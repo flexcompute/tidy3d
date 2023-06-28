@@ -2431,14 +2431,14 @@ class AnisotropicMedium(AbstractMedium):
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
-    @pd.validator("allow_gain", always=True)
-    def _allow_gain_ignored(cls, val):
+    @pd.root_validator(pre=True)
+    def _ignored_fields(cls, values):
         """The field is ignored."""
-        if val is not None:
+        if values.get("xx") is not None and values.get("allow_gain") is not None:
             log.warning(
                 "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
             )
-        return val
+        return values
 
     @cached_property
     def components(self) -> Dict[str, Medium]:
@@ -2821,21 +2821,19 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
             raise SetupError("The zz-component medium type is not isotropic.")
         return val
 
-    @pd.validator("allow_gain", always=True)
-    def _allow_gain_ignored(cls, val):
+    @pd.root_validator(pre=True)
+    def _ignored_fields(cls, values):
         """The field is ignored."""
-        if val is not None:
-            log.warning(
-                "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
-            )
-        return val
-
-    @pd.validator("subpixel", always=True)
-    def _subpixel_ignored(cls, val):
-        """The value subpixel is ignored."""
-        if val is not None:
-            log.warning("The field 'subpixel' is ignored. Please set 'subpixel' in each component.")
-        return val
+        if values.get("xx") is not None:
+            if values.get("allow_gain") is not None:
+                log.warning(
+                    "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
+                )
+            if values.get("subpixel") is not None:
+                log.warning(
+                    "The field 'subpixel' is ignored. Please set 'subpixel' in each component."
+                )
+        return values
 
     @cached_property
     def n_cfl(self):
