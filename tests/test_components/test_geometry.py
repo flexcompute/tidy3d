@@ -415,6 +415,34 @@ def test_polyslab_merge():
     assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
 
 
+def test_polyslab_side_plot_merge():
+    """In side plot, make sure splitted polygons merge."""
+    x0 = 2
+    y0 = 4
+    z0 = 1
+    R = 5
+    wg_width = 0.5
+    wg_thickness = 0.22
+    sidewall_angle = 15 * np.pi / 180
+
+    cell = gdstk.Cell("bottom")
+    path_bottom = gdstk.RobustPath(
+        (x0 + R, y0), wg_width - wg_thickness * np.tan(np.abs(sidewall_angle)), layer=1, datatype=0
+    )
+
+    path_bottom.arc(R, 0, -np.pi)
+    cell.add(path_bottom)
+    ring_bottom_geo = td.PolySlab.from_gds(
+        cell,
+        gds_layer=1,
+        axis=2,
+        slab_bounds=(z0 - wg_thickness / 2, z0 + wg_thickness / 2),
+        sidewall_angle=sidewall_angle,
+        reference_plane="top",
+    )
+    assert len(ring_bottom_geo[0].intersections_plane(x=2)) == 1
+
+
 @pytest.mark.parametrize("axis", [0, 1, 2])
 def test_polyslab_axis(axis):
     ps = td.PolySlab(slab_bounds=(-1, 1), vertices=((-5, -5), (-5, 5), (5, 5), (5, -5)), axis=axis)

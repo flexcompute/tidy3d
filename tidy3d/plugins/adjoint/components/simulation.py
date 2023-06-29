@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Tuple, Union, List, Dict
+from multiprocessing import Pool
 
 import pydantic as pd
 import numpy as np
@@ -21,7 +22,17 @@ from ....exceptions import AdjointError
 
 from .base import JaxObject
 from .structure import JaxStructure
-from .geometry import JaxPolySlab
+from .geometry import JaxPolySlab, JaxGeometryGroup
+
+
+# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
+FWIDTH_FACTOR = 1.0 / 10
+
+# how many processors to use for server and client side adjoint
+NUM_PROC_LOCAL = 1
+
+# number of input structures before it errors
+MAX_NUM_INPUT_STRUCTURES = 400
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -57,10 +68,6 @@ class JaxInfo(Tidy3dBaseModel):
         description="Custom frequency width of the original JaxSimulation.",
         units=HERTZ,
     )
-
-
-# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
-FWIDTH_FACTOR = 1.0 / 10
 
 
 @register_pytree_node_class
@@ -134,6 +141,18 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @pd.validator("input_structures", always=True)
+    def _restrict_input_structures(cls, val):
+        """Restrict number of input structures."""
+        num_input_structures = len(val)
+        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+            raise AdjointError(
+                "For performance, adjoint plugin restricts the number of input structures to "
+                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}."
+            )
+
+        return val
+
+    @pd.validator("input_structures", always=True)
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
@@ -148,38 +167,46 @@ class JaxSimulation(Simulation, JaxObject):
             if not (size_all_floats and cent_all_floats):
                 return val
 
-        # check intersections with other input_structures
-        for i, in_struct_i in enumerate(input_structures):
-            geometry_i = in_struct_i.geometry
-            for j in range(i + 1, len(input_structures)):
-                geometry_j = input_structures[j].geometry
-                if geometry_i.intersects(geometry_j):
+        with log as consolidated_logger:
+            # check intersections with other input_structures
+            for i, in_struct_i in enumerate(input_structures):
+                geometry_i = in_struct_i.geometry
+                for j in range(i + 1, len(input_structures)):
+                    if geometry_i.intersects(input_structures[j].geometry):
+                        consolidated_logger.warning(
+                            f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
+                            f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
+                            "overlapping input structures may contain errors."
+                        )
+
+            # check JaxPolySlab intersections with background structures
+            for i, in_struct_i in enumerate(input_structures):
+                geometry_i = in_struct_i.geometry
+                if not isinstance(geometry_i, JaxPolySlab):
+                    continue
+                for j, struct_j in enumerate(structures):
+                    if geometry_i.intersects(struct_j.geometry):
+                        consolidated_logger.warning(
+                            f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
+                            f"intersects with 'JaxSimulation.structures[{j}]'. Note that in this "
+                            "version of the adjoint plugin, there may be errors in the gradient "
+                            "when 'JaxPolySlab' intersects with background structures."
+                        )
+
+        return val
+
+    @pd.validator("output_monitors", always=True)
+    def _warn_if_colocate(cls, val):
+        """warn if any colocate=True in output FieldMonitors."""
+        for index, mnt in enumerate(val):
+            if isinstance(mnt, FieldMonitor):
+                if mnt.colocate:
                     log.warning(
-                        f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
-                        f"'JaxSimulation.input_structures[{j}]'. "
-                        "Geometric gradients for overlapping input structures may contain errors. "
-                        "Skipping the rest of the structures."
+                        f"'FieldMonitor' at 'JaxSimulation.output_monitors[{index}]' "
+                        "has 'colocate=True', "
+                        "this may lead to decreased accuracy in adjoint gradient."
                     )
                     return val
-
-        # check JaxPolySlab intersections with background structures
-        for i, in_struct_i in enumerate(input_structures):
-            geometry_i = in_struct_i.geometry
-            if not isinstance(geometry_i, JaxPolySlab):
-                continue
-            for j, struct_j in enumerate(structures):
-                geometry_j = struct_j.geometry
-                if geometry_i.intersects(geometry_j):
-                    log.warning(
-                        f"'JaxPolySlab'-containing 'JaxSimulation.input_structures[{i}]' "
-                        f"intersects with 'JaxSimulation.structures[{j}]'. "
-                        "Note that in this version of the adjoint plugin, there may be errors "
-                        "in the gradient when "
-                        "'JaxPolySlab' intersects with background structures. "
-                        "Skipping the rest of the structures."
-                    )
-                    return val
-
         return val
 
     @staticmethod
@@ -417,7 +444,9 @@ class JaxSimulation(Simulation, JaxObject):
         return sim_fwd, jax_info_fwd, jax_info
 
     @staticmethod
-    def get_grad_monitors(input_structures: List[Structure], freq_adjoint: float) -> dict:
+    def get_grad_monitors(
+        input_structures: List[Structure], freq_adjoint: float, include_eps_mnts: bool = True
+    ) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
@@ -426,36 +455,122 @@ class JaxSimulation(Simulation, JaxObject):
                 freq=freq_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
-            grad_eps_mnts.append(grad_eps_mnt)
+            if include_eps_mnts:
+                grad_eps_mnts.append(grad_eps_mnt)
         return dict(grad_monitors=grad_mnts, grad_eps_monitors=grad_eps_mnts)
+
+    def _store_vjp_structure(
+        self,
+        structure: JaxStructure,
+        fld_fwd: FieldData,
+        fld_adj: FieldData,
+        eps_data: PermittivityData,
+        num_proc: int = NUM_PROC_LOCAL,
+    ) -> JaxStructure:
+        """Store the vjp for a single structure."""
+
+        freq = float(eps_data.eps_xx.coords["f"])
+        eps_out = self.medium.eps_model(frequency=freq)
+        return structure.store_vjp(
+            grad_data_fwd=fld_fwd,
+            grad_data_adj=fld_adj,
+            grad_data_eps=eps_data,
+            sim_bounds=self.bounds,
+            eps_out=eps_out,
+            num_proc=num_proc,
+        )
 
     def store_vjp(
         self,
         grad_data_fwd: Tuple[FieldData],
         grad_data_adj: Tuple[FieldData],
         grad_eps_data: Tuple[PermittivityData],
+        num_proc: int = NUM_PROC_LOCAL,
     ) -> JaxSimulation:
         """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
 
-        input_structures_vjp = []
-        adjoint_info = zip(self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data)
-
-        for in_struct, fld_fwd, fld_adj, eps_data in adjoint_info:
-
-            freq = float(eps_data.eps_xx.coords["f"])
-            eps_out = self.medium.eps_model(frequency=freq)
-            eps_in = in_struct.medium.eps_model(frequency=freq)
-
-            input_structure_vjp = in_struct.store_vjp(
-                grad_data_fwd=fld_fwd,
-                grad_data_adj=fld_adj,
-                grad_data_eps=eps_data,
-                sim_bounds=self.bounds,
-                eps_out=eps_out,
-                eps_in=eps_in,
+        # if num_proc supplied and greater than 1, run parallel
+        if num_proc is not None and num_proc > 1:
+            return self.store_vjp_parallel(
+                grad_data_fwd=grad_data_fwd,
+                grad_data_adj=grad_data_adj,
+                grad_eps_data=grad_eps_data,
+                num_proc=num_proc,
             )
 
-            input_structures_vjp.append(input_structure_vjp)
+        # otherwise, call regular sequential one
+        return self.store_vjp_sequential(
+            grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_eps_data=grad_eps_data
+        )
+
+    def store_vjp_sequential(
+        self,
+        grad_data_fwd: Tuple[FieldData],
+        grad_data_adj: Tuple[FieldData],
+        grad_eps_data: Tuple[PermittivityData],
+    ) -> JaxSimulation:
+        """Store the vjp w.r.t. each input_structure without multiprocessing."""
+        map_args = [self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data]
+        input_structures_vjp = list(map(self._store_vjp_structure, *map_args))
+
+        return self.copy(
+            update=dict(
+                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
+            )
+        )
+
+    def store_vjp_parallel(
+        self,
+        grad_data_fwd: Tuple[FieldData],
+        grad_data_adj: Tuple[FieldData],
+        grad_eps_data: Tuple[PermittivityData],
+        num_proc: int,
+    ) -> JaxSimulation:
+        """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data, and
+        parallel processing over ``num_proc`` processes."""
+
+        # Indexing into structures which use internal parallelization, and those which don't.
+        # For the latter, simple parallelization over the list will be used.
+        internal_par_structs = [JaxGeometryGroup]
+
+        # Parallelize polyslabs internally or externally depending on total number
+        polyslabs = [struct for struct in self.input_structures if isinstance(struct, JaxPolySlab)]
+        if len(polyslabs) < num_proc:
+            internal_par_structs += [JaxPolySlab]
+
+        inds_par_internal, inds_par_external = [], []
+        for index, structure in enumerate(self.input_structures):
+            if isinstance(structure.geometry, tuple(internal_par_structs)):
+                inds_par_internal.append(index)
+            else:
+                inds_par_external.append(index)
+
+        def make_args(indexes, num_proc_internal):
+            """Make the arguments to map over selecting over a set of structure ``indexes``."""
+            structures = [self.input_structures[index] for index in indexes]
+            data_fwd = [grad_data_fwd[index] for index in indexes]
+            data_bwd = [grad_data_adj[index] for index in indexes]
+            eps_data = [grad_eps_data[index] for index in indexes]
+            num_proc = [num_proc_internal] * len(indexes)
+
+            return (structures, data_fwd, data_bwd, eps_data, num_proc)
+
+        # Get vjps for structures that parallelize internally using simple map
+        args_par_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
+        vjps_par_internal = list(map(self._store_vjp_structure, *args_par_internal))
+
+        # Get vjps for structures where we parallelize directly here
+        args_par_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
+        with Pool(num_proc) as pool:
+            vjps_par_external = list(
+                pool.starmap(self._store_vjp_structure, zip(*args_par_external))
+            )
+
+        # Reshuffle the two lists back in the correct order
+        vjps_all = list(vjps_par_internal) + list(vjps_par_external)
+        input_structures_vjp = [None] * len(self.input_structures)
+        for index, vjp in zip(inds_par_internal + inds_par_external, vjps_all):
+            input_structures_vjp[index] = vjp
 
         return self.copy(
             update=dict(

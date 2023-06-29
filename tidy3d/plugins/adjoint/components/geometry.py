@@ -2,7 +2,6 @@
 """Defines jax-compatible geometries and their conversion to grad monitors."""
 from __future__ import annotations
 
-import os
 from abc import ABC
 from typing import Tuple, Union, Dict
 from multiprocessing import Pool
@@ -15,8 +14,8 @@ from jax.tree_util import register_pytree_node_class
 import jax
 
 from ....components.base import cached_property
-from ....components.types import Bound, Coordinate2D
-from ....components.geometry import Geometry, Box, PolySlab
+from ....components.types import Bound, Coordinate2D  # , annotate_type
+from ....components.geometry import Geometry, Box, PolySlab, GeometryGroup
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
@@ -161,6 +160,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxBox:
         """Stores the gradient of the box parameters given forward and adjoint field data."""
 
@@ -548,6 +548,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxPolySlab:
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
@@ -556,31 +557,185 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_data_eps=grad_data_eps
         )
 
-        # Construct arguments to pass to the parallel vertices_vjp computation
+        if num_proc is not None and num_proc > 1:
+            return self.store_vjp_parallel(
+                e_mult_xyz=e_mult_xyz,
+                d_mult_xyz=d_mult_xyz,
+                sim_bounds=sim_bounds,
+                wvl_mat=wvl_mat,
+                eps_out=eps_out,
+                eps_in=eps_in,
+                num_proc=num_proc,
+            )
+
+        return self.store_vjp_sequential(
+            e_mult_xyz=e_mult_xyz,
+            d_mult_xyz=d_mult_xyz,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+
+    def _make_vertex_args(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> tuple:
+        """Generate arguments for `vertex_vjp`."""
+
         num_verts = len(self.vertices)
         args = [range(num_verts)]
+
         # append all of the arguments that are the same for each call
         constant_args = [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
         args += [[arg] * num_verts for arg in constant_args]
+        return args
 
-        try:
-            # Try to use multiprocessing over polygon vertices.
-            # Use only half of the available cpus in case there is something else running.
-            num_proc = max(1, os.cpu_count() // 2)
-            with Pool(num_proc) as p:
-                vertices_vjp = p.starmap(self.vertex_vjp, zip(*args))
-        except Exception:  # pylint:disable=broad-except
-            # Compute without parallel pool
-            vertices_vjp = list(map(self.vertex_vjp, *args))
+    def store_vjp_sequential(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> JaxPolySlab:
+        """Stores the gradient of the vertices given forward and adjoint field data."""
+        # Construct arguments to pass to the parallel vertices_vjp computation
 
-        # return copy of the polyslab with the vertices storing the
+        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
+        vertices_vjp = list(map(self.vertex_vjp, *args))
+        return self.copy(update=dict(vertices=vertices_vjp))
+
+    def store_vjp_parallel(
+        self,
+        e_mult_xyz: FieldData,
+        d_mult_xyz: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+        num_proc: int = 1,
+    ) -> JaxPolySlab:
+        """Stores the gradient of the vertices given forward and adjoint field data."""
+
+        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
+        with Pool(num_proc) as pool:
+            vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
         return self.copy(update=dict(vertices=vertices_vjp))
 
 
-JaxGeometryType = Union[JaxBox, JaxPolySlab]
+JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
+
+
+@register_pytree_node_class
+class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
+    """A collection of Geometry objects that can be called as a single geometry object."""
+
+    geometries: Tuple[JaxPolySlab, ...] = pd.Field(
+        ...,
+        title="Geometries",
+        description="Tuple of jax geometries in a single grouping. "
+        "Can provide significant performance enhancement in ``JaxStructure`` when all geometries "
+        "are assigned the same ``JaxMedium``. Note: at this moment, only ``JaxPolySlab`` "
+        "is supported.",
+        jax_field=True,
+    )
+
+    def to_tidy3d(self) -> GeometryGroup:
+        """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
+        self_dict = self.dict(exclude={"type"})
+        self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
+        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
+        tidy3d_type = map_reverse[type(self)]
+        return tidy3d_type.parse_obj(self_dict)
+
+    @classmethod
+    def from_tidy3d(cls, tidy3d_obj: GeometryGroup) -> JaxGeometryGroup:
+        """Convert :class:`.GeometryGroup` instance to :class:`.GeometryGroup`"""
+        obj_dict = tidy3d_obj.dict(exclude={"type"})
+        jax_geometries = []
+
+        tidy3d_type_map = {k.__name__: k for k, v in JAX_GEOMETRY_MAP.items()}
+        jax_type_map = {k.__name__: v for k, v in JAX_GEOMETRY_MAP.items()}
+
+        for geo in obj_dict["geometries"]:
+            type_str = geo["type"]
+            tidy3d_type = tidy3d_type_map[type_str]
+            jax_type = jax_type_map[type_str]
+            geo_tidy3d = tidy3d_type.parse_obj(geo)
+            geo_jax = jax_type.from_tidy3d(geo_tidy3d)
+            jax_geometries.append(geo_jax)
+        obj_dict["geometries"] = jax_geometries
+        return cls.parse_obj(obj_dict)
+
+    # pylint: disable=too-many-arguments
+    @staticmethod
+    def _store_vjp_geometry(
+        geometry: JaxSingleGeometryType,
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        grad_data_eps: PermittivityData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+    ) -> JaxSingleGeometryType:
+        """Function to store a single vjp for a single geometry."""
+        return geometry.store_vjp(
+            grad_data_fwd=grad_data_fwd,
+            grad_data_adj=grad_data_adj,
+            grad_data_eps=grad_data_eps,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            eps_out=eps_out,
+            eps_in=eps_in,
+        )
+
+    # pylint: disable=too-many-arguments
+    def store_vjp(
+        self,
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        grad_data_eps: PermittivityData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        eps_out: complex,
+        eps_in: complex,
+        num_proc: int = 1,
+    ) -> JaxGeometryGroup:
+        """Returns a `JaxGeometryGroup` where the `.geometries` store the gradient info."""
+
+        map_args = (
+            self.geometries,
+            [grad_data_fwd] * len(self.geometries),
+            [grad_data_adj] * len(self.geometries),
+            [grad_data_eps] * len(self.geometries),
+            [sim_bounds] * len(self.geometries),
+            [wvl_mat] * len(self.geometries),
+            [eps_out] * len(self.geometries),
+            [eps_in] * len(self.geometries),
+        )
+
+        if num_proc == 1:
+            geometries_vjp = tuple(map(self._store_vjp_geometry, *map_args))
+        else:
+            with Pool(num_proc) as pool:
+                geometries_vjp = tuple(pool.starmap(self._store_vjp_geometry, zip(*map_args)))
+
+        return self.updated_copy(geometries=geometries_vjp)
+
+
+JaxGeometryType = Union[JaxSingleGeometryType, JaxGeometryGroup]
 
 # pylint: disable=unhashable-member
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
     PolySlab: JaxPolySlab,
+    GeometryGroup: JaxGeometryGroup,
 }

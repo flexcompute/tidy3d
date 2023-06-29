@@ -139,24 +139,26 @@ def create_sfactor(direction, omega, dls, N, n_pml, dmin_pml):
 
 
 def create_sfactor_f(omega, dls, N, n_pml, dmin_pml):
-    """S-factor profile for forward derivative matrix"""
+    """S-factor profile applied after forward derivative matrix, i.e. applied to H-field
+    locations."""
     sfactor_array = np.ones(N, dtype=np.complex128)
     for i in range(N):
-        if i <= n_pml and dmin_pml:
-            sfactor_array[i] = s_value(dls[0], (n_pml - i + 0.5) / n_pml, omega)
-        elif i > N - n_pml:
-            sfactor_array[i] = s_value(dls[-1], (i - (N - n_pml) - 0.5) / n_pml, omega)
+        if i <= n_pml - 1 and dmin_pml:
+            sfactor_array[i] = s_value(dls[0], (n_pml - i - 0.5) / n_pml, omega)
+        elif i >= N - n_pml:
+            sfactor_array[i] = s_value(dls[-1], (i - (N - n_pml) + 0.5) / n_pml, omega)
     return sfactor_array
 
 
 def create_sfactor_b(omega, dls, N, n_pml, dmin_pml):
-    """S-factor profile for backward derivative matrix"""
+    """S-factor profile applied after backward derivative matrix, i.e. applied to E-field
+    locations."""
     sfactor_array = np.ones(N, dtype=np.complex128)
     for i in range(N):
-        if i <= n_pml and dmin_pml:
-            sfactor_array[i] = s_value(dls[0], (n_pml - i + 1) / n_pml, omega)
+        if i < n_pml and dmin_pml:
+            sfactor_array[i] = s_value(dls[0], (n_pml - i) / n_pml, omega)
         elif i > N - n_pml:
-            sfactor_array[i] = s_value(dls[-1], (i - (N - n_pml) - 1) / n_pml, omega)
+            sfactor_array[i] = s_value(dls[-1], (i - (N - n_pml)) / n_pml, omega)
     return sfactor_array
 
 

@@ -1,12 +1,13 @@
 """Defines the FDTD grid."""
-
-from typing import Tuple, List
+from __future__ import annotations
+from typing import Tuple, List, Union
 
 import numpy as np
 import pydantic as pd
 
 from ..base import Tidy3dBaseModel, cached_property
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR
+from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
+from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry import Box
 
 from ...exceptions import SetupError
@@ -47,6 +48,96 @@ class Coords(Tidy3dBaseModel):
     def to_list(self):
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
+
+    def spatial_interp(
+        self,
+        array: Union[SpatialDataArray, ScalarFieldDataArray],
+        interp_method: InterpMethod,
+        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        """
+        Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
+
+            1) Check if the coordinate of the supplied data are in monotonically increasing order.
+            If they are, apply the faster ``assume_sorted=True``.
+
+            2) For axes of single entry, instead of error, apply ``isel()`` along the axis.
+
+        Parameters
+        ----------
+        array : Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            Supplied scalar dataset
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+            Value used to fill in for points outside the data range. If set to 'extrapolate',
+            values will be extrapolated into those regions using the "nearest" method.
+
+        Returns
+        -------
+        Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            The interpolated spatial dataset.
+
+        Note
+        ----
+        This method is called from a :class:`Coords` instance with the array to be interpolated as
+        an argument, not the other way around.
+        """
+
+        # Check for empty dimensions
+        result_coords = dict(self.to_dict)
+        if any(len(v) == 0 for v in result_coords.values()):
+            for c in array.coords:
+                if c not in result_coords:
+                    result_coords[c] = array.coords[c].values
+            result_shape = tuple(len(v) for v in result_coords.values())
+            result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
+            return result
+
+        # Check wich axes need interpolation or selection
+        interp_ax = []
+        isel_ax = []
+        for ax in "xyz":
+            if array.sizes[ax] == 1:
+                isel_ax.append(ax)
+            else:
+                interp_ax.append(ax)
+
+        # apply iselection for the axis containing single entry
+        if len(isel_ax) > 0:
+            array = array.isel({ax: [0] * len(self.to_dict[ax]) for ax in isel_ax})
+            array = array.assign_coords({ax: self.to_dict[ax] for ax in isel_ax})
+            if len(interp_ax) == 0:
+                return array
+
+        # Apply interp for the rest
+        is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
+        interp_param = {
+            "method": interp_method,
+            "assume_sorted": is_sorted,
+            "kwargs": {
+                "bounds_error": False,
+                "fill_value": fill_value,
+            },
+        }
+
+        # Mark extrapolated points with nan's to fill in later
+        if fill_value == "extrapolate" and interp_method != "nearest":
+            interp_param["kwargs"]["fill_value"] = np.nan
+
+        # interpolation
+        interp_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+
+        # Fill in nan's with nearest values
+        if fill_value == "extrapolate" and interp_method != "nearest":
+            interp_param["method"] = "nearest"
+            interp_param["kwargs"]["fill_value"] = "extrapolate"
+            nearest_array = array.interp({ax: self.to_dict[ax] for ax in interp_ax}, **interp_param)
+            interp_array.values[:] = np.where(
+                np.isnan(interp_array.values), nearest_array.values, interp_array.values
+            )
+
+        return interp_array
 
 
 class FieldGrid(Tidy3dBaseModel):

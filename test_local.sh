@@ -40,7 +40,6 @@ pytest -ra tests/test_plugins/test_mode_solver.py
 pytest -ra tests/test_plugins/test_polyslab.py
 pytest -ra tests/test_plugins/test_resonance_finder.py
 
-pytest -ra tests/test_web/test_auth.py
 pytest -ra tests/test_web/test_cli.py
 pytest -ra tests/test_web/test_material_fitter.py    
 pytest -ra tests/test_web/test_task.py

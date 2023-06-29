@@ -14,6 +14,7 @@
     "medium": {
         "name": null,
         "frequency_range": null,
+        "allow_gain": false,
         "type": "Medium",
         "permittivity": 1.0,
         "conductivity": 0.0
@@ -43,6 +44,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 2.0,
                 "conductivity": 0.0
@@ -67,6 +69,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 1.0,
                 "conductivity": 3.0
@@ -87,6 +90,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Sellmeier",
                 "coeffs": [
                     [
@@ -119,6 +123,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Lorentz",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -149,6 +154,31 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
+                "type": "Debye",
+                "eps_inf": 2.0,
+                "coeffs": [
+                    [
+                        1.0,
+                        3.0
+                    ]
+                ]
+            }
+        },
+        {
+            "geometry": {
+                "type": "TriangleMesh",
+                "mesh_dataset": {
+                    "type": "TriangleMeshDataset",
+                    "surface_mesh": "TriangleMeshDataArray"
+                }
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
                 "type": "Debye",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -178,6 +208,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Drude",
                 "eps_inf": 2.0,
                 "coeffs": [
@@ -207,10 +238,12 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium2D",
                 "ss": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -229,6 +262,7 @@
                 "tt": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "PoleResidue",
                     "eps_inf": 1.0,
                     "poles": [
@@ -270,6 +304,7 @@
             "medium": {
                 "name": "PEC",
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "PECMedium"
             }
         },
@@ -292,10 +327,12 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": null,
                 "type": "AnisotropicMedium",
                 "xx": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 1.0,
                     "conductivity": 0.0
@@ -303,6 +340,7 @@
                 "yy": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
@@ -310,6 +348,7 @@
                 "zz": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 3.0,
                     "conductivity": 0.0
@@ -347,6 +386,243 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
+                "type": "PoleResidue",
+                "eps_inf": 1.0,
+                "poles": [
+                    [
+                        {
+                            "real": 0.0,
+                            "imag": 6206417594288582.0
+                        },
+                        {
+                            "real": -0.0,
+                            "imag": -3.311074436985222e+16
+                        }
+                    ]
+                ]
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomMedium",
+                "interp_method": "nearest",
+                "subpixel": false,
+                "permittivity": "SpatialDataArray",
+                "conductivity": null,
+                "eps_dataset": null
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomDrude",
+                "eps_inf": "SpatialDataArray",
+                "coeffs": [
+                    [
+                        "SpatialDataArray",
+                        "SpatialDataArray"
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomLorentz",
+                "eps_inf": "SpatialDataArray",
+                "coeffs": [
+                    [
+                        "SpatialDataArray",
+                        "SpatialDataArray",
+                        "SpatialDataArray"
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomDebye",
+                "eps_inf": "SpatialDataArray",
+                "coeffs": [
+                    [
+                        "SpatialDataArray",
+                        "SpatialDataArray"
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomPoleResidue",
+                "eps_inf": "SpatialDataArray",
+                "poles": [
+                    [
+                        "SpatialDataArray",
+                        "SpatialDataArray"
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "CustomSellmeier",
+                "coeffs": [
+                    [
+                        "SpatialDataArray",
+                        "SpatialDataArray"
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "PolySlab",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "slab_bounds": [
+                    -1.0,
+                    1.0
+                ],
+                "dilation": 0.0,
+                "vertices": [
+                    [
+                        -1.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -1.5
+                    ],
+                    [
+                        -0.5,
+                        -0.5
+                    ]
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
                 "type": "PoleResidue",
                 "eps_inf": 1.0,
                 "poles": [
@@ -376,6 +652,7 @@
             "medium": {
                 "name": null,
                 "frequency_range": null,
+                "allow_gain": false,
                 "type": "Medium",
                 "permittivity": 5.0,
                 "conductivity": 0.0
@@ -584,6 +861,37 @@
             },
             "name": null,
             "field_dataset": {
+                "type": "FieldDataset",
+                "Ex": "ScalarFieldDataArray",
+                "Ey": null,
+                "Ez": null,
+                "Hx": null,
+                "Hy": null,
+                "Hz": null
+            }
+        },
+        {
+            "type": "CustomCurrentSource",
+            "center": [
+                0.0,
+                1.0,
+                2.0
+            ],
+            "size": [
+                2.0,
+                2.0,
+                0.0
+            ],
+            "source_time": {
+                "amplitude": 1.0,
+                "phase": 0.0,
+                "type": "GaussianPulse",
+                "freq0": 200000000000000.0,
+                "fwidth": 40000000000000.0,
+                "offset": 5.0
+            },
+            "name": null,
+            "current_dataset": {
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
                 "Ey": null,
@@ -892,7 +1200,8 @@
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
-            }
+            },
+            "direction": "+"
         },
         {
             "type": "FieldProjectionAngleMonitor",
@@ -1428,6 +1737,7 @@
                 "medium": {
                     "name": null,
                     "frequency_range": null,
+                    "allow_gain": false,
                     "type": "Medium",
                     "permittivity": 2.0,
                     "conductivity": 0.0
@@ -1440,5 +1750,5 @@
     "subpixel": false,
     "normalize_index": 0,
     "courant": 0.8,
-    "version": "2.2.2"
+    "version": "2.3.0rc2"
 }

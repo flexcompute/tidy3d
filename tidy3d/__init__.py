@@ -11,7 +11,9 @@ from .components.geometry import TriangleMesh
 # medium
 from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
-from .components.medium import CustomMedium, FullyAnisotropicMedium
+from .components.medium import CustomMedium, CustomPoleResidue
+from .components.medium import CustomSellmeier, FullyAnisotropicMedium
+from .components.medium import CustomLorentz, CustomDrude, CustomDebye, CustomAnisotropicMedium
 from .components.transformation import RotationAroundAxis
 
 # structures
@@ -27,7 +29,7 @@ from .components.apodization import ApodizationSpec
 from .components.source import GaussianPulse, ContinuousWave
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components.source import GaussianBeam, AstigmaticGaussianBeam
-from .components.source import CustomFieldSource, TFSF
+from .components.source import CustomFieldSource, TFSF, CustomCurrentSource
 
 # monitors
 from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
@@ -45,7 +47,7 @@ from .components.field_projection import FieldProjector
 
 # data
 from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray
-from .components.data.data_array import ScalarFieldTimeDataArray
+from .components.data.data_array import ScalarFieldTimeDataArray, SpatialDataArray
 from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from .components.data.data_array import FluxDataArray, FluxTimeDataArray
 from .components.data.data_array import FieldProjectionAngleDataArray

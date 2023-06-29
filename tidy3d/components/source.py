@@ -7,10 +7,11 @@ from typing_extensions import Literal
 import pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property, DATA_ARRAY_MAP
+from .base import Tidy3dBaseModel, cached_property
 
 from .types import Direction, Polarization, Ax, FreqBound, ArrayFloat1D, Axis, PlotVal
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
+from .validators import warn_if_dataset_none, assert_single_freq_in_range
 from .data.dataset import FieldDataset
 from .geometry import Box, Coordinate
 from .mode import ModeSpec
@@ -409,7 +410,20 @@ class CurrentSource(Source, ABC):
         return pol_vec
 
 
-class UniformCurrentSource(CurrentSource):
+class ReverseInterpolatedSource(Source):
+    """Abstract source that allows reverse-interpolation along zero-sized dimensions."""
+
+    interpolate: bool = pydantic.Field(
+        True,
+        title="Enable Interpolation",
+        description="Handles reverse-interpolation of zero-size dimensions of the source. "
+        "If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, "
+        "equivalent source data is applied on the surrounding Yee grid points to emulate "
+        "placement at the specified location using linear interpolation.",
+    )
+
+
+class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
     """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
 
     Example
@@ -419,7 +433,7 @@ class UniformCurrentSource(CurrentSource):
     """
 
 
-class PointDipole(CurrentSource):
+class PointDipole(CurrentSource, ReverseInterpolatedSource):
     """Uniform current source with a zero size.
 
     Example
@@ -435,13 +449,44 @@ class PointDipole(CurrentSource):
         units=MICROMETER,
     )
 
-    interpolate: bool = pydantic.Field(
-        True,
-        title="Enable Interpolation",
-        description="If ``False``, the dipole is placed at the nearest Yee grid point "
-        "based on the chosen ``polarization``. If ``True``, uses linear interpolation "
-        "so that effectively the dipole is placed at the exact position requested.",
+
+class CustomCurrentSource(ReverseInterpolatedSource):
+    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
+    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
+    current distributions in the FDTD solver.
+
+    Note
+    ----
+        The coordinates of all provided fields are assumed to be relative to the source center.
+
+    Example
+    -------
+    >>> from tidy3d import ScalarFieldDataArray
+    >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
+    >>> x = np.linspace(-1, 1, 101)
+    >>> y = np.linspace(-1, 1, 101)
+    >>> z = np.array([0])
+    >>> f = [2e14]
+    >>> coords = dict(x=x, y=y, z=z, f=f)
+    >>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)
+    >>> dataset = FieldDataset(Ex=scalar_field)
+    >>> custom_source = CustomCurrentSource(
+    ...     center=(1, 1, 1),
+    ...     size=(2, 2, 0),
+    ...     source_time=pulse,
+    ...     current_dataset=dataset)
+
+    """
+
+    current_dataset: Optional[FieldDataset] = pydantic.Field(
+        ...,
+        title="Current Dataset",
+        description=":class:`.FieldDataset` containing the desired frequency-domain "
+        "electric and magnetic current patterns to inject.",
     )
+
+    _current_dataset_none_warning = warn_if_dataset_none("current_dataset")
+    _current_dataset_single_freq = assert_single_freq_in_range("current_dataset")
 
 
 class FieldSource(Source, ABC):
@@ -541,16 +586,19 @@ class BroadbandSource(Source, ABC):
 
 
 class CustomFieldSource(FieldSource, PlanarSource):
-    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-    For the injection to work as expected, the fields must decay by the edges of the source plane,
-    or the source plane must span the entire simulation domain and the fields must match the
-    simulation boundary conditions. The equivalent source currents are fully defined by the field
-    components tangential to the source plane. The normal components (e.g. ``Ez`` and ``Hz``) can be
-    provided but will have no effect on the results, in accordance with the equivalence principle.
-    At least one of the tangential components has to be defined. For example, for a ``z``-normal
-    source, at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy`` has to be present in the provided
-    dataset. The coordinates of all provided fields are assumed to be relative to the source
-    center. Each provided field component must also span the size of the source.
+    """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,
+    using the equivalence principle to define the actual injected currents. For the injection to
+    work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
+    decay by the edges of the source plane, or the source plane must span the entire simulation
+    domain and the fields must match the simulation boundary conditions.
+    The equivalent source currents are fully defined by the field components tangential to the
+    source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
+    can be provided but will have no effect on the results, and at least one of the tangential
+    components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+
+    Note
+    ----
+        The coordinates of all provided fields are assumed to be relative to the source center.
 
     Note
     ----
@@ -583,36 +631,8 @@ class CustomFieldSource(FieldSource, PlanarSource):
         "fields patterns to inject. At least one tangetial field component must be specified.",
     )
 
-    @pydantic.validator("field_dataset", pre=True, always=True)
-    def _warn_if_none(cls, val: FieldDataset) -> FieldDataset:
-        """Warn if the DataArrays fail to load."""
-        if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
-                log.warning("Loading 'field_dataset' without data.")
-                return None
-        return val
-
-    @pydantic.validator("field_dataset", always=True)
-    def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
-        """Assert only one frequency supplied and it's in source time range."""
-        if val is None:
-            return val
-        source_time = get_value(key="source_time", values=values)
-        fmin, fmax = source_time.frequency_range()
-        for name, scalar_field in val.field_components.items():
-            freqs = scalar_field.f
-            if len(freqs) != 1:
-                raise SetupError(
-                    f"'field_dataset.{name}' must have a single frequency, "
-                    f"contains {len(freqs)} frequencies."
-                )
-            freq = float(freqs[0])
-            if (freq < fmin) or (freq > fmax):
-                raise SetupError(
-                    f"'field_dataset.{name}' contains frequency: {freq:.2e} Hz, which is outside "
-                    f"of the 'source_time' frequency range [{fmin:.2e}-{fmax:.2e}] Hz."
-                )
-        return val
+    _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
+    _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
 
     @pydantic.validator("field_dataset", always=True)
     def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
@@ -628,21 +648,6 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
-
-    @pydantic.validator("field_dataset", always=True)
-    def _tangential_fields_span_source(cls, val: FieldDataset, values: dict) -> FieldDataset:
-        """Assert that provided data spans source bounds in the frame with the source center as the
-        origin."""
-        if val is None:
-            return val
-        size = get_value(key="size", values=values)
-        for name, field in val.field_components.items():
-            for dim, dim_name in enumerate("xyz"):
-                in_bounds_min = np.amin(field.coords[dim_name]) <= -size[dim] / 2 + DATA_SPAN_TOL
-                in_bounds_max = np.amax(field.coords[dim_name]) >= size[dim] / 2 - DATA_SPAN_TOL
-                if not (in_bounds_min and in_bounds_max):
-                    raise SetupError(f"Data for field {name} does not span the source plane.")
-        return val
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
@@ -910,5 +915,6 @@ SourceType = Union[
     ModeSource,
     PlaneWave,
     CustomFieldSource,
+    CustomCurrentSource,
     TFSF,
 ]

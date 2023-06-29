@@ -35,9 +35,18 @@ def set_datasets_to_none(sim):
     for src in sim_dict["sources"]:
         if src["type"] == "CustomFieldSource":
             src["field_dataset"] = None
+        elif src["type"] == "CustomCurrentSource":
+            src["current_dataset"] = None
     for structure in sim_dict["structures"]:
         if structure["geometry"]["type"] == "TriangleMesh":
             structure["geometry"]["mesh_dataset"] = None
+        if "Custom" in structure["medium"]["type"]:
+            if structure["medium"]["type"] == "CustomMedium":
+                structure["medium"]["eps_dataset"] = None
+            elif structure["medium"]["type"] == "CustomPoleResidue":
+                structure["medium"]["poles"] = []
+            else:
+                structure["medium"]["coeffs"] = []
     return td.Simulation.parse_obj(sim_dict)
 
 

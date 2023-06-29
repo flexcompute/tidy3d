@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium] = Medium(name=None, frequency_range=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.2.3\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium] = Medium(name=None, frequency_range=None, allow_gain=False, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.CustomCurrentSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.3.0\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
   "type": "object",
   "properties": {
     "type": {
@@ -70,6 +70,7 @@
       "default": {
         "name": null,
         "frequency_range": null,
+        "allow_gain": false,
         "type": "Medium",
         "permittivity": 1.0,
         "conductivity": 0.0
@@ -77,9 +78,6 @@
       "anyOf": [
         {
           "$ref": "#/definitions/Medium"
-        },
-        {
-          "$ref": "#/definitions/CustomMedium"
         },
         {
           "$ref": "#/definitions/AnisotropicMedium"
@@ -104,6 +102,27 @@
         },
         {
           "$ref": "#/definitions/FullyAnisotropicMedium"
+        },
+        {
+          "$ref": "#/definitions/CustomMedium"
+        },
+        {
+          "$ref": "#/definitions/CustomPoleResidue"
+        },
+        {
+          "$ref": "#/definitions/CustomSellmeier"
+        },
+        {
+          "$ref": "#/definitions/CustomLorentz"
+        },
+        {
+          "$ref": "#/definitions/CustomDebye"
+        },
+        {
+          "$ref": "#/definitions/CustomDrude"
+        },
+        {
+          "$ref": "#/definitions/CustomAnisotropicMedium"
         }
       ]
     },
@@ -170,6 +189,7 @@
             "ModeSource": "#/definitions/ModeSource",
             "PlaneWave": "#/definitions/PlaneWave",
             "CustomFieldSource": "#/definitions/CustomFieldSource",
+            "CustomCurrentSource": "#/definitions/CustomCurrentSource",
             "TFSF": "#/definitions/TFSF"
           }
         },
@@ -194,6 +214,9 @@
           },
           {
             "$ref": "#/definitions/CustomFieldSource"
+          },
+          {
+            "$ref": "#/definitions/CustomCurrentSource"
           },
           {
             "$ref": "#/definitions/TFSF"
@@ -455,7 +478,7 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "2.2.3",
+      "default": "2.3.0",
       "type": "string"
     }
   },
@@ -467,7 +490,7 @@
   "definitions": {
     "Medium": {
       "title": "Medium",
-      "description": "Dispersionless medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ConstrainedFloatValue = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : ConstrainedFloatValue = 0.0\n    [units = S/um].  Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> dielectric = Medium(permittivity=4.0, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
+      "description": "Dispersionless medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\npermittivity : ConstrainedFloatValue = 1.0\n    [units = None (relative permittivity)].  Relative permittivity.\nconductivity : float = 0.0\n    [units = S/um].  Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> dielectric = Medium(permittivity=4.0, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -493,6 +516,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -512,138 +541,12 @@
         },
         "conductivity": {
           "title": "Conductivity",
-          "description": "Electric conductivity.  Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
+          "description": "Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
           "default": 0.0,
-          "minimum": 0.0,
           "units": "S/um",
           "type": "number"
         }
       },
-      "additionalProperties": false
-    },
-    "PermittivityDataset": {
-      "title": "PermittivityDataset",
-      "description": "Dataset storing the diagonal components of the permittivity tensor.\n\nParameters\n----------\neps_xx : ScalarFieldDataArray\n    Spatial distribution of the xx-component of the relative permittivity.\neps_yy : ScalarFieldDataArray\n    Spatial distribution of the yy-component of the relative permittivity.\neps_zz : ScalarFieldDataArray\n    Spatial distribution of the zz-component of the relative permittivity.\n\nExample\n-------\n>>> x = [-1,1]\n>>> y = [-2,0,2]\n>>> z = [-3,-1,1,3]\n>>> f = [2e14, 3e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)\n>>> data = PermittivityDataset(eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "PermittivityDataset",
-          "enum": [
-            "PermittivityDataset"
-          ],
-          "type": "string"
-        },
-        "eps_xx": {
-          "title": "DataArray",
-          "description": "Spatial distribution of the xx-component of the relative permittivity.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "eps_yy": {
-          "title": "DataArray",
-          "description": "Spatial distribution of the yy-component of the relative permittivity.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "eps_zz": {
-          "title": "DataArray",
-          "description": "Spatial distribution of the zz-component of the relative permittivity.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        }
-      },
-      "required": [
-        "eps_xx",
-        "eps_yy",
-        "eps_zz"
-      ],
-      "additionalProperties": false
-    },
-    "CustomMedium": {
-      "title": "CustomMedium",
-      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_dataset : PermittivityDataset\n    User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> freqs = [2e14]\n>>> data = np.ones((Nx, Ny, Nz, 1))\n>>> eps_diagonal_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))\n>>> eps_components = {f\"eps_{d}{d}\": eps_diagonal_data for d in \"xyz\"}\n>>> eps_dataset = PermittivityDataset(**eps_components)\n>>> dielectric = CustomMedium(eps_dataset=eps_dataset, name='my_medium')\n>>> eps = dielectric.eps_model(200e12)",
-      "type": "object",
-      "properties": {
-        "name": {
-          "title": "Name",
-          "description": "Optional unique name for medium.",
-          "type": "string"
-        },
-        "frequency_range": {
-          "title": "Frequency Range",
-          "description": "Optional range of validity for the medium.",
-          "units": [
-            "Hz",
-            "Hz"
-          ],
-          "type": "array",
-          "minItems": 2,
-          "maxItems": 2,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "type": {
-          "title": "Type",
-          "default": "CustomMedium",
-          "enum": [
-            "CustomMedium"
-          ],
-          "type": "string"
-        },
-        "eps_dataset": {
-          "title": "Permittivity Dataset",
-          "description": "User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/PermittivityDataset"
-            }
-          ]
-        },
-        "interp_method": {
-          "title": "Interpolation method",
-          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
-          "default": "nearest",
-          "enum": [
-            "nearest",
-            "linear"
-          ],
-          "type": "string"
-        }
-      },
-      "required": [
-        "eps_dataset"
-      ],
       "additionalProperties": false
     },
     "ComplexNumber": {
@@ -667,7 +570,7 @@
     },
     "PoleResidue": {
       "title": "PoleResidue",
-      "description": "A dispersive medium described by the pole-residue pair model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber], Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber]], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\n\nNote\n----\n.. math::\n\n    \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n    \\left[\\frac{c_i}{j \\omega + a_i} +\n    \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\nExample\n-------\n>>> pole_res = PoleResidue(eps_inf=2.0, poles=[((1+2j), (3+4j)), ((5+6j), (7+8j))])\n>>> eps = pole_res.eps_model(200e12)",
+      "description": "A dispersive medium described by the pole-residue pair model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber], Union[tidy3d.components.types.tidycomplex, tidy3d.components.types.ComplexNumber]], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\n\nNote\n----\n.. math::\n\n    \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n    \\left[\\frac{c_i}{j \\omega + a_i} +\n    \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\nExample\n-------\n>>> pole_res = PoleResidue(eps_inf=2.0, poles=[((-1+2j), (3+4j)), ((-5+6j), (7+8j))])\n>>> eps = pole_res.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -693,6 +596,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -784,7 +693,7 @@
     },
     "Sellmeier": {
       "title": "Sellmeier",
-      "description": "A dispersive medium described by the Sellmeier model.\nThe frequency-dependence of the refractive index is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None, um^2)].  List of Sellmeier (:math:`B_i, C_i`) coefficients.\n\nNote\n----\n.. math::\n\n    n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}\n\nExample\n-------\n>>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])\n>>> eps = sellmeier_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Sellmeier model.\nThe frequency-dependence of the refractive index is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None, um^2)].  List of Sellmeier (:math:`B_i, C_i`) coefficients.\n\nNote\n----\n.. math::\n\n    n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}\n\nExample\n-------\n>>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])\n>>> eps = sellmeier_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -810,6 +719,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -850,7 +765,7 @@
     },
     "Lorentz": {
       "title": "Lorentz",
-      "description": "A dispersive medium described by the Lorentz model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, float, float], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])\n>>> eps = lorentz_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Lorentz model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, float, pydantic.types.NonNegativeFloat], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])\n>>> eps = lorentz_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -876,6 +791,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -914,7 +835,8 @@
                 "type": "number"
               },
               {
-                "type": "number"
+                "type": "number",
+                "minimum": 0
               }
             ]
           }
@@ -927,7 +849,7 @@
     },
     "Debye": {
       "title": "Debye",
-      "description": "A dispersive medium described by the Debye model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])\n>>> eps = debye_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Debye model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])\n>>> eps = debye_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -953,6 +875,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -1001,7 +929,7 @@
     },
     "Drude": {
       "title": "Drude",
-      "description": "A dispersive medium described by the Drude model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n    \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> eps = drude_medium.eps_model(200e12)",
+      "description": "A dispersive medium described by the Drude model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : PositiveFloat = 1.0\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[float, pydantic.types.PositiveFloat], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n    \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> eps = drude_medium.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -1027,6 +955,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -1075,7 +1009,7 @@
     },
     "AnisotropicMedium": {
       "title": "AnisotropicMedium",
-      "description": "Diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nxx : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the xx-component of the diagonal permittivity tensor.\nyy : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the yy-component of the diagonal permittivity tensor.\nzz : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the zz-component of the diagonal permittivity tensor.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> medium_xx = Medium(permittivity=4.0)\n>>> medium_yy = Medium(permittivity=4.1)\n>>> medium_zz = Medium(permittivity=3.9)\n>>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)",
+      "description": "Diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : Optional[bool] = None\n    This field is ignored. Please set ``allow_gain`` in each component\nxx : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the xx-component of the diagonal permittivity tensor.\nyy : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the yy-component of the diagonal permittivity tensor.\nzz : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the zz-component of the diagonal permittivity tensor.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> medium_xx = Medium(permittivity=4.0)\n>>> medium_yy = Medium(permittivity=4.1)\n>>> medium_zz = Medium(permittivity=3.9)\n>>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)",
       "type": "object",
       "properties": {
         "name": {
@@ -1101,6 +1035,11 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "This field is ignored. Please set ``allow_gain`` in each component",
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -1225,7 +1164,7 @@
     },
     "PECMedium": {
       "title": "PECMedium",
-      "description": "Perfect electrical conductor class.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\n\nNote\n----\nTo avoid confusion from duplicate PECs, should import ``tidy3d.PEC`` instance directly.",
+      "description": "Perfect electrical conductor class.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\n\nNote\n----\nTo avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.",
       "type": "object",
       "properties": {
         "name": {
@@ -1251,6 +1190,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -1265,7 +1210,7 @@
     },
     "FullyAnisotropicMedium": {
       "title": "FullyAnisotropicMedium",
-      "description": "Fully anisotropic medium including all 9 components of the permittivity and conductivity\ntensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must\nhave coinciding main directions. A non-symmetric conductivity tensor can be used to model\nmagneto-optic effects. Note that dispersive properties and subpixel averaging are currently not\nsupported for fully anisotropic materials.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\npermittivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]\n    [units = None (relative permittivity)].  Relative permittivity tensor.\nconductivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]\n    [units = S/um].  Electric conductivity tensor. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nNote\n----\nSimulations involving fully anisotropic materials are computationally more intensive, thus,\nthey take longer time to complete. This increase strongly depends on the filling fraction of\nthe simulation domain by fully anisotropic materials, varying approximately in the range from\n1.5 to 5. Cost of running a simulation is adjusted correspondingly.\n\nExample\n-------\n>>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]\n>>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]\n>>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)",
+      "description": "Fully anisotropic medium including all 9 components of the permittivity and conductivity\ntensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must\nhave coinciding main directions. A non-symmetric conductivity tensor can be used to model\nmagneto-optic effects. Note that dispersive properties and subpixel averaging are currently not\nsupported for fully anisotropic materials.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\npermittivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]\n    [units = None (relative permittivity)].  Relative permittivity tensor.\nconductivity : ArrayLike_dtype=<class 'float'>_ndim=2_shape=(3, 3) = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]\n    [units = S/um].  Electric conductivity tensor. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nNote\n----\nSimulations involving fully anisotropic materials are computationally more intensive, thus,\nthey take longer time to complete. This increase strongly depends on the filling fraction of\nthe simulation domain by fully anisotropic materials, varying approximately in the range from\n1.5 to 5. Cost of running a simulation is adjusted correspondingly.\n\nExample\n-------\n>>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]\n>>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]\n>>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)",
       "type": "object",
       "properties": {
         "name": {
@@ -1292,6 +1237,12 @@
             }
           ]
         },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
         "type": {
           "title": "Type",
           "default": "FullyAnisotropicMedium",
@@ -1301,7 +1252,7 @@
           "type": "string"
         },
         "permittivity": {
-          "title": "ArrayLike",
+          "title": "Permittivity",
           "description": "Relative permittivity tensor.",
           "default": [
             [
@@ -1324,7 +1275,7 @@
           "type": "ArrayLike"
         },
         "conductivity": {
-          "title": "ArrayLike",
+          "title": "Conductivity",
           "description": "Electric conductivity tensor. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
           "default": [
             [
@@ -1347,6 +1298,952 @@
           "type": "ArrayLike"
         }
       },
+      "additionalProperties": false
+    },
+    "PermittivityDataset": {
+      "title": "PermittivityDataset",
+      "description": "Dataset storing the diagonal components of the permittivity tensor.\n\nParameters\n----------\neps_xx : ScalarFieldDataArray\n    Spatial distribution of the xx-component of the relative permittivity.\neps_yy : ScalarFieldDataArray\n    Spatial distribution of the yy-component of the relative permittivity.\neps_zz : ScalarFieldDataArray\n    Spatial distribution of the zz-component of the relative permittivity.\n\nExample\n-------\n>>> x = [-1,1]\n>>> y = [-2,0,2]\n>>> z = [-3,-1,1,3]\n>>> f = [2e14, 3e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> sclr_fld = ScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2)), coords=coords)\n>>> data = PermittivityDataset(eps_xx=sclr_fld, eps_yy=sclr_fld, eps_zz=sclr_fld)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "PermittivityDataset",
+          "enum": [
+            "PermittivityDataset"
+          ],
+          "type": "string"
+        },
+        "eps_xx": {
+          "title": "DataArray",
+          "description": "Spatial distribution of the xx-component of the relative permittivity.",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "eps_yy": {
+          "title": "DataArray",
+          "description": "Spatial distribution of the yy-component of the relative permittivity.",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "eps_zz": {
+          "title": "DataArray",
+          "description": "Spatial distribution of the zz-component of the relative permittivity.",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        }
+      },
+      "required": [
+        "eps_xx",
+        "eps_yy",
+        "eps_zz"
+      ],
+      "additionalProperties": false
+    },
+    "CustomMedium": {
+      "title": "CustomMedium",
+      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\npermittivity : Optional[SpatialDataArray] = None\n    [units = None (relative permittivity)].  Spatial profile of relative permittivity.\nconductivity : Optional[SpatialDataArray] = None\n    [units = S/um].  Spatial profile Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\neps_dataset : Optional[PermittivityDataset] = None\n    [To be deprecated] User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> coords = dict(x=X, y=Y, z=Z)\n>>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)\n>>> eps = dielectric.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomMedium",
+          "enum": [
+            "CustomMedium"
+          ],
+          "type": "string"
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        },
+        "permittivity": {
+          "title": "DataArray",
+          "description": "Spatial profile of relative permittivity.",
+          "units": "None (relative permittivity)",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "conductivity": {
+          "title": "DataArray",
+          "description": "Spatial profile Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
+          "units": "S/um",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "eps_dataset": {
+          "title": "Permittivity Dataset",
+          "description": "[To be deprecated] User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/PermittivityDataset"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CustomPoleResidue": {
+      "title": "CustomPoleResidue",
+      "description": "A spatially varying dispersive medium described by the pole-residue pair model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNote\n----\n.. math::\n\n    \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n    \\left[\\frac{c_i}{j \\omega + a_i} +\n    \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> a1 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> a2 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])\n>>> eps = pole_res.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomPoleResidue",
+          "enum": [
+            "CustomPoleResidue"
+          ],
+          "type": "string"
+        },
+        "eps_inf": {
+          "title": "DataArray",
+          "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+          "units": "None (relative permittivity)",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "poles": {
+          "title": "Poles",
+          "description": "Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+          "default": [],
+          "units": [
+            "rad/sec",
+            "rad/sec"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": [
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              }
+            ]
+          }
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eps_inf"
+      ],
+      "additionalProperties": false
+    },
+    "CustomSellmeier": {
+      "title": "CustomSellmeier",
+      "description": "A spatially varying dispersive medium described by the Sellmeier model.\nThe frequency-dependence of the refractive index is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None, um^2)].  List of Sellmeier (:math:`B_i, C_i`) coefficients.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNote\n----\n.. math::\n\n    n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])\n>>> eps = sellmeier_medium.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomSellmeier",
+          "enum": [
+            "CustomSellmeier"
+          ],
+          "type": "string"
+        },
+        "coeffs": {
+          "title": "Coefficients",
+          "description": "List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+          "units": [
+            null,
+            "um^2"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": [
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              }
+            ]
+          }
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "CustomLorentz": {
+      "title": "CustomLorentz",
+      "description": "A spatially varying dispersive medium described by the Lorentz model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> d_epsilon = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> f = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])\n>>> eps = lorentz_medium.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomLorentz",
+          "enum": [
+            "CustomLorentz"
+          ],
+          "type": "string"
+        },
+        "eps_inf": {
+          "title": "DataArray",
+          "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+          "units": "None (relative permittivity)",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "coeffs": {
+          "title": "Coefficients",
+          "description": "List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
+          "units": [
+            "None (relative permittivity)",
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": [
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              }
+            ]
+          }
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eps_inf",
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "CustomDebye": {
+      "title": "CustomDebye",
+      "description": "A spatially varying dispersive medium described by the Debye model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n    \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])\n>>> eps = debye_medium.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomDebye",
+          "enum": [
+            "CustomDebye"
+          ],
+          "type": "string"
+        },
+        "eps_inf": {
+          "title": "DataArray",
+          "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+          "units": "None (relative permittivity)",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "coeffs": {
+          "title": "Coefficients",
+          "description": "List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+          "units": [
+            "None (relative permittivity)",
+            "sec"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": [
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              }
+            ]
+          }
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eps_inf",
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "CustomDrude": {
+      "title": "CustomDrude",
+      "description": "A spatially varying dispersive medium described by the Drude model.\nThe frequency-dependence of the complex-valued permittivity is described by:\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNote\n----\n.. math::\n\n    \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n    \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])\n>>> eps = drude_medium.eps_model(200e12)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomDrude",
+          "enum": [
+            "CustomDrude"
+          ],
+          "type": "string"
+        },
+        "eps_inf": {
+          "title": "DataArray",
+          "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+          "units": "None (relative permittivity)",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        },
+        "coeffs": {
+          "title": "Coefficients",
+          "description": "List of (:math:`f_i, \\delta_i`) values for model.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": [
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              },
+              {
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
+                  }
+                },
+                "required": [
+                  "_dims"
+                ]
+              }
+            ]
+          }
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.",
+          "default": "nearest",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.",
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "eps_inf",
+        "coeffs"
+      ],
+      "additionalProperties": false
+    },
+    "CustomAnisotropicMedium": {
+      "title": "CustomAnisotropicMedium",
+      "description": "Diagonally anisotropic medium with spatially varying permittivity in each component.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : Optional[bool] = None\n    This field is ignored. Please set ``allow_gain`` in each component\nxx : Union[CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomMedium]\n    Medium describing the xx-component of the diagonal permittivity tensor.\nyy : Union[CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomMedium]\n    Medium describing the yy-component of the diagonal permittivity tensor.\nzz : Union[CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomMedium]\n    Medium describing the zz-component of the diagonal permittivity tensor.\ninterp_method : Optional[Literal['nearest', 'linear']] = None\n    When the value is 'None', each component will follow its own interpolation method. When the value is other than 'None', the interpolation method specified by this field will override the one in each component.\nsubpixel : Optional[bool] = None\n    This field is ignored. Please set ``subpixel`` in each component\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> x = np.linspace(-1, 1, Nx)\n>>> y = np.linspace(-1, 1, Ny)\n>>> z = np.linspace(-1, 1, Nz)\n>>> coords = dict(x=x, y=y, z=z)\n>>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)\n>>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)\n>>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)\n>>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)\n>>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)\n>>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])\n>>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)",
+      "type": "object",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "description": "Optional unique name for medium.",
+          "type": "string"
+        },
+        "frequency_range": {
+          "title": "Frequency Range",
+          "description": "Optional range of validity for the medium.",
+          "units": [
+            "Hz",
+            "Hz"
+          ],
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "This field is ignored. Please set ``allow_gain`` in each component",
+          "type": "boolean"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomAnisotropicMedium",
+          "enum": [
+            "CustomAnisotropicMedium"
+          ],
+          "type": "string"
+        },
+        "xx": {
+          "title": "XX Component",
+          "description": "Medium describing the xx-component of the diagonal permittivity tensor.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "CustomPoleResidue": "#/definitions/CustomPoleResidue",
+              "CustomSellmeier": "#/definitions/CustomSellmeier",
+              "CustomLorentz": "#/definitions/CustomLorentz",
+              "CustomDebye": "#/definitions/CustomDebye",
+              "CustomDrude": "#/definitions/CustomDrude",
+              "CustomMedium": "#/definitions/CustomMedium"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/CustomPoleResidue"
+            },
+            {
+              "$ref": "#/definitions/CustomSellmeier"
+            },
+            {
+              "$ref": "#/definitions/CustomLorentz"
+            },
+            {
+              "$ref": "#/definitions/CustomDebye"
+            },
+            {
+              "$ref": "#/definitions/CustomDrude"
+            },
+            {
+              "$ref": "#/definitions/CustomMedium"
+            }
+          ]
+        },
+        "yy": {
+          "title": "YY Component",
+          "description": "Medium describing the yy-component of the diagonal permittivity tensor.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "CustomPoleResidue": "#/definitions/CustomPoleResidue",
+              "CustomSellmeier": "#/definitions/CustomSellmeier",
+              "CustomLorentz": "#/definitions/CustomLorentz",
+              "CustomDebye": "#/definitions/CustomDebye",
+              "CustomDrude": "#/definitions/CustomDrude",
+              "CustomMedium": "#/definitions/CustomMedium"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/CustomPoleResidue"
+            },
+            {
+              "$ref": "#/definitions/CustomSellmeier"
+            },
+            {
+              "$ref": "#/definitions/CustomLorentz"
+            },
+            {
+              "$ref": "#/definitions/CustomDebye"
+            },
+            {
+              "$ref": "#/definitions/CustomDrude"
+            },
+            {
+              "$ref": "#/definitions/CustomMedium"
+            }
+          ]
+        },
+        "zz": {
+          "title": "ZZ Component",
+          "description": "Medium describing the zz-component of the diagonal permittivity tensor.",
+          "discriminator": {
+            "propertyName": "type",
+            "mapping": {
+              "CustomPoleResidue": "#/definitions/CustomPoleResidue",
+              "CustomSellmeier": "#/definitions/CustomSellmeier",
+              "CustomLorentz": "#/definitions/CustomLorentz",
+              "CustomDebye": "#/definitions/CustomDebye",
+              "CustomDrude": "#/definitions/CustomDrude",
+              "CustomMedium": "#/definitions/CustomMedium"
+            }
+          },
+          "oneOf": [
+            {
+              "$ref": "#/definitions/CustomPoleResidue"
+            },
+            {
+              "$ref": "#/definitions/CustomSellmeier"
+            },
+            {
+              "$ref": "#/definitions/CustomLorentz"
+            },
+            {
+              "$ref": "#/definitions/CustomDebye"
+            },
+            {
+              "$ref": "#/definitions/CustomDrude"
+            },
+            {
+              "$ref": "#/definitions/CustomMedium"
+            }
+          ]
+        },
+        "interp_method": {
+          "title": "Interpolation method",
+          "description": "When the value is 'None', each component will follow its own interpolation method. When the value is other than 'None', the interpolation method specified by this field will override the one in each component.",
+          "enum": [
+            "nearest",
+            "linear"
+          ],
+          "type": "string"
+        },
+        "subpixel": {
+          "title": "Subpixel averaging",
+          "description": "This field is ignored. Please set ``subpixel`` in each component",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "xx",
+        "yy",
+        "zz"
+      ],
       "additionalProperties": false
     },
     "Box": {
@@ -1621,7 +2518,7 @@
           "type": "number"
         },
         "vertices": {
-          "title": "ArrayLike",
+          "title": "Vertices",
           "description": "List of (d1, d2) defining the 2 dimensional positions of the polygon face vertices at the ``reference_plane``. The index of dimension should be in the ascending order: e.g. if the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
           "units": "um",
           "type": "ArrayLike"
@@ -1749,7 +2646,7 @@
     },
     "Medium2D": {
       "title": "Medium2D",
-      "description": "2D diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nss : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.\ntt : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)",
+      "description": "2D diagonally anisotropic medium.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nss : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the ss-component of the diagonal permittivity tensor. The ss-component refers to the in-plane dimension of the medium that is the first component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the xx-component of the corresponding 3D medium.\ntt : Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]\n    Medium describing the tt-component of the diagonal permittivity tensor. The tt-component refers to the in-plane dimension of the medium that is the second component in order of 'x', 'y', 'z'. If the 2D material is normal to the y-axis, for example, then this determines the zz-component of the corresponding 3D medium.\n\nNote\n----\nOnly diagonal anisotropy is currently supported.\n\nExample\n-------\n>>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])\n>>> medium2d = Medium2D(ss=drude_medium, tt=drude_medium)",
       "type": "object",
       "properties": {
         "name": {
@@ -1775,6 +2672,12 @@
               "type": "number"
             }
           ]
+        },
+        "allow_gain": {
+          "title": "Allow gain medium",
+          "description": "Allow the medium to be active. Caution: simulations with gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.",
+          "default": false,
+          "type": "boolean"
         },
         "type": {
           "title": "Type",
@@ -1863,7 +2766,7 @@
     },
     "Structure": {
       "title": "Structure",
-      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, CustomMedium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, Medium2D]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
+      "description": "Defines a physical object that interacts with the electromagnetic fields.\nA :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)\nand a :class:`Geometry`.\n\nParameters\n----------\ngeometry : Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh, GeometryGroup]\n    Defines geometric properties of the structure.\nname : Optional[str] = None\n    Optional name for the structure.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium, Medium2D]\n    Defines the electromagnetic properties of the structure's medium.\n\nExample\n-------\n>>> from tidy3d import Box, Medium\n>>> box = Box(center=(0,0,1), size=(2, 2, 2))\n>>> glass = Medium(permittivity=3.9)\n>>> struct = Structure(geometry=box, medium=glass, name='glass_box')",
       "type": "object",
       "properties": {
         "geometry": {
@@ -1921,7 +2824,6 @@
             "propertyName": "type",
             "mapping": {
               "Medium": "#/definitions/Medium",
-              "CustomMedium": "#/definitions/CustomMedium",
               "AnisotropicMedium": "#/definitions/AnisotropicMedium",
               "PECMedium": "#/definitions/PECMedium",
               "PoleResidue": "#/definitions/PoleResidue",
@@ -1930,15 +2832,19 @@
               "Debye": "#/definitions/Debye",
               "Drude": "#/definitions/Drude",
               "FullyAnisotropicMedium": "#/definitions/FullyAnisotropicMedium",
+              "CustomMedium": "#/definitions/CustomMedium",
+              "CustomPoleResidue": "#/definitions/CustomPoleResidue",
+              "CustomSellmeier": "#/definitions/CustomSellmeier",
+              "CustomLorentz": "#/definitions/CustomLorentz",
+              "CustomDebye": "#/definitions/CustomDebye",
+              "CustomDrude": "#/definitions/CustomDrude",
+              "CustomAnisotropicMedium": "#/definitions/CustomAnisotropicMedium",
               "Medium2D": "#/definitions/Medium2D"
             }
           },
           "oneOf": [
             {
               "$ref": "#/definitions/Medium"
-            },
-            {
-              "$ref": "#/definitions/CustomMedium"
             },
             {
               "$ref": "#/definitions/AnisotropicMedium"
@@ -1963,6 +2869,27 @@
             },
             {
               "$ref": "#/definitions/FullyAnisotropicMedium"
+            },
+            {
+              "$ref": "#/definitions/CustomMedium"
+            },
+            {
+              "$ref": "#/definitions/CustomPoleResidue"
+            },
+            {
+              "$ref": "#/definitions/CustomSellmeier"
+            },
+            {
+              "$ref": "#/definitions/CustomLorentz"
+            },
+            {
+              "$ref": "#/definitions/CustomDebye"
+            },
+            {
+              "$ref": "#/definitions/CustomDrude"
+            },
+            {
+              "$ref": "#/definitions/CustomAnisotropicMedium"
             },
             {
               "$ref": "#/definitions/Medium2D"
@@ -3161,6 +4088,99 @@
       ],
       "additionalProperties": false
     },
+    "CustomCurrentSource": {
+      "title": "CustomCurrentSource",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nInjects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``\ncurrent distributions in the FDTD solver.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "CustomCurrentSource",
+          "enum": [
+            "CustomCurrentSource"
+          ],
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "description": "Center of object in x, y, and z.",
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "size": {
+          "title": "Size",
+          "description": "Size in x, y, and z directions.",
+          "units": "um",
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "number",
+              "minimum": 0
+            }
+          ]
+        },
+        "source_time": {
+          "title": "Source Time",
+          "description": "Specification of the source time-dependence.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GaussianPulse"
+            },
+            {
+              "$ref": "#/definitions/ContinuousWave"
+            }
+          ]
+        },
+        "name": {
+          "title": "Name",
+          "description": "Optional name for the source.",
+          "type": "string"
+        },
+        "current_dataset": {
+          "title": "Current Dataset",
+          "description": ":class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/FieldDataset"
+            }
+          ]
+        }
+      },
+      "required": [
+        "size",
+        "source_time",
+        "current_dataset"
+      ],
+      "additionalProperties": false
+    },
     "TFSF": {
       "title": "TFSF",
       "description": "Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.\nThe TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the\ncase of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,\nand not the propagation direction, unlike a ``PlaneWave`` source. This allows computing\nscattering and absorption cross sections without the need for additional normalization.\n\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
@@ -4035,7 +5055,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4344,7 +5363,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4449,7 +5467,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4698,7 +5715,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4738,7 +5754,7 @@
     },
     "ModeSolverMonitor": {
       "title": "ModeSolverMonitor",
-      "description": ":class:`Monitor` that stores the mode field profiles returned by the mode solver in the\nmonitor plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeSolverMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
+      "description": ":class:`Monitor` that stores the mode field profiles returned by the mode solver in the\nmonitor plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nmode_spec : ModeSpec\n    Parameters to feed to mode solver which determine modes measured by monitor.\ndirection : Literal['+', '-'] = +\n    Direction of waveguide mode propagation along the axis defined by its normal dimension.\n\nExample\n-------\n>>> mode_spec = ModeSpec(num_modes=3)\n>>> monitor = ModeSolverMonitor(\n...     center=(1,2,3),\n...     size=(2,2,0),\n...     freqs=[200e12, 210e12],\n...     mode_spec=mode_spec,\n...     name='mode_monitor')",
       "type": "object",
       "properties": {
         "type": {
@@ -4813,7 +5829,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4841,6 +5856,16 @@
               "$ref": "#/definitions/ModeSpec"
             }
           ]
+        },
+        "direction": {
+          "title": "Propagation direction",
+          "description": "Direction of waveguide mode propagation along the axis defined by its normal dimension.",
+          "default": "+",
+          "enum": [
+            "+",
+            "-"
+          ],
+          "type": "string"
         }
       },
       "required": [
@@ -4853,7 +5878,7 @@
     },
     "FieldProjectionAngleMonitor": {
       "title": "FieldProjectionAngleMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them at given observation angles.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\ntheta : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Polar angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\nphi : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Azimuth angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\n\nExample\n-------\n>>> monitor = FieldProjectionAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them at given observation angles. The ``center`` and ``size`` fields define\nwhere the monitor will be placed in order to record near fields, typically very close\nto the structure of interest. The near fields are then projected\nto far-field locations defined by ``phi``, ``theta``, and ``proj_distance``, relative\nto the ``custom_origin``. If the distance between the near and far field locations is\nmuch larger than the size of the device, one can typically set ``far_field_approx`` to\n``True``, which will make use of the far-field approximation to speed up calculations.\nIf the projection distance is comparable to the size of the device, we recommend setting\n``far_field_approx`` to ``False``, so that the approximations are not used, and the\nprojection is accurate even just a few wavelengths away from the near field locations.\nFor applications where the monitor is an open surface rather than a box that\nencloses the device, it is advisable to pick the size of the monitor such that the\nrecorded near fields decay to negligible values near the edges of the monitor.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\ntheta : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Polar angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\nphi : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = rad].  Azimuth angles with respect to the global z axis, relative to the location of ``local_origin``, at which to project fields.\n\nExample\n-------\n>>> monitor = FieldProjectionAngleMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     phi=[0, np.pi/2],\n...     theta=np.linspace(-np.pi/2, np.pi/2, 100)\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -4928,7 +5953,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -4994,7 +6018,7 @@
         },
         "far_field_approx": {
           "title": "Far field approximation",
-          "description": "Whether to enable the far field approximation when projecting fields.",
+          "description": "Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.",
           "default": true,
           "type": "boolean"
         },
@@ -5017,7 +6041,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5034,7 +6057,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5051,7 +6073,7 @@
     },
     "FieldProjectionCartesianMonitor": {
       "title": "FieldProjectionCartesianMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on a Cartesian observation plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Signed distance of the projection plane along ``proj_axis``. from the plane containing ``local_origin``.\nx : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global y axis. When ``proj_axis`` is 1, this corresponds to the global x axis. When ``proj_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global z axis. When ``proj_axis`` is 1, this corresponds to the global z axis. When ``proj_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = FieldProjectionCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     proj_axis=2,\n...     proj_distance=5\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on a Cartesian observation plane. The ``center`` and ``size`` fields define\nwhere the monitor will be placed in order to record near fields, typically very close\nto the structure of interest. The near fields are then projected\nto far-field locations defined by ``x``, ``y``, and ``proj_distance``, relative\nto the ``custom_origin``. Here, ``x`` and ``y`` correspond to a local coordinate system\nwhere the local z axis is defined by ``proj_axis``: which is the axis normal to this monitor.\nIf the distance between the near and far field locations is much larger than the size of the\ndevice, one can typically set ``far_field_approx`` to ``True``, which will make use of the\nfar-field approximation to speed up calculations. If the projection distance is comparable\nto the size of the device, we recommend setting ``far_field_approx`` to ``False``,\nso that the approximations are not used, and the projection is accurate even just a few\nwavelengths away from the near field locations.\nFor applications where the monitor is an open surface rather than a box that\nencloses the device, it is advisable to pick the size of the monitor such that the\nrecorded near fields decay to negligible values near the edges of the monitor.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Signed distance of the projection plane along ``proj_axis``. from the plane containing ``local_origin``.\nx : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global y axis. When ``proj_axis`` is 1, this corresponds to the global x axis. When ``proj_axis`` is 2, this corresponds to the global x axis. \ny : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = um].  Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. When ``proj_axis`` is 0, this corresponds to the global z axis. When ``proj_axis`` is 1, this corresponds to the global z axis. When ``proj_axis`` is 2, this corresponds to the global y axis. \n\nExample\n-------\n>>> monitor = FieldProjectionCartesianMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     x=[-1, 0, 1],\n...     y=[-2, -1, 0, 1, 2],\n...     proj_axis=2,\n...     proj_distance=5\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -5126,7 +6148,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5192,7 +6213,7 @@
         },
         "far_field_approx": {
           "title": "Far field approximation",
-          "description": "Whether to enable the far field approximation when projecting fields.",
+          "description": "Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.",
           "default": true,
           "type": "boolean"
         },
@@ -5225,7 +6246,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5242,7 +6262,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5260,7 +6279,7 @@
     },
     "FieldProjectionKSpaceMonitor": {
       "title": "FieldProjectionKSpaceMonitor",
-      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on an observation plane defined in k-space.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\nux : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\nuy : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\n\nExample\n-------\n>>> monitor = FieldProjectionKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     proj_axis=2,\n...     ux=[0.1,0.2],\n...     uy=[0.3,0.4,0.5]\n...     )",
+      "description": ":class:`Monitor` that samples electromagnetic near fields in the frequency domain\nand projects them on an observation plane defined in k-space. The ``center`` and ``size``\nfields define where the monitor will be placed in order to record near fields, typically\nvery close to the structure of interest. The near fields are then\nprojected to far-field locations defined in k-space by ``ux``, ``uy``, and ``proj_distance``,\nrelative to the ``custom_origin``. Here, ``ux`` and ``uy`` are associated with a local\ncoordinate system where the local 'z' axis is defined by ``proj_axis``: which is the axis\nnormal to this monitor. If the distance between the near and far field locations is much\nlarger than the size of the device, one can typically set ``far_field_approx`` to ``True``,\nwhich will make use of the far-field approximation to speed up calculations. If the\nprojection distance is comparable to the size of the device, we recommend setting\n``far_field_approx`` to ``False``, so that the approximations are not used, and the\nprojection is accurate even just a few wavelengths away from the near field locations.\nFor applications where the monitor is an open surface rather than a box that\nencloses the device, it is advisable to pick the size of the monitor such that the\nrecorded near fields decay to negligible values near the edges of the monitor.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for monitor.\nfreqs : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    [units = Hz].  Array or list of frequencies stored by the field monitor.\napodization : ApodizationSpec = ApodizationSpec(start=None, end=None, width=None, type='ApodizationSpec')\n    Sets parameters of (optional) apodization. Apodization applies a windowing function to the Fourier transform of the time-domain fields into frequency-domain ones, and can be used to truncate the beginning and/or end of the time signal, for example to eliminate the source pulse when studying the eigenmodes of a system. Note: apodization affects the normalization of the frequency-domain fields.\nnormal_dir : Optional[Literal['+', '-']] = None\n    Direction of the surface monitor's normal vector w.r.t. the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. Applies to surface monitors only, and defaults to ``'+'`` if not provided.\nexclude_surfaces : Optional[Tuple[Literal['x-', 'x+', 'y-', 'y+', 'z-', 'z+'], ...]] = None\n    Surfaces to exclude in the integration, if a volume monitor.\ncustom_origin : Optional[Tuple[float, float, float]] = None\n    [units = um].  Local origin used for defining observation points. If ``None``, uses the monitor's center.\nfar_field_approx : bool = True\n    Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.\nproj_axis : Literal[0, 1, 2]\n    Axis along which the observation plane is oriented.\nproj_distance : float = 1000000.0\n    [units = um].  Radial distance of the projection points from ``local_origin``.\nux : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local x component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\nuy : Union[Tuple[float, ...], ArrayLike_dtype=<class 'float'>_ndim=1]\n    Local y component of wave vectors on the observation plane, relative to ``local_origin`` and oriented with respect to ``proj_axis``, normalized by (2*pi/lambda) where lambda is the wavelength associated with the background medium. Must be in the range [-1, 1].\n\nExample\n-------\n>>> monitor = FieldProjectionKSpaceMonitor(\n...     center=(1,2,3),\n...     size=(2,2,2),\n...     freqs=[250e12, 300e12],\n...     name='n2f_monitor',\n...     custom_origin=(1,2,3),\n...     proj_axis=2,\n...     ux=[0.1,0.2],\n...     uy=[0.3,0.4,0.5]\n...     )",
       "type": "object",
       "properties": {
         "type": {
@@ -5335,7 +6354,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5401,7 +6419,7 @@
         },
         "far_field_approx": {
           "title": "Far field approximation",
-          "description": "Whether to enable the far field approximation when projecting fields.",
+          "description": "Whether to enable the far field approximation when projecting fields. If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components of fields. Typically, this should be set to ``True`` only when the projection distance is much larger than the size of the device being modeled, and the projected points are in the far field of the device.",
           "default": true,
           "type": "boolean"
         },
@@ -5433,7 +6451,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5449,7 +6466,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]
@@ -5542,7 +6558,6 @@
               }
             },
             {
-              "title": "ArrayLike",
               "type": "ArrayLike"
             }
           ]

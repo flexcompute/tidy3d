@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 from functools import wraps
+import random
+import time
 
 import matplotlib.pylab as plt
 from matplotlib.patches import PathPatch, ArrowStyle
@@ -13,6 +15,7 @@ import pydantic as pd
 
 from .types import Ax
 from .base import Tidy3dBaseModel
+from ..exceptions import SetupError
 
 """ Constants """
 
@@ -222,3 +225,43 @@ def polygon_patch(polygon, **kwargs):
 
 """End descartes modification
 ================================================================================================="""
+
+
+def plot_sim_3d(sim) -> None:
+    """Make 3D display of simulation in ipyython notebook."""
+
+    try:
+        # pylint:disable=import-outside-toplevel
+        from IPython.display import display, HTML
+    except ImportError as e:
+        raise SetupError(
+            "3D plotting requires ipython to be installed "
+            "and the code to be running on a jupyter notebook."
+        ) from e
+
+    uuid = str(int(time.time() * 1000)) + str(random.randint(0, 100000))
+    # pylint:disable=protected-access
+    js_code = f"""
+    window.postMessageToViewer{uuid} = event => {{
+        if(event.data.type === 'viewer'&&event.data.uuid==='{uuid}'){{
+            document.getElementById('simulation-viewer{uuid}').contentWindow.postMessage({{ type: 'jupyter', uuid:'{uuid}', value:{sim._json_string}}}, '*')
+        }}
+    }};
+    window.addEventListener(
+        'message',
+        window.postMessageToViewer{uuid},
+        false
+    );
+    """
+    viewer_url = (
+        "https://feature-simulation-viewer.d3a9gfg7glllfq.amplifyapp.com/simulation-viewer?uuid="
+        + str(uuid)
+    )
+    html_code = f"""
+    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="800" height="800"></iframe>
+    <script>
+        {js_code}
+    </script>
+    """
+
+    return display(HTML(html_code))

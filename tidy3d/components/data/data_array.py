@@ -1,6 +1,6 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, List
 
 import xarray as xr
 import numpy as np
@@ -114,7 +114,7 @@ class DataArray(xr.DataArray):
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
-        if not np.all(self.data == other.data):
+        if not self.data.shape == other.data.shape or not np.all(self.data == other.data):
             return False
         for key, val in self.coords.items():
             if not np.all(np.array(val) == np.array(other.coords[key])):
@@ -163,6 +163,12 @@ class DataArray(xr.DataArray):
         """Generate hash value for a :class:.`DataArray` instance, needed for custom components."""
         token_str = dask.base.tokenize(self)
         return hash(token_str)
+
+    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> DataArray:
+        """Multiply self by value at indices into ."""
+        self_mult = self.copy()
+        self_mult[{coord_name: indices}] *= value
+        return self_mult
 
 
 class FreqDataArray(DataArray):
@@ -220,6 +226,23 @@ class MixedModeDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("f", "mode_index_0", "mode_index_1")
+
+
+class SpatialDataArray(DataArray):
+    """Spatial distribution.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z")
+    _data_attrs = {"long_name": "field value"}
 
 
 class ScalarFieldDataArray(DataArray):
@@ -425,6 +448,7 @@ class TriangleMeshDataArray(DataArray):
 
 
 DATA_ARRAY_TYPES = [
+    SpatialDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,

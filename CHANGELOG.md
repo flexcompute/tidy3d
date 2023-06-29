@@ -5,12 +5,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2023-6-30
+
 ### Added
+- Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
+- `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
+- `Coords.spatial_interp` to interpolate spatial data avoiding pitfalls of `xarray.interp` in directions where there is a single data point.
+- All medium types accept `allow_gain` which is `False` by default, but allows the medium to be active if `True`.
+- Causality validation in `PoleResidue` model.
+- Group index calculation added to mode monitors and available through `ModeData.n_group`.
+- Support for `JaxGeometryGroup` in adjoint plugin.
+- Support for gradients w.r.t. `FieldMonitor` data from `output_monitors` in adjoint plugin.
+- `estimate_cost()` method for `Job` and `Batch`.
+- `s3utils.get_s3_sts_token` accepts extra query parameters.
+- `plugins.mode.web` to control the server-side mode solver.
+- Support for `JaxDataArray.interp`, allowing differentiable linear interpolation.
+- Support for `JaxSimulationData.get_intensity()`, allowing intensity distribution to be differentiated in `adjoint` plugin.
+- Support for `JaxFieldData.flux` to compute differentiable flux value from `FieldData`.
+- All custom medium types accept `subpixel` which is `False` by default, but applies subpixel averaging of the permittivity on the interfaces of the structure (including exterior boundary and intersection interfaces with other structures) if `True` and simulation's `subpixel` is also `True`.
 
 ### Changed
+- Add `Medium2D` to full simulation in tests.
+- `DispersionFitter` and `StableDispersionFitter` unified in a single `DispersionFitter` interface.
+- `StableDispersionFitter` deprecated, with stable fitter now being run instead through `plugins.dispersion.web.run(DispersionFitter)`.
+- Removed validator from `CustomFieldSource` that ensured data spanned the source geometry. Now the current values are extrapolated outside of the supplied data ranges.
+- `CustomMedium` now take fields `permittivity` and `conductivity`. `eps_dataset` will be deprecated in v3.0.
+- Moved `CustomMedium._interp` to `Coords.spatial_interp` to be used by custom current sources.
+- Adjoint simulations no longer contain unused gradient permittivity monitors, reducing processing time.
+- `Batch` prints total estimated cost if `verbose=True`.
 - Unified config and authentication.
+- Remove restriction that `JaxCustomMedium` must not be a 3D pixelated array.
+- Limit total number of input structures in adjoint plugin for performance reasons.
+- `ModeSolver` and `ModeSolverMonitor` now contain `direction` field that explicitly specifies the mode propagation direction (default is "+").
+- Added an `interpolate` option to `CustomCurrentSource` and `UniformCurrentSource`, which uses linear interpolation to emulate exact placement of the source along directions where the source has zero size, rather than snapping to the nearest grid location, similar to the behavior for `PointDipole`. Default: `True`.
 
 ### Fixed
+- Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
+- More segments in plotting of large cylinder and sphere cross-sections.
+- Proper handling of nested list of custom data components in IO, needed for custom dispersive medium coefficients.
+- `ElectromagneticFieldData.outer_dot` now works correctly for `FieldData`, not only `ModeSolverData`.
+- Fix to the setting of the mode solver PML parameters that produces better results for modes which do not decay in the PML, and fewer spurious modes.
+- Fix to single-precision mode solver to do the type conversion on the final matrix only rather than at intermediate steps, which improves accuracy in some cases.
+- Improvements to graphene medium fit.
+- Schema titles in `ArrayLike` fields.
+- Fix `web.estimate_cost` error/time-out for large simulations, it should now always work but may take some time for complex cases.
+- A more accurate injection and decomposition of backward propagating waveguide modes in lossy and gyrotropic systems.
 
 ## [2.2.3] - 2023-6-15
 
@@ -19,7 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
-Callback URL: "call_back_url" replaced with proper "callbackUrl".
+- Callback URL: "call_back_url" replaced with proper "callbackUrl".
 
 ## [2.2.2] - 2023-5-25
 
@@ -54,6 +93,7 @@ Callback URL: "call_back_url" replaced with proper "callbackUrl".
 - `SimulationTask.get_running_tasks()` to get a list of running tasks from the server.
 - Retry for set number of seconds in web functions if internet connection errors.
 - Argument `scale` to `ModeSolver.plot_field` to control plot scaling.
+- `Simulation.plot_3d()` method to make 3D rendering of simulation.
 
 
 ### Changed
@@ -62,6 +102,9 @@ Callback URL: "call_back_url" replaced with proper "callbackUrl".
 - Increased the maximum allowed estimated simulation data storage to 50GB. Individual monitors with projected data larger than 10GB will trigger a warning.
 - `PolySlab.inside` now uses `matplotlib.path.contains_points` for better performance.
 - `JaxCustomMedium` accepts a maximum of 250,000 grid cells to avoid slow server-side processing.
+- `PolySlab.inside` now uses `matplotlib.path.contains_points`.
+- `JaxCustomMedium` accepts a maximum of 250,000 grid cells.
+- Logging messages are supressed and summarized to avoid repetitions.
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
@@ -75,17 +118,6 @@ Callback URL: "call_back_url" replaced with proper "callbackUrl".
 ### Changed
 - `adjoint` plugin now filters out adjoint sources that are below a threshold in amplitude relative to the maximum amplitude of the monitor data, reducing unnecessary processing by eliminating sources that won't contribute to the gradient.
 - `web.run_async` uses `Batch` under the hood instead of `asyncio`.
-
-### Fixed
-- More helpful error messages from HTTP responses.
-- Bug in `_validate_no_structures_pml`, which was using wrong pml thicknesses.
-- Broken `callback_url` in webapi.
-
-## [2.1.1] - 2023-4-25
-
-### Added
-
-### Changed
 
 ### Fixed
 - More helpful error messages from HTTP responses.
@@ -779,7 +811,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...develop
+[2.3.0]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...v2.3.0
 [2.2.3]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...v2.2.3
 [2.2.2]: https://github.com/flexcompute/tidy3d/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/flexcompute/tidy3d/compare/v2.2.0...v2.2.1

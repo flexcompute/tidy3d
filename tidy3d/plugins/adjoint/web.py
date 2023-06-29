@@ -10,6 +10,7 @@ from jax.tree_util import register_pytree_node_class
 from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
 from ...web.webapi import run as web_run
+from ...web.webapi import wait_for_connection
 from ...web.s3utils import download_file, upload_file
 from ...web.asynchronous import run_async as web_run_async
 from ...web.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
@@ -20,9 +21,7 @@ from .components.simulation import JaxSimulation, JaxInfo
 from .components.data.sim_data import JaxSimulationData
 
 
-# TODO: confused about these paths, they aren't local but rather wherre the jax info and sim_vjp get
-# stored on the server? maybe add a comment for each?
-# when i changed them, adjoint runs errored on the solver.
+# file names and paths for server side adjoint
 SIM_VJP_FILE = "output/jax_sim_vjp.hdf5"
 JAX_INFO_FILE = "jax_info.json"
 
@@ -190,6 +189,7 @@ def run_bwd(
 """TO DO: IMPLEMENT this section IN WEBAPI """
 
 
+@wait_for_connection
 def upload_jax_info(jax_info: JaxInfo, task_id: str, verbose: bool) -> None:
     """Upload jax_info for a task with a given task_id."""
 
@@ -204,6 +204,7 @@ def upload_jax_info(jax_info: JaxInfo, task_id: str, verbose: bool) -> None:
     )
 
 
+@wait_for_connection
 def download_sim_vjp(task_id: str, verbose: bool) -> JaxSimulation:
     """Download the vjp loaded simulation from the server to return to jax."""
 

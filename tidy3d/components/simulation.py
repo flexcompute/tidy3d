@@ -19,12 +19,13 @@ from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .medium import CustomMedium, Medium2D, MediumType3D
+from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
+from .source import CustomCurrentSource
 from .source import TFSF, Source
 from .monitor import MonitorType, Monitor, FreqMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
@@ -33,7 +34,7 @@ from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
-from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch
+from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
 
 from ..version import __version__
 from ..constants import C_0, SECOND, inf
@@ -49,7 +50,8 @@ MIN_GRIDS_PER_WVL = 6.0
 MAX_NUM_MEDIUMS = 65530
 
 # maximum numbers of simulation parameters
-MAX_TIME_STEPS = 1e8
+MAX_TIME_STEPS = 1e7
+WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
 WARN_MONITOR_DATA_SIZE_GB = 10
@@ -443,21 +445,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bound_min, sim_bound_max = sim_box.bounds
         sim_bounds = list(sim_bound_min) + list(sim_bound_max)
 
-        for istruct, structure in enumerate(val):
-            struct_bound_min, struct_bound_max = structure.geometry.bounds
-            struct_bounds = list(struct_bound_min) + list(struct_bound_max)
+        with log as consolidated_logger:
+            for istruct, structure in enumerate(val):
+                struct_bound_min, struct_bound_max = structure.geometry.bounds
+                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
-            for sim_val, struct_val in zip(sim_bounds, struct_bounds):
+                for sim_val, struct_val in zip(sim_bounds, struct_bounds):
 
-                if isclose(sim_val, struct_val):
-                    log.warning(
-                        f"Structure at structures[{istruct}] has bounds that extend exactly to "
-                        "simulation edges. This can cause unexpected behavior. "
-                        "If intending to extend the structure to infinity along one dimension, "
-                        "use td.inf as a size variable instead to make this explicit. "
-                        f"Skipping check for structure indexes > {istruct}."
-                    )
-                    return val
+                    if isclose(sim_val, struct_val):
+                        consolidated_logger.warning(
+                            f"Structure at structures[{istruct}] has bounds that extend exactly to "
+                            "simulation edges. This can cause unexpected behavior. "
+                            "If intending to extend the structure to infinity along one dimension, "
+                            "use td.inf as a size variable instead to make this explicit."
+                        )
 
         return val
 
@@ -476,47 +477,46 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
             return val
 
-        def warn(istruct, side):
-            """Warning message for a structure too close to PML."""
-            log.warning(
-                f"Structure at structures[{istruct}] was detected as being less "
-                f"than half of a central wavelength from a PML on side {side}. "
-                "To avoid inaccurate results, please increase gap between "
-                "any structures and PML or fully extend structure through the pml. "
-                f"Skipping check for structure indexes > {istruct}."
-            )
+        with log as consolidated_logger:
 
-        for istruct, structure in enumerate(structures):
-            struct_bound_min, struct_bound_max = structure.geometry.bounds
+            def warn(istruct, side):
+                """Warning message for a structure too close to PML."""
+                consolidated_logger.warning(
+                    f"Structure at structures[{istruct}] was detected as being less "
+                    f"than half of a central wavelength from a PML on side {side}. "
+                    "To avoid inaccurate results, please increase gap between "
+                    "any structures and PML or fully extend structure through the pml."
+                )
 
-            for source in sources:
-                lambda0 = C_0 / source.source_time.freq0
+            for istruct, structure in enumerate(structures):
+                struct_bound_min, struct_bound_max = structure.geometry.bounds
 
-                zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
-                for axis, sim_val, struct_val, boundary in zipped:
-                    # The test is required only for PML and stable PML
-                    if not isinstance(boundary[0], (PML, StablePML)):
-                        continue
-                    if (
-                        boundary[0].num_layers > 0
-                        and struct_val > sim_val
-                        and abs(sim_val - struct_val) < lambda0 / 2
-                    ):
-                        warn(istruct, axis + "-min")
-                        return val
+                for source in sources:
+                    lambda0 = C_0 / source.source_time.freq0
 
-                zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
-                for axis, sim_val, struct_val, boundary in zipped:
-                    # The test is required only for PML and stable PML
-                    if not isinstance(boundary[1], (PML, StablePML)):
-                        continue
-                    if (
-                        boundary[1].num_layers > 0
-                        and struct_val < sim_val
-                        and abs(sim_val - struct_val) < lambda0 / 2
-                    ):
-                        warn(istruct, axis + "-max")
-                        return val
+                    zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
+                    for axis, sim_val, struct_val, boundary in zipped:
+                        # The test is required only for PML and stable PML
+                        if not isinstance(boundary[0], (PML, StablePML)):
+                            continue
+                        if (
+                            boundary[0].num_layers > 0
+                            and struct_val > sim_val
+                            and abs(sim_val - struct_val) < lambda0 / 2
+                        ):
+                            warn(istruct, axis + "-min")
+
+                    zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
+                    for axis, sim_val, struct_val, boundary in zipped:
+                        # The test is required only for PML and stable PML
+                        if not isinstance(boundary[1], (PML, StablePML)):
+                            continue
+                        if (
+                            boundary[1].num_layers > 0
+                            and struct_val < sim_val
+                            and abs(sim_val - struct_val) < lambda0 / 2
+                        ):
+                            warn(istruct, axis + "-max")
 
         return val
 
@@ -532,31 +532,34 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for monitor_index, monitor in enumerate(val):
-            if not isinstance(monitor, FreqMonitor):
-                continue
-
-            freqs = np.array(monitor.freqs)
-            for medium_index, medium in enumerate(mediums):
-
-                # skip mediums that have no freq range (all freqs valid)
-                if medium.frequency_range is None:
+        with log as consolidated_logger:
+            for monitor_index, monitor in enumerate(val):
+                if not isinstance(monitor, FreqMonitor):
                     continue
 
-                # make sure medium frequency range includes all monitor frequencies
-                fmin_med, fmax_med = medium.frequency_range
-                if np.any(freqs < fmin_med) or np.any(freqs > fmax_med):
-                    if medium_index == 0:
-                        medium_str = "The simulation background medium"
-                    else:
-                        medium_str = f"The medium associated with structures[{medium_index-1}]"
+                freqs = np.array(monitor.freqs)
+                fmin_mon = freqs.min()
+                fmax_mon = freqs.max()
+                for medium_index, medium in enumerate(mediums):
 
-                    log.warning(
-                        f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
-                        "(Hz) that does not fully cover the frequencies contained in "
-                        f"monitors[{monitor_index}]. "
-                        "This can cause inaccuracies in the recorded results."
-                    )
+                    # skip mediums that have no freq range (all freqs valid)
+                    if medium.frequency_range is None:
+                        continue
+
+                    # make sure medium frequency range includes all monitor frequencies
+                    fmin_med, fmax_med = medium.frequency_range
+                    if fmin_mon < fmin_med or fmax_mon > fmax_med:
+                        if medium_index == 0:
+                            medium_str = "The simulation background medium"
+                        else:
+                            medium_str = f"The medium associated with structures[{medium_index-1}]"
+
+                        consolidated_logger.warning(
+                            f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
+                            "(Hz) that does not fully cover the frequencies contained in "
+                            f"monitors[{monitor_index}]. "
+                            "This can cause inaccuracies in the recorded results."
+                        )
 
         return val
 
@@ -582,17 +585,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
         freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
 
-        for monitor_index, monitor in enumerate(val):
-            if not isinstance(monitor, FreqMonitor):
-                continue
+        with log as consolidated_logger:
+            for monitor_index, monitor in enumerate(val):
+                if not isinstance(monitor, FreqMonitor):
+                    continue
 
-            freqs = np.array(monitor.freqs)
-            if np.any(freqs < freq_min) or np.any(freqs > freq_max):
-                log.warning(
-                    f"monitors[{monitor_index}] contains frequencies "
-                    f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
-                    "(Hz) as defined by the sources."
-                )
+                freqs = np.array(monitor.freqs)
+                if freqs.min() < freq_min or freqs.max() > freq_max:
+                    consolidated_logger.warning(
+                        f"monitors[{monitor_index}] contains frequencies "
+                        f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
+                        "(Hz) as defined by the sources."
+                    )
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -660,24 +664,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         sim_size = values.get("size")
 
-        for idx, monitor in enumerate(val):
-            if isinstance(monitor, AbstractFieldProjectionMonitor):
-                if (
-                    np.abs(monitor.proj_distance) > 1.0e4 * np.max(sim_size)
-                    and not monitor.far_field_approx
-                ):
-                    monitor = monitor.copy(update={"far_field_approx": True})
-                    val = list(val)
-                    val[idx] = monitor
-                    val = tuple(val)
-                    log.warning(
-                        "A very large projection distance was set for the field projection "
-                        f"monitor '{monitor.name}'. Using exact field projections may result in "
-                        "precision loss for large distances; automatically enabling far-field "
-                        "approximations ('far_field_approx = True') for better precision. "
-                        "To insist on exact projections, consider using client-side projections "
-                        "via the 'FieldProjector' class, where higher precision is available."
-                    )
+        with log as consolidated_logger:
+            for idx, monitor in enumerate(val):
+                if isinstance(monitor, AbstractFieldProjectionMonitor):
+                    if (
+                        np.abs(monitor.proj_distance) > 1.0e4 * np.max(sim_size)
+                        and not monitor.far_field_approx
+                    ):
+                        monitor = monitor.copy(update={"far_field_approx": True})
+                        val = list(val)
+                        val[idx] = monitor
+                        val = tuple(val)
+                        consolidated_logger.warning(
+                            "A very large projection distance was set for the field projection "
+                            f"monitor '{monitor.name}'. Using exact field projections may result "
+                            "in precision loss for large distances; automatically enabling "
+                            "far-field approximations ('far_field_approx = True') for better "
+                            "precision. To insist on exact projections, consider using client-side "
+                            "projections via the 'FieldProjector' class, where higher precision is "
+                            "available."
+                        )
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -707,39 +713,38 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         medium_bg = values.get("medium")
         mediums = [medium_bg] + [structure.medium for structure in structures]
 
-        for source_index, source in enumerate(values.get("sources")):
-            freq0 = source.source_time.freq0
+        with log as consolidated_logger:
+            for source_index, source in enumerate(values.get("sources")):
+                freq0 = source.source_time.freq0
 
-            for medium_index, medium in enumerate(mediums):
+                for medium_index, medium in enumerate(mediums):
 
-                # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                if isinstance(medium, PECMedium):
-                    continue
-                # min wavelength in Medium2D is meaningless
-                if isinstance(medium, Medium2D):
-                    continue
+                    # min wavelength in PEC is meaningless and we'll get divide by inf errors
+                    if isinstance(medium, PECMedium):
+                        continue
+                    # min wavelength in Medium2D is meaningless
+                    if isinstance(medium, Medium2D):
+                        continue
 
-                eps_material = medium.eps_model(freq0)
-                n_material, _ = medium.eps_complex_to_nk(eps_material)
-                lambda_min = C_0 / freq0 / n_material
+                    eps_material = medium.eps_model(freq0)
+                    n_material, _ = medium.eps_complex_to_nk(eps_material)
+                    lambda_min = C_0 / freq0 / n_material
 
-                for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
-                    if (
-                        isinstance(grid_spec, UniformGrid)
-                        and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
-                    ):
-                        log.warning(
-                            f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
-                            ", which was detected as being large when compared to the "
-                            f"central wavelength of sources[{source_index}] "
-                            f"within the simulation medium "
-                            f"associated with structures[{medium_index + 1}], given by "
-                            f"{lambda_min:.4f} (um). "
-                            "To avoid inaccuracies, it is recommended the grid size is reduced. "
-                            f"Skipping check for structure indexes > {medium_index + 1}."
-                        )
-                        return val
-                        # TODO: warn about custom grid spec
+                    for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
+                        if (
+                            isinstance(grid_spec, UniformGrid)
+                            and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
+                        ):
+                            consolidated_logger.warning(
+                                f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
+                                ", which was detected as being large when compared to the "
+                                f"central wavelength of sources[{source_index}] "
+                                f"within the simulation medium "
+                                f"associated with structures[{medium_index + 1}], given by "
+                                f"{lambda_min:.4f} (um). To avoid inaccuracies, "
+                                "it is recommended the grid size is reduced. "
+                            )
+                            # TODO: warn about custom grid spec
 
         return val
 
@@ -822,26 +827,26 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_bounds = self.bounds
         bound_spec = self.boundary_spec.to_list
 
-        for i, structure in enumerate(self.structures):
-            geo_bounds = structure.geometry.bounds
-            for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
-                sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
-            ):
-                for sim_pos, geo_pos, pml, bound_edge in zip(
-                    sim_bound, geo_bound, pml_thick, bound_dim
+        with log as consolidated_logger:
+            for i, structure in enumerate(self.structures):
+                geo_bounds = structure.geometry.bounds
+                for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
+                    sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
                 ):
-                    sim_pos_pml = sim_pos + pm_val * pml
-                    in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
-                    in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
-                    if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
-                        log.warning(
-                            f"A bound of Simulation.structures[{i}] was detected as being within "
-                            "the simulation PML. We recommend extending structures to infinity or "
-                            "completely outside of the simulation PML to "
-                            "avoid unexpected effects when the structures are not translationally "
-                            "invariant within the PML. Skipping rest of structures."
-                        )
-                        return
+                    for sim_pos, geo_pos, pml, bound_edge in zip(
+                        sim_bound, geo_bound, pml_thick, bound_dim
+                    ):
+                        sim_pos_pml = sim_pos + pm_val * pml
+                        in_pml_plus = (pm_val > 0) and (sim_pos < geo_pos <= sim_pos_pml)
+                        in_pml_mnus = (pm_val < 0) and (sim_pos > geo_pos >= sim_pos_pml)
+                        if not isinstance(bound_edge, Absorber) and (in_pml_plus or in_pml_mnus):
+                            consolidated_logger.warning(
+                                f"A bound of Simulation.structures[{i}] was detected as being "
+                                "within the simulation PML. We recommend extending structures to "
+                                "infinity or completely outside of the simulation PML to avoid "
+                                "unexpected effects when the structures are not translationally "
+                                "invariant within the PML."
+                            )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
         """Warn if the grid is nonuniform along the directions tangential to the injection plane,
@@ -851,36 +856,37 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if not (self.grid_spec.auto_grid_used or self.grid_spec.custom_grid_used):
             return
 
-        for source in self.sources:
-            if not isinstance(source, TFSF):
-                continue
-
-            centers = self.grid.centers.to_list
-            sizes = self.grid.sizes.to_list
-            tfsf_bounds = source.bounds
-            _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
-            grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
-            for ind in plane_inds:
-                grid_type = grid_list[ind]
-                if isinstance(grid_type, UniformGrid):
+        with log as consolidated_logger:
+            for source in self.sources:
+                if not isinstance(source, TFSF):
                     continue
 
-                sizes_in_tfsf = [
-                    size
-                    for size, center in zip(sizes[ind], centers[ind])
-                    if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
-                ]
+                centers = self.grid.centers.to_list
+                sizes = self.grid.sizes.to_list
+                tfsf_bounds = source.bounds
+                _, plane_inds = source.pop_axis([0, 1, 2], axis=source.injection_axis)
+                grid_list = [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+                for ind in plane_inds:
+                    grid_type = grid_list[ind]
+                    if isinstance(grid_type, UniformGrid):
+                        continue
 
-                # check if all the grid sizes are sufficiently unequal
-                if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
-                    log.warning(
-                        f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
-                        "to sub-optimal cancellation of the incident field in the scattered-field "
-                        "region for the total-field scattered-field (TFSF) source "
-                        f"'{source.name}'. For best results, we recommended ensuring a uniform "
-                        "grid in both directions tangential to the TFSF injection axis, "
-                        f"'{'xyz'[source.injection_axis]}'. "
-                    )
+                    sizes_in_tfsf = [
+                        size
+                        for size, center in zip(sizes[ind], centers[ind])
+                        if tfsf_bounds[0][ind] <= center <= tfsf_bounds[1][ind]
+                    ]
+
+                    # check if all the grid sizes are sufficiently unequal
+                    if not np.all(np.isclose(sizes_in_tfsf, sizes_in_tfsf[0])):
+                        consolidated_logger.warning(
+                            f"The grid is nonuniform along the '{'xyz'[ind]}' axis, which may lead "
+                            "to sub-optimal cancellation of the incident field in the "
+                            "scattered-field region for the total-field scattered-field (TFSF) "
+                            f"source '{source.name}'. For best results, we recommended ensuring a "
+                            "uniform grid in both directions tangential to the TFSF injection "
+                            f"axis, '{'xyz'[source.injection_axis]}'."
+                        )
 
     """ Pre submit validation (before web.upload()) """
 
@@ -909,6 +915,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"Simulation has {num_time_steps:.2e} time steps, "
                 f"a maximum of {MAX_TIME_STEPS:.2e} are allowed."
             )
+        if num_time_steps > WARN_TIME_STEPS:
+            log.warning(
+                f"Simulation has {num_time_steps:.2e} time steps. The 'run_time' may be "
+                "unnecessarily large, unless there are very long-lived resonances."
+            )
 
         num_cells_times_steps = num_time_steps * num_comp_cells
         if num_cells_times_steps > MAX_CELLS_TIMES_STEPS:
@@ -924,24 +935,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid = self.grid
 
         total_size_gb = 0
-        for monitor in self.monitors:
-            monitor_inds = grid.discretize_inds(monitor, extend=True)
-            num_cells = [inds[1] - inds[0] for inds in monitor_inds]
-            # take monitor downsampling into account
-            if isinstance(monitor, AbstractFieldMonitor):
-                num_cells = monitor.downsampled_num_cells(num_cells)
-            num_cells = np.prod(num_cells)
-            monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
-            monitor_size_gb = monitor_size / 2**30
+        with log as consolidated_logger:
+            for monitor in self.monitors:
+                monitor_inds = grid.discretize_inds(monitor, extend=True)
+                num_cells = [inds[1] - inds[0] for inds in monitor_inds]
+                # take monitor downsampling into account
+                if isinstance(monitor, AbstractFieldMonitor):
+                    num_cells = monitor.downsampled_num_cells(num_cells)
+                num_cells = np.prod(num_cells)
+                monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+                monitor_size_gb = monitor_size / 2**30
 
-            if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
-                log.warning(
-                    f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
-                    "Consider making it smaller, using fewer frequencies, or spatial or temporal "
-                    "downsampling using 'interval_space' and 'interval', respectively."
-                )
+                if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
+                    consolidated_logger.warning(
+                        f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                        "Consider making it smaller, using fewer frequencies, or spatial or "
+                        "temporal downsampling using 'interval_space' and 'interval', respectively."
+                    )
 
-            total_size_gb += monitor_size_gb
+                total_size_gb += monitor_size_gb
 
         if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
@@ -986,7 +998,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
                     if any(
-                        isinstance(struct.medium, (CustomMedium, FullyAnisotropicMedium))
+                        isinstance(struct.medium, (AbstractCustomMedium, FullyAnisotropicMedium))
                         for struct in intersecting_structs
                     ):
                         raise SetupError(
@@ -1443,7 +1455,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         if alpha <= 0:
             return ax
 
-        if alpha < 1 and not isinstance(self.medium, CustomMedium):
+        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
             axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
             center = Box.unpop_axis(position, (0, 0), axis=axis)
             size = Box.unpop_axis(0, (inf, inf), axis=axis)
@@ -1456,10 +1468,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
-            if medium == self.medium and alpha < 1 and not isinstance(medium, CustomMedium):
+            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
                 continue
             # no need to add patches for custom medium
-            if not isinstance(medium, CustomMedium):
+            if not isinstance(medium, AbstractCustomMedium):
                 ax = self._plot_shape_structure_eps(
                     freq=freq,
                     alpha=alpha,
@@ -1496,17 +1508,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         eps_list = [
             medium.eps_model(freq).real
             for medium in medium_list
-            if not isinstance(medium, CustomMedium)
+            if not isinstance(medium, AbstractCustomMedium)
         ]
         eps_min = min(1, min(eps_list))
         eps_max = max(1, max(eps_list))
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
-        for mat in [medium for medium in medium_list if isinstance(medium, CustomMedium)]:
-            eps_dataset_at_freq = mat.eps_dataset_freq(freq)
-            for eps_component in eps_dataset_at_freq.field_components.values():
-                eps_min = min(eps_min, np.min(eps_component.real.values.ravel()))
-                eps_max = max(eps_max, np.max(eps_component.real.values.ravel()))
+        for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
+            eps_dataarray = mat.eps_dataarray_freq(freq)
+            eps_min = min(
+                eps_min,
+                min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+            )
+            eps_max = max(
+                eps_max,
+                max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+            )
         return eps_min, eps_max
 
     def _pcolormesh_shape_custom_medium_structure_eps(
@@ -2212,6 +2229,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return (freq_min, freq_max)
 
+    def plot_3d(self) -> None:
+        """Render 3D plot of ``Simulation`` (in jupyter notebook only)."""
+        return plot_sim_3d(self)
+
     """ Discretization """
 
     @cached_property
@@ -2271,21 +2292,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid_axes = [False, False, False]
         # must use volumetric grid for the ``AutoGrid`` in-plane directions of 2d materials
         volumetric_grid_axes = [False, False, False]
-        for structure in self.structures:
-            if isinstance(structure.medium, Medium2D):
-                normal = structure.geometry._normal_2dmaterial  # pylint:disable=protected-access
-                grid_axes[normal] = True
-                for axis, grid_axis in enumerate(
-                    [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
-                ):
-                    if isinstance(grid_axis, AutoGrid):
-                        if axis != normal:
-                            volumetric_grid_axes[axis] = True
-                        else:
-                            log.warning(
-                                "Using 'AutoGrid' for the normal direction of a 2D material "
-                                "may generate a grid that is not sufficiently fine."
-                            )
+        with log as consolidated_logger:
+            for structure in self.structures:
+                if isinstance(structure.medium, Medium2D):
+                    # pylint:disable=protected-access
+                    normal = structure.geometry._normal_2dmaterial
+                    grid_axes[normal] = True
+                    for axis, grid_axis in enumerate(
+                        [self.grid_spec.grid_x, self.grid_spec.grid_y, self.grid_spec.grid_z]
+                    ):
+                        if isinstance(grid_axis, AutoGrid):
+                            if axis != normal:
+                                volumetric_grid_axes[axis] = True
+                            else:
+                                consolidated_logger.warning(
+                                    "Using 'AutoGrid' for the normal direction of a 2D material "
+                                    "may generate a grid that is not sufficiently fine."
+                                )
         coords_all = [None, None, None]
         for axis in range(3):
             if grid_axes[axis] and volumetric_grid_axes[axis]:
@@ -2581,31 +2604,32 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
             # replace 2d materials with volumetric equivalents
-            for structure in self.volumetric_structures:
-                # Indexing subset within the bounds of the structure
-                # pylint:disable=protected-access
-                inds = structure.geometry._inds_inside_bounds(*arrays)
+            with log as consolidated_logger:
+                for structure in self.volumetric_structures:
+                    # Indexing subset within the bounds of the structure
+                    # pylint:disable=protected-access
+                    inds = structure.geometry._inds_inside_bounds(*arrays)
 
-                # Get permittivity on meshgrid over the reduced coordinates
-                coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
-                if any(coords.size == 0 for coords in coords_reduced):
-                    continue
+                    # Get permittivity on meshgrid over the reduced coordinates
+                    coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+                    if any(coords.size == 0 for coords in coords_reduced):
+                        continue
 
-                red_coords = Coords(**dict(zip("xyz", coords_reduced)))
-                eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+                    red_coords = Coords(**dict(zip("xyz", coords_reduced)))
+                    eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
 
-                if isinstance(structure.geometry, TriangleMesh):
-                    log.warning(
-                        "Client-side permittivity of a 'TriangleMesh' may be "
-                        "inaccurate if the mesh is not unionized. We recommend unionizing "
-                        "all meshes before import. A 'PermittivityMonitor' can be used to "
-                        "obtain the true permittivity and check that the surface mesh is "
-                        "loaded correctly."
-                    )
+                    if isinstance(structure.geometry, TriangleMesh):
+                        consolidated_logger.warning(
+                            "Client-side permittivity of a 'TriangleMesh' may be "
+                            "inaccurate if the mesh is not unionized. We recommend unionizing "
+                            "all meshes before import. A 'PermittivityMonitor' can be used to "
+                            "obtain the true permittivity and check that the surface mesh is "
+                            "loaded correctly."
+                        )
 
-                # Update permittivity array at selected indexes within the geometry
-                is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
-                eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
+                    # Update permittivity array at selected indexes within the geometry
+                    is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                    eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
 
             coords = dict(zip("xyz", arrays))
             return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
@@ -2623,16 +2647,19 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
-        datasets_source = [
+        datasets_field_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
-        datasets_medium = [mat.eps_dataset for mat in self.mediums if isinstance(mat, CustomMedium)]
+        datasets_current_source = [
+            src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
+        ]
+        datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
         datasets_geometry = [
             struct.geometry.mesh_dataset
             for struct in self.structures
             if isinstance(struct.geometry, TriangleMesh)
         ]
-        return datasets_source + datasets_medium + datasets_geometry
+        return datasets_field_source + datasets_current_source + datasets_medium + datasets_geometry
 
     def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
@@ -2748,3 +2775,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents."""
         return self._volumetric_structures_grid(self.grid)
+
+    @cached_property
+    def allow_gain(self) -> bool:
+        """``True`` if any of the mediums in the simulation allows gain."""
+
+        for medium in self.mediums:
+            if isinstance(medium, AnisotropicMedium):
+                if np.any([med.allow_gain for med in [medium.xx, medium.yy, medium.zz]]):
+                    return True
+            elif medium.allow_gain:
+                return True
+        return False

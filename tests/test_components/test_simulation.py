@@ -8,7 +8,7 @@ import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, SIM_FULL, log_capture
+from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated, clear_tmp
 from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
@@ -483,6 +483,10 @@ def test_plot_eps():
 
 def test_plot():
     SIM_FULL.plot(x=0, ax=AX)
+
+
+def test_plot_3d():
+    SIM_FULL.plot_3d()
 
 
 def test_structure_alpha():
@@ -1457,12 +1461,13 @@ def test_dt():
     # simulation with eps_inf < 1
     structure = td.Structure(
         geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
-        medium=td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)]),
+        medium=td.PoleResidue(eps_inf=0.16, poles=[(-1 + 1j, 2 + 2j)]),
     )
     sim_new = sim.copy(update=dict(structures=[structure]))
     assert sim_new.dt == 0.4 * dt
 
 
+@clear_tmp
 def test_sim_volumetric_structures():
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45
@@ -1514,11 +1519,17 @@ def test_sim_volumetric_structures():
         geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
         medium=aniso_medium,
     )
-
+    monitor = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, 0, td.inf),
+        freqs=(1.5e14),
+        name="field_xz",
+    )
     sim = td.Simulation(
         size=(10, 10, 10),
         structures=[below, box],
         sources=[src],
+        monitors=[monitor],
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(num_layers=5),
             y=td.Boundary.pml(num_layers=5),
@@ -1538,6 +1549,12 @@ def test_sim_volumetric_structures():
         LARGE_NUMBER * thickness / grid_dl,
         rtol=RTOL,
     )
+    # check that plotting 2d material doesn't raise an error
+    sim_data = run_emulated(sim)
+    sim_data.plot_field(ax=AX, field_monitor_name="field_xz", field_name="Ex", val="real")
+    _ = sim.plot_eps(ax=AX, x=0, alpha=0.2)
+    _ = sim.plot(ax=AX, x=0)
+
     # nonuniform sub/super-strate should error
     below_half = td.Structure(
         geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
@@ -1635,3 +1652,34 @@ def test_pml_boxes_2D(normal_axis):
 
     for pml_box in pml_boxes:
         assert pml_box.size[normal_axis] > 0, "PML box has size of 0 in normal direction of 2D sim."
+
+
+def test_allow_gain():
+    """Test if simulation allows gain."""
+
+    medium = td.Medium(permittivity=2.0)
+    medium_gain = td.Medium(permittivity=2.0, allow_gain=True)
+    medium_ani = td.AnisotropicMedium(xx=medium, yy=medium, zz=medium)
+    medium_gain_ani = td.AnisotropicMedium(xx=medium, yy=medium_gain, zz=medium)
+
+    # Test simulation medium
+    sim = td.Simulation(
+        size=(10, 10, 10), run_time=1e-12, medium=medium, grid_spec=td.GridSpec.uniform(dl=0.1)
+    )
+    assert not sim.allow_gain
+    sim = sim.updated_copy(medium=medium_gain)
+    assert sim.allow_gain
+
+    # Test structure with anisotropic gain medium
+    struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=medium_ani)
+    struct_gain = struct.updated_copy(medium=medium_gain_ani)
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        medium=medium,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[struct],
+    )
+    assert not sim.allow_gain
+    sim = sim.updated_copy(structures=[struct_gain])
+    assert sim.allow_gain

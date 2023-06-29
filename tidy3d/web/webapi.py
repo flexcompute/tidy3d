@@ -6,8 +6,9 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Callable
 from functools import wraps
 
-from requests import HTTPError
+from requests import HTTPError, ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
+from requests.exceptions import JSONDecodeError
 from urllib3.exceptions import NewConnectionError
 
 import pytz
@@ -16,13 +17,12 @@ from rich.progress import Progress
 
 from .environment import Env
 from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
-from .task import TaskId, TaskInfo
+from .task import TaskId, TaskInfo, ChargeType
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
 from ..log import log
 from ..exceptions import WebError
-
 
 # time between checking task status
 REFRESH_TIME = 0.3
@@ -52,7 +52,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
             while (time.time() - time_start) < wait_time_sec:
                 try:
                     return web_fn(*args, **kwargs)
-                except (ConnErr, ConnectionError, NewConnectionError):
+                except (ConnErr, ConnectionError, NewConnectionError, ReadTimeout, JSONDecodeError):
                     if not warned_previously:
                         log.warning(f"No connection: Retrying for {wait_time_sec} seconds.")
                         warned_previously = True
@@ -90,10 +90,10 @@ def run(  # pylint:disable=too-many-arguments
         Simulation to upload to server.
     task_name : str
         Name of task.
-    path : str = "simulation_data.hdf5"
-        Path to download results file (.hdf5), including filename.
     folder_name : str = "default"
         Name of folder to store task on web UI.
+    path : str = "simulation_data.hdf5"
+        Path to download results file (.hdf5), including filename.
     callback_url : str = None
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
@@ -265,6 +265,23 @@ def get_run_info(task_id: TaskId):
     return task.get_running_info()
 
 
+def get_status(task_id) -> str:
+    """Get the status of a task. Raises an error if status is "error".
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    """
+    task_info = get_info(task_id)
+    status = task_info.status
+    if status == "visualize":
+        return "success"
+    if status == "error":
+        raise WebError("Error running task!")
+    return status
+
+
 # pylint: disable=too-many-statements, too-many-locals, too-many-branches
 def monitor(task_id: TaskId, verbose: bool = True) -> None:
     # pylint:disable=too-many-statements
@@ -289,33 +306,55 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     console = Console() if verbose else None
 
-    def get_status() -> str:
-        """Get status for this task."""
-        task_info = get_info(task_id)
-        status = task_info.status
-        if status == "visualize":
-            return "success"
-        if status == "error":
-            raise WebError("Error running task!")
-        return status
-
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
         task_info = get_info(task_id)
-        return task_info.estFlexUnit
+        block_info = task_info.taskBlockInfo
+        if block_info and block_info.chargeType == ChargeType.FREE:
+            est_flex_unit = 0
+            grid_points = block_info.maxGridPoints
+            time_steps = block_info.maxTimeSteps
+            if grid_points < 1000:
+                grid_points_str = f"{grid_points}"
+            elif 1000 <= grid_points < 1000 * 1000:
+                grid_points_str = f"{grid_points / 1000}K"
+            else:
+                grid_points_str = f"{grid_points / 1000 / 1000}M"
+
+            if time_steps < 1000:
+                time_steps_str = f"{time_steps}"
+            elif 1000 <= grid_points < 1000 * 1000:
+                time_steps_str = f"{time_steps / 1000}K"
+            else:
+                time_steps_str = f"{time_steps / 1000 / 1000}M"
+
+            console.log(
+                f"You are running this simulation for FREE. Your current plan allows"
+                f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
+                f" day (under {grid_points_str} grid points and {time_steps_str}"
+                f" time steps)"
+            )
+        else:
+            est_flex_unit = task_info.estFlexUnit
+            if est_flex_unit is not None and est_flex_unit > 0:
+                console.log(
+                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
+                    f" to get the billed FlexCredit cost after a simulation run."
+                )
+        return est_flex_unit
 
     def monitor_preprocess() -> None:
         """Periodically check the status."""
-        status = get_status()
+        status = get_status(task_id)
         while status not in break_statuses and status != "running":
-            new_status = get_status()
+            new_status = get_status(task_id)
             if new_status != status:
                 status = new_status
                 if verbose and status != "running":
                     console.log(f"status = {status}")
             time.sleep(REFRESH_TIME)
 
-    status = get_status()
+    status = get_status(task_id)
 
     if verbose:
         console.log(f"status = {status}")
@@ -333,16 +372,11 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     # if the estimated cost is ready, print it
     if verbose:
-        est_flex_unit = get_estimated_cost()
-        if est_flex_unit is not None and est_flex_unit > 0:
-            console.log(
-                f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)' to "
-                "get the billed FlexCredit cost after a simulation run."
-            )
+        get_estimated_cost()
         console.log("starting up solver")
 
     # while running but before the percentage done is available, keep waiting
-    while get_run_info(task_id)[0] is None and get_status() == "running":
+    while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
         time.sleep(REFRESH_TIME)
 
     # while running but percentage done is available
@@ -355,7 +389,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             pbar_pd = progress.add_task("% done", total=100)
             perc_done, _ = get_run_info(task_id)
 
-            while perc_done is not None and perc_done < 100 and get_status() == "running":
+            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
                 perc_done, field_decay = get_run_info(task_id)
                 new_description = f"solver progress (field decay = {field_decay:.2e})"
                 progress.update(pbar_pd, completed=perc_done, description=new_description)
@@ -371,26 +405,26 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
-        while perc_done is not None and perc_done < 100 and get_status() == "running":
+        while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)
             time.sleep(1.0)
 
     # post processing
     if verbose:
 
-        status = get_status()
+        status = get_status(task_id)
         if status != "running":
             console.log(f"status = {status}")
 
         with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
             while status not in break_statuses:
-                new_status = get_status()
+                new_status = get_status(task_id)
                 if new_status != status:
                     status = new_status
                     console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
     else:
-        while get_status() not in break_statuses:
+        while get_status(task_id) not in break_statuses:
             time.sleep(REFRESH_TIME)
 
 
@@ -685,7 +719,7 @@ def estimate_cost(task_id: str) -> float:
     Note
     ----
     Cost is calculated assuming the simulation runs for
-    the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+    the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
     Parameters
     ----------
@@ -701,14 +735,25 @@ def estimate_cost(task_id: str) -> float:
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    resp = task.estimate_cost()
-    flex_unit = resp.get("flex_unit")
-    if not flex_unit:
-        log.warning(
-            "Could not get estimated cost! It will be reported in preprocessing upon "
-            "simulation run."
-        )
-    return flex_unit
+
+    task.estimate_cost()
+    task_info = get_info(task_id)
+    status = task_info.metadataStatus
+
+    # Wait for a termination status
+    while status not in ["processed", "success", "error", "failed"]:
+        time.sleep(REFRESH_TIME)
+        task_info = get_info(task_id)
+        status = task_info.metadataStatus
+
+    if status in ["processed", "success"]:
+        return task_info.estFlexUnit
+
+    log.warning(
+        "Could not get estimated cost! It will be reported during a simulation run in the "
+        "preprocessing step."
+    )
+    return None
 
 
 @wait_for_connection

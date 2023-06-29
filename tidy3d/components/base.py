@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from functools import wraps
-from typing import List, Callable
+from typing import List, Callable, Dict, Union, Tuple, Any
 
 import rich
 import pydantic
@@ -76,8 +76,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
-        super().__init__(**kwargs)
-        self._post_init_validators()
+        log.begin_capture()
+        try:
+            super().__init__(**kwargs)
+            self._post_init_validators()
+        finally:
+            log.end_capture(self)
 
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init, implement in subclasses."""
@@ -437,6 +441,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
+        def is_data_array(value: Any) -> bool:
+            """Whether a value is supposed to be a data array based on the contents."""
+            return isinstance(value, str) and value in DATA_ARRAY_MAP
+
         def load_data_from_file(model_dict: dict, group_path: str = "") -> None:
             """For every DataArray item in dictionary, load path of hdf5 group as value."""
 
@@ -456,15 +464,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         )
 
                 # write the path to the element of the json dict where the data_array should be
-                if isinstance(value, str) and value in DATA_ARRAY_MAP:
+                if is_data_array(value):
                     data_array_type = DATA_ARRAY_MAP[value]
                     model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
                     continue
 
                 # if a list, assign each element a unique key, recurse
                 if isinstance(value, (list, tuple)):
+
                     value_dict = cls.tuple_to_dict(tuple_values=value)
                     load_data_from_file(model_dict=value_dict, group_path=subpath)
+
+                    # handle case of nested list of DataArray elements
+                    val_tuple = list(value_dict.values())
+                    for ind, (model_item, value_item) in enumerate(zip(model_dict[key], val_tuple)):
+                        if is_data_array(model_item):
+                            model_dict[key][ind] = value_item
 
                 # if a dict, recurse
                 elif isinstance(value, dict):
@@ -689,3 +704,34 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         doc += "\n"
         cls.__doc__ = doc
+
+    def get_submodels_by_hash(self) -> Dict[int, List[Union[str, Tuple[str, int]]]]:
+        """Return a dictionary of this object's sub-models indexed by their hash values."""
+        fields = {}
+        for key in self.__fields__:
+            field = getattr(self, key)
+
+            if isinstance(field, Tidy3dBaseModel):
+                hash_ = hash(field)
+                if hash_ not in fields:
+                    fields[hash_] = []
+                fields[hash_].append(key)
+
+            # Do we need to consider np.ndarray here?
+            elif isinstance(field, (list, tuple, np.ndarray)):
+                for index, sub_field in enumerate(field):
+                    if isinstance(sub_field, Tidy3dBaseModel):
+                        hash_ = hash(sub_field)
+                        if hash_ not in fields:
+                            fields[hash_] = []
+                        fields[hash_].append((key, index))
+
+            elif isinstance(field, dict):
+                for index, sub_field in field.items():
+                    if isinstance(sub_field, Tidy3dBaseModel):
+                        hash_ = hash(sub_field)
+                        if hash_ not in fields:
+                            fields[hash_] = []
+                        fields[hash_].append((key, index))
+
+        return fields

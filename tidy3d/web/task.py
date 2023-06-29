@@ -35,6 +35,23 @@ TaskId = str
 TaskName = str
 
 
+class ChargeType(str, Enum):
+    """The payment method of task."""
+
+    FREE = "free"
+    PAID = "paid"
+
+
+class TaskBlockInfo(TaskBase):
+    """The block info that task will be blocked by all three features of DE,
+    User limit and Insufficient balance"""
+
+    chargeType: ChargeType = None
+    maxFreeCount: int = None
+    maxGridPoints: int = None
+    maxTimeSteps: int = None
+
+
 class TaskInfo(TaskBase):
     """General information about task."""
 
@@ -57,6 +74,8 @@ class TaskInfo(TaskBase):
     totalSolverTime: int = None
     callbackUrl: str = None
     taskType: str = None
+    metadataStatus: str = None
+    taskBlockInfo: TaskBlockInfo = None
 
 
 class RunInfo(TaskBase):

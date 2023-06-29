@@ -10,7 +10,8 @@ import functools
 import pydantic
 import numpy as np
 from matplotlib import patches, path
-from shapely.geometry import Point, Polygon, box, MultiPolygon
+from shapely import unary_union
+from shapely.geometry import Point, Polygon, box, MultiPolygon, LineString
 from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
@@ -48,6 +49,10 @@ _N_SAMPLE_POLYGON_INTERSECT = 5
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
 _IS_CLOSE_RTOL = np.finfo(float).eps
+# for shapely circular shapes discretization in visualization
+_N_SHAPELY_QUAD_SEGS = 200
+# polygon merge
+POLY_GRID_SIZE = 1e-12
 
 
 Points = ArrayFloat3D
@@ -419,8 +424,12 @@ class Geometry(Tidy3dBaseModel, ABC):
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
         _shape = self.evaluate_inf_shape(shape)
-        patch = polygon_patch(_shape, **plot_params.to_kwargs())
-        ax.add_artist(patch)
+        if isinstance(_shape, LineString):
+            xs, ys = zip(*_shape.coords)
+            ax.plot(xs, ys, color=plot_params.edgecolor)
+        else:
+            patch = polygon_patch(_shape, **plot_params.to_kwargs())
+            ax.add_artist(patch)
         return ax
 
     @classmethod
@@ -1592,7 +1601,7 @@ class Sphere(Centered, Circular):
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
-        return [Point(x0, y0).buffer(0.5 * intersect_dist)]
+        return [Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     @cached_property
     def bounds(self) -> Bound:
@@ -1706,7 +1715,7 @@ class Cylinder(Centered, Circular, Planar):
             return []
 
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
-        return [Point(x0, y0).buffer(radius_offset)]
+        return [Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
@@ -2300,10 +2309,8 @@ class PolySlab(Planar):
         )
 
         # convert vertices into polyslabs
-        polygons = (Polygon(vertices) for vertices in all_vertices)
-        polys_union = functools.reduce(
-            lambda poly1, poly2: poly1.union(poly2, grid_size=1e-12), polygons
-        )
+        polygons = [Polygon(vertices).buffer(0) for vertices in all_vertices]
+        polys_union = unary_union(polygons, grid_size=POLY_GRID_SIZE)
 
         if isinstance(polys_union, Polygon):
             all_vertices = [PolySlab.strip_coords(polys_union)[0]]
@@ -2687,10 +2694,17 @@ class PolySlab(Planar):
                         plane_val=y_min + dy_min, axis_val=z_max, axis=axis
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
-                    polys.append(Polygon(vertices))
+                    polys.append(Polygon(vertices).buffer(0))
             # update the base coordinate for the next subsection
             h_base = h_top
 
+        # merge touching polygons
+        polys_union = unary_union(polys, grid_size=POLY_GRID_SIZE)
+        if isinstance(polys_union, Polygon):
+            return [polys_union]
+        if isinstance(polys_union, MultiPolygon):
+            return polys_union.geoms
+        # in other cases, just return the original unmerged polygons
         return polys
 
     def _find_intersecting_height(self, position: float, axis: int) -> np.ndarray:

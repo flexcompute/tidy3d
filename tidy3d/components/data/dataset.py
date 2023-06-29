@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable
+from typing import Union, Dict, Callable, Any
 
 import xarray as xr
 import numpy as np
@@ -39,6 +39,10 @@ class AbstractFieldDataset(Dataset, ABC):
     @abstractmethod
     def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
+
+    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+        """How to package the dictionary of fields computed via self.colocate()."""
+        return xr.Dataset(centered_fields)
 
     def colocate(self, x=None, y=None, z=None) -> xr.Dataset:
         """colocate all of the data at a set of x, y, z coordinates.
@@ -79,11 +83,11 @@ class AbstractFieldDataset(Dataset, ABC):
 
             # loop through x, y, z dimensions and raise an error if only one element along dim
             for coord_name, coords_supplied in supplied_coord_map.items():
-                coord_data = field_data.coords[coord_name]
+                coord_data = np.array(field_data.coords[coord_name])
                 if coord_data.size == 1:
                     raise DataError(
                         f"colocate given {coord_name}={coords_supplied}, but "
-                        f"data only has one coordinate at {coord_name}={coord_data.values[0]}. "
+                        f"data only has one coordinate at {coord_name}={coord_data[0]}. "
                         "Therefore, can't colocate along this dimension. "
                         f"supply {coord_name}=None to skip it."
                     )
@@ -93,7 +97,7 @@ class AbstractFieldDataset(Dataset, ABC):
             )
 
         # combine all centered fields in a dataset
-        return xr.Dataset(centered_fields)
+        return self.package_colocate_results(centered_fields)
 
 
 EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]

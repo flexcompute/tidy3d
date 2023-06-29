@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Dict, Tuple
 import pydantic as pd
+import trimesh
 
 import pytest
 import numpy as np
@@ -12,6 +13,7 @@ from tidy3d.web import BatchData
 from tidy3d.components.base import Tidy3dBaseModel
 
 """ utilities shared between all tests """
+np.random.seed(4)
 
 
 def clear_dir(path: str):
@@ -63,6 +65,68 @@ SIM_MONITORS = Simulation(
     boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
 )
 
+# STL geometry
+VERTICES = np.array([[-1.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-1.5, 0.5, -0.5], [-1.5, -0.5, 0.5]])
+FACES = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+STL_GEO = TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
+
+# custom medium
+COORDS = dict(x=[-1.5, -0.5], y=[0, 1], z=[0, 1])
+custom_medium = CustomMedium(
+    permittivity=td.SpatialDataArray(
+        1 + np.random.random((2, 2, 2)),
+        coords=COORDS,
+    ),
+)
+custom_poleresidue = CustomPoleResidue(
+    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    poles=(
+        (
+            td.SpatialDataArray(-1 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+        ),
+    ),
+)
+custom_debye = CustomDebye(
+    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    coeffs=(
+        (
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+        ),
+    ),
+)
+
+custom_drude = CustomDrude(
+    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    coeffs=(
+        (
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+        ),
+    ),
+)
+
+custom_lorentz = CustomLorentz(
+    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    coeffs=(
+        (
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(10 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+        ),
+    ),
+)
+
+custom_sellmeier = CustomSellmeier(
+    coeffs=(
+        (
+            td.SpatialDataArray(0.1 + np.random.random((2, 2, 2)), coords=COORDS),
+            td.SpatialDataArray(10 + np.random.random((2, 2, 2)), coords=COORDS),
+        ),
+    ),
+)
+
 SIM_FULL = Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
@@ -88,8 +152,16 @@ SIM_FULL = Simulation(
             medium=Debye(eps_inf=2.0, coeffs=[(1, 3)]),
         ),
         Structure(
+            geometry=STL_GEO,
+            medium=Debye(eps_inf=2.0, coeffs=[(1, 3)]),
+        ),
+        Structure(
             geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=Drude(eps_inf=2.0, coeffs=[(1, 3)]),
+        ),
+        Structure(
+            geometry=Box(size=(1, 0, 1), center=(-1, 0, 0)),
+            medium=Medium2D.from_medium(Medium(conductivity=0.45), thickness=0.01),
         ),
         Structure(
             geometry=GeometryGroup(geometries=[Box(size=(1, 1, 1), center=(-1, 0, 0))]),
@@ -102,6 +174,54 @@ SIM_FULL = Simulation(
                 yy=td.Medium(permittivity=2),
                 zz=td.Medium(permittivity=3),
             ),
+        ),
+        Structure(
+            geometry=PolySlab(
+                vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
+            ),
+            medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_medium,
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_drude,
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_lorentz,
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_debye,
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_poleresidue,
+        ),
+        Structure(
+            geometry=Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_sellmeier,
         ),
         Structure(
             geometry=PolySlab(
@@ -197,6 +317,25 @@ SIM_FULL = Simulation(
                 fwidth=4e13,
             ),
             field_dataset=FieldDataset(
+                Ex=ScalarFieldDataArray(
+                    np.ones((101, 101, 1, 1)),
+                    coords=dict(
+                        x=np.linspace(-1, 1, 101),
+                        y=np.linspace(-1, 1, 101),
+                        z=np.array([0]),
+                        f=[2e14],
+                    ),
+                )
+            ),
+        ),
+        CustomCurrentSource(
+            center=(0, 1, 2),
+            size=(2, 2, 0),
+            source_time=GaussianPulse(
+                freq0=2e14,
+                fwidth=4e13,
+            ),
+            current_dataset=FieldDataset(
                 Ex=ScalarFieldDataArray(
                     np.ones((101, 101, 1, 1)),
                     coords=dict(

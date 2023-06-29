@@ -64,14 +64,15 @@ class JaxStructure(Structure, JaxObject):
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
         eps_out: complex,
-        eps_in: complex,
+        num_proc: int = 1,
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
         # compute wavelength in material (to use for determining integration points)
         freq = float(grad_data_eps.eps_xx.f)
         wvl_free_space = C_0 / freq
-        ref_ind = np.sqrt(np.max(np.real(self.medium.eps_model(freq))))
+        eps_in = self.medium.eps_model(frequency=freq)
+        ref_ind = np.sqrt(np.max(np.real(eps_in)))
         wvl_mat = wvl_free_space / ref_ind
 
         geo_vjp = self.geometry.store_vjp(
@@ -82,6 +83,7 @@ class JaxStructure(Structure, JaxObject):
             wvl_mat=wvl_mat,
             eps_out=eps_out,
             eps_in=eps_in,
+            num_proc=num_proc,
         )
 
         medium_vjp = self.medium.store_vjp(

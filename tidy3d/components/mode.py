@@ -148,9 +148,4 @@ class ModeSpec(Tidy3dBaseModel):
                     "Group index calculation without mode tracking can lead to incorrect results "
                     "around mode crossings. Consider setting 'track_freq' to 'central'."
                 )
-            if values["precision"] != "double":
-                log.warning(
-                    "Group index calculation should be performed with double precision for better "
-                    "accuracy. Consider setting 'precision' to 'double'."
-                )
         return values

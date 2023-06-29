@@ -5,7 +5,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...components.types import Numpy, ModeSolverType
+from ...components.types import Numpy, ModeSolverType, EpsSpecType
 from ...components.base import Tidy3dBaseModel
 from ...constants import ETA_0, C_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
@@ -34,7 +34,8 @@ class EigSolver(Tidy3dBaseModel):
         freq,
         mode_spec,
         symmetry=(0, 0),
-    ) -> Tuple[Numpy, Numpy]:
+        direction="+",
+    ) -> Tuple[Numpy, Numpy, EpsSpecType]:
         """Solve for the modes of a waveguide cross section.
 
         Parameters
@@ -51,12 +52,15 @@ class EigSolver(Tidy3dBaseModel):
             (Hertz) Frequency at which the eigenmodes are computed.
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
+        direction : Union["+", "-"]
+            Direction of mode propagation.
 
         Returns
         -------
-        Tuple[Numpy, Numpy]
-            The first array gives the E and H fields for all modes, the second one give sthe complex
-            effective index.
+        Tuple[Numpy, Numpy, str]
+            The first array gives the E and H fields for all modes, the second one gives the complex
+            effective index. The last variable describes permittivity characterization on the mode
+            solver's plane ("diagonal", "tensorial_real", or "tensorial_complex").
         """
 
         # freq += 0.0001j
@@ -166,7 +170,7 @@ class EigSolver(Tidy3dBaseModel):
         target_neff_p = target / np.linalg.norm(kp_to_k) + fp_eps
 
         # Solve for the modes
-        E, H, neff, keff = cls.solver_em(
+        E, H, neff, keff, eps_spec = cls.solver_em(
             Nx,
             Ny,
             eps_tensor,
@@ -175,6 +179,7 @@ class EigSolver(Tidy3dBaseModel):
             num_modes,
             target_neff_p,
             mode_spec.precision,
+            direction,
         )
 
         # Filter polarization if needed
@@ -199,14 +204,24 @@ class EigSolver(Tidy3dBaseModel):
         H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
         neff = neff * np.linalg.norm(kp_to_k)
+        keff = keff * np.linalg.norm(kp_to_k)
 
         fields = np.stack((E, H), axis=0)
 
-        return fields, neff + 1j * keff
+        return fields, neff + 1j * keff, eps_spec
 
     @classmethod
     def solver_em(
-        cls, Nx, Ny, eps_tensor, mu_tensor, der_mats, num_modes, neff_guess, mat_precision
+        cls,
+        Nx,
+        Ny,
+        eps_tensor,
+        mu_tensor,
+        der_mats,
+        num_modes,
+        neff_guess,
+        mat_precision,
+        direction,
     ):  # pylint:disable=too-many-arguments
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -229,6 +244,8 @@ class EigSolver(Tidy3dBaseModel):
             Initial guess for the effective index.
         mat_precision : Union['single', 'double']
             Single or double-point precision in eigensolver.
+        direction : Union["+", "-"]
+            Direction of mode propagation.
 
         Returns
         -------
@@ -240,6 +257,8 @@ class EigSolver(Tidy3dBaseModel):
             Real part of the effective index, shape (num_modes, ).
         keff : np.ndarray
             Imaginary part of the effective index, shape (num_modes, ).
+        eps_spec : Union["diagonal", "tensorial_real", "tensorial_complex"]
+            Permittivity characterization on the mode solver's plane.
         """
 
         # use a high-conductivity model for locations associated with a PEC
@@ -255,11 +274,52 @@ class EigSolver(Tidy3dBaseModel):
         off_diagonals = (np.ones((3, 3)) - np.eye(3)).astype(bool)
         eps_offd = np.abs(eps_tensor[off_diagonals])
         mu_offd = np.abs(mu_tensor[off_diagonals])
-        is_tensorial = False
-        if np.any(eps_offd > TOL_TENSORIAL) or np.any(mu_offd > TOL_TENSORIAL):
-            is_tensorial = True
+        is_tensorial = np.any(eps_offd > TOL_TENSORIAL) or np.any(mu_offd > TOL_TENSORIAL)
 
-        # Determine data types
+        # initial vector for eigensolver in correct data type
+        vec_init = cls.set_initial_vec(Nx, Ny, is_tensorial=is_tensorial)
+
+        # call solver
+        kwargs = {
+            "eps": eps_tensor,
+            "mu": mu_tensor,
+            "der_mats": der_mats,
+            "num_modes": num_modes,
+            "neff_guess": neff_guess,
+            "vec_init": vec_init,
+            "mat_precision": mat_precision,
+        }
+
+        is_eps_complex = cls.isinstance_complex(eps_tensor)
+
+        if not is_tensorial:
+
+            eps_spec = "diagonal"
+            E, H, neff, keff = cls.solver_diagonal(**kwargs)
+            if direction == "-":
+                H[0] *= -1
+                H[1] *= -1
+                E[2] *= -1
+
+        elif not is_eps_complex:
+
+            eps_spec = "tensorial_real"
+            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction="+")
+            if direction == "-":
+                E = np.conj(E)
+                H = -np.conj(H)
+
+        else:
+
+            eps_spec = "tensorial_complex"
+            E, H, neff, keff = cls.solver_tensorial(**kwargs, direction=direction)
+
+        return E, H, neff, keff, eps_spec
+
+    # pylint:disable=too-many-arguments
+    @classmethod
+    def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
+        """Determine data type that should be used for the matrix for diagonalization."""
         mat_dtype = np.float32
         # In tensorial case, even though the matrix can be real, the
         # expected eigenvalue is purely imaginary. So for now we enforce
@@ -268,13 +328,11 @@ class EigSolver(Tidy3dBaseModel):
             mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
         else:
             # 1) check if complex or not
-            complex_solver = False
-            if (
-                cls.isinstance_complex(eps_tensor)
-                or cls.isinstance_complex(mu_tensor)
+            complex_solver = (
+                cls.isinstance_complex(eps)
+                or cls.isinstance_complex(mu)
                 or np.any([cls.isinstance_complex(f) for f in der_mats])
-            ):
-                complex_solver = True
+            )
             # 2) determine precision
             if complex_solver:
                 mat_dtype = np.complex128 if mat_precision == "double" else np.complex64
@@ -282,27 +340,20 @@ class EigSolver(Tidy3dBaseModel):
                 if mat_precision == "double":
                     mat_dtype = np.float64
 
-        # data type conversion
-        eps_tensor = cls.type_conversion(eps_tensor, mat_dtype)
-        mu_tensor = cls.type_conversion(mu_tensor, mat_dtype)
-        der_mats = [cls.type_conversion(f, mat_dtype) for f in der_mats]
-        neff_guess = cls.type_conversion(np.array([neff_guess]), mat_dtype)[0]
-
-        # initial vector for eigensolver
-        vec_init = cls.set_initial_vec(Nx, Ny, mat_dtype=mat_dtype, is_tensorial=is_tensorial)
-
-        # call solver
-        if is_tensorial:
-            return cls.solver_tensorial(
-                eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess
-            )
-
-        return cls.solver_diagonal(eps_tensor, mu_tensor, der_mats, num_modes, vec_init, neff_guess)
+        return mat_dtype
 
     @classmethod
-    def solver_diagonal(
-        cls, eps, mu, der_mats, num_modes, vec_init, neff_guess
-    ):  # pylint:disable=too-many-arguments
+    def trim_small_values(cls, mat: sp.csr_matrix, tol: float) -> sp.csr_matrix:
+        """Eliminate elements of matrix ``mat`` for which ``abs(element) / abs(max_element) < tol``,
+        or ``np.abs(mat_data) < tol``. This operates in-place on mat so there is no return.
+        """
+        max_element = np.amax(np.abs(mat))
+        mat.data *= np.logical_or(np.abs(mat.data) / max_element > tol, np.abs(mat.data) > tol)
+        mat.eliminate_zeros()
+
+    # pylint:disable=too-many-arguments
+    @classmethod
+    def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
         # code associated with these options is included below in case it's useful in the future
@@ -359,8 +410,21 @@ class EigSolver(Tidy3dBaseModel):
 
         pmat = sp.bmat([[p11, p12], [p21, p22]])
         qmat = sp.bmat([[q11, q12], [q21, q22]])
-
         mat = pmat.dot(qmat)
+
+        # Cast matrix to target data type
+        mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=False)
+        mat = cls.type_conversion(mat, mat_dtype)
+
+        # Trim small values in single precision case
+        if mat_precision == "single":
+            cls.trim_small_values(mat, tol=fp_eps)
+
+        # Casting starting vector to target data type
+        vec_init = cls.type_conversion(vec_init, mat_dtype)
+
+        # Starting eigenvalue guess in target data type
+        eig_guess = cls.type_conversion(np.array([-(neff_guess**2)]), mat_dtype)[0]
 
         if enable_incidence_matrices:
             mat = dnz * mat * dnz.T  # pylint: disable=used-before-assignment
@@ -384,7 +448,7 @@ class EigSolver(Tidy3dBaseModel):
             mat,
             num_modes,
             vec_init,
-            guess_value=-(neff_guess**2),
+            guess_value=eig_guess,
             mode_solver_type=mode_solver_type,
             M=precon,
         )
@@ -423,10 +487,11 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff
 
+    # pylint:disable=too-many-arguments
     @classmethod
     def solver_tensorial(
-        cls, eps, mu, der_mats, num_modes, vec_init, neff_guess
-    ):  # pylint:disable=too-many-arguments
+        cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
+    ):
         """EM eigenmode solver assuming ``eps`` or ``mu`` have off-diagonal elements."""
 
         mode_solver_type = "tensorial"
@@ -494,13 +559,34 @@ class EigSolver(Tidy3dBaseModel):
             ]
         )
 
-        # Call the eigensolver. The eigenvalues are 1j * (neff + 1j * keff)
-        # Now multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
+        # The eigenvalues for the matrix above are 1j * (neff + 1j * keff)
+        # Multiply the matrix by -1j, so that eigenvalues are (neff + 1j * keff)
+        mat *= -1j
+
+        # change matrix sign for backward direction
+        if direction == "-":
+            mat *= -1
+
+        # Cast matrix to target data type
+        mat_dtype = cls.matrix_data_type(eps, mu, der_mats, mat_precision, is_tensorial=True)
+        mat = cls.type_conversion(mat, mat_dtype)
+
+        # Trim small values in single precision case
+        if mat_precision == "single":
+            cls.trim_small_values(mat, tol=fp_eps)
+
+        # Casting starting vector to target data type
+        vec_init = cls.type_conversion(vec_init, mat_dtype)
+
+        # Starting eigenvalue guess in target data type
+        eig_guess = cls.type_conversion(np.array([neff_guess]), mat_dtype)[0]
+
+        # Call the eigensolver.
         vals, vecs = cls.solver_eigs(
-            -1j * mat,
+            mat,
             num_modes,
             vec_init,
-            guess_value=neff_guess,
+            guess_value=eig_guess,
             mode_solver_type=mode_solver_type,
         )
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
@@ -596,7 +682,7 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError("Unsupported new_type.")
 
     @classmethod
-    def set_initial_vec(cls, Nx, Ny, mat_dtype=np.complex128, is_tensorial=False):
+    def set_initial_vec(cls, Nx, Ny, is_tensorial=False):
         """Set initial vector for eigs:
         1) The field at x=0 and y=0 boundaries are set to 0. This should be
         the case for PEC boundaries, but wouldn't hurt for non-PEC boundary;
@@ -609,8 +695,6 @@ class EigSolver(Tidy3dBaseModel):
             Number of grids along x-direction.
         Ny : int
             Number of grids along y-direction.
-        mat_dtype : Union[np.complex128, np.complex64, np.float64, np.float32]
-            The type of returned vector.
         is_tensorial : bool
             diagonal or tensorial eigenvalue problem.
         """
@@ -624,7 +708,6 @@ class EigSolver(Tidy3dBaseModel):
         size = (Nx, Ny, len_multiplier)
         rng = np.random.default_rng(0)
         vec_init = rng.random(size) + 1j * rng.random(size)
-        vec_init = cls.type_conversion(vec_init, mat_dtype)
 
         # Set values at the boundary to be 0
         if Nx > 1:
@@ -670,6 +753,6 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
 
-def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy]:
+def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in ``ModeSolver``."""
     return EigSolver.compute_modes(*args, **kwargs)

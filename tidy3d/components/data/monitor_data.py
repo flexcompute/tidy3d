@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, Callable, Dict, List
+from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
 
 import xarray as xr
@@ -21,6 +21,7 @@ from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
+from ..types import EpsSpecType
 from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -30,7 +31,7 @@ from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
-from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError
+from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, ValidationError
 from ...constants import ETA_0, C_0, MICROMETER
 from ...log import log
 
@@ -104,7 +105,6 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             return self.copy()
 
         update_dict = {}
-
         for field_name, scalar_data in self.field_components.items():
 
             eigenval_fn = self.symmetry_eigenvalues[field_name]
@@ -138,7 +138,9 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
                 # apply the symmetry eigenvalue (if defined) to the flipped values
                 if eigenval_fn is not None:
                     sym_eigenvalue = eigenval_fn(sym_dim)
-                    scalar_data[{dim_name: flip_inds}] *= sym_val * sym_eigenvalue
+                    scalar_data = scalar_data.multiply_at(
+                        value=sym_val * sym_eigenvalue, coord_name=dim_name, indices=flip_inds
+                    )
 
             # assign the final scalar data to the update_dict
             update_dict[field_name] = scalar_data
@@ -233,8 +235,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             # This is because we cannot colocate the fields to the center of that pixel.
             # However, the monitor should be completely outside of this last pixel.
             fields = self.symmetry_expanded_copy.field_components
-            plane_bounds1 = fields["E" + dim2].coords[dim1].values
-            plane_bounds2 = fields["E" + dim1].coords[dim2].values
+            plane_bounds1 = np.array(fields["E" + dim2].coords[dim1])
+            plane_bounds2 = np.array(fields["E" + dim1].coords[dim2])
 
         return plane_bounds1, plane_bounds2
 
@@ -361,10 +363,15 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._centered_tangential_fields
         dim1, dim2 = self._tangential_dims
+
         e_x_h_star = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
         e_x_h_star -= tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
         poynting = 0.5 * np.real(e_x_h_star)
         return poynting
+
+    def package_flux_results(self, flux_values: xr.DataArray) -> Any:
+        """How to package flux"""
+        return FluxDataArray(flux_values)
 
     @cached_property
     def flux(self) -> FluxDataArray:
@@ -372,7 +379,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
-        return FluxDataArray((self.poynting * d_area).sum(dim=d_area.dims))
+        poynting = self.poynting
+
+        flux_values = poynting * d_area
+        flux_values = flux_values.sum(dim=d_area.dims)
+
+        return self.package_flux_results(flux_values)
 
     @cached_property
     def mode_area(self) -> FreqModeDataArray:
@@ -476,7 +488,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         The tangential fields from ``field_data`` are interpolated to this object's grid, so the
         data arrays don't need to have the same discretization.  The calculation is performed for
         all common frequencies between data arrays.  In the output, ``mode_index_0`` and
-        ``mode_index_1`` are the mode indices from this object and ``field_data``, respectively.
+        ``mode_index_1`` are the mode indices from this object and ``field_data``, respectively, if
+        they are instances of ``ModeSolverData``.
 
         Parameters
         ----------
@@ -489,8 +502,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Returns
         -------
-        :class:`.MixedModeDataArray`
-            Dataset with the complex-valued modal overlaps between the two mode data.
+        :class:`xarray.DataArray`
+            Data array with the complex-valued modal overlaps between the two mode data.
 
         See also
         --------
@@ -522,26 +535,38 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         # Prepare array with proper dimensions for the dot product data
         arrays = (fields_self[e_1], fields_other[e_1])
         coords = (arrays[0].coords, arrays[1].coords)
+
         # Common frequencies to both data arrays
         f = np.array(sorted(set(coords[0]["f"].values).intersection(coords[1]["f"].values)))
-        mode_index_0 = coords[0]["mode_index"].values
-        mode_index_1 = coords[1]["mode_index"].values
+
+        # Mode indices, if available
+        modes_in_self = "mode_index" in coords[0]
+        mode_index_0 = coords[0]["mode_index"].values if modes_in_self else np.zeros(1, dtype=int)
+        modes_in_other = "mode_index" in coords[1]
+        mode_index_1 = coords[1]["mode_index"].values if modes_in_other else np.zeros(1, dtype=int)
+
         dtype = np.promote_types(arrays[0].dtype, arrays[1].dtype)
         dot = np.empty((f.size, mode_index_0.size, mode_index_1.size), dtype=dtype)
 
         # Calculate overlap for each common frequency and each mode pair
         for i, freq in enumerate(f):
+            indexer_self = {"f": freq}
+            indexer_other = {"f": freq}
             for mi0 in mode_index_0:
-                e_self_1 = fields_self[e_1].sel(f=freq, mode_index=mi0, drop=True)
-                e_self_2 = fields_self[e_2].sel(f=freq, mode_index=mi0, drop=True)
-                h_self_1 = fields_self[h_1].sel(f=freq, mode_index=mi0, drop=True)
-                h_self_2 = fields_self[h_2].sel(f=freq, mode_index=mi0, drop=True)
+                if modes_in_self:
+                    indexer_self["mode_index"] = mi0
+                e_self_1 = fields_self[e_1].sel(indexer_self, drop=True)
+                e_self_2 = fields_self[e_2].sel(indexer_self, drop=True)
+                h_self_1 = fields_self[h_1].sel(indexer_self, drop=True)
+                h_self_2 = fields_self[h_2].sel(indexer_self, drop=True)
 
                 for mi1 in mode_index_1:
-                    e_other_1 = fields_other[e_1].sel(f=freq, mode_index=mi1, drop=True)
-                    e_other_2 = fields_other[e_2].sel(f=freq, mode_index=mi1, drop=True)
-                    h_other_1 = fields_other[h_1].sel(f=freq, mode_index=mi1, drop=True)
-                    h_other_2 = fields_other[h_2].sel(f=freq, mode_index=mi1, drop=True)
+                    if modes_in_other:
+                        indexer_other["mode_index"] = mi1
+                    e_other_1 = fields_other[e_1].sel(indexer_other, drop=True)
+                    e_other_2 = fields_other[e_2].sel(indexer_other, drop=True)
+                    h_other_1 = fields_other[h_1].sel(indexer_other, drop=True)
+                    h_other_2 = fields_other[h_2].sel(indexer_other, drop=True)
 
                     # Cross products of fields
                     e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
@@ -553,13 +578,22 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
                     dot[i, mi0, mi1] = 0.25 * integrand.sum(dim=d_area.dims)
 
         coords = {"f": f, "mode_index_0": mode_index_0, "mode_index_1": mode_index_1}
-        return MixedModeDataArray(dot, coords=coords)
+        result = xr.DataArray(dot, coords=coords)
+
+        # Remove mode index coordinate if the input did not have it
+        if not modes_in_self:
+            result = result.isel(mode_index_0=0, drop=True)
+        if not modes_in_other:
+            result = result.isel(mode_index_1=0, drop=True)
+
+        return result
 
     @property
     def time_reversed_copy(self) -> FieldData:
         """Make a copy of the data with time-reversed fields."""
 
-        # Time reversal for frequency-domain fields; overwritten in :class:`FieldTimeData`.
+        # Time reversal for frequency-domain fields; overwritten in :class:`FieldTimeData`
+        # and :class:`ModeSolverData`.
         new_data = {}
         for comp, field in self.field_components.items():
             if comp[0] == "H":
@@ -742,6 +776,24 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         ..., title="Monitor", description="Mode solver monitor associated with the data."
     )
 
+    eps_spec: List[EpsSpecType] = pd.Field(
+        None,
+        title="Permettivity Specification",
+        description="Characterization of the permittivity profile on the plane where modes are "
+        "computed. Possible values are 'diagonal', 'tensorial_real', 'tensorial_complex'.",
+    )
+
+    @pd.validator("eps_spec", always=True)
+    def eps_spec_match_mode_spec(cls, val, values):
+        """Raise validation error if frequencies in eps_spec does not match frequency list"""
+        if val:
+            mode_data_freqs = values["monitor"].freqs
+            if len(val) != len(mode_data_freqs):
+                raise ValidationError(
+                    "eps_spec must be provided at the same frequencies as mode solver data."
+                )
+        return val
+
     # pylint:disable=too-many-locals
     def overlap_sort(
         self,
@@ -850,6 +902,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         # Current pairs and their overlaps
         pairs = np.arange(num_modes)
         complex_amps = self.dot(data_to_sort).data.ravel()
+        if self.monitor.direction == "-":
+            complex_amps *= -1
 
         # Check whether modes already match
         modes_to_sort = np.where(np.abs(complex_amps) < overlap_thresh)[0]
@@ -871,6 +925,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
             # Project to all modes of interest from data_template
             amps_reduced[:, i] = data_template_reduced.dot(one_mode).data.ravel()
+            if self.monitor.direction == "-":
+                amps_reduced[:, i] *= -1
 
         # Find the most similar modes and corresponding overlap values
         pairs_reduced, amps_reduced = self._find_closest_pairs(amps_reduced)
@@ -945,6 +1001,77 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         return self.copy(update=update_dict)
 
+    def _group_index_post_process(self, frequency_step: float) -> ModeSolverData:
+        """Calculate group index and remove added frequencies used only for this calculation.
+
+        Parameters
+        ----------
+        frequency_step: float
+            Fractional frequency step used to calculate the group index.
+
+        Returns
+        -------
+        :class:`.ModeSolverData`
+            Filtered data with calulated group index.
+        """
+
+        freqs = self.n_complex.coords["f"].values
+        num_freqs = freqs.size
+        back = slice(0, num_freqs, 3)
+        center = slice(1, num_freqs, 3)
+        fwd = slice(2, num_freqs, 3)
+
+        # calculate group index
+        n_center = self.n_eff.isel(f=center).values
+        n_backward = self.n_eff.isel(f=back).values
+        n_forward = self.n_eff.isel(f=fwd).values
+
+        n_group_data = n_center + (n_forward - n_backward) / (2 * frequency_step)
+        n_group = ModeIndexDataArray(
+            n_group_data,
+            coords={
+                "f": list(freqs[center]),
+                "mode_index": list(self.n_complex.coords["mode_index"].values),
+            },
+            attrs={"long name": "Group index"},
+        )
+
+        # remove data corresponding to frequencies used only for group index calculation
+        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group": n_group}
+
+        for key, field in self.field_components.items():
+            update_dict[key] = field.isel(f=center)
+
+        # pylint: disable=protected-access
+        for key, data in self._grid_correction_dict.items():
+            update_dict[key] = data.isel(f=center)
+
+        if self.eps_spec:
+            update_dict["eps_spec"] = self.eps_spec[center]
+
+        update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs[center])
+
+        return self.copy(update=update_dict)
+
+    @property
+    def time_reversed_copy(self) -> FieldData:
+        """Make a copy of the data with direction-reversed fields. In lossy or gyrotropic systems,
+        the time-reversed fields will not be the same as the backward-propagating modes."""
+
+        # Time reversal
+        new_data = {}
+        for comp, field in self.field_components.items():
+            if comp[0] == "H":
+                new_data[comp] = -np.conj(field)
+            else:
+                new_data[comp] = np.conj(field)
+
+        # switch direction in the monitor
+        mnt = self.monitor
+        new_direction = "+" if mnt.direction == "-" else "-"
+        new_data["monitor"] = mnt.updated_copy(direction=new_direction)
+        return self.copy(update=new_data)
+
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
@@ -1002,6 +1129,12 @@ class ModeData(MonitorData):
         ...,
         title="Propagation Index",
         description="Complex-valued effective propagation constants associated with the mode.",
+    )
+
+    n_group: ModeIndexDataArray = pd.Field(
+        None,
+        title="Group Index",
+        description="Index associated with group velocity of the mode.",
     )
 
     @property
