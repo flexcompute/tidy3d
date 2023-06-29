@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove restriction that `JaxCustomMedium` must not be a 3D pixelated array.
 - Limit total number of input structures in adjoint plugin for performance reasons.
 - `ModeSolver` and `ModeSolverMonitor` now contain `direction` field that explicitly specifies the mode propagation direction (default is "+").
+- Added an `interpolate` option to `CustomCurrentSource` and `UniformCurrentSource`, which uses linear interpolation to emulate exact placement of the source along directions where the source has zero size, rather than snapping to the nearest grid location, similar to the behavior for `PointDipole`. Default: `True`.
 
 ### Fixed
 - Plotting 2D materials in `SimulationData.plot_field` and other circumstances.
