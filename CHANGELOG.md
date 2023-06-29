@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2023-6-30
+
 ### Added
 - Specification of spatial permittivity distribution of dispersive material using user-supplied data through `CustomPoleResidue`, `CustomSellmeier`, `CustomLorentz`, `CustomDebye`, and `CustomDrude` components.
 - `CustomAnisotropicMedium` where each component can take user-supplied data to define spatial permittivity distribution of non-dispersive or dispersive material.
@@ -808,7 +810,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...develop
+[2.3.0]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...v2.3.0
 [2.2.3]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...v2.2.3
 [2.2.2]: https://github.com/flexcompute/tidy3d/compare/v2.2.1...v2.2.2
 [2.2.1]: https://github.com/flexcompute/tidy3d/compare/v2.2.0...v2.2.1
