@@ -1,36 +1,26 @@
-Examples
-========
+Learning FDTD Through Examples
+==============================
 
-Introduction
-------------
+Examples of How to Use FDTD Features
+------------------------------------
 
-.. toctree::
-    :maxdepth: 1
-
-    notebooks/StartHere
-    notebooks/Simulation
-    notebooks/Primer
-
-Tutorials
----------
-
-Advanced Structure Definition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Defining Structures and Materials
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    notebooks/GDS_import
+    notebooks/GDSImport
+    notebooks/STLImport
     notebooks/Dispersion
     notebooks/Fitting
-    notebooks/Self_intersecting_polyslab
-    notebooks/STLImport
-    notebooks/TFSF
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
+    notebooks/CustomMediumTutorial
+    notebooks/SelfIntersectingPolyslab
 
-Grid and Boundaries
-~~~~~~~~~~~~~~~~~~~
+Defining Grid and Boundary Conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -38,19 +28,19 @@ Grid and Boundaries
     notebooks/BoundaryConditions
     notebooks/AutoGrid
 
-Mode Solver
-~~~~~~~~~~~
+Defining Sources and Monitors
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    notebooks/ModeSolver
-    notebooks/Modal_sources_monitors
-    notebooks/Modes_bent_angled
-    notebooks/WaveguidePluginDemonstration
+    notebooks/ModalSourcesMonitors
+    notebooks/ModesBentAngled
+    notebooks/TFSF
+    notebooks/CustomFieldSource
 
-Web API
-~~~~~~~
+Running Simulations
+~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -58,8 +48,8 @@ Web API
     notebooks/WebAPI
     notebooks/ParameterScan
 
-Visualization
-~~~~~~~~~~~~~
+Visualization of Simulation and Monitor Data
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -68,39 +58,34 @@ Visualization
     notebooks/VizData
     notebooks/AnimationTutorial
 
-Custom Components
-~~~~~~~~~~~~~~~~~
+Utility Tools
+~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
-    notebooks/CustomFieldSource
-    notebooks/CustomMediumTutorial
-
-Adjoint Plugin
-~~~~~~~~~~~~~~
-
-.. toctree::
-    :maxdepth: 1
-
-    notebooks/AdjointPlugin_1_Intro
-    notebooks/AdjointPlugin_2_GradientChecking
-    notebooks/AdjointPlugin_3_InverseDesign
-    notebooks/AdjointPlugin_4_MultiObjective
-    notebooks/AdjointPlugin_5_BoundaryGradients
-    notebooks/AdjointPlugin_7_Metalens
-
-Pre and Post Processing
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. toctree::
-    :maxdepth: 1
-
+    notebooks/ModeSolver
+    notebooks/WaveguidePluginDemonstration
     notebooks/FieldProjections
     notebooks/SMatrix
+    notebooks/PICComponents
 
-Case studies
-------------
+FDTD Adjoint Optimization
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/AdjointPlugin1Intro
+    notebooks/AdjointPlugin2GradientChecking
+    notebooks/AdjointPlugin3InverseDesign
+    notebooks/AdjointPlugin4MultiObjective
+    notebooks/AdjointPlugin5BoundaryGradients
+    notebooks/AdjointPlugin6GratingCoupler
+    notebooks/AdjointPlugin7Metalens
+
+Tidy3D Case Studies
+-------------------
 
 Photonic Integrated Circuit Components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -108,7 +93,7 @@ Photonic Integrated Circuit Components
     :maxdepth: 1
 
     notebooks/YJunction
-    notebooks/MMI_1x4
+    notebooks/MMI1x4
     notebooks/BilevelPSR
     notebooks/WaveguideCrossing
     notebooks/WaveguideSizeConverter
@@ -124,9 +109,11 @@ Photonic Integrated Circuit Components
     notebooks/EdgeCoupler
     notebooks/90OpticalHybrid
     notebooks/SWGBroadbandPolarizer
+    notebooks/ZeroCrossTalkTE
+    notebooks/WaveguideToRingCoupling
 
 Metamaterials, Gratings, and Other Periodic Structures
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 .. toctree::
     :maxdepth: 1
 
@@ -134,8 +121,8 @@ Metamaterials, Gratings, and Other Periodic Structures
     notebooks/GradientMetasurfaceReflector
     notebooks/GrapheneMetamaterial.ipynb
     notebooks/MicrowaveFrequencySelectiveSurface
-    notebooks/HighQ_Si
-    notebooks/HighQ_Ge
+    notebooks/HighQSi
+    notebooks/HighQGe
     notebooks/GratingEfficiency
     notebooks/BiosensorGrating
     notebooks/DistributedBraggReflectorCavity
@@ -157,6 +144,8 @@ Optical Scattering and Far-field Radiation
     notebooks/PlasmonicNanoparticle
     notebooks/PlasmonicYagiUdaNanoantenna
     notebooks/ZonePlateFieldProjection
+    notebooks/AndersonLocalization
+    notebooks/NonHermitianMetagratings
 
 Lenses
 ~~~~~~
