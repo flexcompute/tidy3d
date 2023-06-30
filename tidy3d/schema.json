@@ -3015,7 +3015,7 @@
     },
     "UniformCurrentSource": {
       "title": "UniformCurrentSource",
-      "description": "Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
+      "description": "Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
       "type": "object",
       "properties": {
         "type": {
@@ -3089,6 +3089,12 @@
           "description": "Optional name for the source.",
           "type": "string"
         },
+        "interpolate": {
+          "title": "Enable Interpolation",
+          "description": "Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.",
+          "default": true,
+          "type": "boolean"
+        },
         "polarization": {
           "title": "Polarization",
           "description": "Specifies the direction and type of current component.",
@@ -3112,7 +3118,7 @@
     },
     "PointDipole": {
       "title": "PointDipole",
-      "description": "Uniform current source with a zero size.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\ninterpolate : bool = True\n    If ``False``, the dipole is placed at the nearest Yee grid point based on the chosen ``polarization``. If ``True``, uses linear interpolation so that effectively the dipole is placed at the exact position requested.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')",
+      "description": "Uniform current source with a zero size.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')",
       "type": "object",
       "properties": {
         "type": {
@@ -3197,6 +3203,12 @@
           "description": "Optional name for the source.",
           "type": "string"
         },
+        "interpolate": {
+          "title": "Enable Interpolation",
+          "description": "Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.",
+          "default": true,
+          "type": "boolean"
+        },
         "polarization": {
           "title": "Polarization",
           "description": "Specifies the direction and type of current component.",
@@ -3209,12 +3221,6 @@
             "Hz"
           ],
           "type": "string"
-        },
-        "interpolate": {
-          "title": "Enable Interpolation",
-          "description": "If ``False``, the dipole is placed at the nearest Yee grid point based on the chosen ``polarization``. If ``True``, uses linear interpolation so that effectively the dipole is placed at the exact position requested.",
-          "default": true,
-          "type": "boolean"
         }
       },
       "required": [
@@ -3997,7 +4003,7 @@
     },
     "CustomFieldSource": {
       "title": "CustomFieldSource",
-      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nFor the injection to work as expected, the fields must decay by the edges of the source plane,\nor the source plane must span the entire simulation domain and the fields must match the\nsimulation boundary conditions. The equivalent source currents are fully defined by the field\ncomponents tangential to the source plane. The normal components (e.g. ``Ez`` and ``Hz``) can be\nprovided but will have no effect on the results, in accordance with the equivalence principle.\nAt least one of the tangential components has to be defined. For example, for a ``z``-normal\nsource, at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy`` has to be present in the provided\ndataset. The coordinates of all provided fields are assumed to be relative to the source\ncenter. Each provided field component must also span the size of the source.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nfield_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain fields patterns to inject. At least one tangetial field component must be specified.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomFieldSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     field_dataset=dataset)",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,\nusing the equivalence principle to define the actual injected currents. For the injection to\nwork as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must\ndecay by the edges of the source plane, or the source plane must span the entire simulation\ndomain and the fields must match the simulation boundary conditions.\nThe equivalent source currents are fully defined by the field components tangential to the\nsource plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)\ncan be provided but will have no effect on the results, and at least one of the tangential\ncomponents has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nfield_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain fields patterns to inject. At least one tangetial field component must be specified.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomFieldSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     field_dataset=dataset)",
       "type": "object",
       "properties": {
         "type": {
@@ -4090,7 +4096,7 @@
     },
     "CustomCurrentSource": {
       "title": "CustomCurrentSource",
-      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nInjects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``\ncurrent distributions in the FDTD solver.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nInjects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``\ncurrent distributions in the FDTD solver.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)",
       "type": "object",
       "properties": {
         "type": {
@@ -4163,6 +4169,12 @@
           "title": "Name",
           "description": "Optional name for the source.",
           "type": "string"
+        },
+        "interpolate": {
+          "title": "Enable Interpolation",
+          "description": "Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.",
+          "default": true,
+          "type": "boolean"
         },
         "current_dataset": {
           "title": "Current Dataset",
