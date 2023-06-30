@@ -81,6 +81,10 @@ Materials
      - ``td.AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)`` for three ``td.Medium`` objects defining the diagonal elements of the permittivity tensor.
    * - Create a dispersive material from model parameters?
      - Call one of the dispersive models with your parameters, for example ``debye_medium = td.Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])``.
+   * - Create an active material?
+     - Tidy3D by default will not allow medium specifications that give rise to active materials to avoid potential divergence. However, you can override this by setting the field ``allow_gain=True`` in any medium, e.g. ``td.Medium(permittivity=2.0, conductivity=-1.0, allow_gain=True)``
+   * - Create a spatially varying material?
+     - Call one of the "Custom-" materials, e.g. ``CustomMedium`` for a spatially varying non-dispersive medium.
    * - Load a commonly-used dispersive material?
      - Import one of several material models from our ``td.material_library``.
 
