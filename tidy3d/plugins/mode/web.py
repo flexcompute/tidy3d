@@ -189,7 +189,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             mode_spec = mode_solver.mode_spec.copy(update={"precision": "single"})
             mode_solver = mode_solver.copy(update={"mode_spec": mode_spec})
 
-        mode_solver.simulation.validate_pre_upload()
+        mode_solver.simulation.validate_pre_upload(source_required=False)
         resp = http.post(
             MODESOLVER_API,
             {

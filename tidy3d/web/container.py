@@ -76,6 +76,12 @@ class Job(WebContainer):
         description="Task ID number, set when the task is uploaded, leave as None.",
     )
 
+    source_required: bool = pd.Field(
+        True,
+        title="Source Required",
+        deacription="If ``True``, simulations without sources will raise an error before upload.",
+    )
+
     _upload_fields = (
         "simulation",
         "task_name",
@@ -84,6 +90,7 @@ class Job(WebContainer):
         "verbose",
         "simulation_type",
         "parent_tasks",
+        "source_required",
     )
 
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
@@ -327,6 +334,12 @@ class Batch(WebContainer):
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
+    )
+
+    source_required: bool = pd.Field(
+        True,
+        title="Source Required",
+        deacription="If ``True``, simulations without sources will raise an error before upload.",
     )
 
     jobs: Dict[TaskName, Job] = pd.Field(

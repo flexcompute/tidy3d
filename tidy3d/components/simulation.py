@@ -579,7 +579,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if not source_ranges:
-            log.warning("No sources in simulation.")
+            log.info("No sources in simulation.")
             return val
 
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
@@ -890,14 +890,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Pre submit validation (before web.upload()) """
 
-    def validate_pre_upload(self) -> None:
-        """Validate the fully initialized simulation is ok for upload to our servers."""
+    def validate_pre_upload(self, source_required: bool = True) -> None:
+        """Validate the fully initialized simulation is ok for upload to our servers.
+
+        Parameters
+        ----------
+        source_required: bool = True
+            If ``True``, validation will fail in case no sources are found in the simulation.
+        """
         self._validate_size()
         self._validate_monitor_size()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
         # self._validate_run_time()
         _ = self.volumetric_structures
+        if source_required and len(self.sources) == 0:
+            raise SetupError("No sources in simulation.")
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
