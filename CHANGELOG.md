@@ -10,12 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Source validation happens before simulation upload and raises an error if no source is present.
 - Warning instead of error if structure out of simulation bounds.
+- Cleaner display of `ArrayLike` in docs.
 
 ### Fixed
 - Point-like objects correctly appear as single points using `plt.scatter`.
-### Changed
-- Source validation happens before simulation upload and raises an error if no source is present.
-- Cleaner display of `ArrayLike` in docs.
+- Apply finite grid correction to the fields when calculating the Poynting vector from 2D monitors.
 
 ## [2.3.0] - 2023-6-30
 
