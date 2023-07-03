@@ -324,8 +324,9 @@ def set_logging_file(
         try:
             log.handlers["file"].file.close()
         except:  # pylint: disable=bare-except
-            del log.handlers["file"]
             log.warning("Log file could not be closed")
+        finally:
+            del log.handlers["file"]
 
     try:
         # pylint: disable=consider-using-with
