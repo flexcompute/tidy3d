@@ -681,6 +681,7 @@
                 "offset": 5.0
             },
             "name": null,
+            "interpolate": true,
             "polarization": "Hx"
         },
         {
@@ -704,8 +705,8 @@
                 "offset": 5.0
             },
             "name": null,
-            "polarization": "Ex",
-            "interpolate": true
+            "interpolate": true,
+            "polarization": "Ex"
         },
         {
             "type": "ModeSource",
@@ -891,6 +892,7 @@
                 "offset": 5.0
             },
             "name": null,
+            "interpolate": true,
             "current_dataset": {
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",

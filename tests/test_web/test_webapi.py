@@ -3,6 +3,7 @@ import tempfile
 import pytest
 import responses
 from _pytest import monkeypatch
+import os
 
 import tidy3d as td
 import tidy3d.web as web
@@ -20,14 +21,21 @@ from tidy3d.web.asynchronous import run_async
 
 from tidy3d.__main__ import main
 
+from ..utils import TMP_DIR
+
 # variables used below
-FNAME_TMP = "tests/tmp/web_test_tmp.json"
+FNAME_TMP = os.path.join(TMP_DIR, "web_test_tmp.json")
+
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
 CREATED_AT = "2022-01-01T00:00:00.000Z"
 PROJECT_NAME = "default"
 FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
+
+# make the TMP directory if it doesnt exist
+if not os.path.exists(TMP_DIR):
+    os.mkdir(TMP_DIR)
 
 
 def make_sim():
