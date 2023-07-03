@@ -197,20 +197,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return tangential_dims
 
     @property
-    def _grid_corrected_fields(self) -> Dict[str, DataArray]:
+    def _in_plane(self) -> Dict[str, DataArray]:
         """Dictionary of field components with finite grid correction factors applied and symmetry
         expanded."""
         if len(self.monitor.zero_dims) != 1:
             raise DataError("Data must be 2D to apply grid corrections.")
+
         normal_dim = "xyz"[self.monitor.zero_dims[0]]
         fields = {}
-        for field_name, field in self.symmetry_expanded_copy.field_components.items():
-            eig_val = self.symmetry_eigenvalues[field_name](normal_dim)
-            if eig_val < 0:
-                fields[field_name] = field * self.grid_dual_correction
-            else:
-                fields[field_name] = field * self.grid_primal_correction
-            fields[field_name] = fields[field_name].squeeze(dim=normal_dim, drop=True)
+        for field_name, field in self.grid_corrected_copy.field_components.items():
+            fields[field_name] = field.squeeze(dim=normal_dim, drop=True)
         return fields
 
     @property
@@ -307,7 +303,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         ----
             The finite grid correction factors are applied and symmetry is expanded.
         """
-        return self._tangential_corrected(self._grid_corrected_fields)
+        return self._tangential_corrected(self._in_plane)
 
     @property
     def _centered_fields(self) -> Dict[str, DataArray]:
@@ -319,7 +315,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             The finite grid correction factors are applied and symmetry is expanded.
         """
 
-        field_components = self._grid_corrected_fields
+        field_components = self._in_plane
+
         if self.monitor.colocate:
             return field_components
 
@@ -345,6 +342,24 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             The finite grid correction factors are applied and symmetry is expanded.
         """
         return self._tangential_corrected(self._centered_fields)
+
+    @property
+    def grid_corrected_copy(self) -> ElectromagneticFieldData:
+        """Return a copy of self with grid correction factors applied (if necessary) and symmetry
+        expanded."""
+        field_data = self.symmetry_expanded_copy
+        if len(self.monitor.zero_dims) != 1:
+            return field_data
+
+        normal_dim = "xyz"[self.monitor.zero_dims[0]]
+        update = {"grid_primal_correction": 1.0, "grid_dual_correction": 1.0}
+        for field_name, field in field_data.field_components.items():
+            eig_val = self.symmetry_eigenvalues[field_name](normal_dim)
+            if eig_val < 0:
+                update[field_name] = field * self.grid_dual_correction
+            else:
+                update[field_name] = field * self.grid_primal_correction
+        return field_data.copy(update=update)
 
     @property
     def intensity(self) -> ScalarFieldDataArray:

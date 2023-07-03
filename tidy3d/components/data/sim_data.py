@@ -216,8 +216,23 @@ class SimulationData(Tidy3dBaseModel):
             interpolated to center locations on Yee grid.
         """
 
-        # get the data
-        monitor_data = self.load_field_monitor(field_monitor_name)
+        return self._at_centers(self.load_field_monitor(field_monitor_name))
+
+    def _at_centers(self, monitor_data: xr.Dataset) -> xr.Dataset:
+        """return xarray.Dataset representation of field monitor data
+        co-located at Yee cell centers.
+
+        Parameters
+        ----------
+        monitor_data : xr.Dataset
+            Monitor data to be co-located.
+
+        Returns
+        -------
+        xarray.Dataset
+            Dataset containing all of the fields in the data
+            interpolated to center locations on Yee grid.
+        """
 
         # discretize the monitor and get center locations
         sub_grid = self.simulation.discretize(monitor_data.monitor, extend=False)
@@ -233,6 +248,7 @@ class SimulationData(Tidy3dBaseModel):
 
         return monitor_data.colocate(**xyz_kwargs)
 
+    # pylint: disable=too-many-locals
     def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
         """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.
 
@@ -253,8 +269,9 @@ class SimulationData(Tidy3dBaseModel):
             DataArray containing the Poynting vector calculated based on the field components
             colocated at the center locations of the Yee grid.
         """
-
-        field_dataset = self.at_centers(field_monitor_name)
+        # Fields from 2D monitors need a correction factor
+        mon_data = self.load_field_monitor(field_monitor_name).grid_corrected_copy
+        field_dataset = self._at_centers(mon_data)
 
         time_domain = isinstance(self.monitor_data[field_monitor_name], FieldTimeData)
 
