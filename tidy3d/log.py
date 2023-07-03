@@ -24,6 +24,14 @@ _level_name = {v: k for k, v in _level_value.items()}
 
 DEFAULT_LEVEL = "WARNING"
 
+DEFAULT_LOG_STYLES = {
+    "DEBUG": None,
+    "INFO": None,
+    "WARNING": "red",
+    "ERROR": "red bold",
+    "CRITICAL": "red bold",
+}
+
 
 def _get_level_int(level: LogValue) -> int:
     """Get the integer corresponding to the level string."""
@@ -54,7 +62,13 @@ class LogHandler:
             if stack[offset - 1].filename.endswith("exceptions.py"):
                 # We want the calling site for exceptions.py
                 offset += 1
-            self.console.log(level_name, message, sep=": ", _stack_offset=offset)
+            self.console.log(
+                level_name,
+                message,
+                sep=": ",
+                style=DEFAULT_LOG_STYLES[level_name],
+                _stack_offset=offset,
+            )
 
 
 class Logger:
@@ -310,8 +324,9 @@ def set_logging_file(
         try:
             log.handlers["file"].file.close()
         except:  # pylint: disable=bare-except
-            del log.handlers["file"]
             log.warning("Log file could not be closed")
+        finally:
+            del log.handlers["file"]
 
     try:
         # pylint: disable=consider-using-with
