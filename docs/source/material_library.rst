@@ -39,14 +39,14 @@ Silver ("Ag")
 .. table::
    :widths: auto
 
-   =========================== ========================== ============= =============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                    
-   =========================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml>`__ 
-   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-BB.yml>`__
-   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Rakic-LD.yml>`__
-   ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 2-pole, lossy [3] `[data] <https://refractiveindex.info/database/data/main/Ag/Yang.yml>`__                 
-   =========================== ========================== ============= =============================================================================================
+   =========================== ========================== ============= =========================================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                                
+   =========================== ========================== ============= =========================================================================================================
+   ``'JohnsonChristy1972'``    0.19 - 1.94 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Johnson.yml>`__ 
+   ``'Rakic1998BB'`` (default) 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-BB.yml>`__
+   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Rakic-LD.yml>`__
+   ``'Yang2015Drude'``         0.19 - 1.94 :math:`{\mu}m` 2-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Yang.yml>`__    
+   =========================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -70,12 +70,12 @@ Aluminum ("Al")
 .. table::
    :widths: auto
 
-   =========================== ============================ ============= =============================================================================================
-   Variant                     Valid for                    Model Info    Reference                                                                                    
-   =========================== ============================ ============= =============================================================================================
-   ``'Rakic1995'`` (default)   0.02 - 1.97 :math:`{\mu}m`   5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Al/Rakic.yml>`__   
-   ``'RakicLorentzDrude1998'`` 0.06 - 247.97 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Al/Rakic-LD.yml>`__
-   =========================== ============================ ============= =============================================================================================
+   =========================== ============================ ============= =========================================================================================================
+   Variant                     Valid for                    Model Info    Reference                                                                                                
+   =========================== ============================ ============= =========================================================================================================
+   ``'Rakic1995'`` (default)   0.02 - 1.97 :math:`{\mu}m`   5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Al/Rakic.yml>`__   
+   ``'RakicLorentzDrude1998'`` 0.06 - 247.97 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Al/Rakic-LD.yml>`__
+   =========================== ============================ ============= =========================================================================================================
 
 Examples:
 
@@ -114,12 +114,12 @@ Aluminum Arsenide ("AlAs")
 .. table::
    :widths: auto
 
-   ====================== ========================= ================ ===========================================================================================
-   Variant                Valid for                 Model Info       Reference                                                                                  
-   ====================== ========================= ================ ===========================================================================================
-   ``'FernOnton1971'``    0.56 - 2.2 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/AlAs/Fern.yml>`__
-   ``'Horiba'`` (default) 0.41 -   :math:`{\mu}m`   1-pole, lossy    [2]                                                                                        
-   ====================== ========================= ================ ===========================================================================================
+   ====================== ========================= ================ =======================================================================================================
+   Variant                Valid for                 Model Info       Reference                                                                                              
+   ====================== ========================= ================ =======================================================================================================
+   ``'FernOnton1971'``    0.56 - 2.2 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/AlAs/Fern.yml>`__
+   ``'Horiba'`` (default) 0.41 -   :math:`{\mu}m`   1-pole, lossy    [2]                                                                                                    
+   ====================== ========================= ================ =======================================================================================================
 
 Examples:
 
@@ -238,16 +238,16 @@ Gold ("Au")
 .. table::
    :widths: auto
 
-   =================================== =========================== ============= =============================================================================================
-   Variant                             Valid for                   Model Info    Reference                                                                                    
-   =================================== =========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Johnson.yml>`__ 
-   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 2-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-sc.yml>`__
-   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ev.yml>`__
-   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Olmon-ts.yml>`__
-   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Au/Rakic-LD.yml>`__
-   =================================== =========================== ============= =============================================================================================
+   =================================== =========================== ============= =========================================================================================================
+   Variant                             Valid for                   Model Info    Reference                                                                                                
+   =================================== =========================== ============= =========================================================================================================
+   ``'JohnsonChristy1972'``            0.19 - 1.94 :math:`{\mu}m`  6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Johnson.yml>`__ 
+   ``'Olmon2012crystal'``              0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012Drude'``                1.24 - 24.93 :math:`{\mu}m` 2-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-sc.yml>`__
+   ``'Olmon2012evaporated'`` (default) 0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ev.yml>`__
+   ``'Olmon2012stripped'``             0.3 - 24.93 :math:`{\mu}m`  3-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Olmon-ts.yml>`__
+   ``'RakicLorentzDrude1998'``         0.25 - 6.2 :math:`{\mu}m`   7-pole, lossy [3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Au/Rakic-LD.yml>`__
+   =================================== =========================== ============= =========================================================================================================
 
 Examples:
 
@@ -275,12 +275,12 @@ Beryllium ("Be")
 .. table::
    :widths: auto
 
-   =========================== =========================== ============= =============================================================================================
-   Variant                     Valid for                   Model Info    Reference                                                                                    
-   =========================== =========================== ============= =============================================================================================
-   ``'Rakic1998BB'`` (default) 0.25 - 61.99 :math:`{\mu}m` 4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Be/Rakic-BB.yml>`__
-   ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Be/Rakic-LD.yml>`__
-   =========================== =========================== ============= =============================================================================================
+   =========================== =========================== ============= =========================================================================================================
+   Variant                     Valid for                   Model Info    Reference                                                                                                
+   =========================== =========================== ============= =========================================================================================================
+   ``'Rakic1998BB'`` (default) 0.25 - 61.99 :math:`{\mu}m` 4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-BB.yml>`__
+   ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Be/Rakic-LD.yml>`__
+   =========================== =========================== ============= =========================================================================================================
 
 Examples:
 
@@ -358,12 +358,12 @@ Chromium ("Cr")
 .. table::
    :widths: auto
 
-   =========================== =========================== ============= =============================================================================================
-   Variant                     Valid for                   Model Info    Reference                                                                                    
-   =========================== =========================== ============= =============================================================================================
-   ``'Rakic1998BB'`` (default) 0.25 - 62.0 :math:`{\mu}m`  4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Cr/Rakic-BB.yml>`__
-   ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Cr/Rakic-LD.yml>`__
-   =========================== =========================== ============= =============================================================================================
+   =========================== =========================== ============= =========================================================================================================
+   Variant                     Valid for                   Model Info    Reference                                                                                                
+   =========================== =========================== ============= =========================================================================================================
+   ``'Rakic1998BB'`` (default) 0.25 - 62.0 :math:`{\mu}m`  4-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-BB.yml>`__
+   ``'RakicLorentzDrude1998'`` 0.25 - 61.99 :math:`{\mu}m` 8-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cr/Rakic-LD.yml>`__
+   =========================== =========================== ============= =========================================================================================================
 
 Examples:
 
@@ -381,13 +381,13 @@ Crystalline Silicon ("cSi")
 .. table::
    :widths: auto
 
-   ================================= ========================== ================ ================================================================================================
-   Variant                           Valid for                  Model Info       Reference                                                                                       
-   ================================= ========================== ================ ================================================================================================
-   ``'Green2008'``                   0.25 - 1.45 :math:`{\mu}m` 4-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Green-2008.yml>`__ 
-   ``'Li1993_293K'``                 1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Li-293K.yml>`__    
-   ``'SalzbergVilla1957'`` (default) 1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si/Salzberg.yml>`__
-   ================================= ========================== ================ ================================================================================================
+   ================================= ========================== ================ ============================================================================================================
+   Variant                           Valid for                  Model Info       Reference                                                                                                   
+   ================================= ========================== ================ ============================================================================================================
+   ``'Green2008'``                   0.25 - 1.45 :math:`{\mu}m` 4-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
+   ``'Li1993_293K'``                 1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
+   ``'SalzbergVilla1957'`` (default) 1.36 - 11.0 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Salzberg.yml>`__
+   ================================= ========================== ================ ============================================================================================================
 
 Examples:
 
@@ -410,12 +410,12 @@ Copper ("Cu")
 .. table::
    :widths: auto
 
-   ================================== ========================== ============= =============================================================================================
-   Variant                            Valid for                  Model Info    Reference                                                                                    
-   ================================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Cu/Johnson.yml>`__ 
-   ``'RakicLorentzDrude1998'``        0.21 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Cu/Rakic-LD.yml>`__
-   ================================== ========================== ============= =============================================================================================
+   ================================== ========================== ============= =========================================================================================================
+   Variant                            Valid for                  Model Info    Reference                                                                                                
+   ================================== ========================== ============= =========================================================================================================
+   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cu/Johnson.yml>`__ 
+   ``'RakicLorentzDrude1998'``        0.21 - 12.4 :math:`{\mu}m` 6-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Cu/Rakic-LD.yml>`__
+   ================================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -434,13 +434,13 @@ Fused Silica ("FusedSilica")
 .. table::
    :widths: auto
 
-   ============================== ========================== ================ ==================================================================================================
-   Variant                        Valid for                  Model Info       Reference                                                                                         
-   ============================== ========================== ================ ==================================================================================================
-   ``'ZemaxPMLStable'`` (default) 0.41 - 1.99 :math:`{\mu}m` 1-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml>`__
-   ``'ZemaxSellmeier'``           0.21 - 6.7 :math:`{\mu}m`  3-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml>`__
-   ``'ZemaxVisiblePMLStable'``    0.41 - 0.78 :math:`{\mu}m` 1-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/SiO2/Malitson.yml>`__
-   ============================== ========================== ================ ==================================================================================================
+   ============================== ========================== ================ ==============================================================================================================
+   Variant                        Valid for                  Model Info       Reference                                                                                                     
+   ============================== ========================== ================ ==============================================================================================================
+   ``'ZemaxPMLStable'`` (default) 0.41 - 1.99 :math:`{\mu}m` 1-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/SiO2/Malitson.yml>`__
+   ``'ZemaxSellmeier'``           0.21 - 6.7 :math:`{\mu}m`  3-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/SiO2/Malitson.yml>`__
+   ``'ZemaxVisiblePMLStable'``    0.41 - 0.78 :math:`{\mu}m` 1-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/SiO2/Malitson.yml>`__
+   ============================== ========================== ================ ==============================================================================================================
 
 Examples:
 
@@ -461,11 +461,11 @@ Gallium Arsenide ("GaAs")
 .. table::
    :widths: auto
 
-   ========================== ========================== ================ =============================================================================================
-   Variant                    Valid for                  Model Info       Reference                                                                                    
-   ========================== ========================== ================ =============================================================================================
-   ``'Skauli2003'`` (default) 0.97 - 17.0 :math:`{\mu}m` 3-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/GaAs/Skauli.yml>`__
-   ========================== ========================== ================ =============================================================================================
+   ========================== ========================== ================ =========================================================================================================
+   Variant                    Valid for                  Model Info       Reference                                                                                                
+   ========================== ========================== ================ =========================================================================================================
+   ``'Skauli2003'`` (default) 0.97 - 17.0 :math:`{\mu}m` 3-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/GaAs/Skauli.yml>`__
+   ========================== ========================== ================ =========================================================================================================
 
 Examples:
 
@@ -481,11 +481,11 @@ Germanium ("Ge")
 .. table::
    :widths: auto
 
-   ============================ ========================= ================ ================================================================================================
-   Variant                      Valid for                 Model Info       Reference                                                                                       
-   ============================ ========================= ================ ================================================================================================
-   ``'Icenogle1976'`` (default) 2.5 - 12.0 :math:`{\mu}m` 2-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ge/Icenogle.yml>`__
-   ============================ ========================= ================ ================================================================================================
+   ============================ ========================= ================ ============================================================================================================
+   Variant                      Valid for                 Model Info       Reference                                                                                                   
+   ============================ ========================= ================ ============================================================================================================
+   ``'Icenogle1976'`` (default) 2.5 - 12.0 :math:`{\mu}m` 2-pole, lossless [1][2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ge/Icenogle.yml>`__
+   ============================ ========================= ================ ============================================================================================================
 
 Examples:
 
@@ -590,11 +590,11 @@ Indium Phosphide ("InP")
 .. table::
    :widths: auto
 
-   ========================== ========================== ================ ==================================================================================================
-   Variant                    Valid for                  Model Info       Reference                                                                                         
-   ========================== ========================== ================ ==================================================================================================
-   ``'Pettit1965'`` (default) 0.95 - 10.0 :math:`{\mu}m` 2-pole, lossless [1][2][3] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/InP/Pettit.yml>`__
-   ========================== ========================== ================ ==================================================================================================
+   ========================== ========================== ================ ==============================================================================================================
+   Variant                    Valid for                  Model Info       Reference                                                                                                     
+   ========================== ========================== ================ ==============================================================================================================
+   ``'Pettit1965'`` (default) 0.95 - 10.0 :math:`{\mu}m` 2-pole, lossless [1][2][3] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/InP/Pettit.yml>`__
+   ========================== ========================== ================ ==============================================================================================================
 
 Examples:
 
@@ -652,11 +652,11 @@ Magnesium Oxide ("MgO")
 .. table::
    :widths: auto
 
-   ==================================== ========================= ============= ==============================================================================================
-   Variant                              Valid for                 Model Info    Reference                                                                                     
-   ==================================== ========================= ============= ==============================================================================================
-   ``'StephensMalitson1952'`` (default) 0.36 - 5.4 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/MgO/Stephens.yml>`__
-   ==================================== ========================= ============= ==============================================================================================
+   ==================================== ========================= ============= ==========================================================================================================
+   Variant                              Valid for                 Model Info    Reference                                                                                                 
+   ==================================== ========================= ============= ==========================================================================================================
+   ``'StephensMalitson1952'`` (default) 0.36 - 5.4 :math:`{\mu}m` 3-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/MgO/Stephens.yml>`__
+   ==================================== ========================= ============= ==========================================================================================================
 
 Examples:
 
@@ -712,12 +712,12 @@ Nickel ("Ni")
 .. table::
    :widths: auto
 
-   ================================== ========================== ============= =============================================================================================
-   Variant                            Valid for                  Model Info    Reference                                                                                    
-   ================================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ni/Johnson.yml>`__ 
-   ``'RakicLorentzDrude1998'``        0.25 - 6.2 :math:`{\mu}m`  8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ni/Rakic-LD.yml>`__
-   ================================== ========================== ============= =============================================================================================
+   ================================== ========================== ============= =========================================================================================================
+   Variant                            Valid for                  Model Info    Reference                                                                                                
+   ================================== ========================== ============= =========================================================================================================
+   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ni/Johnson.yml>`__ 
+   ``'RakicLorentzDrude1998'``        0.25 - 6.2 :math:`{\mu}m`  8-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ni/Rakic-LD.yml>`__
+   ================================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -736,12 +736,12 @@ Palladium ("Pd")
 .. table::
    :widths: auto
 
-   ================================== ========================== ============= =============================================================================================
-   Variant                            Valid for                  Model Info    Reference                                                                                    
-   ================================== ========================== ============= =============================================================================================
-   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Johnson.yml>`__ 
-   ``'RakicLorentzDrude1998'``        0.25 - 12.4 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pd/Rakic-LD.yml>`__
-   ================================== ========================== ============= =============================================================================================
+   ================================== ========================== ============= =========================================================================================================
+   Variant                            Valid for                  Model Info    Reference                                                                                                
+   ================================== ========================== ============= =========================================================================================================
+   ``'JohnsonChristy1972'`` (default) 0.19 - 1.94 :math:`{\mu}m` 5-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pd/Johnson.yml>`__ 
+   ``'RakicLorentzDrude1998'``        0.25 - 12.4 :math:`{\mu}m` 7-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pd/Rakic-LD.yml>`__
+   ================================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -888,12 +888,12 @@ Platinum ("Pt")
 .. table::
    :widths: auto
 
-   =========================== ========================== ============= =============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                    
-   =========================== ========================== ============= =============================================================================================
-   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Pt/Werner.yml>`__  
-   =========================== ========================== ============= =============================================================================================
+   =========================== ========================== ============= =========================================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                                
+   =========================== ========================== ============= =========================================================================================================
+   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pt/Rakic-LD.yml>`__
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Pt/Werner.yml>`__  
+   =========================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -972,14 +972,14 @@ Silicon Nitride ("Si3N4")
 .. table::
    :widths: auto
 
-   ========================== ========================== ================ ==================================================================================================
-   Variant                    Valid for                  Model Info       Reference                                                                                         
-   ========================== ========================== ================ ==================================================================================================
-   ``'Horiba'`` (default)     0.23 - 0.83 :math:`{\mu}m` 1-pole, lossy    [1]                                                                                               
-   ``'Luke2015PMLStable'``    0.41 - 1.97 :math:`{\mu}m` 2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Luke.yml>`__      
-   ``'Luke2015Sellmeier'``    0.31 - 5.5 :math:`{\mu}m`  2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Luke.yml>`__      
-   ``'Philipp1973Sellmeier'`` 0.21 - 1.24 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Si3N4/Philipp.yml>`__
-   ========================== ========================== ================ ==================================================================================================
+   ========================== ========================== ================ ==============================================================================================================
+   Variant                    Valid for                  Model Info       Reference                                                                                                     
+   ========================== ========================== ================ ==============================================================================================================
+   ``'Horiba'`` (default)     0.23 - 0.83 :math:`{\mu}m` 1-pole, lossy    [1]                                                                                                           
+   ``'Luke2015PMLStable'``    0.41 - 1.97 :math:`{\mu}m` 2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si3N4/Luke.yml>`__      
+   ``'Luke2015Sellmeier'``    0.31 - 5.5 :math:`{\mu}m`  2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si3N4/Luke.yml>`__      
+   ``'Philipp1973Sellmeier'`` 0.21 - 1.24 :math:`{\mu}m` 1-pole, lossless [3][4] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si3N4/Philipp.yml>`__
+   ========================== ========================== ================ ==============================================================================================================
 
 Examples:
 
@@ -1104,12 +1104,12 @@ Titanium ("Ti")
 .. table::
    :widths: auto
 
-   =========================== ========================== ============= =============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                    
-   =========================== ========================== ============= =============================================================================================
-   ``'RakicLorentzDrude1998'`` 0.25 - 31.0 :math:`{\mu}m` 7-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ti/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Ti/Werner.yml>`__  
-   =========================== ========================== ============= =============================================================================================
+   =========================== ========================== ============= =========================================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                                
+   =========================== ========================== ============= =========================================================================================================
+   ``'RakicLorentzDrude1998'`` 0.25 - 31.0 :math:`{\mu}m` 7-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ti/Rakic-LD.yml>`__
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ti/Werner.yml>`__  
+   =========================== ========================== ============= =========================================================================================================
 
 Examples:
 
@@ -1151,12 +1151,12 @@ Tungsten ("W")
 .. table::
    :widths: auto
 
-   =========================== ========================== ============= ============================================================================================
-   Variant                     Valid for                  Model Info    Reference                                                                                   
-   =========================== ========================== ============= ============================================================================================
-   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/W/Rakic-LD.yml>`__
-   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/W/Werner.yml>`__  
-   =========================== ========================== ============= ============================================================================================
+   =========================== ========================== ============= ========================================================================================================
+   Variant                     Valid for                  Model Info    Reference                                                                                               
+   =========================== ========================== ============= ========================================================================================================
+   ``'RakicLorentzDrude1998'`` 0.25 - 12.4 :math:`{\mu}m` 6-pole, lossy [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/W/Rakic-LD.yml>`__
+   ``'Werner2009'`` (default)  0.1 - 2.48 :math:`{\mu}m`  5-pole, lossy [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/W/Werner.yml>`__  
+   =========================== ========================== ============= ========================================================================================================
 
 Examples:
 
@@ -1215,12 +1215,12 @@ Yttrium Oxide ("Y2O3")
 .. table::
    :widths: auto
 
-   ====================== ========================= ================ =============================================================================================
-   Variant                Valid for                 Model Info       Reference                                                                                    
-   ====================== ========================= ================ =============================================================================================
-   ``'Horiba'`` (default) 0.31 - 0.8 :math:`{\mu}m` 1-pole, lossless [1]                                                                                          
-   ``'Nigara1968'``       0.25 - 9.6 :math:`{\mu}m` 2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Y2O3/Nigara.yml>`__
-   ====================== ========================= ================ =============================================================================================
+   ====================== ========================= ================ =========================================================================================================
+   Variant                Valid for                 Model Info       Reference                                                                                                
+   ====================== ========================= ================ =========================================================================================================
+   ``'Horiba'`` (default) 0.31 - 0.8 :math:`{\mu}m` 1-pole, lossless [1]                                                                                                      
+   ``'Nigara1968'``       0.25 - 9.6 :math:`{\mu}m` 2-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Y2O3/Nigara.yml>`__
+   ====================== ========================= ================ =========================================================================================================
 
 Examples:
 
@@ -1239,11 +1239,11 @@ Yttrium Aluminium Garnet ("YAG")
 .. table::
    :widths: auto
 
-   ========================== ======================== ================ =================================================================================================
-   Variant                    Valid for                Model Info       Reference                                                                                        
-   ========================== ======================== ================ =================================================================================================
-   ``'Zelmon1998'`` (default) 0.4 - 5.0 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=data/main/Y3Al5O12/Zelmon.yml>`__
-   ========================== ======================== ================ =================================================================================================
+   ========================== ======================== ================ =============================================================================================================
+   Variant                    Valid for                Model Info       Reference                                                                                                    
+   ========================== ======================== ================ =============================================================================================================
+   ``'Zelmon1998'`` (default) 0.4 - 5.0 :math:`{\mu}m` 2-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Y3Al5O12/Zelmon.yml>`__
+   ========================== ======================== ================ =============================================================================================================
 
 Examples:
 
