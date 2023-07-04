@@ -9,7 +9,7 @@ import tidy3d.web as web
 
 from responses import matchers
 
-from tidy3d import Simulation
+from tidy3d.exceptions import SetupError
 from tidy3d.web.environment import Env
 from tidy3d.web.webapi import delete, delete_old, download, download_json, run
 from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
@@ -32,7 +32,14 @@ EST_FLEX_UNIT = 11.11
 
 def make_sim():
     """Makes a simulation."""
-    return td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
+    pulse = td.GaussianPulse(freq0=200e12, fwidth=20e12)
+    pt_dipole = td.PointDipole(source_time=pulse, polarization="Ex")
+    return td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[pt_dipole],
+    )
 
 
 @pytest.fixture
@@ -224,6 +231,14 @@ def mock_webapi(
     mock_upload, mock_metadata, mock_get_info, mock_start, mock_monitor, mock_download, mock_load
 ):
     """Mocks all webapi operation."""
+
+
+@responses.activate
+def test_source_validation(mock_upload):
+    sim = make_sim().copy(update={"sources": []})
+    assert upload(sim, TASK_NAME, PROJECT_NAME, source_required=False)
+    with pytest.raises(SetupError):
+        upload(sim, TASK_NAME, PROJECT_NAME)
 
 
 @responses.activate
@@ -453,7 +468,7 @@ def test_main(mock_webapi, monkeypatch, mock_job_status):
     # batch_data = run_async(sims, folder_name=PROJECT_NAME)
 
     def save_sim_to_path(path: str) -> None:
-        sim = Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.auto(wavelength=1.0), run_time=1e-12)
+        sim = make_sim()
         sim.to_file(path)
 
     monkeypatch.setattr("builtins.input", lambda _: "Y")

@@ -142,6 +142,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     progress_callback: Callable[[float], None] = None,
     simulation_type: str = "tidy3d",
     parent_tasks: List[str] = None,
+    source_required: bool = True,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
 
@@ -164,6 +165,8 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         Type of simulation being uploaded.
     parent_tasks : List[str]
         List of related task ids.
+    source_required: bool = True
+        If ``True``, simulations without sources will raise an error before being uploaded.
 
     Returns
     -------
@@ -175,7 +178,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     To start the simulation running, must call :meth:`start` after uploaded.
     """
 
-    simulation.validate_pre_upload()
+    simulation.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
 
     task = SimulationTask.create(
