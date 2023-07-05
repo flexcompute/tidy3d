@@ -102,12 +102,16 @@ def constrained_array(
 
     # note, a unique name is required for each subclass of ArrayLike with constraints
     type_name = "ArrayLike"
+
+    meta_args = []
     if dtype is not None:
-        type_name += f"_dtype={dtype}"
+        meta_args.append(f"dtype={dtype.__name__}")
     if ndim is not None:
-        type_name += f"_ndim={ndim}"
+        meta_args.append(f"ndim={ndim}")
     if shape is not None:
-        type_name += f"_shape={shape}"
+        meta_args.append(f"shape={shape}")
+    type_name += "[" + ", ".join(meta_args) + "]"
+
     return type(type_name, (ArrayLike,), dict(dtype=dtype, ndim=ndim, shape=shape))
 
 

@@ -63,6 +63,30 @@ def test_array_like():
     my_obj.json()
 
 
+def test_array_like_field_name():
+    class MyClass(Tidy3dBaseModel):
+
+        a: ArrayLike  # can be any array-like thing
+        b: constrained_array(ndim=2)  # must be 2D
+        c: constrained_array(dtype=float)  # must be float-like
+        d: constrained_array(ndim=1, dtype=complex)  # 1D complex
+        e: constrained_array(ndim=3, shape=(1, 2, 3))  # must have certain shape
+        f: ArrayLike = None
+
+    fields = MyClass.__fields__
+
+    def correct_field_display(field_name, display_name):
+        """Make sure the field has the expected name."""
+        assert fields[field_name]._type_display() == display_name
+
+    correct_field_display("a", "ArrayLike")
+    correct_field_display("b", "ArrayLike[ndim=2]")
+    correct_field_display("c", "ArrayLike[dtype=float]")
+    correct_field_display("d", "ArrayLike[dtype=complex, ndim=1]")
+    correct_field_display("e", "ArrayLike[ndim=3, shape=(1, 2, 3)]")
+    correct_field_display("f", "Optional[ArrayLike]")
+
+
 def test_hash():
     class MyClass(Tidy3dBaseModel):
 
