@@ -1,6 +1,8 @@
 """Tools for generating an S matrix automatically from tidy3d simulation and port definitions."""
+from __future__ import annotations
 
-from typing import List, Tuple, Optional, Callable, Dict
+from typing import List, Tuple, Optional, Dict
+import os
 
 import pydantic as pd
 import numpy as np
@@ -15,14 +17,14 @@ from ...components.data.sim_data import SimulationData
 from ...components.data.data_array import DataArray
 from ...components.types import Direction, Ax, Complex
 from ...components.viz import add_ax_if_none, equal_aspect
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
-from ...web.container import Batch, BatchData
-
+from ...log import log
+from ...web.container import BatchData, Batch
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
-DEFAULT_DATA_DIR = "data"
+DEFAULT_DATA_DIR = "."
 
 
 class Port(Box):
@@ -126,12 +128,17 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Verbosity",
         description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
     )
-    batch: Optional[Batch] = pd.Field(
+    callback_url: str = pd.Field(
         None,
-        title="Batch",
-        description="Batch of generated simulations needed for each row of the scattering matrix."
-        "Should be left ``None`` in almost all cases, which will generate the proper batch "
-        "internally and store it as ``ComponentModeler.batch``.",
+        title="Callback URL",
+        description="Http PUT url to receive simulation finish event. "
+        "The body content is a json file with fields "
+        "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
+    )
+    path_dir: str = pd.Field(
+        DEFAULT_DATA_DIR,
+        title="Directory Path",
+        description="Base directory where data and batch will be downloaded.",
     )
 
     @pd.validator("simulation", always=True)
@@ -141,94 +148,59 @@ class ComponentModeler(Tidy3dBaseModel):
             raise SetupError("'ComponentModeler.simulation' must not have any sources.")
         return val
 
-    @pd.validator("batch", always=True)
-    def _set_batch(cls, val, values):
-        """Initialize the batch if not supplied."""
-
-        # if supplied, return it
-        if val is not None:
-            return val
-
-        # otherwise, generate all sims and make a new batch
-        sim_dict = cls.make_sim_dict(values=values)
-        return Batch(
-            simulations=sim_dict,
-            folder_name=values.get("folder_name"),
-            verbose=values.get("verbose"),
-        )
-
-    @classmethod
-    def make_sim_dict(cls, values: dict) -> Dict[str, Simulation]:
+    @cached_property
+    def sim_dict(self) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
 
         sim_dict = {}
-        ports = values.get("ports")
-        simulation = values.get("simulation")
-        freqs = values.get("freqs")
+        mode_monitors = [self.to_monitor(port=port) for port in self.ports]
 
-        mode_monitors = [
-            cls._to_monitor(port=port, freqs=freqs) for port in ports
-        ]  # pylint:disable=protected-access
+        for (port_name, mode_index) in self.matrix_indices_run_sim:
 
-        for (port_name, mode_index) in cls.matrix_indices_run_sim(
-            ports=ports,
-            run_only=values.get("run_only"),
-            element_mappings=values.get("element_mappings"),
-        ):
+            port = self.get_port_by_name(port_name=port_name)
 
-            port = cls.get_port_by_name(port_name=port_name, ports=ports)
+            port_source = self.shift_port(port=port)
+            mode_source = self.to_source(port=port_source, mode_index=mode_index)
 
-            port_source = cls._shift_port(
-                simulation=simulation, port=port
-            )  # pylint:disable=protected-access
-            mode_source = cls._to_source(
-                port=port_source, mode_index=mode_index, freqs=freqs
-            )  # pylint:disable=protected-access
-
-            new_mnts = list(simulation.monitors) + mode_monitors
-            sim_copy = simulation.copy(update=dict(sources=[mode_source], monitors=new_mnts))
-            task_name = cls._task_name(port=port, mode_index=mode_index)
+            new_mnts = list(self.simulation.monitors) + mode_monitors
+            sim_copy = self.simulation.copy(update=dict(sources=[mode_source], monitors=new_mnts))
+            task_name = self._task_name(port=port, mode_index=mode_index)
             sim_dict[task_name] = sim_copy
         return sim_dict
 
-    @classmethod
-    def matrix_indices_monitor(cls, ports: Tuple[Port, ...]) -> Tuple[MatrixIndex, ...]:
+    @cached_property
+    def matrix_indices_monitor(self) -> Tuple[MatrixIndex, ...]:
         """Tuple of all the possible matrix indices (port, mode_index) in the Component Modeler."""
         matrix_indices = []
-        for port in ports:
+        for port in self.ports:
             for mode_index in range(port.mode_spec.num_modes):
                 matrix_indices.append((port.name, mode_index))
         return tuple(matrix_indices)
 
-    @classmethod
-    def matrix_indices_source(
-        cls, ports: Tuple[Port, ...], run_only: Tuple[MatrixIndex, ...] = None
-    ) -> Tuple[MatrixIndex, ...]:
+    @cached_property
+    def matrix_indices_source(self) -> Tuple[MatrixIndex, ...]:
         """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
-        return run_only if run_only is not None else cls.matrix_indices_monitor(ports=ports)
+        if self.run_only is not None:
+            return self.run_only
+        return self.matrix_indices_monitor
 
-    @classmethod
-    def matrix_indices_run_sim(
-        cls,
-        ports: Tuple[Port, ...],
-        element_mappings: Dict[Element, Dict[Element, Callable[[complex], complex]]] = None,
-        run_only: Tuple[MatrixIndex, ...] = None,
-    ) -> Tuple[MatrixIndex, ...]:
+    @cached_property
+    def matrix_indices_run_sim(self) -> Tuple[MatrixIndex, ...]:
         """Tuple of all the source matrix indices (port, mode_index) in the Component Modeler."""
 
-        if element_mappings is None or element_mappings == {}:
-            return cls.matrix_indices_source(ports=ports, run_only=run_only)
+        if self.element_mappings is None or self.element_mappings == {}:
+            return self.matrix_indices_source
 
         # all the (i, j) pairs in `S_ij` that are tagged as covered by `element_mappings`
-        elements_determined_by_map = [element_out for (_, element_out, _) in element_mappings]
+        elements_determined_by_map = [element_out for (_, element_out, _) in self.element_mappings]
 
         # loop through rows of the full s matrix and record rows that still need running.
         source_indices_needed = []
-        for col_index in cls.matrix_indices_source(ports=ports, run_only=run_only):
+        for col_index in self.matrix_indices_source:
 
             # loop through columns and keep track of whether each element is covered by mapping.
             matrix_elements_covered = []
-            for row_index in cls.matrix_indices_monitor(ports=ports):
+            for row_index in self.matrix_indices_monitor:
                 element = (row_index, col_index)
                 element_covered_by_map = element in elements_determined_by_map
                 matrix_elements_covered.append(element_covered_by_map)
@@ -239,30 +211,27 @@ class ComponentModeler(Tidy3dBaseModel):
 
         return source_indices_needed
 
-    @staticmethod
-    def get_port_by_name(ports: Tuple[Port, ...], port_name: str) -> Port:
+    def get_port_by_name(self, port_name: str) -> Port:
         """Get the port from the name."""
-        ports = [port for port in ports if port.name == port_name]
+        ports = [port for port in self.ports if port.name == port_name]
         if len(ports) == 0:
             raise Tidy3dKeyError(f'Port "{port_name}" not found.')
         return ports[0]
 
-    @staticmethod
-    def _to_monitor(port: Port, freqs: List[float]) -> ModeMonitor:
+    def to_monitor(self, port: Port) -> ModeMonitor:
         """Creates a mode monitor from a given port."""
         return ModeMonitor(
             center=port.center,
             size=port.size,
-            freqs=freqs,
+            freqs=self.freqs,
             mode_spec=port.mode_spec,
             name=port.name,
         )
 
-    @staticmethod
-    def _to_source(port: Port, mode_index: int, freqs: List[float]) -> List[ModeSource]:
+    def to_source(self, port: Port, mode_index: int) -> List[ModeSource]:
         """Creates a list of mode sources from a given port."""
-        freq0 = np.mean(freqs)
-        fdiff = max(freqs) - min(freqs)
+        freq0 = np.mean(self.freqs)
+        fdiff = max(self.freqs) - min(self.freqs)
         fwidth = max(fdiff, freq0 * FWIDTH_FRAC)
         return ModeSource(
             center=port.center,
@@ -274,13 +243,12 @@ class ComponentModeler(Tidy3dBaseModel):
             name=port.name,
         )
 
-    @staticmethod
-    def _shift_value_signed(simulation: Simulation, port: Port) -> float:
+    def _shift_value_signed(self, port: Port) -> float:
         """How far (signed) to shift the source from the monitor."""
 
         # get the grid boundaries and sizes along port normal from the simulation
         normal_axis = port.size.index(0.0)
-        grid = simulation.grid
+        grid = self.simulation.grid
         grid_boundaries = grid.boundaries.to_list[normal_axis]
         grid_centers = grid.centers.to_list[normal_axis]
 
@@ -314,11 +282,10 @@ class ComponentModeler(Tidy3dBaseModel):
         new_pos = grid_centers[shifted_index]
         return new_pos - port_position
 
-    @classmethod
-    def _shift_port(cls, simulation: Simulation, port: Port) -> Port:
+    def shift_port(self, port: Port) -> Port:
         """Generate a new port shifted by the shift amount in normal direction."""
 
-        shift_value = cls._shift_value_signed(simulation=simulation, port=port)
+        shift_value = self._shift_value_signed(port=port)
         center_shifted = list(port.center)
         center_shifted[port.size.index(0.0)] += shift_value
         port_shifted = port.copy(update=dict(center=center_shifted))
@@ -336,16 +303,60 @@ class ComponentModeler(Tidy3dBaseModel):
 
         plot_sources = []
         for port_source in self.ports:
-            mode_source_0 = self._to_source(port=port_source, freqs=self.freqs, mode_index=0)
+            mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
         return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
-    def _run_sims(self, path_dir: str) -> BatchData:
+    @cached_property
+    def batch(self) -> Batch:
+        """Batch associated with this component modeler."""
+
+        # first try loading the batch from file, if it exists
+        batch_path = self._batch_path
+        if os.path.exists(batch_path):
+            return Batch.from_file(fname=batch_path)
+
+        return Batch(
+            simulations=self.sim_dict,
+            folder_name=self.folder_name,
+            callback_url=self.callback_url,
+            verbose=self.verbose,
+        )
+
+    @cached_property
+    def batch_path(self) -> str:
+        """Path to the batch saved to file."""
+        # pylint: disable=protected-access
+        return self.batch._batch_path(path_dir=DEFAULT_DATA_DIR)
+
+    def get_path_dir(self, path_dir: str) -> None:
+        """Check whether the supplied 'path_dir' matches the internal field value."""
+
+        if path_dir not in (DEFAULT_DATA_DIR, self.path_dir):
+            log.warning(
+                f"'ComponentModeler' method was supplied a 'path_dir' of '{path_dir}' "
+                f"when its internal 'path_dir' field was set to '{self.path_dir}'. "
+                "The passed value will be deprecated in later versions. "
+                "Please set the internal 'path_dir' field to the desired value and "
+                "remove the 'path_dir' from the method argument. "
+                f"Using supplied '{path_dir}'."
+            )
+            return path_dir
+
+        return self.path_dir
+
+    @cached_property
+    def _batch_path(self) -> str:
+        """Where we store the batch for this ComponentModeler instance after the run."""
+        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".json")
+
+    def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""
-        self.batch.start()
-        self.batch.monitor()
-        return self.batch.load(path_dir=path_dir)
+        batch = self.batch
+        batch_data = batch.run(path_dir=path_dir)
+        batch.to_file(self._batch_path)
+        return batch_data
 
     def _normalization_factor(self, port_source: Port, sim_data: SimulationData) -> complex:
         """Compute the normalization amplitude based on the measured input mode amplitude."""
@@ -363,10 +374,10 @@ class ComponentModeler(Tidy3dBaseModel):
 
         k0s = 2 * np.pi * C_0 / np.array(self.freqs)
         k_effs = k0s * normalize_n_eff
-        shift_value = self._shift_value_signed(simulation=self.simulation, port=port_source)
+        shift_value = self._shift_value_signed(port=port_source)
         return normalize_amps * np.exp(1j * k_effs * shift_value)
 
-    @property
+    @cached_property
     def max_mode_index(self) -> Tuple[int, int]:
         """maximum mode indices for the smatrix dataset for the in and out ports, respectively."""
 
@@ -374,15 +385,12 @@ class ComponentModeler(Tidy3dBaseModel):
             """Get the maximum mode index for a list of (port name, mode index)."""
             return max(mode_index for _, mode_index in matrix_elements)
 
-        matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
-        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
-
-        max_mode_index_out = get_max_mode_indices(matrix_elements_out)
-        max_mode_index_in = get_max_mode_indices(matrix_elements_in)
+        max_mode_index_out = get_max_mode_indices(self.matrix_indices_monitor)
+        max_mode_index_in = get_max_mode_indices(self.matrix_indices_source)
 
         return max_mode_index_out, max_mode_index_in
 
-    @property
+    @cached_property
     def port_names(self) -> Tuple[List[str], List[str]]:
         """List of port names for inputs and outputs, respectively."""
 
@@ -394,18 +402,14 @@ class ComponentModeler(Tidy3dBaseModel):
                     port_names.append(port_name)
             return port_names
 
-        matrix_elements_in = self.matrix_indices_source(ports=self.ports, run_only=self.run_only)
-        matrix_elements_out = self.matrix_indices_monitor(ports=self.ports)
-
-        port_names_in = get_port_names(matrix_elements_in)
-        port_names_out = get_port_names(matrix_elements_out)
+        port_names_in = get_port_names(self.matrix_indices_source)
+        port_names_out = get_port_names(self.matrix_indices_monitor)
 
         return port_names_out, port_names_in
 
-    def _construct_smatrix(  # pylint:disable=too-many-locals
-        self, batch_data: BatchData
-    ) -> SMatrixDataArray:
-        """Post process batch to generate scattering matrix."""
+    # pylint:disable=too-many-locals
+    def _construct_smatrix(self, batch_data: BatchData) -> SMatrixDataArray:
+        """Post process `BatchData` to generate scattering matrix."""
 
         max_mode_index_out, max_mode_index_in = self.max_mode_index
         num_modes_out = max_mode_index_out + 1
@@ -427,19 +431,17 @@ class ComponentModeler(Tidy3dBaseModel):
         s_matrix = SMatrixDataArray(values, coords=coords)
 
         # loop through source ports
-        for col_index in self.matrix_indices_run_sim(
-            ports=self.ports, run_only=self.run_only, element_mappings=self.element_mappings
-        ):
+        for col_index in self.matrix_indices_run_sim:
 
             port_name_in, mode_index_in = col_index
-            port_in = self.get_port_by_name(port_name=port_name_in, ports=self.ports)
+            port_in = self.get_port_by_name(port_name=port_name_in)
 
             sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
 
-            for row_index in self.matrix_indices_monitor(ports=self.ports):
+            for row_index in self.matrix_indices_monitor:
 
                 port_name_out, mode_index_out = row_index
-                port_out = self.get_port_by_name(port_name=port_name_out, ports=self.ports)
+                port_out = self.get_port_by_name(port_name=port_name_out)
 
                 # directly compute the element
                 mode_amps_data = sim_data[port_out.name].copy().amps
@@ -482,14 +484,14 @@ class ComponentModeler(Tidy3dBaseModel):
 
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
         """Solves for the scattering matrix of the system."""
+        path_dir = self.get_path_dir(path_dir)
 
         batch_data = self._run_sims(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
-        """Load an Smatrix from saved BatchData object."""
+        """Load a scattering matrix from saved `BatchData` object."""
+        path_dir = self.get_path_dir(path_dir)
 
-        if self.batch is None:
-            raise SetupError("Component modeler has no batch saved. Run .run() to generate.")
-        batch_data = self.batch.load(path_dir=path_dir)
+        batch_data = BatchData.load(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
