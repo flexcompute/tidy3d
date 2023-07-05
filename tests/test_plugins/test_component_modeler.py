@@ -186,7 +186,7 @@ def make_component_modeler(**kwargs):
     ports = make_ports()
     batch_empty = Batch(simulations={}, folder_name="None")
     return ComponentModeler(
-        simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, batch=batch_empty, **kwargs
+        simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, path_dir=PATH_DIR, **kwargs
     )
 
 
@@ -199,7 +199,7 @@ def run_component_modeler(monkeypatch, modeler: ComponentModeler):
         run_only=modeler.run_only,
         element_mappings=modeler.element_mappings,
     )
-    sim_dict = modeler.make_sim_dict(values)
+    sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     monkeypatch.setattr(ComponentModeler, "_run_sims", lambda self, path_dir: batch_data)
     s_matrix = modeler.run(path_dir=PATH_DIR)
@@ -218,14 +218,15 @@ def test_validate_no_sources():
 
 def test_element_mappings_none():
     modeler = make_component_modeler()
-    modeler.matrix_indices_run_sim(ports=[], element_mappings=None)
+    modeler = modeler.updated_copy(ports=[], element_mappings=())
+    modeler.matrix_indices_run_sim
 
 
 def test_no_port():
     modeler = make_component_modeler()
     ports = modeler.ports
     with pytest.raises(Tidy3dKeyError):
-        modeler.get_port_by_name(ports=ports, port_name="NOT_A_PORT")
+        modeler.get_port_by_name(port_name="NOT_A_PORT")
 
 
 def test_ports_too_close_boundary():
@@ -242,13 +243,15 @@ def test_ports_too_close_boundary():
             update=dict(center=port_center_at_edge, direction=port_dir)
         )
         with pytest.raises(SetupError):
-            modeler._shift_value_signed(simulation=modeler.simulation, port=port_at_edge)
+            modeler._shift_value_signed(port=port_at_edge)
 
 
 def test_validate_batch_supplied():
 
     sim = make_coupler()
-    modeler = ComponentModeler(simulation=sim, ports=[], freqs=sim.monitors[0].freqs, batch=None)
+    modeler = ComponentModeler(
+        simulation=sim, ports=[], freqs=sim.monitors[0].freqs, path_dir=PATH_DIR
+    )
 
 
 def test_plot_sim():
@@ -372,9 +375,7 @@ def test_mapping_exclusion(monkeypatch):
 
     modeler = make_component_modeler(element_mappings=element_mappings)
 
-    run_sim_indices = modeler.matrix_indices_run_sim(
-        ports=modeler.ports, run_only=modeler.run_only, element_mappings=modeler.element_mappings
-    )
+    run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"
 
     s_matrix = run_component_modeler(monkeypatch, modeler)
