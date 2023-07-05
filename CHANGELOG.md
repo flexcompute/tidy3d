@@ -5,8 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-# Changed
+### Added
+
+### Changed
 - Source validation happens before simulation upload and raises an error if no source is present.
+
+### Fixed
+- Point-like objects correctly appear as single points using `plt.scatter`.
 
 ## [2.3.0] - 2023-6-30
 

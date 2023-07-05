@@ -427,6 +427,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         if isinstance(_shape, LineString):
             xs, ys = zip(*_shape.coords)
             ax.plot(xs, ys, color=plot_params.edgecolor)
+        elif isinstance(_shape, Point):
+            ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             ax.add_artist(patch)
@@ -1275,6 +1277,7 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
+    # pylint:disable=too-many-locals
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1302,7 +1305,17 @@ class Box(Centered):
         dz = np.abs(z0 - position)
         if dz > Lz / 2 + fp_eps:
             return []
-        return [box(minx=x0 - Lx / 2, miny=y0 - Ly / 2, maxx=x0 + Lx / 2, maxy=y0 + Ly / 2)]
+
+        minx = x0 - Lx / 2
+        miny = y0 - Ly / 2
+        maxx = x0 + Lx / 2
+        maxy = y0 + Ly / 2
+
+        # handle case where the box vertices are identical
+        if isclose(minx, maxx) and isclose(miny, maxy):
+            return [Point(minx, miny)]
+
+        return [box(minx=minx, miny=miny, maxx=maxx, maxy=maxy)]
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
