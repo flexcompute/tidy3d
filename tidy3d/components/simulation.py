@@ -244,7 +244,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
-    _structures_in_bounds = assert_objects_in_sim_bounds("structures")
+    _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
