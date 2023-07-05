@@ -111,7 +111,8 @@ def test_deprecation_defaults(log_capture):
     assert_log_level(log_capture, None)
 
 
-def test_sim_bounds():
+@pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
+def test_sim_bounds(shift_amount, log_level, log_capture):
     """make sure bounds are working correctly"""
 
     # make sure all things are shifted to this central location
@@ -122,7 +123,7 @@ def test_sim_bounds():
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
         sim = td.Simulation(
-            size=(1, 1, 1),
+            size=(1.5, 1.5, 1.5),
             center=CENTER_SHIFT,
             grid_spec=td.GridSpec(wavelength=1.0),
             run_time=1e-12,
@@ -132,6 +133,13 @@ def test_sim_bounds():
                 )
             ],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+            sources=[
+                td.PointDipole(
+                    center=CENTER_SHIFT,
+                    polarization="Ex",
+                    source_time=td.GaussianPulse(freq0=td.C_0, fwidth=td.C_0),
+                )
+            ],
         )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -143,17 +151,11 @@ def test_sim_bounds():
     # test all cases where box is shifted +/- 1 in x,y,z and still intersects
     for amp in bin_ints:
         for sign in bin_signs:
-            center = amp * sign
-            place_box(tuple(center))
-
-    # test all cases where box is shifted +/- 2 in x,y,z and no longer intersects
-    for amp in bin_ints:
-        for sign in bin_signs:
-            center = 2 * amp * sign
+            center = shift_amount * amp * sign
             if np.sum(center) < 1e-12:
                 continue
-            with pytest.raises(pydantic.ValidationError) as e_info:
-                place_box(tuple(center))
+            place_box(tuple(center))
+    assert_log_level(log_capture, log_level)
 
 
 def test_sim_size():
