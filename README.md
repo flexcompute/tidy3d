@@ -28,6 +28,14 @@ pip install -r docs/requirements.txt
 pip install -r tests/requirements.txt
 ```
 
+To configure [`nbdime`](https://nbdime.readthedocs.io/en/latest/index.html) as diff and merge tool for notebooks (highly recommended), run:
+
+```bash
+git config --add include.path '../.gitconfig'
+```
+
+*NOTE:* There's no need to run `nbdime config-git` as directed by the documentation, as the drivers and tools are already configured in the `.gitconfig` file included in this repository.
+
 ## Compiling
 
 To compile the docs:
