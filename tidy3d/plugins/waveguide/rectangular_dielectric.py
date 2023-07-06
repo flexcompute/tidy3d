@@ -17,6 +17,7 @@ from ...components.simulation import Simulation
 from ...components.source import ModeSource, GaussianPulse
 from ...components.structure import Structure
 from ...components.types import ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D, Union
+from ...components.types import TYPE_TAG_STR
 from ...constants import C_0, inf, MICROMETER, RADIAN
 from ...exceptions import Tidy3dError, ValidationError
 from ...log import log
@@ -61,18 +62,21 @@ class RectangularDielectric(Tidy3dBaseModel):
         ...,
         title="Core Medium",
         description="Medium associated with the core layer.",
+        discriminator=TYPE_TAG_STR,
     )
 
     clad_medium: MediumType = pydantic.Field(
         ...,
         title="Clad Medium",
         description="Medium associated with the upper cladding layer.",
+        discriminator=TYPE_TAG_STR,
     )
 
     box_medium: MediumType = pydantic.Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer.",
+        discriminator=TYPE_TAG_STR,
     )
 
     slab_thickness: Size1D = pydantic.Field(
@@ -131,6 +135,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         None,
         title="Sidewall medium",
         description="Medium associated with the sidewall layer to model sidewall losses.",
+        discriminator=TYPE_TAG_STR,
     )
 
     surface_thickness: Size1D = pydantic.Field(
@@ -145,6 +150,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         None,
         title="Surface Medium",
         description="Medium associated with the surface layer to model surface losses.",
+        discriminator=TYPE_TAG_STR,
     )
 
     origin: Coordinate = pydantic.Field(
