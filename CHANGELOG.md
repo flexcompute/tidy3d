@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Configuration option `config.log_suppression` can be used to control the suppression of log messages.
+- `abort()` for `Job` and `mode solver`, Job or mode solver whose status is not success or error(e.g. running, draft) can be aborted, if Job or mode solver is abort, it can't be submitted, a new one needs to be created and submitted.
+- `web.abort()` and `Job.abort()` methods allowing to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
 
 ### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.

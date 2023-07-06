@@ -305,7 +305,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     task_info = get_info(task_id)
     task_name = task_info.taskName
 
-    break_statuses = ("success", "error", "diverged", "deleted", "draft")
+    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
 
     console = Console() if verbose else None
 
@@ -384,15 +384,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     # while running but percentage done is available
     if verbose:
-
         # verbose case, update progressbar
         console.log("running solver")
         console.log(
-            "To cancel the simulation, use 'web.delete(task_id)' or delete the task in the web"
+            "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
+            "or abort/delete the task in the web"
             " UI. Terminating the Python script will not stop the job running on the cloud."
         )
         with Progress(console=console) as progress:
-
             pbar_pd = progress.add_task("% done", total=100)
             perc_done, _ = get_run_info(task_id)
 
@@ -409,7 +408,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             progress.update(pbar_pd, completed=100, refresh=True)
 
     else:
-
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
@@ -418,7 +416,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     # post processing
     if verbose:
-
         status = get_status(task_id)
         if status != "running":
             console.log(f"status = {status}")
@@ -675,6 +672,27 @@ def delete_old(
     for task in tasks:
         task.delete()
     return len(tasks)
+
+
+@wait_for_connection
+def abort(task_id: TaskId) -> TaskInfo:
+    """Abort server-side data associated with task.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+
+    Returns
+    -------
+    TaskInfo
+        Object containing information about status, size, credits of task.
+    """
+
+    # task = SimulationTask.get(task_id)
+    task = SimulationTask(taskId=task_id)
+    task.abort()
+    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
 # TODO: make this return a list of TaskInfo instead?
