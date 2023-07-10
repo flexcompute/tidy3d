@@ -5,9 +5,11 @@ import tempfile
 import responses
 from responses import matchers
 
+import tidy3d as td
 from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
 from tidy3d.version import __version__
+from tidy3d.web.file_util import compress_file_to_gzip, read_simulation_from_hdf5
 
 test_env = EnvironmentConfig(
     name="test",
@@ -17,6 +19,18 @@ test_env = EnvironmentConfig(
 )
 
 Env.set_current(test_env)
+
+
+def make_sim():
+    """Makes a simulation."""
+    pulse = td.GaussianPulse(freq0=200e12, fwidth=20e12)
+    pt_dipole = td.PointDipole(source_time=pulse, polarization="Ex")
+    return td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[pt_dipole],
+    )
 
 
 @pytest.fixture
@@ -82,10 +96,13 @@ def test_query_task(set_api_key):
 
 @responses.activate
 def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
+    sim = make_sim()
+
     def mock_download(*args, **kwargs):
-        file_path = kwargs["to_file"]
-        with open(file_path, "w") as f:
-            f.write("test data")
+        to_file = kwargs["to_file"]
+        file_path = "simulation.hdf5"
+        sim.to_file(file_path)
+        compress_file_to_gzip(file_path, to_file)
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
 
@@ -103,7 +120,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     JSON_NAME = str(tmp_path / "task.json")
     task.get_simulation_json(JSON_NAME)
-    assert os.path.getsize(JSON_NAME) > 0
+    assert td.Simulation.from_file(JSON_NAME) == sim
 
 
 @responses.activate
@@ -146,6 +163,7 @@ def test_create(set_api_key):
                 {
                     "taskName": "test task",
                     "callbackUrl": None,
+                    "fileType": "Gz",
                     "simulationType": "tidy3d",
                     "parentTasks": None,
                 }
@@ -184,6 +202,7 @@ def test_submit(set_api_key):
                 {
                     "taskName": task_name,
                     "callbackUrl": None,
+                    "fileType": "Gz",
                     "simulationType": "tidy3d",
                     "parentTasks": None,
                 }
@@ -296,7 +315,8 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     LOG_FNAME = str(tmp_path / "test.log")
     task.get_log(LOG_FNAME)
-    assert os.path.getsize(LOG_FNAME) > 0
+    with open(LOG_FNAME, "r") as f:
+        assert f.read() == "0.3,5.7"
 
 
 @responses.activate

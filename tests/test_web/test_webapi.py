@@ -7,6 +7,7 @@ import tidy3d as td
 
 from responses import matchers
 
+from tidy3d import Simulation
 from tidy3d.exceptions import SetupError
 from tidy3d.web.environment import Env
 from tidy3d.web.webapi import delete, delete_old, download, download_json, run, abort
@@ -14,9 +15,9 @@ from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_inf
 from tidy3d.web.webapi import load, load_simulation, start, upload, monitor, real_cost
 from tidy3d.web.container import Job, Batch
 from tidy3d.web.asynchronous import run_async
+from tidy3d.web.file_util import compress_file_to_gzip
 
 from tidy3d.__main__ import main
-
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -68,6 +69,7 @@ def mock_upload(monkeypatch, set_api_key):
                     "callbackUrl": None,
                     "simulationType": "tidy3d",
                     "parentTasks": None,
+                    "fileType": "Gz",
                 }
             )
         ],
@@ -84,7 +86,7 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.upload_string", mock_download)
+    monkeypatch.setattr("tidy3d.web.simulation_task.upload_file", mock_download)
 
 
 @pytest.fixture
@@ -298,16 +300,18 @@ def test_estimate_cost(set_api_key, mock_get_info, mock_metadata):
 
 @responses.activate
 def test_download_json(monkeypatch, mock_get_info, tmp_path):
+    sim = make_sim()
+
     def mock_download(*args, **kwargs):
-        file_path = kwargs["to_file"]
-        with open(file_path, "w") as f:
-            f.write("0.3,5.7")
+        file_path = "simulation.hdf5"
+        sim.to_file(file_path)
+        compress_file_to_gzip(file_path, "simulation.hdf5.gz")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
 
-    download_json(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json"), "r") as f:
-        assert f.read() == "0.3,5.7"
+    fname_tmp = str(tmp_path / "web_test_tmp.json")
+    download_json(TASK_ID, fname_tmp)
+    assert Simulation.from_file(fname_tmp) == sim
 
 
 @responses.activate
