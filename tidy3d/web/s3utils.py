@@ -1,7 +1,6 @@
 # pylint:disable=unused-argument
 """handles filesystem, storage
 """
-import io
 import pathlib
 import urllib
 from datetime import datetime
@@ -204,69 +203,6 @@ def get_s3_sts_token(
 
 
 # pylint: disable=too-many-arguments
-def upload_string(
-    resource_id: str,
-    content: str,
-    remote_filename: str,
-    verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
-    extra_arguments: Mapping[str, str] = None,
-):
-    """Upload a string to a file on S3.
-
-    Parameters
-    ----------
-    resource_id : str
-        The resource id, e.g. task id.
-    content : str
-        The content of the file
-    remote_filename : str
-        The remote file name on S3 relative to the resource context root path.
-    verbose : bool = True
-        Whether to display a progressbar for the upload.
-    progress_callback : Callable[[float], None] = None
-        User-supplied callback function with ``bytes_in_chunk`` as argument.
-    extra_arguments : Mapping[str, str]
-        Additional arguments used to specify the upload bucket.
-    """
-
-    token = get_s3_sts_token(resource_id, remote_filename, extra_arguments)
-
-    def _upload(_callback: Callable) -> None:
-        """Perform the upload with a callback fn
-
-        Parameters
-        ----------
-        _callback : Callable[[float], None]
-            Callback function for upload, accepts ``bytes_in_chunk``
-        """
-        token.get_client().upload_fileobj(
-            io.BytesIO(content.encode("utf-8")),
-            Bucket=token.get_bucket(),
-            Key=token.get_s3_key(),
-            Callback=_callback,
-            Config=_s3_config,
-        )
-
-    if progress_callback is not None:
-        _upload(progress_callback)
-    else:
-        if verbose:
-            with _get_progress(_S3Action.UPLOADING) as progress:
-                total_size = len(content)
-                task_id = progress.add_task("upload", filename=remote_filename, total=total_size)
-
-                def _callback(bytes_in_chunk):
-                    progress.update(task_id, advance=bytes_in_chunk)
-
-                _upload(_callback)
-                progress.update(task_id, completed=total_size, refresh=True)
-
-        elif progress_callback is None:
-            _upload(lambda bytes_in_chunk: None)
-
-
-# pylint: disable=too-many-arguments
 def upload_file(
     resource_id: str,
     path: str,
@@ -311,6 +247,9 @@ def upload_file(
                 Key=token.get_s3_key(),
                 Callback=_callback,
                 Config=_s3_config,
+                ExtraArgs={"ContentEncoding": "gzip"}
+                if token.get_s3_key().endswith(".gz")
+                else None,
             )
 
     if progress_callback is not None:

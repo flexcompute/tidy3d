@@ -8,21 +8,25 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic as pd
 from pydantic import Extra, Field, parse_obj_as
+from rich.console import Console
 
 from tidy3d import Simulation
 from tidy3d.version import __version__
+from tidy3d.exceptions import WebError
 
 from .cache import FOLDER_CACHE
 from .http_management import http
-from .s3utils import download_file, upload_file, upload_string
+from .s3utils import download_file, upload_file
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
+from .file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
 
 SIMULATION_JSON = "simulation.json"
-SIMULATION_HDF5 = "output/monitor_data.hdf5"
+SIMULATION_DATA_HDF5 = "output/monitor_data.hdf5"
 RUNNING_INFO = "output/solver_progress.csv"
 SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
+SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -197,6 +201,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         callback_url: str = None,
         simulation_type: str = "tidy3d",
         parent_tasks: List[str] = None,
+        file_type: str = "Gz",
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -217,6 +222,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Type of simulation being uploaded.
         parent_tasks : List[str]
             List of related task ids.
+        file_type: str
+            the simulation file type Json, Hdf5, Gz
 
         Returns
         -------
@@ -232,6 +239,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "callbackUrl": callback_url,
                 "simulationType": simulation_type,
                 "parentTasks": parent_tasks,
+                "fileType": file_type,
             },
         )
 
@@ -296,9 +304,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 return self.simulation
         return None
 
-    def get_simulation_json(
-        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
-    ) -> pathlib.Path:
+    def get_simulation_json(self, to_file: str, verbose: bool = True) -> pathlib.Path:
         """Get json file for a :class:`.Simulation` from server.
 
         Parameters
@@ -307,8 +313,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             save file to path.
         verbose: bool = True
             Whether to display progress bars.
-        progress_callback : Callable[[float], None] = None
-            Optional callback function called while downloading the data.
 
         Returns
         -------
@@ -316,13 +320,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         assert self.task_id
-        return download_file(
-            self.task_id,
-            SIMULATION_JSON,
-            to_file=to_file,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
+        self.get_simulation_hdf5(SIM_FILE_HDF5)
+        if os.path.exists(SIM_FILE_HDF5):
+            json_string = read_simulation_from_hdf5(SIM_FILE_HDF5)
+            os.remove(SIM_FILE_HDF5)
+            with open(to_file, "w") as file:
+                # Write the string to the file
+                file.write(json_string.decode("utf-8"))
+                if verbose:
+                    console = Console()
+                    console.log("Generate simulation.json successfully.")
+        else:
+            raise WebError("Failed to download simulation.json.")
 
     def upload_simulation(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
@@ -338,28 +347,26 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         assert self.task_id
         assert self.simulation
-        upload_string(
-            self.task_id,
-            self.simulation._json_string,  # pylint: disable=protected-access
-            SIMULATION_JSON,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
-        if len(self.simulation.custom_datasets) > 0:
-            # Also upload hdf5 containing all data.
-            file, file_name = tempfile.mkstemp()
-            os.close(file)
-            self.simulation.to_hdf5(file_name)
-            try:
-                upload_file(
-                    self.task_id,
-                    file_name,
-                    SIM_FILE_HDF5,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-            finally:
-                os.unlink(file_name)
+
+        # Also upload hdf5.gz containing all data.
+        file, file_name = tempfile.mkstemp()
+        gz_file, gz_file_name = tempfile.mkstemp()
+        os.close(file)
+        os.close(gz_file)
+        self.simulation.to_hdf5(file_name)
+        try:
+            # compress .hdf5 to .hdf5.gz
+            compress_file_to_gzip(file_name, gz_file_name)
+            upload_file(
+                self.task_id,
+                gz_file_name,
+                SIM_FILE_HDF5_GZ,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        finally:
+            os.unlink(file_name)
+            os.unlink(gz_file_name)
 
     def upload_file(
         self,
@@ -411,12 +418,26 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             worker group
         """
         if self.simulation:
-            upload_string(
-                self.task_id,
-                self.simulation._json_string,  # pylint: disable=protected-access
-                SIMULATION_JSON,
-                verbose=False,
-            )
+            # Also upload hdf5.gz containing all data.
+            file, file_name = tempfile.mkstemp()
+            gz_file, gz_file_name = tempfile.mkstemp()
+            os.close(file)
+            os.close(gz_file)
+            self.simulation.to_hdf5(file_name)
+            try:
+                # compress .hdf5 to .hdf5.gz
+                compress_file_to_gzip(file_name, gz_file_name)
+
+                upload_file(
+                    self.task_id,
+                    gz_file_name,
+                    SIM_FILE_HDF5_GZ,
+                    verbose=False,
+                    progress_callback=None,
+                )
+            finally:
+                os.unlink(file_name)
+                os.unlink(gz_file_name)
 
         if solver_version:
             protocol_version = None
@@ -462,10 +483,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         )
         return resp
 
-    def get_simulation_hdf5(
+    def get_sim_data_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
     ) -> pathlib.Path:
-        """Get hdf5 file from Server.
+        """Get output/monitor_data.hdf5 file from Server.
 
         Parameters
         ----------
@@ -484,11 +505,47 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         assert self.task_id
         return download_file(
             self.task_id,
-            SIMULATION_HDF5,
+            SIMULATION_DATA_HDF5,
             to_file=to_file,
             verbose=verbose,
             progress_callback=progress_callback,
         )
+
+    def get_simulation_hdf5(
+        self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
+    ) -> pathlib.Path:
+        """Get simulation.hdf5 file from Server.
+
+        Parameters
+        ----------
+        to_file: str
+            save file to path.
+        verbose: bool = True
+            Whether to display progress bars.
+        progress_callback : Callable[[float], None] = None
+            Optional callback function called while downloading the data.
+
+        Returns
+        -------
+        path: pathlib.Path
+            Path to saved file.
+        """
+        assert self.task_id
+        download_file(
+            self.task_id,
+            SIM_FILE_HDF5_GZ,
+            to_file=SIM_FILE_HDF5_GZ,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
+        if os.path.exists(SIM_FILE_HDF5_GZ):
+            extract_gz_file(SIM_FILE_HDF5_GZ, to_file)
+            os.remove(SIM_FILE_HDF5_GZ)
+            if verbose:
+                console = Console()
+                console.log(f"Extract {SIM_FILE_HDF5_GZ} to {to_file} successfully.")
+        else:
+            raise WebError("Failed to download simulation.hdf5")
 
     def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.

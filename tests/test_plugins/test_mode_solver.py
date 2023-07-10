@@ -13,6 +13,7 @@ from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.environment import Env
+from tidy3d.version import __version__
 
 
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0))
@@ -46,7 +47,7 @@ def mock_remote_api(monkeypatch):
             sources=[SRC],
         )
         mode_spec = td.ModeSpec(
-            num_modes=1,
+            num_modes=3,
             target_neff=2.0,
             filter_pol="tm",
             precision="double",
@@ -62,7 +63,6 @@ def mock_remote_api(monkeypatch):
 
     monkeypatch.setattr(td.web.http_management, "api_key", lambda: "api_key")
     monkeypatch.setattr("tidy3d.plugins.mode.web.upload_file", void)
-    monkeypatch.setattr("tidy3d.plugins.mode.web.upload_string", void)
     monkeypatch.setattr("tidy3d.plugins.mode.web.download_file", mock_download)
 
     responses.add(
@@ -82,7 +82,8 @@ def mock_remote_api(monkeypatch):
                     "projectId": PROJECT_ID,
                     "taskName": TASK_NAME,
                     "modeSolverName": MODESOLVER_NAME,
-                    "fileType": "Json",
+                    "fileType": "Gz",
+                    "source": "Python",
                     "protocolVersion": __version__,
                 }
             )
@@ -94,34 +95,7 @@ def mock_remote_api(monkeypatch):
                 "status": "draft",
                 "createdAt": "2023-05-19T16:47:57.190Z",
                 "charge": 0,
-                "fileType": "Json",
-            }
-        },
-        status=200,
-    )
-
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py",
-        match=[
-            responses.matchers.json_params_matcher(
-                {
-                    "projectId": PROJECT_ID,
-                    "taskName": TASK_NAME,
-                    "modeSolverName": MODESOLVER_NAME,
-                    "fileType": "Hdf5",
-                    "protocolVersion": __version__,
-                }
-            )
-        ],
-        json={
-            "data": {
-                "refId": TASK_ID,
-                "id": SOLVER_ID,
-                "status": "draft",
-                "createdAt": "2023-05-19T16:47:57.190Z",
-                "charge": 0,
-                "fileType": "Hdf5",
+                "fileType": "Gz",
             }
         },
         status=200,
@@ -153,7 +127,7 @@ def mock_remote_api(monkeypatch):
                 "status": "queued",
                 "createdAt": "2023-05-19T16:47:57.190Z",
                 "charge": 0,
-                "fileType": "Json",
+                "fileType": "Gz",
             }
         },
         status=200,

@@ -17,16 +17,20 @@ from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
 from ...log import log
+from ...web.file_util import compress_file_to_gzip, extract_gz_file
 from ...web.http_management import http
-from ...web.s3utils import download_file, upload_file, upload_string
-from ...web.simulation_task import Folder, SIMULATION_JSON
+from ...web.s3utils import download_file, upload_file
+from ...web.simulation_task import Folder, SIMULATION_JSON, SIM_FILE_HDF5_GZ
 from ...web.types import ResourceLifecycle, Submittable
 
 from .mode_solver import ModeSolver, MODE_MONITOR_NAME
+from ...version import __version__
 
 MODESOLVER_API = "tidy3d/modesolver/py"
 MODESOLVER_JSON = "mode_solver.json"
 MODESOLVER_HDF5 = "mode_solver.hdf5"
+MODESOLVER_GZ = "mode_solver.hdf5.gz"
+
 MODESOLVER_LOG = "output/result.log"
 MODESOLVER_RESULT = "output/result.hdf5"
 
@@ -95,7 +99,7 @@ def run(
         status = task.get_info().status
 
     if status == "error":
-        raise WebError("Error runnig mode solver.")
+        raise WebError("Error running mode solver.")
 
     log.log(log_level, f"Mode solver status: {status}")
     if verbose:
@@ -196,9 +200,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             {
                 "projectId": folder.folder_id,
                 "taskName": task_name,
-                "modeSolverName": mode_solver_name,
-                "fileType": "Hdf5" if len(mode_solver.simulation.custom_datasets) > 0 else "Json",
                 "protocolVersion": __version__,
+                "modeSolverName": mode_solver_name,
+                "fileType": "Gz",
+                "source": "Python",
             },
         )
         log.info(
@@ -256,6 +261,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         resp = http.get(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}")
         return ModeSolverTask(**resp, mode_solver=self.mode_solver)
 
+    # pylint: disable=protected-access
     def upload(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
     ) -> None:
@@ -270,46 +276,51 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         """
         mode_solver = self.mode_solver.copy()
 
-        # Upload simulation as json for GUI display
-        upload_string(
-            self.task_id,
-            mode_solver.simulation._json_string,  # pylint: disable=protected-access
-            SIMULATION_JSON,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
+        sim = mode_solver.simulation
 
-        if self.file_type == "Hdf5":
-            # Upload a single HDF5 file with the full data
-            file, file_name = tempfile.mkstemp()
-            os.close(file)
-            mode_solver.to_hdf5(file_name)
+        file, file_name = tempfile.mkstemp()
+        gz_file, gz_file_name = tempfile.mkstemp()
+        os.close(file)
+        os.close(gz_file)
 
-            try:
-                upload_file(
-                    self.solver_id,
-                    file_name,
-                    MODESOLVER_HDF5,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-            finally:
-                os.unlink(file_name)
-        else:
-            # Send only mode solver, without simulation
-            mode_solver_spec = mode_solver.dict()
+        sim.to_hdf5(file_name)
+        try:
+            # Upload simulation.hdf5.gz for GUI display
+            # compress .hdf5 to .hdf5.gz
+            compress_file_to_gzip(file_name, gz_file_name)
 
-            # Upload mode solver without simulation: 'construct' skips all validation
-            mode_solver_spec["simulation"] = None
-            mode_solver = ModeSolver.construct(**mode_solver_spec)
-            upload_string(
-                self.solver_id,
-                mode_solver._json_string,  # pylint: disable=protected-access
-                MODESOLVER_JSON,
+            upload_file(
+                self.task_id,
+                gz_file_name,
+                SIM_FILE_HDF5_GZ,
                 verbose=verbose,
                 progress_callback=progress_callback,
-                extra_arguments={"type": "ms"},
             )
+        finally:
+            os.unlink(file_name)
+            os.unlink(gz_file_name)
+
+        # Upload a single HDF5 file with the full data
+        file, file_name = tempfile.mkstemp()
+        gz_file, gz_file_name = tempfile.mkstemp()
+        os.close(file)
+        os.close(gz_file)
+        mode_solver.to_hdf5(file_name)
+
+        try:
+            # compress .hdf5 to .hdf5.gz
+            compress_file_to_gzip(file_name, gz_file_name)
+
+            upload_file(
+                self.solver_id,
+                gz_file_name,
+                MODESOLVER_GZ,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        finally:
+            os.unlink(file_name)
+            os.unlink(gz_file_name)
 
     # pylint: disable=arguments-differ
     def submit(self):
@@ -365,7 +376,21 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         stored in the same path as 'to_file', but with '.hdf5' extension, and neither 'to_file' or
         'sim_file' will be created.
         """
-        if self.file_type == "Hdf5":
+        if self.file_type == "Gz":
+            to_gz = pathlib.Path(to_file).with_suffix(".hdf5.gz")
+            to_hdf5 = pathlib.Path(to_file).with_suffix(".hdf5")
+            download_file(
+                self.task_id,
+                MODESOLVER_GZ,
+                to_file=to_gz,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+            extract_gz_file(to_gz, to_hdf5)
+            to_file = str(to_hdf5)
+            mode_solver = ModeSolver.from_hdf5(to_hdf5)
+
+        elif self.file_type == "Hdf5":
             to_hdf5 = pathlib.Path(to_file).with_suffix(".hdf5")
             download_file(
                 self.solver_id,

@@ -19,12 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added option to allow DC component in `GaussianPulse` spectrum, by setting `remove_dc_component=False` in `GaussianPulse`.
 - Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
 - `colocate` introduced as an argument to `ModeSolver` and a Field in `ModeSolverMonitor`, set to True by default.
-- `FieldTimeMonitor`-s and `FieldMonitor`-s that have `colocate=True` return fields colocated to the grid boundaries rather than centers. This matches better user expectations for example when the simulation has a symmetry (explicitly defined, or implicit) w.r.t. a given axis. When colocating to centers, fields would be ``dl / 2`` away from that symmetry plane, and components that are expected to go to zero do not (of course, they still do if interpolated to the symmetry plane). Another convenient use case is that it is easier to place a 2D monitor exactly on a grid boundary in the automatically generated grid, by simply passing an override structure with the monitor geometry.
+- `FieldTimeMonitor`-s and `FieldMonitor`-s that have `colocate=True` return fields colocated to the grid boundaries rather than centers. This matches better user expectations for example when the simulation has a symmetry (explicitly defined, or implicit) w.r.t. a given axis. When colocating to centers, fields would be `dl / 2` away from that symmetry plane, and components that are expected to go to zero do not (of course, they still do if interpolated to the symmetry plane). Another convenient use case is that it is easier to place a 2D monitor exactly on a grid boundary in the automatically generated grid, by simply passing an override structure with the monitor geometry.
 - In these monitors, `colocate` is now set to `True` by default. This is to avoid a lot of potential confusion coming from returning non-colocated fields by default, when colocated fields need to be used when computing quantities that depend on more than one field component, like flux or field intensity.
 - Field colocation for computations like flux, Poynting, and modal overlap also happen to cell boundaries rather than centers. The effect on final results
 should be close to imperceptible as verified by a large number of backend tests and our online examples. Any difference can be at most on the scale of
 the difference that can be observed when slightly modifying the grid resolution.
 - `GeometryGroup` accepts other `GeometryGroup` instances as group elements.
+- FDTD and mode solver tasks always upload `hdf5.gz` file instead of `hdf5` or `json`.
+- `web.download_json()` will download `simulation.hdf5.gz` and unzip it, then load the json from the hdf5 file.
+- `SimulationTask.get_simulation_hdf5()` will download simulation.hdf5.gz and unzip it to hdf5 file.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.

@@ -182,7 +182,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     log.debug("Creating task.")
 
     task = SimulationTask.create(
-        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks
+        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
     )
     if verbose:
         console = Console()
@@ -388,8 +388,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         console.log("running solver")
         console.log(
             "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
-            "or abort/delete the task in the web"
-            " UI. Terminating the Python script will not stop the job running on the cloud."
+            "or abort/delete the task in the web "
+            "UI. Terminating the Python script will not stop the job running on the cloud."
         )
         with Progress(console=console) as progress:
             pbar_pd = progress.add_task("% done", total=100)
@@ -454,16 +454,11 @@ def download(
 
     """
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_sim_data_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
 
 @wait_for_connection
-def download_json(
-    task_id: TaskId,
-    path: str = SIM_FILE_JSON,
-    verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
-) -> None:
+def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
     """Download the `.json` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
@@ -474,13 +469,11 @@ def download_json(
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
-    progress_callback : Callable[[float], None] = None
-        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
 
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_json(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_simulation_json(path, verbose=verbose)
 
 
 @wait_for_connection
@@ -510,12 +503,7 @@ def download_hdf5(
 
 
 @wait_for_connection
-def load_simulation(
-    task_id: TaskId,
-    path: str = SIM_FILE_JSON,
-    verbose: bool = True,
-    progress_callback: Callable[[float], None] = None,
-) -> Simulation:
+def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> Simulation:
     """Download the `.json` file of a task and load the associated :class:`.Simulation`.
 
     Parameters
@@ -526,8 +514,6 @@ def load_simulation(
         Download path to .json file of simulation (including filename).
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
-    progress_callback : Callable[[float], None] = None
-        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Returns
     -------
@@ -537,7 +523,7 @@ def load_simulation(
 
     # task = SimulationTask.get(task_id)
     task = SimulationTask(taskId=task_id)
-    task.get_simulation_json(path, verbose=verbose, progress_callback=progress_callback)
+    task.get_simulation_json(path, verbose=verbose)
     return Simulation.from_file(path)
 
 
@@ -577,7 +563,7 @@ def load(
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationData:
-    """Download and Load simultion results into :class:`.SimulationData` object.
+    """Download and Load simulation results into :class:`.SimulationData` object.
 
     Parameters
     ----------
