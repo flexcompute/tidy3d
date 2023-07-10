@@ -387,6 +387,10 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         # verbose case, update progressbar
         console.log("running solver")
+        console.log(
+            "To cancel the simulation, use 'web.delete(task_id)' or delete the task in the web"
+            " UI. Terminating the Python script will not stop the job running on the cloud."
+        )
         with Progress(console=console) as progress:
 
             pbar_pd = progress.add_task("% done", total=100)
