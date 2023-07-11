@@ -35,6 +35,12 @@ def test_excluded_surfaces_flat():
         M = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
 
 
+def test_fld_mnt_freqs_none():
+    """Test that validation errors if freqs=[None]."""
+    with pytest.raises(pydantic.ValidationError):
+        td.FieldMonitor(center=(0, 0, 0), size=(0, 0, 0), freqs=[None], name="test")
+
+
 def test_integration_surfaces():
     # test that integration surfaces are extracted correctly for surface and volume
     # integration monitors

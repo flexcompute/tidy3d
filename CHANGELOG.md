@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Point-like objects correctly appear as single points using `plt.scatter`.
 - Cleaner display of `ArrayLike` in docs.
+- `ArrayLike` validation properly fails with `None` or `nan` contents.
 
 ## [2.3.0] - 2023-6-30
 

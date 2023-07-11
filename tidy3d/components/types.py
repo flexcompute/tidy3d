@@ -51,6 +51,7 @@ class ArrayLike:
         yield cls.convert_to_numpy
         yield cls.check_dims
         yield cls.check_shape
+        yield cls.assert_non_null
 
     @classmethod
     def load_complex(cls, val):
@@ -83,6 +84,13 @@ class ArrayLike:
         """Make sure the shape is correct."""
         if cls.shape and val.shape != cls.shape:
             raise ValidationError(f"Expected shape {cls.shape} for ArrayLike, got {val.shape}.")
+        return val
+
+    @classmethod
+    def assert_non_null(cls, val):
+        """Make sure array is not None."""
+        if np.any(np.isnan(val)):
+            raise ValidationError("'ArrayLike' field contained None or nan values.")
         return val
 
     @classmethod
