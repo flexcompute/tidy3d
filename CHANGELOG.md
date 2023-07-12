@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Source validation happens before simulation upload and raises an error if no source is present.
 - Warning instead of error if structure out of simulation bounds.
 - Internal refactor of `ComponentModeler` to simplify logic.
+- (Changed effective 2.3.0) Backward-direction mode amplitudes from `ModeMonitors` have a flipped sign compared to previous versions. 
+Previously, the amplitudes were computed directly through the dot product ``amp = (mode, field)``, while, since 2.3.0, we use ``amp = (mode, field) / (mode, mode)`` instead.
+The modes are already normalized to unit directed flux, such that ``(mode, mode) = 1`` for forward modes, and ``(mode, mode) = -1`` for backward modes
+(the dot product of a mode with itself is equal to the flux through the mode plane). Therefore, the change in the ``amp`` formula is equivalent to a sign change for
+backward modes. This makes their interpretation more intuitive, since the amplitude is now ``1`` if the recorded field and a mode match exactly. A ``-1`` amplitude means
+that the fields match exactly except for a ``pi`` phase shift. This interpretation is also now independent of forward/backward direction.
 
 ### Fixed
 - Point-like objects correctly appear as single points using `plt.scatter`.

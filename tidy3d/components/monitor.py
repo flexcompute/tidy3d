@@ -456,6 +456,11 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
 class ModeMonitor(AbstractModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
+    The amplitudes are defined as
+    ``mode_solver_data.dot(recorded_field) / mode_solver_data.dot(mode_solver_data)``, where
+    ``recorded_field`` is the field data recorded in the FDTD simulation at the monitor frequencies,
+    and ``mode_solver_data`` is the mode data from the mode solver at the monitor plane.
+    This gives the power amplitude of ``recorded_field`` carried by each mode.
 
     Example
     -------
