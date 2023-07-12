@@ -227,7 +227,7 @@ def make_sim(
 
     jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
     values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
-    eps_ii = JaxDataArray(values=values, coords=coords)
+    eps_ii = JaxDataArray(values=values * (1+1j), coords=coords)
     field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
     jax_eps_dataset = JaxPermittivityDataset(**field_components)
     jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
