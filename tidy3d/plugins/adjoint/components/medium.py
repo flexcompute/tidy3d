@@ -6,7 +6,6 @@ from abc import ABC
 
 import pydantic as pd
 import numpy as np
-import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import xarray as xr
 
@@ -17,6 +16,7 @@ from ....components.data.monitor_data import FieldData
 from ....components.data.dataset import PermittivityDataset
 from ....components.data.data_array import ScalarFieldDataArray
 from ....exceptions import SetupError
+from ....constants import CONDUCTIVITY
 
 from .base import JaxObject
 from .types import JaxFloat, validate_jax_float
@@ -92,7 +92,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         e_fwd = grad_data_fwd.field_components[field]
         e_adj = grad_data_adj.field_components[field]
 
-        e_dotted = (e_fwd * e_adj).real
+        e_dotted = e_fwd * e_adj
 
         inside_mask = self.make_inside_mask(vol_coords=vol_coords, inside_fn=inside_fn)
 
@@ -103,7 +103,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         }
         interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
 
-        fields_eval = e_dotted.isel(f=0, **isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
+        fields_eval = e_dotted.isel(**isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
         inside_mask = inside_mask.isel(**isel_kwargs)
 
         return inside_mask * d_vol * fields_eval
@@ -148,12 +148,22 @@ class JaxMedium(Medium, AbstractJaxMedium):
         jax_field=True,
     )
 
+    conductivity: JaxFloat = pd.Field(
+        0.0,
+        title="Conductivity",
+        description="Electric conductivity. Defined such that the imaginary part of the complex "
+        "permittivity at angular frequency omega is given by conductivity/omega.",
+        units=CONDUCTIVITY,
+        jax_field=True,
+    )
+
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Override of inherited validator."""
         return val
 
     _sanitize_permittivity = validate_jax_float("permittivity")
+    _sanitize_conductivity = validate_jax_float("conductivity")
 
     def to_medium(self) -> Medium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
@@ -180,8 +190,17 @@ class JaxMedium(Medium, AbstractJaxMedium):
             inside_fn=inside_fn,
         )
 
-        vjp_permittivty = jnp.sum(d_eps_map.values)
-        return self.copy(update=dict(permittivity=vjp_permittivty))
+        vjp_eps_complex = np.sum(d_eps_map.values)
+
+        freq = d_eps_map.coords["f"][0]
+        vjp_eps, vjp_sigma = self.eps_complex_to_eps_sigma(vjp_eps_complex, freq)
+
+        return self.copy(
+            update=dict(
+                permittivity=vjp_eps,
+                conductivity=vjp_sigma,
+            )
+        )
 
 
 @register_pytree_node_class
@@ -255,8 +274,14 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
                 inside_fn=inside_fn,
             )
 
-            vjp_ii = jnp.sum(e_mult_dim.real.values)
-            vjp_fields[component_name] = JaxMedium(permittivity=vjp_ii)
+            vjp_eps_complex_ii = np.sum(e_mult_dim.values)
+            freq = e_mult_dim.coords["f"][0]
+            vjp_eps_ii, vjp_sigma_ii = self.eps_complex_to_eps_sigma(vjp_eps_complex_ii, freq)
+
+            vjp_fields[component_name] = JaxMedium(
+                permittivity=vjp_eps_ii,
+                conductivity=vjp_sigma_ii,
+            )
 
         return self.copy(update=vjp_fields)
 
