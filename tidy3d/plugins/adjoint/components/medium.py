@@ -523,7 +523,14 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
             # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())
-            vjp_values = e_dotted.real.values.reshape(vjp_shape)
+
+            # make sure this has the same dtype as the original
+            dtype_orig = np.array(orig_data_array.values).dtype
+
+            vjp_values = e_dotted.values.reshape(vjp_shape)
+            if dtype_orig.kind == "f":
+                vjp_values = vjp_values.real
+            vjp_values = vjp_values.astype(dtype_orig)
 
             # construct a DataArray storing the vjp
             vjp_data_array = JaxDataArray(values=vjp_values, coords=coords)
