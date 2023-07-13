@@ -98,6 +98,7 @@ Photonic Integrated Circuit Components
     notebooks/EulerWaveguideBend
     notebooks/EdgeCoupler
     notebooks/GratingCoupler
+    notebooks/FocusedApodGC
     notebooks/MMI1x4
     notebooks/RingResonator
     notebooks/BilevelPSR
