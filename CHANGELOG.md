@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for differentiating with respect to `JaxMedium.conductivity`.
-
 - Validating that every surface (unless excluded in ``exclude_surfaces``) of a 3D ``SurfaceIntegrationMonitor`` (flux monitor or field projection monitor) is not completely outside the simulation domain.
 
 ### Changed
@@ -26,6 +25,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Cleaner display of `ArrayLike` in docs.
 - `ArrayLike` validation properly fails with `None` or `nan` contents.
 - Apply finite grid correction to the fields when calculating the Poynting vector from 2D monitors.
+- `JaxCustomMedium` properly handles complex-valued permittivity.
 
 ## [2.3.0] - 2023-6-30
 
