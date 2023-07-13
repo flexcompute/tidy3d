@@ -27,7 +27,7 @@ from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource
 from .source import TFSF, Source
-from .monitor import MonitorType, Monitor, FreqMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
@@ -651,6 +651,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     raise SetupError(
                         f"{len(mediums)} different mediums detected on plane "
                         f"intersecting a {monitor.type}. Plane must be homogeneous."
+                    )
+
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def _integration_surfaces_in_bounds(cls, val, values):
+        """Error if any of the integration surfaces are outside of the simulation domain."""
+
+        if val is None:
+            return val
+
+        sim_center = values.get("center")
+        sim_size = values.get("size")
+        sim_box = Box(size=sim_size, center=sim_center)
+
+        for mnt in (mnt for mnt in val if isinstance(mnt, SurfaceIntegrationMonitor)):
+            for surface in mnt.integration_surfaces:
+                if not sim_box.intersects(surface):
+                    raise SetupError(
+                        f"Integration surface '{surface.name}' of monitor "
+                        f"'{mnt.name}' is outside of the simulation bounds. Modify monitor "
+                        "geometry or use 'exclude_surfaces' to exclude that surface."
                     )
 
         return val

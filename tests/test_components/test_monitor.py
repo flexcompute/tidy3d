@@ -118,6 +118,26 @@ def test_fieldproj_surfaces():
     assert len(M) == 4
 
 
+def test_fieldproj_surfaces_in_simulaiton():
+    # test error if a projection surfaces is outside the simulation domain
+    M = td.FieldProjectionAngleMonitor(size=(1, 3, 3), theta=[1], phi=[0], name="f", freqs=[2e12])
+    with pytest.raises(pydantic.ValidationError):
+        sim = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            monitors=[M],
+            grid_spec=td.GridSpec.uniform(0.1),
+        )
+    # no error when outside surfaces are excluded
+    M = M.updated_copy(exclude_surfaces=["y-", "y+", "z-", "z+"])
+    sim = td.Simulation(
+        size=(2, 2, 2),
+        run_time=1e-12,
+        monitors=[M],
+        grid_spec=td.GridSpec.uniform(0.1),
+    )
+
+
 def test_fieldproj_kspace_range():
     # make sure ux, uy are in [-1, 1] for k-space projection monitors
     with pytest.raises(pydantic.ValidationError):
@@ -216,6 +236,7 @@ def test_diffraction_validators():
             structures=[td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium())],
             boundary_spec=boundary_spec,
             monitors=[td.DiffractionMonitor(size=[td.inf, td.inf, 0], freqs=[1e12], name="de")],
+            grid_spec=td.GridSpec.uniform(dl=0.1),
         )
 
     # ensure error if monitor isn't infinite in two directions

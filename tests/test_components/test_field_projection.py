@@ -210,7 +210,7 @@ def test_proj_data():
     )
 
     sim = td.Simulation(
-        size=(7, 7, 7),
+        size=(7, 7, 9),
         grid_spec=td.GridSpec.auto(wavelength=5.0),
         monitors=[monitor_xy, monitor_u, monitor_tp],
         run_time=1e-12,
