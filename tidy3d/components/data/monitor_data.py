@@ -427,9 +427,9 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             modes in lossless waveguides but differs for modes in lossy materials. In that case,
             the conjugated dot product can be interpreted as the fraction of the power of the first
             mode carried by the second, but modes are not orthogonal with respect to that product
-            and the sum of carried power fractions exceed 1. In the non-conjugated definition,
-            orthogonal modes can be defined, but the interpretation of modal overlap as power
-            carried by a given mode is no longer valid.
+            and the sum of carried power fractions may be different from the total flux.
+            In the non-conjugated definition, modes are orthogonal, but the interpretation of the
+            dot product power carried by a given mode is no longer valid.
         """
 
         # Tangential fields for current and other field data
