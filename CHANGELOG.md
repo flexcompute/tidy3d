@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for differentiating with respect to `JaxMedium.conductivity`.
 
 ### Changed
 - Source validation happens before simulation upload and raises an error if no source is present.

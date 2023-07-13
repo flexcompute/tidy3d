@@ -201,7 +201,7 @@ def make_sim(
 
     # JaxBox
     jax_box1 = JaxBox(size=size, center=(1, 0, 2))
-    jax_med1 = JaxMedium(permittivity=permittivity)
+    jax_med1 = JaxMedium(permittivity=permittivity, conductivity=permittivity * 0.1)
     jax_struct1 = JaxStructure(geometry=jax_box1, medium=jax_med1)
 
     jax_box2 = JaxBox(size=size, center=(-1, 0, -3))
