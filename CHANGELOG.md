@@ -24,6 +24,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Point-like objects correctly appear as single points using `plt.scatter`.
 - Cleaner display of `ArrayLike` in docs.
 - `ArrayLike` validation properly fails with `None` or `nan` contents.
+- Apply finite grid correction to the fields when calculating the Poynting vector from 2D monitors.
 
 ## [2.3.0] - 2023-6-30
 
