@@ -184,6 +184,7 @@ Types of Sources
    GaussianBeam
    AstigmaticGaussianBeam
    CustomFieldSource
+   CustomCurrentSource
    TFSF
 
 
