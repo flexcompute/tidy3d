@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Union, List, Dict, Any
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import jax.numpy as jnp
 

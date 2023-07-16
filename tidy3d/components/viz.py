@@ -11,7 +11,7 @@ import matplotlib.pylab as plt
 from matplotlib.patches import PathPatch, ArrowStyle
 from matplotlib.path import Path
 from numpy import array, concatenate, ones
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .types import Ax
 from .base import Tidy3dBaseModel

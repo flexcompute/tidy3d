@@ -6,7 +6,7 @@ import json
 import functools
 
 import yaml
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .log import log
 from .version import __version__

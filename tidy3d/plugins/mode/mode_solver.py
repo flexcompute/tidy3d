@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import List, Tuple, Dict
 
 import numpy as np
-import pydantic
+import pydantic.v1
 import xarray as xr
 
 from ...log import log

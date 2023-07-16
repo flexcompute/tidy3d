@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple, List, Union
 
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel, cached_property
 from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray

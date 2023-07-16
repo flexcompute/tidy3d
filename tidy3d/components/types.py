@@ -9,7 +9,7 @@ except ImportError:
     from typing_extensions import Literal
 from typing_extensions import Annotated
 
-import pydantic
+import pydantic.v1
 import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry

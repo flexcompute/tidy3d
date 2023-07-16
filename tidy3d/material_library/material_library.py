@@ -1,7 +1,7 @@
 """Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
 import json
 from typing import Dict, List
-import pydantic as pd
+import pydantic.v1 as pd
 
 from ..components.medium import PoleResidue, Medium2D
 from ..components.base import Tidy3dBaseModel

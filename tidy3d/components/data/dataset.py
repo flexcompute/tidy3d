@@ -6,7 +6,7 @@ from typing import Union, Dict, Callable, Any
 
 import xarray as xr
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray

@@ -8,7 +8,7 @@ import warnings
 
 import xarray as xr
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray

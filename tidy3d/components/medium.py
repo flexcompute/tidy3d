@@ -7,7 +7,7 @@ from typing import Tuple, Union, Callable, Optional, Dict, List
 import functools
 from math import isclose
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Union, List
 import numpy as np
 import xarray as xr
-import pydantic
+import pydantic.v1
 
 from rich.progress import track
 

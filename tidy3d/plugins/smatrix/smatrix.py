@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Dict
 import os
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from ...constants import HERTZ, C_0

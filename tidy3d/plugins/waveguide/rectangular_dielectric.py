@@ -3,7 +3,7 @@
 from typing import List, Any
 
 import numpy
-import pydantic
+import pydantic.v1
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.boundary import BoundarySpec, Periodic

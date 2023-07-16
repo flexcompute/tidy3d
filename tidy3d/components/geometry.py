@@ -7,7 +7,7 @@ from typing import List, Tuple, Union, Any, Callable, Optional
 from math import isclose
 import functools
 
-import pydantic
+import pydantic.v1
 import numpy as np
 from matplotlib import patches, path
 from shapely import unary_union
