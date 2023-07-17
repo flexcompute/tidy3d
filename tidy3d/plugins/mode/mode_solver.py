@@ -579,7 +579,7 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
-        def add_source(
+    def add_source(
         self,
         source_time: SourceTime,
         direction: Direction,
