@@ -637,7 +637,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         mode_monitor = self.to_monitor(mode_monitor_freqs, mode_monitor_name)
-        new_monitors = newSim.monitors
+        new_monitors = self.simulation.monitors
         if not new_monitors:
             new_monitors = [mode_monitor]
         else:
@@ -666,7 +666,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         mode_solver_monitor = self.to_mode_solver_monitor(mode_solver_monitor_name)
-        new_monitors = newSim.monitors
+        new_monitors = self.simulation.monitors
         if not new_monitors:
             new_monitors = [mode_solver_monitor]
         else:
