@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
+- Out of date endpoint in `migrate` option of webapi.
 
 ## [2.3.1] - 2023-7-14
 
