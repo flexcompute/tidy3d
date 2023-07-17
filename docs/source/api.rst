@@ -433,6 +433,9 @@ Adjoint
    tidy3d.plugins.adjoint.JaxModeData
    tidy3d.plugins.adjoint.JaxPermittivityDataset
    tidy3d.plugins.adjoint.JaxDataArray
+   tidy3d.plugins.adjoint.utils.filter.ConicFilter
+   tidy3d.plugins.adjoint.utils.filter.BinaryProjector
+   tidy3d.plugins.adjoint.utils.penalty.RadiusPenalty
 
 Waveguide
 ---------
