@@ -1,8 +1,8 @@
 """Environment Setup."""
 import os
 
-from pydantic import BaseSettings, Field
-
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 class EnvironmentConfig(BaseSettings):
     """Basic Configuration for definition environment."""

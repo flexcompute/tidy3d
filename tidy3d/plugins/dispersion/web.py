@@ -6,7 +6,7 @@ import ssl
 from typing import Tuple, Optional
 from enum import Enum
 import requests
-import pydantic.v1
+import pydantic.v1 as pd
 from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...log import log

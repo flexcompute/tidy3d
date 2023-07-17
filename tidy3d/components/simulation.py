@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
-import pydantic.v1
+import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib.pylab as plt

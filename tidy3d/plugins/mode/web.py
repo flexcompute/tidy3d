@@ -9,7 +9,7 @@ import pathlib
 import tempfile
 import time
 
-import pydantic.v1
+import pydantic.v1 as pd
 import rich
 
 from ...components.simulation import Simulation

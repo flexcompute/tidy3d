@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
 
 from typing_extensions import Literal
-import pydantic.v1
+import pydantic.v1 as pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property

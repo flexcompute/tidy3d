@@ -4,7 +4,8 @@ from enum import Enum
 from abc import ABC
 from typing import Optional
 
-import pydantic.v1
+import pydantic.v1 as pydantic
+from ..components.base import Tidy3dBaseModel
 
 
 class TaskStatus(Enum):
@@ -19,7 +20,7 @@ class TaskStatus(Enum):
     ERROR = "error"
 
 
-class TaskBase(pydantic.BaseModel, ABC):
+class TaskBase(Tidy3dBaseModel, ABC):
     """Base config for all task objects."""
 
     class Config:

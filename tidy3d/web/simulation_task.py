@@ -25,7 +25,7 @@ SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
 
 
-class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
+class Folder(Tidy3DResource, Queryable):
     """Tidy3D Folder."""
 
     folder_id: str = Field(..., title="Folder id", description="folder id", alias="projectId")
@@ -121,7 +121,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         )
 
 
-class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
+class SimulationTask(ResourceLifecycle, Submittable):
     """Interface for managing the running of a :class:`.Simulation` task on server."""
 
     task_id: Optional[str] = Field(

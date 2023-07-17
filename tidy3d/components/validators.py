@@ -2,7 +2,7 @@
 """ Defines various validation functions that get used to ensure inputs are legit """
 from typing import Any
 
-import pydantic.v1
+import pydantic.v1 as pydantic
 
 from .geometry import Box
 from ..exceptions import ValidationError, SetupError

@@ -4,9 +4,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from pydantic import BaseModel
+from ..components.base import Tidy3dBaseModel
 
 
-class Tidy3DResource(BaseModel, ABC):
+class Tidy3DResource(Tidy3dBaseModel, ABC):
     """Abstract base class / template for a webservice that implements resource query."""
 
     @classmethod
@@ -28,7 +29,7 @@ class ResourceLifecycle(Tidy3DResource, ABC):
         """Delete the resource."""
 
 
-class Submittable(BaseModel, ABC):
+class Submittable(Tidy3dBaseModel, ABC):
     """Abstract base class / template for a webservice that implements a submit method."""
 
     @abstractmethod
@@ -36,7 +37,7 @@ class Submittable(BaseModel, ABC):
         """Submit the task to the webservice."""
 
 
-class Queryable(BaseModel, ABC):
+class Queryable(Tidy3dBaseModel, ABC):
     """Abstract base class / template for a webservice that implements a query method."""
 
     @classmethod

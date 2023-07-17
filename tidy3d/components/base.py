@@ -7,8 +7,8 @@ from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 
 import rich
-import pydantic.v1
-from pydantic.fields import ModelField
+import pydantic.v1 as pydantic
+from pydantic.v1.fields import ModelField
 import yaml
 import numpy as np
 import h5py
@@ -627,7 +627,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         value = cls.__name__
         annotation = Literal[value]
-
         tag_field = ModelField.infer(
             name=TYPE_TAG_STR,
             value=value,
