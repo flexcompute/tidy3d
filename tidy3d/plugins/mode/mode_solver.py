@@ -667,10 +667,12 @@ class ModeSolver(Tidy3dBaseModel):
 
         mode_solver_monitor = self.to_mode_solver_monitor(mode_solver_monitor_name)
         new_monitors = self.simulation.monitors
+        print(new_monitors)
         if not new_monitors:
             new_monitors = [mode_solver_monitor]
         else:
             new_monitors = [new_monitors, mode_solver_monitor]
+        print(new_monitors)
         newSim = self.simulation.copy(update=dict(monitors=new_monitors))
 
         return newSim
