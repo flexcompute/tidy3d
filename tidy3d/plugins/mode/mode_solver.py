@@ -607,9 +607,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         mode_source = self.to_source(mode_index=mode_index, direction=direction, source_time=source_time)
         new_sources = self.simulation.sources
-        print(new_sources)
-        new_sources = tuple(new_sources) + tuple(mode_source)
-        print(new_sources)
+        new_sources = [new_sources, mode_source]
         newSim = self.simulation.copy(update=dict(sources=new_sources))
 
         return newSim
