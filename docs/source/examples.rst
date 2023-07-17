@@ -103,6 +103,7 @@ Photonic Integrated Circuit Components
     notebooks/RingResonator
     notebooks/BilevelPSR
     notebooks/WaveguideSizeConverter
+    notebooks/StripToSlotConverters
     notebooks/BraggGratings.ipynb
     notebooks/BroadbandDirectionalCoupler
     notebooks/PolarizationSplitterRotator
