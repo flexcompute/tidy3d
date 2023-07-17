@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Configuration option `config.log_suppression` can be used to control the suppression of log messages.
+
 ## [2.3.1] - 2023-7-14
 
 ### Added

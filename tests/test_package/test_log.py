@@ -131,3 +131,20 @@ def test_logging_warning_capture():
     warning_list = td.log.captured_warnings()
     assert len(warning_list) == 15
     td.log.set_capture(False)
+
+
+def test_log_suppression():
+    with td.log as suppressed_log:
+        assert td.log._counts is not None
+        for i in range(4):
+            suppressed_log.warning("Warning message")
+        assert td.log._counts[30] == 3
+
+    td.config.log_suppression = False
+    with td.log as suppressed_log:
+        assert td.log._counts is None
+        for i in range(4):
+            suppressed_log.warning("Warning message")
+        assert td.log._counts is None
+
+    td.config.log_suppression = True
