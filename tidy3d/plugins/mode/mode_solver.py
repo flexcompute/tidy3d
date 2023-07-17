@@ -611,7 +611,6 @@ class ModeSolver(Tidy3dBaseModel):
         else:
             new_sources = new_sources + tuple([mode_source])
         newSim = self.simulation.copy(update=dict(sources=new_sources))
-        print(new_sources)
         return newSim
 
     def add_monitor(
