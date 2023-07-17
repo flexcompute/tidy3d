@@ -208,6 +208,7 @@ def test_mode_solver_simple(mock_remote_api, local):
     newSim_add_source = ms.add_source(mode_index=0, direction="+", source_time=source_time)
     newSim_add_monitor = ms.add_monitor(mode_monitor_freqs=freqs, mode_monitor_name="mode monitor")
     newSim_add_mode_solver_monitor = ms.add_mode_solver_monitor(mode_solver_monitor_name="mode solver monitor")
+    print("Testing issue 807 functions")
     if local:
         assert len(newSim_add_source.simulation.sources) == len(simulation.sources)+1
         assert len(newSim_add_monitor.simulation.monitors) == len(simulation.monitors)+1
