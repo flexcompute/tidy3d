@@ -579,6 +579,89 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
+    def sim_with_source(
+        self,
+        source_time: SourceTime,
+        direction: Direction,
+        mode_index: pydantic.NonNegativeInt = 0,
+    ) -> Simulation:
+        """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a copy of
+        the ModeSolver's original simulation with a ModeSource added corresponding to
+        the ModeSolver parameters.
+
+        Parameters
+        ----------
+        source_time: :class:`.SourceTime`
+            Specification of the source time-dependence.
+        direction : Direction
+            Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+        mode_index : int = 0
+            Index into the list of modes returned by mode solver to use in source.
+
+        Returns
+        -------
+        :class:`.Simulation`
+            Copy of the simulation with a :class:`.ModeSource` with specifications taken
+            from the ModeSolver instance and the method inputs.
+        """
+        mode_source = self.to_source(
+            mode_index=mode_index, direction=direction, source_time=source_time
+        )
+        new_sources = list(self.simulation.sources) + [mode_source]
+        new_sim = self.simulation.updated_copy(sources=new_sources)
+        return new_sim
+
+    def sim_with_monitor(
+        self,
+        freqs: List[float],
+        name: str,
+    ) -> Simulation:
+        """Creates :class:`.Simulation` from a :class:`ModeSolver`. Creates a copy of
+        the ModeSolver's original simulation with a mode monitor added corresponding to
+        the ModeSolver parameters.
+
+        Parameters
+        ----------
+        freqs : List[float]
+            Frequencies to include in Monitor (Hz).
+        name : str
+            Required name of monitor.
+
+        Returns
+        -------
+        :class:`.Simulation`
+            Copy of the simulation with a :class:`.ModeMonitor` with specifications taken
+            from the ModeSolver instance and the method inputs.
+        """
+        mode_monitor = self.to_monitor(freqs=freqs, name=name)
+        new_monitors = list(self.simulation.monitors) + [mode_monitor]
+        new_sim = self.simulation.updated_copy(monitors=new_monitors)
+        return new_sim
+
+    def sim_with_mode_solver_monitor(
+        self,
+        name: str,
+    ) -> Simulation:
+        """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a
+        copy of the ModeSolver's original simulation with a mode solver monitor
+        added corresponding to the ModeSolver parameters.
+
+        Parameters
+        ----------
+        name : str
+            Name of the monitor.
+
+        Returns
+        -------
+        :class:`.Simulation`
+            Copy of the simulation with a :class:`.ModeSolverMonitor` with specifications taken
+            from the ModeSolver instance and ``name``.
+        """
+        mode_solver_monitor = self.to_mode_solver_monitor(name=name)
+        new_monitors = list(self.simulation.monitors) + [mode_solver_monitor]
+        new_sim = self.simulation.updated_copy(monitors=new_monitors)
+        return new_sim
+
     # pylint:disable=too-many-arguments
     def plot_field(
         self,
