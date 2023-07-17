@@ -619,7 +619,6 @@ class ModeSolver(Tidy3dBaseModel):
         mode_monitor_freqs: List[float],
         mode_monitor_name: str,
         ) -> Simulation:
-
         """Creates :class:`.Simulation` from a :class:`ModeSolver` instance plus additional
         specifications.
 
@@ -639,7 +638,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         mode_monitor = self.to_monitor(mode_monitor_freqs, mode_monitor_name)
         new_monitors = newSim.monitors
-        new_monitors.append(mode_monitor)
+        if not new_monitors:
+            new_monitors = [mode_monitor]
+        else:
+            new_monitors = [new_sources, mode_source]
         newSim = newSim.copy(update=dict(monitors=new_monitors))
 
         return newSim
@@ -665,7 +667,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         mode_solver_monitor = self.to_mode_solver_monitor(mode_solver_monitor_name)
         new_monitors = newSim.monitors
-        new_monitors.append(mode_solver_monitor)
+        if not new_monitors:
+            new_monitors = [mode_solver_monitor]
+        else:
+            new_monitors = [new_monitors, mode_solver_monitor]
         newSim = newSim.copy(update=dict(monitors=new_monitors))
 
         return newSim
