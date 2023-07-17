@@ -204,6 +204,16 @@ def test_mode_solver_simple(mock_remote_api, local):
     )
     _ = ms.solve() if local else msweb.run(ms)
 
+    # Testing issue 807 functions
+    freq0 = td.C_0 / 1.55
+    source_time = td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10)
+    nS_add_source = ms.sim_with_source(mode_index=0, direction="+", source_time=source_time)
+    nS_add_monitor = ms.sim_with_monitor(freqs=freqs, name="mode monitor")
+    nS_add_mode_solver_monitor = ms.sim_with_mode_solver_monitor(name="mode solver monitor")
+    assert len(nS_add_source.sources) == len(simulation.sources) + 1
+    assert len(nS_add_monitor.monitors) == len(simulation.monitors) + 1
+    assert len(nS_add_mode_solver_monitor.monitors) == len(simulation.monitors) + 1
+
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
