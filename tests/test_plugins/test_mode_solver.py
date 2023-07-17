@@ -204,6 +204,14 @@ def test_mode_solver_simple(mock_remote_api, local):
     )
     _ = ms.solve() if local else msweb.run(ms)
 
+    # testing add_source, add_monitor, add_mode_solver_monitor
+    newSim_add_source = ms.add_source(mode_index=0, direction="+", source_time=source_time)
+    newSim_add_monitor = ms.add_monitor(mode_monitor_freqs=freqs, mode_monitor_name="mode monitor")
+    newSim_add_mode_solver_monitor = ms.add_mode_solver_monitor(mode_solver_monitor_name="mode solver monitor")
+    if local:
+        assert len(newSim_add_source.simulation.sources) == len(simulation.sources)+1
+        assert len(newSim_add_monitor.simulation.monitors) == len(simulation.monitors)+1
+        assert len(newSim_add_mode_solver_monitor.simulation.monitors) == len(simulation.monitors)+1
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
@@ -400,7 +408,7 @@ def test_group_index(mock_remote_api, local):
         assert (modes.n_group.sel(mode_index=0).values < 4.2).all()
         assert (modes.n_group.sel(mode_index=1).values > 3.7).all()
         assert (modes.n_group.sel(mode_index=1).values < 4.0).all()
-
+        
 
 def test_pml_params():
     """Test that mode solver pml parameters are computed correctly.
