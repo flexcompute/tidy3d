@@ -35,7 +35,7 @@ def migrate() -> bool:
             if is_migrate:
                 headers = {"Application": "TIDY3D"}
                 resp = requests.get(
-                    f"{Env.current.auth_api_endpoint}/auth",
+                    f"{Env.current.web_api_endpoint}/auth",
                     headers=headers,
                     auth=(email, password),
                 )
