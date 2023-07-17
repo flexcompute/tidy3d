@@ -645,7 +645,7 @@ class ModeSolver(Tidy3dBaseModel):
     def add_mode_solver_monitor(
         self,
         mode_solver_monitor_name: str,
-        )
+        ) -> Simulation:
 
         """Creates :class:`Simulation` from a :class:`ModeSolver` instance.
 
