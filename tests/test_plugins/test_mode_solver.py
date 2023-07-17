@@ -204,7 +204,7 @@ def test_mode_solver_simple(mock_remote_api, local):
     )
     _ = ms.solve() if local else msweb.run(ms)
 
-    print("Testing issue 807 functions")
+    # Testing issue 807 functions
     freq0 = td.C_0 / 1.55
     source_time = td.GaussianPulse(freq0=freq0, fwidth=freq0/10)
     nS_add_source = ms.add_source(mode_index=0, direction="+", source_time=source_time)
