@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Add width and height options to Simulation.plot_3d
+- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the mode solver to create simulations with the source/monitor/mode solver monitor previously added to the mode solver's simulation.
+
+### Changed
 
 ### Fixed
 
