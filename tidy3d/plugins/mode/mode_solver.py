@@ -671,7 +671,7 @@ class ModeSolver(Tidy3dBaseModel):
         if not new_monitors:
             new_monitors = [mode_solver_monitor]
         else:
-            new_monitors = [new_monitors, mode_solver_monitor]
+            new_monitors = list(new_monitors).append(mode_solver_monitor)
         print(new_monitors)
         newSim = self.simulation.copy(update=dict(monitors=new_monitors))
 
