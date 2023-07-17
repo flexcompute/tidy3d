@@ -32,6 +32,8 @@ from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDatase
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
+from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
+from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector
 from tidy3d.web.container import BatchData
 from tidy3d.web import run as run_regular
 
@@ -1410,3 +1412,25 @@ def test_num_input_structures():
 
     with pytest.raises(pydantic.ValidationError):
         sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
+
+
+@pytest.mark.parametrize("strict_binarize", (True, False))
+def test_adjoint_utils(strict_binarize):
+    """Test filtering, projection, and optimization routines."""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    # projection / filtering
+    image = sim.input_structures[2].medium.eps_dataset.eps_xx.values
+
+    filter = ConicFilter(feature_size=1.5, design_region_dl=0.1)
+    filter.evaluate(image)
+    projector = BinaryProjector(vmin=1.0, vmax=2.0, beta=1.5, strict_binarize=strict_binarize)
+    projector.evaluate(image)
+
+    # radius of curvature
+
+    polyslab = sim.input_structures[3].geometry
+
+    radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
+    penalty = radius_penalty.evaluate(polyslab.vertices)

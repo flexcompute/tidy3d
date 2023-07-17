@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
+- Inverse design convenience utilities in `plugins.adjoint.utils` for image filtering (`ConicFilter`), projection (`BinaryProjector`), and radius of curvature penalization (`RadiusPenalty)`.
 
 ### Fixed
 - Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
