@@ -119,8 +119,8 @@ def test_fieldproj_surfaces():
 
 
 def test_fieldproj_surfaces_in_simulaiton():
-    # test error if a projection surfaces is outside the simulation domain
-    M = td.FieldProjectionAngleMonitor(size=(1, 3, 3), theta=[1], phi=[0], name="f", freqs=[2e12])
+    # test error if all projection surfaces are outside the simulation domain
+    M = td.FieldProjectionAngleMonitor(size=(3, 3, 3), theta=[1], phi=[0], name="f", freqs=[2e12])
     with pytest.raises(pydantic.ValidationError):
         sim = td.Simulation(
             size=(2, 2, 2),
@@ -128,14 +128,24 @@ def test_fieldproj_surfaces_in_simulaiton():
             monitors=[M],
             grid_spec=td.GridSpec.uniform(0.1),
         )
-    # no error when outside surfaces are excluded
-    M = M.updated_copy(exclude_surfaces=["y-", "y+", "z-", "z+"])
+    # no error when some surfaces are in
+    M = M.updated_copy(size=(1, 3, 3))
     sim = td.Simulation(
         size=(2, 2, 2),
         run_time=1e-12,
         monitors=[M],
         grid_spec=td.GridSpec.uniform(0.1),
     )
+
+    # error when the surfaces that are in are excluded
+    M = M.updated_copy(exclude_surfaces=["x-", "x+"])
+    with pytest.raises(pydantic.ValidationError):
+        sim = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            monitors=[M],
+            grid_spec=td.GridSpec.uniform(0.1),
+        )
 
 
 def test_fieldproj_kspace_range():
