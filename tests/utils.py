@@ -250,6 +250,12 @@ SIM_FULL = Simulation(
             ),
             medium=td.Medium(permittivity=5),
         ),
+        Structure(
+            geometry=TriangleMesh.from_stl(
+                "tests/data/two_boxes_separate.stl", scale=0.1, origin=(0.5, 0.5, 0.5)
+            ),
+            medium=td.Medium(permittivity=5),
+        ),
     ],
     sources=[
         UniformCurrentSource(

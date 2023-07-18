@@ -40,6 +40,10 @@ def set_datasets_to_none(sim):
     for structure in sim_dict["structures"]:
         if structure["geometry"]["type"] == "TriangleMesh":
             structure["geometry"]["mesh_dataset"] = None
+        if structure["geometry"]["type"] == "GeometryGroup":
+            for geometry in structure["geometry"]["geometries"]:
+                if geometry["type"] == "TriangleMesh":
+                    geometry["mesh_dataset"] = None
         if "Custom" in structure["medium"]["type"]:
             if structure["medium"]["type"] == "CustomMedium":
                 structure["medium"]["eps_dataset"] = None
