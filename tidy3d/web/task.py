@@ -5,6 +5,8 @@ from abc import ABC
 from typing import Optional
 
 import pydantic
+from pydantic import Field, ConfigDict
+from typing_extensions import Annotated
 
 
 class TaskStatus(Enum):
@@ -21,11 +23,7 @@ class TaskStatus(Enum):
 
 class TaskBase(pydantic.BaseModel, ABC):
     """Base config for all task objects."""
-
-    class Config:
-        """configure class"""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 # type of the task_id
@@ -81,8 +79,8 @@ class TaskInfo(TaskBase):
 class RunInfo(TaskBase):
     """Information about the run."""
 
-    perc_done: pydantic.confloat(ge=0.0, le=100.0)
-    field_decay: pydantic.confloat(ge=0.0, le=1.0)
+    perc_done: Annotated[float, Field(ge=0.0, le=100.0)]
+    field_decay: Annotated[float, Field(ge=0.0, le=1.0)]
 
     def display(self):
         """Print some info."""
@@ -95,8 +93,4 @@ class Folder(pydantic.BaseModel):
 
     projectName: str = None
     projectId: str = None
-
-    class Config:
-        """Configure class."""
-
-        arbitrary_types_allowed = True
+    model_config = ConfigDict(arbitrary_types_allowed=True)

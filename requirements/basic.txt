@@ -9,7 +9,7 @@ h5py>=3.0.0
 rich<12.6.0 # note: rich >= 12.6 adds double progressbars
 matplotlib
 shapely>=2.0
-pydantic>=1.10.0,<2.0.0
+pydantic==2.*
 PyYAML
 dask
 toml

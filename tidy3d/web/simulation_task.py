@@ -125,7 +125,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     """Interface for managing the running of a :class:`.Simulation` task on server."""
 
     task_id: Optional[str] = Field(
-        ...,
+        None,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
@@ -151,7 +151,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         alias="projectName",
     )
 
-    folder: Optional[Folder]
+    folder: Optional[Folder] = None
 
     callback_url: str = Field(
         None,

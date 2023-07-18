@@ -1,7 +1,8 @@
 """Environment Setup."""
 import os
 
-from pydantic import BaseSettings, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
 
 class EnvironmentConfig(BaseSettings):
@@ -14,7 +15,7 @@ class EnvironmentConfig(BaseSettings):
     web_api_endpoint: str
     website_endpoint: str
     s3_region: str
-    ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
+    ssl_verify: bool = Field(True, validation_alias="TIDY3D_SSL_VERIFY")
 
     def active(self) -> None:
         """Activate the environment instance."""

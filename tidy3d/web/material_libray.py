@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from pydantic import Field, parse_obj_as, validator
+from pydantic import field_validator, Field, parse_obj_as
 from tidy3d.components.medium import MediumType
 
 from .http_management import http
@@ -26,7 +26,8 @@ class MaterialLibray(Queryable, smart_union=True):
     )
 
     # pylint: disable=no-self-argument
-    @validator("medium", "json_input", pre=True)
+    @field_validator("medium", "json_input", mode="before")
+    @classmethod
     def parse_result(cls, values):
         """Automatically parsing medium and json_input from string to object."""
         return json.loads(values)
