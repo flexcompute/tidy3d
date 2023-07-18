@@ -14,7 +14,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder
+from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder, GeometryGroup
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
@@ -2684,11 +2684,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
         ]
         datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
-        datasets_geometry = [
-            struct.geometry.mesh_dataset
-            for struct in self.structures
-            if isinstance(struct.geometry, TriangleMesh)
-        ]
+        datasets_geometry = []
+
+        for struct in self.structures:
+            if isinstance(struct.geometry, TriangleMesh):
+                datasets_geometry += struct.geometry.mesh_dataset
+            elif isinstance(struct.geometry, GeometryGroup):
+                for geometry in struct.geometry.geometries:
+                    datasets_geometry += geometry.mesh_dataset
+
         return datasets_field_source + datasets_current_source + datasets_medium + datasets_geometry
 
     def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:

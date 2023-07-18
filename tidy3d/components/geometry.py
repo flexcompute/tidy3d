@@ -3452,7 +3452,7 @@ class TriangleMesh(Geometry, ABC):
         meshes = []
         if isinstance(scene, trimesh.Trimesh):
             meshes = [scene]
-        elif isinstance(scene.trimesh.Scene):
+        elif isinstance(scene, trimesh.Scene):
             meshes = scene.dump()
         else:
             raise ValidationError(
@@ -3655,7 +3655,7 @@ class TriangleMesh(Geometry, ABC):
         mapping[:3, :3] = np.array(permutation).T
 
         section2d, _ = section.to_planar(to_2D=mapping)
-        return section2d.polygons_full
+        return list(section2d.polygons_full)
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
