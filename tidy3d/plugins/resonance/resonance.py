@@ -104,6 +104,8 @@ class ResonanceFinder(Tidy3dBaseModel):
         "Making this closer to zero will typically return more resonances.",
     )
 
+    # TODO[pydantic]: We couldn't refactor the `validator`, please replace it by `field_validator` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-validators for more information.
     @validator("freq_window", always=True)
     def _check_freq_window(cls, val):
         """Validate ``freq_window``"""

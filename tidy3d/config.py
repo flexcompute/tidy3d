@@ -3,20 +3,12 @@
 import pydantic as pd
 
 from .log import DEFAULT_LEVEL, LogLevel, set_logging_level
+from pydantic import ConfigDict
 
 
 class Tidy3dConfig(pd.BaseModel):
     """configuration of tidy3d"""
-
-    class Config:
-        """Config of the config."""
-
-        arbitrary_types_allowed = False
-        validate_all = True
-        extra = "forbid"
-        validate_assignment = True
-        allow_population_by_field_name = True
-        frozen = False
+    model_config = ConfigDict(arbitrary_types_allowed=False, validate_default=True, extra="forbid", validate_assignment=True, populate_by_name=True, frozen=False)
 
     logging_level: LogLevel = pd.Field(
         DEFAULT_LEVEL,

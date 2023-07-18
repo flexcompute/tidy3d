@@ -52,6 +52,8 @@ class DispersionFitter(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
+    # TODO[pydantic]: We couldn't refactor the `validator`, please replace it by `field_validator` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-validators for more information.
     @validator("wvl_um", always=True)
     def _setup_wvl(cls, val):
         """Convert wvl_um to a numpy array."""
@@ -59,6 +61,8 @@ class DispersionFitter(Tidy3dBaseModel):
             raise ValidationError("Wavelength data cannot be empty.")
         return val
 
+    # TODO[pydantic]: We couldn't refactor the `validator`, please replace it by `field_validator` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-validators for more information.
     @validator("n_data", always=True)
     def _ndata_length_match_wvl(cls, val, values):
         """Validate n_data"""
@@ -66,6 +70,8 @@ class DispersionFitter(Tidy3dBaseModel):
             raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
         return val
 
+    # TODO[pydantic]: We couldn't refactor the `validator`, please replace it by `field_validator` manually.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-validators for more information.
     @validator("k_data", always=True)
     def _kdata_setup_and_length_match(cls, val, values):
         """Validate the length of k_data, or setup k if it's None."""

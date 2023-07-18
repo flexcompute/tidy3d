@@ -18,6 +18,7 @@ from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
 from ..exceptions import FileError
 from ..log import log
+from pydantic import ConfigDict
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -91,39 +92,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         cls.add_type_field()
         cls.generate_docstring()
-
-    class Config:  # pylint: disable=too-few-public-methods
-        """Sets config for all :class:`Tidy3dBaseModel` objects.
-
-        Configuration Options
-        ---------------------
-        allow_population_by_field_name : bool = True
-            Allow properties to stand in for fields(?).
-        arbitrary_types_allowed : bool = True
-            Allow types like numpy arrays.
-        extra : str = 'forbid'
-            Forbid extra kwargs not specified in model.
-        json_encoders : Dict[type, Callable]
-            Defines how to encode type in json file.
-        validate_all : bool = True
-            Validate default values just to be safe.
-        validate_assignment : bool
-            Re-validate after re-assignment of field in model.
-        """
-
-        arbitrary_types_allowed = True
-        validate_all = True
-        extra = "forbid"
-        validate_assignment = True
-        allow_population_by_field_name = True
-        json_encoders = {
-            np.ndarray: ndarray_encoder,
-            complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
-        }
-        frozen = True
-        allow_mutation = False
-        copy_on_model_validation = "none"
+    # TODO[pydantic]: The following keys were removed: `json_encoders`, `allow_mutation`, `copy_on_model_validation`.
+    # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_default=True, extra="forbid", validate_assignment=True, populate_by_name=True, json_encoders={
+        np.ndarray: ndarray_encoder,
+        complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
+        xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
+    }, frozen=True, allow_mutation=False, copy_on_model_validation="none")
 
     _cached_properties = pydantic.PrivateAttr({})
 
