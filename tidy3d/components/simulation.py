@@ -667,13 +667,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sim_box = Box(size=sim_size, center=sim_center)
 
         for mnt in (mnt for mnt in val if isinstance(mnt, SurfaceIntegrationMonitor)):
-            for surface in mnt.integration_surfaces:
-                if not sim_box.intersects(surface):
-                    raise SetupError(
-                        f"Integration surface '{surface.name}' of monitor "
-                        f"'{mnt.name}' is outside of the simulation bounds. Modify monitor "
-                        "geometry or use 'exclude_surfaces' to exclude that surface."
-                    )
+            if not any(sim_box.intersects(surf) for surf in mnt.integration_surfaces):
+                raise SetupError(
+                    f"All integration surfaces of monitor '{mnt.name}' are outside of the "
+                    "simulation bounds."
+                )
 
         return val
 

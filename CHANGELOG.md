@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+- Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
+
 ## [2.3.1] - 2023-7-14
 
 ### Added
