@@ -1,6 +1,15 @@
 Learning FDTD Through Examples
 ==============================
 
+Lecture Series
+--------------
+
+.. toctree::
+    :maxdepth: 1
+
+    fdtd101
+    inversedesign
+
 Examples of How to Use FDTD Features
 ------------------------------------
 
