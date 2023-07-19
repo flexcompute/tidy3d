@@ -394,10 +394,16 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Compute flux by integrating Poynting vector in-plane
         d_area = self._diff_area
+        print("flux: computed _diff_area")
         poynting = self.poynting
+        print("flux: computed poynting")
 
-        flux_values = poynting * d_area
-        flux_values = flux_values.sum(dim=d_area.dims)
+        # flux_values = poynting * d_area
+        poynting *= d_area
+        print("flux: computed poynting * d_area")
+        # flux_values = flux_values.sum(dim=d_area.dims)
+        flux_values = poynting.sum(dim=d_area.dims)
+        print("flux: summed flux")
 
         return self.package_flux_results(flux_values)
 
