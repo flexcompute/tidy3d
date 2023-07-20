@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
 
+### Fixed
+- Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
+
 ## [2.3.1] - 2023-7-14
 
 ### Added

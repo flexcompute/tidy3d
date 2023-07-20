@@ -92,6 +92,8 @@ class JaxModeData(JaxMonitorData, ModeData):
             k0 = 2 * np.pi * freq / C_0
             grad_const = k0 / 4 / ETA_0
             src_amp = grad_const * amp
+            if direction == "-":
+                src_amp *= -1
 
             src_direction = self.flip_direction(str(direction))
 
