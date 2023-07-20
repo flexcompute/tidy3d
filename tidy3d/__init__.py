@@ -23,6 +23,10 @@ from .components.parameter_perturbation import ParameterPerturbation
 from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
 from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
 
+# time modulation
+from .components.time_modulation import SpaceTimeModulation, SpaceModulation
+from .components.time_modulation import ContinuousWaveTimeModulation, ModulationSpec
+
 # structures
 from .components.structure import Structure, MeshOverrideStructure
 
@@ -303,4 +307,8 @@ __all__ = [
     "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
+    "SpaceTimeModulation",
+    "SpaceModulation",
+    "ContinuousWaveTimeModulation",
+    "ModulationSpec",
 ]

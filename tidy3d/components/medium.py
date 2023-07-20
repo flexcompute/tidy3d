@@ -27,7 +27,7 @@ from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
 from .heat_spec import HeatSpecType
-
+from .time_modulation import ModulationSpec
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -167,7 +167,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
-        "simulations with gain medium are unstable, and are likely to diverge."
+        "simulations with a gain medium are unstable, and are likely to diverge."
         "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
         "diverged. Monitor data up to the divergence point will still be returned and can be "
         "useful in some cases.",
@@ -177,6 +177,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
+    )
+
+    modulation_spec: ModulationSpec = pd.Field(
+        None,
+        title="Modulation Spec",
+        description="Modulation spec applied on top of the base medium properties.",
     )
 
     @pd.validator("nonlinear_spec", always=True)
@@ -203,7 +209,24 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val, values):
+        """Check compatibility with modulation_spec."""
+        nonlinear_spec = values.get("nonlinear_spec")
+        if val is not None and nonlinear_spec is not None:
+            raise ValidationError(
+                f"For medium class {cls}, 'modulation_spec' of class {type(val)} and "
+                f"'nonlinear_spec' of class {type(nonlinear_spec)} are "
+                "not simultaneously supported."
+            )
+        return val
+
     _name_validator = validate_name_str()
+
+    @cached_property
+    def time_modulated(self) -> bool:
+        """Whether any component of the medium is time modulated."""
+        return self.modulation_spec is not None and self.modulation_spec.applied_modulation
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -338,7 +361,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Returns
         -------
         complex
-            Complex-valued relative permittivty.
+            Complex-valued relative permittivity.
         """
         eps_real = n**2 - k**2
         eps_imag = 2 * n * k
@@ -609,6 +632,16 @@ class PECMedium(AbstractMedium):
     To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
     """
 
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls}."
+            )
+        return val
+
     def eps_model(self, frequency: float) -> complex:
         # return something like frequency with value of pec_val + 0j
         return 0j * frequency + pec_val
@@ -663,8 +696,40 @@ class Medium(AbstractMedium):
         if not values.get("allow_gain") and val < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+                "To simulate a gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
+            )
+        return val
+
+    @pd.validator("permittivity", always=True)
+    def _permittivity_modulation_validation(cls, val, values):
+        """Assert modulated permittivity cannot be <= 0."""
+        modulation = values.get("modulation_spec")
+        if modulation is None or modulation.permittivity is None:
+            return val
+
+        min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
+        if min_eps_inf - modulation.permittivity.max_modulation <= 0:
+            raise ValidationError(
+                "The minimum permittivity value with modulation applied was found to be negative."
+            )
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _passivity_modulation_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        modulation = values.get("modulation_spec")
+        if modulation is None or modulation.conductivity is None:
+            return val
+
+        min_sigma = val if np.ndim(val) == 0 else np.min(np.array(val))
+        if not values.get("allow_gain") and min_sigma - modulation.conductivity.max_modulation < 0:
+            raise ValidationError(
+                "For passive medium, 'conductivity' must be non-negative at any time."
+                "With conductivity modulation, this medium can sometimes be active. "
+                "Please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, "
+                "and are likely to diverge."
             )
         return val
 
@@ -676,7 +741,11 @@ class Medium(AbstractMedium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        return np.sqrt(self.permittivity)
+        permittivity = self.permittivity
+        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
+            permittivity -= self.modulation_spec.permittivity.max_modulation
+        n, _ = self.eps_complex_to_nk(permittivity)
+        return n
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -787,8 +856,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not values.get("allow_gain") and np.any(val.values < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+                "To simulate a gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
         return val
 
@@ -800,7 +869,11 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        return np.sqrt(np.min(self.permittivity.values))
+        permittivity = np.min(self.permittivity.values)
+        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
+            permittivity -= self.modulation_spec.permittivity.max_modulation
+        n, _ = self.eps_complex_to_nk(permittivity)
+        return n
 
     @cached_property
     def is_isotropic(self):
@@ -845,6 +918,14 @@ class CustomMedium(AbstractCustomMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
+    eps_dataset: Optional[PermittivityDataset] = pd.Field(
+        None,
+        title="Permittivity Dataset",
+        description="[To be deprecated] User-supplied dataset containing complex-valued "
+        "permittivity as a function of space. Permittivity distribution over the Yee-grid "
+        "will be interpolated based on ``interp_method``.",
+    )
+
     permittivity: Optional[SpatialDataArray] = pd.Field(
         None,
         title="Permittivity",
@@ -859,14 +940,6 @@ class CustomMedium(AbstractCustomMedium):
         "that the imaginary part of the complex permittivity at angular "
         "frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
-    )
-
-    eps_dataset: Optional[PermittivityDataset] = pd.Field(
-        None,
-        title="Permittivity Dataset",
-        description="[To be deprecated] User-supplied dataset containing complex-valued "
-        "permittivity as a function of space. Permittivity distribution over the Yee-grid "
-        "will be interpolated based on ``interp_method``.",
     )
 
     @pd.root_validator(pre=True)
@@ -966,6 +1039,7 @@ class CustomMedium(AbstractCustomMedium):
         """Assert any eps_inf must be >=1"""
         if val is None:
             return val
+        modulation = values.get("modulation_spec")
 
         for comp in ["eps_xx", "eps_yy", "eps_zz"]:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
@@ -976,17 +1050,40 @@ class CustomMedium(AbstractCustomMedium):
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
                 )
+
+            if modulation is not None and modulation.permittivity is not None:
+                if np.any(eps_real.values - modulation.permittivity.max_modulation <= 0):
+                    raise ValidationError(
+                        "The minimum permittivity value with modulation applied "
+                        "was found to be negative."
+                    )
+
             if not values.get("allow_gain") and np.any(sigma.values < 0):
                 raise ValidationError(
                     "For passive medium, imaginary part of permittivity must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
+                    "and are likely to diverge."
+                )
+
+            if (
+                not values.get("allow_gain")
+                and modulation is not None
+                and modulation.conductivity is not None
+                and np.any(sigma.values - modulation.conductivity.max_modulation <= 0)
+            ):
+                raise ValidationError(
+                    "For passive medium, imaginary part of permittivity must be non-negative "
+                    "at any time. "
+                    "With conductivity modulation, this medium can sometimes be active. "
+                    "Please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
 
     @pd.validator("permittivity", always=True)
-    def _eps_inf_greater_no_less_than_one(cls, val):
+    def _eps_inf_greater_no_less_than_one(cls, val, values):
         """Assert any eps_inf must be >=1"""
         if val is None:
             return val
@@ -996,6 +1093,15 @@ class CustomMedium(AbstractCustomMedium):
 
         if np.any(val.values < 1):
             raise SetupError("'permittivity' must be no less than one.")
+
+        modulation = values.get("modulation_spec")
+        if modulation is None or modulation.permittivity is None:
+            return val
+
+        if np.any(val.values - modulation.permittivity.max_modulation <= 0):
+            raise ValidationError(
+                "The minimum permittivity value with modulation applied was found to be negative."
+            )
 
         return val
 
@@ -1015,13 +1121,36 @@ class CustomMedium(AbstractCustomMedium):
         if not values.get("allow_gain") and np.any(val.values < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with gain medium are unstable, "
+                "To simulate a gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, "
                 "and are likely to diverge."
             )
 
         if values["permittivity"].coords != val.coords:
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
+
+        return val
+
+    @pd.validator("conductivity", always=True)
+    def _passivity_modulation_validation(cls, val, values):
+        """Assert passive medium at any time during modulation if `allow_gain` is False."""
+
+        # validated already when the data is supplied through `eps_dataset`
+        if values.get("eps_dataset"):
+            return val
+
+        # permittivity defined with ``permittivity`` and ``conductivity``
+        modulation = values.get("modulation_spec")
+        if values.get("allow_gain") or modulation is None or modulation.conductivity is None:
+            return val
+        if val is None or np.any(val.values - modulation.conductivity.max_modulation < 0):
+            raise ValidationError(
+                "For passive medium, 'conductivity' must be non-negative at any time. "
+                "With conductivity modulation, this medium can sometimes be active. "
+                "Please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, "
+                "and are likely to diverge."
+            )
         return val
 
     @cached_property
@@ -1362,6 +1491,49 @@ class CustomMedium(AbstractCustomMedium):
 class DispersiveMedium(AbstractMedium, ABC):
     """A Medium with dispersion (propagation characteristics depend on frequency)"""
 
+    @staticmethod
+    def _permittivity_modulation_validation():
+        """Assert modulated permittivity cannot be <= 0 at any time."""
+
+        @pd.validator("eps_inf", allow_reuse=True, always=True)
+        def _validate_permittivity_modulation(cls, val, values):
+            """Assert modulated permittivity cannot be <= 0."""
+            modulation = values.get("modulation_spec")
+            if modulation is None or modulation.permittivity is None:
+                return val
+
+            min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
+            if min_eps_inf - modulation.permittivity.max_modulation <= 0:
+                raise ValidationError(
+                    "The minimum permittivity value with modulation applied was found to be negative."
+                )
+            return val
+
+        return _validate_permittivity_modulation
+
+    @staticmethod
+    def _conductivity_modulation_validation():
+        """Assert passive medium at any time if not ``allow_gain``."""
+
+        @pd.validator("modulation_spec", allow_reuse=True, always=True)
+        def _validate_conductivity_modulation(cls, val, values):
+            """With conductivity modulation, the medium can exhibit gain during the cycle.
+            So `allow_gain` must be True when the conductivity is modulated.
+            """
+            if val is None or val.conductivity is None:
+                return val
+
+            if not values.get("allow_gain"):
+                raise ValidationError(
+                    "For passive medium, 'conductivity' must be non-negative at any time. "
+                    "With conductivity modulation, this medium can sometimes be active. "
+                    "Please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, and are likely to diverge."
+                )
+            return val
+
+        return _validate_conductivity_modulation
+
     @abstractmethod
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
@@ -1380,7 +1552,11 @@ class DispersiveMedium(AbstractMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        return np.sqrt(self.pole_residue.eps_inf)
+        permittivity = self.pole_residue.eps_inf
+        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
+            permittivity -= self.modulation_spec.permittivity.max_modulation
+        n, _ = self.eps_complex_to_nk(permittivity)
+        return n
 
     @staticmethod
     def tuple_to_complex(value: Tuple[float, float]) -> complex:
@@ -1408,7 +1584,11 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        return np.sqrt(np.min(self.pole_residue.eps_inf.values))
+        permittivity = np.min(self.pole_residue.eps_inf.values)
+        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
+            permittivity -= self.modulation_spec.permittivity.max_modulation
+        n, _ = self.eps_complex_to_nk(permittivity)
+        return n
 
     @cached_property
     def is_isotropic(self):
@@ -1502,6 +1682,9 @@ class PoleResidue(DispersiveMedium):
             if np.any(np.real(a) > 0):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
+
+    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
+    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -1907,11 +2090,27 @@ class Sellmeier(DispersiveMedium):
             if B < 0:
                 raise ValidationError(
                     "For passive medium, 'B_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
+
+    @pd.validator("modulation_spec", always=True)
+    def _validate_permittivity_modulation(cls, val):
+        """Assert modulated permittivity cannot be <= 0."""
+
+        if val is None or val.permittivity is None:
+            return val
+
+        min_eps_inf = 1.0
+        if min_eps_inf - val.permittivity.max_modulation <= 0:
+            raise ValidationError(
+                "The minimum permittivity value with modulation applied was found to be negative."
+            )
+        return val
+
+    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
@@ -2033,8 +2232,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             if np.any(B < 0):
                 raise ValidationError(
                     "For passive medium, 'B_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -2160,11 +2359,14 @@ class Lorentz(DispersiveMedium):
             if del_ep < 0:
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
+
+    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
+    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2313,8 +2515,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -2368,6 +2570,9 @@ class Drude(DispersiveMedium):
         description="List of (:math:`f_i, \\delta_i`) values for model.",
         units=(HERTZ, HERTZ),
     )
+
+    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
+    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2533,11 +2738,14 @@ class Debye(DispersiveMedium):
             if del_ep < 0:
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
+
+    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
+    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2642,8 +2850,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with gain medium are unstable, "
+                    "To simulate a gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with a gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -2721,6 +2929,17 @@ class AnisotropicMedium(AbstractMedium):
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls}. "
+                "Please add modulation to each component."
+            )
+        return val
+
     @pd.root_validator(pre=True)
     def _ignored_fields(cls, values):
         """The field is ignored."""
@@ -2734,6 +2953,11 @@ class AnisotropicMedium(AbstractMedium):
     def components(self) -> Dict[str, Medium]:
         """Dictionary of diagonal medium components."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+
+    @cached_property
+    def time_modulated(self) -> bool:
+        """Whether any component of the medium is time modulated."""
+        return any(mat.time_modulated for mat in self.components.values())
 
     @cached_property
     def n_cfl(self):
@@ -2845,6 +3069,16 @@ class FullyAnisotropicMedium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls}."
+            )
+        return val
+
     @pd.validator("permittivity", always=True)
     def permittivity_spd_and_ge_one(cls, val):
         """Check that provided permittivity tensor is symmetric positive definite
@@ -2887,8 +3121,8 @@ class FullyAnisotropicMedium(AbstractMedium):
             raise ValidationError(
                 "For passive medium, main diagonal of provided conductivity tensor "
                 "must be non-negative. "
-                "To simulate gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+                "To simulate a gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
         return val
 
@@ -3341,7 +3575,11 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         """
 
         new_dict = self.dict(
-            exclude={"permittivity_perturbation", "conductivity_perturbation", "type"}
+            exclude={
+                "permittivity_perturbation",
+                "conductivity_perturbation",
+                "type",
+            }
         )
 
         if all(x is None for x in [temperature, electron_density, hole_density]):
@@ -3547,6 +3785,16 @@ class Medium2D(AbstractMedium):
         "zz-component of the corresponding 3D medium.",
         discriminator=TYPE_TAG_STR,
     )
+
+    @pd.validator("modulation_spec", always=True)
+    def _validate_modulation_spec(cls, val):
+        """Check compatibility with modulation_spec."""
+        if val is not None:
+            raise ValidationError(
+                f"A 'modulation_spec' of class {type(val)} is not "
+                f"currently supported for medium class {cls}."
+            )
+        return val
 
     @classmethod
     def _weighted_avg(
@@ -3790,7 +4038,7 @@ class Medium2D(AbstractMedium):
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
         log.warning(
             "The refractive index of a 'Medium2D' is unphysical. "
-            "Use 'Medium2D.plot_sigma' instead to plot surface conductivty, or call "
+            "Use 'Medium2D.plot_sigma' instead to plot surface conductivity, or call "
             "'Medium2D.to_anisotropic_medium' or 'Medium2D.to_pole_residue' first "
             "to obtain the physical refractive index."
         )
