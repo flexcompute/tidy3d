@@ -250,6 +250,11 @@ def test_mode_solver_custom_medium(mock_remote_api, local):
         modes = ms.solve() if local else msweb.run(ms)
         n_eff.append(modes.n_eff.values)
 
+        fname = "tests/tmp/ms_custom_medium.hdf5"
+        ms.to_file(fname)
+        m2 = ModeSolver.from_file(fname)
+        assert m2 == ms
+
     if local:
         assert n_eff[0] < 1.5
         assert n_eff[1] > 4
