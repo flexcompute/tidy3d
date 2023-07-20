@@ -26,7 +26,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
-
+from .time_modulation import TimeModulationType
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -181,6 +181,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         the FDTD with this medium is stable when the time step size that doesn't take
         material factor into account is multiplied by ``n_cfl``.
         """
+
+    @cached_property
+    def time_modulated(self):
+        """Whether time modulation has been applied to the medium."""
+        return False
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
@@ -537,6 +542,18 @@ class Medium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
+    permittivity_time_modulation: TimeModulationType = pd.Field(
+        None,
+        title="Time modulation of permittivity",
+        description="Time modulation of permittivity",
+    )
+
+    conductivity_time_modulation: TimeModulationType = pd.Field(
+        None,
+        title="Time modulation of conductivity",
+        description="Time modulation of conductivity",
+    )
+
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
@@ -548,6 +565,48 @@ class Medium(AbstractMedium):
             )
         return val
 
+    @pd.validator("permittivity_time_modulation", always=True)
+    def _permittivity_modulation_validation(cls, val, values):
+        """Assert modulated permittivity cannot be <= 0."""
+        if val is None:
+            return val
+
+        if values.get("permittivity") + val.range[0] <= 0:
+            raise ValidationError("Modulated permittivity must always be positibe.")
+        return val
+
+    @pd.validator("conductivity_time_modulation", always=True)
+    def _passivity_modulation_validation(cls, val, values):
+        """Assert passive medium if `allow_gain` is False."""
+        if val is None:
+            return val
+        if not values.get("allow_gain") and values.get("conductivity") + val.range[0] < 0:
+            raise ValidationError(
+                "For passive medium, the overall modulated 'conductivity' must be non-negative. "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
+            )
+        return val
+
+    @pd.validator("conductivity_time_modulation", always=True)
+    def _same_modulation_frequency(cls, val, values):
+        """Assert same modulation frequency in permittivity and conductivity."""
+        permittiivty_modulation = values.get("permittivity_time_modulation")
+        if val is not None and permittiivty_modulation is not None:
+            if not isclose(val.freq, permittiivty_modulation.freq):
+                raise ValidationError(
+                    "'permittivity' and 'conductivity' should be modulated at the same frequency."
+                )
+        return val
+
+    @cached_property
+    def time_modulated(self):
+        """Whether time modulation has been applied to the medium."""
+        for comp in [self.permittivity_time_modulation, self.conductivity_time_modulation]:
+            if comp is not None and not comp.negligible_modulation:
+                return True
+        return False
+
     @cached_property
     def n_cfl(self):
         """This property computes the index of refraction related to CFL condition, so that
@@ -556,6 +615,8 @@ class Medium(AbstractMedium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
+        if self.time_modulated:
+            return np.sqrt(self.permittivity + self.permittivity_time_modulation.range[0])
         return np.sqrt(self.permittivity)
 
     @ensure_freq_in_range
@@ -3044,7 +3105,13 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         """
 
         new_dict = self.dict(
-            exclude={"permittivity_perturbation", "conductivity_perturbation", "type"}
+            exclude={
+                "permittivity_perturbation",
+                "conductivity_perturbation",
+                "permittivity_time_modulation",
+                "conductivity_time_modulation",
+                "type",
+            }
         )
 
         if all(x is None for x in [temperature, electron_density, hole_density]):

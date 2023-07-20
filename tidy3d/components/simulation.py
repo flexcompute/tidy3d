@@ -1457,6 +1457,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
+        elif medium.time_modulated:
+            # time modulated medium
+            plot_params = plot_params.copy(
+                update={"facecolor": "red", "linewidth": 0, "hatch": "x*"}
+            )
         elif isinstance(medium, Medium2D):
             # 2d material
             plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
@@ -2755,7 +2760,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_current_source = [
             src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
         ]
-        datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
+        datasets_medium = [
+            mat
+            for mat in self.mediums
+            if isinstance(mat, AbstractCustomMedium) or mat.time_modulated
+        ]
         datasets_geometry = []
 
         for struct in self.structures:

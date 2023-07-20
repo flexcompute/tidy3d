@@ -20,6 +20,9 @@ from .components.parameter_perturbation import ParameterPerturbation
 from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
 from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
 
+# time modulation
+from .components.time_modulation import ContinuousWaveModulation
+
 # structures
 from .components.structure import Structure, MeshOverrideStructure
 
