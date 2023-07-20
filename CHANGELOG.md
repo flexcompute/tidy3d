@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
 - GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
 - ``verbose`` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
+- Added support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
 
 ### Changed
 - Update versions of `boto3`, `requests`, and `click`.
