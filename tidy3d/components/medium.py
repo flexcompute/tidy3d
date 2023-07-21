@@ -1182,7 +1182,7 @@ class CustomMedium(AbstractCustomMedium):
                 """Convert user supplied coords into boundary coords to use in :class:`.Grid`."""
 
                 # get coordinates of the bondaries halfway between user-supplied data
-                coord_bounds = (coords[1:] + coords[:1]) / 2.0
+                coord_bounds = (coords[1:] + coords[:-1]) / 2.0
 
                 # res-set coord boundaries that lie outside geometry bounds to the boundary (0 vol.)
                 coord_bounds[coord_bounds <= pt_min] = pt_min
