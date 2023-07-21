@@ -11,7 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `web.abort()` and `Job.abort()` methods allowing to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
 
 ### Changed
+
+### Fixed
+
+## [2.3.2] - 2023-7-21
+
+### Added
+
+### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
+
+### Fixed
+- Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
+- Bug in `CustomMedium.grids`, which was giving incorrect grid boundaries at edges.
+- Out of date endpoint in `migrate` option of webapi.
 
 ## [2.3.1] - 2023-7-14
 
@@ -843,7 +856,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...develop
+[2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...v2.3.0
 [2.2.3]: https://github.com/flexcompute/tidy3d/compare/v2.2.2...v2.2.3
