@@ -3,11 +3,13 @@
 from typing import Any
 
 import pydantic
+import numpy as np
 
 from .geometry import Box
 from ..exceptions import ValidationError, SetupError
 from .data.dataset import Dataset, FieldDataset
 from .base import DATA_ARRAY_MAP
+from .types import Tuple
 from ..log import log
 
 """ Explanation of pydantic validators:
@@ -249,3 +251,81 @@ def assert_single_freq_in_range(field_name: str):
         return val
 
     return _single_frequency_in_range
+
+
+def validate_parameter_perturbation(
+    field_name: str,
+    base_field_name: str,
+    allowed_real_range: Tuple[Tuple[float, float], ...],
+    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_complex: bool = True,
+):
+    """Assert perturbations do not drive a parameter out of physical bounds."""
+
+    # pylint:disable=too-many-locals, too-many-nested-blocks
+    @pydantic.validator(field_name, always=True, allow_reuse=True)
+    def _warn_perturbed_val_range(cls, val, values):
+        """Assert perturbations do not drive a parameter out of physical bounds."""
+
+        if val is not None:
+            # get base values
+            base_values = values[base_field_name]
+
+            # check that shapes of base parameter and perturbations coincide
+            if np.shape(base_values) != np.shape(val):
+                raise SetupError(
+                    f"Shape of perturbations '{field_name}' ({np.shape(val)}) does not coincide"
+                    f" with shape of base parameter '{base_field_name}' ({np.shape(base_values)})."
+                )
+
+            for tuple_ind, (base_tuple, perturb_tuple) in enumerate(
+                zip(np.atleast_1d(base_values), np.atleast_1d(val))
+            ):
+                tuple_ind_str = "" if np.shape(base_values) == () else f"[{tuple_ind}]"
+                for paramer_ind, (base_value, perturb, real_range, imag_range) in enumerate(
+                    zip(
+                        np.atleast_1d(base_tuple),
+                        np.atleast_1d(perturb_tuple),
+                        allowed_real_range,
+                        allowed_imag_range,
+                    )
+                ):
+                    if perturb is not None:
+
+                        # check real/complex type
+                        if perturb.is_complex and not allowed_complex:
+                            raise SetupError(
+                                f"Perturbation of '{base_field_name}' cannot be complex."
+                            )
+
+                        min_val, max_val = perturb.perturbation_range
+                        min_val = min_val + base_value
+                        max_val = max_val + base_value
+
+                        ind_pointer = tuple_ind_str + (
+                            "" if np.shape(base_tuple) == () else f"[{paramer_ind}]"
+                        )
+
+                        for part_range, part_func, part_name in zip(
+                            [real_range, imag_range], [np.real, np.imag], ["Re", "Im"]
+                        ):
+                            if part_range is not None:
+
+                                min_allowed, max_allowed = part_range
+
+                                if min_allowed is not None and part_func(min_val) < min_allowed:
+                                    log.warning(
+                                        f"'{part_name}({base_field_name}{ind_pointer})' could "
+                                        f"become less than '{min_allowed}' for a perturbation "
+                                        "medium."
+                                    )
+
+                                if max_allowed is not None and part_func(max_val) > max_allowed:
+                                    log.warning(
+                                        f"'{part_name}({base_field_name}{ind_pointer})' could "
+                                        f"become greater than '{max_allowed}' for a perturbation "
+                                        "medium."
+                                    )
+        return val
+
+    return _warn_perturbed_val_range

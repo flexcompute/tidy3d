@@ -1754,3 +1754,67 @@ def test_allow_gain():
     assert not sim.allow_gain
     sim = sim.updated_copy(structures=[struct_gain])
     assert sim.allow_gain
+
+
+def test_perturbed_mediums_copy():
+
+    # Non-dispersive
+    pp_real = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(
+            coeff=-0.01,
+            temperature_ref=300,
+            temperature_range=(200, 500),
+        ),
+    )
+
+    pp_complex = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(
+            coeff=0.01j,
+            temperature_ref=300,
+            temperature_range=(200, 500),
+        ),
+        charge=td.LinearChargePerturbation(
+            electron_coeff=-1e-21,
+            electron_ref=0,
+            electron_range=(0, 1e20),
+            hole_coeff=-2e-21,
+            hole_ref=0,
+            hole_range=(0, 0.5e20),
+        ),
+    )
+
+    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+
+    pmed1 = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_real)
+
+    pmed2 = td.PerturbationPoleResidue(
+        poles=[(1j, 3), (2j, 4)],
+        poles_perturbation=[(None, pp_real), (pp_complex, None)],
+    )
+
+    struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=pmed2)
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        medium=pmed1,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[struct],
+    )
+
+    # no perturbations provided -> regular mediums
+    new_sim = sim.perturbed_mediums_copy()
+
+    assert isinstance(new_sim.medium, td.Medium)
+    assert isinstance(new_sim.structures[0].medium, td.PoleResidue)
+
+    # perturbations provided -> custom mediums
+    new_sim = sim.perturbed_mediums_copy(temperature)
+    new_sim = sim.perturbed_mediums_copy(temperature, None, hole_density)
+    new_sim = sim.perturbed_mediums_copy(temperature, electron_density, hole_density)
+
+    assert isinstance(new_sim.medium, td.CustomMedium)
+    assert isinstance(new_sim.structures[0].medium, td.CustomPoleResidue)
