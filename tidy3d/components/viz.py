@@ -227,7 +227,7 @@ def polygon_patch(polygon, **kwargs):
 ================================================================================================="""
 
 
-def plot_sim_3d(sim) -> None:
+def plot_sim_3d(sim, width=800, height=800) -> None:
     """Make 3D display of simulation in ipyython notebook."""
 
     try:
@@ -258,7 +258,7 @@ def plot_sim_3d(sim) -> None:
         + str(uuid)
     )
     html_code = f"""
-    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="800" height="800"></iframe>
+    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="{width}" height="{height}" allowfullscreen="true"></iframe>
     <script>
         {js_code}
     </script>
