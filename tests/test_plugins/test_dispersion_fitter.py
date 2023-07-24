@@ -149,3 +149,13 @@ def test_dispersion_set_wvg_range(random_data):
     fastfitter = fastfitter.copy(update={"wvl_range": wvl_range})
     assert len(fastfitter.freqs) == 11
     medium, rms = fastfitter.fit(advanced_param=advanced_param)
+
+
+def test_dispersion_guess(random_data):
+    """plots a medium fit from file"""
+    wvl_um, n_data, k_data = random_data
+
+    fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
+    medium, rms = fitter.fit(num_tries=2)
+
+    medium_new, rms_new = fitter.fit(num_tries=1, guess=medium)

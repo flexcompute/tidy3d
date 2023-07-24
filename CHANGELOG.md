@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FastDispersionFitter` for fast fitting of material dispersion data.
 - `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
 - Source with arbitrary user-specified time dependence through `CustomSourceTime`.
+- Interface for specifying material heat and charge perturbation models. 
+Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
+where perturbations to each parameter is specified using class `ParameterPerturbation`.
+A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
+
 
 ### Changed
 - Add `width` and `height` options to `Simulation.plot_3d()`.
@@ -43,7 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
-- Inverse design convenience utilities in `plugins.adjoint.utils` for image filtering (`ConicFilter`), projection (`BinaryProjector`), and radius of curvature penalization (`RadiusPenalty)`.
+- Inverse design convenience utilities in `plugins.adjoint.utils` for image filtering (`ConicFilter`), projection (`BinaryProjector`), and radius of curvature penalization (`RadiusPenalty`).
 
 ### Fixed
 - Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
