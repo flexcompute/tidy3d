@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fix the `Environment has no attribute _current` issue when set `TIDY3D_ENV=prod`
 
 ## [2.3.2] - 2023-7-21
 

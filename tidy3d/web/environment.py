@@ -3,6 +3,8 @@ import os
 
 from pydantic import BaseSettings, Field
 
+from tidy3d import log
+
 
 class EnvironmentConfig(BaseSettings):
     """Basic Configuration for definition environment."""
@@ -67,15 +69,27 @@ class Environment:
     >>> Env.current.name == "dev"
     """
 
+    env_map = dict(
+        dev=dev,
+        uat=uat,
+        prod=prod,
+    )
+
     def __init__(self):
         """Initialize the environment."""
         env_key = os.environ.get("TIDY3D_ENV")
-        if env_key is None:
+        env_key = env_key.lower() if env_key else env_key
+        log.info(f"env_key is {env_key}")
+        if not env_key:
             self._current = prod
-        elif env_key == "dev":
-            self._current = dev
-        elif env_key == "uat":
-            self._current = uat
+        elif env_key in self.env_map:
+            self._current = self.env_map[env_key]
+        else:
+            log.warning(
+                f"The value '{env_key}' for the environment variable TIDY3D_ENV is not supported. "
+                f"Using prod as default."
+            )
+            self._current = prod
 
     @property
     def current(self) -> EnvironmentConfig:
