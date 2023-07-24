@@ -8,7 +8,15 @@ from pydantic import ConfigDict
 
 class Tidy3dConfig(pd.BaseModel):
     """configuration of tidy3d"""
-    model_config = ConfigDict(arbitrary_types_allowed=False, validate_default=True, extra="forbid", validate_assignment=True, populate_by_name=True, frozen=False)
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=False,
+        validate_default=True,
+        extra="forbid",
+        validate_assignment=True,
+        populate_by_name=True,
+        frozen=False,
+    )
 
     logging_level: LogLevel = pd.Field(
         DEFAULT_LEVEL,

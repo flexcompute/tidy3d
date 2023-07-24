@@ -7,6 +7,16 @@ import numpy as np
 import dask
 import h5py
 
+from pydantic_core import core_schema
+from typing_extensions import Annotated
+
+from pydantic import (
+    BaseModel,
+    GetJsonSchemaHandler,
+    ValidationError,
+)
+from pydantic.json_schema import JsonSchemaValue
+
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...exceptions import DataError, FileError
 
@@ -35,7 +45,7 @@ DIM_ATTRS = {
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
 
-class DataArray(xr.DataArray):
+class _DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
 
     # Always set __slots__ = () to avoid xarray warnings
@@ -46,52 +56,7 @@ class DataArray(xr.DataArray):
     _data_attrs: Dict[str, str] = {}
 
     @classmethod
-    def __get_validators__(cls):
-        """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
-        yield cls.check_unloaded_data
-        yield cls.validate_dims
-        yield cls.assign_data_attrs
-        yield cls.assign_coord_attrs
-
-    @classmethod
-    def check_unloaded_data(cls, val):
-        """If the data comes in as the raw data array string, raise a custom warning."""
-        if isinstance(val, str) and val in DATA_ARRAY_MAP:
-            raise DataError(
-                f"Trying to load {cls.__name__} but the data is not present. "
-                "Note that data will not be saved to .json file. "
-                "use .hdf5 format instead if data present."
-            )
-        return cls(val)
-
-    @classmethod
-    def validate_dims(cls, val):
-        """Make sure the dims are the same as _dims, then put them in the correct order."""
-        if set(val.dims) != set(cls._dims):
-            raise ValueError(f"wrong dims, expected '{cls._dims}', got '{val.dims}'")
-        return val.transpose(*cls._dims)
-
-    @classmethod
-    def assign_data_attrs(cls, val):
-        """Assign the correct data attributes to the :class:`.DataArray`."""
-
-        for attr_name, attr in cls._data_attrs.items():
-            val.attrs[attr_name] = attr
-        return val
-
-    @classmethod
-    def assign_coord_attrs(cls, val):
-        """Assign the correct coordinate attributes to the :class:`.DataArray`."""
-
-        for dim in cls._dims:
-            dim_attrs = DIM_ATTRS.get(dim)
-            if dim_attrs is not None:
-                for attr_name, attr in dim_attrs.items():
-                    val.coords[dim].attrs[attr_name] = attr
-        return val
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
+    def _mod_schema(cls, field_schema):
         """Sets the schema of DataArray object."""
 
         schema = dict(
@@ -171,7 +136,100 @@ class DataArray(xr.DataArray):
         return self_mult
 
 
-class FreqDataArray(DataArray):
+class _DataArrayAnnotation:
+    """Annotation for DataArray to add validation and serialization."""
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: Callable[[Any], core_schema.CoreSchema],
+    ) -> core_schema.CoreSchema:
+        """
+        We return a pydantic_core.CoreSchema that behaves in the following ways:
+
+        * dictionaries will be parsed as `complex` instances using real and imaginary parts
+        * `complex`, `float`, and `int` instances will be parsed as `complex` instances
+        * Nothing else will pass validation
+        * Serialization will always return a dict with real and imaginary parts
+        """
+
+        # def handle_dict(val):
+        #     """If the data comes in as the raw data array string, raise a custom warning."""
+        #     if isinstance(val, dict):
+        #         import pdb; pdb.set_trace()
+        #     return val
+
+        def check_unloaded_data(val):
+            """If the data comes in as the raw data array string, raise a custom warning."""
+            if isinstance(val, str) and val in DATA_ARRAY_MAP:
+                raise DataError(
+                    f"Trying to load {_source_type.__name__} but the data is not present. "
+                    "Note that data will not be saved to .json file. "
+                    "use .hdf5 format instead if data present."
+                )
+            return _source_type(val)
+
+        def validate_dims(val):
+            """Make sure the dims are the same as _dims, then put them in the correct order."""
+            if set(val.dims) != set(_source_type._dims):
+                raise ValueError(f"wrong dims, expected '{_source_type._dims}', got '{val.dims}'")
+            return val.transpose(*_source_type._dims)
+
+        def assign_data_attrs(val):
+            """Assign the correct data attributes to the :class:`.DataArray`."""
+
+            for attr_name, attr in _source_type._data_attrs.items():
+                val.attrs[attr_name] = attr
+            return val
+
+        def assign_coord_attrs(val):
+            """Assign the correct coordinate attributes to the :class:`.DataArray`."""
+
+            for dim in _source_type._dims:
+                dim_attrs = DIM_ATTRS.get(dim)
+                if dim_attrs is not None:
+                    for attr_name, attr in dim_attrs.items():
+                        val.coords[dim].attrs[attr_name] = attr
+            return val
+
+        # def correct_type(val):
+        #     """Ensure an `xr.DataArray` is returned."""
+        #     try:
+        #         return _source_type(val)
+
+        from_dict_schema = core_schema.chain_schema(
+            [
+                # core_schema.no_info_plain_validator_function(handle_dict),
+                core_schema.no_info_plain_validator_function(check_unloaded_data),
+                core_schema.no_info_plain_validator_function(validate_dims),
+                core_schema.no_info_plain_validator_function(assign_data_attrs),
+                core_schema.no_info_plain_validator_function(assign_coord_attrs),
+                # core_schema.no_info_plain_validator_function(correct_type),
+            ]
+        )
+
+        return core_schema.json_or_python_schema(
+            json_schema=from_dict_schema,
+            python_schema=from_dict_schema,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda instance: type(instance).__name__
+            ),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        # Use the same schema that would be used for `int`
+        return handler(core_schema.dict_schema())
+
+
+# We now create an `Annotated` wrapper that we'll use as the annotation for fields on `BaseModel`s, etc.
+DataArray = Annotated[_DataArray, _DataArrayAnnotation]
+
+
+class _FreqDataArray(DataArray):
     """Frequency-domain array.
 
     Example
@@ -184,7 +242,7 @@ class FreqDataArray(DataArray):
     _dims = ("f",)
 
 
-class FreqModeDataArray(DataArray):
+class _FreqModeDataArray(DataArray):
     """Array over frequency and mode index.
 
     Example
@@ -199,7 +257,7 @@ class FreqModeDataArray(DataArray):
     _dims = ("f", "mode_index")
 
 
-class TimeDataArray(DataArray):
+class _TimeDataArray(DataArray):
     """Time-domain array.
 
     Example
@@ -212,7 +270,7 @@ class TimeDataArray(DataArray):
     _dims = "t"
 
 
-class MixedModeDataArray(DataArray):
+class _MixedModeDataArray(DataArray):
     """Scalar property associated with mode pairs
 
     Example
@@ -228,7 +286,7 @@ class MixedModeDataArray(DataArray):
     _dims = ("f", "mode_index_0", "mode_index_1")
 
 
-class SpatialDataArray(DataArray):
+class _SpatialDataArray(DataArray):
     """Spatial distribution.
 
     Example
@@ -245,7 +303,7 @@ class SpatialDataArray(DataArray):
     _data_attrs = {"long_name": "field value"}
 
 
-class ScalarFieldDataArray(DataArray):
+class _ScalarFieldDataArray(DataArray):
     """Spatial distribution in the frequency-domain.
 
     Example
@@ -263,7 +321,7 @@ class ScalarFieldDataArray(DataArray):
     _data_attrs = {"long_name": "field value"}
 
 
-class ScalarFieldTimeDataArray(DataArray):
+class _ScalarFieldTimeDataArray(DataArray):
     """Spatial distribution in the time-domain.
 
     Example
@@ -281,7 +339,7 @@ class ScalarFieldTimeDataArray(DataArray):
     _data_attrs = {"long_name": "field value"}
 
 
-class ScalarModeFieldDataArray(DataArray):
+class _ScalarModeFieldDataArray(DataArray):
     """Spatial distribution of a mode in frequency-domain as a function of mode index.
 
     Example
@@ -300,7 +358,7 @@ class ScalarModeFieldDataArray(DataArray):
     _data_attrs = {"long_name": "field value"}
 
 
-class FluxDataArray(DataArray):
+class _FluxDataArray(DataArray):
     """Flux through a surface in the frequency-domain.
 
     Example
@@ -315,7 +373,7 @@ class FluxDataArray(DataArray):
     _data_attrs = {"units": "W", "long_name": "flux"}
 
 
-class FluxTimeDataArray(DataArray):
+class _FluxTimeDataArray(DataArray):
     """Flux through a surface in the time-domain.
 
     Example
@@ -330,7 +388,7 @@ class FluxTimeDataArray(DataArray):
     _data_attrs = {"units": "W", "long_name": "flux"}
 
 
-class ModeAmpsDataArray(DataArray):
+class _ModeAmpsDataArray(DataArray):
     """Forward and backward propagating complex-valued mode amplitudes.
 
     Example
@@ -347,7 +405,7 @@ class ModeAmpsDataArray(DataArray):
     _data_attrs = {"units": "sqrt(W)", "long_name": "mode amplitudes"}
 
 
-class ModeIndexDataArray(DataArray):
+class _ModeIndexDataArray(DataArray):
     """Complex-valued effective propagation index of a mode.
 
     Example
@@ -363,7 +421,7 @@ class ModeIndexDataArray(DataArray):
     _data_attrs = {"long_name": "Propagation index"}
 
 
-class FieldProjectionAngleDataArray(DataArray):
+class _FieldProjectionAngleDataArray(DataArray):
     """Far fields in frequency domain as a function of angles theta and phi.
 
     Example
@@ -382,7 +440,7 @@ class FieldProjectionAngleDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
-class FieldProjectionCartesianDataArray(DataArray):
+class _FieldProjectionCartesianDataArray(DataArray):
     """Far fields in frequency domain as a function of local x and y coordinates.
 
     Example
@@ -401,7 +459,7 @@ class FieldProjectionCartesianDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
-class FieldProjectionKSpaceDataArray(DataArray):
+class _FieldProjectionKSpaceDataArray(DataArray):
     """Far fields in frequency domain as a function of normalized
     kx and ky vectors on the observation plane.
 
@@ -421,7 +479,7 @@ class FieldProjectionKSpaceDataArray(DataArray):
     _data_attrs = {"long_name": "radiation vectors"}
 
 
-class DiffractionDataArray(DataArray):
+class _DiffractionDataArray(DataArray):
     """Diffraction power amplitudes as a function of diffraction orders and frequency.
 
     Example
@@ -439,7 +497,7 @@ class DiffractionDataArray(DataArray):
     _data_attrs = {"long_name": "diffraction amplitude"}
 
 
-class TriangleMeshDataArray(DataArray):
+class _TriangleMeshDataArray(DataArray):
     """Data of the triangles of a surface mesh as in the STL file format."""
 
     __slots__ = ()
@@ -447,23 +505,48 @@ class TriangleMeshDataArray(DataArray):
     _data_attrs = {"long_name": "surface mesh triangles"}
 
 
-DATA_ARRAY_TYPES = [
-    SpatialDataArray,
-    ScalarFieldDataArray,
-    ScalarFieldTimeDataArray,
-    ScalarModeFieldDataArray,
-    FluxDataArray,
-    FluxTimeDataArray,
-    ModeAmpsDataArray,
-    ModeIndexDataArray,
-    FieldProjectionAngleDataArray,
-    FieldProjectionCartesianDataArray,
-    FieldProjectionKSpaceDataArray,
-    DiffractionDataArray,
-    FreqModeDataArray,
-    FreqDataArray,
-    TimeDataArray,
-    FreqModeDataArray,
-    TriangleMeshDataArray,
+SpatialDataArray = Annotated[_SpatialDataArray, _DataArrayAnnotation]
+ScalarFieldDataArray = Annotated[_ScalarFieldDataArray, _DataArrayAnnotation]
+ScalarFieldTimeDataArray = Annotated[_ScalarFieldTimeDataArray, _DataArrayAnnotation]
+ScalarModeFieldDataArray = Annotated[_ScalarModeFieldDataArray, _DataArrayAnnotation]
+FluxDataArray = Annotated[_FluxDataArray, _DataArrayAnnotation]
+FluxTimeDataArray = Annotated[_FluxTimeDataArray, _DataArrayAnnotation]
+ModeAmpsDataArray = Annotated[_ModeAmpsDataArray, _DataArrayAnnotation]
+ModeIndexDataArray = Annotated[_ModeIndexDataArray, _DataArrayAnnotation]
+MixedModeDataArray = Annotated[_MixedModeDataArray, _DataArrayAnnotation]
+FieldProjectionAngleDataArray = Annotated[_FieldProjectionAngleDataArray, _DataArrayAnnotation]
+FieldProjectionCartesianDataArray = Annotated[
+    _FieldProjectionCartesianDataArray, _DataArrayAnnotation
 ]
-DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
+FieldProjectionKSpaceDataArray = Annotated[_FieldProjectionKSpaceDataArray, _DataArrayAnnotation]
+DiffractionDataArray = Annotated[_DiffractionDataArray, _DataArrayAnnotation]
+FreqModeDataArray = Annotated[_FreqModeDataArray, _DataArrayAnnotation]
+FreqDataArray = Annotated[_FreqDataArray, _DataArrayAnnotation]
+TimeDataArray = Annotated[_TimeDataArray, _DataArrayAnnotation]
+FreqModeDataArray = Annotated[_FreqModeDataArray, _DataArrayAnnotation]
+TriangleMeshDataArray = Annotated[_TriangleMeshDataArray, _DataArrayAnnotation]
+
+DATA_ARRAY_MAP = dict(
+    _SpatialDataArray=SpatialDataArray,
+    _ScalarFieldDataArray=ScalarFieldDataArray,
+    _ScalarFieldTimeDataArray=ScalarFieldTimeDataArray,
+    _ScalarModeFieldDataArray=ScalarModeFieldDataArray,
+    _FluxDataArray=FluxDataArray,
+    _FluxTimeDataArray=FluxTimeDataArray,
+    _ModeAmpsDataArray=ModeAmpsDataArray,
+    _ModeIndexDataArray=ModeIndexDataArray,
+    _MixedModeDataArray=MixedModeDataArray,
+    _FieldProjectionAngleDataArray=FieldProjectionAngleDataArray,
+    _FieldProjectionCartesianDataArray=FieldProjectionCartesianDataArray,
+    _FieldProjectionKSpaceDataArray=FieldProjectionKSpaceDataArray,
+    _DiffractionDataArray=DiffractionDataArray,
+    _FreqModeDataArray=FreqModeDataArray,
+    _FreqDataArray=FreqDataArray,
+    _TimeDataArray=TimeDataArray,
+    _TriangleMeshDataArray=TriangleMeshDataArray,
+)
+DATA_ARRAY_TYPES = DATA_ARRAY_MAP.keys()
+
+# DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
+
+# import pdb; pdb.set_trace()

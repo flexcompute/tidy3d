@@ -23,6 +23,7 @@ class TaskStatus(Enum):
 
 class TaskBase(pydantic.BaseModel, ABC):
     """Base config for all task objects."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 

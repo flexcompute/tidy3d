@@ -2,7 +2,7 @@
 """ utilities for plotting """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 from functools import wraps
 import random
 import time
@@ -83,7 +83,7 @@ class PlotParams(Tidy3dBaseModel):
     edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
     facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
     fill: bool = pd.Field(True, title="Is Filled")
-    hatch: str = pd.Field(None, title="Hatch Style")
+    hatch: Optional[str] = pd.Field(None, title="Hatch Style")
     linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
     def include_kwargs(self, **kwargs) -> PlotParams:

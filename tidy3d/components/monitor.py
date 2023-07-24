@@ -1,6 +1,6 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 
 import pydantic
 import numpy as np
@@ -104,7 +104,7 @@ class TimeMonitor(Monitor, ABC):
         units=SECOND,
     )
 
-    stop: pydantic.NonNegativeFloat = pydantic.Field(
+    stop: Optional[pydantic.NonNegativeFloat] = pydantic.Field(
         None,
         title="Stop time",
         description="Time at which to stop monitor recording.  "
@@ -181,7 +181,7 @@ class AbstractFieldMonitor(Monitor, ABC):
         "and automatically colocated.",
     )
 
-    colocate: bool = pydantic.Field(
+    colocate: Optional[bool] = pydantic.Field(
         None,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell centers. Default: "
@@ -348,7 +348,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
     """Abstract class for monitors that perform surface integrals during the solver run, as in
     flux and near to far transformations."""
 
-    normal_dir: Direction = pydantic.Field(
+    normal_dir: Optional[Direction] = pydantic.Field(
         None,
         title="Normal vector orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
@@ -356,7 +356,9 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...] = pydantic.Field(
+    exclude_surfaces: Optional[
+        Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...]
+    ] = pydantic.Field(
         None,
         title="Excluded surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
@@ -553,7 +555,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     and projects them to a given set of observation points.
     """
 
-    custom_origin: Coordinate = pydantic.Field(
+    custom_origin: Optional[Coordinate] = pydantic.Field(
         None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -789,7 +791,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
         "associated with the background medium. Must be in the range [-1, 1].",
     )
 
-    @pydantic.root_validator()
+    @pydantic.root_validator(skip_on_failure=True)
     def reciprocal_vector_range(cls, values):
         """Ensure that ux, uy are in [-1, 1]."""
         maxabs_ux = max(list(values.get("ux")), key=abs)

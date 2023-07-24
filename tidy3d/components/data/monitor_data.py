@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, Callable, Dict, List, Any
+from typing import Union, Tuple, Callable, Dict, List, Any, Optional
 import warnings
 
 import xarray as xr
@@ -71,13 +71,13 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         description="Symmetry eigenvalues of the original simulation in x, y, and z.",
     )
 
-    symmetry_center: Coordinate = pd.Field(
+    symmetry_center: Optional[Coordinate] = pd.Field(
         None,
         title="Symmetry Center",
         description="Center of the symmetry planes of the original simulation in x, y, and z. "
         "Required only if any of the ``symmetry`` field are non-zero.",
     )
-    grid_expanded: Grid = pd.Field(
+    grid_expanded: Optional[Grid] = pd.Field(
         None,
         title="Expanded Grid",
         description=":class:`.Grid` on which the symmetry will be expanded. "
@@ -146,8 +146,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             update_dict[field_name] = scalar_data
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
-        return self.copy(update=update_dict)
-
+        return self.copy(update=update_dict, deep=True)
 
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
@@ -791,7 +790,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         ..., title="Monitor", description="Mode solver monitor associated with the data."
     )
 
-    eps_spec: List[EpsSpecType] = pd.Field(
+    eps_spec: Optional[List[EpsSpecType]] = pd.Field(
         None,
         title="Permettivity Specification",
         description="Characterization of the permittivity profile on the plane where modes are "
@@ -1146,7 +1145,7 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group: ModeIndexDataArray = pd.Field(
+    n_group: Optional[ModeIndexDataArray] = pd.Field(
         None,
         title="Group Index",
         description="Index associated with group velocity of the mode.",

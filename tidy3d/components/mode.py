@@ -1,6 +1,6 @@
 """Defines specification for mode solver."""
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Optional
 
 import pydantic as pd
 import numpy as np
@@ -29,7 +29,7 @@ class ModeSpec(Tidy3dBaseModel):
         1, title="Number of modes", description="Number of modes returned by mode solver."
     )
 
-    target_neff: pd.PositiveFloat = pd.Field(
+    target_neff: Optional[pd.PositiveFloat] = pd.Field(
         None, title="Target effective index", description="Guess for effective index of the mode."
     )
 
@@ -39,7 +39,7 @@ class ModeSpec(Tidy3dBaseModel):
         description="Number of standard pml layers to add in the two tangential axes.",
     )
 
-    filter_pol: Literal["te", "tm"] = pd.Field(
+    filter_pol: Optional[Literal["te", "tm"]] = pd.Field(
         None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
@@ -77,7 +77,7 @@ class ModeSpec(Tidy3dBaseModel):
         "single precision, but more accurate under double precision.",
     )
 
-    bend_radius: float = pd.Field(
+    bend_radius: Optional[float] = pd.Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
@@ -86,7 +86,7 @@ class ModeSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    bend_axis: Axis2D = pd.Field(
+    bend_axis: Optional[Axis2D] = pd.Field(
         None,
         title="Bend axis",
         description="Index into the two tangential axes defining the normal to the "
@@ -139,7 +139,7 @@ class ModeSpec(Tidy3dBaseModel):
             raise ValidationError("Parameter 'group_index_step' must be less than 1.")
         return val
 
-    @pd.root_validator()
+    @pd.root_validator(skip_on_failure=True)
     def check_precision(cls, values):
         """Verify critical ModeSpec settings for group index calculation."""
         if values["group_index_step"] > 0:

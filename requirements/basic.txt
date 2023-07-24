@@ -10,6 +10,7 @@ rich<12.6.0 # note: rich >= 12.6 adds double progressbars
 matplotlib
 shapely>=2.0
 pydantic==2.*
+pydantic_settings
 PyYAML
 dask
 toml

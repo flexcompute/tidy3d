@@ -303,7 +303,9 @@ class Source(Box, ABC):
         ..., title="Source Time", description="Specification of the source time-dependence."
     )
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
+    name: Optional[str] = pydantic.Field(
+        None, title="Name", description="Optional name for the source."
+    )
 
     @cached_property
     def plot_params(self) -> PlotParams:

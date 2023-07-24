@@ -1,6 +1,6 @@
 """Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
 import json
-from typing import Dict, List
+from typing import Dict, List, Optional
 import pydantic as pd
 
 from ..components.medium import PoleResidue, Medium2D
@@ -35,13 +35,13 @@ class VariantItem(Tidy3dBaseModel):
         description="A dispersive medium described by the pole-residue pair model.",
     )
 
-    reference: List[ReferenceData] = pd.Field(
+    reference: Optional[List[ReferenceData]] = pd.Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
     )
 
-    data_url: str = pd.Field(
+    data_url: Optional[str] = pd.Field(
         None,
         title="Dispersion data URL",
         description="The URL to access the dispersion data upon which the material "

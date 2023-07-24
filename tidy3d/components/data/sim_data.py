@@ -17,8 +17,7 @@ from ...exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...log import log
 
 
-DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
-
+DATA_TYPE_MAP = {data.__fields__["monitor"].annotation.__name__: data for data in MonitorDataTypes}
 
 class SimulationData(Tidy3dBaseModel):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.

@@ -1234,10 +1234,10 @@ class Box(Centered):
         surfaces = []
         for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
 
-            if "normal_dir" in cls.__dict__["__fields__"]:
+            if "normal_dir" in cls.model_fields:
                 kwargs["normal_dir"] = _normal_dir
 
-            if "name" in cls.__dict__["__fields__"]:
+            if "name" in cls.model_fields:
                 kwargs["name"] = _name
 
             surface = cls(center=_cent, size=_size, **kwargs)
@@ -1273,7 +1273,7 @@ class Box(Centered):
         """
         exclude_surfaces = kwargs.pop("exclude_surfaces", None)
         surfaces = cls.surfaces(size=size, center=center, **kwargs)
-        if "name" in cls.__dict__["__fields__"] and exclude_surfaces:
+        if "name" in cls.model_fields and exclude_surfaces:
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
@@ -2065,7 +2065,6 @@ class PolySlab(Planar):
         """Makes sure vertices size is correct.
         Make sure no intersecting edges.
         """
-
         shape = val.shape
 
         # overall shape of vertices

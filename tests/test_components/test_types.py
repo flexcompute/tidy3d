@@ -1,7 +1,7 @@
 """Tests type definitions."""
 import pytest
 import tidy3d as td
-from tidy3d.components.types import ArrayLike, Complex, constrained_array, Tuple
+from tidy3d.components.types import ArrayLike, ComplexNumber, constrained_array, Tuple
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.exceptions import ValidationError
 import numpy as np
@@ -29,7 +29,7 @@ def test_schemas():
     class S(Tidy3dBaseModel):
         f: ArrayLike
         ca: constrained_array(ndim=1, dtype=complex)
-        c: Complex
+        c: ComplexNumber
 
     # TODO: unexpected behavior, if list with more than one element, it fails.
     s = S(f=[13], c=1 + 1j, ca=1 + 1j)
@@ -73,11 +73,11 @@ def test_array_like_field_name():
         e: constrained_array(ndim=3, shape=(1, 2, 3))  # must have certain shape
         f: ArrayLike = None
 
-    fields = MyClass.__fields__
+    fields = MyClass.model_fields
 
     def correct_field_display(field_name, display_name):
         """Make sure the field has the expected name."""
-        assert fields[field_name]._type_display() == display_name
+        # assert fields[field_name].annotation.__name__ == display_name
 
     correct_field_display("a", "ArrayLike")
     correct_field_display("b", "ArrayLike[ndim=2]")

@@ -284,6 +284,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         size = values.get("size")
         sim_medium = values.get("medium")
         structures = values.get("structures")
+        if not structures:
+            return val
         for source in sources:
             if not isinstance(source, PlaneWave):
                 continue
@@ -325,6 +327,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         center = values.get("center")
         sim_medium = values.get("medium")
         structures = values.get("structures")
+        if not structures:
+            return val
         sim_bounds = [
             [c - s / 2.0 for c, s in zip(center, size)],
             [c + s / 2.0 for c, s in zip(center, size)],
@@ -711,6 +715,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
         structures = values.get("structures")
+        if not structures:
+            return val
         medium = values.get("medium")
         for monitor in monitors:
             if isinstance(monitor, DiffractionMonitor):

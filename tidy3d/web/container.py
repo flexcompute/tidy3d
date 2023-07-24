@@ -104,7 +104,7 @@ class Job(WebContainer):
         self.monitor()
         return self.load(path=path)
 
-    @pd.root_validator()
+    @pd.root_validator(skip_on_failure=True)
     def _upload(cls, values) -> None:
         """Upload simulation to server without running."""
 

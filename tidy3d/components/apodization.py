@@ -1,4 +1,5 @@
 """Defines specification for apodization."""
+from typing import Optional
 
 import pydantic as pd
 import numpy as np
@@ -18,21 +19,21 @@ class ApodizationSpec(Tidy3dBaseModel):
     >>> apod_spec = ApodizationSpec(start=1, end=2, width=0.5)
     """
 
-    start: pd.NonNegativeFloat = pd.Field(
+    start: Optional[pd.NonNegativeFloat] = pd.Field(
         None,
         title="Start Interval",
         description="Defines the time at which the start apodization ends.",
         units=SECOND,
     )
 
-    end: pd.NonNegativeFloat = pd.Field(
+    end: Optional[pd.NonNegativeFloat] = pd.Field(
         None,
         title="End Interval",
         description="Defines the time at which the end apodization begins.",
         units=SECOND,
     )
 
-    width: pd.PositiveFloat = pd.Field(
+    width: Optional[pd.PositiveFloat] = pd.Field(
         None,
         title="Apodization Width",
         description="Characteristic decay length of the apodization function.",

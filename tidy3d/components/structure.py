@@ -25,7 +25,9 @@ class AbstractStructure(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
+    name: Optional[str] = pydantic.Field(
+        None, title="Name", description="Optional name for the structure."
+    )
 
     _name_validator = validate_name_str()
 

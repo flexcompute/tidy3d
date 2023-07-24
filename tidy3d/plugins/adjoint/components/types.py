@@ -13,7 +13,7 @@ class NumpyArrayType(np.ndarray):
     """Subclass of ``np.ndarray`` with a schema defined for pydantic."""
 
     @classmethod
-    def __modify_schema__(cls, field_schema):
+    def _mod_schema(cls, field_schema):
         """Sets the schema of np.ndarray object."""
 
         schema = dict(
@@ -29,10 +29,10 @@ def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:
     # pylint: disable=unused-argument
     @classmethod
     def mod_schema_fn(cls, field_schema: dict) -> None:
-        """Function that gets set to ``arbitrary_type.__modify_schema__``."""
+        """Function that gets set to ``arbitrary_type._mod_schema``."""
         field_schema.update(dict(title=title, type=field_type_str))
 
-    arbitrary_type.__modify_schema__ = mod_schema_fn
+    arbitrary_type._mod_schema = mod_schema_fn
 
 
 _add_schema(DeviceArray, title="DeviceArray", field_type_str="jaxlib.xla_extension.DeviceArray")

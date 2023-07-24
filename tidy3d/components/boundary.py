@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional
 
 import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Complex, Axis, TYPE_TAG_STR
+from .types import ComplexNumber, Axis, TYPE_TAG_STR
 from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
 from .medium import Medium
 
@@ -20,7 +20,9 @@ from ..log import log
 class BoundaryEdge(ABC, Tidy3dBaseModel):
     """Electromagnetic boundary condition at a domain edge."""
 
-    name: str = pd.Field(None, title="Name", description="Optional unique name for boundary.")
+    name: Optional[str] = pd.Field(
+        None, title="Name", description="Optional unique name for boundary."
+    )
 
 
 # PBC keyword
@@ -61,7 +63,7 @@ class BlochBoundary(BoundaryEdge):
     )
 
     @cached_property
-    def bloch_phase(self) -> Complex:
+    def bloch_phase(self) -> complex:
         """Returns the forward phase factor associated with `bloch_vec`."""
         return np.exp(1j * 2.0 * np.pi * self.bloch_vec)
 
@@ -116,8 +118,8 @@ class BlochBoundary(BoundaryEdge):
             medium = Medium(permittivity=1.0, name="free_space")
 
         freq0 = source.source_time.freq0
-        eps_complex = medium.eps_model(freq0)
-        kmag = np.real(freq0 * np.sqrt(eps_complex * EPSILON_0 * MU_0))
+        eps_ComplexNumber = medium.eps_model(freq0)
+        kmag = np.real(freq0 * np.sqrt(eps_ComplexNumber * EPSILON_0 * MU_0))
 
         angle_theta = source.angle_theta
         angle_phi = source.angle_phi
@@ -178,7 +180,7 @@ class AbsorberParams(Tidy3dBaseModel):
 
 
 class PMLParams(AbsorberParams):
-    """Specifies full set of parameters needed for complex, frequency-shifted PML.
+    """Specifies full set of parameters needed for ComplexNumber, frequency-shifted PML.
 
     Example
     -------
@@ -274,7 +276,7 @@ class PML(AbsorberSpec):
     parameters: PMLParams = pd.Field(
         DefaultPMLParameters,
         title="PML Parameters",
-        description="Parameters of the complex frequency-shifted absorption poles.",
+        description="Parameters of the ComplexNumber frequency-shifted absorption poles.",
     )
 
 
@@ -294,7 +296,7 @@ class StablePML(AbsorberSpec):
     parameters: PMLParams = pd.Field(
         DefaultStablePMLParameters,
         title="Stable PML Parameters",
-        description="'Stable' parameters of the complex frequency-shifted absorption poles.",
+        description="'Stable' parameters of the ComplexNumber frequency-shifted absorption poles.",
     )
 
 
@@ -417,12 +419,12 @@ class Boundary(Tidy3dBaseModel):
         return cls(plus=plus, minus=minus)
 
     @classmethod
-    def bloch(cls, bloch_vec: complex):
+    def bloch(cls, bloch_vec: ComplexNumber):
         """Bloch boundary specification on both sides along a dimension.
 
         Parameters
         ----------
-        bloch_vec : complex
+        bloch_vec : ComplexNumber
             Normalized component of the Bloch vector in units of 2 * pi / (size along dimension)
             in the background medium, along the dimension in which the boundary is specified.
 
@@ -501,7 +503,7 @@ class Boundary(Tidy3dBaseModel):
         num_layers : int = 12
             Number of layers of standard PML to add to + and - boundaries.
         parameters : :class:`PMLParams`
-            Parameters of the complex frequency-shifted absorption poles.
+            Parameters of the ComplexNumber frequency-shifted absorption poles.
 
         Example
         -------
@@ -522,7 +524,7 @@ class Boundary(Tidy3dBaseModel):
         num_layers : int = 40
             Number of layers of 'stable' PML to add to + and - boundaries.
         parameters : :class:`PMLParams`
-            'Stable' parameters of the complex frequency-shifted absorption poles.
+            'Stable' parameters of the ComplexNumber frequency-shifted absorption poles.
 
         Example
         -------

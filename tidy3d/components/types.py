@@ -1,6 +1,16 @@
 """ Defines 'types' that various fields can be """
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Any, Callable
+
+from pydantic_core import core_schema
+from typing_extensions import Annotated
+
+from pydantic import (
+    BaseModel,
+    GetJsonSchemaHandler,
+    ValidationError,
+)
+from pydantic.json_schema import JsonSchemaValue
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
@@ -26,19 +36,96 @@ def annotate_type(UnionType):  # pylint:disable=invalid-name
 
 """ Numpy Arrays """
 
-
-def _totuple(arr: np.ndarray) -> tuple:
-    """Convert a numpy array to a nested tuple."""
-    if arr.ndim > 1:
-        return tuple(_totuple(val) for val in arr)
-    return tuple(arr)
-
-
-# generic numpy array
 Numpy = np.ndarray
 
 
-class ArrayLike:
+class _ArrayLikeAnnotation:
+    """Annotation for ArrayLike to add validation and serialization."""
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: Callable[[Any], core_schema.CoreSchema],
+    ) -> core_schema.CoreSchema:
+        """
+        We return a pydantic_core.CoreSchema that behaves in the following ways:
+
+        * all array-like values will be parsed as np.ndarray instances
+        * dictionaries containing real and imag parts will be parsed as complex np.ndarrays.
+        * Nothing else will pass validation
+        * Serialization
+        """
+
+        def load_complex(val):
+            """Special handling to load a complex-valued np.ndarray saved to file."""
+            if not isinstance(val, dict):
+                return val
+            if "real" not in val or "imag" not in val:
+                raise ValueError("ArrayLike real and imaginary parts not stored properly.")
+            arr_real = np.array(val["real"])
+            arr_imag = np.array(val["imag"])
+            return arr_real + 1j * arr_imag
+
+        def convert_to_numpy(val):
+            """Convert the value to np.ndarray and provide some casting."""
+            arr_numpy = np.array(val, ndmin=1, dtype=_source_type.dtype, copy=True)
+            arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
+            arr_tidy3d[:] = arr_numpy
+            return arr_tidy3d
+
+        def check_dims(val):
+            """Make sure the number of dimensions is correct."""
+            if _source_type.ndim and val.ndim != _source_type.ndim:
+                raise ValidationError(
+                    f"Expected {_source_type.ndim} dimensions for ArrayLike, got {val.ndim}."
+                )
+            return val
+
+        def check_shape(val):
+            """Make sure the shape is correct."""
+            if _source_type.shape and val.shape != _source_type.shape:
+                raise ValidationError(
+                    f"Expected shape {_source_type.shape} for ArrayLike, got {val.shape}."
+                )
+            return val
+
+        def assert_non_null(val):
+            """Make sure array is not None."""
+            if np.any(np.isnan(val)):
+                raise ValidationError("'ArrayLike' field contained None or nan values.")
+            return val
+
+        from_value_schema = core_schema.chain_schema(
+            [
+                core_schema.no_info_plain_validator_function(load_complex),
+                core_schema.no_info_plain_validator_function(convert_to_numpy),
+                core_schema.no_info_plain_validator_function(check_dims),
+                core_schema.no_info_plain_validator_function(check_shape),
+                core_schema.no_info_plain_validator_function(assert_non_null),
+            ]
+        )
+
+        def serialize(instance):
+            if np.any(np.iscomplex(instance)):
+                return dict(real=instance.real.tolist(), imag=instance.imag.tolist())
+            return np.real(instance).tolist()
+
+        return core_schema.json_or_python_schema(
+            json_schema=from_value_schema,
+            python_schema=from_value_schema,
+            serialization=core_schema.plain_serializer_function_ser_schema(serialize),
+        )
+
+    @classmethod
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        # Use the same schema that would be used for `int`
+        return handler(core_schema.dict_schema())
+
+
+class _ArrayLike:
     """Type that stores a numpy array."""
 
     ndim = None
@@ -46,61 +133,15 @@ class ArrayLike:
     shape = None
 
     @classmethod
-    def __get_validators__(cls):
-        yield cls.load_complex
-        yield cls.convert_to_numpy
-        yield cls.check_dims
-        yield cls.check_shape
-        yield cls.assert_non_null
-
-    @classmethod
-    def load_complex(cls, val):
-        """Special handling to load a complex-valued np.ndarray saved to file."""
-        if not isinstance(val, dict):
-            return val
-        if "real" not in val or "imag" not in val:
-            raise ValueError("ArrayLike real and imaginary parts not stored properly.")
-        arr_real = np.array(val["real"])
-        arr_imag = np.array(val["imag"])
-        return arr_real + 1j * arr_imag
-
-    @classmethod
-    def convert_to_numpy(cls, val):
-        """Convert the value to np.ndarray and provide some casting."""
-        arr_numpy = np.array(val, ndmin=1, dtype=cls.dtype, copy=True)
-        arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
-        arr_tidy3d[:] = arr_numpy
-        return arr_tidy3d
-
-    @classmethod
-    def check_dims(cls, val):
-        """Make sure the number of dimensions is correct."""
-        if cls.ndim and val.ndim != cls.ndim:
-            raise ValidationError(f"Expected {cls.ndim} dimensions for ArrayLike, got {val.ndim}.")
-        return val
-
-    @classmethod
-    def check_shape(cls, val):
-        """Make sure the shape is correct."""
-        if cls.shape and val.shape != cls.shape:
-            raise ValidationError(f"Expected shape {cls.shape} for ArrayLike, got {val.shape}.")
-        return val
-
-    @classmethod
-    def assert_non_null(cls, val):
-        """Make sure array is not None."""
-        if np.any(np.isnan(val)):
-            raise ValidationError("'ArrayLike' field contained None or nan values.")
-        return val
-
-    @classmethod
-    def __modify_schema__(cls, field_schema):
+    def _mod_schema(cls, field_schema):
         """Sets the schema of DataArray object."""
 
         schema = dict(
             type="ArrayLike",
         )
         field_schema.update(schema)
+
+ArrayLike = Annotated[_ArrayLike, _ArrayLikeAnnotation]
 
 
 def constrained_array(
@@ -120,7 +161,8 @@ def constrained_array(
         meta_args.append(f"shape={shape}")
     type_name += "[" + ", ".join(meta_args) + "]"
 
-    return type(type_name, (ArrayLike,), dict(dtype=dtype, ndim=ndim, shape=shape))
+    array_like_type = type(type_name, (_ArrayLike,), dict(dtype=dtype, ndim=ndim, shape=shape))
+    return Annotated[array_like_type, _ArrayLikeAnnotation]
 
 
 # pre-define a set of commonly used array like instances for import and use in type hints
@@ -138,41 +180,62 @@ TensorReal = constrained_array(dtype=float, ndim=2, shape=(3, 3))
 """ Complex Values """
 
 
-class ComplexNumber(pydantic.BaseModel):
-    """Complex number with a well defined schema."""
-
-    real: float
-    imag: float
-
-    @property
-    def as_complex(self):
-        """return complex representation of ComplexNumber."""
-        return self.real + 1j * self.imag
-
-
-class tidycomplex(complex):  # pylint: disable=invalid-name
-    """complex type that we can use in our models."""
+class _ComplexNumberAnnotation:
+    """Annotation for ComplexNumber to add validation and serialization."""
 
     @classmethod
-    def __get_validators__(cls):
-        """Defines which validator function to use for ComplexNumber."""
-        yield cls.validate
+    def __get_pydantic_core_schema__(
+        cls,
+        _source_type: Any,
+        _handler: Callable[[Any], core_schema.CoreSchema],
+    ) -> core_schema.CoreSchema:
+        """
+        We return a pydantic_core.CoreSchema that behaves in the following ways:
+
+        * dictionaries will be parsed as `complex` instances using real and imaginary parts
+        * `complex`, `float`, and `int` instances will be parsed as `complex` instances
+        * Nothing else will pass validation
+        * Serialization will always return a dict with real and imaginary parts
+        """
+
+        def validate_from_dict(value: dict) -> complex:
+            if isinstance(value, dict):
+                real = value.get("real")
+                imag = value.get("imag")
+                return real + 1j * imag
+            else:
+                return complex(value)
+
+        from_dict_schema = core_schema.chain_schema(
+            [
+                core_schema.no_info_plain_validator_function(validate_from_dict),
+            ]
+        )
+
+        return core_schema.json_or_python_schema(
+            json_schema=from_dict_schema,
+            python_schema=core_schema.union_schema(
+                [
+                    # check if it's an instance first before doing any further work
+                    core_schema.is_instance_schema(complex),
+                    from_dict_schema,
+                ]
+            ),
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda instance: dict(real=np.real(instance), imag=np.imag(instance))
+            ),
+        )
 
     @classmethod
-    def validate(cls, value):
-        """What gets called when you construct a tidycomplex."""
+    def __get_pydantic_json_schema__(
+        cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
+        # Use the same schema that would be used for `int`
+        return handler(core_schema.dict_schema())
 
-        if isinstance(value, ComplexNumber):
-            return value.as_complex
-        if isinstance(value, dict):
-            c = ComplexNumber(**value)
-            return c.as_complex
-        return cls(value)
 
-    @classmethod
-    def __modify_schema__(cls, field_schema):
-        """Sets the schema of ComplexNumber."""
-        field_schema.update(ComplexNumber.schema())
+# We now create an `Annotated` wrapper that we'll use as the annotation for fields on `BaseModel`s, etc.
+ComplexNumber = Annotated[complex, _ComplexNumberAnnotation]
 
 
 """ symmetry """
@@ -199,9 +262,8 @@ PlanePosition = Literal["bottom", "middle", "top"]
 # custom medium
 InterpMethod = Literal["nearest", "linear"]
 
-# Complex = Union[complex, ComplexNumber]
-Complex = Union[tidycomplex, ComplexNumber]
-PoleAndResidue = Tuple[Complex, Complex]
+# Complex = Union[complex, tidycomplex, ComplexNumber]
+PoleAndResidue = Tuple[ComplexNumber, ComplexNumber]
 
 # PoleAndResidue = Tuple[Tuple[float, float], Tuple[float, float]]
 FreqBoundMax = float

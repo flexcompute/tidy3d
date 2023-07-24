@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 from functools import wraps
-from typing import List, Callable, Dict, Union, Tuple, Any
+from typing import List, Callable, Dict, Union, Tuple, Any, Optional
 
 import rich
 import pydantic
-from pydantic.fields import ModelField
+from pydantic.fields import FieldInfo
 import yaml
 import numpy as np
 import h5py
@@ -68,6 +68,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
 
+    type: Optional[str] = None
+
+    @classmethod
+    def _mod_schema(cls, field_schema):
+        """Wrapper for the pydantic 2.0 syntax for backwards compatibility."""
+        return
+
+    def __get_pydantic_json_schema__(
+        cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
+    ) -> Dict[str, Any]:
+        json_schema = handler(core_schema)
+        json_schema = handler.resolve_ref_schema(json_schema)
+        cls._mod_schema(json_schema)
+        return json_schema
+
+
     def __hash__(self) -> int:
         """Hash method."""
         try:
@@ -92,13 +108,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         cls.add_type_field()
         cls.generate_docstring()
+
     # TODO[pydantic]: The following keys were removed: `json_encoders`, `allow_mutation`, `copy_on_model_validation`.
     # Check https://docs.pydantic.dev/dev-v2/migration/#changes-to-config for more information.
-    model_config = ConfigDict(arbitrary_types_allowed=True, validate_default=True, extra="forbid", validate_assignment=True, populate_by_name=True, json_encoders={
-        np.ndarray: ndarray_encoder,
-        complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-        xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
-    }, frozen=True, allow_mutation=False, copy_on_model_validation="none")
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_default=True,
+        extra="forbid",
+        validate_assignment=True,
+        populate_by_name=True,
+        frozen=True,
+    )
 
     _cached_properties = pydantic.PrivateAttr({})
 
@@ -107,8 +127,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         if "deep" in kwargs and kwargs["deep"] is False:
             raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
         kwargs.update(dict(deep=True))
-        new_copy = pydantic.BaseModel.copy(self, **kwargs)
-        return self.validate(new_copy.dict())
+        new_copy = super().copy(**kwargs)
+        return self.validate(dict(new_copy._iter(to_dict=False, by_alias=False, exclude_unset=True)))
 
     def updated_copy(self, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
@@ -589,27 +609,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_string = json_string.replace("Infinity", '"Infinity"')
             return json_string.replace(tmp_string, '"-Infinity"')
 
-        json_string = self.json(indent=INDENT, exclude_unset=False)
+        # try:
+        json_string = self.json()  # indent=INDENT, exclude_unset=False)
+        # except:
+        # import pdb; pdb.set_trace()
+
         json_string = make_json_compatible(json_string)
         return json_string
-        # json_dict = json.loads(json_string)
-
-        # return json.dumps(json_dict)
 
     @classmethod
     def add_type_field(cls) -> None:
         """Automatically place "type" field with model name in the model field dictionary."""
-
         value = cls.__name__
         annotation = Literal[value]
-
-        tag_field = ModelField.infer(
-            name=TYPE_TAG_STR,
-            value=value,
-            annotation=annotation,
-            class_validators=None,
-            config=cls.__config__,
-        )
+        tag_field = FieldInfo.from_annotation(annotation)
+        tag_field.default = value
         cls.__fields__[TYPE_TAG_STR] = tag_field
 
     @classmethod
@@ -636,7 +650,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 continue
 
             # get data type
-            data_type = field._type_display()  # pylint:disable=protected-access
+            data_type = field.annotation.__name__
 
             # get default values
             default_val = field.get_default()
@@ -646,15 +660,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 default_val = (", ").join(default_val.split(" "))
 
             # make first line: name : type = default
-            default_str = "" if field.required else f" = {default_val}"
+            default_str = "" if field.is_required else f" = {default_val}"
             doc += f"    {field_name} : {data_type}{default_str}\n"
 
             # get field metadata
-            field_info = field.field_info
             doc += "        "
 
             # add units (if present)
-            units = field_info.extra.get("units")
+            units = field._find_field_info_arg("units")
             if units is not None:
                 if isinstance(units, (tuple, list)):
                     unitstr = "("
@@ -668,7 +681,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 doc += f"[units = {unitstr}].  "
 
             # add description
-            description_str = field_info.description
+            description_str = field.description
             if description_str is not None:
                 doc += f"{description_str}\n"
 

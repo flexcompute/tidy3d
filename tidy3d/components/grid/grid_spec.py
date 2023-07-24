@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional
 
 import numpy as np
 import pydantic as pd
@@ -206,7 +206,7 @@ class CustomGrid(GridSpec1d):
         units=MICROMETER,
     )
 
-    custom_offset: float = pd.Field(
+    custom_offset: Optional[float] = pd.Field(
         None,
         title="Customized grid offset.",
         description="The starting coordinate of the grid which defines the simulation center. "
@@ -432,7 +432,7 @@ class GridSpec(Tidy3dBaseModel):
         description="Grid specification along z-axis",
     )
 
-    wavelength: float = pd.Field(
+    wavelength: Optional[float] = pd.Field(
         None,
         title="Free-space wavelength",
         description="Free-space wavelength for automatic nonuniform grid. It can be 'None' "

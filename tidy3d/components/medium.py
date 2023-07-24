@@ -17,6 +17,7 @@ from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bo
 from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
+from .data.data_array import _SpatialDataArray
 from .viz import add_ax_if_none
 from .geometry import Geometry
 from .validators import validate_name_str
@@ -73,9 +74,9 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
 
-    name: str = pd.Field(None, title="Name", description="Optional unique name for medium.")
+    name: Optional[str] = pd.Field(None, title="Name", description="Optional unique name for medium.")
 
-    frequency_range: FreqBound = pd.Field(
+    frequency_range: Optional[FreqBound] = pd.Field(
         None,
         title="Frequency Range",
         description="Optional range of validity for the medium.",
@@ -1916,7 +1917,7 @@ class Lorentz(DispersiveMedium):
     @staticmethod
     def _all_larger(coeff_a, coeff_b) -> bool:
         """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
-        if isinstance(coeff_a, SpatialDataArray):
+        if isinstance(coeff_a, _SpatialDataArray):
             return np.all(coeff_a.values > coeff_b.values)
         return coeff_a > coeff_b
 
@@ -2425,7 +2426,7 @@ class AnisotropicMedium(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    allow_gain: bool = pd.Field(
+    allow_gain: Optional[bool] = pd.Field(
         None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
