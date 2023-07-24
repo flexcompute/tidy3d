@@ -2257,9 +2257,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return (freq_min, freq_max)
 
-    def plot_3d(self) -> None:
-        """Render 3D plot of ``Simulation`` (in jupyter notebook only)."""
-        return plot_sim_3d(self)
+    def plot_3d(self, width=800, height=800) -> None:
+        """Render 3D plot of ``Simulation`` (in jupyter notebook only).
+        Parameters
+        ----------
+        width : float = 800
+            width of the 3d view dom's size
+        height : float = 800
+            height of the 3d view dom's size
+        
+        """
+        return plot_sim_3d(self, width, height)
 
     """ Discretization """
 
