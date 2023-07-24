@@ -78,6 +78,7 @@ Utility Tools
     notebooks/FieldProjections
     notebooks/SMatrix
     notebooks/PICComponents
+    notebooks/PhotonicCrystalsComponents
 
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
