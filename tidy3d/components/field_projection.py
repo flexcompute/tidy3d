@@ -1,7 +1,7 @@
 """Near field to far field transformation plugin
 """
 from __future__ import annotations
-from typing import Dict, Tuple, Union, List
+from typing import Dict, Tuple, Union, List, Optional
 import numpy as np
 import xarray as xr
 import pydantic
@@ -55,7 +55,7 @@ class FieldProjector(Tidy3dBaseModel):
         "will not resampled, but will still be colocated.",
     )
 
-    origin: Coordinate = pydantic.Field(
+    origin: Optional[Coordinate] = pydantic.Field(
         None,
         title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
@@ -63,7 +63,7 @@ class FieldProjector(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    currents: Dict[str, xr.Dataset] = pydantic.Field(
+    currents: Optional[Dict[str, xr.Dataset]] = pydantic.Field(
         None,
         title="Surface current densities",
         description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "

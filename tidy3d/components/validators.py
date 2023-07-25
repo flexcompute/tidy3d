@@ -211,7 +211,7 @@ def required_if_symmetry_present(field_name: str):
 def warn_if_dataset_none(field_name: str):
     """Warn if a Dataset field has None in its dictionary."""
 
-    @pydantic.validator(field_name, pre=True, always=True, allow_reuse=True)
+    @pydantic.field_validator(field_name, mode="before")
     def _warn_if_none(cls, val: Dataset) -> Dataset:
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):

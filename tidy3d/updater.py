@@ -94,7 +94,7 @@ class Updater(pd.BaseModel):
 
         # TODO: fix this, it broke
         if ".hdf5" in fname:
-            sim_dict = Tidy3dBaseModel.from_file(fname=fname).dict()
+            sim_dict = dict(Tidy3dBaseModel.from_file(fname=fname))
 
         else:
             # try:
@@ -202,7 +202,8 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
         # Try other iterables
         for item in update_dict:
             iterate_update_dict(item, update_types)
-
+    elif isinstance(update_dict, Tidy3dBaseModel):
+        iterate_update_dict(dict(update_dict), update_types)
 
 @updates_from_version("1.8")
 def update_1_8(sim_dict: dict) -> dict:

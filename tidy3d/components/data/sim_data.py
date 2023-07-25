@@ -1,6 +1,6 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Tuple
+from typing import Dict, Callable, Tuple, Optional
 
 import xarray as xr
 import pydantic as pd
@@ -17,7 +17,8 @@ from ...exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...log import log
 
 
-DATA_TYPE_MAP = {data.__fields__["monitor"].annotation.__name__: data for data in MonitorDataTypes}
+DATA_TYPE_MAP = {data.__fields__["monitor"].annotation: data for data in MonitorDataTypes}
+
 
 class SimulationData(Tidy3dBaseModel):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
@@ -75,7 +76,7 @@ class SimulationData(Tidy3dBaseModel):
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    log: str = pd.Field(
+    log: Optional[str] = pd.Field(
         None,
         title="Solver Log",
         description="A string containing the log information from the simulation run.",

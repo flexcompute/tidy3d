@@ -403,3 +403,4 @@ class TriangleMeshDataset(Dataset):
         description="Dataset containing the surface triangles and corresponding face indices "
         "for a surface mesh.",
     )
+

@@ -148,6 +148,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
         return self.copy(update=update_dict, deep=True)
 
+
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
 

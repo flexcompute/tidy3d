@@ -83,7 +83,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls._mod_schema(json_schema)
         return json_schema
 
-
     def __hash__(self) -> int:
         """Hash method."""
         try:
@@ -97,6 +96,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         try:
             super().__init__(**kwargs)
             self._post_init_validators()
+        # except ValueError:
+        # import pdb; pdb.set_trace()
         finally:
             log.end_capture(self)
 
@@ -128,7 +129,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
         kwargs.update(dict(deep=True))
         new_copy = super().copy(**kwargs)
-        return self.validate(dict(new_copy._iter(to_dict=False, by_alias=False, exclude_unset=True)))
+        return self.validate(
+            dict(new_copy._iter(to_dict=False, by_alias=False, exclude_unset=True))
+        )
 
     def updated_copy(self, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
@@ -172,7 +175,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
         model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+        return cls.model_validate(model_dict, **parse_obj_kwargs)
 
     @classmethod
     def dict_from_file(cls, fname: str, group_path: str = None) -> dict:
@@ -410,6 +413,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return model_dict
 
     @classmethod
+    def _insert_inf(cls, model_dict: dict) -> None:
+        for key, value in model_dict.items():
+            if isinstance(value, str) and "Infinity" in value:
+                if "-" in value:
+                    model_dict[key] = -inf
+                else:
+                    model_dict[key] = inf
+            if isinstance(value, dict):
+                cls._insert_inf(value)
+
+    @classmethod
     def dict_from_hdf5(
         cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
     ) -> dict:
@@ -476,13 +490,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         if is_data_array(model_item):
                             model_dict[key][ind] = value_item
 
+                # elif isinstance(value, Tidy3dBaseModel):
+                #     value = dict(value)
+
                 # if a dict, recurse
                 elif isinstance(value, dict):
                     load_data_from_file(model_dict=value, group_path=subpath)
 
+
         with h5py.File(fname, "r") as f_handle:
             json_string = f_handle[JSON_TAG][()]
             model_dict = json.loads(json_string)
+            # import pdb; pdb.set_trace()
+
+        # recursively insert any infinities
+        # cls._insert_inf(model_dict)
 
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
@@ -569,7 +591,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     elif isinstance(value, dict):
                         add_data_to_file(data_dict=value, group_path=subpath)
 
-            add_data_to_file(data_dict=self.dict())
+                    # if it's a Tidy3D object, convert to dict and recurse
+                    elif isinstance(value, Tidy3dBaseModel):
+                        add_data_to_file(data_dict=dict(value), group_path=subpath)
+
+            add_data_to_file(data_dict=dict(self))
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
@@ -603,17 +629,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         def make_json_compatible(json_string: str) -> str:
             """Makes the string compatiable with json standards, notably for infinity."""
-
             tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
             json_string = json_string.replace("-Infinity", tmp_string)
             json_string = json_string.replace("Infinity", '"Infinity"')
             return json_string.replace(tmp_string, '"-Infinity"')
 
-        # try:
-        json_string = self.json()  # indent=INDENT, exclude_unset=False)
-        # except:
-        # import pdb; pdb.set_trace()
-
+        json_string = json.dumps(self.dict())
         json_string = make_json_compatible(json_string)
         return json_string
 

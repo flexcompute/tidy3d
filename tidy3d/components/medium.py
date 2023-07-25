@@ -17,7 +17,7 @@ from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bo
 from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
-from .data.data_array import _SpatialDataArray
+from .data.data_array import _SpatialDataArray, _ScalarFieldDataArray
 from .viz import add_ax_if_none
 from .geometry import Geometry
 from .validators import validate_name_str
@@ -74,7 +74,9 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 class AbstractMedium(ABC, Tidy3dBaseModel):
     """A medium within which electromagnetic waves propagate."""
 
-    name: Optional[str] = pd.Field(None, title="Name", description="Optional unique name for medium.")
+    name: Optional[str] = pd.Field(
+        None, title="Name", description="Optional unique name for medium."
+    )
 
     frequency_range: Optional[FreqBound] = pd.Field(
         None,
@@ -1309,7 +1311,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
                 for coeff_i in coeff:
                     if isinstance(coeff_i, str) and coeff_i in DATA_ARRAY_MAP.keys():
                         log.warning(
-                            "Loading '{nested_tuple_field}' without data; "
+                            f"Loading '{nested_tuple_field}' without data; "
                             "constructing a vacuum medium instead."
                         )
                         fail_load = True

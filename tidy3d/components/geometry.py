@@ -3366,13 +3366,15 @@ class TriangleMesh(Geometry, ABC):
         cls._check_trimesh_library()
         return values
 
-    @pydantic.validator("mesh_dataset", pre=True, always=True)
+    @pydantic.field_validator("mesh_dataset", mode="before")
     def _warn_if_none(cls, val: TriangleMeshDataset) -> TriangleMeshDataset:
         """Warn if the Dataset fails to load."""
         if isinstance(val, dict):
-            if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
-                log.warning("Loading 'mesh_dataset' without data.")
-                return None
+            for _, v in val.items():
+                if isinstance(v, str):
+                    if v in DATA_ARRAY_MAP:
+                        log.warning("Loading 'mesh_dataset' without data.")
+                        return None
         return val
 
     @pydantic.validator("mesh_dataset", always=True)

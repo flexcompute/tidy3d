@@ -161,7 +161,9 @@ class _DataArrayAnnotation:
         #     return val
 
         def check_unloaded_data(val):
-            """If the data comes in as the raw data array string, raise a custom warning."""
+            """If the data comes in as the raw data array string, raise a custom warning."""   
+            if val is None:
+                return val
             if isinstance(val, str) and val in DATA_ARRAY_MAP:
                 raise DataError(
                     f"Trying to load {_source_type.__name__} but the data is not present. "
@@ -178,14 +180,12 @@ class _DataArrayAnnotation:
 
         def assign_data_attrs(val):
             """Assign the correct data attributes to the :class:`.DataArray`."""
-
             for attr_name, attr in _source_type._data_attrs.items():
                 val.attrs[attr_name] = attr
             return val
 
         def assign_coord_attrs(val):
             """Assign the correct coordinate attributes to the :class:`.DataArray`."""
-
             for dim in _source_type._dims:
                 dim_attrs = DIM_ATTRS.get(dim)
                 if dim_attrs is not None:
@@ -213,7 +213,7 @@ class _DataArrayAnnotation:
             json_schema=from_dict_schema,
             python_schema=from_dict_schema,
             serialization=core_schema.plain_serializer_function_ser_schema(
-                lambda instance: type(instance).__name__
+                lambda instance: type(instance).__name__[1:] # name without the leading "_"
             ),
         )
 
@@ -221,7 +221,6 @@ class _DataArrayAnnotation:
     def __get_pydantic_json_schema__(
         cls, _core_schema: core_schema.CoreSchema, handler: GetJsonSchemaHandler
     ) -> JsonSchemaValue:
-        # Use the same schema that would be used for `int`
         return handler(core_schema.dict_schema())
 
 
@@ -527,25 +526,25 @@ FreqModeDataArray = Annotated[_FreqModeDataArray, _DataArrayAnnotation]
 TriangleMeshDataArray = Annotated[_TriangleMeshDataArray, _DataArrayAnnotation]
 
 DATA_ARRAY_MAP = dict(
-    _SpatialDataArray=SpatialDataArray,
-    _ScalarFieldDataArray=ScalarFieldDataArray,
-    _ScalarFieldTimeDataArray=ScalarFieldTimeDataArray,
-    _ScalarModeFieldDataArray=ScalarModeFieldDataArray,
-    _FluxDataArray=FluxDataArray,
-    _FluxTimeDataArray=FluxTimeDataArray,
-    _ModeAmpsDataArray=ModeAmpsDataArray,
-    _ModeIndexDataArray=ModeIndexDataArray,
-    _MixedModeDataArray=MixedModeDataArray,
-    _FieldProjectionAngleDataArray=FieldProjectionAngleDataArray,
-    _FieldProjectionCartesianDataArray=FieldProjectionCartesianDataArray,
-    _FieldProjectionKSpaceDataArray=FieldProjectionKSpaceDataArray,
-    _DiffractionDataArray=DiffractionDataArray,
-    _FreqModeDataArray=FreqModeDataArray,
-    _FreqDataArray=FreqDataArray,
-    _TimeDataArray=TimeDataArray,
-    _TriangleMeshDataArray=TriangleMeshDataArray,
+    SpatialDataArray=SpatialDataArray,
+    ScalarFieldDataArray=ScalarFieldDataArray,
+    ScalarFieldTimeDataArray=ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray=ScalarModeFieldDataArray,
+    FluxDataArray=FluxDataArray,
+    FluxTimeDataArray=FluxTimeDataArray,
+    ModeAmpsDataArray=ModeAmpsDataArray,
+    ModeIndexDataArray=ModeIndexDataArray,
+    MixedModeDataArray=MixedModeDataArray,
+    FieldProjectionAngleDataArray=FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray=FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray=FieldProjectionKSpaceDataArray,
+    DiffractionDataArray=DiffractionDataArray,
+    FreqModeDataArray=FreqModeDataArray,
+    FreqDataArray=FreqDataArray,
+    TimeDataArray=TimeDataArray,
+    TriangleMeshDataArray=TriangleMeshDataArray,
 )
-DATA_ARRAY_TYPES = DATA_ARRAY_MAP.keys()
+DATA_ARRAY_TYPES = [key for key in DATA_ARRAY_MAP.keys()]
 
 # DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}
 

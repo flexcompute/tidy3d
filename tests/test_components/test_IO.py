@@ -238,6 +238,16 @@ def test_to_hdf5_group_path_sim_data():
         assert mnt_data == sim_data.monitor_data[monitor.name]
 
 
+@pytest.mark.parametrize('extension', ('hdf5', 'json', 'yaml'))
+def test_inf(extension):
+    """Tests that values of None where None is not the default are loaded correctly."""
+
+    box = td.Box(size=(1, td.inf, 1))
+    fname = f"tests/tmp/box.{extension}"
+    box.to_file(fname)
+    box2 = td.Box.from_file(fname)
+    assert box2.size[1] == td.inf
+
 @clear_tmp
 def test_none_hdf5():
     """Tests that values of None where None is not the default are loaded correctly."""

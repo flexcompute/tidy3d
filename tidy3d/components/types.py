@@ -141,6 +141,7 @@ class _ArrayLike:
         )
         field_schema.update(schema)
 
+
 ArrayLike = Annotated[_ArrayLike, _ArrayLikeAnnotation]
 
 
