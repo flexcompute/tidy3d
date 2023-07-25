@@ -38,6 +38,7 @@ def annotate_type(UnionType):  # pylint:disable=invalid-name
 
 Numpy = np.ndarray
 
+
 class tdarray(np.ndarray):
     """Numpy array with a hash function."""
 

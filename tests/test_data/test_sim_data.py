@@ -176,7 +176,7 @@ def test_final_decay():
 
 def test_to_dict():
     sim_data = make_sim_data()
-    j = sim_data.dict()
+    j = dict(sim_data)
     sim_data2 = SimulationData(**j)
     assert sim_data == sim_data2
 
