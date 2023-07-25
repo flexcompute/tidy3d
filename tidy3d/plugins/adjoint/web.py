@@ -1,5 +1,5 @@
 """Adjoint-specific webapi."""
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 from functools import partial
 import tempfile
 
@@ -220,13 +220,13 @@ AdjointSimulationType = Literal["tidy3d", "adjoint_fwd", "adjoint_bwd"]
 class AdjointJob(Job):
     """Job that uploads a jax_info object and also includes new fields for adjoint tasks."""
 
-    simulation_type: AdjointSimulationType = pd.Field(
+    simulation_type: Optional[AdjointSimulationType] = pd.Field(
         None,
         title="Simulation Type",
         description="Type of simulation, used internally only.",
     )
 
-    jax_info: JaxInfo = pd.Field(
+    jax_info: Optional[JaxInfo] = pd.Field(
         None,
         title="Jax Info",
         description="Container of information needed to reconstruct jax simulation.",
@@ -242,6 +242,7 @@ class AdjointJob(Job):
         upload_jax_info(task_id=self.task_id, jax_info=self.jax_info, verbose=self.verbose)
         super().start()
 
+JobType = AdjointJob
 
 class AdjointBatch(Batch):
     """Batch that uploads a jax_info object and also includes new fields for adjoint tasks."""
@@ -252,7 +253,7 @@ class AdjointBatch(Batch):
         description="Type of simulation, used internally only.",
     )
 
-    jobs: Dict[str, AdjointJob] = pd.Field(
+    jobs: Optional[Dict[str, AdjointJob]] = pd.Field(
         None,
         title="Simulations",
         description="Mapping of task names to individual AdjointJob object for each task "
@@ -265,7 +266,36 @@ class AdjointBatch(Batch):
         description="Containers of information needed to reconstruct JaxSimulation for each item.",
     )
 
-    @pd.root_validator()
+    @pd.validator("jobs", always=True)
+    def _upload(cls, val, values) -> None:
+        """Create a series of tasks in the :class:`.Batch` and upload them to server.
+
+        Note
+        ----
+        To start the simulations running, must call :meth:`Batch.start` after uploaded.
+        """
+        if val is not None:
+            return val
+
+        # the type of job to upload (to generalize to subclasses)
+        parent_tasks = values.get("parent_tasks")
+
+        verbose = bool(values.get("verbose"))
+        jobs = {}
+        for task_name, simulation in values.get("simulations").items():
+
+            # pylint:disable=protected-access
+            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields.get_default()}
+            upload_kwargs["task_name"] = task_name
+            upload_kwargs["simulation"] = simulation
+            upload_kwargs["verbose"] = verbose
+            if parent_tasks and task_name in parent_tasks:
+                upload_kwargs["parent_tasks"] = parent_tasks[task_name]
+            job = JobType(**upload_kwargs)
+            jobs[task_name] = job
+        return jobs
+
+    @pd.root_validator(skip_on_failure=True)
     def _add_jax_infos(cls, values) -> None:
         """Add jax_info fields to the uploaded jobs."""
         jax_infos = values.get("jax_infos")

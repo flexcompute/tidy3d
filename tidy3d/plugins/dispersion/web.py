@@ -40,7 +40,7 @@ class ExceptionCodes(Enum):
 class AdvancedFitterParam(Tidy3dBaseModel):
     """Advanced fitter parameters"""
 
-    bound_amp: NonNegativeFloat = Field(
+    bound_amp: Optional[NonNegativeFloat] = Field(
         None,
         title="Upper bound of oscillator strength",
         description="Upper bound of real and imagniary part of oscillator "
@@ -48,7 +48,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         "automatic setup based on the frequency range of interest).",
         units=HERTZ,
     )
-    bound_f: NonNegativeFloat = Field(
+    bound_f: Optional[NonNegativeFloat] = Field(
         None,
         title="Upper bound of pole frequency",
         description="Upper bound of real and imaginary part of ``a`` that corresponds to pole "
@@ -123,7 +123,7 @@ class FitterData(AdvancedFitterParam):
         title="Index of refraction",
         description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: Tuple[float, ...] = Field(
+    k_data: Optional[Tuple[float, ...]] = Field(
         None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",
@@ -347,7 +347,7 @@ def run(
 class StableDispersionFitter(DispersionFitter):
     """Deprecated."""
 
-    @pydantic.root_validator()
+    @pydantic.root_validator(skip_on_failure=True)
     def _deprecate_stable_fitter(cls, values):
         log.warning(
             "'StableDispersionFitter' has been deprecated. Use 'DispersionFitter' with "

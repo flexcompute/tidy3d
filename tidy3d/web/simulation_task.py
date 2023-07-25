@@ -130,17 +130,17 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
+    status: Optional[str] = Field(None, title="status", description="Simulation task status.")
 
-    real_flex_unit: float = Field(
+    real_flex_unit: Optional[float] = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
-    created_at: Optional[datetime] = Field(
+    created_at: Optional[datetime] = Field(None, 
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    simulation: Optional[Simulation] = Field(
+    simulation: Optional[Simulation] = Field(None, 
         title="simulation", description="A copy of the Simulation being run as this task."
     )
 
@@ -153,7 +153,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
     folder: Optional[Folder] = None
 
-    callback_url: str = Field(
+    callback_url: Optional[str] = Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "

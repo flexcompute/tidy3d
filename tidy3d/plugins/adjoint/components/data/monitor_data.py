@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Optional
 import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
@@ -31,7 +31,8 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
     @classmethod
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:
         """Construct a :class:`.JaxMonitorData` instance from a :class:`.MonitorData`."""
-        self_dict = mnt_data.dict(exclude={"type"}).copy()
+        self_dict = dict(mnt_data)
+        self_dict.pop("type")
         for field_name in cls.get_jax_field_names():
             data_array = self_dict[field_name]
             if data_array is not None:
@@ -40,7 +41,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
                 }
                 jax_amps = JaxDataArray(values=data_array.values, coords=coords)
                 self_dict[field_name] = jax_amps
-        return cls.parse_obj(self_dict)
+        return cls.validate(self_dict)
 
     @abstractmethod
     def to_adjoint_sources(self, fwidth: float) -> List[Source]:
@@ -114,37 +115,37 @@ class JaxModeData(JaxMonitorData, ModeData):
 class JaxFieldData(JaxMonitorData, FieldData):
     """A :class:`.FieldData` registered with jax."""
 
-    Ex: JaxDataArray = pd.Field(
+    Ex: Optional[JaxDataArray] = pd.Field(
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
         jax_field=True,
     )
-    Ey: JaxDataArray = pd.Field(
+    Ey: Optional[JaxDataArray] = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
         jax_field=True,
     )
-    Ez: JaxDataArray = pd.Field(
+    Ez: Optional[JaxDataArray] = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
         jax_field=True,
     )
-    Hx: JaxDataArray = pd.Field(
+    Hx: Optional[JaxDataArray] = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
         jax_field=True,
     )
-    Hy: JaxDataArray = pd.Field(
+    Hy: Optional[JaxDataArray] = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
         jax_field=True,
     )
-    Hz: JaxDataArray = pd.Field(
+    Hz: Optional[JaxDataArray] = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",

@@ -5,11 +5,12 @@ import pydantic as pd
 import numpy as np
 from jax.interpreters.ad import JVPTracer
 from jax.numpy import DeviceArray
+from ....components.types import tdarray
 
 """ Define schema for these jax and numpy types."""
 
 
-class NumpyArrayType(np.ndarray):
+class NumpyArrayType(tdarray):
     """Subclass of ``np.ndarray`` with a schema defined for pydantic."""
 
     @classmethod
@@ -70,7 +71,7 @@ def validate_jax_float(field_name: str) -> Callable:
 
 def validate_jax_tuple(field_name: str) -> Callable:
     """Return validator that ignores any `class object` types in a tuple."""
-    return pd.validator(field_name, pre=True, allow_reuse=True, each_item=True)(
+    return pd.validator(field_name, pre=True, allow_reuse=True)(
         sanitize_validator_fn
     )
 
@@ -78,7 +79,7 @@ def validate_jax_tuple(field_name: str) -> Callable:
 def validate_jax_tuple_tuple(field_name: str) -> Callable:
     """Return validator that ignores any `class object` types in a tuple of tuples."""
 
-    @pd.validator(field_name, pre=True, allow_reuse=True, each_item=True)
+    @pd.validator(field_name, pre=True, allow_reuse=True)
     def validator(cls, val):
         val_list = list(val)
         for i, value in enumerate(val_list):

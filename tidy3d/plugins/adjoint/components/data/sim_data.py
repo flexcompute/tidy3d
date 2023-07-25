@@ -1,7 +1,7 @@
 """Defines a jax-compatible SimulationData."""
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union, List
+from typing import Tuple, Dict, Union, List, Optional
 
 import pydantic as pd
 
@@ -44,7 +44,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         description="The jax-compatible simulation corresponding to the data.",
     )
 
-    task_id: str = pd.Field(
+    task_id: Optional[str] = pd.Field(
         None,
         title="Task ID",
         description="Optional field storing the task_id for the original JaxSimulation.",

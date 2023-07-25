@@ -615,6 +615,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Define == for two Tidy3DBaseModels."""
         return self._json_string == other._json_string
 
+    @staticmethod
+    def make_json_compatible(json_string: str) -> str:
+        """Makes the string compatiable with json standards, notably for infinity."""
+        tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
+        json_string = json_string.replace("-Infinity", tmp_string)
+        json_string = json_string.replace("Infinity", '"Infinity"')
+        return json_string.replace(tmp_string, '"-Infinity"')
+
     @cached_property
     def _json_string(self) -> str:
         """Returns string representation of a :class:`Tidy3dBaseModel`.
@@ -625,15 +633,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
 
-        def make_json_compatible(json_string: str) -> str:
-            """Makes the string compatiable with json standards, notably for infinity."""
-            tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
-            json_string = json_string.replace("-Infinity", tmp_string)
-            json_string = json_string.replace("Infinity", '"Infinity"')
-            return json_string.replace(tmp_string, '"-Infinity"')
-
         json_string = json.dumps(self.dict())
-        json_string = make_json_compatible(json_string)
+        json_string = self.make_json_compatible(json_string)
         return json_string
 
     @classmethod

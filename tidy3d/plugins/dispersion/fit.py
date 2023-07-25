@@ -38,7 +38,7 @@ class DispersionFitter(Tidy3dBaseModel):
         description="Real part of the complex index of refraction.",
     )
 
-    k_data: ArrayFloat1D = Field(
+    k_data: Optional[ArrayFloat1D] = Field(
         None,
         title="Extinction coefficient data",
         description="Imaginary part of the complex index of refraction.",

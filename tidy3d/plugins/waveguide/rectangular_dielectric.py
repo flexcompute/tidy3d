@@ -1,6 +1,6 @@
 """Rectangular dielectric waveguide utilities."""
 
-from typing import List, Any
+from typing import List, Any, Optional
 
 import numpy
 import pydantic
@@ -72,7 +72,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    box_medium: MediumType = pydantic.Field(
+    box_medium: Optional[MediumType] = pydantic.Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer.",
@@ -86,21 +86,21 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    clad_thickness: Size1D = pydantic.Field(
+    clad_thickness: Optional[Size1D] = pydantic.Field(
         None,
         title="Clad Thickness",
         description="Domain size above the core layer.",
         units=MICROMETER,
     )
 
-    box_thickness: Size1D = pydantic.Field(
+    box_thickness: Optional[Size1D] = pydantic.Field(
         None,
         title="Box Thickness",
         description="Domain size below the core layer.",
         units=MICROMETER,
     )
 
-    side_margin: Size1D = pydantic.Field(
+    side_margin: Optional[Size1D] = pydantic.Field(
         None,
         title="Side Margin",
         description="Domain size to the sides of the waveguide core.",
@@ -131,7 +131,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    sidewall_medium: MediumType = pydantic.Field(
+    sidewall_medium: Optional[MediumType] = pydantic.Field(
         None,
         title="Sidewall medium",
         description="Medium associated with the sidewall layer to model sidewall losses.",
@@ -146,7 +146,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    surface_medium: MediumType = pydantic.Field(
+    surface_medium: Optional[MediumType] = pydantic.Field(
         None,
         title="Surface Medium",
         description="Medium associated with the surface layer to model surface losses.",
@@ -249,7 +249,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             raise ValidationError("Number of gaps must be 1 less than number of core widths.")
         return val
 
-    @pydantic.root_validator
+    @pydantic.root_validator(skip_on_failure=True)
     def _ensure_consistency(cls, values):
         """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
         sidewall_thickness = values["sidewall_thickness"]

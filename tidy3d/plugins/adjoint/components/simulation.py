@@ -1,7 +1,7 @@
 """Defines a jax-compatible simulation."""
 from __future__ import annotations
 
-from typing import Tuple, Union, List, Dict
+from typing import Tuple, Union, List, Dict, Optional
 from multiprocessing import Pool
 
 import pydantic as pd
@@ -62,7 +62,7 @@ class JaxInfo(Tidy3dBaseModel):
         description="Number of permittivity monitors in the original JaxSimulation.",
     )
 
-    fwidth_adjoint: float = pd.Field(
+    fwidth_adjoint: Optional[float] = pd.Field(
         None,
         title="Adjoint Frequency Width",
         description="Custom frequency width of the original JaxSimulation.",
@@ -102,7 +102,7 @@ class JaxSimulation(Simulation, JaxObject):
         description="Tuple of monitors used for storing epsilon, used internally for gradients.",
     )
 
-    fwidth_adjoint: pd.PositiveFloat = pd.Field(
+    fwidth_adjoint: Optional[pd.PositiveFloat] = pd.Field(
         None,
         title="Adjoint Frequency Width",
         description="Custom frequency width to use for 'source_time' of adjoint sources. "

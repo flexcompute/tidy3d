@@ -12,16 +12,16 @@ from .http_management import http
 from .types import Queryable
 
 
-class MaterialLibray(Queryable, smart_union=True):
+class MaterialLibray(Queryable):
     """Material Library Resource interface."""
 
     id: str = Field(title="Material Library ID", description="Material Library ID")
     name: str = Field(title="Material Library Name", description="Material Library Name")
-    medium: Optional[MediumType] = Field(title="medium", description="medium", alias="calcResult")
-    medium_type: Optional[str] = Field(
+    medium: Optional[MediumType] = Field(None, title="medium", description="medium", alias="calcResult")
+    medium_type: Optional[str] = Field(None, 
         title="medium type", description="medium type", alias="mediumType"
     )
-    json_input: Optional[dict] = Field(
+    json_input: Optional[dict] = Field(None, 
         title="json input", description="original input", alias="jsonInput"
     )
 

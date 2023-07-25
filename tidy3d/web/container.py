@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Optional
 import time
 
 from rich.console import Console
@@ -41,7 +41,7 @@ class Job(WebContainer):
         "default", title="Folder Name", description="Name of folder to store task on web UI."
     )
 
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = pd.Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -49,7 +49,7 @@ class Job(WebContainer):
         "``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.",
     )
 
-    solver_version: str = pd.Field(
+    solver_version: Optional[str] = pd.Field(
         None,
         title="Solver Version",
         description_str="Custom solver version to use, "
@@ -66,11 +66,11 @@ class Job(WebContainer):
         description="Type of simulation, used internally only.",
     )
 
-    parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    parent_tasks: Optional[Tuple[TaskId, ...]] = pd.Field(
         None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
     )
 
-    task_id: TaskId = pd.Field(
+    task_id: Optional[TaskId] = pd.Field(
         None,
         title="Task Id",
         description="Task ID number, set when the task is uploaded, leave as None.",
@@ -108,16 +108,16 @@ class Job(WebContainer):
     def _upload(cls, values) -> None:
         """Upload simulation to server without running."""
 
-        # task_id already present, don't re-upload
         if values.get("task_id") is not None:
             return values
 
         # upload kwargs with all fields except task_id
-        upload_kwargs = {key: values.get(key) for key in cls._upload_fields}
+        values_dict = dict(values)
+        upload_kwargs = {key: values_dict.get(key) for key in cls._upload_fields.get_default()}
         task_id = web.upload(**upload_kwargs)
 
         # then set the task_id and return
-        values["task_id"] = task_id
+        values['task_id'] = task_id
         return values
 
     def get_info(self) -> TaskInfo:
@@ -282,6 +282,8 @@ class BatchData(Tidy3dBaseModel):
         batch = Batch.from_file(batch_file)
         return batch.load(path_dir=path_dir)
 
+# job type for batch
+JobType = Job
 
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever."""
@@ -302,14 +304,14 @@ class Batch(WebContainer):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    solver_version: str = pd.Field(
+    solver_version: Optional[str] = pd.Field(
         None,
         title="Solver Version",
         description_str="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = pd.Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "
@@ -323,13 +325,13 @@ class Batch(WebContainer):
         description="Type of each simulation in the batch, used internally only.",
     )
 
-    parent_tasks: Dict[str, Tuple[TaskId, ...]] = pd.Field(
+    parent_tasks: Optional[Dict[str, Tuple[TaskId, ...]]] = pd.Field(
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    jobs: Dict[TaskName, Job] = pd.Field(
+    jobs: Optional[Dict[TaskName, JobType]] = pd.Field(
         None,
         title="Simulations",
         description="Mapping of task names to individual Job object for each task in the batch. "
@@ -386,7 +388,6 @@ class Batch(WebContainer):
             return val
 
         # the type of job to upload (to generalize to subclasses)
-        JobType = cls.__fields__["jobs"].type_  # pylint:disable=invalid-name
         parent_tasks = values.get("parent_tasks")
 
         verbose = bool(values.get("verbose"))
@@ -394,7 +395,7 @@ class Batch(WebContainer):
         for task_name, simulation in values.get("simulations").items():
 
             # pylint:disable=protected-access
-            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
+            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields.get_default()}
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation
             upload_kwargs["verbose"] = verbose

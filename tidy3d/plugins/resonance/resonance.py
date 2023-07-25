@@ -1,7 +1,7 @@
 """Find resonances in time series data
 """
 
-from typing import Tuple, List, Union
+from typing import Tuple, List, Union, Optional
 from functools import partial
 
 import numpy as np
@@ -31,10 +31,10 @@ class ResonanceData(Tidy3dBaseModel):
     """Data class for storing objects computed while running the resonance finder."""
 
     eigvals: ArrayComplex1D = Field(..., title="Eigenvalues", description="Resonance eigenvalues.")
-    complex_amplitudes: ArrayComplex1D = Field(
+    complex_amplitudes: Optional[ArrayComplex1D] = Field(
         None, title="Complex amplitudes", description="Complex resonance amplitudes"
     )
-    errors: ArrayFloat1D = Field(
+    errors: Optional[ArrayFloat1D] = Field(
         None, title="Errors", description="Rough eigenvalue error estimate."
     )
 

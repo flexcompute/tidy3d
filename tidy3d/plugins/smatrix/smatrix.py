@@ -15,7 +15,7 @@ from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
 from ...components.data.sim_data import SimulationData
 from ...components.data.data_array import DataArray
-from ...components.types import Direction, Ax, Complex
+from ...components.types import Direction, Ax, ComplexNumber
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
@@ -103,7 +103,7 @@ class ComponentModeler(Tidy3dBaseModel):
         title="Folder Name",
         description="Name of the folder for the tasks on web.",
     )
-    element_mappings: Tuple[Tuple[Element, Element, Complex], ...] = pd.Field(
+    element_mappings: Tuple[Tuple[Element, Element, ComplexNumber], ...] = pd.Field(
         (),
         title="Element Mappings",
         description="Mapping between elements of the scattering matrix, "
@@ -123,12 +123,12 @@ class ComponentModeler(Tidy3dBaseModel):
         "If this option is used, "
         "the data corresponding to other inputs will be missing in the resulting matrix.",
     )
-    verbose: bool = pd.Field(
+    verbose: Optional[bool] = pd.Field(
         False,
         title="Verbosity",
         description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
     )
-    callback_url: str = pd.Field(
+    callback_url: Optional[str] = pd.Field(
         None,
         title="Callback URL",
         description="Http PUT url to receive simulation finish event. "

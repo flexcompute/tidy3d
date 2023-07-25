@@ -20,9 +20,9 @@ class JaxObject(Tidy3dBaseModel):
     def get_jax_field_names(cls) -> List[str]:
         """Returns list of field names that have a ``jax_field_type``."""
         adjoint_fields = []
-        for field_name, model_field in cls.__fields__.items():
-            jax_field_type = model_field.field_info.extra.get("jax_field")
-            if jax_field_type:
+        for field_name, model_field in cls.model_fields.items():
+            jax_field_type = model_field.json_schema_extra
+            if jax_field_type and "jax_field" in jax_field_type:
                 adjoint_fields.append(field_name)
         return adjoint_fields
 
@@ -31,7 +31,7 @@ class JaxObject(Tidy3dBaseModel):
     def tree_flatten(self) -> Tuple[list, dict]:
         """How to flatten a :class:`.JaxObject` instance into a pytree."""
         children = []
-        aux_data = self.dict()
+        aux_data = dict(self)
         for field_name in self.get_jax_field_names():
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
@@ -64,8 +64,7 @@ class JaxObject(Tidy3dBaseModel):
     def _json_string(self) -> str:
         """Overwritten method to get the json string to store in the files."""
 
-        json_string_og = super()._json_string
-        json_dict = json.loads(json_string_og)
+        json_dict = dict(self)
 
         def strip_data_array(sub_dict: dict) -> None:
             """Strip any elements of the dictionary with type "JaxDataArray", replace with tag."""
@@ -83,7 +82,8 @@ class JaxObject(Tidy3dBaseModel):
                     sub_dict[key] = list(val_dict.values())
 
         strip_data_array(json_dict)
-        return json.dumps(json_dict)
+        json_string = json.dumps(json_dict)
+        return self.make_json_compatible(json_string)
 
     def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
         """Exports :class:`JaxObject` instance to .hdf5 file.
