@@ -744,6 +744,10 @@ class CustomMedium(AbstractCustomMedium):
     @pd.root_validator(pre=True)
     def _warn_if_none(cls, values):
         """Warn if the data array fails to load, and return a vacuum medium."""
+
+        if not isinstance(values, dict):
+            return values
+
         eps_dataset = values.get("eps_dataset")
         permittivity = values.get("permittivity")
         conductivity = values.get("conductivity")
@@ -772,6 +776,9 @@ class CustomMedium(AbstractCustomMedium):
     @pd.root_validator(pre=True)
     def _deprecation_dataset(cls, values):
         """Raise deprecation warning if dataset supplied and convert to dataset."""
+
+        if not isinstance(values, dict):
+            return values
 
         eps_dataset = values.get("eps_dataset")
         permittivity = values.get("permittivity")
@@ -1063,7 +1070,7 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        if isinstance(eps, SpatialDataArray):
+        if isinstance(eps, _SpatialDataArray):
             # purely real, not need to know `freq`
             if CustomMedium._validate_isreal_dataarray(eps):
                 return cls(permittivity=eps, interp_method=interp_method, **kwargs)
@@ -1131,7 +1138,7 @@ class CustomMedium(AbstractCustomMedium):
         """
         # lossless
         if k is None:
-            if isinstance(n, ScalarFieldDataArray):
+            if isinstance(n, _ScalarFieldDataArray):
                 n = SpatialDataArray(n.squeeze(dim="f", drop=True))
             freq = 0  # dummy value
             eps_real, _ = CustomMedium.nk_to_eps_sigma(n, 0 * n, freq)
@@ -1144,7 +1151,7 @@ class CustomMedium(AbstractCustomMedium):
             raise SetupError("'n' and 'k' must have same coordinates.")
 
         # k is a SpatialDataArray
-        if isinstance(k, SpatialDataArray):
+        if isinstance(k, _SpatialDataArray):
             if freq is None:
                 raise SetupError(
                     "For a lossy medium, must supply 'freq' at which to convert 'n' "
@@ -1298,6 +1305,10 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         @pd.root_validator(pre=True, allow_reuse=True)
         def _warn_if_none(cls, values):  # pylint:disable=unused-argument
             """Warn if any of `eps_inf` and nested_tuple_field are not load."""
+
+            if not isinstance(values, dict):
+                return values
+
             eps_inf = values.get("eps_inf")
             coeffs = values.get(nested_tuple_field)
             fail_load = False
@@ -2437,6 +2448,8 @@ class AnisotropicMedium(AbstractMedium):
     @pd.root_validator(pre=True)
     def _ignored_fields(cls, values):
         """The field is ignored."""
+        if not isinstance(values, dict):
+            return values
         if values.get("xx") is not None and values.get("allow_gain") is not None:
             log.warning(
                 "The field 'allow_gain' is ignored. Please set 'allow_gain' in each component."
@@ -2736,6 +2749,9 @@ class FullyAnisotropicMedium(AbstractMedium):
         ax.legend()
         return ax
 
+    # def hash(self):
+    #     """Hash function for this class."""
+
 
 class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     """Diagonally anisotropic medium with spatially varying permittivity in each component.
@@ -2791,13 +2807,13 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
         "method specified by this field will override the one in each component.",
     )
 
-    allow_gain: bool = pd.Field(
+    allow_gain: Optional[bool] = pd.Field(
         None,
         title="Allow gain medium",
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
-    subpixel: bool = pd.Field(
+    subpixel: Optional[bool] = pd.Field(
         None,
         title="Subpixel averaging",
         description="This field is ignored. Please set ``subpixel`` in each component",
@@ -2827,6 +2843,10 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     @pd.root_validator(pre=True)
     def _ignored_fields(cls, values):
         """The field is ignored."""
+
+        if not isinstance(values, dict):
+            return values
+
         if values.get("xx") is not None:
             if values.get("allow_gain") is not None:
                 log.warning(

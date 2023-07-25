@@ -161,7 +161,7 @@ class _DataArrayAnnotation:
         #     return val
 
         def check_unloaded_data(val):
-            """If the data comes in as the raw data array string, raise a custom warning."""   
+            """If the data comes in as the raw data array string, raise a custom warning."""
             if val is None:
                 return val
             if isinstance(val, str) and val in DATA_ARRAY_MAP:
@@ -213,7 +213,7 @@ class _DataArrayAnnotation:
             json_schema=from_dict_schema,
             python_schema=from_dict_schema,
             serialization=core_schema.plain_serializer_function_ser_schema(
-                lambda instance: type(instance).__name__[1:] # name without the leading "_"
+                lambda instance: type(instance).__name__[1:]  # name without the leading "_"
             ),
         )
 

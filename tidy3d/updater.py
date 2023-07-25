@@ -205,6 +205,7 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
     elif isinstance(update_dict, Tidy3dBaseModel):
         iterate_update_dict(dict(update_dict), update_types)
 
+
 @updates_from_version("1.8")
 def update_1_8(sim_dict: dict) -> dict:
     """Updates version 1.8."""

@@ -71,10 +71,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     type: Optional[str] = None
 
     @classmethod
-    def _mod_schema(cls, field_schema):
+    def _mod_schema(cls, handler):
         """Wrapper for the pydantic 2.0 syntax for backwards compatibility."""
         return
 
+    @classmethod
     def __get_pydantic_json_schema__(
         cls, core_schema: CoreSchema, handler: GetJsonSchemaHandler
     ) -> Dict[str, Any]:
@@ -88,7 +89,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         try:
             return super().__hash__(self)
         except TypeError:
-            return hash(self.json())
+            return hash(self._json_string)
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
@@ -96,8 +97,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         try:
             super().__init__(**kwargs)
             self._post_init_validators()
-        # except ValueError:
-        # import pdb; pdb.set_trace()
         finally:
             log.end_capture(self)
 
@@ -496,7 +495,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 # if a dict, recurse
                 elif isinstance(value, dict):
                     load_data_from_file(model_dict=value, group_path=subpath)
-
 
         with h5py.File(fname, "r") as f_handle:
             json_string = f_handle[JSON_TAG][()]

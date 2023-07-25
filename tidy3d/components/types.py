@@ -38,6 +38,13 @@ def annotate_type(UnionType):  # pylint:disable=invalid-name
 
 Numpy = np.ndarray
 
+class tdarray(np.ndarray):
+    """Numpy array with a hash function."""
+
+    def __hash__(self) -> int:
+        """Custom hash function (hash the tuple containing values)."""
+        return hash(tuple(self))
+
 
 class _ArrayLikeAnnotation:
     """Annotation for ArrayLike to add validation and serialization."""
@@ -70,7 +77,7 @@ class _ArrayLikeAnnotation:
         def convert_to_numpy(val):
             """Convert the value to np.ndarray and provide some casting."""
             arr_numpy = np.array(val, ndmin=1, dtype=_source_type.dtype, copy=True)
-            arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
+            arr_tidy3d = tdarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
             arr_tidy3d[:] = arr_numpy
             return arr_tidy3d
 

@@ -63,13 +63,6 @@ class FieldProjector(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    currents: Optional[Dict[str, xr.Dataset]] = pydantic.Field(
-        None,
-        title="Surface current densities",
-        description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "
-        "surface current densities.",
-    )
-
     @pydantic.validator("origin", always=True)
     def set_origin(cls, val, values):
         """Sets .origin as the average of centers of all surface monitors if not provided."""
