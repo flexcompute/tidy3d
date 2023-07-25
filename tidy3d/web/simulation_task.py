@@ -537,3 +537,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             verbose=verbose,
             progress_callback=progress_callback,
         )
+
+    def abort(self):
+        """Abort current task from server."""
+        if not self.task_id:
+            raise ValueError("Task id not found.")
+        return http.put("tidy3d/tasks/abort", json={"taskType": "FDTD", "taskId": self.task_id})

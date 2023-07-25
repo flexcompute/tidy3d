@@ -2,7 +2,7 @@
 
 import pydantic as pd
 
-from .log import DEFAULT_LEVEL, LogLevel, set_logging_level
+from .log import DEFAULT_LEVEL, LogLevel, set_logging_level, set_log_suppression
 
 
 class Tidy3dConfig(pd.BaseModel):
@@ -25,10 +25,23 @@ class Tidy3dConfig(pd.BaseModel):
         'Can be "DEBUG", "INFO", "WARNING", "ERROR", or "CRITICAL".',
     )
 
+    log_suppression: bool = pd.Field(
+        True,
+        title="Log suppression",
+        description="Enable or disable suppression of certain log messages when they are repeated "
+        "for several elements.",
+    )
+
     @pd.validator("logging_level", pre=True, always=True)
     def _set_logging_level(cls, val):
         """Set the logging level if logging_level is changed."""
         set_logging_level(val)
+        return val
+
+    @pd.validator("log_suppression", pre=True, always=True)
+    def _set_log_suppression(cls, val):
+        """Control log suppression when log_suppression is changed."""
+        set_log_suppression(val)
         return val
 
 

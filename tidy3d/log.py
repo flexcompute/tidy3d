@@ -88,6 +88,7 @@ class Logger:
 
     def __init__(self):
         self.handlers = {}
+        self.suppression = True
         self._counts = None
         self._stack = None
         self._capture = False
@@ -104,8 +105,9 @@ class Logger:
         return captured_warnings
 
     def __enter__(self):
-        """Enter a consolidation context (only a single message is emitted)."""
-        if self._counts is None:
+        """If suppression is enables, enter a consolidation context (only a single message is
+        emitted)."""
+        if self.suppression and self._counts is None:
             self._counts = {}
         return self
 
@@ -281,6 +283,11 @@ def set_logging_level(level: LogValue = DEFAULT_LEVEL) -> None:
     """
     if "console" in log.handlers:
         log.handlers["console"].level = _get_level_int(level)
+
+
+def set_log_suppression(value: bool) -> None:
+    """Control log suppression for repeated messages."""
+    log.suppression = value
 
 
 def set_logging_console(stderr: bool = False) -> None:

@@ -1,22 +1,19 @@
 # Tests webapi and things that depend on it
-import tempfile
 import pytest
 import responses
 from _pytest import monkeypatch
 import os
 
 import tidy3d as td
-import tidy3d.web as web
 
 from responses import matchers
 
 from tidy3d.exceptions import SetupError
 from tidy3d.web.environment import Env
-from tidy3d.web.webapi import delete, delete_old, download, download_json, run
+from tidy3d.web.webapi import delete, delete_old, download, download_json, run, abort
 from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
 from tidy3d.web.webapi import load, load_simulation, start, upload, monitor, real_cost
 from tidy3d.web.container import Job, Batch
-from tidy3d.web.task import TaskInfo
 from tidy3d.web.asynchronous import run_async
 
 from tidy3d.__main__ import main
@@ -151,12 +148,10 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
 
 @pytest.fixture
 def mock_monitor(monkeypatch):
-
     status_count = [0]
     statuses = ("upload", "running", "running", "running", "running", "running", "success")
 
     def mock_get_status(task_id):
-
         current_count = min(status_count[0], len(statuses) - 1)
         current_status = statuses[current_count]
         status_count[0] += 1
@@ -288,7 +283,6 @@ def _test_load(mock_load, mock_get_info):
 
 @responses.activate
 def test_delete(set_api_key, mock_get_info):
-
     responses.add(
         responses.DELETE,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
@@ -382,7 +376,6 @@ def test_delete_old(set_api_key):
 
 @responses.activate
 def test_get_tasks(set_api_key):
-
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -418,12 +411,30 @@ def test_real_cost(mock_get_info):
     assert real_cost(TASK_ID) == FLEX_UNIT
 
 
+@responses.activate
+def test_abort_task(set_api_key):
+    responses.add(
+        responses.PUT,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/abort",
+        match=[
+            matchers.json_params_matcher(
+                {
+                    "taskId": TASK_ID,
+                    "taskType": "FDTD",
+                }
+            )
+        ],
+        json={"result": True},
+        status=200,
+    )
+    abort(TASK_ID)
+
+
 """ Containers """
 
 
 @responses.activate
 def test_job(mock_webapi, monkeypatch):
-
     monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
     sim = make_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
@@ -444,7 +455,6 @@ def mock_job_status(monkeypatch):
 
 @responses.activate
 def test_batch(mock_webapi, mock_job_status):
-
     # monkeypatch.setattr("tidy3d.web.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
 
@@ -460,7 +470,6 @@ def test_batch(mock_webapi, mock_job_status):
 
 @responses.activate
 def test_async(mock_webapi, mock_job_status):
-
     # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()}
     batch_data = run_async(sims, folder_name=PROJECT_NAME)
@@ -471,7 +480,6 @@ def test_async(mock_webapi, mock_job_status):
 
 @responses.activate
 def test_main(mock_webapi, monkeypatch, mock_job_status):
-
     # sims = {TASK_NAME: make_sim()}
     # batch_data = run_async(sims, folder_name=PROJECT_NAME)
 

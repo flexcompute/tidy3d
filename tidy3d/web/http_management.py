@@ -112,7 +112,7 @@ class HttpSessionManager:
     def put(self, path: str, json=None, files=None):
         """Update the resource."""
         return self.session.put(
-            Env.current.get_real_url(path), data=json, auth=api_key_auth, files=files
+            Env.current.get_real_url(path), json=json, auth=api_key_auth, files=files
         )
 
     @http_interceptor

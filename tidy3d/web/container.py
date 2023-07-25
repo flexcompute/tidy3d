@@ -392,7 +392,6 @@ class Batch(WebContainer):
         verbose = bool(values.get("verbose"))
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-
             # pylint:disable=protected-access
             upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
             upload_kwargs["task_name"] = task_name
@@ -485,7 +484,6 @@ class Batch(WebContainer):
                 )
 
             with Progress(console=console) as progress:
-
                 # create progressbars
                 pbar_tasks = {}
                 for task_name, job in self.jobs.items():
@@ -616,7 +614,6 @@ class Batch(WebContainer):
         task_paths = {}
         task_ids = {}
         for task_name, job in self.jobs.items():
-
             if "error" in job.status:
                 log.warning(f"Not loading '{task_name}' as the task errored.")
                 continue
