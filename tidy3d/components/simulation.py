@@ -2265,9 +2265,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             width of the 3d view dom's size
         height : float = 800
             height of the 3d view dom's size
-        
+
         """
-        return plot_sim_3d(self, width, height)
+        return plot_sim_3d(self, width=width, height=height)
 
     """ Discretization """
 
