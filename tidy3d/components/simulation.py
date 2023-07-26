@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
+
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
@@ -959,24 +960,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_monitor_size(self) -> None:
         """Ensures the monitors arent storing too much data before simulation is uploaded."""
 
-        tmesh = self.tmesh
-        grid = self.grid
-
         total_size_gb = 0
         with log as consolidated_logger:
-            for monitor in self.monitors:
-                monitor_inds = grid.discretize_inds(monitor, extend=True)
-                num_cells = [inds[1] - inds[0] for inds in monitor_inds]
-                # take monitor downsampling into account
-                if isinstance(monitor, AbstractFieldMonitor):
-                    num_cells = monitor.downsampled_num_cells(num_cells)
-                num_cells = np.prod(num_cells)
-                monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            datas = self.monitors_data_size
+            for monitor_name, monitor_size in datas.items():
                 monitor_size_gb = monitor_size / 2**30
-
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
-                        f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                        f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
                         "Consider making it smaller, using fewer frequencies, or spatial or "
                         "temporal downsampling using 'interval_space' and 'interval', respectively."
                     )
@@ -988,6 +979,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
+
+    @cached_property
+    def monitors_data_size(self) -> Dict[str, float]:
+        """Dictionary mapping monitor names to their estimated storage size in bytes."""
+        tmesh = self.tmesh
+        grid = self.grid
+        data_size = {}
+        for monitor in self.monitors:
+            name = monitor.name
+            monitor_inds = grid.discretize_inds(monitor, extend=True)
+            num_cells = [inds[1] - inds[0] for inds in monitor_inds]
+            # take monitor downsampling into account
+            if isinstance(monitor, AbstractFieldMonitor):
+                num_cells = monitor.downsampled_num_cells(num_cells)
+            num_cells = np.prod(num_cells)
+            monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            data_size[name] = float(monitor_size)
+
+        return data_size
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
