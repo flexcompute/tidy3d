@@ -94,6 +94,68 @@ def test_sim_init():
     sim.epsilon(m)
 
 
+def test_monitors_data_size():
+    """make sure a simulation can be initialized"""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.Medium(permittivity=2.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=td.Medium(permittivity=1.0, conductivity=3.0),
+            ),
+            td.Structure(
+                geometry=td.Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=td.Medium()
+            ),
+            td.Structure(
+                geometry=td.Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=td.Medium(),
+            ),
+        ],
+        sources=[
+            td.UniformCurrentSource(
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization="Hx",
+                source_time=td.GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+                name="my_dipole",
+            ),
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+            ),
+        ],
+        monitors=[
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
+        ],
+        symmetry=(0, 1, -1),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=20),
+            y=td.Boundary.stable_pml(num_layers=30),
+            z=td.Boundary.absorber(num_layers=100),
+        ),
+        shutoff=1e-6,
+        courant=0.8,
+        subpixel=False,
+    )
+
+    datas = sim.monitors_data_size
+    assert len(datas) == 2
+
+
 def test_deprecation_defaults(log_capture):
     """Make sure deprecation warnings NOT thrown if defaults used."""
     s = td.Simulation(

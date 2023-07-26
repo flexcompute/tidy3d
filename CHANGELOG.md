@@ -10,12 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `abort()` for `Job` and `mode solver`, Job or mode solver whose status is not success or error(e.g. running, draft) can be aborted, if Job or mode solver is abort, it can't be submitted, a new one needs to be created and submitted.
 - `web.abort()` and `Job.abort()` methods allowing to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
 - `FastDispersionFitter` for fast fitting of material dispersion data.
+- `Simulation.monitors_data_size` mapping monitor name to its data size in bytes.
 
 ### Changed
-- Add width and height options to Simulation.plot_3d
-- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the mode solver to create simulations with the source/monitor/mode solver monitor previously added to the mode solver's simulation.
-
-### Changed
+- Add `width` and `height` options to `Simulation.plot_3d`.
+- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its simulation with a `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor` added, respectively.
 
 ### Fixed
 - Fix the `Environment has no attribute _current` issue when set `TIDY3D_ENV=prod`
