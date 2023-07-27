@@ -7,7 +7,7 @@ import os
 import pydantic as pd
 import numpy as np
 
-from ...constants import HERTZ, C_0
+from ...constants import HERTZ
 from ...components.simulation import Simulation
 from ...components.geometry import Box
 from ...components.mode import ModeSpec
@@ -368,14 +368,9 @@ class ComponentModeler(Tidy3dBaseModel):
             f=self.freqs,
             direction=port_source.direction,
             mode_index=mode_index,
-        ).values
+        )
 
-        normalize_n_eff = port_monitor_data.n_eff.sel(f=self.freqs, mode_index=mode_index).values
-
-        k0s = 2 * np.pi * C_0 / np.array(self.freqs)
-        k_effs = k0s * normalize_n_eff
-        shift_value = self._shift_value_signed(port=port_source)
-        return normalize_amps * np.exp(1j * k_effs * shift_value)
+        return normalize_amps.values
 
     @cached_property
     def max_mode_index(self) -> Tuple[int, int]:
