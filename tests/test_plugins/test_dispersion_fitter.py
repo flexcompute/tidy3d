@@ -2,13 +2,17 @@ import numpy as np
 import pytest
 import responses
 
+import matplotlib.pylab as plt
+
 import tidy3d as td
 from tidy3d.plugins.dispersion import DispersionFitter, FastDispersionFitter
 from tidy3d.plugins.dispersion import AdvancedFastFitterParam
 from tidy3d.plugins.dispersion.web import run as run_fitter
 
-
 advanced_param = AdvancedFastFitterParam(num_iters=1, passivity_num_iters=1)
+
+
+_, AX = plt.subplots()
 
 
 @pytest.fixture
@@ -98,14 +102,14 @@ def test_dispersion_plot(random_data):
     wvl_um, n_data, k_data = random_data
 
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data)
-    fitter.plot()
+    fitter.plot(ax=AX)
     medium, rms = fitter.fit(num_tries=2)
-    fitter.plot(medium)
+    fitter.plot(medium, ax=AX)
 
     fitter = DispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
     fitter.plot()
     medium, rms = fitter.fit(num_tries=2)
-    fitter.plot(medium)
+    fitter.plot(medium, ax=AX)
 
 
 def test_dispersion_set_wvg_range(random_data):

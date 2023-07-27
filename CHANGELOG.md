@@ -6,19 +6,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.4.0rc1] - 2023-7-27
+
+### Added
 - Configuration option `config.log_suppression` can be used to control the suppression of log messages.
-- `abort()` for `Job` and `mode solver`, Job or mode solver whose status is not success or error(e.g. running, draft) can be aborted, if Job or mode solver is abort, it can't be submitted, a new one needs to be created and submitted.
-- `web.abort()` and `Job.abort()` methods allowing to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
+- `web.abort()` and `Job.abort()` methods allowing user to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
 - `FastDispersionFitter` for fast fitting of material dispersion data.
-- `Simulation.monitors_data_size` mapping monitor name to its data size in bytes.
+- `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
 - Source with arbitrary user-specified time dependence through `CustomSourceTime`.
 
 ### Changed
-- Add `width` and `height` options to `Simulation.plot_3d`.
-- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its simulation with a `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor` added, respectively.
+- Add `width` and `height` options to `Simulation.plot_3d()`.
+- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its `Simulation` with an added `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor`, respectively.
 
 ### Fixed
-- Fix the `Environment has no attribute _current` issue when set `TIDY3D_ENV=prod`
+- Handles `TIDY3D_ENV` properly when set to `prod`.
 - Redundant phase compensation for shifted source in smatrix plugin.
 
 ## [2.3.2] - 2023-7-21
@@ -864,7 +871,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...pre/2.4
+[2.4.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.4.0rc1
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...v2.3.0
