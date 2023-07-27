@@ -687,7 +687,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             doc += "        "
 
             # add units (if present)
-            units = field._find_field_info_arg("units")
+            extra_schema = field.json_schema_extra
+            units = None
+            if extra_schema:
+                units = extra_schema.get("units")
             if units is not None:
                 if isinstance(units, (tuple, list)):
                     unitstr = "("
