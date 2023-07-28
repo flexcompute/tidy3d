@@ -123,14 +123,14 @@ class JaxBox(JaxGeometry, Box, JaxObject):
     size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
         title="Size",
-        description="Size of the box in (x,y,z). May contain ``jax`` ``DeviceArray`` instances.",
+        description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
         jax_field=True,
     )
 
     center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
         title="Center",
-        description="Center of the box in (x,y,z). May contain ``jax`` ``DeviceArray`` instances.",
+        description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
         jax_field=True,
     )
 
