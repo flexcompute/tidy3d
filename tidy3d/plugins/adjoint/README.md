@@ -144,7 +144,7 @@ Finally, there are some methods in the `JaxX` subclasses for converting `JaxX` t
 
 ### The One Exception: `DataArrays`
 
-Unfortunately, all `Tidy3D` components are not handled so simply. It turns out that `jax` datastructures do not work when added to `xarray.DataArray` containers. Therefore, we needed to find a replacement to the `DataArray` class in regular Tidy3D to use in our `JaxMonitorData` fields. To solve this problem, the adjoint plugin introduces a `JaxDataArray`, which stores `.vaues` as a `jax` `DeviceArray` (basically a `jax` version of `numpy` arrays) and `.coords` as a dictionary of coordinates with a dimensions string mapping to a list of values. 
+Unfortunately, all `Tidy3D` components are not handled so simply. It turns out that `jax` datastructures do not work when added to `xarray.DataArray` containers. Therefore, we needed to find a replacement to the `DataArray` class in regular Tidy3D to use in our `JaxMonitorData` fields. To solve this problem, the adjoint plugin introduces a `JaxDataArray`, which stores `.vaues` as a `jax` `Array` (basically a `jax` version of `numpy` arrays) and `.coords` as a dictionary of coordinates with a dimensions string mapping to a list of values. 
 
 The `JaxDataArray` may freely store `jax` values and tracers and implements a few basic emulations of `xarray.DataArray` objects, such as `.sel` and `.isel`. Note that at this time `.interp` is not supported, but I think we could consider implementing it later. A user could, in principle, wrap `.sel` to do the interpolation themselves, but it was not considered at this stage because some trials to implement it myself ended badly.
 

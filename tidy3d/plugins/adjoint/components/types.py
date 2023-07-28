@@ -4,7 +4,7 @@ import pydantic as pd
 
 import numpy as np
 from jax.interpreters.ad import JVPTracer
-from jax.numpy import DeviceArray
+from jax.numpy import ndarray as JaxArrayType
 
 """ Define schema for these jax and numpy types."""
 
@@ -35,11 +35,11 @@ def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:
     arbitrary_type.__modify_schema__ = mod_schema_fn
 
 
-_add_schema(DeviceArray, title="DeviceArray", field_type_str="jaxlib.xla_extension.DeviceArray")
+_add_schema(JaxArrayType, title="JaxArray", field_type_str="jax.numpy.ndarray")
 _add_schema(JVPTracer, title="JVPTracer", field_type_str="jax.interpreters.ad.JVPTracer")
 
 # define types usable as floats including the jax tracers
-JaxArrayLike = Union[NumpyArrayType, DeviceArray]
+JaxArrayLike = Union[NumpyArrayType, JaxArrayType]
 JaxFloat = Union[float, JaxArrayLike, JVPTracer]
 
 """
