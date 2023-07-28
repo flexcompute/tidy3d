@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Adjoint plugin import failures after `jax.numpy.DeviceArray` -> `jax.Array` in jax 0.4.14.
 
 ## [2.3.2] - 2023-7-21
 
