@@ -222,8 +222,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # intersect all shapes with the input plane
         bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
-        #shapely_box = box(minx=bs_min[0], miny=bs_min[0], maxx=bs_max[1], maxy=bs_max[1])
-        shapely_box = box(minx=bs_min[0], miny=bs_min[1], maxx=bs_max[0], maxy=bs_max[1])
+        shapely_box = box(minx=bs_min[0], miny=bs_min[0], maxx=bs_max[1], maxy=bs_max[1])
         shapely_box = plane.evaluate_inf_shape(shapely_box)
         return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 
