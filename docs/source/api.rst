@@ -385,10 +385,11 @@ Dispersive Model Fitting
    :toctree: _autosummary/
 
    tidy3d.plugins.dispersion.FastDispersionFitter
-   tidy3d.plugins.dispersion.DispersionFitter
-   tidy3d.plugins.dispersion.StableDispersionFitter
    tidy3d.plugins.dispersion.AdvancedFastFitterParam
+   tidy3d.plugins.dispersion.DispersionFitter
    tidy3d.plugins.dispersion.AdvancedFitterParam
+   tidy3d.plugins.dispersion.web.run
+   tidy3d.plugins.dispersion.StableDispersionFitter
 
 Self-intersecting Polyslab
 --------------------------
