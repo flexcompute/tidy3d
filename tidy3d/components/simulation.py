@@ -28,7 +28,8 @@ from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime
 from .source import TFSF, Source
-from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor
+from .monitor import SurfaceIntegrationMonitor, PermittivityMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
 from .viz import add_ax_if_none, equal_aspect
@@ -2478,9 +2479,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         int
             The largest ``N`` such that ``N * self.dt`` is below the Nyquist limit.
         """
-        freq_range = self.frequency_range
-        if freq_range[1] > 0:
-            nyquist_step = int(1 / (2 * freq_range[1]) / self.dt) - 1
+
+        # source frequency upper bound
+        freq_source_max = self.frequency_range[1]
+        # monitor frequency upper bound
+        freq_monitor_max = max(
+            (
+                monitor.frequency_range[1]
+                for monitor in self.monitors
+                if isinstance(monitor, FreqMonitor) and not isinstance(monitor, PermittivityMonitor)
+            ),
+            default=0.0,
+        )
+        # combined frequency upper bound
+        freq_max = max(freq_source_max, freq_monitor_max)
+
+        if freq_max > 0:
+            nyquist_step = int(1 / (2 * freq_max) / self.dt) - 1
             nyquist_step = max(1, nyquist_step)
         else:
             nyquist_step = 1

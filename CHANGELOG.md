@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
 
 ### Fixed
 
