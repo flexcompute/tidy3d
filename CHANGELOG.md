@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Handles `TIDY3D_ENV` properly when set to `prod`.
 - Redundant phase compensation for shifted source in smatrix plugin.
+## [2.3.3] - 2023-07-28
+
+### Added
+
+### Changed
+
+### Fixed
+- Adjoint plugin import failures after `jax.numpy.DeviceArray` -> `jax.Array` in jax 0.4.14.
 
 ## [2.3.2] - 2023-7-21
 
@@ -873,6 +881,8 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...pre/2.4
 [2.4.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.4.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...develop
+[2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/flexcompute/tidy3d/compare/v2.2.3...v2.3.0

@@ -144,7 +144,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
     permittivity: JaxFloat = pd.Field(
         1.0,
         title="Permittivity",
-        description="Relative permittivity of the medium. May be a ``jax`` ``DeviceArray``.",
+        description="Relative permittivity of the medium. May be a ``jax`` ``Array``.",
         jax_field=True,
     )
 
