@@ -41,6 +41,7 @@ A convenience function `Simulation.perturbed_mediums_copy` is added to class `Si
 
 ### Fixed
 - Adjoint plugin import failures after `jax.numpy.DeviceArray` -> `jax.Array` in jax 0.4.14.
+- Fixed definition of shapely box bounds in Geometry.intersections_2dbox()
 
 ## [2.3.2] - 2023-7-21
 
