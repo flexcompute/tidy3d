@@ -2225,15 +2225,21 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The axes after setting the boundaries.
         """
-        """
+        
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-        """
-        if hlim[0] != hlim[1]:
-            ax.set_xlim(hlim[0], hlim[1])
-        if vlim[0] != vlim[1]:
-            ax.set_ylim(vlim[0], vlim[1])
+        
+        if hlim != None:
+            if hlim[0] != hlim[1]:
+                ax.set_xlim(hlim[0], hlim[1])
+        else:
+            ax.set_xlim(xmin, xmax)
+        if vlim != None:
+            if vlim[0] != vlim[1]:
+                ax.set_ylim(vlim[0], vlim[1])
+        else:
+            ax.set_ylim(ymin, ymax)
         return ax
 
     @staticmethod
