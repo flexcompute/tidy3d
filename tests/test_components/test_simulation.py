@@ -622,9 +622,16 @@ def test_nyquist():
     )
     assert S.nyquist_step > 1
 
+    # nyquist step decreses to 1 when the frequency-domain monitor is at high frequency
+    S_MONITOR = S.copy(
+        update=dict(monitors=[td.FluxMonitor(size=(1, 1, 0), freqs=[1e14, 1e20], name="flux")])
+    )
+    assert S_MONITOR.nyquist_step == 1
+
     # fake a scenario where the fmax of the simulation is negative?
     class MockSim:
         frequency_range = (-2, -1)
+        monitors = ()
         _cached_properties = {}
 
     m = MockSim()
