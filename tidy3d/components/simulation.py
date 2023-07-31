@@ -1317,7 +1317,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             new_v_lim = (vmin, vmax)
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z,hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
@@ -1335,6 +1335,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1366,14 +1368,30 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-
-        ax = self.plot_structures_eps(freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+        
+        new_h_lim, new_v_lim = hlim, vlim
+        # account for unordered limits
+        if hlim != None:
+            (h_min, h_max) = hlim
+            if h_min > h_max: new_h_lim = (h_max, h_min)
+        else:
+            new_h_lim = (hmin, hmax)
+        if vlim != None:
+            (v_min, v_max) = vlim
+            if v_min > v_max: new_v_lim = (v_max, v_min)
+        else:
+            new_v_lim = (vmin, vmax)
+        ax = self.plot_structures_eps(freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         return ax
 
     @equal_aspect
@@ -1411,7 +1429,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """
         
         medium_shapes = []
-        #medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
         medium_shapes = self._get_structures_2dbox(structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         medium_map = self.medium_map
         for (medium, shape) in medium_shapes:
@@ -1476,6 +1493,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -1501,6 +1520,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Defaults to the structure default alpha.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float,float] = None
+            Horizontal bounds for plotting
+        vlim : Tuple[float,float] = None
+            Vertical bounds for plotting
 
         Returns
         -------
@@ -1525,7 +1548,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
-            medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
+            medium_shapes = self._get_structures_2dbox(structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
         for (medium, shape) in medium_shapes:
@@ -1552,7 +1575,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
