@@ -484,9 +484,9 @@ def test_plot_eps():
 
     
 def test_plot_eps_bounds():
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.5, 0.7])
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, vlim=[-0.5, 0.7])
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.5, 0.7], vlim=[-0.5,0.7])
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45,0.45])
 
 
 def test_plot():
@@ -494,9 +494,9 @@ def test_plot():
 
 
 def test_plot_bounds():
-    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.5, 0.7])
-    _ = SIM_FULL.plot(ax=AX, x=0, vlim=[-0.5, 0.7])
-    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.5, 0.7], vlim=[-0.5,0.7])
+    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(ax=AX, x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45,0.45])
 
 
 def test_plot_3d():
