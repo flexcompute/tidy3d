@@ -8,6 +8,7 @@ from tidy3d.components.data.data_array import ScalarModeFieldDataArray
 from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
 from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
 from tidy3d.components.data.data_array import DiffractionDataArray
+from tidy3d.components.data.data_array import HeatDataArray, ChargeDataArray
 from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
 from tidy3d.components.simulation import Simulation
 from tidy3d.components.grid.grid_spec import GridSpec
@@ -284,3 +285,14 @@ def test_empty_field_time():
 def test_abs():
     data = make_mode_amps_data_array()
     dabs = data.abs
+
+
+def test_heat_data_array():
+    T = [0, 1e-12, 2e-12]
+    test = HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
+
+
+def test_heat_data_array():
+    n = [0, 1e-12, 2e-12]
+    p = [0, 3e-12, 4e-12]
+    test = ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))

@@ -15,6 +15,10 @@ from .components.medium import CustomMedium, CustomPoleResidue
 from .components.medium import CustomSellmeier, FullyAnisotropicMedium
 from .components.medium import CustomLorentz, CustomDrude, CustomDebye, CustomAnisotropicMedium
 from .components.transformation import RotationAroundAxis
+from .components.medium import PerturbationMedium, PerturbationPoleResidue
+from .components.parameter_perturbation import ParameterPerturbation
+from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
+from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
 
 # structures
 from .components.structure import Structure, MeshOverrideStructure
@@ -26,7 +30,7 @@ from .components.mode import ModeSpec
 from .components.apodization import ApodizationSpec
 
 # sources
-from .components.source import GaussianPulse, ContinuousWave
+from .components.source import GaussianPulse, ContinuousWave, CustomSourceTime
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components.source import GaussianBeam, AstigmaticGaussianBeam
 from .components.source import CustomFieldSource, TFSF, CustomCurrentSource
@@ -54,6 +58,7 @@ from .components.data.data_array import FieldProjectionAngleDataArray
 from .components.data.data_array import FieldProjectionCartesianDataArray
 from .components.data.data_array import FieldProjectionKSpaceDataArray
 from .components.data.data_array import DiffractionDataArray
+from .components.data.data_array import HeatDataArray, ChargeDataArray
 from .components.data.dataset import FieldDataset, FieldTimeDataset
 from .components.data.dataset import PermittivityDataset, ModeSolverDataset
 from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData

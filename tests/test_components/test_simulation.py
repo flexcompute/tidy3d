@@ -94,6 +94,68 @@ def test_sim_init():
     sim.epsilon(m)
 
 
+def test_monitors_data_size():
+    """make sure a simulation can be initialized"""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.Medium(permittivity=2.0),
+            ),
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+                medium=td.Medium(permittivity=1.0, conductivity=3.0),
+            ),
+            td.Structure(
+                geometry=td.Sphere(radius=1.4, center=(1.0, 0.0, 1.0)), medium=td.Medium()
+            ),
+            td.Structure(
+                geometry=td.Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=td.Medium(),
+            ),
+        ],
+        sources=[
+            td.UniformCurrentSource(
+                size=(0, 0, 0),
+                center=(0, -0.5, 0),
+                polarization="Hx",
+                source_time=td.GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+                name="my_dipole",
+            ),
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(
+                    freq0=1e14,
+                    fwidth=1e12,
+                ),
+            ),
+        ],
+        monitors=[
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
+        ],
+        symmetry=(0, 1, -1),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=20),
+            y=td.Boundary.stable_pml(num_layers=30),
+            z=td.Boundary.absorber(num_layers=100),
+        ),
+        shutoff=1e-6,
+        courant=0.8,
+        subpixel=False,
+    )
+
+    datas = sim.monitors_data_size
+    assert len(datas) == 2
+
+
 def test_deprecation_defaults(log_capture):
     """Make sure deprecation warnings NOT thrown if defaults used."""
     s = td.Simulation(
@@ -572,9 +634,16 @@ def test_nyquist():
     )
     assert S.nyquist_step > 1
 
+    # nyquist step decreses to 1 when the frequency-domain monitor is at high frequency
+    S_MONITOR = S.copy(
+        update=dict(monitors=[td.FluxMonitor(size=(1, 1, 0), freqs=[1e14, 1e20], name="flux")])
+    )
+    assert S_MONITOR.nyquist_step == 1
+
     # fake a scenario where the fmax of the simulation is negative?
     class MockSim:
         frequency_range = (-2, -1)
+        monitors = ()
         _cached_properties = {}
 
     m = MockSim()
@@ -1697,3 +1766,67 @@ def test_allow_gain():
     assert not sim.allow_gain
     sim = sim.updated_copy(structures=[struct_gain])
     assert sim.allow_gain
+
+
+def test_perturbed_mediums_copy():
+
+    # Non-dispersive
+    pp_real = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(
+            coeff=-0.01,
+            temperature_ref=300,
+            temperature_range=(200, 500),
+        ),
+    )
+
+    pp_complex = td.ParameterPerturbation(
+        heat=td.LinearHeatPerturbation(
+            coeff=0.01j,
+            temperature_ref=300,
+            temperature_range=(200, 500),
+        ),
+        charge=td.LinearChargePerturbation(
+            electron_coeff=-1e-21,
+            electron_ref=0,
+            electron_range=(0, 1e20),
+            hole_coeff=-2e-21,
+            hole_ref=0,
+            hole_range=(0, 0.5e20),
+        ),
+    )
+
+    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+
+    pmed1 = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_real)
+
+    pmed2 = td.PerturbationPoleResidue(
+        poles=[(1j, 3), (2j, 4)],
+        poles_perturbation=[(None, pp_real), (pp_complex, None)],
+    )
+
+    struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=pmed2)
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        run_time=1e-12,
+        medium=pmed1,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        structures=[struct],
+    )
+
+    # no perturbations provided -> regular mediums
+    new_sim = sim.perturbed_mediums_copy()
+
+    assert isinstance(new_sim.medium, td.Medium)
+    assert isinstance(new_sim.structures[0].medium, td.PoleResidue)
+
+    # perturbations provided -> custom mediums
+    new_sim = sim.perturbed_mediums_copy(temperature)
+    new_sim = sim.perturbed_mediums_copy(temperature, None, hole_density)
+    new_sim = sim.perturbed_mediums_copy(temperature, electron_density, hole_density)
+
+    assert isinstance(new_sim.medium, td.CustomMedium)
+    assert isinstance(new_sim.structures[0].medium, td.CustomPoleResidue)

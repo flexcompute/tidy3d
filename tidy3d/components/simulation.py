@@ -1,6 +1,7 @@
 # pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
+
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
@@ -14,22 +15,24 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry
+from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder, GeometryGroup
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
-from .medium import AnisotropicMedium, FullyAnisotropicMedium
+from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource
+from .source import CustomCurrentSource, CustomSourceTime
 from .source import TFSF, Source
-from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
+from .monitor import MonitorType, Monitor, FreqMonitor
+from .monitor import SurfaceIntegrationMonitor, PermittivityMonitor
 from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
+from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 
 from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
@@ -67,6 +70,10 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = 0.02
+
+# allow some numerical flexibility before warning about CustomSourceTime
+# in units of dt
+CUSTOMSOURCETIME_TOL = 1.1
 
 
 class Simulation(Box):  # pylint:disable=too-many-public-methods
@@ -133,6 +140,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         Medium(),
         title="Background Medium",
         description="Background medium of simulation, defaults to vacuum if not specified.",
+        discriminator=TYPE_TAG_STR,
     )
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
@@ -839,6 +847,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """Call validators taking z`self` that get run after init."""
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
+        self._validate_customsourcetime()
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -908,6 +917,34 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                             f"axis, '{'xyz'[source.injection_axis]}'."
                         )
 
+    def _validate_customsourcetime(self) -> None:
+        """Make sure custom source time is not undersampled.
+        Also, make sure that all simulation.tmesh values are covered."""
+        for source in self.sources:
+            if isinstance(source.source_time, CustomSourceTime):
+                dataset = source.source_time.source_time_dataset
+                if dataset is None:
+                    continue
+                times = dataset.values.coords["t"].values
+                if (
+                    min(times) > self.tmesh[0]
+                    or max(times) < self.tmesh[-1] - CUSTOMSOURCETIME_TOL * self.dt
+                ):
+                    raise ValidationError(
+                        "'CustomSourceTime' found with time coordinates "
+                        "'times' that do not cover the entire 'Simulation.tmesh'. Currently, "
+                        f"'(min(times), max(times)) = ({min(times)}, {max(times)})', while "
+                        f"'(min(tmesh), max(tmesh)) = ({self.tmesh[0]}, {self.tmesh[-1]}).' "
+                    )
+                max_dt = np.amax(np.diff(times))
+                if max_dt > self.dt * CUSTOMSOURCETIME_TOL:
+                    log.warning(
+                        f"'CustomSourceTime' found with time step 'max(dt) = {max_dt:.3g}', "
+                        f"while the simulation time step is 'dt={self.dt}'. "
+                        "We recommend that the largest time step of the custom source "
+                        f"be smaller than the time step of the simulation."
+                    )
+
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self, source_required: bool = True) -> None:
@@ -959,24 +996,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     def _validate_monitor_size(self) -> None:
         """Ensures the monitors arent storing too much data before simulation is uploaded."""
 
-        tmesh = self.tmesh
-        grid = self.grid
-
         total_size_gb = 0
         with log as consolidated_logger:
-            for monitor in self.monitors:
-                monitor_inds = grid.discretize_inds(monitor, extend=True)
-                num_cells = [inds[1] - inds[0] for inds in monitor_inds]
-                # take monitor downsampling into account
-                if isinstance(monitor, AbstractFieldMonitor):
-                    num_cells = monitor.downsampled_num_cells(num_cells)
-                num_cells = np.prod(num_cells)
-                monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            datas = self.monitors_data_size
+            for monitor_name, monitor_size in datas.items():
                 monitor_size_gb = monitor_size / 2**30
-
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
-                        f"Monitor '{monitor.name}' estimated storage is {monitor_size_gb:1.2f}GB. "
+                        f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
                         "Consider making it smaller, using fewer frequencies, or spatial or "
                         "temporal downsampling using 'interval_space' and 'interval', respectively."
                     )
@@ -988,6 +1015,25 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
+
+    @cached_property
+    def monitors_data_size(self) -> Dict[str, float]:
+        """Dictionary mapping monitor names to their estimated storage size in bytes."""
+        tmesh = self.tmesh
+        grid = self.grid
+        data_size = {}
+        for monitor in self.monitors:
+            name = monitor.name
+            monitor_inds = grid.discretize_inds(monitor, extend=True)
+            num_cells = [inds[1] - inds[0] for inds in monitor_inds]
+            # take monitor downsampling into account
+            if isinstance(monitor, AbstractFieldMonitor):
+                num_cells = monitor.downsampled_num_cells(num_cells)
+            num_cells = np.prod(num_cells)
+            monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            data_size[name] = float(monitor_size)
+
+        return data_size
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
@@ -1593,8 +1639,9 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             for medium in medium_list
             if not isinstance(medium, AbstractCustomMedium)
         ]
-        eps_min = min(1, min(eps_list))
-        eps_max = max(1, max(eps_list))
+        eps_list.append(1)
+        eps_min = min(eps_list)
+        eps_max = max(eps_list)
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
@@ -2430,9 +2477,17 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return (freq_min, freq_max)
 
-    def plot_3d(self) -> None:
-        """Render 3D plot of ``Simulation`` (in jupyter notebook only)."""
-        return plot_sim_3d(self)
+    def plot_3d(self, width=800, height=800) -> None:
+        """Render 3D plot of ``Simulation`` (in jupyter notebook only).
+        Parameters
+        ----------
+        width : float = 800
+            width of the 3d view dom's size
+        height : float = 800
+            height of the 3d view dom's size
+
+        """
+        return plot_sim_3d(self, width=width, height=height)
 
     """ Discretization """
 
@@ -2600,9 +2655,23 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         int
             The largest ``N`` such that ``N * self.dt`` is below the Nyquist limit.
         """
-        freq_range = self.frequency_range
-        if freq_range[1] > 0:
-            nyquist_step = int(1 / (2 * freq_range[1]) / self.dt) - 1
+
+        # source frequency upper bound
+        freq_source_max = self.frequency_range[1]
+        # monitor frequency upper bound
+        freq_monitor_max = max(
+            (
+                monitor.frequency_range[1]
+                for monitor in self.monitors
+                if isinstance(monitor, FreqMonitor) and not isinstance(monitor, PermittivityMonitor)
+            ),
+            default=0.0,
+        )
+        # combined frequency upper bound
+        freq_max = max(freq_source_max, freq_monitor_max)
+
+        if freq_max > 0:
+            nyquist_step = int(1 / (2 * freq_max) / self.dt) - 1
             nyquist_step = max(1, nyquist_step)
         else:
             nyquist_step = 1
@@ -2848,6 +2917,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
+        datasets_source_time = [
+            src.source_time.source_time_dataset
+            for src in self.sources
+            if isinstance(src.source_time, CustomSourceTime)
+        ]
         datasets_field_source = [
             src.field_dataset for src in self.sources if isinstance(src, CustomFieldSource)
         ]
@@ -2855,12 +2929,22 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
         ]
         datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
-        datasets_geometry = [
-            struct.geometry.mesh_dataset
-            for struct in self.structures
-            if isinstance(struct.geometry, TriangleMesh)
-        ]
-        return datasets_field_source + datasets_current_source + datasets_medium + datasets_geometry
+        datasets_geometry = []
+
+        for struct in self.structures:
+            if isinstance(struct.geometry, TriangleMesh):
+                datasets_geometry += struct.geometry.mesh_dataset
+            elif isinstance(struct.geometry, GeometryGroup):
+                for geometry in struct.geometry.geometries:
+                    datasets_geometry += geometry.mesh_dataset
+
+        return (
+            datasets_source_time
+            + datasets_field_source
+            + datasets_current_source
+            + datasets_medium
+            + datasets_geometry
+        )
 
     def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
@@ -2988,3 +3072,97 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             elif medium.allow_gain:
                 return True
         return False
+
+    def perturbed_mediums_copy(
+        self,
+        temperature: SpatialDataArray = None,
+        electron_density: SpatialDataArray = None,
+        hole_density: SpatialDataArray = None,
+    ) -> Simulation:
+        """Return a copy of the simulation with heat and/or charge data applied to all mediums
+        that have perturbation models specified. That is, such mediums will be replaced with
+        spatially dependent custom mediums that reflect perturbation effects. Any of temperature,
+        electron_density, and hole_density can be ``None``. All provided fields must have identical
+        coords.
+
+        Parameters
+        ----------
+        temperature : SpatialDataArray = None
+            Temperature field data.
+        electron_density : SpatialDataArray = None
+            Electron density field data.
+        hole_density : SpatialDataArray = None
+            Hole density field data.
+
+        Returns
+        -------
+        Simulation
+            Simulation after application of heat and/or charge data.
+        """
+
+        sim_dict = self.dict()
+        structures = self.structures
+        sim_bounds = self.bounds_pml
+        array_dict = {
+            "temperature": temperature,
+            "electron_density": electron_density,
+            "hole_density": hole_density,
+        }
+
+        # For each structure made of mediums with perturbation models, convert those mediums into
+        # spatially dependent mediums by selecting minimal amount of heat and charge data points
+        # covering the structure, and create a new structure containing the resulting custom medium
+        new_structures = []
+        for s_ind, structure in enumerate(structures):
+            med = structure.medium
+            if isinstance(med, AbstractPerturbationMedium):
+                # get structure's bounding box
+                s_bounds = structure.geometry.bounds
+
+                bounds = [
+                    np.max([sim_bounds[0], s_bounds[0]], axis=0),
+                    np.min([sim_bounds[1], s_bounds[1]], axis=0),
+                ]
+
+                # for each structure select a minimal subset of data that covers it
+                restricted_arrays = {}
+
+                for name, array in array_dict.items():
+                    if array is not None:
+                        restricted_arrays[name] = array.sel_inside(bounds)
+
+                        # check provided data fully cover structure
+                        if not array.does_cover(bounds):
+                            log.warning(
+                                f"Provided '{name}' does not fully cover structures[{s_ind}]."
+                            )
+
+                new_medium = med.perturbed_copy(**restricted_arrays)
+                new_structure = structure.updated_copy(medium=new_medium)
+                new_structures.append(new_structure)
+            else:
+                new_structures.append(structure)
+
+        sim_dict["structures"] = new_structures
+
+        # do the same for background medium if it a medium with perturbation models.
+        med = self.medium
+        if isinstance(med, AbstractPerturbationMedium):
+
+            # get simulation's bounding box
+            bounds = sim_bounds
+
+            # for each structure select a minimal subset of data that covers it
+            restricted_arrays = {}
+
+            for name, array in array_dict.items():
+                if array is not None:
+                    restricted_arrays[name] = array.sel_inside(bounds)
+
+                    # check provided data fully cover simulation
+                    if not array.does_cover(bounds):
+                        log.warning(f"Provided '{name}' does not fully cover simulation domain.")
+
+            sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
+
+        return Simulation.parse_obj(sim_dict)

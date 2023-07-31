@@ -254,6 +254,7 @@ class DispersionFitter(Tidy3dBaseModel):
         num_poles: int = 1,
         num_tries: int = 50,
         tolerance_rms: float = 1e-2,
+        guess: PoleResidue = None,
     ) -> Tuple[PoleResidue, float]:
         """Fit data a number of times and returns best results.
 
@@ -262,9 +263,12 @@ class DispersionFitter(Tidy3dBaseModel):
         num_poles : int, optional
             Number of poles in the model.
         num_tries : int, optional
-            Number of optimizations to run with random initial guess.
+            Number of optimizations to run with different initial guesses.
         tolerance_rms : float, optional
             RMS error below which the fit is successful and the result is returned.
+        guess : :class:`.PoleResidue` = None
+            A :class:`.PoleResidue` medium to use as the initial guess in the first optimization
+            run.
 
         Returns
         -------
@@ -284,7 +288,11 @@ class DispersionFitter(Tidy3dBaseModel):
 
             while not progress.finished:
 
-                medium, rms_error = self._fit_single(num_poles=num_poles)
+                # if guess is provided use it in the first optimization run
+                if guess is not None and progress.tasks[0].completed == 0:
+                    medium, rms_error = self._fit_single(num_poles=num_poles, guess=guess)
+                else:
+                    medium, rms_error = self._fit_single(num_poles=num_poles)
 
                 # if improvement, set the best RMS and coeffs
                 if rms_error < best_rms:
@@ -333,6 +341,7 @@ class DispersionFitter(Tidy3dBaseModel):
     def _fit_single(
         self,
         num_poles: int = 3,
+        guess: PoleResidue = None,
     ) -> Tuple[PoleResidue, float]:
         """Perform a single fit to the data and return optimization result.
 
@@ -340,6 +349,8 @@ class DispersionFitter(Tidy3dBaseModel):
         ----------
         num_poles : int = 3
             Number of poles in the model.
+        guess : :class:`.PoleResidue` = None
+            A PoleResidue object to use a guess instead of a random one.
 
         Returns
         -------
@@ -399,7 +410,18 @@ class DispersionFitter(Tidy3dBaseModel):
 
         # set initial guess
         num_coeffs = num_poles * 4
-        coeffs0 = 2 * (np.random.random(num_coeffs) - 0.5)
+
+        if guess is not None:
+            if len(guess.poles) != num_poles:
+                raise ValueError(
+                    f"The number of poles ({len(guess.poles)}) in provided guess 'PoleResidue' "
+                    f"medium does not match argument 'num_poles' = {num_poles})"
+                )
+
+            coeffs0 = self._poles_to_coeffs(guess.poles)
+
+        else:
+            coeffs0 = 2 * (np.random.random(num_coeffs) - 0.5)
 
         # set bounds
         bounds_upper = np.zeros(num_coeffs, dtype=float)

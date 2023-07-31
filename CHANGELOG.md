@@ -9,8 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Added bound capabilities to `Simulation.plot()` and `Simulation.plot_eps()`
+
 ### Fixed
 
+- `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
+
+### Fixed
+
+## [2.4.0rc1] - 2023-7-27
+
+### Added
+- Configuration option `config.log_suppression` can be used to control the suppression of log messages.
+- `web.abort()` and `Job.abort()` methods allowing user to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
+- `FastDispersionFitter` for fast fitting of material dispersion data.
+- `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
+- Source with arbitrary user-specified time dependence through `CustomSourceTime`.
+- Interface for specifying material heat and charge perturbation models. 
+Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
+where perturbations to each parameter is specified using class `ParameterPerturbation`.
+A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
+
+
+### Changed
+- Add `width` and `height` options to `Simulation.plot_3d()`.
+- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its `Simulation` with an added `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor`, respectively.
+
+### Fixed
+- Handles `TIDY3D_ENV` properly when set to `prod`.
+- Redundant phase compensation for shifted source in smatrix plugin.
 ## [2.3.3] - 2023-07-28
 
 ### Added
@@ -28,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Surface integration monitor validator changed to error only if *all* integration surfaces are outside of the simulation domain.
+- Inverse design convenience utilities in `plugins.adjoint.utils` for image filtering (`ConicFilter`), projection (`BinaryProjector`), and radius of curvature penalization (`RadiusPenalty`).
 
 ### Fixed
 - Properly handle sign flip in `ModeMonitor` outputs with `direction="-"` in adjoint plugin.
@@ -864,6 +892,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...pre/2.4
+[2.4.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.4.0rc1
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...develop
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2

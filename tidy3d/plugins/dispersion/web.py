@@ -353,11 +353,12 @@ class StableDispersionFitter(DispersionFitter):
         )
         return values
 
-    def fit(  # pylint:disable=arguments-differ, too-many-locals
+    def fit(  # pylint:disable=arguments-differ, too-many-locals, too-many-arguments
         self,
         num_poles: PositiveInt = 1,
         num_tries: PositiveInt = 50,
         tolerance_rms: NonNegativeFloat = 1e-2,
+        guess: PoleResidue = None,
         advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
     ) -> Tuple[PoleResidue, float]:
         """Deprecated."""

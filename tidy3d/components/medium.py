@@ -19,12 +19,13 @@ from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
 from .geometry import Geometry
-from .validators import validate_name_str
+from .validators import validate_name_str, validate_parameter_perturbation
 from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
+from .parameter_perturbation import ParameterPerturbation
 
 
 # evaluate frequency as this number (Hz) if inf
@@ -2927,7 +2928,266 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     )
 
 
+""" Medium perturbation classes """
+
+
+class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
+    """Abstract class for medium perturbation."""
+
+    subpixel: bool = pd.Field(
+        True,
+        title="Subpixel averaging",
+        description="This value will be transferred to the resulting custom medium. That is, "
+        "if ``True``, the subpixel averaging will be applied to the custom medium provided "
+        "the corresponding ``Simulation``'s field ``subpixel`` is set to ``True`` as well. "
+        "If the resulting medium is not a custom medium (no perturbations), this field does not "
+        "have an effect.",
+    )
+
+    @abstractmethod
+    def perturbed_copy(
+        self,
+        temperature: SpatialDataArray = None,
+        electron_density: SpatialDataArray = None,
+        hole_density: SpatialDataArray = None,
+    ) -> Union[AbstractMedium, AbstractCustomMedium]:
+        """Sample perturbations on provided heat and/or charge data and create a custom medium.
+        Any of ``temperature``, ``electron_density``, and ``hole_density`` can be ``None``.
+        If all passed arguments are ``None`` then a non-custom medium is returned.
+        All provided fields must have identical coords.
+
+        Parameters
+        ----------
+        temperature : SpatialDataArray = None
+            Temperature field data.
+        electron_density : SpatialDataArray = None
+            Electron density field data.
+        hole_density : SpatialDataArray = None
+            Hole density field data.
+
+        Returns
+        -------
+        Union[AbstractMedium, AbstractCustomMedium]
+            Medium specification after application of heat and/or charge data.
+        """
+
+
+class PerturbationMedium(Medium, AbstractPerturbationMedium):
+    """Dispersionless medium with perturbations.
+
+    Example
+    -------
+    >>> from tidy3d import ParameterPerturbation, LinearHeatPerturbation
+    >>> dielectric = PerturbationMedium(
+    ...     permittivity=4.0,
+    ...     permittivity_perturbation=ParameterPerturbation(
+    ...         heat=LinearHeatPerturbation(temperature_ref=300, coeff=0.0001),
+    ...     ),
+    ...     name='my_medium',
+    ... )
+    """
+
+    permittivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Permittivity Perturbation",
+        description="List of heat and/or charge perturbations to permittivity.",
+        units=PERMITTIVITY,
+    )
+
+    conductivity_perturbation: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Permittivity Perturbation",
+        description="List of heat and/or charge perturbations to permittivity.",
+        units=CONDUCTIVITY,
+    )
+
+    _permittivity_perturbation_validator = validate_parameter_perturbation(
+        "permittivity_perturbation",
+        "permittivity",
+        allowed_real_range=[(1.0, None)],
+        allowed_imag_range=[None],
+        allowed_complex=False,
+    )
+
+    _conductivity_perturbation_validator = validate_parameter_perturbation(
+        "conductivity_perturbation",
+        "conductivity",
+        allowed_real_range=[(0.0, None)],
+        allowed_imag_range=[None],
+        allowed_complex=False,
+    )
+
+    def perturbed_copy(
+        self,
+        temperature: SpatialDataArray = None,
+        electron_density: SpatialDataArray = None,
+        hole_density: SpatialDataArray = None,
+    ) -> Union[Medium, CustomMedium]:
+        """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
+        Any of temperature, electron_density, and hole_density can be 'None'. If all passed
+        arguments are 'None' then a 'Medium' object is returned. All provided fields must have
+        identical coords.
+
+        Parameters
+        ----------
+        temperature : SpatialDataArray = None
+            Temperature field data.
+        electron_density : SpatialDataArray = None
+            Electron density field data.
+        hole_density : SpatialDataArray = None
+            Hole density field data.
+
+        Returns
+        -------
+        Union[Medium, CustomMedium]
+            Medium specification after application of heat and/or charge data.
+        """
+
+        new_dict = self.dict(
+            exclude={"permittivity_perturbation", "conductivity_perturbation", "type"}
+        )
+
+        if all(x is None for x in [temperature, electron_density, hole_density]):
+            new_dict.pop("subpixel")
+            return Medium.parse_obj(new_dict)
+
+        # pylint:disable=protected-access
+        permittivity_field = self.permittivity + ParameterPerturbation._zeros_like(
+            temperature, electron_density, hole_density
+        )
+
+        if self.permittivity_perturbation is not None:
+            permittivity_field += self.permittivity_perturbation.apply_data(
+                temperature, electron_density, hole_density
+            )
+
+        conductivity_field = None
+        if self.conductivity_perturbation is not None:
+            conductivity_field = self.conductivity + self.conductivity_perturbation.apply_data(
+                temperature, electron_density, hole_density
+            )
+
+        new_dict["permittivity"] = permittivity_field
+        new_dict["conductivity"] = conductivity_field
+
+        return CustomMedium.parse_obj(new_dict)
+
+
+class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
+    """A dispersive medium described by the pole-residue pair model with perturbations.
+    The frequency-dependence of the complex-valued permittivity is described by:
+
+    Note
+    ----
+    .. math::
+
+        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+        \\left[\\frac{c_i}{j \\omega + a_i} +
+        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+
+    Example
+    -------
+    >>> from tidy3d import ParameterPerturbation, LinearHeatPerturbation
+    >>> c0_perturbation = ParameterPerturbation(
+    ...     heat=LinearHeatPerturbation(temperature_ref=300, coeff=0.0001),
+    ... )
+    >>> pole_res = PerturbationPoleResidue(
+    ...     eps_inf=2.0,
+    ...     poles=[((-1+2j), (3+4j)), ((-5+6j), (7+8j))],
+    ...     poles_perturbation=[(None, c0_perturbation), (None, None)],
+    ... )
+    """
+
+    eps_inf_perturbation: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Perturbation of Epsilon at Infinity",
+        description="Perturbations to relative permittivity at infinite frequency "
+        "(:math:`\\epsilon_\\infty`).",
+        units=PERMITTIVITY,
+    )
+
+    poles_perturbation: Tuple[
+        Tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...
+    ] = pd.Field(
+        (),
+        title="Perturbations of Poles",
+        description="Perturbations to poles of the model.",
+        units=(RADPERSEC, RADPERSEC),
+    )
+
+    _eps_inf_perturbation_validator = validate_parameter_perturbation(
+        "eps_inf_perturbation",
+        "eps_inf",
+        allowed_real_range=[(0.0, None)],
+        allowed_imag_range=[None],
+        allowed_complex=False,
+    )
+    _poles_perturbation_validator = validate_parameter_perturbation(
+        "poles_perturbation",
+        "poles",
+        allowed_real_range=[(None, 0.0), (None, None)],
+        allowed_imag_range=[None, None],
+    )
+
+    def perturbed_copy(
+        self,
+        temperature: SpatialDataArray = None,
+        electron_density: SpatialDataArray = None,
+        hole_density: SpatialDataArray = None,
+    ) -> Union[PoleResidue, CustomPoleResidue]:
+        """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
+        Any of temperature, electron_density, and hole_density can be 'None'. If all passed
+        arguments are 'None' then a 'PoleResidue' object is returned. All provided fields must have
+        identical coords.
+
+        Parameters
+        ----------
+        temperature : SpatialDataArray = None
+            Temperature field data.
+        electron_density : SpatialDataArray = None
+            Electron density field data.
+        hole_density : SpatialDataArray = None
+            Hole density field data.
+
+        Returns
+        -------
+        Union[PoleResidue, CustomPoleResidue]
+            Medium specification after application of heat and/or charge data.
+        """
+
+        new_dict = self.dict(exclude={"eps_inf_perturbation", "poles_perturbation", "type"})
+
+        if all(x is None for x in [temperature, electron_density, hole_density]):
+            new_dict.pop("subpixel")
+            return PoleResidue.parse_obj(new_dict)
+
+        # pylint:disable=protected-access
+        zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
+
+        # sample eps_inf
+        eps_inf_field = self.eps_inf + zeros
+
+        if self.eps_inf_perturbation is not None:
+            eps_inf_field += self.eps_inf_perturbation.apply_data(
+                temperature, electron_density, hole_density
+            )
+
+        # sample poles
+        poles_field = [[a + zeros, c + zeros] for a, c in self.poles]
+        for (a_perturb, c_perturb), (a_field, c_field) in zip(self.poles_perturbation, poles_field):
+            if a_perturb is not None:
+                a_field += a_perturb.apply_data(temperature, electron_density, hole_density)
+            if c_perturb is not None:
+                c_field += c_perturb.apply_data(temperature, electron_density, hole_density)
+
+        new_dict["eps_inf"] = eps_inf_field
+        new_dict["poles"] = poles_field
+
+        return CustomPoleResidue.parse_obj(new_dict)
+
+
 # types of mediums that can be used in Simulation and Structures
+
 
 MediumType3D = Union[
     Medium,
@@ -2946,6 +3206,8 @@ MediumType3D = Union[
     CustomDebye,
     CustomDrude,
     CustomAnisotropicMedium,
+    PerturbationMedium,
+    PerturbationPoleResidue,
 ]
 
 

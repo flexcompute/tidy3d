@@ -1,6 +1,10 @@
 {
   "title": "Simulation",
+<<<<<<< HEAD
   "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium] = Medium(name=None, frequency_range=None, allow_gain=False, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.CustomCurrentSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.3.3\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+=======
+  "description": "Contains all information about Tidy3d simulation.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium] = Medium(name=None, frequency_range=None, allow_gain=False, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.CustomCurrentSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 so explicitly setting the boundaries is recommended.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nversion : str = 2.4.0rc1\n    String specifying the front end version number.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1.5e14, 2e14], name='point'),\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )",
+>>>>>>> 1e305d4d3b27cc42878edb08af9db414cd24c670
   "type": "object",
   "properties": {
     "type": {
@@ -478,7 +482,11 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
+<<<<<<< HEAD
       "default": "2.3.3",
+=======
+      "default": "2.4.0rc1",
+>>>>>>> 1e305d4d3b27cc42878edb08af9db414cd24c670
       "type": "string"
     }
   },
@@ -3013,9 +3021,107 @@
       ],
       "additionalProperties": false
     },
+    "TimeDataset": {
+      "title": "TimeDataset",
+      "description": "Dataset for storing a function of time.\n\nParameters\n----------\nvalues : TimeDataArray\n    Values as a function of time.",
+      "type": "object",
+      "properties": {
+        "type": {
+          "title": "Type",
+          "default": "TimeDataset",
+          "enum": [
+            "TimeDataset"
+          ],
+          "type": "string"
+        },
+        "values": {
+          "title": "DataArray",
+          "description": "Values as a function of time.",
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
+            }
+          },
+          "required": [
+            "_dims"
+          ]
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "additionalProperties": false
+    },
+    "CustomSourceTime": {
+      "title": "CustomSourceTime",
+      "description": "Custom source time dependence, real or complex valued.\n\nParameters\n----------\namplitude : NonNegativeFloat = 1.0\n    Real-valued maximum amplitude of the time dependence.\nphase : float = 0.0\n    [units = rad].  Phase shift of the time dependence.\nfreq0 : PositiveFloat\n    [units = Hz].  Central frequency of the pulse.\nfwidth : PositiveFloat\n    [units = Hz].  Standard deviation of the frequency content of the pulse.\noffset : ConstrainedFloatValue = 5.0\n    Time delay of the maximum value of the pulse in units of 1 / (``2pi * fwidth``).\nsource_time_dataset : Optional[TimeDataset]\n    Dataset for storing the custom source time.\n\nNote\n----\nThe source time dependence is linearly interpolated to the simulation time steps.\nTo ensure that this interpolation does not introduce artifacts, it is necessary\nto use a sampling rate that is sufficiently fast relative to the simulation time step.\n\nExample\n-------\n>>> cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1,\n>>>     values=np.linspace(0, 9, 10), dt=0.1)",
+      "type": "object",
+      "properties": {
+        "amplitude": {
+          "title": "Amplitude",
+          "description": "Real-valued maximum amplitude of the time dependence.",
+          "default": 1.0,
+          "minimum": 0,
+          "type": "number"
+        },
+        "phase": {
+          "title": "Phase",
+          "description": "Phase shift of the time dependence.",
+          "default": 0.0,
+          "units": "rad",
+          "type": "number"
+        },
+        "type": {
+          "title": "Type",
+          "default": "CustomSourceTime",
+          "enum": [
+            "CustomSourceTime"
+          ],
+          "type": "string"
+        },
+        "freq0": {
+          "title": "Central Frequency",
+          "description": "Central frequency of the pulse.",
+          "units": "Hz",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "fwidth": {
+          "title": "Fwidth",
+          "description": "Standard deviation of the frequency content of the pulse.",
+          "units": "Hz",
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        "offset": {
+          "title": "Offset",
+          "description": "Time delay of the maximum value of the pulse in units of 1 / (``2pi * fwidth``).",
+          "default": 5.0,
+          "minimum": 2.5,
+          "type": "number"
+        },
+        "source_time_dataset": {
+          "title": "Source time dataset",
+          "description": "Dataset for storing the custom source time.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TimeDataset"
+            }
+          ]
+        }
+      },
+      "required": [
+        "freq0",
+        "fwidth",
+        "source_time_dataset"
+      ],
+      "additionalProperties": false
+    },
     "UniformCurrentSource": {
       "title": "UniformCurrentSource",
-      "description": "Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
+      "description": "Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
       "type": "object",
       "properties": {
         "type": {
@@ -3081,6 +3187,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -3118,7 +3227,7 @@
     },
     "PointDipole": {
       "title": "PointDipole",
-      "description": "Uniform current source with a zero size.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')",
+      "description": "Uniform current source with a zero size.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')",
       "type": "object",
       "properties": {
         "type": {
@@ -3195,6 +3304,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -3231,7 +3343,7 @@
     },
     "GaussianBeam": {
       "title": "GaussianBeam",
-      "description": "Guassian distribution on finite extent plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\nwaist_radius : PositiveFloat = 1.0\n    [units = um].  Radius of the beam at the waist.\nwaist_distance : float = 0.0\n    [units = um].  Distance from the beam waist along the propagation direction.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> gauss = GaussianBeam(\n...     size=(0,3,3),\n...     source_time=pulse,\n...     pol_angle=np.pi / 2,\n...     direction='+',\n...     waist_radius=1.0)",
+      "description": "Guassian distribution on finite extent plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\nwaist_radius : PositiveFloat = 1.0\n    [units = um].  Radius of the beam at the waist.\nwaist_distance : float = 0.0\n    [units = um].  Distance from the beam waist along the propagation direction.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> gauss = GaussianBeam(\n...     size=(0,3,3),\n...     source_time=pulse,\n...     pol_angle=np.pi / 2,\n...     direction='+',\n...     waist_radius=1.0)",
       "type": "object",
       "properties": {
         "type": {
@@ -3297,6 +3409,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -3368,7 +3483,7 @@
     },
     "AstigmaticGaussianBeam": {
       "title": "AstigmaticGaussianBeam",
-      "description": "This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,\nApplied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows\nboth an elliptical intensity profile and different waist locations for the two principal axes\nof the ellipse. When equal waist sizes and equal waist distances are specified in the two\ndirections, this source becomes equivalent to :class:`GaussianBeam`.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\nwaist_sizes : Tuple[PositiveFloat, PositiveFloat] = (1.0, 1.0)\n    [units = um].  Size of the beam at the waist in the local x and y directions.\nwaist_distances : Tuple[float, float] = (0.0, 0.0)\n    [units = um].  Distance to the beam waist along the propagation direction for the waist sizes in the local x and y directions.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> gauss = AstigmaticGaussianBeam(\n...     size=(0,3,3),\n...     source_time=pulse,\n...     pol_angle=np.pi / 2,\n...     direction='+',\n...     waist_sizes=(1.0, 2.0),\n...     waist_distances = (3.0, 4.0))",
+      "description": "This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,\nApplied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows\nboth an elliptical intensity profile and different waist locations for the two principal axes\nof the ellipse. When equal waist sizes and equal waist distances are specified in the two\ndirections, this source becomes equivalent to :class:`GaussianBeam`.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\nwaist_sizes : Tuple[PositiveFloat, PositiveFloat] = (1.0, 1.0)\n    [units = um].  Size of the beam at the waist in the local x and y directions.\nwaist_distances : Tuple[float, float] = (0.0, 0.0)\n    [units = um].  Distance to the beam waist along the propagation direction for the waist sizes in the local x and y directions.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> gauss = AstigmaticGaussianBeam(\n...     size=(0,3,3),\n...     source_time=pulse,\n...     pol_angle=np.pi / 2,\n...     direction='+',\n...     waist_sizes=(1.0, 2.0),\n...     waist_distances = (3.0, 4.0))",
       "type": "object",
       "properties": {
         "type": {
@@ -3434,6 +3549,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -3655,7 +3773,7 @@
     },
     "ModeSource": {
       "title": "ModeSource",
-      "description": "Injects current source to excite modal profile on finite extent plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nmode_spec : ModeSpec = ModeSpec(num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='single', bend_radius=None, bend_axis=None, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters to feed to mode solver which determine modes measured by monitor.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver.  Specifies which mode to inject using this source. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> mode_spec = ModeSpec(target_neff=2.)\n>>> mode_source = ModeSource(\n...     size=(10,10,0),\n...     source_time=pulse,\n...     mode_spec=mode_spec,\n...     mode_index=1,\n...     direction='-')",
+      "description": "Injects current source to excite modal profile on finite extent plane.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nnum_freqs : ConstrainedIntValue = 1\n    Number of points used to approximate the frequency dependence of injected field. A Chebyshev interpolation is used, thus, only a small number of points, i.e., less than 20, is typically sufficient to obtain converged results.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nmode_spec : ModeSpec = ModeSpec(num_modes=1, target_neff=None, num_pml=(0,, 0), filter_pol=None, angle_theta=0.0, angle_phi=0.0, precision='single', bend_radius=None, bend_axis=None, track_freq='central', group_index_step=False, type='ModeSpec')\n    Parameters to feed to mode solver which determine modes measured by monitor.\nmode_index : NonNegativeInt = 0\n    Index into the collection of modes returned by mode solver.  Specifies which mode to inject using this source. If larger than ``mode_spec.num_modes``, ``num_modes`` in the solver will be set to ``mode_index + 1``.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> mode_spec = ModeSpec(target_neff=2.)\n>>> mode_source = ModeSource(\n...     size=(10,10,0),\n...     source_time=pulse,\n...     mode_spec=mode_spec,\n...     mode_index=1,\n...     direction='-')",
       "type": "object",
       "properties": {
         "type": {
@@ -3721,6 +3839,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -3789,7 +3910,7 @@
     },
     "PlaneWave": {
       "title": "PlaneWave",
-      "description": "Uniform current distribution on an infinite extent plane. One element of size must be zero.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')",
+      "description": "Uniform current distribution on an infinite extent plane. One element of size must be zero.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')",
       "type": "object",
       "properties": {
         "type": {
@@ -3855,6 +3976,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -4003,7 +4127,7 @@
     },
     "CustomFieldSource": {
       "title": "CustomFieldSource",
-      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,\nusing the equivalence principle to define the actual injected currents. For the injection to\nwork as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must\ndecay by the edges of the source plane, or the source plane must span the entire simulation\ndomain and the fields must match the simulation boundary conditions.\nThe equivalent source currents are fully defined by the field components tangential to the\nsource plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)\ncan be provided but will have no effect on the results, and at least one of the tangential\ncomponents has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nfield_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain fields patterns to inject. At least one tangetial field component must be specified.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomFieldSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     field_dataset=dataset)",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,\nusing the equivalence principle to define the actual injected currents. For the injection to\nwork as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must\ndecay by the edges of the source plane, or the source plane must span the entire simulation\ndomain and the fields must match the simulation boundary conditions.\nThe equivalent source currents are fully defined by the field components tangential to the\nsource plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)\ncan be provided but will have no effect on the results, and at least one of the tangential\ncomponents has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\nfield_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain fields patterns to inject. At least one tangetial field component must be specified.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nNote\n----\n    If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,\n    but will inject equal power in both directions instead.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomFieldSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     field_dataset=dataset)",
       "type": "object",
       "properties": {
         "type": {
@@ -4069,6 +4193,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -4096,7 +4223,7 @@
     },
     "CustomCurrentSource": {
       "title": "CustomCurrentSource",
-      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nInjects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``\ncurrent distributions in the FDTD solver.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\nInjects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``\ncurrent distributions in the FDTD solver.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNote\n----\n    The coordinates of all provided fields are assumed to be relative to the source center.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)",
       "type": "object",
       "properties": {
         "type": {
@@ -4162,6 +4289,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },
@@ -4195,7 +4325,7 @@
     },
     "TFSF": {
       "title": "TFSF",
-      "description": "Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.\nThe TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the\ncase of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,\nand not the propagation direction, unlike a ``PlaneWave`` source. This allows computing\nscattering and absorption cross sections without the need for additional normalization.\n\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
+      "description": "Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.\nThe TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the\ncase of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,\nand not the propagation direction, unlike a ``PlaneWave`` source. This allows computing\nscattering and absorption cross sections without the need for additional normalization.\n\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\nname : Optional[str] = None\n    Optional name for the source.\ndirection : Literal['+', '-']\n    Specifies propagation in the positive or negative direction of the injection axis.\nangle_theta : float = 0.0\n    [units = rad].  Polar angle of the propagation axis from the injection axis.\nangle_phi : float = 0.0\n    [units = rad].  Azimuth angle of the propagation axis in the plane orthogonal to the injection axis.\npol_angle : float = 0\n    [units = rad].  Specifies the angle between the electric field polarization of the source and the plane defined by the injection axis and the propagation axis (rad). ``pol_angle=0`` (default) specifies P polarization, while ``pol_angle=np.pi/2`` specifies S polarization. At normal incidence when S and P are undefined, ``pol_angle=0`` defines: - ``Ey`` polarization for propagation along ``x``.- ``Ex`` polarization for propagation along ``y``.- ``Ex`` polarization for propagation along ``z``.\ninjection_axis : Literal[0, 1, 2]\n    Specifies the injection axis. The plane of incidence is defined via this ``injection_axis`` and the ``direction``. The popagation axis is defined with respect to the ``injection_axis`` by ``angle_theta`` and ``angle_phi``.",
       "type": "object",
       "properties": {
         "type": {
@@ -4261,6 +4391,9 @@
             },
             {
               "$ref": "#/definitions/ContinuousWave"
+            },
+            {
+              "$ref": "#/definitions/CustomSourceTime"
             }
           ]
         },

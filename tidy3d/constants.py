@@ -46,6 +46,8 @@ PML_SIGMA = "2*EPSILON_0/dt"
 RADPERSEC = "rad/sec"
 ELECTRON_VOLT = "eV"
 KELVIN = "K"
+CMCUBE = "cm^3"
+PERCMCUBE = "1/cm^3"
 
 # large number used for comparing infinity
 LARGE_NUMBER = 1e10

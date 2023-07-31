@@ -565,3 +565,17 @@ def test_custom_surface_geometry():
     tetrahedron = trimesh.Trimesh(vertices, faces)
     with pytest.raises(pydantic.ValidationError):
         geom = td.TriangleMesh.from_trimesh(tetrahedron)
+
+    # test trimesh.Scene
+    import_geom = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
+    sim = sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[],
+        structures=[td.Structure(geometry=import_geom, medium=td.Medium(permittivity=2))],
+        monitors=[],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.PML()),
+    )
+    _, ax = plt.subplots()
+    _ = sim.plot(y=0, ax=ax)

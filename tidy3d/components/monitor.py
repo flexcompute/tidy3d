@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray
+from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
 from .geometry import Box
 from .validators import assert_plane
@@ -92,6 +92,17 @@ class FreqMonitor(Monitor, ABC):
         if len(val) == 0:
             raise ValidationError("'freqs' must not be empty.")
         return val
+
+    @cached_property
+    def frequency_range(self) -> FreqBound:
+        """Frequency range of the array ``self.freqs``.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Minimum and maximum frequencies of the frequency array.
+        """
+        return (min(self.freqs), max(self.freqs))
 
 
 class TimeMonitor(Monitor, ABC):

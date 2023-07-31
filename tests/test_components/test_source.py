@@ -13,6 +13,9 @@ ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
 
 
+ATOL = 1e-8
+
+
 def test_plot_source_time():
 
     for val in ("real", "imag", "abs"):
@@ -247,3 +250,46 @@ def test_broadband_source():
             mode_index=0,
             num_freqs=-10,
         )
+
+
+def test_custom_source_time():
+    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    ts = np.linspace(0, 30, 1001)
+    amp_time = g.amp_time(ts)
+
+    # basic test
+    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=amp_time, dt=ts[1] - ts[0])
+    assert np.allclose(cst.amp_time(ts), amp_time, rtol=0, atol=ATOL)
+
+    # test single value validation error
+    with pytest.raises(pydantic.ValidationError):
+        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
+        dataset = td.components.data.dataset.TimeDataset(values=vals)
+        cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=1, fwidth=0.1)
+        assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
+
+    # test interpolation
+    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
+    assert np.allclose(cst.amp_time(0.09), [0.9], rtol=0, atol=ATOL)
+
+    # test sampling warning
+    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
+    source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[source],
+    )
+
+    # test out of range validation error
+    with pytest.raises(td.exceptions.ValidationError):
+        vals = np.cos(sim.tmesh[:-2])
+        cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=vals, dt=sim.dt)
+        source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+        sim = sim.updated_copy(sources=[source])
+
+    vals = np.cos(sim.tmesh[:-1])
+    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=vals, dt=sim.dt)
+    source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+    sim = sim.updated_copy(sources=[source])

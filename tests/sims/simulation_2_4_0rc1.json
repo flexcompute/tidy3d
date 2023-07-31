@@ -657,6 +657,37 @@
                 "permittivity": 5.0,
                 "conductivity": 0.0
             }
+        },
+        {
+            "geometry": {
+                "type": "GeometryGroup",
+                "geometries": [
+                    {
+                        "type": "TriangleMesh",
+                        "mesh_dataset": {
+                            "type": "TriangleMeshDataset",
+                            "surface_mesh": "TriangleMeshDataArray"
+                        }
+                    },
+                    {
+                        "type": "TriangleMesh",
+                        "mesh_dataset": {
+                            "type": "TriangleMeshDataset",
+                            "surface_mesh": "TriangleMeshDataArray"
+                        }
+                    }
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "type": "Medium",
+                "permittivity": 5.0,
+                "conductivity": 0.0
+            }
         }
     ],
     "sources": [
@@ -1780,5 +1811,5 @@
     "subpixel": false,
     "normalize_index": 0,
     "courant": 0.8,
-    "version": "2.3.0"
+    "version": "2.4.0rc1"
 }
