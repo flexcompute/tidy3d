@@ -917,7 +917,11 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     waist_distance: float = pydantic.Field(
         0.0,
         title="Waist Distance",
-        description="Distance from the beam waist along the propagation direction.",
+        description="Distance from the beam waist along the propagation direction. "
+        "When ``direction`` is ``+`` and ``waist_distance`` is positive, the waist "
+        "is on the ``-`` side (behind) the source plane. When ``direction`` is ``+`` and "
+        " ``waist_distance``is negative, the waist is on the ``+`` side (in front) of "
+        "the source plane.",
         units=MICROMETER,
     )
 
@@ -952,7 +956,11 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
-        "for the waist sizes in the local x and y directions.",
+        "for the waist sizes in the local x and y directions. "
+        "When ``direction`` is ``+`` and ``waist_distances`` are positive, the waist "
+        "is on the ``-`` side (behind) the source plane. When ``direction`` is ``+`` and "
+        "``waist_distances`` are negative, the waist is on the ``+`` side (in front) of "
+        "the source plane.",
         units=MICROMETER,
     )
 
