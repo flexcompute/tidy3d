@@ -2759,11 +2759,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         datasets_geometry = []
 
         for struct in self.structures:
-            if isinstance(struct.geometry, TriangleMesh):
-                datasets_geometry += struct.geometry.mesh_dataset
-            elif isinstance(struct.geometry, GeometryGroup):
-                for geometry in struct.geometry.geometries:
-                    datasets_geometry += geometry.mesh_dataset
+            geo = struct.geometry
+            geometries = geo.geometries if isinstance(geo, GeometryGroup) else [geo]
+            for geometry in geometries:
+                if isinstance(geometry, TriangleMesh):
+                    datasets_geometry += [geometry.mesh_dataset]
 
         return (
             datasets_source_time

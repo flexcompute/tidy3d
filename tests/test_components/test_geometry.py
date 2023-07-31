@@ -579,3 +579,23 @@ def test_custom_surface_geometry():
     )
     _, ax = plt.subplots()
     _ = sim.plot(y=0, ax=ax)
+
+
+def test_geo_group_sim():
+
+    geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
+    geos_orig = list(geo_grp.geometries)
+    geo_grp_full = geo_grp.updated_copy(geometries=geos_orig + [td.Box(size=(1, 1, 1))])
+
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[],
+        structures=[td.Structure(geometry=geo_grp_full, medium=td.Medium(permittivity=2))],
+        monitors=[],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(td.PML()),
+    )
+
+    # why is this failing?  assert 4==2
+    assert len(sim.custom_datasets) == len(geos_orig)
