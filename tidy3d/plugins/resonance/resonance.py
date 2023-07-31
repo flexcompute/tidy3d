@@ -316,7 +316,6 @@ class ResonanceFinder(Tidy3dBaseModel):
 
         u_matrices = np.zeros((3, nfreqs, nfreqs), dtype=complex)
         for pval in range(3):
-
             u_matrices[pval, :, :] = prefactor * (
                 np.outer(zvals, zinvl[:, : half_len + 1] @ signal[pval:][: half_len + 1])
                 + np.outer(

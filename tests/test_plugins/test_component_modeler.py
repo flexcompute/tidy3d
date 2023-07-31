@@ -139,7 +139,6 @@ def make_coupler():
 
 
 def make_ports():
-
     sim = make_coupler()
     # source
     src_pos = sim.size[0] / 2 - straight_wg_length / 2
@@ -191,7 +190,6 @@ def make_component_modeler(**kwargs):
 
 
 def run_component_modeler(monkeypatch, modeler: ComponentModeler):
-
     values = dict(
         simulation=modeler.simulation,
         ports=modeler.ports,
@@ -247,7 +245,6 @@ def test_ports_too_close_boundary():
 
 
 def test_validate_batch_supplied():
-
     sim = make_coupler()
     modeler = ComponentModeler(
         simulation=sim, ports=[], freqs=sim.monitors[0].freqs, path_dir=PATH_DIR
@@ -275,10 +272,8 @@ def test_run_component_modeler(monkeypatch):
 
     for port_in in modeler.ports:
         for mode_index_in in range(port_in.mode_spec.num_modes):
-
             for port_out in modeler.ports:
                 for mode_index_out in range(port_out.mode_spec.num_modes):
-
                     coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
                     coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
 
@@ -316,7 +311,6 @@ def test_component_modeler_run_only(monkeypatch):
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), (k, l), mult_by in element_mappings:
-
         (port_out_from, mode_index_out_from) = i
         (port_in_from, mode_index_in_from) = j
         (port_out_to, mode_index_out_to) = k
@@ -342,7 +336,6 @@ def _test_mappings(element_mappings, s_matrix):
 
 
 def test_run_component_modeler_mappings(monkeypatch):
-
     element_mappings = (
         ((("left_bot", 0), ("right_bot", 0)), (("left_top", 0), ("right_top", 0)), -1j),
         ((("left_bot", 0), ("right_top", 0)), (("left_top", 0), ("right_bot", 0)), +1),

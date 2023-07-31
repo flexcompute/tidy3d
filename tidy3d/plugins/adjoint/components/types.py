@@ -54,6 +54,7 @@ and can make JaxFloat like
 # JaxFloat = Union[float, ArrayLike]
 """
 
+
 # pylint: disable= unused-argument
 def sanitize_validator_fn(cls, val):
     """if val is an object (untracable) return 0.0."""

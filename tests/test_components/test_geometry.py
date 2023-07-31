@@ -320,7 +320,6 @@ def test_geo_group_surface_area():
 
 
 def test_geometry():
-
     b = td.Box(size=(1, 1, 1), center=(0, 0, 0))
     s = td.Sphere(radius=1, center=(0, 0, 0))
     s = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
@@ -348,7 +347,6 @@ def test_geometry():
 
 
 def test_geometry_sizes():
-
     # negative in size kwargs errors
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
         with pytest.raises(pydantic.ValidationError) as e_info:

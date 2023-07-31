@@ -17,7 +17,6 @@ ATOL = 1e-8
 
 
 def test_plot_source_time():
-
     for val in ("real", "imag", "abs"):
         ST.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
         ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
@@ -40,7 +39,6 @@ def test_dir_vector():
 
 
 def test_UniformCurrentSource():
-
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make generic UniformCurrentSource
@@ -51,7 +49,6 @@ def test_UniformCurrentSource():
 
 
 def test_source_times():
-
     # test we can make gaussian pulse
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
     ts = np.linspace(0, 30, 1001)
@@ -67,7 +64,6 @@ def test_source_times():
 
 
 def test_dipole():
-
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
     p1 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
     p2 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=False)
@@ -135,11 +131,9 @@ def test_FieldSource():
 
 
 def test_pol_arrow():
-
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     def get_pol_dir(axis, pol_angle=0, angle_theta=0, angle_phi=0):
-
         size = [td.inf, td.inf, td.inf]
         size[axis] = 0
 

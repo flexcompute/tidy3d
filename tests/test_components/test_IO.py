@@ -58,7 +58,6 @@ def set_datasets_to_none(sim):
 
 @clear_tmp
 def test_simulation_load_export():
-
     major, minor, patch = __version__.split(".")
     path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     SIM.to_file(path)
@@ -68,7 +67,6 @@ def test_simulation_load_export():
 
 @clear_tmp
 def test_simulation_load_export_yaml():
-
     path = "tests/tmp/simulation.yaml"
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
@@ -77,7 +75,6 @@ def test_simulation_load_export_yaml():
 
 @clear_tmp
 def test_component_load_export():
-
     path = "tests/tmp/medium.json"
     td.Medium().to_file(path)
     M2 = td.Medium.from_file(path)
@@ -86,7 +83,6 @@ def test_component_load_export():
 
 @clear_tmp
 def test_component_load_export_yaml():
-
     path = "tests/tmp/medium.yaml"
     td.Medium().to_file(path)
     M2 = td.Medium.from_file(path)
@@ -95,7 +91,6 @@ def test_component_load_export_yaml():
 
 @clear_tmp
 def test_simulation_load_export_hdf5():
-
     path = "tests/tmp/simulation.hdf5"
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
@@ -104,7 +99,6 @@ def test_simulation_load_export_hdf5():
 
 @clear_tmp
 def test_simulation_load_export_hdf5_explicit():
-
     path = "tests/tmp/simulation.hdf5"
     SIM.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
@@ -113,7 +107,6 @@ def test_simulation_load_export_hdf5_explicit():
 
 @clear_tmp
 def test_simulation_load_export_pckl():
-
     path = "tests/tmp/simulation.pckl"
     with open(path, "wb") as pickle_file:
         pickle.dump(SIM, pickle_file)
@@ -162,7 +155,6 @@ def test_1a_simulation_load_export2():
 
 
 def test_validation_speed():
-
     sizes_bytes = []
     times_sec = []
     path = "tests/tmp/simulation.json"

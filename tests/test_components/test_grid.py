@@ -32,7 +32,6 @@ def test_field_grid():
 
 
 def test_grid():
-
     boundaries_x = np.arange(-1, 2, 1)
     boundaries_y = np.arange(-2, 3, 1)
     boundaries_z = np.arange(-3, 4, 1)
@@ -213,7 +212,6 @@ def test_sim_nonuniform_large():
 
 
 def test_sim_grid():
-
     sim = td.Simulation(
         size=(4, 4, 4),
         grid_spec=td.GridSpec.uniform(1.0),
@@ -260,7 +258,6 @@ def test_sim_symmetry_grid():
 
 
 def test_sim_pml_grid():
-
     sim = td.Simulation(
         size=(4, 4, 4),
         grid_spec=td.GridSpec.uniform(1.0),
@@ -279,7 +276,6 @@ def test_sim_pml_grid():
 
 
 def test_sim_discretize_vol():
-
     sim = td.Simulation(
         size=(4, 4, 4),
         grid_spec=td.GridSpec.uniform(1.0),
@@ -301,7 +297,6 @@ def test_sim_discretize_vol():
 
 
 def test_sim_discretize_plane():
-
     sim = td.Simulation(
         size=(4, 4, 4),
         grid_spec=td.GridSpec.uniform(1.0),

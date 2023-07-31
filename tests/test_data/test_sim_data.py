@@ -307,7 +307,6 @@ def test_empty_io():
 
 @clear_tmp
 def test_run_time_lt_start():
-
     # Point source inside a box
     box = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),

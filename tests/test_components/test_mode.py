@@ -7,7 +7,6 @@ from tidy3d.exceptions import SetupError
 
 
 def test_modes():
-
     m = td.ModeSpec(num_modes=2)
     m = td.ModeSpec(num_modes=1, target_neff=1.0)
 

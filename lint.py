@@ -44,7 +44,6 @@ def main():
         final_score = results.linter.stats["global_note"]
 
     if final_score < threshold:
-
         message = "PyLint Failed | Score: {} | Threshold: {} ".format(final_score, threshold)
 
         logging.error(message)

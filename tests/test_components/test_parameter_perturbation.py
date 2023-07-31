@@ -6,7 +6,6 @@ import tidy3d as td
 
 
 def test_heat_perturbation():
-
     perturb = td.LinearHeatPerturbation(
         coeff=0.01,
         temperature_ref=300,
@@ -60,7 +59,6 @@ def test_heat_perturbation():
     perturb_data = td.HeatDataArray([1 + 1j, 3 + 1j, 1j], coords=dict(T=[200, 300, 400]))
 
     for interp_method in ["linear", "nearest"]:
-
         perturb = td.CustomHeatPerturbation(
             perturbation_values=perturb_data, interp_method=interp_method
         )
@@ -107,7 +105,6 @@ def test_heat_perturbation():
 
 
 def test_charge_perturbation():
-
     perturb = td.LinearChargePerturbation(
         electron_coeff=1e-21,
         electron_ref=0,
@@ -213,7 +210,6 @@ def test_charge_perturbation():
     )
 
     for interp_method in ["linear", "nearest"]:
-
         perturb = td.CustomChargePerturbation(
             perturbation_values=perturb_data, interp_method=interp_method
         )
@@ -301,7 +297,6 @@ def test_charge_perturbation():
 
 
 def test_parameter_perturbation():
-
     heat = td.LinearHeatPerturbation(
         coeff=0.01,
         temperature_ref=300,

@@ -813,7 +813,6 @@ def run_async_local_fwd(
 
     sims_fwd = []
     for simulation in simulations:
-
         grad_mnts = simulation.get_grad_monitors(
             input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
         )
@@ -885,7 +884,6 @@ def run_async_local_bwd(
 
     sims_vjp = []
     for i, (sim_data_fwd, sim_data_adj) in enumerate(zip(batch_data_fwd, batch_data_adj)):
-
         grad_data_fwd = sim_data_fwd.grad_data_symmetry
         grad_data_adj = sim_data_adj.grad_data_symmetry
         grad_data_eps_fwd = sim_data_fwd.grad_eps_data_symmetry

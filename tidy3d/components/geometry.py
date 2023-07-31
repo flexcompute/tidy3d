@@ -1190,7 +1190,6 @@ class Box(Centered):
         surface_index = 0
         for dim_index in range(3):
             for min_max_index in range(2):
-
                 new_center = centers[surface_index]
                 new_size = sizes[surface_index]
 
@@ -1233,7 +1232,6 @@ class Box(Centered):
 
         surfaces = []
         for _cent, _size, _name, _normal_dir in zip(centers, sizes, names, normal_dirs):
-
             if "normal_dir" in cls.__dict__["__fields__"]:
                 kwargs["normal_dir"] = _normal_dir
 

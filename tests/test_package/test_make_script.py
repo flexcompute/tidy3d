@@ -8,7 +8,6 @@ from ..utils import clear_tmp
 
 @clear_tmp
 def test_make_script():
-
     # make a sim
     simulation = td.Simulation(
         size=(1, 1, 1),

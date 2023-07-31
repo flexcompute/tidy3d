@@ -459,7 +459,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
                 for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-
                     if isclose(sim_val, struct_val):
                         consolidated_logger.warning(
                             f"Structure at structures[{istruct}] has bounds that extend exactly to "
@@ -482,7 +481,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -549,7 +547,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 fmin_mon = freqs.min()
                 fmax_mon = freqs.max()
                 for medium_index, medium in enumerate(mediums):
-
                     # skip mediums that have no freq range (all freqs valid)
                     if medium.frequency_range is None:
                         continue
@@ -746,7 +743,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 freq0 = source.source_time.freq0
 
                 for medium_index, medium in enumerate(mediums):
-
                     # min wavelength in PEC is meaningless and we'll get divide by inf errors
                     if isinstance(medium, PECMedium):
                         continue
@@ -1346,22 +1342,28 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-        
+
         new_h_lim, new_v_lim = hlim, vlim
         # account for unordered limits
         if hlim != None:
             (h_min, h_max) = hlim
-            if h_min > h_max: new_h_lim = (h_max, h_min)
+            if h_min > h_max:
+                new_h_lim = (h_max, h_min)
         else:
             new_h_lim = (hmin, hmax)
         if vlim != None:
             (v_min, v_max) = vlim
-            if v_min > v_max: new_v_lim = (v_max, v_min)
+            if v_min > v_max:
+                new_v_lim = (v_max, v_min)
         else:
             new_v_lim = (vmin, vmax)
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha)
+        ax = self.plot_sources(
+            ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha
+        )
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
@@ -1416,22 +1418,30 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-        
+
         new_h_lim, new_v_lim = hlim, vlim
         # account for unordered limits
         if hlim != None:
             (h_min, h_max) = hlim
-            if h_min > h_max: new_h_lim = (h_max, h_min)
+            if h_min > h_max:
+                new_h_lim = (h_max, h_min)
         else:
             new_h_lim = (hmin, hmax)
         if vlim != None:
             (v_min, v_max) = vlim
-            if v_min > v_max: new_v_lim = (v_max, v_min)
+            if v_min > v_max:
+                new_v_lim = (v_max, v_min)
         else:
             new_v_lim = (vmin, vmax)
-        ax = self.plot_structures_eps(freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha)
+        ax = self.plot_structures_eps(
+            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim
+        )
+        ax = self.plot_sources(
+            ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=source_alpha
+        )
+        ax = self.plot_monitors(
+            ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim, alpha=monitor_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=new_h_lim, vlim=new_v_lim)
@@ -1471,11 +1481,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        
+
         medium_shapes = []
-        medium_shapes = self._get_structures_2dbox(structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        medium_shapes = self._get_structures_2dbox(
+            structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         medium_map = self.medium_map
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
@@ -1592,10 +1604,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
-            medium_shapes = self._get_structures_2dbox(structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            )
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
             if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
                 continue
@@ -1787,7 +1801,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         alpha: float = None,
-        ax: Ax = None
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1829,7 +1843,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         alpha: float = None,
-        ax: Ax = None
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1998,7 +2012,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
-        ax: Ax = None
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
@@ -2067,8 +2081,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        hlim : Tuple[float,float] = None,
-        vlim : Tuple[float,float] = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -2271,7 +2285,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         z: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
-        ) -> Ax:
+    ) -> Ax:
         """Sets the xy limits of the simulation at a plane, useful after plotting.
 
         Parameters
@@ -2293,11 +2307,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         matplotlib.axes._subplots.Axes
             The axes after setting the boundaries.
         """
-        
+
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-        
+
         if hlim != None:
             if hlim[0] != hlim[1]:
                 ax.set_xlim(hlim[0], hlim[1])
@@ -2376,14 +2390,24 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         h_length, v_length = h_max - h_min, v_max - v_min
         if z == None:
             if x == None:
-                center, size = (h_min+h_length/2, y, v_min+v_length/2), (h_length, 0, v_length)
+                center, size = (h_min + h_length / 2, y, v_min + v_length / 2), (
+                    h_length,
+                    0,
+                    v_length,
+                )
             else:
-                center, size = (x, h_min+h_length/2, v_min+v_length/2), (0, h_length, v_length)
+                center, size = (x, h_min + h_length / 2, v_min + v_length / 2), (
+                    0,
+                    h_length,
+                    v_length,
+                )
         else:
-            center, size = (h_min+h_length/2, v_min+v_length/2, z), (h_length, v_length, 0)
+            center, size = (h_min + h_length / 2, v_min + v_length / 2, z), (h_length, v_length, 0)
         medium_shapes = []
         for structure in structures:
-            intersections = structure.geometry.intersections_2dbox(plane=Box(center=center, size=size))
+            intersections = structure.geometry.intersections_2dbox(
+                plane=Box(center=center, size=size)
+            )
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
@@ -2416,7 +2440,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         shapes = []
         for structure in structures:
-
             # get list of Shapely shapes that intersect at the plane
             shapes_plane = structure.geometry.intersections_2dbox(plane)
 
@@ -2426,12 +2449,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         background_shapes = []
         for medium, shape, bounds in shapes:
-
             minx, miny, maxx, maxy = bounds
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
-
                 _minx, _miny, _maxx, _maxy = _bounds
 
                 # do a bounding box check to see if any intersection to do anything about
@@ -2699,7 +2720,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bmin_new, bmax_new = [], []
 
         zipped = zip(self.center, self.symmetry, bounds_min, bounds_max, sim_bs_min, sim_bs_max)
-        for (center, sym, bmin, bmax, sim_bmin, sim_bmax) in zipped:
+        for center, sym, bmin, bmax, sim_bmin, sim_bmax in zipped:
             if sym == 0 or center < bmin:
                 bmin_tmp, bmax_tmp = bmin, bmax
             elif bmax < center:
@@ -3148,7 +3169,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-
             # get simulation's bounding box
             bounds = sim_bounds
 

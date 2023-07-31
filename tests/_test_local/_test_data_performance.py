@@ -83,7 +83,6 @@ def test_memory_2_load():
 
 
 def test_core_profile_small_1_save():
-
     Nx, Ny, Nz, Nt = 100, 100, 100, 10
 
     x = np.arange(Nx)
@@ -100,14 +99,12 @@ def test_core_profile_small_1_save():
 
 
 def test_core_profile_small_2_load():
-
     with Profile():
         print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
         data = td.FieldTimeData.from_file(PATH)
 
 
 def test_core_profile_large():
-
     sim_data = make_sim_data_1()
 
     with Profile():
@@ -121,7 +118,6 @@ def test_core_profile_large():
 
 @profile
 def test_speed_many_datasets():
-
     Nx, Ny, Nz, Nf = 100, 100, 100, 1
 
     x = np.arange(Nx)
@@ -163,7 +159,6 @@ def test_speed_many_datasets():
     )
 
     with Profile():
-
         sim_data.to_file(PATH)
         sim_data2 = sim_data.from_file(PATH)
 

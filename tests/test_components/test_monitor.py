@@ -30,7 +30,6 @@ def test_downsampled():
 
 
 def test_excluded_surfaces_flat():
-
     with pytest.raises(pydantic.ValidationError):
         M = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
 
@@ -232,7 +231,6 @@ def test_monitor_downsampling():
 
 
 def test_diffraction_validators():
-
     # ensure error if boundaries are not periodic
     boundary_spec = td.BoundarySpec(
         x=td.Boundary.pml(),
@@ -255,7 +253,6 @@ def test_diffraction_validators():
 
 
 def test_monitor():
-
     size = (1, 2, 3)
     center = (1, 2, 3)
 
@@ -289,7 +286,6 @@ def test_monitor():
 
 
 def test_monitor_plane():
-
     freqs = [1, 2, 3]
 
     # make sure flux, mode and diffraction monitors fail with non planar geometries
@@ -308,7 +304,6 @@ def _test_freqs_nonempty():
 
 
 def test_monitor_surfaces_from_volume():
-
     center = (1, 2, 3)
 
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
