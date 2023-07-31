@@ -1312,6 +1312,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1330,19 +1332,38 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        # account for unordered limits
+        if hlim is None:
+            hlim = (hmin, hmax)
+        if vlim is None:
+            vlim = (vmin, vmax)
+
+        if hlim[0] > hlim[1]:
+            raise Tidy3dError("Error: 'hmin' > 'hmax'")
+        if vlim[0] > vlim[1]:
+            raise Tidy3dError("Error: 'vmin' > 'vmax'")
+
+        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -1357,6 +1378,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1382,26 +1405,53 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Opacity of the monitors. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        ax = self.plot_structures_eps(freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha)
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        # account for unordered limits
+        if hlim is None:
+            hlim = (hmin, hmax)
+        if vlim is None:
+            vlim = (vmin, vmax)
+
+        if hlim[0] > hlim[1]:
+            raise Tidy3dError("Error: hmin > hmax")
+        if vlim[0] > vlim[1]:
+            raise Tidy3dError("Error: vmin > vmax")
+
+        ax = self.plot_structures_eps(
+            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
     @equal_aspect
     @add_ax_if_none
     def plot_structures(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1415,6 +1465,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in z direction, only one of x, y, z must be specified to define plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
         -------
@@ -1422,14 +1476,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             The supplied or created matplotlib axes.
         """
 
-        medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
+        medium_shapes = self._get_structures_2dbox(
+            structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         medium_map = self.medium_map
-
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
-
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1488,6 +1542,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -1513,6 +1569,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Defaults to the structure default alpha.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
         -------
@@ -1537,10 +1597,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
         else:
             structures = [self.background_structure] + list(structures)
-            medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            )
 
         eps_min, eps_max = self.eps_bounds(freq=freq)
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
             if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
                 continue
@@ -1564,7 +1626,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         if cbar:
             self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1725,7 +1787,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @equal_aspect
     @add_ax_if_none
     def plot_sources(
-        self, x: float = None, y: float = None, z: float = None, alpha: float = None, ax: Ax = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1737,6 +1806,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         alpha : float = None
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
@@ -1750,13 +1823,20 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bounds = self.bounds
         for source in self.sources:
             ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
     @equal_aspect
     @add_ax_if_none
     def plot_monitors(
-        self, x: float = None, y: float = None, z: float = None, alpha: float = None, ax: Ax = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1768,6 +1848,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         alpha : float = None
             Opacity of the sources, If ``None`` uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
@@ -1781,7 +1865,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bounds = self.bounds
         for monitor in self.monitors:
             ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
     @cached_property
@@ -1844,6 +1928,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's absorbing boundaries
@@ -1856,7 +1942,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y : float = None
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
+            position of plane in z direction, only one of x, y, z must be specified to define plane
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -1869,7 +1959,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
     def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
@@ -1907,7 +1997,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     @equal_aspect
     @add_ax_if_none
     def plot_symmetries(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1919,6 +2015,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -1936,7 +2036,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             sym_box = self._make_symmetry_box(sym_axis=sym_axis)
             plot_params = self._make_symmetry_plot_params(sym_value=sym_value)
             ax = sym_box.plot(x=x, y=y, z=z, ax=ax, **plot_params.to_kwargs())
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
     def _make_symmetry_plot_params(self, sym_value: Symmetry) -> PlotParams:
@@ -1972,6 +2072,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -1984,6 +2086,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         **kwargs
@@ -2031,7 +2137,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             )
             ax.add_patch(rect)
 
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
@@ -2156,7 +2262,15 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return ax
 
-    def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
+    def _set_plot_bounds(
+        self,
+        ax: Ax,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> Ax:
         """Sets the xy limits of the simulation at a plane, useful after plotting.
 
         Parameters
@@ -2169,7 +2283,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
-
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
         Returns
         -------
         matplotlib.axes._subplots.Axes
@@ -2180,10 +2297,12 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
         _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        if xmin != xmax:
-            ax.set_xlim(xmin, xmax)
-        if ymin != ymax:
-            ax.set_ylim(ymin, ymax)
+        if hlim is not None:
+            (xmin, xmax) = hlim
+        if vlim is not None:
+            (ymin, ymax) = vlim
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
         return ax
 
     @staticmethod
@@ -2213,6 +2332,68 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
             if len(intersections) > 0:
                 for shape in intersections:
+                    shape = Box.evaluate_inf_shape(shape)
+                    medium_shapes.append((structure.medium, shape))
+        return medium_shapes
+
+    def _get_structures_2dbox(
+        self,
+        structures: List[Structure],
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> List[Tuple[Medium, Shapely]]:
+        """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
+
+        Parameters
+        ----------
+        structures : List[:class:`.Structure`]
+            list of structures to filter on the plane.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane.
+        """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+
+        if hlim is not None:
+            (hmin, hmax) = hlim
+        if vlim is not None:
+            (vmin, vmax) = vlim
+
+        # get center and size with h, v
+        h_center = (hmin + hmax) / 2.0
+        v_center = (vmin + vmax) / 2.0
+        h_size = hmax - hmin
+        v_size = vmax - vmin
+
+        axis, center_normal = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        center = self.unpop_axis(center_normal, (h_center, v_center), axis=axis)
+        size = self.unpop_axis(0.0, (h_size, v_size), axis=axis)
+
+        medium_shapes = []
+        for structure in structures:
+            intersections = structure.geometry.intersections_2dbox(
+                plane=Box(center=center, size=size)
+            )
+            for shape in intersections:
+                if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
                     medium_shapes.append((structure.medium, shape))
         return medium_shapes
@@ -2526,7 +2707,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         bmin_new, bmax_new = [], []
 
         zipped = zip(self.center, self.symmetry, bounds_min, bounds_max, sim_bs_min, sim_bs_max)
-        for (center, sym, bmin, bmax, sim_bmin, sim_bmax) in zipped:
+        for center, sym, bmin, bmax, sim_bmin, sim_bmax in zipped:
             if sym == 0 or center < bmin:
                 bmin_tmp, bmax_tmp = bmin, bmax
             elif bmax < center:

@@ -545,8 +545,20 @@ def test_plot_eps():
     SIM_FULL._add_cbar(eps_min=1, eps_max=2, ax=ax)
 
 
+def test_plot_eps_bounds():
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+
+
 def test_plot():
     SIM_FULL.plot(x=0, ax=AX)
+
+
+def test_plot_bounds():
+    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(ax=AX, x=0, vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
 
 
 def test_plot_3d():

@@ -293,6 +293,8 @@ class JaxSimulation(Simulation, JaxObject):
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         **patch_kwargs,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` structure plotting."""
@@ -304,6 +306,8 @@ class JaxSimulation(Simulation, JaxObject):
             ax=ax,
             source_alpha=source_alpha,
             monitor_alpha=monitor_alpha,
+            hlim=hlim,
+            vlim=vlim,
             **patch_kwargs,
         )
 
@@ -317,6 +321,8 @@ class JaxSimulation(Simulation, JaxObject):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Wrapper around regular :class:`.Simulation` permittivity plotting."""
@@ -328,6 +334,8 @@ class JaxSimulation(Simulation, JaxObject):
             ax=ax,
             source_alpha=source_alpha,
             monitor_alpha=monitor_alpha,
+            hlim=hlim,
+            vlim=vlim,
         )
 
     def __eq__(self, other: JaxSimulation) -> bool:
