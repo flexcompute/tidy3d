@@ -179,4 +179,11 @@ material_refs = dict(
         "Non-Local Model of Biased Graphene, IEEE Trans. Antennas Propag. 56, 3, 747-757 (2008)",
         doi="https://doi.org/10.1109/TAP.2008.917005",
     ),
+    Burnett2016=ReferenceData(
+        journal="John H. Burnett, Simon G. Kaplan, Eric Stover, and Adam Phenis, "
+        "Refractive index measurements of Ge, "
+        "Proc. SPIE 9974, Infrared Sensors, Devices, and Applications VI, 99740X "
+        "(20 September 2016)",
+        doi="https://doi.org/10.1117/12.2237978",
+    ),
 )
