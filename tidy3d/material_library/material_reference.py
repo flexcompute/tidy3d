@@ -186,4 +186,16 @@ material_refs = dict(
         "(20 September 2016)",
         doi="https://doi.org/10.1117/12.2237978",
     ),
+    Palik=ReferenceData(
+        journal="E. D. Palik. Handbook of Optical Constants of Solids, " "Academic Press (1998)",
+        doi="https://doi.org/10.1016/B978-0-08-055630-7.50001-8",
+    ),
+    Palik_Lossy=ReferenceData(
+        journal="E. D. Palik. Handbook of Optical Constants of Solids, " "Academic Press (1998)",
+        doi="https://doi.org/10.1016/B978-0-08-055630-7.50001-8",
+    ),
+    Palik_Lossless=ReferenceData(
+        journal="E. D. Palik. Handbook of Optical Constants of Solids, " "Academic Press (1998)",
+        doi="https://doi.org/10.1016/B978-0-08-055630-7.50001-8",
+    ),
 )
