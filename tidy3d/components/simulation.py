@@ -2316,7 +2316,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
             if len(intersections) > 0:
                 for shape in intersections:
-                    shape = Box.evaluate_inf_shape(shape)
+                    shape = Geometry.evaluate_inf_shape(shape)
                     medium_shapes.append((structure.medium, shape))
         return medium_shapes
 

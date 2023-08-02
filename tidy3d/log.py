@@ -105,7 +105,7 @@ class Logger:
         return captured_warnings
 
     def __enter__(self):
-        """If suppression is enables, enter a consolidation context (only a single message is
+        """If suppression is enabled, enter a consolidation context (only a single message is
         emitted)."""
         if self.suppression and self._counts is None:
             self._counts = {}

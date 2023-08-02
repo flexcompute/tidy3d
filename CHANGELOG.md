@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
 - Spatial downsampling allowed in ``PermittivityMonitor`` through the ``interval_space`` argument.
+- `ClipOperation` geometry type allows the construction of complex geometries through boolean operations.
+- Operations on geometry (`+`, `|`, `*`, `&`, `-`, `^`) will create the appropriate `ClipOperation` or `GeometryGroup`.
+- `Geometry.from_shapely` to extrude shapely primitives into Tidy3D geometry.
+- `Geometry.from_gds` to extrude GDS cells into geometry groups with support for holes.
 
 ### Changed
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
@@ -20,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Field colocation for computations like flux, Poynting, and modal overlap also happen to cell boundaries rather than centers. The effect on final results
 should be close to imperceptible as verified by a large number of backend tests and our online examples. Any difference can be at most on the scale of
 the difference that can be observed when slightly modifying the grid resolution.
+- `GeometryGroup` accepts other `GeometryGroup` instances as group elements.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.
