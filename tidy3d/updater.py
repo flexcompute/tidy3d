@@ -1,18 +1,17 @@
 """Utilities for converting between tidy3d versions."""
 from __future__ import annotations
 
-from typing import Dict, Callable
-import json
 import functools
+import json
+from collections.abc import Callable
 
-import yaml
 import pydantic as pd
+import yaml
 
+from .components.base import Tidy3dBaseModel
+from .exceptions import FileError, SetupError
 from .log import log
 from .version import __version__
-from .exceptions import FileError, SetupError
-from .components.base import Tidy3dBaseModel
-
 
 """Storing version numbers."""
 
@@ -98,7 +97,7 @@ class Updater(pd.BaseModel):
 
         else:
             # try:
-            with open(fname, "r", encoding="utf-8") as f:
+            with open(fname, encoding="utf-8") as f:
                 if ".json" in fname:
                     sim_dict = json.load(f)
                 elif ".yaml" in fname:
@@ -186,7 +185,7 @@ def updates_from_version(version_from_string: str):
     return decorator
 
 
-def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
+def iterate_update_dict(update_dict: dict, update_types: dict[str, Callable]):
     """Recursively iterate nested ``update_dict``. For any nested ``nested_dict`` found,
     apply an update function if its ``nested_dict["type"]`` is in the keys of the ``update_types``
     dictionary. Also iterates lists and tuples.
@@ -198,7 +197,7 @@ def iterate_update_dict(update_dict: Dict, update_types: Dict[str, Callable]):
             update_types[update_dict["type"]](update_dict)
         for item in update_dict.values():
             iterate_update_dict(item, update_types)
-    elif isinstance(update_dict, (list, tuple)):
+    elif isinstance(update_dict, list | tuple):
         # Try other iterables
         for item in update_dict:
             iterate_update_dict(item, update_types)

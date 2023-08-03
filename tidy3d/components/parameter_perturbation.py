@@ -2,21 +2,21 @@
 """Defines perturbations to properties of the medium / materials"""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Callable, Union, Tuple, List
 import functools
+from abc import ABC, abstractmethod
+from collections.abc import Callable
 
-import pydantic as pd
-import numpy as np
-import xarray as xr
 import matplotlib.pyplot as plt
+import numpy as np
+import pydantic as pd
+import xarray as xr
 
-from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray
-from .base import Tidy3dBaseModel, cached_property
-from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
-from ..log import log
-from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod
+from ..components.types import ArrayLike, Ax, Complex, FieldVal, InterpMethod
 from ..components.viz import add_ax_if_none
+from ..constants import CMCUBE, KELVIN, PERCMCUBE, inf
+from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import ChargeDataArray, HeatDataArray, SpatialDataArray
 
 """ Generic perturbation classes """
 
@@ -26,7 +26,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @cached_property
     @abstractmethod
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Perturbation range."""
 
     @cached_property
@@ -35,7 +35,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
         """Whether perturbation is complex valued."""
 
     @staticmethod
-    def _linear_range(interval: Tuple[float, float], ref: float, coeff: Union[float, Complex]):
+    def _linear_range(interval: tuple[float, float], ref: float, coeff: float | Complex):
         """Find value range for a linear perturbation."""
         if coeff in (0, 0j):  # to avoid 0*inf
             return np.array([0, 0])
@@ -43,8 +43,8 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def _get_val(
-        field: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray], val: FieldVal
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        field: ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray, val: FieldVal
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Get specified value from a field."""
 
         if val == "real":
@@ -68,7 +68,7 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
         )
 
     @staticmethod
-    def _array_type(value: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]) -> str:
+    def _array_type(value: ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray) -> str:
         """Check whether variable is scalar, array, or spatial array."""
         if isinstance(value, SpatialDataArray):
             return "spatial"
@@ -82,19 +82,19 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
 def ensure_temp_in_range(
     sample: Callable[
-        Union[ArrayLike[float], SpatialDataArray],
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+        ArrayLike[float] | SpatialDataArray,
+        ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray,
     ]
 ) -> Callable[
-    Union[ArrayLike[float], SpatialDataArray],
-    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+    ArrayLike[float] | SpatialDataArray,
+    ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray,
 ]:
     """Decorate ``sample`` to log warning if temperature supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: ArrayLike[float] | SpatialDataArray
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """New sample function."""
 
         if np.iscomplexobj(temperature):
@@ -115,7 +115,7 @@ def ensure_temp_in_range(
 class HeatPerturbation(AbstractPerturbation):
     """Abstract class for heat perturbation."""
 
-    temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    temperature_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Temperature range",
         description="Temparature range in which perturbation model is valid.",
@@ -124,8 +124,8 @@ class HeatPerturbation(AbstractPerturbation):
 
     @abstractmethod
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: ArrayLike[float] | SpatialDataArray
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation.
 
         Parameters
@@ -211,7 +211,7 @@ class LinearHeatPerturbation(HeatPerturbation):
         units=KELVIN,
     )
 
-    coeff: Union[float, Complex] = pd.Field(
+    coeff: float | Complex = pd.Field(
         ...,
         title="Thermo-optic Coefficient",
         description="Sensitivity (derivative) of perturbation with respect to temperature.",
@@ -219,14 +219,14 @@ class LinearHeatPerturbation(HeatPerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible perturbation values in the provided ``temperature_range``."""
         return self._linear_range(self.temperature_range, self.temperature_ref, self.coeff)
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: ArrayLike[float] | SpatialDataArray
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation at temperature points.
 
         Parameters
@@ -279,7 +279,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         description="Sampled perturbation values.",
     )
 
-    temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    temperature_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Temperature range",
         description="Temparature range in which perturbation model is valid. For "
@@ -295,7 +295,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -323,8 +323,8 @@ class CustomHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: ArrayLike[float] | SpatialDataArray
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation at provided temperature points.
 
         Parameters
@@ -354,7 +354,7 @@ class CustomHeatPerturbation(HeatPerturbation):
         return np.iscomplexobj(self.perturbation_values)
 
 
-HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
+HeatPerturbationType = LinearHeatPerturbation | CustomHeatPerturbation
 
 
 """ Elementary charge perturbation classes """
@@ -362,21 +362,21 @@ HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
 
 def ensure_charge_in_range(
     sample: Callable[
-        [Union[ArrayLike[float], SpatialDataArray], Union[ArrayLike[float], SpatialDataArray]],
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+        [ArrayLike[float] | SpatialDataArray, ArrayLike[float] | SpatialDataArray],
+        ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray,
     ]
 ) -> Callable[
-    [Union[ArrayLike[float], SpatialDataArray], Union[ArrayLike[float], SpatialDataArray]],
-    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+    [ArrayLike[float] | SpatialDataArray, ArrayLike[float] | SpatialDataArray],
+    ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray,
 ]:
     """Decorate ``sample`` to log warning if charge supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: ArrayLike[float] | SpatialDataArray,
+        hole_density: ArrayLike[float] | SpatialDataArray,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """New sample function."""
 
         # disable complex input
@@ -413,13 +413,13 @@ def ensure_charge_in_range(
 class ChargePerturbation(AbstractPerturbation):
     """Abstract class for charge perturbation."""
 
-    electron_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    electron_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid.",
     )
 
-    hole_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    hole_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid.",
@@ -428,9 +428,9 @@ class ChargePerturbation(AbstractPerturbation):
     @abstractmethod
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: ArrayLike[float] | SpatialDataArray,
+        hole_density: ArrayLike[float] | SpatialDataArray,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation.
 
         Parameters
@@ -597,7 +597,7 @@ class LinearChargePerturbation(ChargePerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible perturbation values within provided ``electron_range`` and
         ``hole_range``.
         """
@@ -612,9 +612,9 @@ class LinearChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: ArrayLike[float] | SpatialDataArray,
+        hole_density: ArrayLike[float] | SpatialDataArray,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation at electron and hole density points.
 
         Parameters
@@ -690,7 +690,7 @@ class CustomChargePerturbation(ChargePerturbation):
         description="2D array (vs electron and hole densities) of sampled perturbation values.",
     )
 
-    electron_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    electron_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Electron Density Range",
         description="Range of electrons densities in which perturbation model is valid. For "
@@ -698,7 +698,7 @@ class CustomChargePerturbation(ChargePerturbation):
         "provided ``perturbation_values``",
     )
 
-    hole_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
+    hole_range: tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Hole Density Range",
         description="Range of holes densities in which perturbation model is valid. For "
@@ -713,7 +713,7 @@ class CustomChargePerturbation(ChargePerturbation):
     )
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[complex, complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[complex, complex]:
         """Range of possible parameter perturbation values."""
         return np.min(self.perturbation_values).item(), np.max(self.perturbation_values).item()
 
@@ -755,9 +755,9 @@ class CustomChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: ArrayLike[float] | SpatialDataArray,
+        hole_density: ArrayLike[float] | SpatialDataArray,
+    ) -> ArrayLike[float] | ArrayLike[Complex] | SpatialDataArray:
         """Sample perturbation at electron and hole density points.
 
         Parameters
@@ -797,9 +797,9 @@ class CustomChargePerturbation(ChargePerturbation):
         return np.iscomplexobj(self.perturbation_values)
 
 
-ChargePerturbationType = Union[LinearChargePerturbation, CustomChargePerturbation]
+ChargePerturbationType = LinearChargePerturbation | CustomChargePerturbation
 
-PerturbationType = Union[HeatPerturbationType, ChargePerturbationType]
+PerturbationType = HeatPerturbationType | ChargePerturbationType
 
 
 class ParameterPerturbation(Tidy3dBaseModel):
@@ -838,7 +838,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
     )
 
     @cached_property
-    def perturbation_list(self) -> List[PerturbationType]:
+    def perturbation_list(self) -> list[PerturbationType]:
         """Provided perturbations as a list."""
         perturb_list = []
         for p in [self.heat, self.charge]:
@@ -847,7 +847,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
         return perturb_list
 
     @cached_property
-    def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
+    def perturbation_range(self) -> tuple[float, float] | tuple[Complex, Complex]:
         """Range of possible parameter perturbation values due to both heat and charge effects."""
         prange = np.zeros(2)
 

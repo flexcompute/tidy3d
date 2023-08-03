@@ -1,7 +1,10 @@
 """Tests type definitions."""
 import pytest
+
 import pydantic
-from tidy3d.components.types import ArrayLike, Complex, constrained_array, Tuple
+from tidy3d.components.types import ArrayLike, Complex, constrained_array
+from typing import Tuple
+import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
 import numpy as np
 

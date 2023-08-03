@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional
 
 from pydantic import Field, parse_obj_as, validator
+
 from tidy3d.components.medium import MediumType
 
 from .http_management import http
@@ -17,11 +17,11 @@ class MaterialLibray(Queryable, smart_union=True):
 
     id: str = Field(title="Material Library ID", description="Material Library ID")
     name: str = Field(title="Material Library Name", description="Material Library Name")
-    medium: Optional[MediumType] = Field(title="medium", description="medium", alias="calcResult")
-    medium_type: Optional[str] = Field(
+    medium: MediumType | None = Field(title="medium", description="medium", alias="calcResult")
+    medium_type: str | None = Field(
         title="medium type", description="medium type", alias="mediumType"
     )
-    json_input: Optional[dict] = Field(
+    json_input: dict | None = Field(
         title="json input", description="original input", alias="jsonInput"
     )
 
@@ -33,7 +33,7 @@ class MaterialLibray(Queryable, smart_union=True):
 
     # pylint: disable=arguments-differ
     @classmethod
-    def list(cls) -> List[MaterialLibray]:
+    def list(cls) -> list[MaterialLibray]:
         """List all material libraries.
 
         Returns
@@ -42,4 +42,4 @@ class MaterialLibray(Queryable, smart_union=True):
             List of material libraries/
         """
         resp = http.get("tidy3d/libraries")
-        return parse_obj_as(List[MaterialLibray], resp) if resp else None
+        return parse_obj_as(list[MaterialLibray], resp) if resp else None

@@ -2,27 +2,42 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, List, Dict, Any
-import pydantic as pd
-import numpy as np
-import jax.numpy as jnp
+from typing import Any
 
+import jax.numpy as jnp
+import numpy as np
+import pydantic as pd
 from jax.tree_util import register_pytree_node_class
 
 from .....components.base import cached_property
-from .....components.geometry import Box
-from .....components.source import Source, GaussianPulse, PointDipole
-from .....components.source import ModeSource, PlaneWave, CustomFieldSource, CustomCurrentSource
-from .....components.data.monitor_data import MonitorData, ModeSolverData
-from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
+from .....components.data.data_array import (
+    FreqModeDataArray,
+    MixedModeDataArray,
+    ModeAmpsDataArray,
+    ScalarFieldDataArray,
+)
 from .....components.data.dataset import FieldDataset
-from .....components.data.data_array import ScalarFieldDataArray, FreqModeDataArray
-from .....components.data.data_array import ModeAmpsDataArray, MixedModeDataArray
+from .....components.data.monitor_data import (
+    DiffractionData,
+    FieldData,
+    ModeData,
+    ModeSolverData,
+    MonitorData,
+)
+from .....components.geometry import Box
+from .....components.source import (
+    CustomCurrentSource,
+    CustomFieldSource,
+    GaussianPulse,
+    ModeSource,
+    PlaneWave,
+    PointDipole,
+    Source,
+)
 from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
-
-from .data_array import JaxDataArray
 from ..base import JaxObject
+from .data_array import JaxDataArray
 
 
 class JaxMonitorData(MonitorData, JaxObject, ABC):
@@ -43,7 +58,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
         return cls.parse_obj(self_dict)
 
     @abstractmethod
-    def to_adjoint_sources(self, fwidth: float) -> List[Source]:
+    def to_adjoint_sources(self, fwidth: float) -> list[Source]:
         """Construct a list of adjoint sources from this :class:`.JaxMonitorData`."""
 
     @staticmethod
@@ -77,7 +92,7 @@ class JaxModeData(JaxMonitorData, ModeData):
     )
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
+    def to_adjoint_sources(self, fwidth: float) -> list[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
 
         amps, sel_coords = self.amps.nonzero_val_coords
@@ -160,7 +175,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
     def __getitem__(self, item: str) -> bool:
         return self.field_components[item]
 
-    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+    def package_colocate_results(self, centered_fields: dict[str, ScalarFieldDataArray]) -> Any:
         """How to package the dictionary of fields computed via self.colocate()."""
         return self.updated_copy(**centered_fields)
 
@@ -185,7 +200,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
         raise NotImplementedError("'mode_area' is not yet supported in the adjoint plugin.")
 
     def dot(
-        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+        self, field_data: FieldData | ModeSolverData, conjugate: bool = True
     ) -> ModeAmpsDataArray:
         """Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
@@ -219,7 +234,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
 
     # pylint: disable=too-many-locals
     def outer_dot(
-        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+        self, field_data: FieldData | ModeSolverData, conjugate: bool = True
     ) -> MixedModeDataArray:
         """Dot product (modal overlap) with another :class:`.FieldData` object."""
         raise NotImplementedError("'outer_dot' is not yet supported in the adjoint plugin.")
@@ -232,12 +247,12 @@ class JaxFieldData(JaxMonitorData, FieldData):
         )
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
+    def to_adjoint_sources(self, fwidth: float) -> list[CustomFieldSource]:
         """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
 
         # parse the frequency from the scalar field data
         freqs = [scalar_fld.coords["f"] for _, scalar_fld in self.field_components.items()]
-        if any((len(fs) != 1 for fs in freqs)):
+        if any(len(fs) != 1 for fs in freqs):
             raise AdjointError("FieldData must have only one frequency.")
         freqs = [fs[0] for fs in freqs]
         if len(set(freqs)) != 1:
@@ -281,7 +296,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
             """How much to shift the geometry by along a dimension (only if > 1D)."""
             return 1e-5 if len(coords) > 1 else 0
 
-        for name, field_component in self.field_components.items():
+        for _, field_component in self.field_components.items():
             coords = field_component.coords
             data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
             data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
@@ -399,7 +414,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
         return JaxDataArray(values=power_values, coords=power_coords)
 
     # pylint:disable=too-many-locals
-    def to_adjoint_sources(self, fwidth: float) -> List[PlaneWave]:
+    def to_adjoint_sources(self, fwidth: float) -> list[PlaneWave]:
         """Converts a :class:`.DiffractionData` to a list of adjoint :class:`.PlaneWave`."""
 
         # extract the values coordinates of the non-zero amplitudes
@@ -449,7 +464,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
 
 # allowed types in JaxSimulationData.output_data
-JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData, JaxFieldData]
+JaxMonitorDataType = JaxModeData | JaxDiffractionData | JaxFieldData
 
 # maps regular Tidy3d MonitorData to the JaxTidy3d equivalents, used in JaxSimulationData loading
 # pylint: disable=unhashable-member

@@ -1,23 +1,22 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
 
-from typing import Tuple, List, Optional
-import csv
 import codecs
-import requests
+import csv
 
-import scipy.optimize as opt
 import numpy as np
-from rich.progress import Progress
+import requests
+import scipy.optimize as opt
 from pydantic import Field, validator
+from rich.progress import Progress
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.medium import PoleResidue, AbstractMedium
+from ...components.medium import AbstractMedium, PoleResidue
+from ...components.types import ArrayFloat1D, Ax
 from ...components.viz import add_ax_if_none
-from ...components.types import Ax, ArrayFloat1D
 from ...constants import C_0, HBAR, MICROMETER
-from ...exceptions import ValidationError, WebError, SetupError
+from ...exceptions import SetupError, ValidationError, WebError
+from ...log import log
 from ...web.environment import Env
 
 
@@ -44,7 +43,7 @@ class DispersionFitter(Tidy3dBaseModel):
         description="Imaginary part of the complex index of refraction.",
     )
 
-    wvl_range: Tuple[Optional[float], Optional[float]] = Field(
+    wvl_range: tuple[float | None, float | None] = Field(
         (None, None),
         title="Wavelength range [wvl_min,wvl_max] for fitting",
         description="Truncate the wavelength, n and k data to the wavelength range '[wvl_min, "
@@ -76,7 +75,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return val
 
     @cached_property
-    def data_in_range(self) -> Tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
+    def data_in_range(self) -> tuple[ArrayFloat1D, ArrayFloat1D, ArrayFloat1D]:
         """Filter the wavelength-nk data to wavelength range for fitting.
 
         Returns
@@ -123,7 +122,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return AbstractMedium.nk_to_eps_complex(n=n_data, k=k_data)
 
     @property
-    def freqs(self) -> Tuple[float, ...]:
+    def freqs(self) -> tuple[float, ...]:
         """Convert filtered input wavelength data to frequency.
 
         Returns
@@ -136,7 +135,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return C_0 / wvl_um
 
     @property
-    def frequency_range(self) -> Tuple[float, float]:
+    def frequency_range(self) -> tuple[float, float]:
         """Frequency range of filtered input data
 
         Returns
@@ -255,7 +254,7 @@ class DispersionFitter(Tidy3dBaseModel):
         num_tries: int = 50,
         tolerance_rms: float = 1e-2,
         guess: PoleResidue = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Fit data a number of times and returns best results.
 
         Parameters
@@ -342,7 +341,7 @@ class DispersionFitter(Tidy3dBaseModel):
         self,
         num_poles: int = 3,
         guess: PoleResidue = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Perform a single fit to the data and return optimization result.
 
         Parameters
@@ -509,7 +508,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return ax
 
     @staticmethod
-    def _validate_url_load(data_load: List):
+    def _validate_url_load(data_load: list):
         """Validate if the loaded data from URL is valid
             The data list should be in this format:
                 [["wl",     "n"],

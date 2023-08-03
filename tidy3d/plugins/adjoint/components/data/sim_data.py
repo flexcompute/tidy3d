@@ -1,38 +1,34 @@
 """Defines a jax-compatible SimulationData."""
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union, List
-
 import pydantic as pd
-
 from jax.tree_util import register_pytree_node_class
 
-from .....components.data.monitor_data import MonitorDataType, FieldData, PermittivityData
+from .....components.data.monitor_data import FieldData, MonitorDataType, PermittivityData
 from .....components.data.sim_data import SimulationData
-
 from ..base import JaxObject
-from ..simulation import JaxSimulation, JaxInfo
-from .monitor_data import JaxMonitorDataType, JAX_MONITOR_DATA_MAP
+from ..simulation import JaxInfo, JaxSimulation
+from .monitor_data import JAX_MONITOR_DATA_MAP, JaxMonitorDataType
 
 
 @register_pytree_node_class
 class JaxSimulationData(SimulationData, JaxObject):
     """A :class:`.SimulationData` registered with jax."""
 
-    output_data: Tuple[JaxMonitorDataType, ...] = pd.Field(
+    output_data: tuple[JaxMonitorDataType, ...] = pd.Field(
         (),
         title="Jax Data",
         description="Tuple of Jax-compatible data associated with output monitors.",
         jax_field=True,
     )
 
-    grad_data: Tuple[FieldData, ...] = pd.Field(
+    grad_data: tuple[FieldData, ...] = pd.Field(
         (),
         title="Gradient Field Data",
         description="Tuple of monitor data storing fields associated with the input structures.",
     )
 
-    grad_eps_data: Tuple[PermittivityData, ...] = pd.Field(
+    grad_eps_data: tuple[PermittivityData, ...] = pd.Field(
         (),
         title="Gradient Permittivity Data",
         description="Tuple of monitor data storing epsilon associated with the input structures.",
@@ -51,22 +47,22 @@ class JaxSimulationData(SimulationData, JaxObject):
     )
 
     @property
-    def grad_data_symmetry(self) -> Tuple[FieldData, ...]:
+    def grad_data_symmetry(self) -> tuple[FieldData, ...]:
         """``self.grad_data`` but with ``symmetry_expanded_copy`` applied."""
         return tuple(data.symmetry_expanded_copy for data in self.grad_data)
 
     @property
-    def grad_eps_data_symmetry(self) -> Tuple[FieldData, ...]:
+    def grad_eps_data_symmetry(self) -> tuple[FieldData, ...]:
         """``self.grad_eps_data`` but with ``symmetry_expanded_copy`` applied."""
         return tuple(data.symmetry_expanded_copy for data in self.grad_eps_data)
 
     @property
-    def output_monitor_data(self) -> Dict[str, JaxMonitorDataType]:
+    def output_monitor_data(self) -> dict[str, JaxMonitorDataType]:
         """Dictionary of ``.output_data`` monitor ``.name`` to the corresponding data."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.output_data}
 
     @property
-    def monitor_data(self) -> Dict[str, Union[JaxMonitorDataType, MonitorDataType]]:
+    def monitor_data(self) -> dict[str, JaxMonitorDataType | MonitorDataType]:
         """Dictionary of ``.output_data`` monitor ``.name`` to the corresponding data."""
         reg_mnt_data = {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
         reg_mnt_data.update(self.output_monitor_data)
@@ -74,8 +70,8 @@ class JaxSimulationData(SimulationData, JaxObject):
 
     @staticmethod
     def split_data(
-        mnt_data: List[MonitorDataType], jax_info: JaxInfo
-    ) -> Dict[str, List[MonitorDataType]]:
+        mnt_data: list[MonitorDataType], jax_info: JaxInfo
+    ) -> dict[str, list[MonitorDataType]]:
         """Split list of monitor data into data, output_data, grad_data, and grad_eps_data."""
         # Get information needed to split the full data list
         len_output_data = jax_info.num_output_monitors
@@ -135,7 +131,7 @@ class JaxSimulationData(SimulationData, JaxObject):
     @classmethod
     def split_fwd_sim_data(
         cls, sim_data: SimulationData, jax_info: JaxInfo
-    ) -> Tuple[SimulationData, SimulationData]:
+    ) -> tuple[SimulationData, SimulationData]:
         """Split a :class:`.SimulationData` into two parts, containing user and gradient data."""
 
         sim = sim_data.simulation

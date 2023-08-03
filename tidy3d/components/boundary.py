@@ -2,19 +2,17 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, List
 
-import pydantic as pd
 import numpy as np
-
-from .base import Tidy3dBaseModel, cached_property
-from .types import Complex, Axis, TYPE_TAG_STR
-from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
-from .medium import Medium
+import pydantic as pd
 
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
-from ..exceptions import SetupError, DataError
+from ..exceptions import DataError, SetupError
 from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .medium import Medium
+from .source import TFSF, GaussianBeam, ModeSource, PlaneWave
+from .types import TYPE_TAG_STR, Axis, Complex
 
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):
@@ -41,7 +39,7 @@ class PMCBoundary(BoundaryEdge):
 # """ Bloch boundary """
 
 # sources from which Bloch boundary conditions can be defined
-BlochSourceType = Union[GaussianBeam, ModeSource, PlaneWave, TFSF]
+BlochSourceType = GaussianBeam | ModeSource | PlaneWave | TFSF
 
 
 class BlochBoundary(BoundaryEdge):
@@ -322,16 +320,14 @@ class Absorber(AbsorberSpec):
 
 
 # pml types allowed in simulation init
-PMLTypes = Union[PML, StablePML, Absorber, None]
+PMLTypes = PML | StablePML | Absorber | None
 
 
 # """ boundary specification classes """
 
 # types of boundaries that can be used in Simulation
 
-BoundaryEdgeType = Union[
-    Periodic, PECBoundary, PMCBoundary, PML, StablePML, Absorber, BlochBoundary
-]
+BoundaryEdgeType = Periodic | PECBoundary | PMCBoundary | PML | StablePML | Absorber | BlochBoundary
 
 
 class Boundary(Tidy3dBaseModel):
@@ -374,8 +370,8 @@ class Boundary(Tidy3dBaseModel):
         plus = values.get("plus")
         minus = values.get("minus")
         num_pbc = isinstance(plus, Periodic) + isinstance(minus, Periodic)
-        num_pml = isinstance(plus, (PML, StablePML, Absorber)) + isinstance(
-            minus, (PML, StablePML, Absorber)
+        num_pml = isinstance(plus, PML | StablePML | Absorber) + isinstance(
+            minus, PML | StablePML | Absorber
         )
         if num_pbc == 1 and num_pml == 1:
             raise SetupError("Cannot have both PML and PBC along the same dimension.")
@@ -389,10 +385,10 @@ class Boundary(Tidy3dBaseModel):
         minus = values.get("minus")
 
         switched = False
-        if isinstance(minus, (PECBoundary, PMCBoundary)) and isinstance(plus, Periodic):
+        if isinstance(minus, PECBoundary | PMCBoundary) and isinstance(plus, Periodic):
             plus = minus
             switched = True
-        elif isinstance(plus, (PECBoundary, PMCBoundary)) and isinstance(minus, Periodic):
+        elif isinstance(plus, PECBoundary | PMCBoundary) and isinstance(minus, Periodic):
             minus = plus
             switched = True
         if switched:
@@ -691,7 +687,7 @@ class BoundarySpec(Tidy3dBaseModel):
         )
 
     @cached_property
-    def to_list(self) -> List[Tuple[BoundaryEdgeType, BoundaryEdgeType]]:
+    def to_list(self) -> list[tuple[BoundaryEdgeType, BoundaryEdgeType]]:
         """Returns edge-wise boundary conditions along each dimension for internal use."""
         return [
             (self.x.minus, self.x.plus),

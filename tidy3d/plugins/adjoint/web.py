@@ -1,25 +1,22 @@
 """Adjoint-specific webapi."""
-from typing import Tuple, Dict, List
-from functools import partial
 import tempfile
+from functools import partial
 
 import pydantic as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
 
-from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
+from ...components.simulation import Simulation
+from ...components.types import Literal
+from ...web.asynchronous import run_async as web_run_async
+from ...web.container import DEFAULT_DATA_DIR, Batch, BatchData, Job
+from ...web.s3utils import download_file, upload_file
 from ...web.webapi import run as web_run
 from ...web.webapi import wait_for_connection
-from ...web.s3utils import download_file, upload_file
-from ...web.asynchronous import run_async as web_run_async
-from ...web.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
-from ...components.types import Literal
-
 from .components.base import JaxObject
-from .components.simulation import JaxSimulation, JaxInfo
 from .components.data.sim_data import JaxSimulationData
-
+from .components.simulation import JaxInfo, JaxSimulation
 
 # file names and paths for server side adjoint
 SIM_VJP_FILE = "output/jax_sim_vjp.hdf5"
@@ -39,7 +36,7 @@ class RunResidual(JaxObject):
 class RunResidualBatch(JaxObject):
     """Class to store extra data needed to pass between the forward and backward adjoint run."""
 
-    fwd_task_ids: Tuple[str, ...] = pd.Field(
+    fwd_task_ids: tuple[str, ...] = pd.Field(
         ..., title="Forward task_ids", description="task_ids of the forward simulations."
     )
 
@@ -48,7 +45,7 @@ class RunResidualBatch(JaxObject):
 class RunResidualAsync(JaxObject):
     """Class to store extra data needed to pass between the forward and backward adjoint run."""
 
-    fwd_task_ids: Dict[str, str] = pd.Field(
+    fwd_task_ids: dict[str, str] = pd.Field(
         ..., title="Forward task_ids", description="task_ids of the forward simulation for async."
     )
 
@@ -68,7 +65,7 @@ def tidy3d_run_fn(simulation: Simulation, task_name: str, **kwargs) -> Simulatio
     return web_run(simulation=simulation, task_name=task_name, **kwargs)
 
 
-def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
+def tidy3d_run_async_fn(simulations: dict[str, Simulation], **kwargs) -> BatchData:
     """Run a set of regular :class:`.Simulation` objects after conversion from jax type."""
     return web_run_async(simulations=simulations, **kwargs)
 
@@ -133,7 +130,7 @@ def run_fwd(
     path: str,
     callback_url: str,
     verbose: bool,
-) -> Tuple[JaxSimulationData, Tuple[RunResidual]]:
+) -> tuple[JaxSimulationData, tuple[RunResidual]]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
     sim_fwd, jax_info_fwd, jax_info_orig = simulation.to_simulation_fwd()
@@ -163,7 +160,7 @@ def run_bwd(
     verbose: bool,
     res: tuple,
     sim_data_vjp: JaxSimulationData,
-) -> Tuple[JaxSimulation]:
+) -> tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
     fwd_task_id = res[0].fwd_task_id
@@ -252,14 +249,14 @@ class AdjointBatch(Batch):
         description="Type of simulation, used internally only.",
     )
 
-    jobs: Dict[str, AdjointJob] = pd.Field(
+    jobs: dict[str, AdjointJob] = pd.Field(
         None,
         title="Simulations",
         description="Mapping of task names to individual AdjointJob object for each task "
         "in the batch. Set by ``AdjointBatch.upload``, leave as None.",
     )
 
-    jax_infos: Dict[str, JaxInfo] = pd.Field(
+    jax_infos: dict[str, JaxInfo] = pd.Field(
         ...,
         title="Jax Info Dict",
         description="Containers of information needed to reconstruct JaxSimulation for each item.",
@@ -300,7 +297,7 @@ def webapi_run_adjoint_fwd(
     path: str,
     callback_url: str,
     verbose: bool,
-) -> Dict[str, float]:
+) -> dict[str, float]:
     """Runs the forward simulation on our servers, stores the gradient data for later."""
 
     job = AdjointJob(
@@ -361,13 +358,13 @@ def _task_name_orig(index: int):
 # pylint:disable=too-many-locals
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run_async(
-    simulations: Tuple[JaxSimulation, ...],
+    simulations: tuple[JaxSimulation, ...],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     verbose: bool = True,
     num_workers: int = None,
-) -> Tuple[JaxSimulationData, ...]:
+) -> tuple[JaxSimulationData, ...]:
     """Submits a set of :class:`.JaxSimulation` objects to server, starts running,
     monitors progress, downloads, and loads results
     as a tuple of :class:`.JaxSimulationData` objects.
@@ -432,13 +429,13 @@ def run_async(
 
 # pylint:disable=too-many-locals, unused-argument
 def run_async_fwd(
-    simulations: Tuple[JaxSimulation, ...],
+    simulations: tuple[JaxSimulation, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
     num_workers: int,
-) -> Tuple[Tuple[JaxSimulationData, ...], RunResidualBatch]:
+) -> tuple[tuple[JaxSimulationData, ...], RunResidualBatch]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
     jax_infos_orig = []
@@ -478,8 +475,8 @@ def run_async_bwd(
     verbose: bool,
     num_workers: int,
     res: tuple,
-    batch_data_vjp: Tuple[JaxSimulationData, ...],
-) -> Tuple[Dict[str, JaxSimulation]]:
+    batch_data_vjp: tuple[JaxSimulationData, ...],
+) -> tuple[dict[str, JaxSimulation]]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
     fwd_task_ids = res[0].fwd_task_ids
@@ -516,13 +513,13 @@ def run_async_bwd(
 
 
 def webapi_run_async_adjoint_fwd(
-    simulations: Tuple[Simulation, ...],
-    jax_infos: Tuple[JaxInfo, ...],
+    simulations: tuple[Simulation, ...],
+    jax_infos: tuple[JaxInfo, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
-) -> Tuple[BatchData, Dict[str, str]]:
+) -> tuple[BatchData, dict[str, str]]:
     """Runs the forward simulations on our servers, stores the gradient data for later."""
     task_names = [str(_task_name_orig(i)) for i in range(len(simulations))]
 
@@ -544,14 +541,14 @@ def webapi_run_async_adjoint_fwd(
 
 
 def webapi_run_async_adjoint_bwd(
-    simulations: Tuple[Simulation, ...],
-    jax_infos: Tuple[JaxInfo, ...],
+    simulations: tuple[Simulation, ...],
+    jax_infos: tuple[JaxInfo, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
-    parent_tasks: List[List[str]],
-) -> List[JaxSimulation]:
+    parent_tasks: list[list[str]],
+) -> list[JaxSimulation]:
     """Runs the forward simulations on our servers, stores the gradient data for later."""
 
     task_names = [str(i) for i in range(len(simulations))]
@@ -650,7 +647,7 @@ def run_local_fwd(
     path: str,
     callback_url: str,
     verbose: bool,
-) -> Tuple[JaxSimulationData, tuple]:
+) -> tuple[JaxSimulationData, tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
     # add the gradient monitors and run the forward simulation
@@ -681,7 +678,7 @@ def run_local_bwd(
     verbose: bool,
     res: tuple,
     sim_data_vjp: JaxSimulationData,
-) -> Tuple[JaxSimulation]:
+) -> tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
     # grab the forward simulation and its gradient monitor data
@@ -725,14 +722,14 @@ def _task_name_orig_local(index: int, task_name_suffix: str = None):
 # pylint:disable=too-many-locals
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 7)))
 def run_async_local(
-    simulations: Tuple[JaxSimulation, ...],
+    simulations: tuple[JaxSimulation, ...],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     verbose: bool = True,
     num_workers: int = None,
     task_name_suffix: str = None,
-) -> Tuple[JaxSimulationData, ...]:
+) -> tuple[JaxSimulationData, ...]:
     """Submits a set of :class:`.JaxSimulation` objects to server, starts running,
     monitors progress, downloads, and loads results
     as a tuple of :class:`.JaxSimulationData` objects.
@@ -799,14 +796,14 @@ def run_async_local(
 
 # pylint:disable=too-many-locals, unused-argument
 def run_async_local_fwd(
-    simulations: Tuple[JaxSimulation, ...],
+    simulations: tuple[JaxSimulation, ...],
     folder_name: str,
     path_dir: str,
     callback_url: str,
     verbose: bool,
     num_workers: int,
     task_name_suffix: str,
-) -> Tuple[Dict[str, JaxSimulationData], tuple]:
+) -> tuple[dict[str, JaxSimulationData], tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
     task_name_suffix_fwd = _task_name_fwd("")
@@ -849,8 +846,8 @@ def run_async_local_bwd(
     num_workers: int,
     task_name_suffix: str,
     res: tuple,
-    batch_data_vjp: Tuple[JaxSimulationData, ...],
-) -> Tuple[Dict[str, JaxSimulation]]:
+    batch_data_vjp: tuple[JaxSimulationData, ...],
+) -> tuple[dict[str, JaxSimulation]]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
     # grab the forward simulation and its gradient monitor data

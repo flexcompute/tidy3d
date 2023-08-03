@@ -1,21 +1,21 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Tuple
 
-import xarray as xr
-import pydantic as pd
+from collections.abc import Callable
+
 import numpy as np
+import pydantic as pd
+import xarray as xr
 
-from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
-from ..base import Tidy3dBaseModel
-from ..simulation import Simulation
-from ..boundary import BlochBoundary
-from ..source import TFSF
-from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
-from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...log import log
-
+from ..base import Tidy3dBaseModel
+from ..boundary import BlochBoundary
+from ..simulation import Simulation
+from ..source import TFSF
+from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from ..viz import add_ax_if_none, equal_aspect
+from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -69,7 +69,7 @@ class SimulationData(Tidy3dBaseModel):
         description="Original :class:`.Simulation` associated with the data.",
     )
 
-    data: Tuple[annotate_type(MonitorDataType), ...] = pd.Field(
+    data: tuple[annotate_type(MonitorDataType), ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -94,11 +94,11 @@ class SimulationData(Tidy3dBaseModel):
         return monitor_data.symmetry_expanded_copy
 
     @property
-    def monitor_data(self) -> Dict[str, MonitorDataType]:
+    def monitor_data(self) -> dict[str, MonitorDataType]:
         """Dictionary mapping monitor name to its associated :class:`.MonitorData`."""
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
-    @pd.validator("data", always=True)
+    @pd.validator("data", always=True, allow_reuse=True)
     def data_monitors_match_sim(cls, val, values):
         """Ensure each MonitorData in ``.data`` corresponds to a monitor in ``.simulation``."""
         sim = values.get("simulation")
@@ -124,7 +124,7 @@ class SimulationData(Tidy3dBaseModel):
                 "No log string in the SimulationData object, can't find final decay value."
             )
         lines = log_str.split("\n")
-        decay_lines = [l for l in lines if "field decay" in l]
+        decay_lines = [line for line in lines if "field decay" in line]
         final_decay = 1.0
         if len(decay_lines) > 0:
             final_decay_line = decay_lines[-1]
@@ -240,11 +240,11 @@ class SimulationData(Tidy3dBaseModel):
 
         # pass coords if each of the scalar field data have more than one coordinate along a dim
         xyz_kwargs = {}
-        for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
+        for dim, center in zip("xyz", (centers.x, centers.y, centers.z)):
             scalar_data = list(monitor_data.field_components.values())
             coord_lens = [len(data.coords[dim]) for data in scalar_data]
             if all(ncoords > 1 for ncoords in coord_lens):
-                xyz_kwargs[dim] = centers
+                xyz_kwargs[dim] = center
 
         return monitor_data.colocate(**xyz_kwargs)
 

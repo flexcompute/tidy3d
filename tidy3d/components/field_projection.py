@@ -1,34 +1,45 @@
 """Near field to far field transformation plugin
 """
 from __future__ import annotations
-from typing import Dict, Tuple, Union, List
-import numpy as np
-import xarray as xr
-import pydantic
 
+import numpy as np
+import pydantic
+import xarray as xr
 from rich.progress import track
 
-from .data.data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
-from .data.data_array import FieldProjectionKSpaceDataArray
-from .data.monitor_data import FieldData
-from .data.monitor_data import AbstractFieldProjectionData, FieldProjectionAngleData
-from .data.monitor_data import FieldProjectionCartesianData, FieldProjectionKSpaceData
-from .data.sim_data import SimulationData
-from .monitor import FieldProjectionSurface
-from .monitor import FieldMonitor, AbstractFieldProjectionMonitor, FieldProjectionAngleMonitor
-from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor
-from .types import Direction, Coordinate, ArrayComplex4D
-from .medium import MediumType
-from .base import Tidy3dBaseModel, cached_property
+from ..constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from ..exceptions import SetupError
-from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import (
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+)
+from .data.monitor_data import (
+    AbstractFieldProjectionData,
+    FieldData,
+    FieldProjectionAngleData,
+    FieldProjectionCartesianData,
+    FieldProjectionKSpaceData,
+)
+from .data.sim_data import SimulationData
+from .medium import MediumType
+from .monitor import (
+    AbstractFieldProjectionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldProjectionSurface,
+)
+from .types import ArrayComplex4D, Coordinate, Direction
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
 # pylint: disable=invalid-name
-ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayComplex4D]
+ArrayLikeN2F = float | tuple[float, ...] | ArrayComplex4D
 
 
 class FieldProjector(Tidy3dBaseModel):
@@ -40,14 +51,14 @@ class FieldProjector(Tidy3dBaseModel):
         description="Container for simulation data containing the near field monitors.",
     )
 
-    surfaces: Tuple[FieldProjectionSurface, ...] = pydantic.Field(
+    surfaces: tuple[FieldProjectionSurface, ...] = pydantic.Field(
         ...,
         title="Surface monitor with direction",
         description="Tuple of each :class:`.FieldProjectionSurface` to use as source of "
         "near field.",
     )
 
-    pts_per_wavelength: Union[int, type(None)] = pydantic.Field(
+    pts_per_wavelength: int | type(None) = pydantic.Field(
         PTS_PER_WVL,
         title="Points per wavelength",
         description="Number of points per wavelength in the background medium with which "
@@ -63,7 +74,7 @@ class FieldProjector(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    currents: Dict[str, xr.Dataset] = pydantic.Field(
+    currents: dict[str, xr.Dataset] = pydantic.Field(
         None,
         title="Surface current densities",
         description="Dictionary mapping monitor name to an ``xarray.Dataset`` storing the "
@@ -87,7 +98,7 @@ class FieldProjector(Tidy3dBaseModel):
         return sim.monitor_medium(monitor)
 
     @cached_property
-    def frequencies(self) -> List[float]:
+    def frequencies(self) -> list[float]:
         """Return the list of frequencies associated with the field monitors."""
         return self.surfaces[0].monitor.freqs
 
@@ -95,8 +106,8 @@ class FieldProjector(Tidy3dBaseModel):
     def from_near_field_monitors(  # pylint:disable=too-many-arguments
         cls,
         sim_data: SimulationData,
-        near_monitors: List[FieldMonitor],
-        normal_dirs: List[Direction],
+        near_monitors: list[FieldMonitor],
+        normal_dirs: list[Direction],
         pts_per_wavelength: int = PTS_PER_WVL,
         origin: Coordinate = None,
     ):
@@ -733,7 +744,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         # transform the coordinate system so that the origin is at the source point
         # then the observation points in the new system are:
-        x_new, y_new, z_new = [pt_obs - pt_src for pt_src, pt_obs in zip(pts, [x, y, z])]
+        x_new, y_new, z_new = (pt_obs - pt_src for pt_src, pt_obs in zip(pts, [x, y, z]))
 
         # tangential source components to use
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
@@ -771,7 +782,7 @@ class FieldProjector(Tidy3dBaseModel):
         d2G_dr2 = dG_dr * (ikr - 1.0) / r + G / (r**2)
 
         # operations between unit vectors and currents
-        def r_x_current(current: Tuple[np.ndarray, ...]) -> Tuple[np.ndarray, ...]:
+        def r_x_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
             """Cross product between the r unit vector and the current."""
             return [
                 sin_theta * sin_phi * current[2] - cos_theta * current[1],
@@ -779,7 +790,7 @@ class FieldProjector(Tidy3dBaseModel):
                 sin_theta * cos_phi * current[1] - sin_theta * sin_phi * current[0],
             ]
 
-        def r_dot_current(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current(current: tuple[np.ndarray, ...]) -> np.ndarray:
             """Dot product between the r unit vector and the current."""
             return (
                 sin_theta * cos_phi * current[0]
@@ -787,7 +798,7 @@ class FieldProjector(Tidy3dBaseModel):
                 + cos_theta * current[2]
             )
 
-        def r_dot_current_dtheta(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dtheta(current: tuple[np.ndarray, ...]) -> np.ndarray:
             """Theta derivative of the dot product between the r unit vector and the current."""
             return (
                 cos_theta * cos_phi * current[0]
@@ -795,12 +806,12 @@ class FieldProjector(Tidy3dBaseModel):
                 - sin_theta * current[2]
             )
 
-        def r_dot_current_dphi_div_sin_theta(current: Tuple[np.ndarray, ...]) -> np.ndarray:
+        def r_dot_current_dphi_div_sin_theta(current: tuple[np.ndarray, ...]) -> np.ndarray:
             """Phi derivative of the dot product between the r unit vector and the current,
             analytically divided by sin theta."""
             return -sin_phi * current[0] + cos_phi * current[1]
 
-        def grad_Gr_r_dot_current(current: Tuple[np.ndarray, ...]) -> Tuple[np.ndarray, ...]:
+        def grad_Gr_r_dot_current(current: tuple[np.ndarray, ...]) -> tuple[np.ndarray, ...]:
             """Gradient of the product of the gradient of the Green's function and the dot product
             between the r unit vector and the current."""
             temp = [
@@ -811,7 +822,7 @@ class FieldProjector(Tidy3dBaseModel):
             # convert to Cartesian coordinates
             return surface.monitor.sph_2_car_field(temp[0], temp[1], temp[2], theta_obs, phi_obs)
 
-        def potential_terms(current: Tuple[np.ndarray, ...], const: complex):
+        def potential_terms(current: tuple[np.ndarray, ...], const: complex):
             """Assemble vector potential and its derivatives."""
             r_x_c = r_x_current(current)
             pot = [const * item * G for item in current]
@@ -827,16 +838,16 @@ class FieldProjector(Tidy3dBaseModel):
         F, curl_F, grad_div_F = potential_terms(M, epsilon)
 
         # assemble the electric field components (Taflove 8.24, 8.27)
-        e_x_integrand, e_y_integrand, e_z_integrand = [
+        e_x_integrand, e_y_integrand, e_z_integrand = (
             i_omega * (a + grad_div_a / (wavenumber**2)) - curl_f / epsilon
             for a, grad_div_a, curl_f in zip(A, grad_div_A, curl_F)
-        ]
+        )
 
         # assemble the magnetic field components (Taflove 8.25, 8.28)
-        h_x_integrand, h_y_integrand, h_z_integrand = [
+        h_x_integrand, h_y_integrand, h_z_integrand = (
             i_omega * (f + grad_div_f / (wavenumber**2)) + curl_a / MU_0
             for f, grad_div_f, curl_a in zip(F, grad_div_F, curl_A)
-        ]
+        )
 
         # integrate over the surface
         e_x = self.integrate_2d(e_x_integrand, 1.0, pts[idx_u], pts[idx_v])

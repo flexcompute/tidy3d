@@ -3,25 +3,23 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union, Dict
 from multiprocessing import Pool
 
-import pydantic as pd
-import numpy as np
-import xarray as xr
-import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class
 import jax
+import jax.numpy as jnp
+import numpy as np
+import pydantic as pd
+import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
 from ....components.base import cached_property
-from ....components.types import Bound, Coordinate2D  # , annotate_type
-from ....components.geometry import Geometry, Box, PolySlab, GeometryGroup
-from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
+from ....components.data.monitor_data import FieldData, PermittivityData
+from ....components.geometry import Box, Geometry, GeometryGroup, PolySlab
 from ....components.monitor import FieldMonitor, PermittivityMonitor
-from ....constants import fp_eps, MICROMETER
+from ....components.types import Bound, Coordinate2D  # , annotate_type
+from ....constants import MICROMETER, fp_eps
 from ....exceptions import AdjointError
-
 from .base import JaxObject
 from .types import JaxFloat, validate_jax_tuple, validate_jax_tuple_tuple
 
@@ -39,13 +37,13 @@ class JaxGeometry(Geometry, ABC):
     """Abstract :class:`.Geometry` with methods useful for all Jax subclasses."""
 
     @property
-    def bound_size(self) -> Tuple[float, float, float]:
+    def bound_size(self) -> tuple[float, float, float]:
         """Size of the bounding box of this geometry."""
         rmin, rmax = self.bounds
         return tuple(abs(pt_max - pt_min) for (pt_min, pt_max) in zip(rmin, rmax))
 
     @property
-    def bound_center(self) -> Tuple[float, float, float]:
+    def bound_center(self) -> tuple[float, float, float]:
         """Size of the bounding box of this geometry."""
         rmin, rmax = self.bounds
 
@@ -59,7 +57,7 @@ class JaxGeometry(Geometry, ABC):
 
     def make_grad_monitors(
         self, freq: float, name: str
-    ) -> Tuple[FieldMonitor, PermittivityMonitor]:
+    ) -> tuple[FieldMonitor, PermittivityMonitor]:
         """Return gradient monitor associated with this object."""
         size_enlarged = tuple(s + 2 * GRAD_MONITOR_EXPANSION for s in self.bound_size)
         field_mnt = FieldMonitor(
@@ -88,7 +86,7 @@ class JaxGeometry(Geometry, ABC):
     @staticmethod
     def compute_dotted_e_d_fields(
         grad_data_fwd: FieldData, grad_data_adj: FieldData, grad_data_eps: PermittivityData
-    ) -> Tuple[Dict[str, ScalarFieldDataArray], Dict[str, ScalarFieldDataArray]]:
+    ) -> tuple[dict[str, ScalarFieldDataArray], dict[str, ScalarFieldDataArray]]:
         """Get the (x,y,z) components of E_fwd * E_adj and D_fwd * D_adj fields in the domain."""
 
         e_mult_xyz = {}
@@ -120,14 +118,14 @@ class JaxGeometry(Geometry, ABC):
 class JaxBox(JaxGeometry, Box, JaxObject):
     """A :class:`.Box` registered with jax."""
 
-    size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    size: tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
         title="Size",
         description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
         jax_field=True,
     )
 
-    center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    center: tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
         title="Center",
         description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
@@ -270,7 +268,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     """A :class:`.PolySlab` registered with jax."""
 
-    vertices: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
+    vertices: tuple[tuple[JaxFloat, JaxFloat], ...] = pd.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
@@ -368,8 +366,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         vertex_grad: Coordinate2D,
         vertex_stat: Coordinate2D,
         is_next: bool,
-        e_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
-        d_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        e_mult_xyz: tuple[dict[str, ScalarFieldDataArray]],
+        d_mult_xyz: tuple[dict[str, ScalarFieldDataArray]],
         sim_bounds: Bound,
         wvl_mat: float,
         eps_out: complex,
@@ -405,8 +403,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             return (1 - s) * vertex_stat[:, None] + s * vertex_grad[:, None]
 
         def edge_basis(
-            xyz_components: Tuple[FieldData, FieldData, FieldData]
-        ) -> Tuple[FieldData, FieldData, FieldData]:
+            xyz_components: tuple[FieldData, FieldData, FieldData]
+        ) -> tuple[FieldData, FieldData, FieldData]:
             """Puts a field component from the (x, y, z) basis to the (t, n, z) basis."""
             cmp_z, (cmp_x_edge, cmp_y_edge) = self.pop_axis(xyz_components, axis=self.axis)
 
@@ -497,8 +495,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     def vertex_vjp(
         self,
         i_vertex,
-        e_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
-        d_mult_xyz: Tuple[Dict[str, ScalarFieldDataArray]],
+        e_mult_xyz: tuple[dict[str, ScalarFieldDataArray]],
+        d_mult_xyz: tuple[dict[str, ScalarFieldDataArray]],
         sim_bounds: Bound,
         wvl_mat: float,
         eps_out: complex,
@@ -630,14 +628,14 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return self.copy(update=dict(vertices=vertices_vjp))
 
 
-JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
+JaxSingleGeometryType = JaxBox | JaxPolySlab
 
 
 @register_pytree_node_class
 class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[JaxPolySlab, ...] = pd.Field(
+    geometries: tuple[JaxPolySlab, ...] = pd.Field(
         ...,
         title="Geometries",
         description="Tuple of jax geometries in a single grouping. "
@@ -731,7 +729,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         return self.updated_copy(geometries=geometries_vjp)
 
 
-JaxGeometryType = Union[JaxSingleGeometryType, JaxGeometryGroup]
+JaxGeometryType = JaxSingleGeometryType | JaxGeometryGroup
 
 # pylint: disable=unhashable-member
 JAX_GEOMETRY_MAP = {

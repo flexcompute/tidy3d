@@ -1,20 +1,19 @@
 """Fit PoleResidue Dispersion models to optical NK data"""
 
 from __future__ import annotations
-from typing import Tuple, Optional
 
 import numpy as np
-from rich.progress import Progress
-from pydantic import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
 import scipy
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
+from rich.progress import Progress
 
-from .fit import DispersionFitter
-from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.medium import PoleResidue
-from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayFloat2D, ArrayComplex2D
+from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 from ...constants import HBAR
 from ...exceptions import ValidationError
+from ...log import log
+from .fit import DispersionFitter
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8
@@ -41,7 +40,7 @@ SCALE_FACTOR = 1.01
 class AdvancedFastFitterParam(Tidy3dBaseModel):
     """Advanced fast fitter parameters."""
 
-    loss_bounds: Tuple[float, float] = Field(
+    loss_bounds: tuple[float, float] = Field(
         (0, np.inf),
         title="Loss bounds",
         description="Bounds (lower, upper) on Im[eps]. Default corresponds to only passivity. "
@@ -51,7 +50,7 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         "A finite upper bound may be helpful when fitting lossless materials. "
         "In this case, consider also increasing the weight for fitting the imaginary part.",
     )
-    weights: Tuple[NonNegativeFloat, NonNegativeFloat] = Field(
+    weights: tuple[NonNegativeFloat, NonNegativeFloat] = Field(
         None,
         title="Weights",
         description="Weights (real, imag) in objective function for fitting. The weights "
@@ -75,20 +74,20 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         description="Whether to show unweighted RMS error in addition to the default weighted "
         'RMS error. Requires ``td.config.logging_level = "INFO"``.',
     )
-    relaxed: Optional[bool] = Field(
+    relaxed: bool | None = Field(
         None,
         title="Relaxed",
         description="Whether to use relaxed fitting algorithm, which "
         "has better pole relocation properties. If ``None``, will try both original and relaxed "
         "algorithms.",
     )
-    smooth: Optional[bool] = Field(
+    smooth: bool | None = Field(
         None,
         title="Smooth",
         description="Whether to use real starting poles, which can help when fitting smooth data. "
         "If ``None``, will try both real and complex starting poles.",
     )
-    logspacing: Optional[bool] = Field(
+    logspacing: bool | None = Field(
         None,
         title="Log spacing",
         description="Whether to space the poles logarithmically. "
@@ -160,7 +159,7 @@ class FastFitterData(AdvancedFastFitterParam):
     )
     residues: ArrayComplex1D = Field(None, title="Residues in eV", description="Residues in eV")
 
-    passivity_optimized: Optional[bool] = Field(
+    passivity_optimized: bool | None = Field(
         False,
         title="Passivity optimized",
         description="Whether the fit was optimized to enforce passivity. If None, "
@@ -192,7 +191,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("poles", always=True)
     def _generate_initial_poles(cls, val, values):
         """Generate initial poles."""
-        if not val is None:
+        if val is not None:
             return val
         if values["logspacing"] is None or values["smooth"] is None:
             return None
@@ -215,7 +214,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("residues", always=True)
     def _generate_initial_residues(cls, val, values):
         """Generate initial residues."""
-        if not val is None:
+        if val is not None:
             return val
         poles = values["poles"]
         if poles is None:
@@ -262,7 +261,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self.poles[np.iscomplex(self.poles)]
 
     @classmethod
-    def get_default_weights(cls, eps: ArrayComplex1D) -> Tuple[float, float]:
+    def get_default_weights(cls, eps: ArrayComplex1D) -> tuple[float, float]:
         """Default weights based on real and imaginary part of eps."""
         rms = np.array([np.sqrt(np.mean(x**2)) for x in (np.real(eps), np.imag(eps))])
         rms = np.maximum(RMS_MIN, rms)
@@ -293,7 +292,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return self.evaluate(self.omega)
 
     @cached_property
-    def imag_extrema(self) -> Tuple[ArrayFloat1D, ArrayComplex1D]:
+    def imag_extrema(self) -> tuple[ArrayFloat1D, ArrayComplex1D]:
         """Extrema of imaginary part of eps."""
 
         # pylint: disable=too-many-locals
@@ -564,7 +563,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return model
 
     # pylint:disable=too-many-locals
-    def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> Tuple[FastFitterData, int]:
+    def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> tuple[FastFitterData, int]:
         """Iterate passivity enforcement algorithm."""
 
         size = len(self.real_poles) + 2 * len(self.complex_poles)
@@ -645,7 +644,7 @@ class FastDispersionFitter(DispersionFitter):
     dispersive medium described by :class:`.PoleResidue` model."""
 
     def _fit_fixed_parameters(
-        self, num_poles_range: Tuple[PositiveInt, PositiveInt], model: FastFitterData
+        self, num_poles_range: tuple[PositiveInt, PositiveInt], model: FastFitterData
     ) -> FastFitterData:
         def fit_non_passive(model: FastFitterData) -> FastFitterData:
             best_model = model
@@ -679,7 +678,7 @@ class FastDispersionFitter(DispersionFitter):
         eps_inf: float = None,
         tolerance_rms: NonNegativeFloat = DEFAULT_TOLERANCE_RMS,
         advanced_param: AdvancedFastFitterParam = None,
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Fit data using a fast fitting algorithm.
 
         Note

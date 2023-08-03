@@ -3,17 +3,16 @@
 import os
 import time
 from enum import Enum
-from typing import Dict
 
 import jwt
+import requests
 import toml
 from requests import Session
-import requests
 
-from .cli.constants import CONFIG_FILE
-from .environment import Env
 from ..exceptions import WebError
 from ..version import __version__
+from .cli.constants import CONFIG_FILE
+from .environment import Env
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
@@ -29,7 +28,7 @@ def api_key():
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+        with open(CONFIG_FILE, encoding="utf-8") as config_file:
             config = toml.loads(config_file.read())
             return config.get("apikey", "")
 
@@ -149,7 +148,7 @@ def need_token_refresh(token: str) -> bool:
     return decoded["exp"] - time.time() < 300
 
 
-def get_headers() -> Dict[str, str]:
+def get_headers() -> dict[str, str]:
     """get headers for http request.
 
     Returns

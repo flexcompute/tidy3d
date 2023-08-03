@@ -1,21 +1,20 @@
 """Interface to run several jobs in batch using simplified syntax."""
-from typing import Dict, List
 
-from .container import DEFAULT_DATA_DIR, BatchData, Batch
 from ..components.simulation import Simulation
 from ..log import log
+from .container import DEFAULT_DATA_DIR, Batch, BatchData
 
 
 # pylint:disable=too-many-arguments, too-many-locals
 def run_async(
-    simulations: Dict[str, Simulation],
+    simulations: dict[str, Simulation],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
     num_workers: int = None,
     verbose: bool = True,
     simulation_type: str = "tidy3d",
-    parent_tasks: Dict[str, List[str]] = None,
+    parent_tasks: dict[str, list[str]] = None,
 ) -> BatchData:
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.

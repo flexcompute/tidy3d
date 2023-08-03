@@ -2,23 +2,20 @@
 from __future__ import annotations
 
 import os
-from abc import ABC
-from typing import Dict, Tuple
 import time
+from abc import ABC
 
+import pydantic as pd
 from rich.console import Console
 from rich.progress import Progress
-import pydantic as pd
 
-from . import webapi as web
-from .task import TaskId, TaskInfo, RunInfo, TaskName
-from ..components.simulation import Simulation
 from ..components.base import Tidy3dBaseModel
 from ..components.data.sim_data import SimulationData
-from ..log import log
-
+from ..components.simulation import Simulation
 from ..exceptions import DataError
-
+from ..log import log
+from . import webapi as web
+from .task import RunInfo, TaskId, TaskInfo, TaskName
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
@@ -66,7 +63,7 @@ class Job(WebContainer):
         description="Type of simulation, used internally only.",
     )
 
-    parent_tasks: Tuple[TaskId, ...] = pd.Field(
+    parent_tasks: tuple[TaskId, ...] = pd.Field(
         None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
     )
 
@@ -227,13 +224,13 @@ class Job(WebContainer):
 class BatchData(Tidy3dBaseModel):
     """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
 
-    task_paths: Dict[TaskName, str] = pd.Field(
+    task_paths: dict[TaskName, str] = pd.Field(
         ...,
         title="Data Paths",
         description="Mapping of task_name to path to corresponding data for each task in batch.",
     )
 
-    task_ids: Dict[TaskName, str] = pd.Field(
+    task_ids: dict[TaskName, str] = pd.Field(
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
@@ -253,7 +250,7 @@ class BatchData(Tidy3dBaseModel):
             verbose=self.verbose,
         )
 
-    def items(self) -> Tuple[TaskName, SimulationData]:
+    def items(self) -> tuple[TaskName, SimulationData]:
         """Iterate through the :class:`.SimulationData` for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
@@ -286,7 +283,7 @@ class BatchData(Tidy3dBaseModel):
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever."""
 
-    simulations: Dict[TaskName, Simulation] = pd.Field(
+    simulations: dict[TaskName, Simulation] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
@@ -323,13 +320,13 @@ class Batch(WebContainer):
         description="Type of each simulation in the batch, used internally only.",
     )
 
-    parent_tasks: Dict[str, Tuple[TaskId, ...]] = pd.Field(
+    parent_tasks: dict[str, tuple[TaskId, ...]] = pd.Field(
         None,
         title="Parent Tasks",
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    jobs: Dict[TaskName, Job] = pd.Field(
+    jobs: dict[TaskName, Job] = pd.Field(
         None,
         title="Simulations",
         description="Mapping of task names to individual Job object for each task in the batch. "
@@ -403,7 +400,7 @@ class Batch(WebContainer):
             jobs[task_name] = job
         return jobs
 
-    def get_info(self) -> Dict[TaskName, TaskInfo]:
+    def get_info(self) -> dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
 
         Returns
@@ -427,7 +424,7 @@ class Batch(WebContainer):
         for _, job in self.jobs.items():
             job.start()
 
-    def get_run_info(self) -> Dict[TaskName, RunInfo]:
+    def get_run_info(self) -> dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
 
         Returns

@@ -1,27 +1,26 @@
 """Web API for mode solver"""
 
 from __future__ import annotations
-from typing import Optional, Callable
 
-from datetime import datetime
 import os
 import pathlib
 import tempfile
 import time
+from collections.abc import Callable
+from datetime import datetime
 
 import pydantic
 import rich
 
-from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
+from ...components.simulation import Simulation
 from ...exceptions import WebError
 from ...log import log
 from ...web.http_management import http
 from ...web.s3utils import download_file, upload_file, upload_string
-from ...web.simulation_task import Folder, SIMULATION_JSON
+from ...web.simulation_task import SIMULATION_JSON, Folder
 from ...web.types import ResourceLifecycle, Submittable
-
-from .mode_solver import ModeSolver, MODE_MONITOR_NAME
+from .mode_solver import MODE_MONITOR_NAME, ModeSolver
 
 MODESOLVER_API = "tidy3d/modesolver/py"
 MODESOLVER_JSON = "mode_solver.json"
@@ -130,7 +129,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="charge"
     )
 
-    created_at: Optional[datetime] = pydantic.Field(
+    created_at: datetime | None = pydantic.Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 

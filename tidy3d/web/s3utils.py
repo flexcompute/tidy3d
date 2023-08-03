@@ -4,15 +4,21 @@
 import io
 import pathlib
 import urllib
+from collections.abc import Callable, Mapping
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Mapping
 
 import boto3
 from boto3.s3.transfer import TransferConfig
 from pydantic import BaseModel, Field
-from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
-from rich.progress import TransferSpeedColumn, TimeRemainingColumn
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 
 from . import httputils as http
 from .environment import Env

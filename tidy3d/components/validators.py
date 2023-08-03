@@ -2,15 +2,14 @@
 """ Defines various validation functions that get used to ensure inputs are legit """
 from typing import Any
 
-import pydantic
 import numpy as np
+import pydantic
 
-from .geometry import Box
-from ..exceptions import ValidationError, SetupError
-from .data.dataset import Dataset, FieldDataset
-from .base import DATA_ARRAY_MAP
-from .types import Tuple
+from ..exceptions import SetupError, ValidationError
 from ..log import log
+from .base import DATA_ARRAY_MAP
+from .data.dataset import Dataset, FieldDataset
+from .geometry import Box
 
 """ Explanation of pydantic validators:
 
@@ -256,8 +255,8 @@ def assert_single_freq_in_range(field_name: str):
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
-    allowed_real_range: Tuple[Tuple[float, float], ...],
-    allowed_imag_range: Tuple[Tuple[float, float], ...] = None,
+    allowed_real_range: tuple[tuple[float, float], ...],
+    allowed_imag_range: tuple[tuple[float, float], ...] = None,
     allowed_complex: bool = True,
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""

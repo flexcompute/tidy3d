@@ -1,14 +1,15 @@
 """Base model for Tidy3D components that are compatible with jax."""
 from __future__ import annotations
 
-from typing import Tuple, List, Any, Callable
 import json
+from collections.abc import Callable
+from typing import Any
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel, cached_property
-from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
+from .data.data_array import JAX_DATA_ARRAY_TAG, JaxDataArray
 
 
 class JaxObject(Tidy3dBaseModel):
@@ -17,7 +18,7 @@ class JaxObject(Tidy3dBaseModel):
     """Shortcut to get names of all fields that have jax components."""
 
     @classmethod
-    def get_jax_field_names(cls) -> List[str]:
+    def get_jax_field_names(cls) -> list[str]:
         """Returns list of field names that have a ``jax_field_type``."""
         adjoint_fields = []
         for field_name, model_field in cls.__fields__.items():
@@ -28,7 +29,7 @@ class JaxObject(Tidy3dBaseModel):
 
     """Methods needed for jax to register arbitary classes."""
 
-    def tree_flatten(self) -> Tuple[list, dict]:
+    def tree_flatten(self) -> tuple[list, dict]:
         """How to flatten a :class:`.JaxObject` instance into a pytree."""
         children = []
         aux_data = self.dict()
@@ -77,7 +78,7 @@ class JaxObject(Tidy3dBaseModel):
                         sub_dict[key] = JAX_DATA_ARRAY_TAG
                     else:
                         strip_data_array(val)
-                elif isinstance(val, (list, tuple)):
+                elif isinstance(val, list | tuple):
                     val_dict = dict(zip(range(len(val)), val))
                     strip_data_array(val_dict)
                     sub_dict[key] = list(val_dict.values())
@@ -85,7 +86,7 @@ class JaxObject(Tidy3dBaseModel):
         strip_data_array(json_dict)
         return json.dumps(json_dict)
 
-    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: list[Callable] = None) -> None:
         """Exports :class:`JaxObject` instance to .hdf5 file.
 
         Parameters
@@ -116,7 +117,7 @@ class JaxObject(Tidy3dBaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+        cls, fname: str, group_path: str = "", custom_decoders: list[Callable] = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 

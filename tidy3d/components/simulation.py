@@ -2,49 +2,93 @@
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
 
-from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
-import pydantic
-import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
 import matplotlib as mpl
+import matplotlib.pyplot as plt
+import numpy as np
+import pydantic
+import xarray as xr
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cached_property
-from .validators import assert_unique_names, assert_objects_in_sim_bounds
-from .validators import validate_mode_objects_symmetry
-from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder, GeometryGroup
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
-from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium
-from .medium import AbstractCustomMedium, Medium2D, MediumType3D
-from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
-from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
-from .boundary import PML, StablePML, Absorber, AbsorberSpec
-from .structure import Structure
-from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource, CustomSourceTime
-from .source import TFSF, Source
-from .monitor import MonitorType, Monitor, FreqMonitor
-from .monitor import SurfaceIntegrationMonitor, PermittivityMonitor
-from .monitor import AbstractFieldMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
-from .data.dataset import Dataset
-from .data.data_array import SpatialDataArray
-from .viz import add_ax_if_none, equal_aspect
-
-from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
-from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
-from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
-
-from ..version import __version__
 from ..constants import C_0, SECOND, inf
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError
+from ..exceptions import SetupError, Tidy3dError, Tidy3dKeyError, ValidationError
 from ..log import log
 from ..updater import Updater
-
+from ..version import __version__
+from .base import cached_property
+from .boundary import (
+    PML,
+    Absorber,
+    AbsorberSpec,
+    BlochBoundary,
+    BoundarySpec,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    StablePML,
+)
+from .data.data_array import SpatialDataArray
+from .data.dataset import Dataset
+from .geometry import Box, Cylinder, Geometry, GeometryGroup, PolySlab, TriangleMesh
+from .grid.grid import Coords, Coords1D, Grid
+from .grid.grid_spec import AutoGrid, GridSpec, UniformGrid
+from .medium import (
+    AbstractCustomMedium,
+    AbstractMedium,
+    AbstractPerturbationMedium,
+    AnisotropicMedium,
+    FullyAnisotropicMedium,
+    Medium,
+    Medium2D,
+    MediumType,
+    MediumType3D,
+    PECMedium,
+)
+from .monitor import (
+    AbstractFieldMonitor,
+    AbstractFieldProjectionMonitor,
+    DiffractionMonitor,
+    FreqMonitor,
+    Monitor,
+    MonitorType,
+    PermittivityMonitor,
+    SurfaceIntegrationMonitor,
+)
+from .source import (
+    TFSF,
+    AstigmaticGaussianBeam,
+    CustomCurrentSource,
+    CustomFieldSource,
+    CustomSourceTime,
+    GaussianBeam,
+    PlaneWave,
+    Source,
+    SourceType,
+)
+from .structure import Structure
+from .types import TYPE_TAG_STR, Ax, Axis, FreqBound, Shapely, Symmetry, annotate_type
+from .validators import (
+    assert_objects_in_sim_bounds,
+    assert_unique_names,
+    validate_mode_objects_symmetry,
+)
+from .viz import (
+    MEDIUM_CMAP,
+    STRUCTURE_EPS_CMAP,
+    PlotParams,
+    add_ax_if_none,
+    equal_aspect,
+    plot_params_bloch,
+    plot_params_override_structures,
+    plot_params_pec,
+    plot_params_pmc,
+    plot_params_pml,
+    plot_params_structure,
+    plot_params_symmetry,
+    plot_sim_3d,
+    polygon_path,
+)
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
@@ -143,7 +187,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         discriminator=TYPE_TAG_STR,
     )
 
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
+    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
@@ -155,7 +199,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "determine the symmetry value.",
     )
 
-    structures: Tuple[Structure, ...] = pydantic.Field(
+    structures: tuple[Structure, ...] = pydantic.Field(
         (),
         title="Structures",
         description="Tuple of structures present in simulation. "
@@ -163,7 +207,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "simulation material properties in regions of spatial overlap.",
     )
 
-    sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
+    sources: tuple[annotate_type(SourceType), ...] = pydantic.Field(
         (),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
@@ -177,7 +221,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "so explicitly setting the boundaries is recommended.",
     )
 
-    monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
+    monitors: tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
         title="Monitors",
         description="Tuple of monitors in the simulation. "
@@ -206,7 +250,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
 
-    normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
+    normalize_index: pydantic.NonNegativeInt | None = pydantic.Field(
         0,
         title="Normalization index",
         description="Index of the source in the tuple of sources whose spectrum will be used to "
@@ -505,7 +549,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     zipped = zip(["x", "y", "z"], sim_bound_min, struct_bound_min, boundaries)
                     for axis, sim_val, struct_val, boundary in zipped:
                         # The test is required only for PML and stable PML
-                        if not isinstance(boundary[0], (PML, StablePML)):
+                        if not isinstance(boundary[0], PML | StablePML):
                             continue
                         if (
                             boundary[0].num_layers > 0
@@ -517,7 +561,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     zipped = zip(["x", "y", "z"], sim_bound_max, struct_bound_max, boundaries)
                     for axis, sim_val, struct_val, boundary in zipped:
                         # The test is required only for PML and stable PML
-                        if not isinstance(boundary[1], (PML, StablePML)):
+                        if not isinstance(boundary[1], PML | StablePML):
                             continue
                         if (
                             boundary[1].num_layers > 0
@@ -624,7 +668,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 ]
                 # make sure the transverse boundaries are either periodic or Bloch
                 for boundary in boundaries:
-                    if not isinstance(boundary, (Periodic, BlochBoundary)):
+                    if not isinstance(boundary, Periodic | BlochBoundary):
                         raise SetupError(
                             f"The 'DiffractionMonitor' {monitor.name} requires periodic "
                             f"or Bloch boundaries along dimensions {n_x} and {n_y}."
@@ -652,7 +696,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         total_structures = [structure_bg] + list(structures)
 
         for monitor in val:
-            if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
+            if isinstance(monitor, AbstractFieldProjectionMonitor | DiffractionMonitor):
                 mediums = cls.intersecting_media(monitor, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
@@ -799,7 +843,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         # for each plane wave in the sources list
         for source in val:
-            if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
+            if isinstance(source, PlaneWave | GaussianBeam | AstigmaticGaussianBeam):
                 mediums = cls.intersecting_media(source, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
@@ -808,7 +852,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         f"intersecting a {source.type} source. Plane must be homogeneous."
                     )
                 if len(mediums) == 1 and isinstance(
-                    list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)
+                    list(mediums)[0], AnisotropicMedium | FullyAnisotropicMedium
                 ):
                     raise SetupError(
                         f"An anisotropic medium is detected on plane intersecting a {source.type} "
@@ -1007,7 +1051,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             )
 
     @cached_property
-    def monitors_data_size(self) -> Dict[str, float]:
+    def monitors_data_size(self) -> dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
         tmesh = self.tmesh
         grid = self.grid
@@ -1062,7 +1106,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                     )
 
                     if any(
-                        isinstance(struct.medium, (AbstractCustomMedium, FullyAnisotropicMedium))
+                        isinstance(struct.medium, AbstractCustomMedium | FullyAnisotropicMedium)
                         for struct in intersecting_structs
                     ):
                         raise SetupError(
@@ -1116,7 +1160,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
     """ Accounting """
 
     @cached_property
-    def mediums(self) -> Set[MediumType]:
+    def mediums(self) -> set[MediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in simulation.
 
         Returns
@@ -1129,7 +1173,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return list(medium_dict.keys())
 
     @cached_property
-    def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
+    def medium_map(self) -> dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
         ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium`
         in simulation.
@@ -1157,8 +1201,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def intersecting_media(
-        test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[MediumType, ...]:
+        test_object: Box, structures: tuple[Structure, ...]
+    ) -> tuple[MediumType, ...]:
         """From a given list of structures, returns a list of :class:`.AbstractMedium` associated
         with those structures that intersect with the ``test_object``, if it is a surface, or its
         surfaces, if it is a volume.
@@ -1191,8 +1235,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def intersecting_structures(
-        test_object: Box, structures: Tuple[Structure, ...]
-    ) -> Tuple[Structure, ...]:
+        test_object: Box, structures: tuple[Structure, ...]
+    ) -> tuple[Structure, ...]:
         """From a given list of structures, returns a list of :class:`.Structure` that intersect
         with the ``test_object``, if it is a surface, or its surfaces, if it is a volume.
 
@@ -1302,8 +1346,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1368,8 +1412,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
@@ -1440,8 +1484,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
 
@@ -1532,8 +1576,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         cbar: bool = True,
         reverse: bool = False,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -1625,7 +1669,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return ax
 
-    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
+    def eps_bounds(self, freq: float = None) -> tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
 
         medium_list = [self.medium] + list(self.mediums)
@@ -1645,11 +1689,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
@@ -1781,8 +1825,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         alpha: float = None,
         ax: Ax = None,
     ) -> Ax:
@@ -1823,8 +1867,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         alpha: float = None,
         ax: Ax = None,
     ) -> Ax:
@@ -1859,7 +1903,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     @cached_property
-    def num_pml_layers(self) -> List[Tuple[float, float]]:
+    def num_pml_layers(self) -> list[tuple[float, float]]:
         """Number of absorbing layers in all three axes and directions (-, +).
 
         Returns
@@ -1871,13 +1915,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
             for idx_j, boundary in enumerate(boundary1d):
-                if isinstance(boundary, (PML, StablePML, Absorber)):
+                if isinstance(boundary, PML | StablePML | Absorber):
                     num_layers[idx_i][idx_j] = boundary.num_layers
 
         return num_layers
 
     @cached_property
-    def pml_thicknesses(self) -> List[Tuple[float, float]]:
+    def pml_thicknesses(self) -> list[tuple[float, float]]:
         """Thicknesses (um) of absorbers in all three axes and directions (-, +)
 
         Returns
@@ -1894,7 +1938,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return pml_thicknesses
 
     @cached_property
-    def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    def bounds_pml(self) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
         bounds_in = self.bounds
@@ -1918,8 +1962,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's absorbing boundaries
@@ -1952,7 +1996,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
-    def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
+    def _make_pml_boxes(self, normal_axis: Axis) -> list[Box]:
         """make a list of Box objects representing the pml to plot on plane."""
         pml_boxes = []
         pml_thicks = self.pml_thicknesses
@@ -1968,7 +2012,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
+        rmin, rmax = (list(bounds) for bounds in self.bounds_pml)
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
@@ -1991,8 +2035,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         ax: Ax = None,
     ) -> Ax:
         """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
@@ -2062,8 +2106,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         y: float = None,
         z: float = None,
         ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
         **kwargs,
     ) -> Ax:
         """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
@@ -2258,8 +2302,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
     ) -> Ax:
         """Sets the xy limits of the simulation at a plane, useful after plotting.
 
@@ -2297,8 +2341,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _get_structures_plane(
-        structures: List[Structure], x: float = None, y: float = None, z: float = None
-    ) -> List[Tuple[Medium, Shapely]]:
+        structures: list[Structure], x: float = None, y: float = None, z: float = None
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
 
         Parameters
@@ -2328,13 +2372,13 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _get_structures_2dbox(
         self,
-        structures: List[Structure],
+        structures: list[Structure],
         x: float = None,
         y: float = None,
         z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> List[Tuple[Medium, Shapely]]:
+        hlim: tuple[float, float] = None,
+        vlim: tuple[float, float] = None,
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
         Parameters
@@ -2390,8 +2434,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
-        structures: List[Structure], plane: Box
-    ) -> List[Tuple[Medium, Shapely]]:
+        structures: list[Structure], plane: Box
+    ) -> list[tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
         Overlaps are removed or merged depending on medium.
 
@@ -2499,10 +2543,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Time step (seconds).
         """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
-        dl_sum_inv_sq = sum((1 / dl**2 for dl in dl_mins))
+        dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
-        n_cfl = min(min((mat.n_cfl for mat in self.mediums)), 1)
+        n_cfl = min(min(mat.n_cfl for mat in self.mediums), 1)
         return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property
@@ -2742,7 +2786,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Grid(boundaries=Coords(**boundary_dict))
 
     @cached_property
-    def _periodic(self) -> Tuple[bool, bool, bool]:
+    def _periodic(self) -> tuple[bool, bool, bool]:
         """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
         We check on both sides but in practice there should be no cases in which a periodic/Bloch
         BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
@@ -2750,7 +2794,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         boundary with another PEC/PMC plane upon initialization."""
         periodic = []
         for bcs_1d in self.boundary_spec.to_list:
-            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+            periodic.append(all(isinstance(bcs, Periodic | BlochBoundary) for bcs in bcs_1d))
         return periodic
 
     def discretize(self, box: Box, snap_zero_dim: bool = False, **kwargs) -> Grid:
@@ -2779,7 +2823,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         box: Box,
         coord_key: str = "centers",
         freq: float = None,
-    ) -> Dict[str, xr.DataArray]:
+    ) -> dict[str, xr.DataArray]:
         """Get array of permittivity at volume specified by box and freq.
 
         Parameters
@@ -2813,7 +2857,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         grid: Grid,
         coord_key: str = "centers",
         freq: float = None,
-    ) -> Dict[str, xr.DataArray]:
+    ) -> dict[str, xr.DataArray]:
         """Get array of permittivity at a given freq on a given grid.
 
         Parameters
@@ -2911,7 +2955,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return make_eps_data(coords)
 
     @property
-    def custom_datasets(self) -> List[Dataset]:
+    def custom_datasets(self) -> list[Dataset]:
         """List of custom datasets for verification purposes. If the list is not empty, then
         the simulation needs to be exported to hdf5 to store the data.
         """
@@ -2944,18 +2988,18 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             + datasets_geometry
         )
 
-    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+    def _volumetric_structures_grid(self, grid: Grid) -> tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
         if not any(isinstance(medium, Medium2D) for medium in self.mediums):
             return self.structures
 
-        def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
+        def get_bounds(geom: Geometry, axis: Axis) -> tuple[float, float]:
             """Get the bounds of a geometry in the axis direction."""
             return (geom.bounds[0][axis], geom.bounds[1][axis])
 
-        def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+        def set_bounds(geom: Geometry, bounds: tuple[float, float], axis: Axis) -> Geometry:
             """Set the bounds of a geometry in the axis direction."""
             if isinstance(geom, Box):
                 new_center = list(geom.center)
@@ -2997,8 +3041,8 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             return set_bounds(geom, (new_center, new_center), axis)
 
         def get_neighboring_media(
-            geom: Geometry, axis: Axis, structures: List[Structure]
-        ) -> Tuple[List[MediumType3D], List[float]]:
+            geom: Geometry, axis: Axis, structures: list[Structure]
+        ) -> tuple[list[MediumType3D], list[float]]:
             """Find the neighboring material properties and grid sizes."""
             dl = get_dls(geom, axis, 1)[0]
             center = get_bounds(geom, axis)[0]
@@ -3054,7 +3098,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return tuple(new_structures)
 
     @cached_property
-    def volumetric_structures(self) -> Tuple[Structure]:
+    def volumetric_structures(self) -> tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents."""
         return self._volumetric_structures_grid(self.grid)

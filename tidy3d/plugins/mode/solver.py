@@ -1,16 +1,15 @@
 """Mode solver for propagating EM modes."""
-from typing import Tuple
 
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...components.types import Numpy, ModeSolverType, EpsSpecType
 from ...components.base import Tidy3dBaseModel
-from ...constants import ETA_0, C_0, fp_eps, pec_val
+from ...components.types import EpsSpecType, ModeSolverType, Numpy
+from ...constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
-from .transforms import radial_transform, angled_transform
+from .transforms import angled_transform, radial_transform
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = fp_eps
@@ -35,7 +34,7 @@ class EigSolver(Tidy3dBaseModel):
         mode_spec,
         symmetry=(0, 0),
         direction="+",
-    ) -> Tuple[Numpy, Numpy, EpsSpecType]:
+    ) -> tuple[Numpy, Numpy, EpsSpecType]:
         """Solve for the modes of a waveguide cross section.
 
         Parameters
@@ -75,9 +74,9 @@ class EigSolver(Tidy3dBaseModel):
         if isinstance(eps_cross, Numpy):
             eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
         elif len(eps_cross) == 9:
-            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = [
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = (
                 np.copy(e) for e in eps_cross
-            ]
+            )
         else:
             raise ValueError("Wrong input to mode solver pemittivity!")
 
@@ -114,14 +113,14 @@ class EigSolver(Tidy3dBaseModel):
             jac_h = np.einsum("ij...,jp...->ip...", jac_h_tmp, jac_h)
 
         """We also need to keep track of the transformation of the k-vector. This is
-        the eigenvalue of the momentum operator assuming some sort of translational invariance and is
-        different from just the transformation of the derivative operator. For example, in a bent
+        the eigenvalue of the momentum operator assuming some sort of translational invariance and
+        is different from just the transformation of the derivative operator. For example, in a bent
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
         effective index approaches that for a straight-waveguide in the limit of infinite radius.
-        Since we use w = R phi in the radial_transform, there is nothing else neede in the k transform.
-        For the angled_transform, the transformation between k-vectors follows from writing the field as
-        E' exp(i k_p w) in transformed coordinates, and identifying this with
+        Since we use w = R phi in the radial_transform, there is nothing else neede in the k
+        transform. For the angled_transform, the transformation between k-vectors follows from
+        writing the field as E' exp(i k_p w) in transformed coordinates, and identifying this with
         E exp(i k_x x + i k_y y + i k_z z) in the original ones."""
         kxy = np.cos(angle_theta) ** 2
         kz = np.cos(angle_theta) * np.sin(angle_theta)
@@ -395,7 +394,7 @@ class EigSolver(Tidy3dBaseModel):
         inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
 
         if enable_incidence_matrices:
-            dnz_xx, dnz_yy, dnz_zz = [incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz]]
+            dnz_xx, dnz_yy, dnz_zz = (incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz])
             dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
             inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
 
@@ -475,8 +474,8 @@ class EigSolver(Tidy3dBaseModel):
         h_field = qmat.dot(vecs)
         Hx = h_field[:N, :] / (1j * neff - keff)
         Hy = h_field[N:, :] / (1j * neff - keff)
-        Hz = inv_mu_zz.dot((dxf.dot(Ey) - dyf.dot(Ex)))
-        Ez = inv_eps_zz.dot((dxb.dot(Hy) - dyb.dot(Hx)))
+        Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
+        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
 
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)
@@ -753,6 +752,6 @@ class EigSolver(Tidy3dBaseModel):
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
 
 
-def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:
+def compute_modes(*args, **kwargs) -> tuple[Numpy, Numpy, str]:
     """A wrapper around ``EigSolver.compute_modes``, which is used in ``ModeSolver``."""
     return EigSolver.compute_modes(*args, **kwargs)

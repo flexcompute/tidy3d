@@ -4,8 +4,9 @@ from __future__ import annotations
 import os
 import pathlib
 import tempfile
+from collections.abc import Callable
 from datetime import datetime
-from typing import List, Optional, Callable, Tuple
+
 import pydantic as pd
 from pydantic import Extra, Field, parse_obj_as
 
@@ -15,8 +16,7 @@ from tidy3d.version import __version__
 from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file, upload_string
-from .types import Queryable, ResourceLifecycle, Submittable
-from .types import Tidy3DResource
+from .types import Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_HDF5 = "output/monitor_data.hdf5"
@@ -46,7 +46,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get("tidy3d/projects")
         return (
             parse_obj_as(
-                List[Folder],
+                list[Folder],
                 resp,
             )
             if resp
@@ -102,7 +102,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 
         http.delete(f"tidy3d/projects/{self.folder_id}")
 
-    def list_tasks(self) -> List[Tidy3DResource]:
+    def list_tasks(self) -> list[Tidy3DResource]:
         """List all tasks in this folder.
 
         Returns
@@ -113,7 +113,7 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         resp = http.get(f"tidy3d/projects/{self.folder_id}/tasks")
         return (
             parse_obj_as(
-                List[SimulationTask],
+                list[SimulationTask],
                 resp,
             )
             if resp
@@ -124,34 +124,34 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
 class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     """Interface for managing the running of a :class:`.Simulation` task on server."""
 
-    task_id: Optional[str] = Field(
+    task_id: str | None = Field(
         ...,
         title="task_id",
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
-    status: Optional[str] = Field(title="status", description="Simulation task status.")
+    status: str | None = Field(title="status", description="Simulation task status.")
 
     real_flex_unit: float = Field(
         None, title="real FlexCredits", description="Billed FlexCredits.", alias="realCost"
     )
 
-    created_at: Optional[datetime] = Field(
+    created_at: datetime | None = Field(
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    simulation: Optional[Simulation] = Field(
+    simulation: Simulation | None = Field(
         title="simulation", description="A copy of the Simulation being run as this task."
     )
 
-    folder_name: Optional[str] = Field(
+    folder_name: str | None = Field(
         "default",
         title="Folder Name",
         description="Name of the folder associated with this task.",
         alias="projectName",
     )
 
-    folder: Optional[Folder]
+    folder: Folder | None
 
     callback_url: str = Field(
         None,
@@ -196,7 +196,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         folder_name: str = "default",
         callback_url: str = None,
         simulation_type: str = "tidy3d",
-        parent_tasks: List[str] = None,
+        parent_tasks: list[str] = None,
     ) -> SimulationTask:
         """Create a new task on the server.
 
@@ -257,7 +257,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         return SimulationTask(**resp) if resp else None
 
     @classmethod
-    def get_running_tasks(cls) -> List[SimulationTask]:
+    def get_running_tasks(cls) -> list[SimulationTask]:
         """Get a list of running tasks from the server"
 
         Returns
@@ -269,7 +269,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         resp = http.get("tidy3d/py/tasks")
         if not resp:
             return []
-        return parse_obj_as(List[SimulationTask], resp)
+        return parse_obj_as(list[SimulationTask], resp)
 
     def delete(self):
         """Delete current task from server."""
@@ -277,7 +277,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             raise ValueError("Task id not found.")
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
-    def get_simulation(self) -> Optional[Simulation]:
+    def get_simulation(self) -> Simulation | None:
         """Download simulation from server.
 
         Returns
@@ -490,7 +490,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             progress_callback=progress_callback,
         )
 
-    def get_running_info(self) -> Tuple[float, float]:
+    def get_running_info(self) -> tuple[float, float]:
         """Gets the % done and field_decay for a running task.
 
         Returns

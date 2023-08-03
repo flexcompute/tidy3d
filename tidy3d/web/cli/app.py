@@ -9,7 +9,7 @@ import click
 import requests
 import toml
 
-from tidy3d.web.cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
+from tidy3d.web.cli.constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
 from tidy3d.web.cli.migrate import migrate
 from tidy3d.web.environment import Env
 
@@ -26,7 +26,7 @@ def get_description():
     """
 
     if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        with open(CONFIG_FILE, encoding="utf-8") as f:
             content = f.read()
             config = toml.loads(content)
             return config.get("apikey", "")
@@ -77,7 +77,7 @@ def configure_fn(apikey: str) -> None:
         return req
 
     if os.path.exists(CREDENTIAL_FILE):
-        with open(CREDENTIAL_FILE, "r", encoding="utf-8") as fp:
+        with open(CREDENTIAL_FILE, encoding="utf-8") as fp:
             auth_json = json.load(fp)
         email = auth_json["email"]
         password = auth_json["password"]

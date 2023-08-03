@@ -1,8 +1,8 @@
 """Special types and validators used by adjoint plugin."""
-from typing import Union, Callable
-import pydantic as pd
+from collections.abc import Callable
 
 import numpy as np
+import pydantic as pd
 from jax.interpreters.ad import JVPTracer
 from jax.numpy import ndarray as JaxArrayType
 
@@ -39,8 +39,8 @@ _add_schema(JaxArrayType, title="JaxArray", field_type_str="jax.numpy.ndarray")
 _add_schema(JVPTracer, title="JVPTracer", field_type_str="jax.interpreters.ad.JVPTracer")
 
 # define types usable as floats including the jax tracers
-JaxArrayLike = Union[NumpyArrayType, JaxArrayType]
-JaxFloat = Union[float, JaxArrayLike, JVPTracer]
+JaxArrayLike = NumpyArrayType | JaxArrayType
+JaxFloat = float | JaxArrayLike | JVPTracer
 
 """
 Note, currently set up for jax 0.3.x, which is the only installable version for windows.

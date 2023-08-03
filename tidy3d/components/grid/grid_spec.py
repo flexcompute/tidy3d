@@ -2,21 +2,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, List, Union
 
 import numpy as np
 import pydantic as pd
 
-from .grid import Coords1D, Coords, Grid
-from .mesher import GradedMesher, MesherType
+from ...constants import C_0, MICROMETER, fp_eps
+from ...exceptions import SetupError
+from ...log import log
 from ..base import Tidy3dBaseModel
-from ..types import Axis, Symmetry, annotate_type
+from ..geometry import Box
 from ..source import SourceType
 from ..structure import Structure, StructureType
-from ..geometry import Box
-from ...log import log
-from ...exceptions import SetupError
-from ...constants import MICROMETER, C_0, fp_eps
+from ..types import Axis, Symmetry, annotate_type
+from .grid import Coords, Coords1D, Grid
+from .mesher import GradedMesher, MesherType
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
@@ -26,11 +25,11 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     def make_coords(  # pylint:disable = too-many-arguments
         self,
         axis: Axis,
-        structures: List[StructureType],
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
+        structures: list[StructureType],
+        symmetry: tuple[Symmetry, Symmetry, Symmetry],
         periodic: bool,
         wavelength: pd.PositiveFloat,
-        num_pml_layers: Tuple[pd.NonNegativeInt, pd.NonNegativeInt],
+        num_pml_layers: tuple[pd.NonNegativeInt, pd.NonNegativeInt],
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
         Symmetry, and PML layers will be treated here.
@@ -85,7 +84,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Generate 1D coords to be used as grid boundaries, based on simulation parameters.
@@ -107,7 +106,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
         """
 
     @staticmethod
-    def _add_pml_to_bounds(num_layers: Tuple[int, int], bounds: Coords1D) -> Coords1D:
+    def _add_pml_to_bounds(num_layers: tuple[int, int], bounds: Coords1D) -> Coords1D:
         """Append absorber layers to the beginning and end of the simulation bounds
         along one dimension.
 
@@ -152,7 +151,7 @@ class UniformGrid(GridSpec1d):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Uniform 1D coords to be used as grid boundaries.
@@ -195,7 +194,7 @@ class CustomGrid(GridSpec1d):
     >>> grid_1d = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
     """
 
-    dl: Tuple[pd.PositiveFloat, ...] = pd.Field(
+    dl: tuple[pd.PositiveFloat, ...] = pd.Field(
         ...,
         title="Customized grid sizes.",
         description="An array of custom nonuniform grid sizes. The resulting grid is centered on "
@@ -218,7 +217,7 @@ class CustomGrid(GridSpec1d):
     def _make_coords_initial(
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         **kwargs,
     ) -> Coords1D:
         """Customized 1D coords to be used as grid boundaries.
@@ -319,7 +318,7 @@ class AutoGrid(GridSpec1d):
     def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ,too-many-locals
         self,
         axis: Axis,
-        structures: List[StructureType],
+        structures: list[StructureType],
         wavelength: float,
         symmetry: Symmetry,
         is_periodic: bool,
@@ -399,7 +398,7 @@ class AutoGrid(GridSpec1d):
         return np.array(bound_coords)
 
 
-GridType = Union[UniformGrid, CustomGrid, AutoGrid]
+GridType = UniformGrid | CustomGrid | AutoGrid
 
 
 class GridSpec(Tidy3dBaseModel):
@@ -443,7 +442,7 @@ class GridSpec(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    override_structures: Tuple[annotate_type(StructureType), ...] = pd.Field(
+    override_structures: tuple[annotate_type(StructureType), ...] = pd.Field(
         (),
         title="Grid specification override structures",
         description="A set of structures that is added on top of the simulation structures in "
@@ -466,7 +465,7 @@ class GridSpec(Tidy3dBaseModel):
         return np.any([isinstance(mesh, CustomGrid) for mesh in grid_list])
 
     @staticmethod
-    def wavelength_from_sources(sources: List[SourceType]) -> pd.PositiveFloat:
+    def wavelength_from_sources(sources: list[SourceType]) -> pd.PositiveFloat:
         """Define a wavelength based on supplied sources. Called if auto mesh is used and
         ``self.wavelength is None``."""
 
@@ -489,7 +488,7 @@ class GridSpec(Tidy3dBaseModel):
         return C_0 / freqs[0]
 
     @property
-    def override_structures_used(self) -> List[bool, bool, bool]:
+    def override_structures_used(self) -> list[bool, bool, bool]:
         """Along each axis, ``True`` if any override structure is used. However,
         it is still ``False`` if only :class:`.MeshOverrideStructure` is supplied, and
         their ``dl[axis]`` all take the ``None`` value.
@@ -513,11 +512,11 @@ class GridSpec(Tidy3dBaseModel):
     # pylint:disable=too-many-locals,too-many-arguments
     def make_grid(
         self,
-        structures: List[Structure],
-        symmetry: Tuple[Symmetry, Symmetry, Symmetry],
-        periodic: Tuple[bool, bool, bool],
-        sources: List[SourceType],
-        num_pml_layers: List[Tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
+        structures: list[Structure],
+        symmetry: tuple[Symmetry, Symmetry, Symmetry],
+        periodic: tuple[bool, bool, bool],
+        sources: list[SourceType],
+        num_pml_layers: list[tuple[pd.NonNegativeInt, pd.NonNegativeInt]],
     ) -> Grid:
         """Make the entire simulation grid based on some simulation parameters.
 
@@ -580,7 +579,7 @@ class GridSpec(Tidy3dBaseModel):
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,
         max_scale: pd.PositiveFloat = 1.4,
-        override_structures: List[StructureType] = (),
+        override_structures: list[StructureType] = (),
         dl_min: pd.NonNegativeFloat = 0.0,
         mesher: MesherType = GradedMesher(),
     ) -> GridSpec:

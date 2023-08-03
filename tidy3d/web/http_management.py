@@ -1,16 +1,16 @@
 """Http connection pool and authentication management."""
 
 import os
+from enum import Enum
 from functools import wraps
 from os.path import expanduser
-from enum import Enum
 
 import requests
 import toml
 
-from .environment import Env
 from ..exceptions import WebError
 from ..version import __version__
+from .environment import Env
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
@@ -29,7 +29,7 @@ def api_key() -> None:
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
     if os.path.exists(f"{expanduser('~')}/.tidy3d/config"):
-        with open(f"{expanduser('~')}/.tidy3d/config", "r", encoding="utf-8") as config_file:
+        with open(f"{expanduser('~')}/.tidy3d/config", encoding="utf-8") as config_file:
             config = toml.loads(config_file.read())
             return config.get("apikey", "")
 

@@ -1,28 +1,26 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional
 from abc import ABC
+from collections.abc import Callable
 
-import pydantic as pd
 import numpy as np
-from jax.tree_util import register_pytree_node_class
+import pydantic as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
-from ....components.types import Bound, Literal
-from ....components.medium import Medium, AnisotropicMedium, CustomMedium
-from ....components.geometry import Geometry
-from ....components.data.monitor_data import FieldData
-from ....components.data.dataset import PermittivityDataset
 from ....components.data.data_array import ScalarFieldDataArray
-from ....exceptions import SetupError
+from ....components.data.dataset import PermittivityDataset
+from ....components.data.monitor_data import FieldData
+from ....components.geometry import Geometry
+from ....components.medium import AnisotropicMedium, CustomMedium, Medium
+from ....components.types import Bound, Literal
 from ....constants import CONDUCTIVITY
-
+from ....exceptions import SetupError
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_float
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
-
+from .types import JaxFloat, validate_jax_float
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20
@@ -37,7 +35,7 @@ class AbstractJaxMedium(ABC, JaxObject):
     # pylint: disable =too-many-locals
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
-    ) -> Tuple[Dict[str, np.ndarray], float]:
+    ) -> tuple[dict[str, np.ndarray], float]:
         """Get the coordinates and volume element for the inside of the corresponding structure."""
 
         # find intersecting volume between structure and simulation
@@ -68,7 +66,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         return vol_coords, d_vol
 
     @staticmethod
-    def make_inside_mask(vol_coords: Dict[str, np.ndarray], inside_fn: Callable) -> xr.DataArray:
+    def make_inside_mask(vol_coords: dict[str, np.ndarray], inside_fn: Callable) -> xr.DataArray:
         """Make a 3D mask of where the volume coordinates are inside a supplied function."""
 
         meshgrid_args = [vol_coords[dim] for dim in "xyz" if dim in vol_coords]
@@ -83,7 +81,7 @@ class AbstractJaxMedium(ABC, JaxObject):
         field: Literal["Ex", "Ey", "Ez"],
         grad_data_fwd: FieldData,
         grad_data_adj: FieldData,
-        vol_coords: Dict[str, np.ndarray],
+        vol_coords: dict[str, np.ndarray],
         d_vol: float,
         inside_fn: Callable,
     ) -> xr.DataArray:
@@ -294,13 +292,13 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     with respect to the field variation.
     """
 
-    permittivity: Optional[JaxDataArray] = pd.Field(
+    permittivity: JaxDataArray | None = pd.Field(
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
     )
 
-    conductivity: Optional[JaxDataArray] = pd.Field(
+    conductivity: JaxDataArray | None = pd.Field(
         None,
         title="Conductivity",
         description="Spatial profile Electric conductivity.  Defined such "
@@ -308,7 +306,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         "frequency omega is given by conductivity/omega.",
     )
 
-    eps_dataset: Optional[JaxPermittivityDataset] = pd.Field(
+    eps_dataset: JaxPermittivityDataset | None = pd.Field(
         None,
         title="Permittivity Dataset",
         description="User-supplied dataset containing complex-valued permittivity "
@@ -541,7 +539,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         return self.copy(update=dict(eps_dataset=vjp_eps_dataset))
 
 
-JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium]
+JaxMediumType = JaxMedium | JaxAnisotropicMedium | JaxCustomMedium
 
 # pylint: disable=unhashable-member
 JAX_MEDIUM_MAP = {

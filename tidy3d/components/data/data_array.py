@@ -1,13 +1,12 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict, List
 
-import xarray as xr
-import numpy as np
 import dask
 import h5py
+import numpy as np
+import xarray as xr
 
-from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
+from ...constants import HERTZ, MICROMETER, RADIAN, SECOND
 from ...exceptions import DataError, FileError
 from ..types import Bound
 
@@ -44,7 +43,7 @@ class DataArray(xr.DataArray):
     # stores an ordered tuple of strings corresponding to the data dimensions
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
-    _data_attrs: Dict[str, str] = {}
+    _data_attrs: dict[str, str] = {}
 
     @classmethod
     def __get_validators__(cls):
@@ -165,7 +164,7 @@ class DataArray(xr.DataArray):
         token_str = dask.base.tokenize(self)
         return hash(token_str)
 
-    def multiply_at(self, value: complex, coord_name: str, indices: List[int]) -> DataArray:
+    def multiply_at(self, value: complex, coord_name: str, indices: list[int]) -> DataArray:
         """Multiply self by value at indices into ."""
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value

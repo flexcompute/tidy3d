@@ -2,30 +2,49 @@
 """Defines spatial extent of objects."""
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any, Callable, Optional
-from math import isclose
 import functools
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from math import isclose
+from typing import Any
 
-import pydantic
 import numpy as np
+import pydantic
 from matplotlib import patches, path
 from shapely import unary_union
-from shapely.geometry import Point, Polygon, box, MultiPolygon, LineString
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 from shapely.validation import make_valid
 
-from .base import Tidy3dBaseModel, cached_property
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayFloat3D, PlanePosition
-from .types import Vertices, Ax, Shapely, annotate_type
-from .viz import add_ax_if_none, equal_aspect
-from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
-from .viz import PlotParams, plot_params_geometry, polygon_patch
+from ..constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
+from ..exceptions import DataError, SetupError, Tidy3dKeyError, ValidationError
 from ..log import log
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
-from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
 from .data.dataset import TriangleMeshDataset
-from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
 from .transformation import RotationAroundAxis
+from .types import (
+    ArrayFloat3D,
+    Ax,
+    Axis,
+    Bound,
+    Coordinate,
+    Coordinate2D,
+    PlanePosition,
+    Shapely,
+    Size,
+    Vertices,
+    annotate_type,
+)
+from .viz import (
+    ARROW_LENGTH,
+    PLOT_BUFFER,
+    PlotParams,
+    add_ax_if_none,
+    arrow_style,
+    equal_aspect,
+    plot_params_geometry,
+    polygon_patch,
+)
 
 try:
     import trimesh
@@ -35,8 +54,8 @@ except Exception:  # pylint:disable=broad-except
     TRIMESH_AVAILABLE = False
 
 try:
-    import networkx  # pylint:disable=unused-import
-    import rtree  # pylint:disable=unused-import
+    import networkx  # noqa: F401
+    import rtree  # noqa: F401
 
     NETWORKX_RTREE_AVAILABLE = True
 except Exception:  # pylint:disable=broad-except
@@ -106,13 +125,13 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _ensure_equal_shape(*arrays):
         """Ensure all input arrays have the same shape."""
-        shapes = set(np.array(arr).shape for arr in arrays)
+        shapes = {np.array(arr).shape for arr in arrays}
         if len(shapes) > 1:
             raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
 
     def _inds_inside_bounds(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
-    ) -> Tuple[slice, slice, slice]:
+    ) -> tuple[slice, slice, slice]:
         """Return slices into the sorted input arrays that are inside the geometry bounds.
 
         Parameters
@@ -173,7 +192,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @abstractmethod
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -193,7 +212,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
-    def intersections_2dbox(self, plane: Box) -> List[Shapely]:
+    def intersections_2dbox(self, plane: Box) -> list[Shapely]:
         """Returns list of shapely geomtries representing the intersections of the geometry with
         a 2D box.
 
@@ -221,7 +240,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         shapes_plane = self.intersections_plane(**xyz_kwargs)
 
         # intersect all shapes with the input plane
-        bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
+        bs_min, bs_max = (plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds)
         shapely_box = box(minx=bs_min[0], miny=bs_min[1], maxx=bs_max[0], maxy=bs_max[1])
         shapely_box = plane.evaluate_inf_shape(shapely_box)
         return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
@@ -321,7 +340,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return Box.from_bounds(*self.bounds)
 
-    def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
+    def _pop_bounds(self, axis: Axis) -> tuple[Coordinate2D, tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
         Parameters
@@ -437,7 +456,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @classmethod
     def strip_coords(
         cls, shape: Shapely
-    ) -> Tuple[List[float], List[float], Tuple[List[float], List[float]]]:
+    ) -> tuple[list[float], list[float], tuple[list[float], list[float]]]:
         """Get the exterior and list of interior xy coords for a shape.
 
         Parameters
@@ -487,7 +506,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             A new copy of the input shape with the mapping applied to the coordinates.
         """
 
-        if not isinstance(shape, (Polygon, MultiPolygon)):
+        if not isinstance(shape, Polygon | MultiPolygon):
             return shape
 
         def apply_func(coords):
@@ -499,7 +518,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         return Polygon(new_ext_coords, holes=list_new_int_coords)
 
-    def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
+    def _get_plot_labels(self, axis: Axis) -> tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
 
         Parameters
@@ -517,7 +536,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def _get_plot_limits(
         self, axis: Axis, buffer: float = PLOT_BUFFER
-    ) -> Tuple[Coordinate2D, Coordinate2D]:
+    ) -> tuple[Coordinate2D, Coordinate2D]:
         """Gets planar coordinate limits for cross section plots.
 
         Parameters
@@ -576,7 +595,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return cls.map_to_coords(cls._evaluate_inf, shape) if isinstance(shape, Polygon) else shape
 
     @staticmethod
-    def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
+    def pop_axis(coord: tuple[Any, Any, Any], axis: int) -> tuple[Any, tuple[Any, Any]]:
         """Separates coordinate at ``axis`` index from coordinates on the plane tangent to ``axis``.
 
         Parameters
@@ -598,7 +617,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis_val, tuple(plane_vals)
 
     @staticmethod
-    def unpop_axis(ax_coord: Any, plane_coords: Tuple[Any, Any], axis: int) -> Tuple[Any, Any, Any]:
+    def unpop_axis(ax_coord: Any, plane_coords: tuple[Any, Any], axis: int) -> tuple[Any, Any, Any]:
         """Combine coordinate along axis with coordinates on the plane tangent to the axis.
 
         Parameters
@@ -620,7 +639,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return tuple(coords)
 
     @staticmethod
-    def parse_xyz_kwargs(**xyz) -> Tuple[Axis, float]:
+    def parse_xyz_kwargs(**xyz) -> tuple[Axis, float]:
         """Turns x,y,z kwargs into index of the normal axis and position along that axis.
 
         Parameters
@@ -749,7 +768,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     """ Field and coordinate transformations """
 
     @staticmethod
-    def car_2_sph(x: float, y: float, z: float) -> Tuple[float, float, float]:
+    def car_2_sph(x: float, y: float, z: float) -> tuple[float, float, float]:
         """Convert Cartesian to spherical coordinates.
 
         Parameters
@@ -772,7 +791,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return r, theta, phi
 
     @staticmethod
-    def sph_2_car(r: float, theta: float, phi: float) -> Tuple[float, float, float]:
+    def sph_2_car(r: float, theta: float, phi: float) -> tuple[float, float, float]:
         """Convert spherical to Cartesian coordinates.
 
         Parameters
@@ -798,7 +817,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def sph_2_car_field(
         f_r: float, f_theta: float, f_phi: float, theta: float, phi: float
-    ) -> Tuple[complex, complex, complex]:
+    ) -> tuple[complex, complex, complex]:
         """Convert vector field components in spherical coordinates to cartesian.
 
         Parameters
@@ -831,7 +850,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def car_2_sph_field(
         f_x: float, f_y: float, f_z: float, theta: float, phi: float
-    ) -> Tuple[complex, complex, complex]:
+    ) -> tuple[complex, complex, complex]:
         """Convert vector field components in cartesian coordinates to spherical.
 
         Parameters
@@ -863,7 +882,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return f_r, f_theta, f_phi
 
     @staticmethod
-    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> Tuple[float, float]:
+    def kspace_2_sph(ux: float, uy: float, axis: Axis) -> tuple[float, float]:
         """Convert normalized k-space coordinates to angles.
 
         Parameters
@@ -1048,7 +1067,7 @@ class Planar(Geometry, ABC):
         axis_index.insert(self.axis, 2)
         return axis_index[axis]
 
-    def _order_by_axis(self, plane_val: Any, axis_val: Any, axis: int) -> Tuple[Any, Any]:
+    def _order_by_axis(self, plane_val: Any, axis_val: Any, axis: int) -> tuple[Any, Any]:
         """Orders a value in the plane and value along axis in correct (x,y) order for plotting.
            Note: sometimes if axis=1 and we compute cross section values orthogonal to axis,
            they can either be x or y in the plots.
@@ -1373,13 +1392,13 @@ class Box(Centered):
         return Box(center=self.center, size=self.size)
 
     @cached_property
-    def zero_dims(self) -> List[Axis]:
+    def zero_dims(self) -> list[Axis]:
         """A list of axes along which the :class:`Box` is zero-sized."""
         return [dim for dim, size in enumerate(self.size) if size == 0]
 
     def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
         self,
-        direction: Tuple[float, float, float],
+        direction: tuple[float, float, float],
         x: float = None,
         y: float = None,
         z: float = None,
@@ -1965,7 +1984,7 @@ class Cylinder(Centered, Circular, Planar):
 
         return radius_middle - (z - self.center_axis) * self._tanq
 
-    def _local_to_global_side_cross_section(self, coords: List[float], axis: int) -> List[float]:
+    def _local_to_global_side_cross_section(self, coords: list[float], axis: int) -> list[float]:
         """Map a point (x,y) from local to global coordinate system in the
         side cross section.
 
@@ -2005,7 +2024,7 @@ class PolySlab(Planar):
     >>> p = PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     """
 
-    slab_bounds: Tuple[float, float] = pydantic.Field(
+    slab_bounds: tuple[float, float] = pydantic.Field(
         ...,
         title="Slab Bounds",
         description="Minimum and maximum positions of the slab along axis dimension.",
@@ -2210,14 +2229,14 @@ class PolySlab(Planar):
         cls,
         gds_cell,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> List[PolySlab]:
+    ) -> list[PolySlab]:
         """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
         Parameters
@@ -2277,7 +2296,7 @@ class PolySlab(Planar):
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List[Vertices]:
+    ) -> list[Vertices]:
         """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
         Parameters
@@ -2337,7 +2356,7 @@ class PolySlab(Planar):
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List[Vertices]:
+    ) -> list[Vertices]:
         """Load :class:`PolySlab` vertices from a ``gdstk.Cell``.
 
         Parameters
@@ -2390,7 +2409,7 @@ class PolySlab(Planar):
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List["PolySlab"]:
+    ) -> list[PolySlab]:
         """Load :class:`PolySlab` vertices from a ``gdspy.Cell``.
 
         Parameters
@@ -2759,7 +2778,7 @@ class PolySlab(Planar):
 
     def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
         self, vertices: np.ndarray, position: float, axis: int, exclude_on_vertices: bool = False
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For unslanted polyslab).
@@ -2838,7 +2857,7 @@ class PolySlab(Planar):
 
     def _find_intersecting_ys_angle_slant(  # pylint:disable=too-many-locals, too-many-statements
         self, vertices: np.ndarray, position: float, axis: int
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
         Find intersection point (in y) assuming straight line,and intersecting angle between plane
         and edges. (For slanted polyslab)
@@ -3180,7 +3199,7 @@ class PolySlab(Planar):
     @staticmethod
     def _shift_vertices(  # pylint:disable=too-many-locals
         vertices: np.ndarray, dist
-    ) -> Tuple[np.ndarray, np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+    ) -> tuple[np.ndarray, np.ndarray, tuple[np.ndarray, np.ndarray]]:
         """Shifts the vertices of a polygon outward uniformly by distances
         `dists`.
 
@@ -3241,7 +3260,7 @@ class PolySlab(Planar):
         return np.swapaxes(vs_orig + shift_total, -2, -1), parallel_shift, (shift_x, shift_y)
 
     @staticmethod
-    def _edge_length_and_reduction_rate(vertices: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _edge_length_and_reduction_rate(vertices: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Edge length of reduction rate of each edge with unit offset length.
 
         Parameters
@@ -3345,7 +3364,7 @@ class TriangleMesh(Geometry, ABC):
     >>> stl_geom = TriangleMesh.from_vertices_faces(vertices, faces)
     """
 
-    mesh_dataset: Optional[TriangleMeshDataset] = pydantic.Field(
+    mesh_dataset: TriangleMeshDataset | None = pydantic.Field(
         ...,
         title="Surface mesh data",
         description="Surface mesh data.",
@@ -3410,10 +3429,10 @@ class TriangleMesh(Geometry, ABC):
         cls,
         filename: str,
         scale: float = 1.0,
-        origin: Tuple[float, float, float] = (0, 0, 0),
+        origin: tuple[float, float, float] = (0, 0, 0),
         solid_index: int = None,
         **kwargs,
-    ) -> Union[TriangleMesh, GeometryGroup]:
+    ) -> TriangleMesh | GeometryGroup:
         """Load a :class:`.TriangleMesh` directly from an STL file.
         The ``solid_index`` parameter can be used to select a single solid from the file.
         Otherwise, if the file contains a single solid, it will be loaded as a
@@ -3600,7 +3619,7 @@ class TriangleMesh(Geometry, ABC):
 
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -3725,13 +3744,13 @@ class TriangleMesh(Geometry, ABC):
 
 
 # types of geometry including just one Geometry object (exluding group)
-SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh]
+SingleGeometryType = Box | Sphere | Cylinder | PolySlab | TriangleMesh
 
 
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[annotate_type(SingleGeometryType), ...] = pydantic.Field(
+    geometries: tuple[annotate_type(SingleGeometryType), ...] = pydantic.Field(
         ...,
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
@@ -3771,7 +3790,7 @@ class GeometryGroup(Geometry):
 
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
-    ) -> List[Shapely]:
+    ) -> list[Shapely]:
         """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
 
         Parameters
@@ -3884,4 +3903,4 @@ class GeometryGroup(Geometry):
 
 
 # geometries usable to define a structure
-GeometryType = Union[SingleGeometryType, GeometryGroup]
+GeometryType = SingleGeometryType | GeometryGroup

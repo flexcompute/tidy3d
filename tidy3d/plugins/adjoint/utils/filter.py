@@ -1,10 +1,10 @@
 """Spatial filtering Functions for adjoint plugin."""
 from abc import ABC, abstractmethod
 
-import pydantic as pd
-import numpy as np
 import jax.numpy as jnp
 import jax.scipy as jsp
+import numpy as np
+import pydantic as pd
 
 from ....components.base import Tidy3dBaseModel
 from ....constants import MICROMETER

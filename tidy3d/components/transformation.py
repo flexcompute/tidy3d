@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
 
-import pydantic as pd
 import numpy as np
+import pydantic as pd
 
-from .base import Tidy3dBaseModel, cached_property
-from .types import Coordinate, TensorReal, ArrayFloat2D
 from ..constants import RADIAN
+from .base import Tidy3dBaseModel, cached_property
+from .types import ArrayFloat2D, Coordinate, TensorReal
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):
@@ -111,4 +110,4 @@ class RotationAroundAxis(AbstractRotation):
         return R
 
 
-RotationType = Union[RotationAroundAxis]
+RotationType = RotationAroundAxis

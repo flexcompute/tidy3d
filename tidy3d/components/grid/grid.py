@@ -1,16 +1,14 @@
 """Defines the FDTD grid."""
 from __future__ import annotations
-from typing import Tuple, List, Union
 
 import numpy as np
 import pydantic as pd
 
-from ..base import Tidy3dBaseModel, cached_property
-from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
-from ..geometry import Box
-
 from ...exceptions import SetupError
+from ..base import Tidy3dBaseModel, cached_property
+from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
+from ..geometry import Box
+from ..types import TYPE_TAG_STR, ArrayFloat1D, Axis, InterpMethod, Literal
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
@@ -51,10 +49,10 @@ class Coords(Tidy3dBaseModel):
 
     def spatial_interp(
         self,
-        array: Union[SpatialDataArray, ScalarFieldDataArray],
+        array: SpatialDataArray | ScalarFieldDataArray,
         interp_method: InterpMethod,
-        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
-    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        fill_value: Literal["extrapolate"] | float = "extrapolate",
+    ) -> SpatialDataArray | ScalarFieldDataArray:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
 
@@ -111,7 +109,7 @@ class Coords(Tidy3dBaseModel):
                 return array
 
         # Apply interp for the rest
-        is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
+        is_sorted = all(np.all(np.diff(array.coords[f]) > 0) for f in interp_ax)
         interp_param = {
             "method": interp_method,
             "assume_sorted": is_sorted,
@@ -282,7 +280,7 @@ class Grid(Tidy3dBaseModel):
         return Coords(**{key: np.diff(val) for key, val in self.boundaries.to_dict.items()})
 
     @property
-    def num_cells(self) -> Tuple[int, int, int]:
+    def num_cells(self) -> tuple[int, int, int]:
         """Return sizes of the cells in the :class:`Grid`.
 
         Returns
@@ -407,7 +405,7 @@ class Grid(Tidy3dBaseModel):
     # pylint:disable=too-many-locals
     def discretize_inds(
         self, box: Box, extend: bool = False, extend_2d_normal: bool = False
-    ) -> List[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters

@@ -2,20 +2,20 @@
 """ utilities for plotting """
 from __future__ import annotations
 
-from typing import Any
-from functools import wraps
 import random
 import time
+from functools import wraps
+from typing import Any
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import PathPatch, ArrowStyle
+import pydantic as pd
+from matplotlib.patches import ArrowStyle, PathPatch
 from matplotlib.path import Path
 from numpy import array, concatenate, ones
-import pydantic as pd
 
-from .types import Ax
-from .base import Tidy3dBaseModel
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel
+from .types import Ax
 
 """ Constants """
 
@@ -232,7 +232,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
 
     try:
         # pylint:disable=import-outside-toplevel
-        from IPython.display import display, HTML
+        from IPython.display import HTML, display
     except ImportError as e:
         raise SetupError(
             "3D plotting requires ipython to be installed "
@@ -244,7 +244,8 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     js_code = f"""
     window.postMessageToViewer{uuid} = event => {{
         if(event.data.type === 'viewer'&&event.data.uuid==='{uuid}'){{
-            document.getElementById('simulation-viewer{uuid}').contentWindow.postMessage({{ type: 'jupyter', uuid:'{uuid}', value:{sim._json_string}}}, '*')
+            document.getElementById('simulation-viewer{uuid}').contentWindow.postMessage({{
+             type: 'jupyter', uuid:'{uuid}', value:{sim._json_string}}}, '*')
         }}
     }};
     window.addEventListener(
@@ -258,7 +259,8 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         + str(uuid)
     )
     html_code = f"""
-    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="{width}" height="{height}" allowfullscreen="true"></iframe>
+    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="{width}" height="{height}"
+    allowfullscreen="true"></iframe>
     <script>
         {js_code}
     </script>

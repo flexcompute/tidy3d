@@ -2,39 +2,74 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
 
-from abc import ABC
-from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
+from abc import ABC
+from collections.abc import Callable
+from typing import Any
 
-import xarray as xr
 import numpy as np
 import pydantic as pd
+import xarray as xr
 
-from .data_array import FluxTimeDataArray, FluxDataArray
-from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
-from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
-from .data_array import FieldProjectionKSpaceDataArray
-from .data_array import DataArray, DiffractionDataArray
-from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
-from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
-from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
-from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..base import TYPE_TAG_STR, cached_property
-from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
-from ..types import EpsSpecType
-from ..grid.grid import Grid, Coords
-from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
-from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
-from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from ..monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
-from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
-from ..monitor import DiffractionMonitor
-from ..source import SourceTimeType, CustomFieldSource
-from ..medium import Medium, MediumType
-from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, ValidationError
-from ...constants import ETA_0, C_0, MICROMETER
+from ...constants import C_0, ETA_0, MICROMETER
+from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
-
+from ..base import TYPE_TAG_STR, cached_property
+from ..grid.grid import Coords, Grid
+from ..medium import Medium, MediumType
+from ..monitor import (
+    DiffractionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldProjectionSurface,
+    FieldTimeMonitor,
+    FluxMonitor,
+    FluxTimeMonitor,
+    ModeMonitor,
+    ModeSolverMonitor,
+    MonitorType,
+    PermittivityMonitor,
+)
+from ..source import CustomFieldSource, SourceTimeType
+from ..types import (
+    ArrayFloat1D,
+    ArrayFloat2D,
+    Coordinate,
+    EpsSpecType,
+    Numpy,
+    Size,
+    Symmetry,
+    TrackFreq,
+)
+from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
+from .data_array import (
+    DataArray,
+    DiffractionDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+    FluxDataArray,
+    FluxTimeDataArray,
+    FreqDataArray,
+    FreqModeDataArray,
+    MixedModeDataArray,
+    ModeAmpsDataArray,
+    ModeIndexDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    TimeDataArray,
+)
+from .dataset import (
+    AbstractFieldDataset,
+    Dataset,
+    ElectromagneticFieldDataset,
+    FieldDataset,
+    FieldTimeDataset,
+    ModeSolverDataset,
+    PermittivityDataset,
+)
 
 Coords1D = ArrayFloat1D
 
@@ -63,9 +98,9 @@ class MonitorData(Dataset, ABC):
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
 
-    monitor: Union[FieldMonitor, FieldTimeMonitor, PermittivityMonitor, ModeSolverMonitor]
+    monitor: FieldMonitor | FieldTimeMonitor | PermittivityMonitor | ModeSolverMonitor
 
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+    symmetry: tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetry",
         description="Symmetry eigenvalues of the original simulation in x, y, and z.",
@@ -152,9 +187,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, ABC):
     """Collection of electromagnetic fields."""
 
-    grid_primal_correction: Union[
-        float, FreqDataArray, TimeDataArray, FreqModeDataArray
-    ] = pd.Field(
+    grid_primal_correction: float | FreqDataArray | TimeDataArray | FreqModeDataArray = pd.Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -162,7 +195,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "which the data was computed. The factor is applied to fields defined on the primal grid "
         "locations along the normal direction.",
     )
-    grid_dual_correction: Union[float, FreqDataArray, TimeDataArray, FreqModeDataArray] = pd.Field(
+    grid_dual_correction: float | FreqDataArray | TimeDataArray | FreqModeDataArray = pd.Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -186,7 +219,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         }
 
     @property
-    def _tangential_dims(self) -> List[str]:
+    def _tangential_dims(self) -> list[str]:
         """For a 2D monitor data, return the names of the tangential dimensions. Raise if cannot
         confirm that the associated monitor is 2D."""
         if len(self.monitor.zero_dims) != 1:
@@ -197,7 +230,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return tangential_dims
 
     @property
-    def _in_plane(self) -> Dict[str, DataArray]:
+    def _in_plane(self) -> dict[str, DataArray]:
         """Dictionary of field components with finite grid correction factors applied and symmetry
         expanded."""
         if len(self.monitor.zero_dims) != 1:
@@ -210,7 +243,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return fields
 
     @property
-    def _plane_grid_boundaries(self) -> Tuple[Coords1D, Coords1D]:
+    def _plane_grid_boundaries(self) -> tuple[Coords1D, Coords1D]:
         """For a 2D monitor data, return the boundaries of the in-plane grid to be used to compute
         differential area and to colocate fields to grid centers if needed."""
         if np.any(np.array(self.monitor.interval_space) > 1):
@@ -237,7 +270,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return plane_bounds1, plane_bounds2
 
     @property
-    def _plane_grid_centers(self) -> Tuple[Coords1D, Coords1D]:
+    def _plane_grid_centers(self) -> tuple[Coords1D, Coords1D]:
         """For 2D monitor data, return the centers of the in-plane grid"""
         return [(bs[1:] + bs[:-1]) / 2 for bs in self._plane_grid_boundaries]
 
@@ -269,7 +302,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         sizes_dim1 = bounds[1][1:] - bounds[1][:-1] if bounds[1].size > 1 else [1.0]
         return xr.DataArray(np.outer(sizes_dim0, sizes_dim1), dims=self._tangential_dims)
 
-    def _tangential_corrected(self, fields: Dict[str, DataArray]) -> Dict[str, DataArray]:
+    def _tangential_corrected(self, fields: dict[str, DataArray]) -> dict[str, DataArray]:
         """For a 2D monitor data, extract the tangential components from fields and orient them
         such that the third component would be the normal axis. This just means that the H field
         gets an extra minus sign if the normal axis is ``"y"``. Raise if any of the tangential
@@ -294,7 +327,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return tan_fields
 
     @property
-    def _tangential_fields(self) -> Dict[str, DataArray]:
+    def _tangential_fields(self) -> dict[str, DataArray]:
         """For a 2D monitor data, get the tangential E and H fields in the 2D plane grid.  Fields
         are oriented such that the third component would be the normal axis. This just means that
         the H field gets an extra minus sign if the normal axis is ``"y"``.
@@ -306,7 +339,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return self._tangential_corrected(self._in_plane)
 
     @property
-    def _centered_fields(self) -> Dict[str, DataArray]:
+    def _centered_fields(self) -> dict[str, DataArray]:
         """For a 2D monitor data, get all E and H fields colocated to the cell centers in the 2D
         plane grid.
 
@@ -331,7 +364,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return centered_fields
 
     @property
-    def _centered_tangential_fields(self) -> Dict[str, DataArray]:
+    def _centered_tangential_fields(self) -> dict[str, DataArray]:
         """For a 2D monitor data, get the tangential E and H fields colocated to the cell centers in
         the 2D plane grid.  Fields are oriented such that the third component would be the normal
         axis. This just means that the H field gets an extra minus sign if the normal axis is
@@ -416,7 +449,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         return FreqModeDataArray(num / den)
 
     def dot(
-        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+        self, field_data: FieldData | ModeSolverData, conjugate: bool = True
     ) -> ModeAmpsDataArray:
         """Dot product (modal overlap) with another :class:`.FieldData` object. Both datasets have
         to be frequency-domain data associated with a 2D monitor. Along the tangential directions,
@@ -469,7 +502,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
         return ModeAmpsDataArray(0.25 * integrand.sum(dim=d_area.dims))
 
-    def _interpolated_tangential_fields(self, centers: ArrayFloat2D) -> Dict[str, DataArray]:
+    def _interpolated_tangential_fields(self, centers: ArrayFloat2D) -> dict[str, DataArray]:
         """For 2D monitors, interpolate this fields to given centers in the tangential plane.
 
         Parameters
@@ -496,7 +529,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     # pylint: disable=too-many-locals
     def outer_dot(
-        self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
+        self, field_data: FieldData | ModeSolverData, conjugate: bool = True
     ) -> MixedModeDataArray:
         """Dot product (modal overlap) with another :class:`.FieldData` object.
 
@@ -791,7 +824,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         ..., title="Monitor", description="Mode solver monitor associated with the data."
     )
 
-    eps_spec: List[EpsSpecType] = pd.Field(
+    eps_spec: list[EpsSpecType] = pd.Field(
         None,
         title="Permettivity Specification",
         description="Characterization of the permittivity profile on the plane where modes are "
@@ -909,7 +942,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         self,
         data_to_sort: ModeSolverData,
         overlap_thresh: float,
-    ) -> Tuple[Numpy, Numpy]:
+    ) -> tuple[Numpy, Numpy]:
         """Find new ordering of modes in data_to_sort based on their similarity to own modes."""
 
         num_modes = self.n_complex.sizes["mode_index"]
@@ -953,7 +986,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         return pairs, complex_amps
 
     @staticmethod
-    def _find_closest_pairs(arr: Numpy) -> Tuple[Numpy, Numpy]:
+    def _find_closest_pairs(arr: Numpy) -> tuple[Numpy, Numpy]:
         """Given a complex overlap matrix pair row and column entries."""
 
         n, k = np.shape(arr)
@@ -1220,19 +1253,20 @@ class FluxTimeData(MonitorData):
     )
 
 
-ProjFieldType = Union[
-    FieldProjectionAngleDataArray,
-    FieldProjectionCartesianDataArray,
-    FieldProjectionKSpaceDataArray,
-    DiffractionDataArray,
-]
+ProjFieldType = (
+    FieldProjectionAngleDataArray
+    | FieldProjectionCartesianDataArray
+    | FieldProjectionKSpaceDataArray
+    | DiffractionDataArray
+)
 
-ProjMonitorType = Union[
-    FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
-    DiffractionMonitor,
-]
+
+ProjMonitorType = (
+    FieldProjectionAngleMonitor
+    | FieldProjectionCartesianMonitor
+    | FieldProjectionKSpaceMonitor
+    | DiffractionMonitor
+)
 
 
 class AbstractFieldProjectionData(MonitorData):
@@ -1282,7 +1316,7 @@ class AbstractFieldProjectionData(MonitorData):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to their associated data."""
         return dict(
             Er=self.Er,
@@ -1299,12 +1333,12 @@ class AbstractFieldProjectionData(MonitorData):
         return np.array(self.Etheta.coords["f"])
 
     @property
-    def coords(self) -> Dict[str, np.ndarray]:
+    def coords(self) -> dict[str, np.ndarray]:
         """Coordinates of the fields contained."""
         return self.Etheta.coords
 
     @property
-    def coords_spherical(self) -> Dict[str, np.ndarray]:
+    def coords_spherical(self) -> dict[str, np.ndarray]:
         """Coordinates grid for the fields in the spherical system."""
         if "theta" in self.coords.keys():
             r, theta, phi = np.meshgrid(
@@ -1332,7 +1366,7 @@ class AbstractFieldProjectionData(MonitorData):
         return {"r": r, "theta": theta, "phi": phi}
 
     @property
-    def dims(self) -> Tuple[str, ...]:
+    def dims(self) -> tuple[str, ...]:
         """Dimensions of the radiation vectors contained."""
         return self.Etheta.dims
 
@@ -1340,7 +1374,7 @@ class AbstractFieldProjectionData(MonitorData):
         """Make an xr.DataArray with data and same coords and dims as fields of self."""
         return xr.DataArray(data=data, coords=self.coords, dims=self.dims)
 
-    def make_dataset(self, keys: Tuple[str, ...], vals: Tuple[np.ndarray, ...]) -> xr.Dataset:
+    def make_dataset(self, keys: tuple[str, ...], vals: tuple[np.ndarray, ...]) -> xr.Dataset:
         """Make an xr.Dataset with keys and data with same coords and dims as fields."""
         data_arrays = tuple(map(self.make_data_array, vals))
         return xr.Dataset(dict(zip(keys, data_arrays)))
@@ -1374,7 +1408,7 @@ class AbstractFieldProjectionData(MonitorData):
         return (2 * np.pi * frequency / C_0) * (index_n + 1j * index_k)
 
     @property
-    def nk(self) -> Tuple[float, float]:
+    def nk(self) -> tuple[float, float]:
         """Returns the real and imaginary parts of the background medium's refractive index."""
         return self.medium.nk_model(frequency=self.f)
 
@@ -1390,7 +1424,7 @@ class AbstractFieldProjectionData(MonitorData):
         return ETA_0 / np.sqrt(eps_complex)
 
     @staticmethod
-    def propagation_phase(dist: Union[float, None], k: complex) -> complex:
+    def propagation_phase(dist: float | None, k: complex) -> complex:
         """Phase associated with propagation of a distance with a given wavenumber."""
         if dist is None:
             return 1.0
@@ -1517,7 +1551,7 @@ class FieldProjectionAngleData(AbstractFieldProjectionData):
         description="Field projection monitor with an angle-based projection grid.",
     )
 
-    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+    projection_surfaces: tuple[FieldProjectionSurface, ...] = pd.Field(
         ...,
         title="Projection surfaces",
         description="Surfaces of the monitor where near fields were recorded for projection",
@@ -1635,7 +1669,7 @@ class FieldProjectionCartesianData(AbstractFieldProjectionData):
         description="Field projection monitor with a Cartesian projection grid.",
     )
 
-    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+    projection_surfaces: tuple[FieldProjectionSurface, ...] = pd.Field(
         ...,
         title="Projection surfaces",
         description="Surfaces of the monitor where near fields were recorded for projection",
@@ -1759,7 +1793,7 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
         description="Field projection monitor with a projection grid defined in k-space.",
     )
 
-    projection_surfaces: Tuple[FieldProjectionSurface, ...] = pd.Field(
+    projection_surfaces: tuple[FieldProjectionSurface, ...] = pd.Field(
         ...,
         title="Projection surfaces",
         description="Surfaces of the monitor where near fields were recorded for projection",
@@ -1905,14 +1939,14 @@ class DiffractionData(AbstractFieldProjectionData):
         description="Spatial distribution of phi-component of the magnetic field.",
     )
 
-    sim_size: Tuple[float, float] = pd.Field(
+    sim_size: tuple[float, float] = pd.Field(
         ...,
         title="Domain size",
         description="Size of the near field in the local x and y directions.",
         units=MICROMETER,
     )
 
-    bloch_vecs: Tuple[float, float] = pd.Field(
+    bloch_vecs: tuple[float, float] = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -1920,7 +1954,7 @@ class DiffractionData(AbstractFieldProjectionData):
     )
 
     @staticmethod
-    def shifted_orders(orders: Tuple[int, ...], bloch_vec: float) -> np.ndarray:
+    def shifted_orders(orders: tuple[int, ...], bloch_vec: float) -> np.ndarray:
         """Diffraction orders shifted by the Bloch vector."""
         return bloch_vec + np.atleast_1d(orders)
 
@@ -1937,8 +1971,8 @@ class DiffractionData(AbstractFieldProjectionData):
 
     @staticmethod
     def compute_angles(
-        reciprocal_vectors: Tuple[np.ndarray, np.ndarray]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        reciprocal_vectors: tuple[np.ndarray, np.ndarray]
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Compute the polar and azimuth angles associated with the given reciprocal vectors."""
         # some wave number pairs are outside the light cone, leading to warnings from numpy.arcsin
         with warnings.catch_warnings():
@@ -1950,7 +1984,7 @@ class DiffractionData(AbstractFieldProjectionData):
         return (thetas, phis)
 
     @property
-    def coords_spherical(self) -> Dict[str, np.ndarray]:
+    def coords_spherical(self) -> dict[str, np.ndarray]:
         """Coordinates grid for the fields in the spherical system."""
         theta, phi = self.angles
         return {"r": None, "theta": theta, "phi": phi}
@@ -1966,7 +2000,7 @@ class DiffractionData(AbstractFieldProjectionData):
         return np.atleast_1d(np.array(self.Etheta.coords["orders_y"]))
 
     @property
-    def reciprocal_vectors(self) -> Tuple[np.ndarray, np.ndarray]:
+    def reciprocal_vectors(self) -> tuple[np.ndarray, np.ndarray]:
         """Get the normalized "ux" and "uy" reciprocal vectors."""
         return (self.ux, self.uy)
 
@@ -1997,7 +2031,7 @@ class DiffractionData(AbstractFieldProjectionData):
         )
 
     @property
-    def angles(self) -> Tuple[xr.DataArray]:
+    def angles(self) -> tuple[xr.DataArray]:
         """The (theta, phi) angles corresponding to each allowed pair of diffraction
         orders storeds as data arrays. Disallowed angles are set to ``np.nan``.
         """
@@ -2072,15 +2106,15 @@ class DiffractionData(AbstractFieldProjectionData):
         h_x, h_y, h_z = self.monitor.sph_2_car_field(
             0, self.Htheta.values, self.Hphi.values, theta, phi
         )
-        e_x, e_y, e_z, h_x, h_y, h_z = [
+        e_x, e_y, e_z, h_x, h_y, h_z = (
             np.nan_to_num(fld) for fld in [e_x, e_y, e_z, h_x, h_y, h_z]
-        ]
+        )
 
         fields = [e_x, e_y, e_z, h_x, h_y, h_z]
         keys = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
         return self._make_dataset(fields, keys)
 
-    def _make_dataset(self, fields: Tuple[np.ndarray, ...], keys: Tuple[str, ...]) -> xr.Dataset:
+    def _make_dataset(self, fields: tuple[np.ndarray, ...], keys: tuple[str, ...]) -> xr.Dataset:
         """Make an xr.Dataset for fields with given field names."""
         data_arrays = []
         for field in fields:
@@ -2102,4 +2136,4 @@ MonitorDataTypes = (
     DiffractionData,
 )
 
-MonitorDataType = Union[MonitorDataTypes]
+MonitorDataType = MonitorDataTypes

@@ -3,32 +3,44 @@ invariance along a given propagation axis.
 """
 
 from __future__ import annotations
-from typing import List, Tuple, Dict
 
 import numpy as np
 import pydantic
 import xarray as xr
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.data.data_array import (
+    FreqModeDataArray,
+    ModeIndexDataArray,
+    ScalarModeFieldDataArray,
+)
+from ...components.data.monitor_data import ModeSolverData
+from ...components.data.sim_data import SimulationData
 from ...components.geometry import Box
-from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec
-from ...components.monitor import ModeSolverMonitor, ModeMonitor
+from ...components.monitor import ModeMonitor, ModeSolverMonitor
+from ...components.simulation import Simulation
 from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
-from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D, EpsSpecType
-from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
-from ...components.data.data_array import FreqModeDataArray
-from ...components.data.sim_data import SimulationData
-from ...components.data.monitor_data import ModeSolverData
-from ...exceptions import ValidationError
+from ...components.types import (
+    ArrayComplex3D,
+    ArrayComplex4D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Direction,
+    EpsSpecType,
+    FreqArray,
+    Literal,
+    PlotScale,
+    Symmetry,
+)
 from ...constants import C_0
+from ...exceptions import ValidationError
+from ...log import log
 from .solver import compute_modes
 
-
-FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
+FIELD = tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 
 # Warning for field intensity at edges over total field intensity larger than this value
@@ -85,7 +97,7 @@ class ModeSolver(Tidy3dBaseModel):
         return self.plane.size.index(0.0)
 
     @cached_property
-    def solver_symmetry(self) -> Tuple[Symmetry, Symmetry]:
+    def solver_symmetry(self) -> tuple[Symmetry, Symmetry]:
         """Get symmetry for solver for propagation along self.normal axis."""
         mode_symmetry = list(self.simulation.symmetry)
         for dim in range(3):
@@ -325,9 +337,9 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _solve_all_freqs(
         self,
-        coords: Tuple[ArrayFloat1D, ArrayFloat1D],
-        symmetry: Tuple[Symmetry, Symmetry],
-    ) -> Tuple[List[float], List[Dict[str, ArrayComplex4D]], List[EpsSpecType]]:
+        coords: tuple[ArrayFloat1D, ArrayFloat1D],
+        symmetry: tuple[Symmetry, Symmetry],
+    ) -> tuple[list[float], list[dict[str, ArrayComplex4D]], list[EpsSpecType]]:
         """Call the mode solver at all requested frequencies."""
 
         fields = []
@@ -348,9 +360,9 @@ class ModeSolver(Tidy3dBaseModel):
     def _solve_single_freq(
         self,
         freq: float,
-        coords: Tuple[ArrayFloat1D, ArrayFloat1D],
-        symmetry: Tuple[Symmetry, Symmetry],
-    ) -> Tuple[float, Dict[str, ArrayComplex4D], EpsSpecType]:
+        coords: tuple[ArrayFloat1D, ArrayFloat1D],
+        symmetry: tuple[Symmetry, Symmetry],
+    ) -> tuple[float, dict[str, ArrayComplex4D], EpsSpecType]:
         """Call the mode solver at a single frequency.
 
         The fields are rotated from propagation coordinates back to global coordinates.
@@ -387,7 +399,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def _process_fields(
         self, mode_fields: ArrayComplex4D, mode_index: pydantic.NonNegativeInt
-    ) -> Tuple[FIELD, FIELD]:
+    ) -> tuple[FIELD, FIELD]:
         """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
 
         # Separate E and H fields (in solver coordinates)
@@ -531,7 +543,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=direction,
         )
 
-    def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
+    def to_monitor(self, freqs: list[float], name: str) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a :class:`ModeSolver` instance plus additional
         specifications.
 
@@ -613,7 +625,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     def sim_with_monitor(
         self,
-        freqs: List[float],
+        freqs: list[float],
         name: str,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`ModeSolver`. Creates a copy of

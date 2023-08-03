@@ -1,23 +1,20 @@
 """Find resonances in time series data
 """
 
-from typing import Tuple, List, Union
 from functools import partial
 
 import numpy as np
 import scipy.linalg
 import xarray as xr
-
 from pydantic import Field, NonNegativeFloat, PositiveInt, validator
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel
-from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayComplex2D, ArrayComplex3D
 from ...components.data.data_array import ScalarFieldTimeDataArray
 from ...components.data.monitor_data import FieldTimeData
+from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D, ArrayFloat1D
 from ...constants import HERTZ
 from ...exceptions import SetupError, ValidationError
-
+from ...log import log
 
 INIT_NUM_FREQS = 200
 
@@ -72,7 +69,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     """
 
-    freq_window: Tuple[float, float] = Field(
+    freq_window: tuple[float, float] = Field(
         ...,
         title="Window ``[fmin, fmax]``",
         description="Window ``[fmin, fmax]`` for the initial frequencies. "
@@ -113,7 +110,7 @@ class ResonanceFinder(Tidy3dBaseModel):
             )
         return val
 
-    def run(self, signals: Union[FieldTimeData, Tuple[FieldTimeData, ...]]) -> xr.Dataset:
+    def run(self, signals: FieldTimeData | tuple[FieldTimeData, ...]) -> xr.Dataset:
         """Finds resonances in a :class:`.FieldTimeData` or a Tuple of such.
         The time coordinates must be uniformly spaced, and the spacing must be the same
         across all supplied data. The resonance finder runs on the sum of the
@@ -161,7 +158,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         signal, dt = self._validate_scalar_field_time(signal)
         return self.run_raw_signal(signal, dt)
 
-    def run_raw_signal(self, signal: List[complex], time_step: float) -> xr.Dataset:
+    def run_raw_signal(self, signal: list[complex], time_step: float) -> xr.Dataset:
         """Finds resonances in a time series.
         Note that the signal should start after the sources have turned off.
 
@@ -210,7 +207,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     def _validate_scalar_field_time(
         self, signal: ScalarFieldTimeDataArray
-    ) -> Tuple[ArrayComplex1D, float]:
+    ) -> tuple[ArrayComplex1D, float]:
         """Validates a :class:`.ScalarFieldTimeDataArray` and returns the time step
         as well as underlying data array."""
         dts = np.diff(signal.t)
@@ -230,7 +227,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         return np.squeeze(signal.data), dt
 
     def _aggregate_field_time_comps(
-        self, signals: Tuple[FieldTimeData, ...], comps
+        self, signals: tuple[FieldTimeData, ...], comps
     ) -> ScalarFieldTimeDataArray:
         """Aggregates the given components from several :class:`.FieldTimeData`."""
         total_signal = None
@@ -240,7 +237,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         for sig_field in signals:
             for comp in comps:
                 field_comp = getattr(sig_field, comp, None)
-                if not field_comp is None:
+                if field_comp is not None:
                     curr_signal, curr_dt = self._validate_scalar_field_time(field_comp)
                     if dt == -1:
                         dt = curr_dt
@@ -264,7 +261,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         )
 
     def _aggregate_field_time(
-        self, signals: Union[FieldTimeData, Tuple[FieldTimeData, ...]]
+        self, signals: FieldTimeData | tuple[FieldTimeData, ...]
     ) -> ScalarFieldTimeDataArray:
         """Aggregates several :class:`.FieldTimeData` into a single
         :class:`.ScalarFieldTimeDataArray`."""
@@ -273,7 +270,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
         # first check electric components
         electric_data = self._aggregate_field_time_comps(signals, electric_components)
-        if not electric_data is None:
+        if electric_data is not None:
             return electric_data
         # now check magnetic components
         magnetic_data = self._aggregate_field_time_comps(signals, magnetic_components)
@@ -349,7 +346,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
     def _solve_gen_eig_prob(
         self, a_matrix: ArrayComplex2D, b_matrix: ArrayComplex2D, rcond: float
-    ) -> Tuple[ArrayComplex1D, ArrayComplex2D]:
+    ) -> tuple[ArrayComplex1D, ArrayComplex2D]:
         """Solve a generalized eigenvalue problem of the form
 
         .. math::

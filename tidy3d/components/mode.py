@@ -1,16 +1,14 @@
 """Defines specification for mode solver."""
 
-from typing import Tuple, Union
 
-import pydantic as pd
 import numpy as np
+import pydantic as pd
 
-from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF
+from ..constants import GLANCING_CUTOFF, MICROMETER, RADIAN
+from ..exceptions import SetupError, ValidationError
+from ..log import log
 from .base import Tidy3dBaseModel
 from .types import Axis2D, Literal, TrackFreq
-from ..log import log
-from ..exceptions import SetupError, ValidationError
-
 
 GROUP_INDEX_STEP = 0.005
 
@@ -33,7 +31,7 @@ class ModeSpec(Tidy3dBaseModel):
         None, title="Target effective index", description="Guess for effective index of the mode."
     )
 
-    num_pml: Tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
+    num_pml: tuple[pd.NonNegativeInt, pd.NonNegativeInt] = pd.Field(
         (0, 0),
         title="Number of PML layers",
         description="Number of standard pml layers to add in the two tangential axes.",
@@ -95,7 +93,7 @@ class ModeSpec(Tidy3dBaseModel):
         "yz plane, the ``bend_axis`` is always 1 (the global z axis).",
     )
 
-    track_freq: Union[TrackFreq, None] = pd.Field(
+    track_freq: TrackFreq | None = pd.Field(
         "central",
         title="Mode Tracking Frequency",
         description="Parameter that turns on/off mode tracking based on their similarity. "
@@ -104,7 +102,7 @@ class ModeSpec(Tidy3dBaseModel):
         "If ``None`` no mode tracking is performed.",
     )
 
-    group_index_step: Union[bool, pd.PositiveFloat] = pd.Field(
+    group_index_step: bool | pd.PositiveFloat = pd.Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "

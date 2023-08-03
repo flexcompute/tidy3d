@@ -3,21 +3,22 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from functools import wraps
-from typing import List, Callable, Dict, Union, Tuple, Any
+from typing import Any
 
-import rich
-import pydantic
-from pydantic.fields import ModelField
-import yaml
-import numpy as np
 import h5py
+import numpy as np
+import pydantic
+import rich
 import xarray as xr
+import yaml
+from pydantic.fields import ModelField
 
-from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from .data.data_array import DataArray, DATA_ARRAY_MAP
 from ..exceptions import FileError
 from ..log import log
+from .data.data_array import DATA_ARRAY_MAP, DataArray
+from .types import TYPE_TAG_STR, ComplexNumber, Literal
 
 # default indentation (# spaces) in files
 INDENT = 4
@@ -119,7 +120,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: ndarray_encoder,
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
+            # pylint:disable=unhashable-member, protected-access
+            xr.DataArray: DataArray._json_encoder,
         }
         frozen = True
         allow_mutation = False
@@ -277,7 +279,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as json_fhandle:
+        with open(fname, encoding="utf-8") as json_fhandle:
             model_dict = json.load(json_fhandle)
         return model_dict
 
@@ -339,7 +341,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as yaml_in:
+        with open(fname, encoding="utf-8") as yaml_in:
             model_dict = yaml.safe_load(yaml_in)
         return model_dict
 
@@ -416,7 +418,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+        cls, fname: str, group_path: str = "", custom_decoders: list[Callable] = None
     ) -> dict:
         """Loads a dictionary containing the model contents from a .hdf5 file.
 
@@ -470,7 +472,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     continue
 
                 # if a list, assign each element a unique key, recurse
-                if isinstance(value, (list, tuple)):
+                if isinstance(value, list | tuple):
 
                     value_dict = cls.tuple_to_dict(tuple_values=value)
                     load_data_from_file(model_dict=value_dict, group_path=subpath)
@@ -499,7 +501,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls,
         fname: str,
         group_path: str = "",
-        custom_decoders: List[Callable] = None,
+        custom_decoders: list[Callable] = None,
         **parse_obj_kwargs,
     ) -> Tidy3dBaseModel:
         """Loads :class:`Tidy3dBaseModel` instance to .hdf5 file.
@@ -529,7 +531,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         )
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
-    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    def to_hdf5(self, fname: str, custom_encoders: list[Callable] = None) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
 
         Parameters
@@ -566,7 +568,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         value.to_hdf5(fname=f_handle, group_path=subpath)
 
                     # if a tuple, assign each element a unique key
-                    if isinstance(value, (list, tuple)):
+                    if isinstance(value, list | tuple):
                         value_dict = self.tuple_to_dict(tuple_values=value)
                         add_data_to_file(data_dict=value_dict, group_path=subpath)
 
@@ -681,7 +683,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # add units (if present)
             units = field_info.extra.get("units")
             if units is not None:
-                if isinstance(units, (tuple, list)):
+                if isinstance(units, tuple | list):
                     unitstr = "("
                     for unit in units:
                         unitstr += str(unit)
@@ -705,7 +707,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         doc += "\n"
         cls.__doc__ = doc
 
-    def get_submodels_by_hash(self) -> Dict[int, List[Union[str, Tuple[str, int]]]]:
+    def get_submodels_by_hash(self) -> dict[int, list[str | tuple[str, int]]]:
         """Return a dictionary of this object's sub-models indexed by their hash values."""
         fields = {}
         for key in self.__fields__:
@@ -718,7 +720,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 fields[hash_].append(key)
 
             # Do we need to consider np.ndarray here?
-            elif isinstance(field, (list, tuple, np.ndarray)):
+            elif isinstance(field, list | tuple | np.ndarray):
                 for index, sub_field in enumerate(field):
                     if isinstance(sub_field, Tidy3dBaseModel):
                         hash_ = hash(sub_field)

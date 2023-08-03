@@ -1,15 +1,12 @@
 """Logging for Tidy3d."""
 
 import inspect
-
-from typing import Union
-from typing_extensions import Literal
+from typing import Literal
 
 from rich.console import Console
 
-
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-LogValue = Union[int, LogLevel]
+LogValue = int | LogLevel
 
 # Logging levels compatible with logging module
 _level_value = {
@@ -330,7 +327,7 @@ def set_logging_file(
     if "file" in log.handlers:
         try:
             log.handlers["file"].file.close()
-        except:  # pylint: disable=bare-except
+        except:  # noqa: E722
             log.warning("Log file could not be closed")
         finally:
             del log.handlers["file"]
@@ -338,7 +335,7 @@ def set_logging_file(
     try:
         # pylint: disable=consider-using-with
         file = open(fname, filemode)
-    except:  # pylint: disable=bare-except
+    except:  # noqa: E722
         log.error(f"File {fname} could not be opened")
         return
 

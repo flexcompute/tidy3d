@@ -1,18 +1,16 @@
 """ Divide a complex polyslab where self-intersecting polygon can occur during extrusion."""
 
-from typing import List, Tuple
 from math import isclose
 
 import pydantic
 from shapely.geometry import Polygon
 
-from ...log import log
-from ...components.geometry import PolySlab, GeometryGroup
+from ...components.geometry import GeometryGroup, PolySlab
 from ...components.medium import MediumType
 from ...components.structure import Structure
 from ...components.types import Axis, PlanePosition
 from ...constants import fp_eps
-
+from ...log import log
 
 # Warn for too many divided polyslabs
 _WARN_MAX_NUM_DIVISION = 100
@@ -71,14 +69,14 @@ class ComplexPolySlab(PolySlab):
         cls,
         gds_cell,
         axis: Axis,
-        slab_bounds: Tuple[float, float],
+        slab_bounds: tuple[float, float],
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> List[PolySlab]:
+    ) -> list[PolySlab]:
         """Import :class:`.PolySlab` from a ``gdstk.Cell``.
 
         Parameters
@@ -164,7 +162,7 @@ class ComplexPolySlab(PolySlab):
         return GeometryGroup(geometries=self.sub_polyslabs)
 
     @property
-    def sub_polyslabs(self) -> List[PolySlab]:
+    def sub_polyslabs(self) -> list[PolySlab]:
         """Divide a complex polyslab into a list of simple polyslabs.
         Only neighboring vertex-vertex crossing events are treated in this
         version.
@@ -249,7 +247,7 @@ class ComplexPolySlab(PolySlab):
         return sub_polyslab_list
 
     @property
-    def _dilation_length(self) -> List[float]:
+    def _dilation_length(self) -> list[float]:
         """dilation length from reference plane to the top/bottom of the polyslab."""
 
         # for "bottom", only needs to compute the offset length to the top

@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, Any
+from collections.abc import Callable
+from typing import Any
 
-import xarray as xr
 import numpy as np
 import pydantic as pd
+import xarray as xr
 
-from .data_array import DataArray
-from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
-from .data_array import ModeIndexDataArray
-from .data_array import TriangleMeshDataArray
-from .data_array import TimeDataArray
-
+from ...exceptions import DataError
 from ..base import Tidy3dBaseModel
 from ..types import Axis
-from ...exceptions import DataError
+from .data_array import (
+    DataArray,
+    ModeIndexDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    TimeDataArray,
+    TriangleMeshDataArray,
+)
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -28,20 +32,20 @@ class AbstractFieldDataset(Dataset, ABC):
 
     @property
     @abstractmethod
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to thier associated data."""
 
     @property
     @abstractmethod
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
 
     @property
     @abstractmethod
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
-    def package_colocate_results(self, centered_fields: Dict[str, ScalarFieldDataArray]) -> Any:
+    def package_colocate_results(self, centered_fields: dict[str, ScalarFieldDataArray]) -> Any:
         """How to package the dictionary of fields computed via self.colocate()."""
         return xr.Dataset(centered_fields)
 
@@ -101,7 +105,7 @@ class AbstractFieldDataset(Dataset, ABC):
         return self.package_colocate_results(centered_fields)
 
 
-EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+EMScalarFieldType = ScalarFieldDataArray | ScalarFieldTimeDataArray | ScalarModeFieldDataArray
 
 
 class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
@@ -139,18 +143,18 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to thier associated data."""
         fields = dict(Ex=self.Ex, Ey=self.Ey, Ez=self.Ez, Hx=self.Hx, Hy=self.Hy, Hz=self.Hz)
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
         return dict(Ex="Ex", Ey="Ey", Ez="Ez", Hx="Hx", Hy="Hy", Hz="Hz")
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
 
         return dict(
@@ -325,7 +329,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     )
 
     @property
-    def field_components(self) -> Dict[str, DataArray]:
+    def field_components(self) -> dict[str, DataArray]:
         """Maps the field components to thier associated data."""
         # pylint:disable=no-member
         return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
@@ -364,17 +368,17 @@ class PermittivityDataset(AbstractFieldDataset):
     """
 
     @property
-    def field_components(self) -> Dict[str, ScalarFieldDataArray]:
+    def field_components(self) -> dict[str, ScalarFieldDataArray]:
         """Maps the field components to thier associated data."""
         return dict(eps_xx=self.eps_xx, eps_yy=self.eps_yy, eps_zz=self.eps_zz)
 
     @property
-    def grid_locations(self) -> Dict[str, str]:
+    def grid_locations(self) -> dict[str, str]:
         """Maps field components to the string key of their grid locations on the yee lattice."""
         return dict(eps_xx="Ex", eps_yy="Ey", eps_zz="Ez")
 
     @property
-    def symmetry_eigenvalues(self) -> Dict[str, Callable[[Axis], float]]:
+    def symmetry_eigenvalues(self) -> dict[str, Callable[[Axis], float]]:
         """Maps field components to their (positive) symmetry eigenvalues."""
         return dict(eps_xx=None, eps_yy=None, eps_zz=None)
 

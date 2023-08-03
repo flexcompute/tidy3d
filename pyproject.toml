@@ -21,3 +21,27 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.ruff]
+ignore-init-module-imports = true
+typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
+line-length = 100
+fix = true
+ignore = [
+  "E501",  # line too long, handled by black
+  "B008",  # do not perform function calls in argument defaults
+  "C901",  # too complex
+  "B905",  # `zip()` without an explicit `strict=` parameter
+  "C408",  # C408 Unnecessary `dict` call (rewrite as a literal)
+  "B904",
+  "B028"  # stacklevel
+]
+select = [
+  "E",  # pycodestyle errors
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes
+  "I",  # isort
+  "C",  # flake8-comprehensions
+  "B",  # flake8-bugbear
+  "UP"
+]

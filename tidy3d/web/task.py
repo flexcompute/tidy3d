@@ -1,8 +1,7 @@
 """ Defnes information about a task """
+from abc import ABC
 from datetime import datetime
 from enum import Enum
-from abc import ABC
-from typing import Optional
 
 import pydantic
 
@@ -58,19 +57,19 @@ class TaskInfo(TaskBase):
     taskId: str
     taskName: str = None
     nodeSize: int = None
-    completedAt: Optional[datetime] = None
+    completedAt: datetime | None = None
     status: str = None
     realCost: float = None
     timeSteps: int = None
     solverVersion: str = None
-    createAt: Optional[datetime] = None
+    createAt: datetime | None = None
     estCostMin: float = None
     estCostMax: float = None
     realFlexUnit: float = None
     estFlexUnit: float = None
     s3Storage: float = None
-    startSolverTime: Optional[datetime] = None
-    finishSolverTime: Optional[datetime] = None
+    startSolverTime: datetime | None = None
+    finishSolverTime: datetime | None = None
     totalSolverTime: int = None
     callbackUrl: str = None
     taskType: str = None

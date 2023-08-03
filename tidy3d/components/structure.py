@@ -1,16 +1,16 @@
 """Defines Geometric objects with Medium properties."""
-from typing import Union, Tuple, Optional
+
 import pydantic
 
-from .base import Tidy3dBaseModel
-from .validators import validate_name_str
-from .geometry import GeometryType
-from .medium import MediumType, AbstractCustomMedium, Medium2D
-from .types import Ax, TYPE_TAG_STR, Axis
-from .viz import add_ax_if_none, equal_aspect
-from .grid.grid import Coords
 from ..constants import MICROMETER
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel
+from .geometry import GeometryType
+from .grid.grid import Coords
+from .medium import AbstractCustomMedium, Medium2D, MediumType
+from .types import TYPE_TAG_STR, Ax, Axis
+from .validators import validate_name_str
+from .viz import add_ax_if_none, equal_aspect
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -79,7 +79,7 @@ class Structure(AbstractStructure):
         discriminator=TYPE_TAG_STR,
     )
 
-    def eps_diagonal(self, frequency: float, coords: Coords) -> Tuple[complex, complex, complex]:
+    def eps_diagonal(self, frequency: float, coords: Coords) -> tuple[complex, complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency.
 
         Parameters
@@ -146,10 +146,10 @@ class MeshOverrideStructure(AbstractStructure):
     >>> struct_override = MeshOverrideStructure(geometry=box, dl=(0.1,0.2,0.3), name='override_box')
     """
 
-    dl: Tuple[
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
-        Optional[pydantic.PositiveFloat],
+    dl: tuple[
+        pydantic.PositiveFloat | None,
+        pydantic.PositiveFloat | None,
+        pydantic.PositiveFloat | None,
     ] = pydantic.Field(
         ...,
         title="Grid Size",
@@ -167,4 +167,4 @@ class MeshOverrideStructure(AbstractStructure):
     )
 
 
-StructureType = Union[Structure, MeshOverrideStructure]
+StructureType = Structure | MeshOverrideStructure

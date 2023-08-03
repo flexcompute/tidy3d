@@ -2,30 +2,53 @@
 # pylint: disable=too-many-lines
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, Optional
+from typing import Literal
 
-from typing_extensions import Literal
-import pydantic
 import numpy as np
+import pydantic
 
-from .base import Tidy3dBaseModel, cached_property
-
-from .types import Direction, Polarization, Ax, FreqBound
-from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D
-from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
-from .validators import warn_if_dataset_none, assert_single_freq_in_range
-from .data.dataset import FieldDataset, TimeDataset
-from .data.data_array import TimeDataArray
-from .geometry import Box, Coordinate
-from .mode import ModeSpec
-from .viz import add_ax_if_none, PlotParams, plot_params_source
-from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
-from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
-from ..constants import inf  # pylint:disable=unused-import
+from ..constants import (
+    GLANCING_CUTOFF,
+    HERTZ,
+    MICROMETER,
+    RADIAN,
+    inf,  # pylint:disable=unused-import
+)
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import TimeDataArray
+from .data.dataset import FieldDataset, TimeDataset
+from .geometry import Box, Coordinate
+from .mode import ModeSpec
+from .types import (
+    ArrayComplex1D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Direction,
+    FreqBound,
+    PlotVal,
+    Polarization,
+)
+from .validators import (
+    assert_plane,
+    assert_single_freq_in_range,
+    assert_volumetric,
+    get_value,
+    validate_name_str,
+    warn_if_dataset_none,
+)
+from .viz import (
+    ARROW_ALPHA,
+    ARROW_COLOR_POLARIZATION,
+    ARROW_COLOR_SOURCE,
+    PlotParams,
+    add_ax_if_none,
+    plot_params_source,
+)
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
@@ -322,7 +345,7 @@ class CustomSourceTime(Pulse):
     ----
     .. math::
 
-        amp\\_time(t) = amplitude \\cdot \\ 
+        amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
 
@@ -348,7 +371,7 @@ class CustomSourceTime(Pulse):
         description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
     )
 
-    source_time_dataset: Optional[TimeDataset] = pydantic.Field(
+    source_time_dataset: TimeDataset | None = pydantic.Field(
         ...,
         title="Source time dataset",
         description="Dataset for storing the envelope of the custom source time. "
@@ -446,7 +469,7 @@ class CustomSourceTime(Pulse):
         return offset * oscillation * amp * envelope
 
 
-SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
+SourceTimeType = GaussianPulse | ContinuousWave | CustomSourceTime
 
 """ Source objects """
 
@@ -479,12 +502,12 @@ class Source(Box, ABC):
         return None
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         return None
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
@@ -556,7 +579,7 @@ class CurrentSource(Source, ABC):
     )
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         component = self.polarization[-1]  # 'x' 'y' or 'z'
         pol_axis = "xyz".index(component)
@@ -597,7 +620,7 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
     >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
     """
 
-    size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
+    size: tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
         (0, 0, 0),
         title="Size",
         description="Size in x, y, and z directions, constrained to ``(0, 0, 0)``.",
@@ -633,7 +656,7 @@ class CustomCurrentSource(ReverseInterpolatedSource):
 
     """
 
-    current_dataset: Optional[FieldDataset] = pydantic.Field(
+    current_dataset: FieldDataset | None = pydantic.Field(
         ...,
         title="Current Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
@@ -687,7 +710,7 @@ class DirectionalSource(FieldSource, ABC):
     )
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Returns a vector indicating the source direction for arrow plotting, if not None."""
         if self._injection_axis is None:
             return None
@@ -779,7 +802,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
     """
 
-    field_dataset: Optional[FieldDataset] = pydantic.Field(
+    field_dataset: FieldDataset | None = pydantic.Field(
         ...,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
@@ -856,7 +879,7 @@ class AngledFieldSource(DirectionalSource, ABC):
 
     # pylint: disable=no-member
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
@@ -865,7 +888,7 @@ class AngledFieldSource(DirectionalSource, ABC):
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
-    def _pol_vector(self) -> Tuple[float, float, float]:
+    def _pol_vector(self) -> tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
         normal_dir = [0.0, 0.0, 0.0]
         normal_dir[int(self._injection_axis)] = 1.0
@@ -921,7 +944,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         return self.mode_spec.angle_phi
 
     @cached_property
-    def _dir_vector(self) -> Tuple[float, float, float]:
+    def _dir_vector(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
@@ -1004,14 +1027,14 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     waist_distances = (3.0, 4.0))
     """
 
-    waist_sizes: Tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
+    waist_sizes: tuple[pydantic.PositiveFloat, pydantic.PositiveFloat] = pydantic.Field(
         (1.0, 1.0),
         title="Waist sizes",
         description="Size of the beam at the waist in the local x and y directions.",
         units=MICROMETER,
     )
 
-    waist_distances: Tuple[float, float] = pydantic.Field(
+    waist_distances: tuple[float, float] = pydantic.Field(
         (0.0, 0.0),
         title="Waist distances",
         description="Distance to the beam waist along the propagation direction "
@@ -1070,14 +1093,14 @@ class TFSF(AngledFieldSource, VolumeSource):
 
 
 # sources allowed in Simulation.sources
-SourceType = Union[
-    UniformCurrentSource,
-    PointDipole,
-    GaussianBeam,
-    AstigmaticGaussianBeam,
-    ModeSource,
-    PlaneWave,
-    CustomFieldSource,
-    CustomCurrentSource,
-    TFSF,
-]
+SourceType = (
+    UniformCurrentSource
+    | PointDipole
+    | GaussianBeam
+    | AstigmaticGaussianBeam
+    | ModeSource
+    | PlaneWave
+    | CustomFieldSource
+    | CustomCurrentSource
+    | TFSF
+)

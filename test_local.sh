@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-black .
-python lint.py
+black . --line-length=100
+ruff tidy3d --line-length=100
 
 pytest -ra tests/test_components/test_apodization.py
 pytest -ra tests/test_components/test_base.py

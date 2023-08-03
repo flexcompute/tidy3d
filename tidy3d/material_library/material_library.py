@@ -1,12 +1,13 @@
-"""Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
+# pylint: disable=too-many-lines
+"""Holds dispersive models for several commonly used optical materials."""
 import json
-from typing import Dict, List
+
 import pydantic as pd
 
-from ..components.medium import PoleResidue, Medium2D
 from ..components.base import Tidy3dBaseModel
+from ..components.medium import Medium2D, PoleResidue
 from ..exceptions import SetupError
-from .material_reference import material_refs, ReferenceData
+from .material_reference import ReferenceData, material_refs
 from .parametric_materials import Graphene
 
 
@@ -35,7 +36,7 @@ class VariantItem(Tidy3dBaseModel):
         description="A dispersive medium described by the pole-residue pair model.",
     )
 
-    reference: List[ReferenceData] = pd.Field(
+    reference: list[ReferenceData] = pd.Field(
         None,
         title="Reference information",
         description="A list of references related to this variant model.",
@@ -53,7 +54,7 @@ class MaterialItem(Tidy3dBaseModel):
     """A material that includes several variants."""
 
     name: str = pd.Field(..., title="Name", description="Unique name for the medium.")
-    variants: Dict[str, VariantItem] = pd.Field(
+    variants: dict[str, VariantItem] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -66,7 +67,7 @@ class MaterialItem(Tidy3dBaseModel):
     @pd.validator("default", always=True)
     def _default_in_variants(cls, val, values):
         """Make sure the default variant is already included in the ``variants``."""
-        if not val in values["variants"]:
+        if val not in values["variants"]:
             raise SetupError(
                 f"The data of the default variant '{val}' is not supplied; "
                 "please include it in the 'variants'."
@@ -98,7 +99,7 @@ class VariantItem2D(VariantItem):
 class MaterialItem2D(MaterialItem):
     """A 2D material that includes several variants."""
 
-    variants: Dict[str, VariantItem2D] = pd.Field(
+    variants: dict[str, VariantItem2D] = pd.Field(
         ...,
         title="Dictionary of available variants for this material",
         description="A dictionary of available variants for this material "
@@ -394,7 +395,7 @@ Au_Olmon2012Drude = VariantItem(
         poles=(
             (
                 (0.0j),
-                ((1.153665672616558e18 + 0j)),
+                (1.153665672616558e18 + 0j),
             ),
             (
                 (-71428570000000 + 0j),

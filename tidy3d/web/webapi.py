@@ -2,27 +2,26 @@
 
 import os
 import time
+from collections.abc import Callable
 from datetime import datetime, timedelta
-from typing import List, Dict, Callable
 from functools import wraps
 
+import pytz
 from requests import HTTPError, ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
 from requests.exceptions import JSONDecodeError
-from urllib3.exceptions import NewConnectionError
-
-import pytz
 from rich.console import Console
 from rich.progress import Progress
+from urllib3.exceptions import NewConnectionError
 
-from .environment import Env
-from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
-from .task import TaskId, TaskInfo, ChargeType
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
-from ..log import log
 from ..exceptions import WebError
+from ..log import log
+from .environment import Env
+from .simulation_task import SIM_FILE_HDF5, Folder, SimulationTask
+from .task import ChargeType, TaskId, TaskInfo
 
 # time between checking task status
 REFRESH_TIME = 0.3
@@ -141,7 +140,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: List[str] = None,
+    parent_tasks: list[str] = None,
     source_required: bool = True,
 ) -> TaskId:
     """Upload simulation to server, but do not start running :class:`.Simulation`.
@@ -699,7 +698,7 @@ def abort(task_id: TaskId) -> TaskInfo:
 @wait_for_connection
 def get_tasks(
     num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
-) -> List[Dict]:
+) -> list[dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
 
     Parameters

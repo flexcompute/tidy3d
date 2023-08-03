@@ -1,11 +1,10 @@
 """Defines jax-compatible datasets."""
 import pydantic as pd
-
 from jax.tree_util import register_pytree_node_class
 
 from .....components.data.dataset import PermittivityDataset
-from .data_array import JaxDataArray
 from ..base import JaxObject
+from .data_array import JaxDataArray
 
 
 @register_pytree_node_class

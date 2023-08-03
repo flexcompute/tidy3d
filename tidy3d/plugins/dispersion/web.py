@@ -3,23 +3,21 @@
 from __future__ import annotations
 
 import ssl
-from typing import Tuple, Optional
 from enum import Enum
-import requests
+
 import pydantic
-from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
+import requests
+from pydantic import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel
-from ...components.types import Literal
 from ...components.medium import PoleResidue
-from ...constants import MICROMETER, HERTZ
-from ...exceptions import WebError, Tidy3dError, SetupError
-from ...web.httputils import get_headers
+from ...components.types import Literal
+from ...constants import HERTZ, MICROMETER
+from ...exceptions import SetupError, Tidy3dError, WebError
+from ...log import log
 from ...web.environment import Env
-
+from ...web.httputils import get_headers
 from .fit import DispersionFitter
-
 
 BOUND_MAX_FACTOR = 10
 
@@ -83,7 +81,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
         title="Number of inner iterations",
         description="Number of iterations in each inner optimization.",
     )
-    random_seed: Optional[int] = Field(
+    random_seed: int | None = Field(
         0,
         title="Random seed for starting coefficients",
         description="The fitting tool performs global optimizations with random "
@@ -110,18 +108,18 @@ class AdvancedFitterParam(Tidy3dBaseModel):
 class FitterData(AdvancedFitterParam):
     """Data class for request body of Fitter where dipsersion data is input through tuple."""
 
-    wvl_um: Tuple[float, ...] = Field(
+    wvl_um: tuple[float, ...] = Field(
         ...,
         title="Wavelengths",
         description="A set of wavelengths for dispersion data.",
         units=MICROMETER,
     )
-    n_data: Tuple[float, ...] = Field(
+    n_data: tuple[float, ...] = Field(
         ...,
         title="Index of refraction",
         description="Real part of the complex index of refraction at each wavelength.",
     )
-    k_data: Tuple[float, ...] = Field(
+    k_data: tuple[float, ...] = Field(
         None,
         title="Extinction coefficient",
         description="Imaginary part of the complex index of refraction at each wavelength.",
@@ -255,7 +253,7 @@ class FitterData(AdvancedFitterParam):
 
         return get_headers()
 
-    def run(self) -> Tuple[PoleResidue, float]:
+    def run(self) -> tuple[PoleResidue, float]:
         """Execute the data fit using the stable fitter in the server.
 
         Returns
@@ -317,7 +315,7 @@ def run(
     num_tries: PositiveInt = 50,
     tolerance_rms: NonNegativeFloat = 1e-2,
     advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
-) -> Tuple[PoleResidue, float]:
+) -> tuple[PoleResidue, float]:
     """Execute the data fit using the stable fitter in the server.
 
     Parameters
@@ -360,6 +358,6 @@ class StableDispersionFitter(DispersionFitter):
         tolerance_rms: NonNegativeFloat = 1e-2,
         guess: PoleResidue = None,
         advanced_param: AdvancedFitterParam = AdvancedFitterParam(),
-    ) -> Tuple[PoleResidue, float]:
+    ) -> tuple[PoleResidue, float]:
         """Deprecated."""
         return run(self, num_poles, num_tries, tolerance_rms, advanced_param)

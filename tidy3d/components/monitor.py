@@ -1,22 +1,30 @@
 """Objects that define how data is recorded from simulation."""
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
 
-import pydantic
 import numpy as np
+import pydantic
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
-from .geometry import Box
-from .validators import assert_plane
-from .base import cached_property, Tidy3dBaseModel
-from .mode import ModeSpec
-from .apodization import ApodizationSpec
-from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
+from ..constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-
+from .apodization import ApodizationSpec
+from .base import Tidy3dBaseModel, cached_property
+from .geometry import Box
+from .mode import ModeSpec
+from .types import (
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Coordinate,
+    Direction,
+    EMField,
+    FreqArray,
+    FreqBound,
+    Literal,
+    ObsGridArray,
+)
+from .validators import assert_plane
+from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR, PlotParams, plot_params_monitor
 
 BYTES_REAL = 4
 BYTES_COMPLEX = 8
@@ -137,7 +145,7 @@ class TimeMonitor(Monitor, ABC):
             raise SetupError("Monitor start time is greater than stop time.")
         return val
 
-    def time_inds(self, tmesh: ArrayFloat1D) -> Tuple[int, int]:
+    def time_inds(self, tmesh: ArrayFloat1D) -> tuple[int, int]:
         """Compute the starting and stopping index of the monitor in a given discrete time mesh."""
 
         tmesh = np.array(tmesh)
@@ -176,13 +184,13 @@ class TimeMonitor(Monitor, ABC):
 class AbstractFieldMonitor(Monitor, ABC):
     """:class:`Monitor` that records electromagnetic field data as a function of x,y,z."""
 
-    fields: Tuple[EMField, ...] = pydantic.Field(
+    fields: tuple[EMField, ...] = pydantic.Field(
         ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"],
         title="Field Components",
         description="Collection of field components to store in the monitor.",
     )
 
-    interval_space: Tuple[
+    interval_space: tuple[
         pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
     ] = pydantic.Field(
         (1, 1, 1),
@@ -208,7 +216,7 @@ class AbstractFieldMonitor(Monitor, ABC):
             val = sum(interval_space) != 3
         return val
 
-    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    def downsampled_num_cells(self, num_cells: tuple[int, int, int]) -> tuple[int, int, int]:
         """Given a tuple of the number of cells spanned by the monitor along each dimension,
         return the number of cells one would have after downsampling based on ``interval_space``.
         """
@@ -271,7 +279,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         return ax
 
     @cached_property
-    def _dir_arrow(self) -> Tuple[float, float, float]:
+    def _dir_arrow(self) -> tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
         dx = np.cos(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
         dy = np.sin(self.mode_spec.angle_phi) * np.sin(self.mode_spec.angle_theta)
@@ -367,7 +375,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...] = pydantic.Field(
+    exclude_surfaces: tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...] = pydantic.Field(
         None,
         title="Excluded surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
@@ -583,7 +591,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     @property
-    def projection_surfaces(self) -> Tuple[FieldProjectionSurface, ...]:
+    def projection_surfaces(self) -> tuple[FieldProjectionSurface, ...]:
         """Surfaces of the monitor where near fields will be recorded for subsequent projection."""
         surfaces = self.integration_surfaces
         return [
@@ -859,16 +867,16 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
 
 # types of monitors that are accepted by simulation
-MonitorType = Union[
-    FieldMonitor,
-    FieldTimeMonitor,
-    PermittivityMonitor,
-    FluxMonitor,
-    FluxTimeMonitor,
-    ModeMonitor,
-    ModeSolverMonitor,
-    FieldProjectionAngleMonitor,
-    FieldProjectionCartesianMonitor,
-    FieldProjectionKSpaceMonitor,
-    DiffractionMonitor,
-]
+MonitorType = (
+    FieldMonitor
+    | FieldTimeMonitor
+    | PermittivityMonitor
+    | FluxMonitor
+    | FluxTimeMonitor
+    | ModeMonitor
+    | ModeSolverMonitor
+    | FieldProjectionAngleMonitor
+    | FieldProjectionCartesianMonitor
+    | FieldProjectionKSpaceMonitor
+    | DiffractionMonitor
+)

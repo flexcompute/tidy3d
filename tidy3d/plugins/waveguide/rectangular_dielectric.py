@@ -1,27 +1,32 @@
 """Rectangular dielectric waveguide utilities."""
 
-from typing import List, Any
+from typing import Any
 
 import numpy
 import pydantic
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.boundary import BoundarySpec, Periodic
-from ...components.data.data_array import ModeIndexDataArray, FreqModeDataArray
+from ...components.data.data_array import FreqModeDataArray, ModeIndexDataArray
 from ...components.geometry import Box, PolySlab
 from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
 from ...components.mode import ModeSpec
 from ...components.simulation import Simulation
-
-from ...components.source import ModeSource, GaussianPulse
+from ...components.source import GaussianPulse, ModeSource
 from ...components.structure import Structure
-from ...components.types import ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D, Union
-from ...components.types import TYPE_TAG_STR
-from ...constants import C_0, inf, MICROMETER, RADIAN
+from ...components.types import (
+    TYPE_TAG_STR,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Coordinate,
+    Literal,
+    Size1D,
+)
+from ...constants import C_0, MICROMETER, RADIAN, inf
 from ...exceptions import Tidy3dError, ValidationError
 from ...log import log
-
 from ..mode.mode_solver import ModeSolver
 
 
@@ -36,14 +41,14 @@ class RectangularDielectric(Tidy3dBaseModel):
     - Coupled waveguides
     """
 
-    wavelength: Union[float, ArrayFloat1D] = pydantic.Field(
+    wavelength: float | ArrayFloat1D = pydantic.Field(
         ...,
         title="Wavelength",
         description="Wavelength(s) at which to calculate modes (in μm).",
         units=MICROMETER,
     )
 
-    core_width: Union[Size1D, ArrayFloat1D] = pydantic.Field(
+    core_width: Size1D | ArrayFloat1D = pydantic.Field(
         ...,
         title="Core width",
         description="Core width at the top of the waveguide.  If set to an array, defines "
@@ -116,7 +121,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         units=RADIAN,
     )
 
-    gap: Union[float, ArrayFloat1D] = pydantic.Field(
+    gap: float | ArrayFloat1D = pydantic.Field(
         0.0,
         title="Gap",
         description="Distance between adjacent waveguides, measured at the top core edges.  "
@@ -287,7 +292,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def _swap_axis(
         self, lateral_coord: Any, normal_coord: Any, propagation_coord: Any
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Swap the model coordinates to desired axes."""
         result = [None, None, None]
         result[self.lateral_axis] = lateral_coord
@@ -297,13 +302,13 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     def _translate(
         self, lateral_coord: float, normal_coord: float, propagation_coord: float
-    ) -> List[float]:
+    ) -> list[float]:
         """Swap the model coordinates to desired axes and translate to origin."""
         coordinates = self._swap_axis(lateral_coord, normal_coord, propagation_coord)
         result = [a + b for a, b in zip(self.origin, coordinates)]
         return result
 
-    def _transform_in_plane(self, lateral_coord: float, propagation_coord: float) -> List[float]:
+    def _transform_in_plane(self, lateral_coord: float, propagation_coord: float) -> list[float]:
         """Swap the model coordinates to desired axes in the substrate plane."""
         result = self._translate(lateral_coord, 0, propagation_coord)
         _, result = Box.pop_axis(result, self.normal_axis)
@@ -323,7 +328,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return w
 
     @property
-    def _core_starts(self) -> List[float]:
+    def _core_starts(self) -> list[float]:
         """Starting positions of each waveguide (x is the position in the lateral direction)."""
         core_x = [-0.5 * (self.core_width.sum() + self.gap.sum())]
         core_x.extend(core_x[0] + numpy.cumsum(self.core_width[:-1]) + numpy.cumsum(self.gap))
@@ -331,7 +336,7 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     # pylint:disable=too-many-locals
     @property
-    def _override_structures(self) -> List[Structure]:
+    def _override_structures(self) -> list[Structure]:
         """Build override structures to define the simulation grid."""
 
         # Grid resolution factor applied to the materials (increase for waveguide corners
@@ -457,7 +462,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return grid_spec
 
     @cached_property
-    def structures(self) -> List[Structure]:
+    def structures(self) -> list[Structure]:
         """Waveguide structures for simulation, including the core(s), slabs (if any), and bottom
         cladding, if different from the top. For bend modes, the structure is a 270 degree bend
         regardless of :attr:`length`."""

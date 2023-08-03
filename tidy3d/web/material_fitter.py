@@ -4,12 +4,12 @@ from __future__ import annotations
 import os
 import tempfile
 from enum import Enum
-from typing import Optional
 from uuid import uuid4
 
 import numpy as np
 import requests
 from pydantic import BaseModel, Field
+
 from tidy3d.plugins.dispersion import DispersionFitter
 
 from .http_management import http
@@ -26,14 +26,14 @@ class ConstraintEnum(str, Enum):
 class FitterOptions(BaseModel):
     """Fitter Options."""
 
-    num_poles: Optional[int] = 1
-    num_tries: Optional[int] = 50
-    tolerance_rms: Optional[float] = 1e-2
-    min_wvl: Optional[float] = None
-    max_wvl: Optional[float] = None
-    bound_amp: Optional[float] = None
-    bound_eps_inf: Optional[float] = 1.0
-    bound_f: Optional[float] = None
+    num_poles: int | None = 1
+    num_tries: int | None = 50
+    tolerance_rms: float | None = 1e-2
+    min_wvl: float | None = None
+    max_wvl: float | None = None
+    bound_amp: float | None = None
+    bound_eps_inf: float | None = 1.0
+    bound_f: float | None = None
     constraint: ConstraintEnum = ConstraintEnum.HARD
     nlopt_maxeval: int = 5000
 
