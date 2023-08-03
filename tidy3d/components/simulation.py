@@ -926,16 +926,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 if dataset is None:
                     continue
                 times = dataset.values.coords["t"].values
-                if (
-                    min(times) > self.tmesh[0]
-                    or max(times) < self.tmesh[-1] - CUSTOMSOURCETIME_TOL * self.dt
-                ):
-                    raise ValidationError(
-                        "'CustomSourceTime' found with time coordinates "
-                        "'times' that do not cover the entire 'Simulation.tmesh'. Currently, "
-                        f"'(min(times), max(times)) = ({min(times)}, {max(times)})', while "
-                        f"'(min(tmesh), max(tmesh)) = ({self.tmesh[0]}, {self.tmesh[-1]}).' "
-                    )
                 max_dt = np.amax(np.diff(times))
                 if max_dt > self.dt * CUSTOMSOURCETIME_TOL:
                     log.warning(
