@@ -296,22 +296,44 @@ class ContinuousWave(Pulse):
 
 
 class CustomSourceTime(Pulse):
-    """Custom source time dependence, real or complex valued.
+    """Custom source time dependence consisting of a real or complex envelope
+    modulated at a central frequency, as shown below.
+
+    Note
+    ----
+    .. math::
+
+        amp\\_time(t) = amplitude \\cdot \\ 
+                e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
+                envelope(t - offset / (2 \\pi \\cdot fwidth))
 
     Note
     ----
     The source time dependence is linearly interpolated to the simulation time steps.
     To ensure that this interpolation does not introduce artifacts, it is necessary
     to use a sampling rate that is sufficiently fast relative to the simulation time step.
+    The source should also ideally start at zero and ramp up smoothly.
+    The first and last values of the envelope will be used for times that are out of range
+    of the provided data.
 
     Example
     -------
-    >>> cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1,
-    >>>     values=np.linspace(0, 9, 10), dt=0.1)
+    >>> cst = CustomSourceTime.from_values(freq0=1, fwidth=0.1,
+    ...     values=np.linspace(0, 9, 10), dt=0.1)
+
     """
 
+    offset: float = pydantic.Field(
+        0.0,
+        title="Offset",
+        description="Time delay of the envelope in units of 1 / (``2pi * fwidth``).",
+    )
+
     source_time_dataset: Optional[TimeDataset] = pydantic.Field(
-        ..., title="Source time dataset", description="Dataset for storing the custom source time."
+        ...,
+        title="Source time dataset",
+        description="Dataset for storing the envelope of the custom source time. "
+        "This envelope will be modulated by a complex exponential at frequency ``freq0``.",
     )
 
     _source_time_dataset_none_warning = warn_if_dataset_none("source_time_dataset")
@@ -334,23 +356,25 @@ class CustomSourceTime(Pulse):
         Parameters
         ----------
         freq0 : float
-            Estimated central frequency of the source.
+            Central frequency of the source. The envelope provided will be modulated
+            by a complex exponential at this frequency.
         fwidth : float
             Estimated frequency width of the source.
         values: ArrayComplex1D
-            Complex values of the source amplitude.
+            Complex values of the source envelope.
         dt: float
             Time step for the `values` array. This value should be sufficiently small
             relative to the simulation `dt` in order to avoid interpolation artifacts.
 
-
         Returns
         -------
         CustomSourceTime
-            :class:`.CustomSourceTime` with these values, and time coordinates evenly spaced
+            :class:`.CustomSourceTime` with envelope given by `values`, modulated by a complex
+            exponential at frequency `freq0`. The time coordinates are evenly spaced
             between 0 and dt * (N-1) with a step size of `dt`, where N is the length of
             the values array.
         """
+
         times = np.arange(len(values)) * dt
         source_time_dataarray = TimeDataArray(values, coords=dict(t=times))
         source_time_dataset = TimeDataset(values=source_time_dataarray)
@@ -373,18 +397,34 @@ class CustomSourceTime(Pulse):
         complex
             Complex-valued source amplitude at that time.
         """
+
         if self.source_time_dataset is None:
             return None
-        times = self.source_time_dataset.values.coords["t"].values.squeeze()
-        if isinstance(time, float):
-            if time < min(times) or time > max(times):
-                return self.source_time_dataset.values.sel(t=time, method="nearest").to_numpy()
-            return self.source_time_dataset.values.interp(t=time).to_numpy()
-        val = np.zeros(len(time), dtype=complex)
-        mask = (time < min(times)) | (time > max(times))
-        val[mask] = self.source_time_dataset.values.sel(t=time[mask], method="nearest").to_numpy()
-        val[~mask] = self.source_time_dataset.values.interp(t=time[~mask]).to_numpy()
-        return val
+
+        # make time a numpy array for uniform handling
+        times = np.array([time] if isinstance(time, float) else time)
+        data_times = self.source_time_dataset.values.coords["t"].values.squeeze()
+
+        # shift time
+        twidth = 1.0 / (2 * np.pi * self.fwidth)
+        time_shifted = times - self.offset * twidth
+
+        # mask times that are out of range
+        mask = (time_shifted < min(data_times)) | (time_shifted > max(data_times))
+
+        # get envelope
+        envelope = np.zeros(len(time_shifted), dtype=complex)
+        values = self.source_time_dataset.values
+        envelope[mask] = values.sel(t=time_shifted[mask], method="nearest").to_numpy()
+        envelope[~mask] = values.interp(t=time_shifted[~mask]).to_numpy()
+
+        # modulation, phase, amplitude
+        omega0 = 2 * np.pi * self.freq0
+        offset = np.exp(1j * self.phase)
+        oscillation = np.exp(-1j * omega0 * time)
+        amp = self.amplitude
+
+        return offset * oscillation * amp * envelope
 
 
 SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]

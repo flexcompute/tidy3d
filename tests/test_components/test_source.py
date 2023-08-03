@@ -253,13 +253,12 @@ def test_broadband_source():
 
 
 def test_custom_source_time():
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
     ts = np.linspace(0, 30, 1001)
-    amp_time = g.amp_time(ts)
+    amp_time = ts / max(ts)
 
     # basic test
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=amp_time, dt=ts[1] - ts[0])
-    assert np.allclose(cst.amp_time(ts), amp_time, rtol=0, atol=ATOL)
+    assert np.allclose(cst.amp_time(ts), amp_time * np.exp(-1j * 2 * np.pi * ts), rtol=0, atol=ATOL)
 
     # test single value validation error
     with pytest.raises(pydantic.ValidationError):
@@ -270,7 +269,9 @@ def test_custom_source_time():
 
     # test interpolation
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
-    assert np.allclose(cst.amp_time(0.09), [0.9], rtol=0, atol=ATOL)
+    assert np.allclose(
+        cst.amp_time(0.09), [0.9 * np.exp(-1j * 2 * np.pi * 0.09)], rtol=0, atol=ATOL
+    )
 
     # test sampling warning
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
@@ -282,14 +283,12 @@ def test_custom_source_time():
         sources=[source],
     )
 
-    # test out of range validation error
-    with pytest.raises(td.exceptions.ValidationError):
-        vals = np.cos(sim.tmesh[:-2])
-        cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=vals, dt=sim.dt)
-        source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
-        sim = sim.updated_copy(sources=[source])
-
-    vals = np.cos(sim.tmesh[:-1])
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=vals, dt=sim.dt)
+    # test out of range handling
+    vals = [1]
+    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=[0, 1], dt=sim.dt)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
     sim = sim.updated_copy(sources=[source])
+    assert np.allclose(cst.amp_time(sim.tmesh[0]), [0], rtol=0, atol=ATOL)
+    assert np.allclose(
+        cst.amp_time(sim.tmesh[1:]), np.exp(-1j * 2 * np.pi * sim.tmesh[1:]), rtol=0, atol=ATOL
+    )
