@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Tuple, Union, List, Dict
 from multiprocessing import Pool
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from jax.tree_util import register_pytree_node_class
@@ -284,7 +284,6 @@ class JaxSimulation(Simulation, JaxObject):
 
         return sim, jax_info
 
-    # pylint:disable=too-many-arguments
     def plot(
         self,
         x: float = None,
@@ -311,7 +310,6 @@ class JaxSimulation(Simulation, JaxObject):
             **patch_kwargs,
         )
 
-    # pylint:disable=too-many-arguments
     def plot_eps(
         self,
         x: float = None,
@@ -379,7 +377,6 @@ class JaxSimulation(Simulation, JaxObject):
             vlim=vlim,
         )
 
-    # pylint: disable=too-many-arguments,too-many-locals
     def plot_structures_eps(
         self,
         x: float = None,
@@ -495,7 +492,6 @@ class JaxSimulation(Simulation, JaxObject):
         # return a dictionary containing these split structures
         return dict(structures=structures, input_structures=input_structures)
 
-    # pylint:disable=too-many-locals
     @classmethod
     def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
         """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""

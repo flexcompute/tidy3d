@@ -1,7 +1,9 @@
+from typing import List
 import pytest
 import numpy as np
-import pydantic
+import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
+
 import gdstk
 
 import tidy3d as td

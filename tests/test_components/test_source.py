@@ -1,6 +1,6 @@
 """Tests sources."""
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td

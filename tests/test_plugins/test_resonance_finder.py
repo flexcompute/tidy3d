@@ -1,6 +1,10 @@
 import pytest
 import numpy as np
 
+import pydantic.v1 as pydantic
+
+import tidy3d as td
+
 from numpy.random import default_rng
 
 from tidy3d.plugins.resonance import ResonanceFinder

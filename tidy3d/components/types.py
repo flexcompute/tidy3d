@@ -9,7 +9,7 @@ except ImportError:
     from typing_extensions import Literal
 from typing_extensions import Annotated
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
@@ -19,7 +19,7 @@ from ..exceptions import ValidationError
 TYPE_TAG_STR = "type"
 
 
-def annotate_type(UnionType):  # pylint:disable=invalid-name
+def annotate_type(UnionType):
     """Annotated union type using TYPE_TAG_STR as discriminator."""
     return Annotated[UnionType, pydantic.Field(discriminator=TYPE_TAG_STR)]
 
@@ -150,7 +150,7 @@ class ComplexNumber(pydantic.BaseModel):
         return self.real + 1j * self.imag
 
 
-class tidycomplex(complex):  # pylint: disable=invalid-name
+class tidycomplex(complex):
     """complex type that we can use in our models."""
 
     @classmethod

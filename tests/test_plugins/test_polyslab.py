@@ -1,6 +1,6 @@
 import numpy as np
 import gdstk
-
+from typing import List
 import tidy3d as td
 
 from tidy3d.plugins.polyslab import ComplexPolySlab

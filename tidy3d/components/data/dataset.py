@@ -2,21 +2,24 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, Any
+from typing import Any, Callable, Union, Dict
 
-import xarray as xr
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
+import xarray as xr
 
-from .data_array import DataArray
-from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
-from .data_array import ModeIndexDataArray
-from .data_array import TriangleMeshDataArray
-from .data_array import TimeDataArray
-
+from ...exceptions import DataError
 from ..base import Tidy3dBaseModel
 from ..types import Axis
-from ...exceptions import DataError
+from .data_array import (
+    DataArray,
+    ModeIndexDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    TimeDataArray,
+    TriangleMeshDataArray,
+)
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -327,7 +330,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
-        # pylint:disable=no-member
+
         return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
 
     @property

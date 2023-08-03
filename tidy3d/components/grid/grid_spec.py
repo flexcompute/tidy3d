@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Union
 
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType
@@ -23,7 +23,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
     """Abstract base class, defines 1D grid generation specifications."""
 
-    def make_coords(  # pylint:disable = too-many-arguments
+    def make_coords(
         self,
         axis: Axis,
         structures: List[StructureType],
@@ -316,7 +316,7 @@ class AutoGrid(GridSpec1d):
         description="The type of mesher to use to generate the grid automatically.",
     )
 
-    def _make_coords_initial(  # pylint:disable=too-many-arguments,arguments-differ,too-many-locals
+    def _make_coords_initial(
         self,
         axis: Axis,
         structures: List[StructureType],
@@ -510,7 +510,6 @@ class GridSpec(Tidy3dBaseModel):
                     override_used[dl_axis] = True
         return override_used
 
-    # pylint:disable=too-many-locals,too-many-arguments
     def make_grid(
         self,
         structures: List[Structure],
@@ -575,7 +574,7 @@ class GridSpec(Tidy3dBaseModel):
         return Grid(boundaries=coords)
 
     @classmethod
-    def auto(  # pylint:disable=too-many-arguments
+    def auto(
         cls,
         wavelength: pd.PositiveFloat = None,
         min_steps_per_wvl: pd.PositiveFloat = 10.0,

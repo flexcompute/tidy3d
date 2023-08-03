@@ -214,7 +214,6 @@ class Logger:
         if len(args) > 0:
             try:
                 composed_message = str(message) % args
-            # pylint: disable=broad-exception-caught
             except Exception as e:
                 composed_message = f"{message} % {args}\n{e}"
         else:
@@ -330,15 +329,14 @@ def set_logging_file(
     if "file" in log.handlers:
         try:
             log.handlers["file"].file.close()
-        except:  # pylint: disable=bare-except
+        except Exception:  # TODO: catch more specific exception
             log.warning("Log file could not be closed")
         finally:
             del log.handlers["file"]
 
     try:
-        # pylint: disable=consider-using-with
         file = open(fname, filemode)
-    except:  # pylint: disable=bare-except
+    except Exception:  # TODO: catch more specific exception
         log.error(f"File {fname} could not be opened")
         return
 

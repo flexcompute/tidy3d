@@ -1,13 +1,14 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict, List
 
-import xarray as xr
-import numpy as np
+from typing import List, Dict
+
 import dask
 import h5py
+import numpy as np
+import xarray as xr
 
-from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
+from ...constants import HERTZ, MICROMETER, RADIAN, SECOND
 from ...exceptions import DataError, FileError
 from ..types import Bound
 
@@ -109,7 +110,7 @@ class DataArray(xr.DataArray):
         field_schema.update(schema)
 
     @classmethod
-    def _json_encoder(cls, val):  # pylint:disable=unused-argument
+    def _json_encoder(cls, val):
         """What function to call when writing a DataArray to json."""
         return type(val).__name__
 

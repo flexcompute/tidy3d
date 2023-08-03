@@ -1,4 +1,3 @@
-# pylint:disable=invalid-name
 """Penalty Functions for adjoint plugin."""
 from abc import ABC, abstractmethod
 
@@ -26,7 +25,6 @@ class RadiusPenalty(Penalty):
     kappa: float = 10.0
     wrap: bool = False
 
-    # pylint: disable=arguments-differ
     def evaluate(self, points: Vertices) -> float:
         """Get the penalty as a function of supplied (x, y) points."""
 
@@ -52,7 +50,6 @@ class RadiusPenalty(Penalty):
                 d_term2 = 2 * t * (p2 - p1)
                 return d_term0 + d_term2
 
-            # pylint:disable=unused-argument
             def d2_p(t):
                 """Second derivative function."""
                 d2_term0 = 2 * p0

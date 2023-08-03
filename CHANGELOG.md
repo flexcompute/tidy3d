@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
 - Added option to allow DC component in `GaussianPulse` spectrum, by setting `remove_dc_component=False` in `GaussianPulse`.
 - Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
+- Upgrades to `pydantic==2.*` with `pydantic.v1` imports.
+- Uses `ruff` for linting instead of `pylint`.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.

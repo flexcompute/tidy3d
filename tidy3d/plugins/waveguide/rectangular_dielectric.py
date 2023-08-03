@@ -3,7 +3,7 @@
 from typing import List, Any
 
 import numpy
-import pydantic
+import pydantic.v1 as pydantic
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.boundary import BoundarySpec, Periodic
@@ -329,7 +329,6 @@ class RectangularDielectric(Tidy3dBaseModel):
         core_x.extend(core_x[0] + numpy.cumsum(self.core_width[:-1]) + numpy.cumsum(self.gap))
         return core_x
 
-    # pylint:disable=too-many-locals
     @property
     def _override_structures(self) -> List[Structure]:
         """Build override structures to define the simulation grid."""
@@ -698,7 +697,6 @@ class RectangularDielectric(Tidy3dBaseModel):
 
     # plot wrappers
 
-    # pylint:disable=too-many-arguments
     def plot(
         self,
         x: float = None,
@@ -741,7 +739,6 @@ class RectangularDielectric(Tidy3dBaseModel):
             **patch_kwargs,
         )
 
-    # pylint:disable=too-many-arguments
     def plot_eps(
         self,
         x: float = None,
@@ -821,7 +818,6 @@ class RectangularDielectric(Tidy3dBaseModel):
             ax=ax,
         )
 
-    # pylint:disable=too-many-arguments
     def plot_structures_eps(
         self,
         x: float = None,
@@ -912,7 +908,6 @@ class RectangularDielectric(Tidy3dBaseModel):
             **kwargs,
         )
 
-    # pylint:disable=too-many-arguments
     def plot_field(
         self,
         field_name: str,

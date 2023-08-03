@@ -1,7 +1,7 @@
 """Defines a jax-compatible structure and its conversion to a gradient monitor."""
 from __future__ import annotations
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 
@@ -56,7 +56,6 @@ class JaxStructure(Structure, JaxObject):
 
         return cls.parse_obj(struct_dict)
 
-    # pylint:disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,

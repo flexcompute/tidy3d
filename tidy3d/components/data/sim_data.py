@@ -1,21 +1,21 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Tuple
 
-import xarray as xr
-import pydantic as pd
+from typing import Callable, Tuple, Dict
+
 import numpy as np
+import pydantic.v1 as pd
+import xarray as xr
 
-from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
-from ..base import Tidy3dBaseModel
-from ..simulation import Simulation
-from ..boundary import BlochBoundary
-from ..source import TFSF
-from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
-from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError, ValidationError
 from ...log import log
-
+from ..base import Tidy3dBaseModel
+from ..boundary import BlochBoundary
+from ..simulation import Simulation
+from ..source import TFSF
+from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from ..viz import add_ax_if_none, equal_aspect
+from .monitor_data import AbstractFieldData, FieldTimeData, MonitorDataType, MonitorDataTypes
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
@@ -124,7 +124,7 @@ class SimulationData(Tidy3dBaseModel):
                 "No log string in the SimulationData object, can't find final decay value."
             )
         lines = log_str.split("\n")
-        decay_lines = [l for l in lines if "field decay" in l]
+        decay_lines = [line for line in lines if "field decay" in line]
         final_decay = 1.0
         if len(decay_lines) > 0:
             final_decay_line = decay_lines[-1]
@@ -240,15 +240,14 @@ class SimulationData(Tidy3dBaseModel):
 
         # pass coords if each of the scalar field data have more than one coordinate along a dim
         xyz_kwargs = {}
-        for dim, centers in zip("xyz", (centers.x, centers.y, centers.z)):
+        for dim, center in zip("xyz", (centers.x, centers.y, centers.z)):
             scalar_data = list(monitor_data.field_components.values())
             coord_lens = [len(data.coords[dim]) for data in scalar_data]
             if all(ncoords > 1 for ncoords in coord_lens):
-                xyz_kwargs[dim] = centers
+                xyz_kwargs[dim] = center
 
         return monitor_data.colocate(**xyz_kwargs)
 
-    # pylint: disable=too-many-locals
     def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
         """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.
 
@@ -422,7 +421,6 @@ class SimulationData(Tidy3dBaseModel):
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
 
-    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def plot_field(
         self,
         field_monitor_name: str,
@@ -615,7 +613,6 @@ class SimulationData(Tidy3dBaseModel):
             ax=ax,
         )
 
-    # pylint: disable=too-many-arguments,too-many-locals
     @equal_aspect
     @add_ax_if_none
     def plot_scalar_array(

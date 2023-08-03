@@ -1,7 +1,7 @@
-"""Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
+"""Holds dispersive models for several commonly used optical materials."""
 import json
 from typing import Dict, List
-import pydantic as pd
+import pydantic.v1 as pd
 
 from ..components.medium import PoleResidue, Medium2D
 from ..components.base import Tidy3dBaseModel
@@ -15,8 +15,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
 
     mat_lib_dict = {
         f'{mat.name} ("{mat_name}")': {
-            var_name: json.loads(var.medium._json_string)  # pylint: disable=protected-access
-            for var_name, var in mat.variants.items()
+            var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()
         }
         for mat_name, mat in material_library.items()
         if not isinstance(mat, type)
@@ -66,7 +65,7 @@ class MaterialItem(Tidy3dBaseModel):
     @pd.validator("default", always=True)
     def _default_in_variants(cls, val, values):
         """Make sure the default variant is already included in the ``variants``."""
-        if not val in values["variants"]:
+        if val not in values["variants"]:
             raise SetupError(
                 f"The data of the default variant '{val}' is not supplied; "
                 "please include it in the 'variants'."

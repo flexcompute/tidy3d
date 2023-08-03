@@ -6,8 +6,8 @@ import ssl
 from typing import Tuple, Optional
 from enum import Enum
 import requests
-import pydantic
-from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
+import pydantic.v1 as pydantic
+from pydantic.v1 import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel
@@ -199,7 +199,6 @@ class FitterData(AdvancedFitterParam):
         else:
             k_data = None
 
-        # pylint: disable=protected-access
         task = FitterData(
             wvl_um=wvl_um.tolist(),
             n_data=n_data.tolist(),
@@ -353,7 +352,7 @@ class StableDispersionFitter(DispersionFitter):
         )
         return values
 
-    def fit(  # pylint:disable=arguments-differ, too-many-locals, too-many-arguments
+    def fit(
         self,
         num_poles: PositiveInt = 1,
         num_tries: PositiveInt = 50,

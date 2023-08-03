@@ -75,7 +75,6 @@ def create_d_matrices(shape, dlf, dlb, dmin_pmc=(False, False)):
     return (dxf, dxb, dyf, dyb)
 
 
-# pylint:disable=too-many-locals, too-many-arguments
 def create_s_matrices(omega, shape, npml, dlf, dlb, dmin_pml=(True, True)):
     """Makes the 'S-matrices'. When dotted with derivative matrices, they add
     PML. If dmin_pml is set to False, PML will not be applied on the "bottom"
@@ -121,7 +120,6 @@ def create_s_matrices(omega, shape, npml, dlf, dlb, dmin_pml=(True, True)):
     return sx_f, sx_b, sy_f, sy_b
 
 
-# pylint:disable=too-many-arguments
 def create_sfactor(direction, omega, dls, N, n_pml, dmin_pml):
     """Creates the S-factor cross section needed in the S-matrices"""
 

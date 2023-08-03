@@ -1,6 +1,6 @@
 """Defines Geometric objects with Medium properties."""
 from typing import Union, Tuple, Optional
-import pydantic
+import pydantic.v1 as pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
@@ -106,7 +106,7 @@ class Structure(AbstractStructure):
                 raise SetupError(
                     "Can't validate 2D structure because its geometry did not pass validation."
                 )
-            _ = geom._normal_2dmaterial  # pylint: disable=protected-access
+            _ = geom._normal_2dmaterial
         return val
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:

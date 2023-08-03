@@ -1,4 +1,3 @@
-# pylint:disable=too-many-lines, too-many-arguments
 """Defines spatial extent of objects."""
 from __future__ import annotations
 
@@ -7,7 +6,7 @@ from typing import List, Tuple, Union, Any, Callable, Optional
 from math import isclose
 import functools
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 from matplotlib import patches, path
 from shapely import unary_union
@@ -31,15 +30,12 @@ try:
     import trimesh
 
     TRIMESH_AVAILABLE = True
-except Exception:  # pylint:disable=broad-except
+except Exception:
     TRIMESH_AVAILABLE = False
 
 try:
-    import networkx  # pylint:disable=unused-import
-    import rtree  # pylint:disable=unused-import
-
     NETWORKX_RTREE_AVAILABLE = True
-except Exception:  # pylint:disable=broad-except
+except Exception:
     NETWORKX_RTREE_AVAILABLE = False
 
 
@@ -58,7 +54,6 @@ POLY_GRID_SIZE = 1e-12
 Points = ArrayFloat3D
 
 
-# pylint:disable=too-many-public-methods
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
@@ -106,7 +101,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _ensure_equal_shape(*arrays):
         """Ensure all input arrays have the same shape."""
-        shapes = set(np.array(arr).shape for arr in arrays)
+        shapes = {np.array(arr).shape for arr in arrays}
         if len(shapes) > 1:
             raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
 
@@ -221,7 +216,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         shapes_plane = self.intersections_plane(**xyz_kwargs)
 
         # intersect all shapes with the input plane
-        bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
+        bs_min, bs_max = (plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds)
         shapely_box = box(minx=bs_min[0], miny=bs_min[1], maxx=bs_max[0], maxy=bs_max[1])
         shapely_box = plane.evaluate_inf_shape(shapely_box)
         return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
@@ -292,7 +287,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @cached_property
     @abstractmethod
-    def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates..
 
         Returns
@@ -1156,7 +1151,7 @@ class Box(Centered):
         return cls(center=center, size=size, **kwargs)
 
     @classmethod
-    def surfaces(cls, size: Size, center: Coordinate, **kwargs):  # pylint: disable=too-many-locals
+    def surfaces(cls, size: Size, center: Coordinate, **kwargs):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1246,9 +1241,7 @@ class Box(Centered):
         return surfaces
 
     @classmethod
-    def surfaces_with_exclusion(
-        cls, size: Size, center: Coordinate, **kwargs
-    ):  # pylint: disable=too-many-locals
+    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1277,7 +1270,6 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
-    # pylint:disable=too-many-locals
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1377,7 +1369,7 @@ class Box(Centered):
         """A list of axes along which the :class:`Box` is zero-sized."""
         return [dim for dim, size in enumerate(self.size) if size == 0]
 
-    def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
+    def _plot_arrow(
         self,
         direction: Tuple[float, float, float],
         x: float = None,
@@ -1730,7 +1722,7 @@ class Cylinder(Centered, Circular, Planar):
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         return [Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
-    def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis):
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
         When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
         cross section can contain hyperbolic curves. This is currently approximated by a polygon
@@ -2206,7 +2198,7 @@ class PolySlab(Planar):
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments
+    def from_gds(
         cls,
         gds_cell,
         axis: Axis,
@@ -2384,13 +2376,13 @@ class PolySlab(Planar):
         return all_vertices
 
     @classmethod
-    def _load_gds_vertices_gdspy(  # pylint:disable=too-many-arguments, too-many-locals
+    def _load_gds_vertices_gdspy(
         cls,
         gds_cell,
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List["PolySlab"]:
+    ) -> List[PolySlab]:
         """Load :class:`PolySlab` vertices from a ``gdspy.Cell``.
 
         Parameters
@@ -2493,7 +2485,6 @@ class PolySlab(Planar):
         dist = self._extrusion_length_to_offset_distance(self.length_axis / 2)
         return self._shift_vertices(self.middle_polygon, dist)[0]
 
-    # pylint:disable=too-many-locals
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
     ) -> np.ndarray[bool]:
@@ -2612,7 +2603,7 @@ class PolySlab(Planar):
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         return [Polygon(vertices_z)]
 
-    def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -2757,7 +2748,7 @@ class PolySlab(Planar):
         height = height[height < self.length_axis - fp_eps]
         return height
 
-    def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
+    def _find_intersecting_ys_angle_vertical(
         self, vertices: np.ndarray, position: float, axis: int, exclude_on_vertices: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
@@ -2836,7 +2827,7 @@ class PolySlab(Planar):
 
         return ints_y_sort, ints_angle_sort
 
-    def _find_intersecting_ys_angle_slant(  # pylint:disable=too-many-locals, too-many-statements
+    def _find_intersecting_ys_angle_slant(
         self, vertices: np.ndarray, position: float, axis: int
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
@@ -3080,7 +3071,7 @@ class PolySlab(Planar):
         return PolySlab._orient(PolySlab._remove_duplicate_vertices(vertices_np))
 
     @staticmethod
-    def _edge_events_detection(  # pylint:disable=too-many-return-statements
+    def _edge_events_detection(
         proper_vertices: np.ndarray, dilation: float, ignore_at_dist: bool = True
     ) -> bool:
         """Detect any edge events within the offset distance ``dilation``.
@@ -3178,7 +3169,7 @@ class PolySlab(Planar):
         return np.array(vertices_tuple)
 
     @staticmethod
-    def _shift_vertices(  # pylint:disable=too-many-locals
+    def _shift_vertices(
         vertices: np.ndarray, dist
     ) -> Tuple[np.ndarray, np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """Shifts the vertices of a polygon outward uniformly by distances

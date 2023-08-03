@@ -1,6 +1,7 @@
 """Tests the base model."""
 import pytest
 import numpy as np
+import pydantic.v1 as pydantic
 
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel

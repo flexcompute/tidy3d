@@ -2,7 +2,7 @@
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
-import pydantic
+import pydantic.v1 as pydantic
 
 import tidy3d as td
 from tidy3d.exceptions import DataError, Tidy3dKeyError

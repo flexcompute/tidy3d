@@ -3,8 +3,9 @@ import dill as pickle
 from typing import Tuple
 
 import pytest
+import pydantic.v1 as pydantic
+
 import numpy as np
-import pydantic
 import xarray as xr
 import tidy3d as td
 

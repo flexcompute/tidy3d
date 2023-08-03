@@ -3,7 +3,7 @@
 from typing import List, Tuple
 from math import isclose
 
-import pydantic
+import pydantic.v1 as pydantic
 from shapely.geometry import Polygon
 
 from ...log import log
@@ -67,7 +67,7 @@ class ComplexPolySlab(PolySlab):
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments
+    def from_gds(
         cls,
         gds_cell,
         axis: Axis,

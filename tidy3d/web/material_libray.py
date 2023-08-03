@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from pydantic import Field, parse_obj_as, validator
+from pydantic.v1 import Field, parse_obj_as, validator
 from tidy3d.components.medium import MediumType
 
 from .http_management import http
@@ -25,13 +25,11 @@ class MaterialLibray(Queryable, smart_union=True):
         title="json input", description="original input", alias="jsonInput"
     )
 
-    # pylint: disable=no-self-argument
     @validator("medium", "json_input", pre=True)
     def parse_result(cls, values):
         """Automatically parsing medium and json_input from string to object."""
         return json.loads(values)
 
-    # pylint: disable=arguments-differ
     @classmethod
     def list(cls) -> List[MaterialLibray]:
         """List all material libraries.

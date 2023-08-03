@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import List, Tuple, Dict
 
 import numpy as np
-import pydantic
+import pydantic.v1 as pydantic
 import xarray as xr
 
 from ...log import log
@@ -161,10 +161,8 @@ class ModeSolver(Tidy3dBaseModel):
             update={"freqs": self._freqs_for_group_index(), "mode_spec": mode_spec}
         )
 
-        # pylint:disable=protected-access
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
-    # pylint:disable=too-many-locals
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -334,7 +332,7 @@ class ModeSolver(Tidy3dBaseModel):
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
-            # pylint: disable=unbalanced-tuple-unpacking
+
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
@@ -344,7 +342,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         return n_complex, fields, eps_spec
 
-    # pylint:disable=too-many-locals
     def _solve_single_freq(
         self,
         freq: float,
@@ -662,7 +659,6 @@ class ModeSolver(Tidy3dBaseModel):
         new_sim = self.simulation.updated_copy(monitors=new_monitors)
         return new_sim
 
-    # pylint:disable=too-many-arguments
     def plot_field(
         self,
         field_name: str,

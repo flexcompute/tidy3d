@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
@@ -90,7 +90,6 @@ class RotationAroundAxis(AbstractRotation):
         return np.isclose(self.angle % (2 * np.pi), 0)
 
     @cached_property
-    # pylint: disable=invalid-name
     def matrix(self) -> TensorReal:
         """Rotation matrix."""
 

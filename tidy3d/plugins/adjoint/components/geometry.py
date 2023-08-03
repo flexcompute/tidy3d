@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 """Defines jax-compatible geometries and their conversion to grad monitors."""
 from __future__ import annotations
 
@@ -6,7 +5,7 @@ from abc import ABC
 from typing import Tuple, Union, Dict
 from multiprocessing import Pool
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
 import jax.numpy as jnp
@@ -150,7 +149,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         """Overrides validator enforing that val is not inf."""
         return val
 
-    # pylint: disable=too-many-locals, too-many-arguments, too-many-statements, unused-argument
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -362,7 +360,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         vertices = np.array(jax.lax.stop_gradient(self.vertices))
         return PolySlab._area(vertices) > 0
 
-    # pylint: disable=too-many-locals, too-many-arguments, too-many-statements
     def edge_contrib(
         self,
         vertex_grad: Coordinate2D,
@@ -493,7 +490,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         # take the real part (from adjoint math) and multiply by area element
         return length_edge * ds * dz * np.real(integral_result)
 
-    # pylint: disable=too-many-arguments
     def vertex_vjp(
         self,
         i_vertex,
@@ -538,7 +534,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         # add the "forward" contribution from the "previous" contribution to get the vertex VJP
         return contrib_prev + contrib_next
 
-    # pylint: disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -674,7 +669,6 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         obj_dict["geometries"] = jax_geometries
         return cls.parse_obj(obj_dict)
 
-    # pylint: disable=too-many-arguments
     @staticmethod
     def _store_vjp_geometry(
         geometry: JaxSingleGeometryType,
@@ -697,7 +691,6 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
             eps_in=eps_in,
         )
 
-    # pylint: disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -733,7 +726,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
 
 JaxGeometryType = Union[JaxSingleGeometryType, JaxGeometryGroup]
 
-# pylint: disable=unhashable-member
+
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
     PolySlab: JaxPolySlab,

@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import numpy as np
 import requests
-from pydantic import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 from tidy3d.plugins.dispersion import DispersionFitter
 
 from .http_management import http
@@ -61,7 +61,6 @@ class MaterialFitterTask(Submittable):
         ..., title="resource path", description="resource path", alias="resourcePath"
     )
 
-    # pylint: disable=arguments-differ
     @classmethod
     def submit(cls, fitter: DispersionFitter, options: FitterOptions) -> MaterialFitterTask:
         """Create and kickoff fitter task.

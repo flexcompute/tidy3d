@@ -5,6 +5,17 @@ from memory_profiler import profile
 import matplotlib.pyplot as plt
 import time
 
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.simulation import Simulation
+from tidy3d.components.source import PointDipole, GaussianPulse
+from tidy3d.components.grid.grid_spec import GridSpec
+
+
+from typing import Callable, Tuple
+
 import jax.numpy as jnp
 from jax import grad
 

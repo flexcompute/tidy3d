@@ -1,16 +1,15 @@
 """Defines electric current sources for injecting light into simulation."""
-# pylint: disable=too-many-lines
+
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
 
 from typing_extensions import Literal
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-
 from .types import Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
@@ -143,7 +142,6 @@ class SourceTime(ABC, Tidy3dBaseModel):
         ax.set_aspect("auto")
         return ax
 
-    # pylint:disable=too-many-arguments
     @add_ax_if_none
     def plot_spectrum(
         self,
@@ -322,7 +320,7 @@ class CustomSourceTime(Pulse):
     ----
     .. math::
 
-        amp\\_time(t) = amplitude \\cdot \\ 
+        amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
 
@@ -488,7 +486,7 @@ class Source(Box, ABC):
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,
@@ -854,7 +852,6 @@ class AngledFieldSource(DirectionalSource, ABC):
             )
         return val
 
-    # pylint: disable=no-member
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
@@ -1054,7 +1051,7 @@ class TFSF(AngledFieldSource, VolumeSource):
         center[self.injection_axis] += sign * size[self.injection_axis] / 2
         return tuple(center)
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,

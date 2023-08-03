@@ -1,19 +1,18 @@
 """Defines jax-compatible DataArrays."""
 from __future__ import annotations
 
-from typing import Tuple, Any, Dict, List
+from typing import Any, Tuple, List, Dict
 
 import h5py
-import pydantic as pd
-import numpy as np
-import jax.numpy as jnp
 import jax
-from jax.tree_util import register_pytree_node_class
+import jax.numpy as jnp
+import numpy as np
+import pydantic.v1 as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
 from .....components.base import Tidy3dBaseModel, cached_property
-from .....exceptions import DataError, Tidy3dKeyError, AdjointError
-
+from .....exceptions import AdjointError, DataError, Tidy3dKeyError
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -23,7 +22,6 @@ VALUE_FILTER_THRESHOLD = 1e-6
 JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 
-# pylint:disable=too-many-public-methods
 @register_pytree_node_class
 class JaxDataArray(Tidy3dBaseModel):
     """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
@@ -87,7 +85,6 @@ class JaxDataArray(Tidy3dBaseModel):
 
     #     return val
 
-    # pylint: disable=arguments-differ, arguments-renamed
     def to_hdf5(self, fname: str, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file with a given path to the group."""
         sub_group = fname.create_group(group_path)
@@ -103,7 +100,6 @@ class JaxDataArray(Tidy3dBaseModel):
                 sub_group[key] = val
         sub_group["dims"] = dims
 
-    # pylint: disable=arguments-differ
     @classmethod
     def from_hdf5(cls, fname: str, group_path: str) -> JaxDataArray:
         """Load an DataArray from an hdf5 file with a given path to the group."""
@@ -232,7 +228,6 @@ class JaxDataArray(Tidy3dBaseModel):
             ret = ret.sum(dim=dim_i)
         return ret
 
-    # pylint:disable=unused-argument
     def squeeze(self, dim: str = None, drop: bool = True) -> JaxDataArray:
         """Remove any non-zero dims."""
 
@@ -305,7 +300,6 @@ class JaxDataArray(Tidy3dBaseModel):
 
         return self_sel
 
-    # pylint:disable=unused-argument
     def sel(self, indexers: dict = None, method: str = "nearest", **sel_kwargs) -> JaxDataArray:
         """Select a value from the :class:`.JaxDataArray` by indexing into coordinate values."""
         isel_kwargs = {}
@@ -338,7 +332,6 @@ class JaxDataArray(Tidy3dBaseModel):
         scalar_data_arr = jnp.moveaxis(scalar_data_arr, 0, axis)
         return self.updated_copy(values=scalar_data_arr)
 
-    # pylint:disable=too-many-locals
     def interp_single(self, key: str, val: float) -> JaxDataArray:
         """Interpolate into a single dimension of self.
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Dict
 import os
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from ...constants import HERTZ
@@ -327,7 +327,7 @@ class ComponentModeler(Tidy3dBaseModel):
     @cached_property
     def batch_path(self) -> str:
         """Path to the batch saved to file."""
-        # pylint: disable=protected-access
+
         return self.batch._batch_path(path_dir=DEFAULT_DATA_DIR)
 
     def get_path_dir(self, path_dir: str) -> None:
@@ -402,7 +402,6 @@ class ComponentModeler(Tidy3dBaseModel):
 
         return port_names_out, port_names_in
 
-    # pylint:disable=too-many-locals
     def _construct_smatrix(self, batch_data: BatchData) -> SMatrixDataArray:
         """Post process `BatchData` to generate scattering matrix."""
 

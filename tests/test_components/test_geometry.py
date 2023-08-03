@@ -1,7 +1,7 @@
 """Tests Geometry objects."""
 
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 import shapely
 import matplotlib.pyplot as plt

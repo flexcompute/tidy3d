@@ -1,9 +1,8 @@
-# pylint:disable=unused-argument
 """ Defines various validation functions that get used to ensure inputs are legit """
 from typing import Any
 
-import pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
 from .geometry import Box
 from ..exceptions import ValidationError, SetupError
@@ -262,7 +261,6 @@ def validate_parameter_perturbation(
 ):
     """Assert perturbations do not drive a parameter out of physical bounds."""
 
-    # pylint:disable=too-many-locals, too-many-nested-blocks
     @pydantic.validator(field_name, always=True, allow_reuse=True)
     def _warn_perturbed_val_range(cls, val, values):
         """Assert perturbations do not drive a parameter out of physical bounds."""

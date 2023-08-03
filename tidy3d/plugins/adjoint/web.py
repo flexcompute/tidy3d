@@ -3,7 +3,7 @@ from typing import Tuple, Dict, List
 from functools import partial
 import tempfile
 
-import pydantic as pd
+import pydantic.v1 as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
 
@@ -76,7 +76,6 @@ def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchDa
 """ Running a single simulation using web.run. """
 
 
-# pylint:disable=too-many-arguments
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run(
     simulation: JaxSimulation,
@@ -125,7 +124,6 @@ def run(
     return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
-# pylint:disable=too-many-arguments
 def run_fwd(
     simulation: JaxSimulation,
     task_name: str,
@@ -154,7 +152,6 @@ def run_fwd(
     return jax_sim_data_orig, (res,)
 
 
-# pylint:disable=too-many-arguments,unused-argument
 def run_bwd(
     task_name: str,
     folder_name: str,
@@ -167,7 +164,7 @@ def run_bwd(
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
     fwd_task_id = res[0].fwd_task_id
-    fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint  # pylint:disable=protected-access
+    fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
     jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
     sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
 
@@ -193,7 +190,7 @@ def run_bwd(
 def upload_jax_info(jax_info: JaxInfo, task_id: str, verbose: bool) -> None:
     """Upload jax_info for a task with a given task_id."""
 
-    data_file = tempfile.NamedTemporaryFile(suffix=".json")  # pylint:disable=consider-using-with
+    data_file = tempfile.NamedTemporaryFile(suffix=".json")
     data_file.close()
     jax_info.to_file(data_file.name)
     upload_file(
@@ -208,7 +205,7 @@ def upload_jax_info(jax_info: JaxInfo, task_id: str, verbose: bool) -> None:
 def download_sim_vjp(task_id: str, verbose: bool) -> JaxSimulation:
     """Download the vjp loaded simulation from the server to return to jax."""
 
-    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")  # pylint:disable=consider-using-with
+    data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
     data_file.close()
     download_file(task_id, SIM_VJP_FILE, to_file=data_file.name, verbose=verbose)
     return JaxSimulation.from_file(data_file.name)
@@ -358,7 +355,6 @@ def _task_name_orig(index: int):
     return int(index)
 
 
-# pylint:disable=too-many-locals
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run_async(
     simulations: Tuple[JaxSimulation, ...],
@@ -430,7 +426,6 @@ def run_async(
     return jax_batch_data
 
 
-# pylint:disable=too-many-locals, unused-argument
 def run_async_fwd(
     simulations: Tuple[JaxSimulation, ...],
     folder_name: str,
@@ -470,7 +465,6 @@ def run_async_fwd(
     return jax_batch_data_orig, (residual,)
 
 
-# pylint:disable=too-many-arguments, too-many-locals, unused-argument
 def run_async_bwd(
     folder_name: str,
     path_dir: str,
@@ -489,7 +483,7 @@ def run_async_bwd(
 
     for sim_data_vjp, fwd_task_id in zip(batch_data_vjp, fwd_task_ids):
         parent_tasks_adj.append([str(fwd_task_id)])
-        fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint  # pylint:disable=protected-access
+        fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
         jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
         sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
         sims_adj.append(sim_adj)
@@ -589,7 +583,6 @@ run_async.defvjp(run_async_fwd, run_async_bwd)
 """ Options to do the previous but all client side (mainly for testing / debugging)."""
 
 
-# pylint:disable=too-many-arguments
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run_local(
     simulation: JaxSimulation,
@@ -642,7 +635,6 @@ def run_local(
     return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
 
-# pylint:disable=too-many-arguments
 def run_local_fwd(
     simulation: JaxSimulation,
     task_name: str,
@@ -672,7 +664,6 @@ def run_local_fwd(
     return sim_data_orig, (sim_data_fwd,)
 
 
-# pylint:disable=too-many-arguments
 def run_local_bwd(
     task_name: str,
     folder_name: str,
@@ -690,7 +681,7 @@ def run_local_bwd(
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data_symmetry
 
     # make and run adjoint simulation
-    fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
+    fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
     sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
     sim_data_adj = run(
         simulation=sim_adj,
@@ -722,7 +713,6 @@ def _task_name_orig_local(index: int, task_name_suffix: str = None):
     return int(index)
 
 
-# pylint:disable=too-many-locals
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 7)))
 def run_async_local(
     simulations: Tuple[JaxSimulation, ...],
@@ -797,7 +787,6 @@ def run_async_local(
     return jax_batch_data
 
 
-# pylint:disable=too-many-locals, unused-argument
 def run_async_local_fwd(
     simulations: Tuple[JaxSimulation, ...],
     folder_name: str,
@@ -840,7 +829,6 @@ def run_async_local_fwd(
     return batch_data_orig, (batch_data_fwd,)
 
 
-# pylint:disable=too-many-arguments, too-many-locals, unused-argument
 def run_async_local_bwd(
     folder_name: str,
     path_dir: str,
@@ -868,7 +856,7 @@ def run_async_local_bwd(
     # make and run adjoint simulation
     sims_adj = []
     for i, sim_data_fwd in enumerate(batch_data_fwd):
-        fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint  # pylint:disable=protected-access
+        fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
         sim_data_vjp = batch_data_vjp[i]
         sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
         sims_adj.append(sim_adj)

@@ -1,4 +1,3 @@
-# pylint:disable=too-many-lines
 """Collection of functions for automatically generating a nonuniform grid. """
 
 from abc import ABC, abstractmethod
@@ -7,7 +6,7 @@ from math import isclose
 from itertools import compress
 import warnings
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 from pyroots import Brentq
 from shapely.strtree import STRtree
@@ -28,7 +27,7 @@ class Mesher(Tidy3dBaseModel, ABC):
     """Abstract class for automatic meshing."""
 
     @abstractmethod
-    def parse_structures(  # pylint:disable=too-many-arguments
+    def parse_structures(
         self,
         axis: Axis,
         structures: List[StructureType],
@@ -53,7 +52,6 @@ class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
 
-    # pylint:disable=too-many-locals, too-many-arguments
     def parse_structures(
         self,
         axis: Axis,
@@ -197,7 +195,6 @@ class GradedMesher(Mesher):
 
         return np.array(intervals["coords"]), np.array(max_steps)
 
-    # pylint:disable=too-many-locals,too-many-arguments
     def insert_bbox(
         self,
         intervals: Dict[str, List],
@@ -504,7 +501,7 @@ class GradedMesher(Mesher):
 
         return coords_filter, steps_filter
 
-    def make_grid_multiple_intervals(  # pylint:disable=too-many-locals
+    def make_grid_multiple_intervals(
         self,
         max_dl_list: ArrayFloat1D,
         len_interval_list: ArrayFloat1D,
@@ -683,7 +680,6 @@ class GradedMesher(Mesher):
 
         return left_dl, right_dl
 
-    # pylint:disable=too-many-locals, too-many-return-statements, too-many-arguments
     def make_grid_in_interval(
         self,
         left_neighbor_dl: float,

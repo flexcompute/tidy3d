@@ -1,6 +1,6 @@
 """Sets the configuration of the script, can be changed with `td.config.config_name = new_val`."""
 
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .log import DEFAULT_LEVEL, LogLevel, set_logging_level, set_log_suppression
 

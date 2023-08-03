@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import Union, Tuple
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound
@@ -241,7 +241,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
-    def plot(  # pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,

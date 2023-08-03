@@ -1,7 +1,7 @@
 """Tests mediums."""
 import numpy as np
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.exceptions import ValidationError

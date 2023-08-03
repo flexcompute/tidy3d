@@ -3,7 +3,7 @@
 from typing import Tuple, Dict, List
 
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import jax.numpy as jnp
 import numpy as np
 from jax import grad

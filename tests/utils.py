@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Dict, Tuple
-import pydantic as pd
+import pydantic.v1 as pd
 import trimesh
 
 import pytest

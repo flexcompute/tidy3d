@@ -1,7 +1,6 @@
 """Deprecated module"""
 
-# pylint: disable=wildcard-import,unused-wildcard-import
-from .web import *
+from ...log import log
 
 log.warning(
     "The module 'plugins.dispersion.fit_web' has been deprecated in favor of "

@@ -1,4 +1,5 @@
 import pytest
+import pydantic.v1 as pydantic
 import numpy as np
 
 from tidy3d.material_library.parametric_materials import (

@@ -1,4 +1,3 @@
-# pylint:disable=unused-argument
 """handles filesystem, storage
 """
 import io
@@ -10,7 +9,7 @@ from typing import Callable, Mapping
 
 import boto3
 from boto3.s3.transfer import TransferConfig
-from pydantic import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
 from rich.progress import TransferSpeedColumn, TimeRemainingColumn
 
@@ -203,7 +202,6 @@ def get_s3_sts_token(
     return _s3_sts_tokens[cache_key]
 
 
-# pylint: disable=too-many-arguments
 def upload_string(
     resource_id: str,
     content: str,
@@ -266,7 +264,6 @@ def upload_string(
             _upload(lambda bytes_in_chunk: None)
 
 
-# pylint: disable=too-many-arguments
 def upload_file(
     resource_id: str,
     path: str,

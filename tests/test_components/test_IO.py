@@ -3,6 +3,7 @@ import os
 import json
 
 import pytest
+import pydantic.v1 as pydantic
 import numpy as np
 from time import time
 import dill as pickle

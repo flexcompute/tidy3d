@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name, too-many-lines
 """Defines properties of the medium / materials"""
 from __future__ import annotations
 
@@ -7,7 +6,7 @@ from typing import Tuple, Union, Callable, Optional, Dict, List
 import functools
 from math import isclose
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
 
@@ -183,7 +182,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """
 
     @add_ax_if_none
-    def plot(self, freqs: float, ax: Ax = None) -> Ax:  # pylint: disable=invalid-name
+    def plot(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot n, k of a :class:`Medium` as a function of frequency.
 
         Parameters
@@ -317,7 +316,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Tuple[float, float]
             Real part of relative permittivity & electric conductivity.
         """
-        eps_real, eps_imag = eps_complex.real, eps_complex.imag  # pylint:disable=no-member
+        eps_real, eps_imag = eps_complex.real, eps_complex.imag
         omega = 2 * np.pi * freq
         sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
@@ -370,7 +369,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def is_isotropic(self) -> bool:
         """The medium is isotropic or anisotropic."""
 
-    def _interp_method(self, comp: Axis) -> InterpMethod:  # pylint:disable=unused-argument
+    def _interp_method(self, comp: Axis) -> InterpMethod:
         """Interpolation method applied to comp."""
         return self.interp_method
 
@@ -959,7 +958,7 @@ class CustomMedium(AbstractCustomMedium):
 
     def _interp_method(self, comp: Axis) -> InterpMethod:
         """Interpolation method applied to comp."""
-        return self._medium._interp_method(comp)  # pylint:disable=protected-access
+        return self._medium._interp_method(comp)
 
     @cached_property
     def n_cfl(self):
@@ -1294,7 +1293,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         """
 
         @pd.root_validator(pre=True, allow_reuse=True)
-        def _warn_if_none(cls, values):  # pylint:disable=unused-argument
+        def _warn_if_none(cls, values):
             """Warn if any of `eps_inf` and nested_tuple_field are not load."""
             eps_inf = values.get("eps_inf")
             coeffs = values.get(nested_tuple_field)
@@ -1398,7 +1397,7 @@ class PoleResidue(DispersiveMedium):
         )
 
     @classmethod
-    def from_medium(cls, medium: Medium) -> "PoleResidue":
+    def from_medium(cls, medium: Medium) -> PoleResidue:
         """Convert a :class:`.Medium` to a pole residue model.
 
         Parameters
@@ -1545,7 +1544,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         return tuple((fun_interp(a), fun_interp(c)) for (a, c) in self.poles)
 
     @classmethod
-    def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+    def from_medium(cls, medium: CustomMedium) -> CustomPoleResidue:
         """Convert a :class:`.CustomMedium` to a pole residue model.
 
         Parameters
@@ -1787,7 +1786,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         dn_dwvl: SpatialDataArray,
         interp_method="nearest",
         **kwargs,
-    ):  # pylint:disable=signature-differs
+    ):
         """Convert ``n`` and wavelength dispersion ``dn_dwvl`` values at frequency ``freq`` to
         a single-pole :class:`CustomSellmeier` medium.
 
@@ -2454,7 +2453,7 @@ class AnisotropicMedium(AbstractMedium):
 
         For this medium, it takes the minimal of ``n_clf`` in all components.
         """
-        return min((mat_component.n_cfl for mat_component in self.components.values()))
+        return min(mat_component.n_cfl for mat_component in self.components.values())
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2844,7 +2843,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
         For this medium, it takes the minimal of ``n_clf`` in all components.
         """
-        return min((mat_component.n_cfl for mat_component in self.components.values()))
+        return min(mat_component.n_cfl for mat_component in self.components.values())
 
     @cached_property
     def is_isotropic(self):
@@ -3051,7 +3050,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             new_dict.pop("subpixel")
             return Medium.parse_obj(new_dict)
 
-        # pylint:disable=protected-access
         permittivity_field = self.permittivity + ParameterPerturbation._zeros_like(
             temperature, electron_density, hole_density
         )
@@ -3161,7 +3159,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             new_dict.pop("subpixel")
             return PoleResidue.parse_obj(new_dict)
 
-        # pylint:disable=protected-access
         zeros = ParameterPerturbation._zeros_like(temperature, electron_density, hole_density)
 
         # sample eps_inf

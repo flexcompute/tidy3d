@@ -1,4 +1,3 @@
-# pylint:disable=too-many-public-methods
 """global configuration / base class for pydantic models used to make simulation."""
 from __future__ import annotations
 
@@ -7,8 +6,8 @@ from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 
 import rich
-import pydantic
-from pydantic.fields import ModelField
+import pydantic.v1 as pydantic
+from pydantic.v1.fields import ModelField
 import yaml
 import numpy as np
 import h5py
@@ -34,13 +33,13 @@ def cache(prop):
     def cached_property_getter(self):
         """The new property method to be returned by decorator."""
 
-        stored_value = self._cached_properties.get(prop_name)  # pylint:disable=protected-access
+        stored_value = self._cached_properties.get(prop_name)
 
         if stored_value is not None:
             return stored_value
 
         computed_value = prop(self)
-        self._cached_properties[prop_name] = computed_value  # pylint:disable=protected-access
+        self._cached_properties[prop_name] = computed_value
         return computed_value
 
     return cached_property_getter
@@ -92,7 +91,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         cls.add_type_field()
         cls.generate_docstring()
 
-    class Config:  # pylint: disable=too-few-public-methods
+    class Config:
         """Sets config for all :class:`Tidy3dBaseModel` objects.
 
         Configuration Options
@@ -119,7 +118,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_encoders = {
             np.ndarray: ndarray_encoder,
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
-            xr.DataArray: DataArray._json_encoder,  # pylint:disable=unhashable-member, protected-access
+            xr.DataArray: DataArray._json_encoder,
         }
         frozen = True
         allow_mutation = False
@@ -277,7 +276,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as json_fhandle:
+        with open(fname, encoding="utf-8") as json_fhandle:
             model_dict = json.load(json_fhandle)
         return model_dict
 
@@ -339,7 +338,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as yaml_in:
+        with open(fname, encoding="utf-8") as yaml_in:
             model_dict = yaml.safe_load(yaml_in)
         return model_dict
 
@@ -661,7 +660,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 continue
 
             # get data type
-            data_type = field._type_display()  # pylint:disable=protected-access
+            data_type = field._type_display()
 
             # get default values
             default_val = field.get_default()

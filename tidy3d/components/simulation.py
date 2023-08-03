@@ -1,11 +1,10 @@
-# pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -76,7 +75,7 @@ PML_HEIGHT_FOR_0_DIMS = 0.02
 CUSTOMSOURCETIME_TOL = 1.1
 
 
-class Simulation(Box):  # pylint:disable=too-many-public-methods
+class Simulation(Box):
     """Contains all information about Tidy3d simulation.
 
     Example
@@ -282,7 +281,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 )
         return val
 
-    # pylint: disable=too-many-locals
     @pydantic.validator("boundary_spec", always=True)
     def plane_wave_boundaries(cls, val, values):
         """Error if there are plane wave sources incompatible with boundary conditions."""
@@ -470,7 +468,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("boundary_spec", always=True)
-    def _structures_not_close_pml(cls, val, values):  # pylint:disable=too-many-locals
+    def _structures_not_close_pml(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
 
         sim_box = Box(size=values.get("size"), center=values.get("center"))
@@ -630,7 +628,6 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                         )
         return val
 
-    # pylint: disable=too-many-locals
     @pydantic.validator("monitors", always=True)
     def _projection_monitors_homogeneous(cls, val, values):
         """Error if any field projection monitor is not in a homogeneous region."""
@@ -729,7 +726,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return val
 
     @pydantic.validator("grid_spec", always=True)
-    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
+    def _warn_grid_size_too_small(cls, val, values):
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
         if val is None:
@@ -1358,7 +1355,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot_eps(  # pylint:disable=too-many-arguments
+    def plot_eps(
         self,
         x: float = None,
         y: float = None,
@@ -1521,7 +1518,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot_structures_eps(  # pylint: disable=too-many-arguments,too-many-locals
+    def plot_structures_eps(
         self,
         x: float = None,
         y: float = None,
@@ -1644,11 +1641,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
@@ -1967,7 +1964,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
+        rmin, rmax = (list(bounds) for bounds in self.bounds_pml)
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
@@ -2055,7 +2052,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return Box(size=size, center=center)
 
     @add_ax_if_none
-    def plot_grid(  # pylint:disable=too-many-locals
+    def plot_grid(
         self,
         x: float = None,
         y: float = None,
@@ -2132,7 +2129,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     @equal_aspect
     @add_ax_if_none
-    def plot_boundaries(  # pylint:disable=too-many-locals
+    def plot_boundaries(
         self,
         x: float = None,
         y: float = None,
@@ -2388,7 +2385,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         return medium_shapes
 
     @staticmethod
-    def _filter_structures_plane(  # pylint:disable=too-many-locals
+    def _filter_structures_plane(
         structures: List[Structure], plane: Box
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane specified by {x,y,z}.
@@ -2498,10 +2495,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Time step (seconds).
         """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
-        dl_sum_inv_sq = sum((1 / dl**2 for dl in dl_mins))
+        dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
-        n_cfl = min(min((mat.n_cfl for mat in self.mediums)), 1)
+        n_cfl = min(min(mat.n_cfl for mat in self.mediums), 1)
         return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property
@@ -2548,7 +2545,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         with log as consolidated_logger:
             for structure in self.structures:
                 if isinstance(structure.medium, Medium2D):
-                    # pylint:disable=protected-access
+
                     normal = structure.geometry._normal_2dmaterial
                     grid_axes[normal] = True
                     for axis, grid_axis in enumerate(
@@ -2675,7 +2672,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
         return nyquist_step
 
-    def min_sym_box(self, box: Box) -> Box:  # pylint:disable=too-many-locals
+    def min_sym_box(self, box: Box) -> Box:
         """Compute the smallest Box restricted to the first quadrant in the presence of symmetries
         that fully covers the original Box when symmetries are applied.
 
@@ -2874,7 +2871,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             with log as consolidated_logger:
                 for structure in self.volumetric_structures:
                     # Indexing subset within the bounds of the structure
-                    # pylint:disable=protected-access
+
                     inds = structure.geometry._inds_inside_bounds(*arrays)
 
                     # Get permittivity on meshgrid over the reduced coordinates
@@ -3033,7 +3030,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
                 new_structures.append(structure)
                 continue
             # otherwise, found a 2D material; replace it with volumetric equivalent
-            axis = structure.geometry._normal_2dmaterial  # pylint: disable=protected-access
+            axis = structure.geometry._normal_2dmaterial
 
             # snap monolayer to grid
             geometry = snap_to_grid(structure.geometry, axis)

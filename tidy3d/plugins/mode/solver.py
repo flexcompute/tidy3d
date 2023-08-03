@@ -25,9 +25,8 @@ class EigSolver(Tidy3dBaseModel):
     It's a collection of static methods.
     """
 
-    # pylint:disable=too-many-statements,too-many-branches,too-many-locals
     @classmethod
-    def compute_modes(  # pylint:disable=too-many-arguments
+    def compute_modes(
         cls,
         eps_cross,
         coords,
@@ -75,9 +74,9 @@ class EigSolver(Tidy3dBaseModel):
         if isinstance(eps_cross, Numpy):
             eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
         elif len(eps_cross) == 9:
-            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = [
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = (
                 np.copy(e) for e in eps_cross
-            ]
+            )
         else:
             raise ValueError("Wrong input to mode solver pemittivity!")
 
@@ -114,14 +113,14 @@ class EigSolver(Tidy3dBaseModel):
             jac_h = np.einsum("ij...,jp...->ip...", jac_h_tmp, jac_h)
 
         """We also need to keep track of the transformation of the k-vector. This is
-        the eigenvalue of the momentum operator assuming some sort of translational invariance and is
-        different from just the transformation of the derivative operator. For example, in a bent
+        the eigenvalue of the momentum operator assuming some sort of translational invariance and
+        is different from just the transformation of the derivative operator. For example, in a bent
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
         effective index approaches that for a straight-waveguide in the limit of infinite radius.
-        Since we use w = R phi in the radial_transform, there is nothing else neede in the k transform.
-        For the angled_transform, the transformation between k-vectors follows from writing the field as
-        E' exp(i k_p w) in transformed coordinates, and identifying this with
+        Since we use w = R phi in the radial_transform, there is nothing else neede in the k
+        transform. For the angled_transform, the transformation between k-vectors follows from
+        writing the field as E' exp(i k_p w) in transformed coordinates, and identifying this with
         E exp(i k_x x + i k_y y + i k_z z) in the original ones."""
         kxy = np.cos(angle_theta) ** 2
         kz = np.cos(angle_theta) * np.sin(angle_theta)
@@ -222,7 +221,7 @@ class EigSolver(Tidy3dBaseModel):
         neff_guess,
         mat_precision,
         direction,
-    ):  # pylint:disable=too-many-arguments
+    ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
 
@@ -316,7 +315,6 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff, eps_spec
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
         """Determine data type that should be used for the matrix for diagonalization."""
@@ -351,7 +349,6 @@ class EigSolver(Tidy3dBaseModel):
         mat.data *= np.logical_or(np.abs(mat.data) / max_element > tol, np.abs(mat.data) > tol)
         mat.eliminate_zeros()
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
@@ -395,7 +392,7 @@ class EigSolver(Tidy3dBaseModel):
         inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
 
         if enable_incidence_matrices:
-            dnz_xx, dnz_yy, dnz_zz = [incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz]]
+            dnz_xx, dnz_yy, dnz_zz = (incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz])
             dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
             inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
 
@@ -427,8 +424,8 @@ class EigSolver(Tidy3dBaseModel):
         eig_guess = cls.type_conversion(np.array([-(neff_guess**2)]), mat_dtype)[0]
 
         if enable_incidence_matrices:
-            mat = dnz * mat * dnz.T  # pylint: disable=used-before-assignment
-            vec_init = dnz * vec_init  # pylint: disable=used-before-assignment
+            mat = dnz * mat * dnz.T
+            vec_init = dnz * vec_init
 
         if enable_preconditioner:
             precon = sp.diags(1 / mat.diagonal())
@@ -457,7 +454,7 @@ class EigSolver(Tidy3dBaseModel):
             vecs = precon * vecs
 
         if enable_incidence_matrices:
-            vecs = dnz.T * vecs  # pylint: disable=used-before-assignment
+            vecs = dnz.T * vecs
 
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
@@ -475,8 +472,8 @@ class EigSolver(Tidy3dBaseModel):
         h_field = qmat.dot(vecs)
         Hx = h_field[:N, :] / (1j * neff - keff)
         Hy = h_field[N:, :] / (1j * neff - keff)
-        Hz = inv_mu_zz.dot((dxf.dot(Ey) - dyf.dot(Ex)))
-        Ez = inv_eps_zz.dot((dxb.dot(Hy) - dyb.dot(Hx)))
+        Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
+        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
 
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)
@@ -487,7 +484,6 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def solver_tensorial(
         cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
@@ -619,9 +615,7 @@ class EigSolver(Tidy3dBaseModel):
         return E, H, neff, keff
 
     @classmethod
-    def solver_eigs(
-        cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs
-    ):  # pylint:disable=unused-argument, too-many-arguments
+    def solver_eigs(cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs):
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters

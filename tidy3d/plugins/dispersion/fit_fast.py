@@ -5,7 +5,7 @@ from typing import Tuple, Optional
 
 import numpy as np
 from rich.progress import Progress
-from pydantic import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
+from pydantic.v1 import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
 import scipy
 
 from .fit import DispersionFitter
@@ -136,7 +136,6 @@ class AdvancedFastFitterParam(Tidy3dBaseModel):
         return new_val
 
 
-# pylint: disable=too-many-public-methods
 class FastFitterData(AdvancedFastFitterParam):
     """Data class for internal use while running fitter."""
 
@@ -192,7 +191,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("poles", always=True)
     def _generate_initial_poles(cls, val, values):
         """Generate initial poles."""
-        if not val is None:
+        if val is not None:
             return val
         if values["logspacing"] is None or values["smooth"] is None:
             return None
@@ -215,7 +214,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("residues", always=True)
     def _generate_initial_residues(cls, val, values):
         """Generate initial residues."""
-        if not val is None:
+        if val is not None:
             return val
         poles = values["poles"]
         if poles is None:
@@ -296,7 +295,6 @@ class FastFitterData(AdvancedFastFitterParam):
     def imag_extrema(self) -> Tuple[ArrayFloat1D, ArrayComplex1D]:
         """Extrema of imaginary part of eps."""
 
-        # pylint: disable=too-many-locals
         def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
             """For each pole, find frequencies for the extrema of Im[eps]"""
 
@@ -415,7 +413,6 @@ class FastFitterData(AdvancedFastFitterParam):
             (self.weights[0] * np.real(matrix), self.weights[1] * np.imag(matrix))
         )
 
-    # pylint:disable=too-many-locals
     def iterate_poles(self) -> FastFitterData:
         """Perform a single iteration of the pole-updating procedure."""
 
@@ -563,7 +560,6 @@ class FastFitterData(AdvancedFastFitterParam):
 
         return model
 
-    # pylint:disable=too-many-locals
     def iterate_passivity(self, passivity_omega: ArrayFloat1D) -> Tuple[FastFitterData, int]:
         """Iterate passivity enforcement algorithm."""
 
@@ -671,7 +667,6 @@ class FastDispersionFitter(DispersionFitter):
         model = model.enforce_passivity()
         return model
 
-    # pylint: disable=arguments-renamed, too-many-locals, too-many-arguments
     def fit(
         self,
         min_num_poles: PositiveInt = 1,

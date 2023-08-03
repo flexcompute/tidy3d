@@ -8,7 +8,7 @@ import time
 
 from rich.console import Console
 from rich.progress import Progress
-import pydantic as pd
+import pydantic.v1 as pd
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
@@ -278,7 +278,7 @@ class BatchData(Tidy3dBaseModel):
             Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
         """
 
-        batch_file = Batch._batch_path(path_dir=path_dir)  # pylint:disable=protected-access
+        batch_file = Batch._batch_path(path_dir=path_dir)
         batch = Batch.from_file(batch_file)
         return batch.load(path_dir=path_dir)
 
@@ -386,13 +386,13 @@ class Batch(WebContainer):
             return val
 
         # the type of job to upload (to generalize to subclasses)
-        JobType = cls.__fields__["jobs"].type_  # pylint:disable=invalid-name
+        JobType = cls.__fields__["jobs"].type_
         parent_tasks = values.get("parent_tasks")
 
         verbose = bool(values.get("verbose"))
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-            # pylint:disable=protected-access
+
             upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation
@@ -441,7 +441,7 @@ class Batch(WebContainer):
             run_info_dict[task_name] = run_info
         return run_info_dict
 
-    def monitor(self) -> None:  # pylint:disable=too-many-locals
+    def monitor(self) -> None:
         """Monitor progress of each of the running tasks.
 
         Note
