@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 import tidy3d as td
 
+from tidy3d.version import __version__
 import tidy3d.plugins.mode.web as msweb
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
@@ -81,6 +82,7 @@ def mock_remote_api(monkeypatch):
                     "taskName": TASK_NAME,
                     "modeSolverName": MODESOLVER_NAME,
                     "fileType": "Json",
+                    "protocolVersion": __version__,
                 }
             )
         ],
@@ -107,6 +109,7 @@ def mock_remote_api(monkeypatch):
                     "taskName": TASK_NAME,
                     "modeSolverName": MODESOLVER_NAME,
                     "fileType": "Hdf5",
+                    "protocolVersion": __version__,
                 }
             )
         ],
