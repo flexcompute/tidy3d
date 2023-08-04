@@ -256,6 +256,17 @@ class GaussianPulse(Pulse):
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     """
 
+    remove_dc_component: bool = pydantic.Field(
+        True,
+        title="Remove DC Component",
+        description="Whether to remove the DC component in the Gaussian pulse spectrum. "
+        "If ``True``, the Gaussian pulse is modified at low frequencies to zero out the "
+        "DC component, which is usually desirable so that the fields will decay. However, "
+        "for broadband simulations, it may be better to have non-vanishing source power "
+        "near zero frequency. Setting this to ``False`` results in an unmodified Gaussian "
+        "pulse spectrum which can have a nonzero DC component.",
+    )
+
     def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time."""
 
@@ -263,12 +274,20 @@ class GaussianPulse(Pulse):
         omega0 = 2 * np.pi * self.freq0
         time_shifted = time - self.offset * twidth
 
-        const = 1j + time_shifted / twidth**2 / omega0
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
         amp = np.exp(-(time_shifted**2) / 2 / twidth**2) * self.amplitude
 
-        return const * offset * oscillation * amp
+        pulse_amp = offset * oscillation * amp
+
+        # subtract out DC component
+        if self.remove_dc_component:
+            pulse_amp = pulse_amp * (1j + time_shifted / twidth**2 / omega0)
+        else:
+            # 1j to make it agree in large omega0 limit
+            pulse_amp = pulse_amp * 1j
+
+        return pulse_amp
 
 
 class ContinuousWave(Pulse):
