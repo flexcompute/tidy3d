@@ -22,6 +22,11 @@ def test_plot_source_time():
         ST.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
         ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
 
+    ST_DC = ST.updated_copy(remove_dc_component=False)
+    for val in ("real", "imag", "abs"):
+        ST_DC.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
+        ST_DC.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
+
     with pytest.raises(ValueError):
         ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah", ax=AX)
 
@@ -64,6 +69,15 @@ def test_source_times():
     c = ContinuousWave(freq0=1, fwidth=0.1)
     ts = np.linspace(0, 30, 1001)
     c.amp_time(ts)
+
+    # test gaussian pulse with and without DC component
+    g = td.GaussianPulse(freq0=0.1, fwidth=1)
+    ts = np.linspace(0, 30, 1001)
+    dc_comp = g.spectrum(ts, [0], ts[1] - ts[0])
+    assert abs(dc_comp) ** 2 < ATOL
+    g = td.GaussianPulse(freq0=0.1, fwidth=1, remove_dc_component=False)
+    dc_comp = g.spectrum(ts, [0], ts[1] - ts[0])
+    assert abs(dc_comp) ** 2 > ATOL
 
 
 def test_dipole():

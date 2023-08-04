@@ -709,7 +709,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "interpolate": true,
@@ -733,7 +734,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "interpolate": true,
@@ -757,7 +759,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "num_freqs": 1,
@@ -799,7 +802,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "direction": "+",
@@ -825,7 +829,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "num_freqs": 1,
@@ -854,7 +859,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "num_freqs": 1,
@@ -889,7 +895,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "field_dataset": {
@@ -920,7 +927,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "interpolate": true,
@@ -952,7 +960,8 @@
                 "type": "GaussianPulse",
                 "freq0": 200000000000000.0,
                 "fwidth": 40000000000000.0,
-                "offset": 5.0
+                "offset": 5.0,
+                "remove_dc_component": true
             },
             "name": null,
             "direction": "+",
