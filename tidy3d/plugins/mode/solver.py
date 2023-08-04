@@ -108,7 +108,7 @@ class EigSolver(Tidy3dBaseModel):
         if bend_radius is not None:
             new_coords, jac_e, jac_h = radial_transform(new_coords, bend_radius, bend_axis)
 
-        if angle_theta > 0:
+        if np.abs(angle_theta) > 0:
             new_coords, jac_e_tmp, jac_h_tmp = angled_transform(new_coords, angle_theta, angle_phi)
             jac_e = np.einsum("ij...,jp...->ip...", jac_e_tmp, jac_e)
             jac_h = np.einsum("ij...,jp...->ip...", jac_h_tmp, jac_h)
