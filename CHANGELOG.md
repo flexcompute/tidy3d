@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
 - Added option to allow DC component in `GaussianPulse` spectrum, by setting `remove_dc_component=False` in `GaussianPulse`.
+- Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
 
 ### Fixed
 
