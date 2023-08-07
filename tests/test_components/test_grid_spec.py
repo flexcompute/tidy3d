@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import tidy3d as td
-from tidy3d.exceptions import SetupError, ValidationError
+from tidy3d.exceptions import SetupError
 
 
 def make_grid_spec():
@@ -19,7 +19,7 @@ def test_add_pml_to_bounds():
 
 def test_make_coords():
     gs = make_grid_spec()
-    cs = gs.grid_x.make_coords(
+    _ = gs.grid_x.make_coords(
         axis=0,
         structures=[
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium()),
@@ -34,7 +34,7 @@ def test_make_coords():
 
 def test_make_coords_2d():
     gs = make_grid_spec()
-    cs = gs.grid_x.make_coords(
+    _ = gs.grid_x.make_coords(
         axis=1,
         structures=[
             td.Structure(geometry=td.Box(size=(1, 0, 1)), medium=td.Medium()),

@@ -42,7 +42,7 @@ def validate_dl_multiple_interval(
     dl_list = np.concatenate(dl_list)
     ratio_f = np.all(dl_list[1:] / dl_list[:-1] <= max_scale + fp_eps)
     ratio_b = np.all(dl_list[1:] / dl_list[:-1] >= 1 / (max_scale + fp_eps))
-    assert (ratio_f and ratio_b) == True
+    assert ratio_f and ratio_b
     assert np.min(dl_list) >= 0.5 * np.min(max_dl_list)
 
 
@@ -57,7 +57,7 @@ def validate_dl_in_interval(
     """Validate dl_list"""
     ratio_f = np.all(dl_list[1:] / dl_list[:-1] <= max_scale + fp_eps)
     ratio_b = np.all(dl_list[1:] / dl_list[:-1] >= 1 / (max_scale + fp_eps))
-    assert (ratio_f and ratio_b) == True
+    assert ratio_f and ratio_b
 
     left_dl = min(max_dl, left_neighbor_dl)
     right_dl = min(max_dl, right_neighbor_dl)
@@ -79,7 +79,7 @@ def test_uniform_grid_in_interval():
         max_dl = np.random.random(1)[0]
         max_scale = 1
         dl = MESHER.make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
-        assert np.any(dl - dl[0]) == False
+        assert not np.any(dl - dl[0])
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
         # max_scale > 1, but left_dl = right_dl
@@ -88,7 +88,7 @@ def test_uniform_grid_in_interval():
         max_scale = 1 + np.random.random(1)[0]
         max_dl = left_dl
         dl = MESHER.make_grid_in_interval(left_dl, right_dl, max_dl, max_scale, len_interval)
-        assert np.any(dl - dl[0]) == False
+        assert not np.any(dl - dl[0])
         validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
         # single pixel
@@ -286,7 +286,7 @@ def test_grid_analytic_refinement():
     left_dl, right_dl = MESHER.grid_multiple_interval_analy_refinement(
         max_dl_list, len_interval_list, max_scale, periodic
     )
-    assert np.all(np.isclose(left_dl[1:], right_dl[:-1])) == True
+    assert np.all(np.isclose(left_dl[1:], right_dl[:-1]))
 
 
 def test_grid_refinement():
@@ -626,7 +626,7 @@ def test_mesher_timeout():
         center = sim_size * (np.random.rand(3) - 0.5)
         center[0] = 0
         size = np.abs(box_scale * np.random.randn(3))
-        n = 1 + (n_max - 1) * np.random.rand(1)
+        _ = 1 + (n_max - 1) * np.random.rand(1)
         box = td.Structure(
             geometry=td.Box(center=center.tolist(), size=size.tolist()),
             medium=mediums[np.random.randint(0, 100)],
@@ -647,14 +647,14 @@ def test_mesher_timeout():
         ],
     )
 
-    grid = sim.grid
+    _ = sim.grid
 
 
 def test_shapely_strtree_warnings():
 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        m = GradedMesher().parse_structures(
+        _ = GradedMesher().parse_structures(
             axis=2,
             structures=[BOX1, BOX2],
             wavelength=1.0,

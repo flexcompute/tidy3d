@@ -10,13 +10,11 @@ from tidy3d.material_library.material_library import (
     export_matlib_to_file,
 )
 import tidy3d as td
-from tidy3d.exceptions import SetupError
-from ..utils import clear_tmp
 
 
 def test_VariantItem():
     """Test if the variant class is working as expected."""
-    variant = VariantItem(
+    _ = VariantItem(
         medium=td.PoleResidue(),
         reference=[ReferenceData(doi="etc.com", journal="paper", url="www")],
     )
@@ -59,6 +57,5 @@ def test_library():
             assert np.allclose(eps_complex1, eps_complex2)
 
 
-@clear_tmp
-def test_test_export():
-    export_matlib_to_file("tests/tmp/matlib.json")
+def test_test_export(tmp_path):
+    export_matlib_to_file(str(tmp_path / "matlib.json"))

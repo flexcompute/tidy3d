@@ -217,7 +217,7 @@ def test_mode_solver_simple(mock_remote_api, local):
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_mode_solver_custom_medium(mock_remote_api, local):
+def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
     """Test mode solver can work with custom medium. Consider a waveguide with varying
     permittivity along x-direction. The value of n_eff at different x position should be
     different.
@@ -260,7 +260,7 @@ def test_mode_solver_custom_medium(mock_remote_api, local):
         modes = ms.solve() if local else msweb.run(ms)
         n_eff.append(modes.n_eff.values)
 
-        fname = "tests/tmp/ms_custom_medium.hdf5"
+        fname = str(tmp_path / "ms_custom_medium.hdf5")
         ms.to_file(fname)
         m2 = ModeSolver.from_file(fname)
         assert m2 == ms

@@ -5,11 +5,7 @@ from unittest import TestCase, mock
 import tidy3d.web as web
 from tidy3d.web.auth import get_credentials, encode_password
 from ..utils import SIM_FULL as sim_original
-from ..utils import clear_tmp
 
-PATH_JSON = "tests/tmp/simulation.json"
-PATH_SIM_DATA = "tests/tmp/sim_data.hdf5"
-PATH_DIR_SIM_DATA = "tests/tmp/"
 CALLBACK_URL = "https://callbackurl"
 
 """ core webapi """
@@ -36,10 +32,11 @@ class Test(TestCase):
         set_authentication_config.assert_called_with("mytestuser", encode_password("mytestpass"))
 
 
-@clear_tmp
-def test_webapi_0_run():
+def test_webapi_0_run(tmp_path):
     """test complete run"""
-    sim_data = web.run(simulation=sim_original, task_name="test_webapi", path=PATH_SIM_DATA)
+    _ = web.run(
+        simulation=sim_original, task_name="test_webapi", path=str(tmp_path / "sim_data.hdf5")
+    )
 
 
 def test_webapi_1_upload():
@@ -71,37 +68,32 @@ def test_webapi_4_monitor():
     web.monitor(task_id)
 
 
-@clear_tmp
-def test_webapi_5_download():
+def test_webapi_5_download(tmp_path):
     """download the simulation data"""
     task_id = _get_gloabl_task_id()
-    web.download(task_id, path=PATH_SIM_DATA)
+    web.download(task_id, path=str(tmp_path / "sim_data.hdf5"))
 
 
-@clear_tmp
-def test_webapi_6_load():
+def test_webapi_6_load(tmp_path):
     """load the results into sim_data"""
     task_id = _get_gloabl_task_id()
-    sim_data = web.load(task_id, path=PATH_SIM_DATA)
+    sim_data = web.load(task_id, path=str(tmp_path / "sim_data.hdf5"))
     first_monitor_name = sim_original.monitors[0].name
     _ = sim_data[first_monitor_name]
 
 
-@clear_tmp
 def test_webapi_7_download_json():
     """download the simulation data"""
     task_id = _get_gloabl_task_id()
     web.download_json(task_id)
 
 
-@clear_tmp
 def test_webapi_8_download_log():
     """download the simulation data"""
     task_id = _get_gloabl_task_id()
     web.download_log(task_id)
 
 
-@clear_tmp
 def test_webapi_9_load_simulation():
     """download the simulation data"""
     task_id = _get_gloabl_task_id()
@@ -135,11 +127,10 @@ def _get_gloabl_job():
     return jobs_global[0]
 
 
-@clear_tmp
-def test_job_0_run():
+def test_job_0_run(tmp_path):
     """test complete run"""
     job = web.Job(simulation=sim_original, task_name="test_job", callback_url=CALLBACK_URL)
-    job.run(path=PATH_SIM_DATA)
+    job.run(path=str(tmp_path / "sim_data.hdf5"))
 
 
 def test_job_1_upload():
@@ -166,18 +157,16 @@ def test_job_4_monitor():
     job.monitor()
 
 
-@clear_tmp
-def test_job_5_download():
+def test_job_5_download(tmp_path):
     """download the simulation data"""
     job = _get_gloabl_job()
-    job.download(path=PATH_SIM_DATA)
+    job.download(path=str(tmp_path / "sim_data.hdf5"))
 
 
-@clear_tmp
-def test_job_6_load():
+def test_job_6_load(tmp_path):
     """load the results into sim_data"""
     job = _get_gloabl_job()
-    sim_data = job.load(path=PATH_SIM_DATA)
+    sim_data = job.load(path=str(tmp_path / "sim_data.hdf5"))
     first_monitor_name = sim_original.monitors[0].name
     _ = sim_data[first_monitor_name]
 
@@ -200,13 +189,12 @@ def _get_gloabl_batch():
     return batches_global[0]
 
 
-@clear_tmp
-def test_batch_0_run():
+def test_batch_0_run(tmp_path):
     """test complete run"""
     sims = 2 * [sim_original]
     simulations = {f"task_{i}": sims[i] for i in range(len(sims))}
     batch = web.Batch(simulations=simulations)
-    batch.run(path_dir=PATH_DIR_SIM_DATA)
+    batch.run(path_dir=str(tmp_path))
 
 
 def test_batch_1_upload():
@@ -235,25 +223,24 @@ def test_batch_4_monitor():
     batch.monitor()
 
 
-@clear_tmp
-def test_batch_5_download():
+def test_batch_5_download(tmp_path):
     """download the simulation data"""
     batch = _get_gloabl_batch()
-    batch.download(path_dir=PATH_DIR_SIM_DATA)
+    batch.download(path_dir=str(tmp_path))
 
 
-def test_batch_6_load():
+def test_batch_6_load(tmp_path):
     """load the results into sim_data"""
     batch = _get_gloabl_batch()
-    sim_data_dict = batch.load(path_dir=PATH_DIR_SIM_DATA)
+    sim_data_dict = batch.load(path_dir=str(tmp_path))
     first_monitor_name = sim_original.monitors[0].name
     for _, sim_data in sim_data_dict.items():
         _ = sim_data[first_monitor_name]
 
 
-def test_batchdata_7_load():
+def test_batchdata_7_load(tmp_path):
     """load the BatchData from file."""
-    sim_data_dict = web.BatchData.load(path_dir=PATH_DIR_SIM_DATA)
+    _ = web.BatchData.load(path_dir=str(tmp_path))
 
 
 def _test_batch_8_delete():
@@ -268,10 +255,10 @@ def _test_batch_8_delete():
 """ Async """
 
 
-@clear_tmp
 def test_web_run_async():
     """test complete run"""
     sims = 2 * [sim_original]
     batch_data = web.run_async(sims)
+    first_monitor_name = sim_original.monitors[0].name
     for _, sim_data in batch_data.items():
         _ = sim_data[first_monitor_name]

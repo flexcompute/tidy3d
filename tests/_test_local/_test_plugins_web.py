@@ -8,12 +8,12 @@ def test_dispersion_load_list():
     num_data = 10
     n_data = np.random.random(num_data)
     wvls = np.linspace(1, 2, num_data)
-    fitter = StableDispersionFitter(wvl_um=wvls, n_data=n_data)
+    _ = StableDispersionFitter(wvl_um=wvls, n_data=n_data)
 
 
 def test_dispersion_load_file():
     """loads dispersion model from nk data file"""
-    fitter = StableDispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
+    _ = StableDispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
 
 
 def test_dispersion_load_url():

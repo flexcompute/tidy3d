@@ -3,8 +3,7 @@ import numpy as np
 import tidy3d as td
 import pytest
 
-from tidy3d.exceptions import SetupError, DataError
-from ..utils import clear_tmp
+from tidy3d.exceptions import DataError
 
 
 MEDIUM = td.Medium(permittivity=3)
@@ -125,7 +124,7 @@ def test_proj_monitors():
 
     all_monitors = near_monitors + list(proj_monitors)
 
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=sim_size,
         grid_spec=grid_spec,
         structures=[],
@@ -137,8 +136,7 @@ def test_proj_monitors():
     )
 
 
-@clear_tmp
-def test_proj_data():
+def test_proj_data(tmp_path):
     """Make sure all the near-to-far data structures can be created."""
 
     f = np.linspace(1e14, 2e14, 10)
@@ -218,8 +216,8 @@ def test_proj_data():
 
     sim_data = td.SimulationData(simulation=sim, data=(data_xy, data_u, data_tp))
     sim_data[monitor_xy.name]
-    sim_data.to_file("tests/tmp/sim_data_n2f.hdf5")
-    sim_data = td.SimulationData.from_file("tests/tmp/sim_data_n2f.hdf5")
+    sim_data.to_file(str(tmp_path / "sim_data_n2f.hdf5"))
+    sim_data = td.SimulationData.from_file(str(tmp_path / "sim_data_n2f.hdf5"))
 
     x = np.linspace(0, 5, 10)
     y = np.linspace(0, 10, 20)
@@ -227,7 +225,7 @@ def test_proj_data():
     coords_xy = dict(x=x, y=y, z=z, f=f)
     values_xy = (1 + 1j) * np.random.random((len(x), len(y), len(z), len(f)))
     scalar_field_xy = td.FieldProjectionCartesianDataArray(values_xy, coords=coords_xy)
-    monitor_xy_exact = td.FieldProjectionCartesianMonitor(
+    _ = td.FieldProjectionCartesianMonitor(
         center=(1, 2, 3),
         size=(2, 2, 2),
         freqs=f,
@@ -238,7 +236,7 @@ def test_proj_data():
         proj_distance=50,
         far_field_approx=False,
     )
-    data_xy_exact = td.FieldProjectionCartesianData(
+    _ = td.FieldProjectionCartesianData(
         monitor=monitor_xy,
         projection_surfaces=monitor_xy.projection_surfaces,
         Er=scalar_field_xy,

@@ -3,28 +3,19 @@ import os
 import json
 
 import pytest
-import pydantic
 import numpy as np
-import os
 from time import time
-import xarray as xr
-import h5py
-from dask.base import tokenize
 import dill as pickle
 
 
 from tidy3d import __version__
 import tidy3d as td
-from tidy3d.components.base import Tidy3dBaseModel, DATA_ARRAY_MAP
+from tidy3d.components.base import DATA_ARRAY_MAP
 from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
-from ..utils import clear_tmp
-from ..test_data.test_monitor_data import make_flux_data, make_flux_time_data
+from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
-from tidy3d.components.data.data_array import FluxDataArray
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
-from tidy3d.components.data.monitor_data import FluxData
-from tidy3d.components.geometry import TriangleMesh
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -56,9 +47,7 @@ def set_datasets_to_none(sim):
     return td.Simulation.parse_obj(sim_dict)
 
 
-@clear_tmp
 def test_simulation_load_export():
-
     major, minor, patch = __version__.split(".")
     path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     SIM.to_file(path)
@@ -66,55 +55,43 @@ def test_simulation_load_export():
     assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
 
 
-@clear_tmp
-def test_simulation_load_export_yaml():
-
-    path = "tests/tmp/simulation.yaml"
+def test_simulation_load_export_yaml(tmp_path):
+    path = str(tmp_path / "simulation.yaml")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
 
 
-@clear_tmp
-def test_component_load_export():
-
-    path = "tests/tmp/medium.json"
+def test_component_load_export(tmp_path):
+    path = str(tmp_path / "medium.json")
     td.Medium().to_file(path)
     M2 = td.Medium.from_file(path)
     assert td.Medium() == M2, "original and loaded medium are not the same"
 
 
-@clear_tmp
-def test_component_load_export_yaml():
-
-    path = "tests/tmp/medium.yaml"
+def test_component_load_export_yaml(tmp_path):
+    path = str(tmp_path / "medium.yaml")
     td.Medium().to_file(path)
     M2 = td.Medium.from_file(path)
     assert td.Medium() == M2, "original and loaded medium are not the same"
 
 
-@clear_tmp
-def test_simulation_load_export_hdf5():
-
-    path = "tests/tmp/simulation.hdf5"
+def test_simulation_load_export_hdf5(tmp_path):
+    path = str(tmp_path / "simulation.hdf5")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-@clear_tmp
-def test_simulation_load_export_hdf5_explicit():
-
-    path = "tests/tmp/simulation.hdf5"
+def test_simulation_load_export_hdf5_explicit(tmp_path):
+    path = str(tmp_path / "simulation.hdf5")
     SIM.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-@clear_tmp
-def test_simulation_load_export_pckl():
-
-    path = "tests/tmp/simulation.pckl"
+def test_simulation_load_export_pckl(tmp_path):
+    path = str(tmp_path / "simulation.pckl")
     with open(path, "wb") as pickle_file:
         pickle.dump(SIM, pickle_file)
     with open(path, "rb") as pickle_file:
@@ -122,11 +99,9 @@ def test_simulation_load_export_pckl():
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-@clear_tmp
-def test_simulation_preserve_types():
+def test_simulation_preserve_types(tmp_path):
     """Test that all re-loaded components have the same types."""
-
-    path = "tests/tmp/simulation.json"
+    path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
     sim_2 = td.Simulation.from_file(path)
     assert set_datasets_to_none(SIM) == sim_2
@@ -154,20 +129,19 @@ def test_simulation_preserve_types():
         assert M in M_types
 
 
-def test_1a_simulation_load_export2():
-    path = "tests/tmp/simulation.json"
+def test_1a_simulation_load_export2(tmp_path):
+    path = str(tmp_path / "simulation.json")
     SIM2.to_file(path)
     SIM3 = td.Simulation.from_file(path)
     assert SIM2 == SIM3, "original and loaded simulations are not the same"
 
 
-def test_validation_speed():
-
+def test_validation_speed(tmp_path):
     sizes_bytes = []
     times_sec = []
-    path = "tests/tmp/simulation.json"
+    path = str(tmp_path / "simulation.json")
 
-    sim_base = SIM
+    _ = SIM
     N_tests = 10
 
     # adjust as needed, keeping small to speed tests up
@@ -206,18 +180,16 @@ def test_simulation_updater(sim_file):
     sim_updated.grid
 
 
-@clear_tmp
-def test_yaml():
-    path = "tests/tmp/simulation.json"
+def test_yaml(tmp_path):
+    path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
     sim = td.Simulation.from_file(path)
-    path1 = "tests/tmp/simulation.yaml"
+    path1 = str(tmp_path / "simulation.yaml")
     sim.to_yaml(path1)
     sim1 = td.Simulation.from_yaml(path1)
     assert sim1 == sim
 
 
-@clear_tmp
 def test_to_json_data():
     """Tests that the json string with data in separate file behaves correctly."""
 
@@ -227,13 +199,12 @@ def test_to_json_data():
     assert json_dict["flux"] in DATA_ARRAY_MAP
 
 
-@clear_tmp
-def test_to_hdf5_group_path_sim_data():
+def test_to_hdf5_group_path_sim_data(tmp_path):
     """Tests that the json string with data in separate file behaves correctly in SimulationData."""
 
     # type saved in the combined json file?
     sim_data = make_sim_data()
-    FNAME = "tests/tmp/sim_data.hdf5"
+    FNAME = str(tmp_path / "sim_data.hdf5")
     sim_data.to_file(fname=FNAME)
 
     for i, monitor in enumerate(sim_data.simulation.monitors):
@@ -244,8 +215,7 @@ def test_to_hdf5_group_path_sim_data():
         assert mnt_data == sim_data.monitor_data[monitor.name]
 
 
-@clear_tmp
-def test_none_hdf5():
+def test_none_hdf5(tmp_path):
     """Tests that values of None where None is not the default are loaded correctly."""
 
     sim = td.Simulation(
@@ -257,7 +227,7 @@ def test_none_hdf5():
 
     assert sim.normalize_index is None, "'normalize_index' of 'None' not initialized correctly."
 
-    fname = "tests/tmp/sim_none.hdf5"
+    fname = str(tmp_path / "sim_none.hdf5")
     sim.to_file(fname)
     sim2 = td.Simulation.from_file(fname)
 

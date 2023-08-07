@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Dict, Tuple
 import pydantic as pd
@@ -6,7 +5,6 @@ import trimesh
 
 import pytest
 import numpy as np
-from tidy3d import *
 import tidy3d as td
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
@@ -16,69 +14,40 @@ from tidy3d.components.base import Tidy3dBaseModel
 np.random.seed(4)
 
 
-def clear_dir(path: str):
-    """clears a dir"""
-    for f in os.listdir(path):
-        full_path = os.path.join(path, f)
-        if not os.path.isdir(full_path):
-            os.remove(full_path)
-
-
-TMP_DIR = "tests/tmp/"
-SIM_DATA_PATH = TMP_DIR + "simulation_data.hdf5"
-
-
-# decorator that clears the tmp/ directory before test
-def clear_tmp(fn):
-    if not os.path.exists(TMP_DIR):
-        os.mkdir(TMP_DIR)
-
-    def new_fn(*args, **kwargs):
-        clear_dir(TMP_DIR)
-        return fn(*args, **kwargs)
-
-    return new_fn
-
-
-def prepend_tmp(path):
-    """prepents "TMP_DIR" to the path"""
-    return os.path.join(TMP_DIR, path)
-
-
-SIM_MONITORS = Simulation(
+SIM_MONITORS = td.Simulation(
     size=(10.0, 10.0, 10.0),
-    grid_spec=GridSpec(wavelength=1.0),
+    grid_spec=td.GridSpec(wavelength=1.0),
     run_time=1e-13,
     monitors=[
-        FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
-        FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
-        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
-        FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
-        ModeMonitor(
+        td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
+        td.FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
+        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
+        td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
+        td.ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
             freqs=[1.90, 2.01, 2.2],
-            mode_spec=ModeSpec(num_modes=3),
+            mode_spec=td.ModeSpec(num_modes=3),
             name="mode",
         ),
     ],
-    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
 )
 
 # STL geometry
 VERTICES = np.array([[-1.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-1.5, 0.5, -0.5], [-1.5, -0.5, 0.5]])
 FACES = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
-STL_GEO = TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
+STL_GEO = td.TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
 
 # custom medium
 COORDS = dict(x=[-1.5, -0.5], y=[0, 1], z=[0, 1])
-custom_medium = CustomMedium(
+custom_medium = td.CustomMedium(
     permittivity=td.SpatialDataArray(
         1 + np.random.random((2, 2, 2)),
         coords=COORDS,
     ),
 )
-custom_poleresidue = CustomPoleResidue(
+custom_poleresidue = td.CustomPoleResidue(
     eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
     poles=(
         (
@@ -87,7 +56,7 @@ custom_poleresidue = CustomPoleResidue(
         ),
     ),
 )
-custom_debye = CustomDebye(
+custom_debye = td.CustomDebye(
     eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
     coeffs=(
         (
@@ -97,7 +66,7 @@ custom_debye = CustomDebye(
     ),
 )
 
-custom_drude = CustomDrude(
+custom_drude = td.CustomDrude(
     eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
     coeffs=(
         (
@@ -107,7 +76,7 @@ custom_drude = CustomDrude(
     ),
 )
 
-custom_lorentz = CustomLorentz(
+custom_lorentz = td.CustomLorentz(
     eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
     coeffs=(
         (
@@ -118,7 +87,7 @@ custom_lorentz = CustomLorentz(
     ),
 )
 
-custom_sellmeier = CustomSellmeier(
+custom_sellmeier = td.CustomSellmeier(
     coeffs=(
         (
             td.SpatialDataArray(0.1 + np.random.random((2, 2, 2)), coords=COORDS),
@@ -127,110 +96,114 @@ custom_sellmeier = CustomSellmeier(
     ),
 )
 
-SIM_FULL = Simulation(
+SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
     structures=[
-        Structure(
-            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=Medium(permittivity=2.0),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.Medium(permittivity=2.0),
         ),
-        Structure(
-            geometry=Box(size=(1, inf, 1), center=(-1, 0, 0)),
-            medium=Medium(permittivity=1.0, conductivity=3.0),
+        td.Structure(
+            geometry=td.Box(size=(1, td.inf, 1), center=(-1, 0, 0)),
+            medium=td.Medium(permittivity=1.0, conductivity=3.0),
         ),
-        Structure(
-            geometry=Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
-            medium=Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)]),
+        td.Structure(
+            geometry=td.Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
+            medium=td.Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)]),
         ),
-        Structure(
-            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=Lorentz(eps_inf=2.0, coeffs=[(1, 2, 3)]),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.Lorentz(eps_inf=2.0, coeffs=[(1, 2, 3)]),
         ),
-        Structure(
-            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=Debye(eps_inf=2.0, coeffs=[(1, 3)]),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.Debye(eps_inf=2.0, coeffs=[(1, 3)]),
         ),
-        Structure(
+        td.Structure(
             geometry=STL_GEO,
-            medium=Debye(eps_inf=2.0, coeffs=[(1, 3)]),
+            medium=td.Debye(eps_inf=2.0, coeffs=[(1, 3)]),
         ),
-        Structure(
-            geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=Drude(eps_inf=2.0, coeffs=[(1, 3)]),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.Drude(eps_inf=2.0, coeffs=[(1, 3)]),
         ),
-        Structure(
-            geometry=Box(size=(1, 0, 1), center=(-1, 0, 0)),
-            medium=Medium2D.from_medium(Medium(conductivity=0.45), thickness=0.01),
+        td.Structure(
+            geometry=td.Box(size=(1, 0, 1), center=(-1, 0, 0)),
+            medium=td.Medium2D.from_medium(td.Medium(conductivity=0.45), thickness=0.01),
         ),
-        Structure(
-            geometry=GeometryGroup(geometries=[Box(size=(1, 1, 1), center=(-1, 0, 0))]),
-            medium=PEC,
+        td.Structure(
+            geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
+            medium=td.PEC,
         ),
-        Structure(
-            geometry=Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
-            medium=AnisotropicMedium(
+        td.Structure(
+            geometry=td.Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+            medium=td.AnisotropicMedium(
                 xx=td.Medium(permittivity=1),
                 yy=td.Medium(permittivity=2),
                 zz=td.Medium(permittivity=3),
             ),
         ),
-        Structure(
-            geometry=PolySlab(
+        td.Structure(
+            geometry=td.PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),
-            medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
+            medium=td.PoleResidue(
+                eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)
+            ),
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_medium,
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_drude,
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_lorentz,
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_debye,
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_poleresidue,
         ),
-        Structure(
-            geometry=Box(
+        td.Structure(
+            geometry=td.Box(
                 size=(1, 1, 1),
                 center=(-1.0, 0.5, 0.5),
             ),
             medium=custom_sellmeier,
         ),
-        Structure(
-            geometry=PolySlab(
+        td.Structure(
+            geometry=td.PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),
-            medium=PoleResidue(eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)),
+            medium=td.PoleResidue(
+                eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)
+            ),
         ),
-        Structure(
-            geometry=TriangleMesh.from_triangles(
+        td.Structure(
+            geometry=td.TriangleMesh.from_triangles(
                 np.array(
                     [
                         [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
@@ -250,53 +223,53 @@ SIM_FULL = Simulation(
             ),
             medium=td.Medium(permittivity=5),
         ),
-        Structure(
-            geometry=TriangleMesh.from_stl(
+        td.Structure(
+            geometry=td.TriangleMesh.from_stl(
                 "tests/data/two_boxes_separate.stl", scale=0.1, origin=(0.5, 0.5, 0.5)
             ),
             medium=td.Medium(permittivity=5),
         ),
     ],
     sources=[
-        UniformCurrentSource(
+        td.UniformCurrentSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
             polarization="Hx",
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
         ),
-        PointDipole(
+        td.PointDipole(
             center=(0, 0.5, 0),
             polarization="Ex",
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
         ),
-        ModeSource(
+        td.ModeSource(
             center=(0, 0.5, 0),
             size=(2, 0, 2),
             mode_spec=td.ModeSpec(),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
             direction="-",
         ),
-        PlaneWave(
-            size=(0, inf, inf),
-            source_time=GaussianPulse(
+        td.PlaneWave(
+            size=(0, td.inf, td.inf),
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
             pol_angle=0.1,
             direction="+",
         ),
-        GaussianBeam(
+        td.GaussianBeam(
             size=(0, 3, 3),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
@@ -304,9 +277,9 @@ SIM_FULL = Simulation(
             direction="+",
             waist_radius=1.0,
         ),
-        AstigmaticGaussianBeam(
+        td.AstigmaticGaussianBeam(
             size=(0, 3, 3),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
@@ -315,15 +288,15 @@ SIM_FULL = Simulation(
             waist_sizes=(1.0, 2.0),
             waist_distances=(3.0, 4.0),
         ),
-        CustomFieldSource(
+        td.CustomFieldSource(
             center=(0, 1, 2),
             size=(2, 2, 0),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
-            field_dataset=FieldDataset(
-                Ex=ScalarFieldDataArray(
+            field_dataset=td.FieldDataset(
+                Ex=td.ScalarFieldDataArray(
                     np.ones((101, 101, 1, 1)),
                     coords=dict(
                         x=np.linspace(-1, 1, 101),
@@ -334,15 +307,15 @@ SIM_FULL = Simulation(
                 )
             ),
         ),
-        CustomCurrentSource(
+        td.CustomCurrentSource(
             center=(0, 1, 2),
             size=(2, 2, 0),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
-            current_dataset=FieldDataset(
-                Ex=ScalarFieldDataArray(
+            current_dataset=td.FieldDataset(
+                Ex=td.ScalarFieldDataArray(
                     np.ones((101, 101, 1, 1)),
                     coords=dict(
                         x=np.linspace(-1, 1, 101),
@@ -353,10 +326,10 @@ SIM_FULL = Simulation(
                 )
             ),
         ),
-        TFSF(
+        td.TFSF(
             center=(1, 2, -3),
             size=(2.5, 2.5, 0.5),
-            source_time=GaussianPulse(
+            source_time=td.GaussianPulse(
                 freq0=2e14,
                 fwidth=4e13,
             ),
@@ -365,38 +338,38 @@ SIM_FULL = Simulation(
             angle_phi=np.pi / 5,
             injection_axis=2,
         ),
-        UniformCurrentSource(
+        td.UniformCurrentSource(
             size=(0, 0, 0),
             center=(0, 0.5, 0),
             polarization="Hx",
-            source_time=CustomSourceTime.from_values(
+            source_time=td.CustomSourceTime.from_values(
                 freq0=2e14, fwidth=4e13, values=np.linspace(0, 10, 1000), dt=1e-12 / 100
             ),
         ),
     ],
     monitors=(
-        FieldMonitor(
+        td.FieldMonitor(
             size=(0, 0, 0), center=(0, 0, 0), fields=["Ex"], freqs=[1.5e14, 2e14], name="field"
         ),
-        FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
-        FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
-        FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
-        PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
-        ModeMonitor(
+        td.FieldTimeMonitor(size=(0, 0, 0), center=(0, 0, 0), name="field_time", interval=100),
+        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name="flux"),
+        td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), name="flux_time"),
+        td.PermittivityMonitor(size=(1, 1, 0.1), name="eps", freqs=[1e14]),
+        td.ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
             name="mode",
             freqs=[2e14, 2.5e14],
-            mode_spec=ModeSpec(),
+            mode_spec=td.ModeSpec(),
         ),
-        ModeSolverMonitor(
+        td.ModeSolverMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
             name="mode_solver",
             freqs=[2e14, 2.5e14],
-            mode_spec=ModeSpec(),
+            mode_spec=td.ModeSpec(),
         ),
-        FieldProjectionAngleMonitor(
+        td.FieldProjectionAngleMonitor(
             center=(0, 0, 0),
             size=(0, 2, 2),
             freqs=[250e12, 300e12],
@@ -405,7 +378,7 @@ SIM_FULL = Simulation(
             phi=[0, np.pi / 2],
             theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
         ),
-        FieldProjectionCartesianMonitor(
+        td.FieldProjectionCartesianMonitor(
             center=(0, 0, 0),
             size=(0, 2, 2),
             freqs=[250e12, 300e12],
@@ -416,7 +389,7 @@ SIM_FULL = Simulation(
             proj_axis=2,
             proj_distance=5,
         ),
-        FieldProjectionKSpaceMonitor(
+        td.FieldProjectionKSpaceMonitor(
             center=(0, 0, 0),
             size=(0, 2, 2),
             freqs=[250e12, 300e12],
@@ -426,7 +399,7 @@ SIM_FULL = Simulation(
             ux=[0.1, 0.2],
             uy=[0.3, 0.4, 0.5],
         ),
-        FieldProjectionAngleMonitor(
+        td.FieldProjectionAngleMonitor(
             center=(0, 0, 0),
             size=(0, 2, 2),
             freqs=[250e12, 300e12],
@@ -436,42 +409,43 @@ SIM_FULL = Simulation(
             theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
             far_field_approx=False,
         ),
-        DiffractionMonitor(
-            size=(0, inf, inf),
+        td.DiffractionMonitor(
+            size=(0, td.inf, td.inf),
             center=(0, 0, 0),
             name="diffraction",
             freqs=[1e14, 2e14],
         ),
     ),
     symmetry=(0, 0, 0),
-    boundary_spec=BoundarySpec(
-        x=Boundary(plus=PML(num_layers=20), minus=Absorber(num_layers=100)),
-        y=Boundary.bloch(bloch_vec=1),
-        z=Boundary.periodic(),
+    boundary_spec=td.BoundarySpec(
+        x=td.Boundary(plus=td.PML(num_layers=20), minus=td.Absorber(num_layers=100)),
+        y=td.Boundary.bloch(bloch_vec=1),
+        z=td.Boundary.periodic(),
     ),
     shutoff=1e-4,
     courant=0.8,
     subpixel=False,
-    grid_spec=GridSpec(
-        grid_x=AutoGrid(),
-        grid_y=CustomGrid(dl=100 * [0.04]),
-        grid_z=UniformGrid(dl=0.05),
+    grid_spec=td.GridSpec(
+        grid_x=td.AutoGrid(),
+        grid_y=td.CustomGrid(dl=100 * [0.04]),
+        grid_z=td.UniformGrid(dl=0.05),
         override_structures=[
             td.Structure(
-                geometry=Box(size=(1, 1, 1), center=(-1, 0, 0)),
-                medium=Medium(permittivity=2.0),
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.Medium(permittivity=2.0),
             )
         ],
     ),
 )
 
 
-def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) -> SimulationData:
+def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.SimulationData:
     """Emulates a simulation run."""
-
     from scipy.ndimage.filters import gaussian_filter
 
-    def make_data(coords: dict, data_array_type: type, is_complex: bool = False) -> "data_type":
+    def make_data(
+        coords: dict, data_array_type: type, is_complex: bool = False
+    ) -> td.components.data.data_array.DataArray:
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
         np.random.seed(1)
@@ -483,7 +457,7 @@ def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) ->
         data_array = data_array_type(data, coords=coords)
         return data_array
 
-    def make_field_data(monitor: FieldMonitor) -> FieldData:
+    def make_field_data(monitor: td.FieldMonitor) -> td.FieldData:
         """make a random FieldData from a FieldMonitor."""
         field_cmps = {}
         coords = {}
@@ -500,10 +474,10 @@ def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) ->
 
             coords["f"] = list(monitor.freqs)
             field_cmps[field_name] = make_data(
-                coords=coords, data_array_type=ScalarFieldDataArray, is_complex=True
+                coords=coords, data_array_type=td.ScalarFieldDataArray, is_complex=True
             )
 
-        return FieldData(
+        return td.FieldData(
             monitor=monitor,
             symmetry=simulation.symmetry,
             symmetry_center=simulation.center,
@@ -511,50 +485,52 @@ def run_emulated(simulation: Simulation, path: str = SIM_DATA_PATH, **kwargs) ->
             **field_cmps,
         )
 
-    def make_eps_data(monitor: PermittivityMonitor) -> PermittivityData:
+    def make_eps_data(monitor: td.PermittivityMonitor) -> td.PermittivityData:
         """make a random PermittivityData from a PermittivityMonitor."""
-        field_mnt = FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
+        field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
         field_data = make_field_data(monitor=field_mnt)
-        return PermittivityData(
+        return td.PermittivityData(
             monitor=monitor, eps_xx=field_data.Ex, eps_yy=field_data.Ey, eps_zz=field_data.Ez
         )
 
-    def make_diff_data(monitor: DiffractionMonitor) -> DiffractionData:
+    def make_diff_data(monitor: td.DiffractionMonitor) -> td.DiffractionData:
         """make a random PermittivityData from a PermittivityMonitor."""
         f = list(monitor.freqs)
         orders_x = np.linspace(-1, 1, 3)
         orders_y = np.linspace(-2, 2, 5)
         coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
         values = np.random.random((len(orders_x), len(orders_y), len(f)))
-        data = DiffractionDataArray(values, coords=coords)
+        data = td.DiffractionDataArray(values, coords=coords)
         field_data = {field: data for field in ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")}
-        return DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
+        return td.DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
 
-    def make_mode_data(monitor: ModeMonitor) -> ModeData:
+    def make_mode_data(monitor: td.ModeMonitor) -> td.ModeData:
         """make a random ModeData from a ModeMonitor."""
-        mode_indices = np.arange(monitor.mode_spec.num_modes)
+        _ = np.arange(monitor.mode_spec.num_modes)
         coords_ind = {
             "f": list(monitor.freqs),
             "mode_index": np.arange(monitor.mode_spec.num_modes),
         }
         n_complex = make_data(
-            coords=coords_ind, data_array_type=ModeIndexDataArray, is_complex=True
+            coords=coords_ind, data_array_type=td.ModeIndexDataArray, is_complex=True
         )
         coords_amps = dict(direction=["+", "-"])
         coords_amps.update(coords_ind)
-        amps = make_data(coords=coords_amps, data_array_type=ModeAmpsDataArray, is_complex=True)
-        return ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
+        amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
+        return td.ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
 
     MONITOR_MAKER_MAP = {
-        FieldMonitor: make_field_data,
-        ModeMonitor: make_mode_data,
-        PermittivityMonitor: make_eps_data,
-        DiffractionMonitor: make_diff_data,
+        td.FieldMonitor: make_field_data,
+        td.ModeMonitor: make_mode_data,
+        td.PermittivityMonitor: make_eps_data,
+        td.DiffractionMonitor: make_diff_data,
     }
 
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
-    sim_data = SimulationData(simulation=simulation, data=data)
-    sim_data.to_file(path)
+    sim_data = td.SimulationData(simulation=simulation, data=data)
+
+    if path is not None:
+        sim_data.to_file(str(path))
 
     return sim_data
 
@@ -572,25 +548,25 @@ class BatchDataTest(Tidy3dBaseModel):
         ..., title="Task IDs", description="Mapping of task_name to task_id for each task in batch."
     )
 
-    sim_data: Dict[str, SimulationData]
+    sim_data: Dict[str, td.SimulationData]
 
-    def load_sim_data(self, task_name: str) -> SimulationData:
+    def load_sim_data(self, task_name: str) -> td.SimulationData:
         """Load a :class:`.SimulationData` from file by task name."""
-        task_data_path = self.task_paths[task_name]
-        task_id = self.task_ids[task_name]
+        _ = self.task_paths[task_name]
+        _ = self.task_ids[task_name]
         return self.sim_data[task_name]
 
-    def items(self) -> Tuple[str, SimulationData]:
+    def items(self) -> Tuple[str, td.SimulationData]:
         """Iterate through the :class:`.SimulationData` for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
 
-    def __getitem__(self, task_name: str) -> SimulationData:
+    def __getitem__(self, task_name: str) -> td.SimulationData:
         """Get the :class:`.SimulationData` for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
 
-def run_async_emulated(simulations: Dict[str, Simulation], **kwargs) -> BatchData:
+def run_async_emulated(simulations: Dict[str, td.Simulation], **kwargs) -> BatchData:
     """Emulate an async run function."""
     task_ids = {task_name: f"task_id={i}" for i, task_name in enumerate(simulations.keys())}
     task_paths = {task_name: "NONE" for task_name in simulations.keys()}

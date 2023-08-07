@@ -1,19 +1,17 @@
 """Tests the simulation and its validators."""
 import pytest
 import pydantic
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated, clear_tmp
+from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated
 from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
-
-_, AX = plt.subplots()
 
 RTOL = 0.01
 
@@ -76,17 +74,20 @@ def test_sim_init():
         subpixel=False,
     )
 
-    dt = sim.dt
-    tm = sim.tmesh
+    _ = sim.dt
+    _ = sim.tmesh
     sim.validate_pre_upload()
-    ms = sim.mediums
-    mm = sim.medium_map
+    _ = sim.mediums
+    _ = sim.medium_map
     m = sim.get_monitor_by_name("point")
-    s = sim.background_structure
+    _ = sim.background_structure
     # sim.plot(x=0)
+    # plt.close()
     # sim.plot_eps(x=0)
+    # plt.close()
     sim.num_pml_layers
     # sim.plot_grid(x=0)
+    # plt.close()
     sim.frequency_range
     sim.grid
     sim.num_cells
@@ -158,7 +159,7 @@ def test_monitors_data_size():
 
 def test_deprecation_defaults(log_capture):
     """Make sure deprecation warnings NOT thrown if defaults used."""
-    s = td.Simulation(
+    _ = td.Simulation(
         size=(1, 1, 1),
         run_time=1e-12,
         grid_spec=td.GridSpec.uniform(dl=0.1),
@@ -184,7 +185,7 @@ def test_sim_bounds(shift_amount, log_level, log_capture):
 
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
-        sim = td.Simulation(
+        _ = td.Simulation(
             size=(1.5, 1.5, 1.5),
             center=CENTER_SHIFT,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -274,7 +275,6 @@ def _test_monitor_size():
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
-    size = (1, 1, 1)
     medium = td.Medium(frequency_range=(2, 3))
     box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium)
     mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq])
@@ -283,7 +283,7 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
         size=(0, 0, 0),
         polarization="Ex",
     )
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(1, 1, 1),
         structures=[box],
         monitors=[mnt],
@@ -298,14 +298,13 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
 def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
-    size = (1, 1, 1)
     src = td.UniformCurrentSource(
         source_time=td.GaussianPulse(freq0=2.0, fwidth=fwidth),
         size=(0, 0, 0),
         polarization="Ex",
     )
     mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(1, 1, 1),
         monitors=[mnt],
         sources=[src],
@@ -541,46 +540,62 @@ def test_no_monitor():
 
 
 def test_plot_eps():
-    ax = SIM_FULL.plot_eps(ax=AX, x=0)
+    ax = SIM_FULL.plot_eps(x=0)
     SIM_FULL._add_cbar(eps_min=1, eps_max=2, ax=ax)
+    plt.close()
 
 
 def test_plot_eps_bounds():
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45])
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, vlim=[-0.45, 0.45])
-    _ = SIM_FULL.plot_eps(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
+    plt.close()
+    _ = SIM_FULL.plot_eps(x=0, vlim=[-0.45, 0.45])
+    plt.close()
+    _ = SIM_FULL.plot_eps(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    plt.close()
 
 
 def test_plot():
-    SIM_FULL.plot(x=0, ax=AX)
+    SIM_FULL.plot(x=0)
+    plt.close()
 
 
 def test_plot_bounds():
-    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45])
-    _ = SIM_FULL.plot(ax=AX, x=0, vlim=[-0.45, 0.45])
-    _ = SIM_FULL.plot(ax=AX, x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45])
+    plt.close()
+    _ = SIM_FULL.plot(x=0, vlim=[-0.45, 0.45])
+    plt.close()
+    _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45], vlim=[-0.45, 0.45])
+    plt.close()
 
 
 def test_plot_3d():
     SIM_FULL.plot_3d()
+    plt.close()
 
 
 def test_structure_alpha():
-    _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=None)
-    _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=-1)
-    _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=1)
-    _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=0.5)
-    _ = SIM_FULL.plot_structures_eps(x=0, ax=AX, alpha=0.5, cbar=True)
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=None)
+    plt.close()
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=-1)
+    plt.close()
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=1)
+    plt.close()
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5)
+    plt.close()
+    _ = SIM_FULL.plot_structures_eps(x=0, alpha=0.5, cbar=True)
+    plt.close()
     new_structs = [
         td.Structure(geometry=s.geometry, medium=SIM_FULL.medium) for s in SIM_FULL.structures
     ]
     S2 = SIM_FULL.copy(update=dict(structures=new_structs))
-    ax5 = S2.plot_structures_eps(x=0, ax=AX, alpha=0.5)
+    _ = S2.plot_structures_eps(x=0, alpha=0.5)
+    plt.close()
 
 
 def test_plot_symmetries():
     S2 = SIM.copy(update=dict(symmetry=(1, 0, -1)))
-    S2.plot_symmetries(x=0, ax=AX)
+    S2.plot_symmetries(x=0)
+    plt.close()
 
 
 def test_plot_grid():
@@ -589,6 +604,7 @@ def test_plot_grid():
         update=dict(grid_spec=td.GridSpec(wavelength=1.0, override_structures=[override]))
     )
     S2.plot_grid(x=0)
+    plt.close()
 
 
 def test_plot_boundaries():
@@ -602,6 +618,7 @@ def test_plot_boundaries():
     )
     S2 = SIM_FULL.copy(update=dict(boundary_spec=bound_spec))
     S2.plot_boundaries(z=0)
+    plt.close()
 
 
 def test_wvl_mat_grid():
@@ -686,7 +703,7 @@ def test_get_structure_plot_params():
 
 
 def test_warn_sim_background_medium_freq_range(log_capture):
-    S = SIM.copy(
+    _ = SIM.copy(
         update=dict(
             sources=(
                 td.PointDipole(
@@ -732,7 +749,7 @@ def test_sim_structure_gap(log_capture, box_size, log_level):
         size=(0, 0, 0),
         polarization="Ex",
     )
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(10, 10, 10),
         structures=[box],
         sources=[src],
@@ -820,7 +837,7 @@ def test_sim_monitor_homogeneous():
 
     box_transparent = td.Structure(geometry=td.Box(size=(0.2, 0.1, 0.1)), medium=medium_bg)
 
-    monitor_n2f = td.FieldProjectionAngleMonitor(
+    _ = td.FieldProjectionAngleMonitor(
         center=(0, 0, 0),
         size=(td.inf, td.inf, 0),
         freqs=[250e12, 300e12],
@@ -838,7 +855,7 @@ def test_sim_monitor_homogeneous():
         phi=[0],
     )
 
-    monitor_diffraction = td.DiffractionMonitor(
+    _ = td.DiffractionMonitor(
         center=(0, 0, 0),
         size=(td.inf, td.inf, 0),
         freqs=[250e12, 300e12],
@@ -854,7 +871,7 @@ def test_sim_monitor_homogeneous():
 
     for monitor in [monitor_n2f_vol]:
         # with transparent box continue
-        sim1 = td.Simulation(
+        _ = td.Simulation(
             size=(1, 1, 1),
             medium=medium_bg,
             structures=[box_transparent],
@@ -1045,7 +1062,7 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
         polarization="Ex",
     )
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(1, 1, 1),
         structures=[box],
         sources=[src],
@@ -1079,13 +1096,17 @@ def test_sim_validate_structure_bounds_pml(log_capture, box_length, absorb_type,
         geometry=td.Box(size=(box_length, 0.5, 0.5), center=(0, 0, 0)),
         medium=td.Medium(permittivity=2),
     )
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(1, 1, 1),
         structures=[box],
         grid_spec=td.GridSpec.auto(wavelength=0.001),
         sources=[src],
         run_time=1e-12,
-        boundary_spec=td.BoundarySpec.pml(x=True, y=False, z=False),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary(plus=boundary, minus=boundary),
+            y=td.Boundary.pec(),
+            z=td.Boundary.pec(),
+        ),
     )
 
     assert_log_level(log_capture, log_level)
@@ -1100,7 +1121,7 @@ def test_num_mediums():
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(5, 5, 5),
         grid_spec=grid_spec,
         structures=structures,
@@ -1112,7 +1133,7 @@ def test_num_mediums():
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
-        sim = td.Simulation(
+        _ = td.Simulation(
             size=(5, 5, 5), grid_spec=grid_spec, structures=structures, run_time=1e-12
         )
 
@@ -1177,8 +1198,8 @@ def _test_names_default():
 
 def test_names_unique():
 
-    with pytest.raises(pydantic.ValidationError) as e:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
             structures=[
@@ -1196,8 +1217,8 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(pydantic.ValidationError) as e:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
             sources=[
@@ -1219,8 +1240,8 @@ def test_names_unique():
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
 
-    with pytest.raises(pydantic.ValidationError) as e:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
             monitors=[
@@ -1236,8 +1257,8 @@ def test_mode_object_syms():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # wrong mode source
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
             grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
@@ -1248,8 +1269,8 @@ def test_mode_object_syms():
         )
 
     # wrong mode monitor
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             center=(1.0, -1.0, 0.5),
             size=(2.0, 2.0, 2.0),
             grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
@@ -1262,7 +1283,7 @@ def test_mode_object_syms():
         )
 
     # right mode source (centered on the symmetry)
-    sim = td.Simulation(
+    _ = td.Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
@@ -1273,7 +1294,7 @@ def test_mode_object_syms():
     )
 
     # right mode monitor (entirely in the main quadrant)
-    sim = td.Simulation(
+    _ = td.Simulation(
         center=(1.0, -1.0, 0.5),
         size=(2.0, 2.0, 2.0),
         grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
@@ -1302,7 +1323,7 @@ def test_tfsf_symmetry():
         injection_axis=2,
     )
 
-    with pytest.raises(pydantic.ValidationError) as e:
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2.0, 2.0, 2.0),
             grid_spec=td.GridSpec.auto(wavelength=td.C_0 / 1.0),
@@ -1372,7 +1393,7 @@ def test_tfsf_boundaries(log_capture):
     assert_log_level(log_capture, "WARNING")
 
     # cannot cross any boundary in the direction of injection
-    with pytest.raises(pydantic.ValidationError) as e:
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2.0, 2.0, 0.5),
             grid_spec=td.GridSpec.auto(wavelength=1.0),
@@ -1381,7 +1402,7 @@ def test_tfsf_boundaries(log_capture):
         )
 
     # cannot cross any non-periodic boundary in the transverse direction
-    with pytest.raises(pydantic.ValidationError) as e:
+    with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             center=(0.5, 0, 0),  # also check the case when the boundary is crossed only on one side
             size=(0.5, 0.5, 2.0),
@@ -1426,7 +1447,7 @@ def test_tfsf_structures_grid(log_capture):
     assert_log_level(log_capture, "WARNING")
 
     # must not have different material profiles on different faces along the injection axis
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(SetupError):
         sim = td.Simulation(
             size=(2.0, 2.0, 2.0),
             grid_spec=td.GridSpec.auto(wavelength=1.0),
@@ -1476,7 +1497,7 @@ def test_tfsf_structures_grid(log_capture):
             )
         ],
     )
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(SetupError):
         sim.validate_pre_upload()
 
     # TFSF box must not intersect a fully anisotropic medium
@@ -1495,7 +1516,7 @@ def test_tfsf_structures_grid(log_capture):
             )
         ],
     )
-    with pytest.raises(SetupError) as e:
+    with pytest.raises(SetupError):
         sim.validate_pre_upload()
 
 
@@ -1550,8 +1571,7 @@ def test_dt():
     assert sim_new.dt == 0.4 * dt
 
 
-@clear_tmp
-def test_sim_volumetric_structures():
+def test_sim_volumetric_structures(tmp_path):
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45
     thickness = 0.01
@@ -1634,9 +1654,12 @@ def test_sim_volumetric_structures():
     )
     # check that plotting 2d material doesn't raise an error
     sim_data = run_emulated(sim)
-    sim_data.plot_field(ax=AX, field_monitor_name="field_xz", field_name="Ex", val="real")
-    _ = sim.plot_eps(ax=AX, x=0, alpha=0.2)
-    _ = sim.plot(ax=AX, x=0)
+    sim_data.plot_field(field_monitor_name="field_xz", field_name="Ex", val="real")
+    plt.close()
+    _ = sim.plot_eps(x=0, alpha=0.2)
+    plt.close()
+    _ = sim.plot(x=0)
+    plt.close()
 
     # nonuniform sub/super-strate should error
     below_half = td.Structure(

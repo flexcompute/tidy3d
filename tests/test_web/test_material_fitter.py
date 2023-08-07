@@ -1,5 +1,4 @@
 import pytest
-import re
 
 import responses
 from tidy3d.plugins.dispersion import DispersionFitter

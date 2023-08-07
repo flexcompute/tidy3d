@@ -1,6 +1,6 @@
 """Tests visualization operations."""
 import pytest
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.components.viz import Polygon
 
@@ -33,3 +33,5 @@ def test_0d_plot(center_z, len_collections):
 
     # if a point is plotted, a single collection will be present, otherwise nothing
     assert len(ax.collections) == len_collections
+
+    plt.close()
