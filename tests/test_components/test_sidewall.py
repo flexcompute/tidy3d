@@ -472,9 +472,7 @@ def test_bound_poly(execution_number):
         angle = 0.0
         # avoid vertex-edge crossing case
         try:
-            s = setup_polyslab(
-                vertices, dilation, angle, bounds, reference_plane=reference_plane
-            )
+            s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=reference_plane)
         except:
             continue
         validate_poly_bound(s)
