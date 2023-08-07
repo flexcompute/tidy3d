@@ -12,7 +12,9 @@ from .environment import Env
 from ..exceptions import WebError
 from ..version import __version__
 
-SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+SIMCLOUD_APIKEY = "DuIXVnlYeJok0LA4M2YiXpA4h4NT14nPd1jjF8bYIFvzDIFb"
+#"NkRVjsG7jjYsDzxa6iHO8N2bO3RXcIPEugAz7AQ0AOZ0rIs3"
+
 
 
 class ResponseCodes(Enum):
@@ -26,14 +28,14 @@ class ResponseCodes(Enum):
 def api_key() -> None:
     """Get the api key for the current environment."""
 
-    if os.environ.get(SIMCLOUD_APIKEY):
-        return os.environ.get(SIMCLOUD_APIKEY)
-    if os.path.exists(f"{expanduser('~')}/.tidy3d/config"):
-        with open(f"{expanduser('~')}/.tidy3d/config", "r", encoding="utf-8") as config_file:
-            config = toml.loads(config_file.read())
-            return config.get("apikey", "")
+    # if os.environ.get(SIMCLOUD_APIKEY):
+    #     return os.environ.get(SIMCLOUD_APIKEY)
+    # if os.path.exists(f"{expanduser('~')}/.tidy3d/config"):
+    #     with open(f"{expanduser('~')}/.tidy3d/config", "r", encoding="utf-8") as config_file:
+    #         config = toml.loads(config_file.read())
+    #         return config.get("apikey", "")
 
-    return None
+    return "DuIXVnlYeJok0LA4M2YiXpA4h4NT14nPd1jjF8bYIFvzDIFb"
 
 
 def api_key_auth(request: requests.request) -> requests.request:

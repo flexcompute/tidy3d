@@ -15,7 +15,7 @@ from .environment import Env
 from ..exceptions import WebError
 from ..version import __version__
 
-SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+SIMCLOUD_APIKEY = "DuIXVnlYeJok0LA4M2YiXpA4h4NT14nPd1jjF8bYIFvzDIFb"
 
 
 def api_key():
@@ -26,14 +26,14 @@ def api_key():
     str
         The API key for the current environment.
     """
-    if os.environ.get(SIMCLOUD_APIKEY):
-        return os.environ.get(SIMCLOUD_APIKEY)
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
-            config = toml.loads(config_file.read())
-            return config.get("apikey", "")
+    # if os.environ.get(SIMCLOUD_APIKEY):
+    #     return os.environ.get(SIMCLOUD_APIKEY)
+    # if os.path.exists(CONFIG_FILE):
+    #     with open(CONFIG_FILE, "r", encoding="utf-8") as config_file:
+    #         config = toml.loads(config_file.read())
+    #         return config.get("apikey", "")
 
-    return None
+    return "DuIXVnlYeJok0LA4M2YiXpA4h4NT14nPd1jjF8bYIFvzDIFb"
 
 
 def auth(request: requests.request) -> requests.request:
