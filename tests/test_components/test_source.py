@@ -22,8 +22,8 @@ def test_plot_source_time():
 
     ST_DC = ST.updated_copy(remove_dc_component=False)
     for val in ("real", "imag", "abs"):
-        ST_DC.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
-        ST_DC.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
+        ST_DC.plot(times=[1e-15, 2e-15, 3e-15], val=val)
+        ST_DC.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val)
 
     with pytest.raises(ValueError):
         ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah")
