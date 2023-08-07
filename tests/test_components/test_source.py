@@ -1,13 +1,11 @@
 """Tests sources."""
 import pytest
 import pydantic
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td
-from tidy3d.exceptions import SetupError, DataError, ValidationError
+from tidy3d.exceptions import SetupError
 from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
-
-_, AX = plt.subplots()
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -19,18 +17,20 @@ ATOL = 1e-8
 def test_plot_source_time():
 
     for val in ("real", "imag", "abs"):
-        ST.plot(times=[1e-15, 2e-15, 3e-15], val=val, ax=AX)
-        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val, ax=AX)
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val=val)
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val=val)
 
     with pytest.raises(ValueError):
-        ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah", ax=AX)
+        ST.plot(times=[1e-15, 2e-15, 3e-15], val="blah")
 
     with pytest.raises(ValueError):
-        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val="blah", ax=AX)
+        ST.plot_spectrum(times=[1e-15, 2e-15, 3e-15], num_freqs=4, val="blah")
 
     # uneven spacing in times
     with pytest.raises(SetupError):
-        ST.plot_spectrum(times=[1e-15, 3e-15, 4e-15], num_freqs=4, ax=AX)
+        ST.plot_spectrum(times=[1e-15, 3e-15, 4e-15], num_freqs=4)
+
+    plt.close("all")
 
 
 def test_dir_vector():
@@ -44,10 +44,8 @@ def test_UniformCurrentSource():
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
 
     # test we can make generic UniformCurrentSource
-    s1 = td.UniformCurrentSource(
-        size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=False
-    )
-    s2 = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=True)
+    _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=False)
+    _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=True)
 
 
 def test_source_times():
@@ -57,6 +55,7 @@ def test_source_times():
     ts = np.linspace(0, 30, 1001)
     g.amp_time(ts)
     # g.plot(ts)
+    # plt.close()
 
     # test we can make cw pulse
     from tidy3d.components.source import ContinuousWave
@@ -69,12 +68,13 @@ def test_source_times():
 def test_dipole():
 
     g = td.GaussianPulse(freq0=1, fwidth=0.1)
-    p1 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
-    p2 = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=False)
+    _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
+    _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=False)
     # p.plot(y=2)
+    # plt.close()
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        p = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PointDipole(size=(1, 1, 1), source_time=g, center=(1, 2, 3), polarization="Ex")
 
 
 def test_FieldSource():
@@ -82,15 +82,17 @@ def test_FieldSource():
     mode_spec = td.ModeSpec(num_modes=2)
 
     # test we can make planewave
-    s = td.PlaneWave(size=(0, td.inf, td.inf), source_time=g, pol_angle=np.pi / 2, direction="+")
+    _ = td.PlaneWave(size=(0, td.inf, td.inf), source_time=g, pol_angle=np.pi / 2, direction="+")
     # s.plot(y=0)
+    # plt.close()
 
     # test we can make gaussian beam
-    s = td.GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    _ = td.GaussianBeam(size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
     # s.plot(y=0)
+    # plt.close()
 
     # test we can make an astigmatic gaussian beam
-    s = td.AstigmaticGaussianBeam(
+    _ = td.AstigmaticGaussianBeam(
         size=(0, 1, 1),
         source_time=g,
         pol_angle=np.pi / 2,
@@ -100,18 +102,19 @@ def test_FieldSource():
     )
 
     # test we can make mode source
-    s = td.ModeSource(
+    _ = td.ModeSource(
         size=(0, 1, 1), direction="+", source_time=g, mode_spec=mode_spec, mode_index=0
     )
     # s.plot(y=0)
+    # plt.close()
 
     # test that non-planar geometry crashes plane wave and gaussian beams
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.AstigmaticGaussianBeam(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PlaneWave(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.GaussianBeam(size=(1, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+")
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.AstigmaticGaussianBeam(
             size=(1, 1, 1),
             source_time=g,
             pol_angle=np.pi / 2,
@@ -119,19 +122,18 @@ def test_FieldSource():
             waist_sizes=(0.2, 0.4),
             waist_distances=(0.1, 0.3),
         )
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
-
-    from tidy3d.components.source import TFSF
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.ModeSource(size=(1, 1, 1), source_time=g, mode_spec=mode_spec)
 
     tfsf = td.TFSF(size=(1, 1, 1), direction="+", source_time=g, injection_axis=2)
     _ = tfsf.injection_plane_center
 
     # assert that TFSF must be volumetric
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         _ = td.TFSF(size=(1, 1, 0), direction="+", source_time=g, injection_axis=2)
 
     # s.plot(z=0)
+    # plt.close()
 
 
 def test_pol_arrow():
@@ -227,11 +229,11 @@ def test_broadband_source():
     check_freq_grid(freq_grid, num_freqs)
 
     # check validators for num_freqs
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         s = td.GaussianBeam(
             size=(0, 1, 1), source_time=g, pol_angle=np.pi / 2, direction="+", num_freqs=200
         )
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         s = td.AstigmaticGaussianBeam(
             size=(0, 1, 1),
             source_time=g,
@@ -241,7 +243,7 @@ def test_broadband_source():
             waist_distances=(0.1, 0.3),
             num_freqs=100,
         )
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         s = td.ModeSource(
             size=(0, 1, 1),
             direction="+",

@@ -7,7 +7,7 @@ from functools import wraps
 import random
 import time
 
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 from matplotlib.patches import PathPatch, ArrowStyle
 from matplotlib.path import Path
 from numpy import array, concatenate, ones

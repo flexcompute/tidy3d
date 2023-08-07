@@ -1,12 +1,10 @@
-import pytest
 import numpy as np
-import matplotlib.pyplot as plt
 import gdstk
 
 import tidy3d as td
 
 from tidy3d.plugins.polyslab import ComplexPolySlab
-from ..utils import clear_tmp, assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture
 
 
 def test_divide_simple_events():
@@ -28,13 +26,8 @@ def test_divide_simple_events():
                     sidewall_angle=angle,
                     reference_plane=reference_plane,
                 )
-                subpolyslabs = s.sub_polyslabs
-                geometry_group = s.geometry_group
-
-                # for i, poly in enumerate(subpolyslabs):
-                #     print(f"------------{i}-th polyglab----------")
-                #     print(f"bounds = ({poly.slab_bounds[0]},  {poly.slab_bounds[1]})")
-                #     print(np.array(poly.vertices))
+                _ = s.sub_polyslabs
+                _ = s.geometry_group
 
 
 def test_many_sub_polyslabs(log_capture):
@@ -54,7 +47,7 @@ def test_many_sub_polyslabs(log_capture):
         sidewall_angle=np.pi / 4,
         reference_plane="bottom",
     )
-    struct = td.Structure(
+    _ = td.Structure(
         geometry=s.geometry_group,
         medium=td.Medium(permittivity=2),
     )
@@ -77,13 +70,13 @@ def test_divide_simulation():
         geometry=s.geometry_group,
         medium=td.Medium(permittivity=2),
     )
-    sim = td.Simulation(
+    _ = td.Simulation(
         run_time=1e-12,
         size=(1, 1, 1),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
-    sim2 = td.Simulation(
+    _ = td.Simulation(
         run_time=1e-12,
         size=(1, 1, 1),
         grid_spec=td.GridSpec.auto(wavelength=1.0),
@@ -91,8 +84,7 @@ def test_divide_simulation():
     )
 
 
-@clear_tmp
-def test_gds_import():
+def test_gds_import(tmp_path):
     """construct complex polyslabs from gds (mostly from GDSII notebook)"""
 
     # Waveguide width
@@ -101,7 +93,7 @@ def test_gds_import():
     wg_spacing_in = 8
     # Length of the coupling region
     coup_length = 10
-    # Angle of the sidewall deviating from the vertical ones, positive values for the base larger than the top
+    # Angle of the sidewall: positive values for the base larger than the top
     sidewall_angle = np.pi / 4
     # Reference plane where the cross section of the device is defined
     reference_plane = "bottom"
@@ -167,7 +159,7 @@ def test_gds_import():
 
     # Create a library for the cell and save it, just so that we can demosntrate loading
     # geometry from a gds file
-    gds_path = "tests/tmp/coupler.gds"
+    gds_path = tmp_path / "coupler.gds"
 
     lib = gdstk.Library()
     lib.add(coup_cell)
@@ -188,7 +180,7 @@ def test_gds_import():
         slab_bounds=(-430, 0),
         reference_plane=reference_plane,
     )
-    arm_geo = ComplexPolySlab.from_gds(
+    _ = ComplexPolySlab.from_gds(
         coup_cell_loaded,
         gds_layer=1,
         axis=2,

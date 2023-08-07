@@ -1,44 +1,42 @@
 """Tests boundary conditions."""
 
-import numpy as np
 import pytest
 import pydantic
 
 import tidy3d as td
-from tidy3d.components.boundary import BoundarySpec, Boundary, BoundaryEdgeType
+from tidy3d.components.boundary import BoundarySpec, Boundary
 from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, BlochBoundary
 from tidy3d.components.boundary import PML, StablePML, Absorber
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
-from tidy3d.components.types import TYPE_TAG_STR
-from tidy3d.exceptions import SetupError, ValidationError, DataError
+from tidy3d.exceptions import SetupError, DataError
 from ..utils import assert_log_level, log_capture
 
 
 def test_bloch_phase():
     bb = BlochBoundary(bloch_vec=1.0)
-    ph = bb.bloch_phase
+    _ = bb.bloch_phase
 
 
 @pytest.mark.parametrize("dimension", ["x", "y", "z"])
 def test_getitem(dimension):
     spec = BoundarySpec.pml(y=True, z=True)
-    edge_spec = spec[dimension]
+    _ = spec[dimension]
 
 
 def test_getitem_not_a_dim():
     spec = BoundarySpec.pml(y=True, z=True)
     with pytest.raises(DataError):
-        edge_spec = spec["NOT_A_DIMENSION"]
+        _ = spec["NOT_A_DIMENSION"]
 
 
 @pytest.mark.parametrize("plane_wave_dir", ["+", "-"])
 def test_boundaryedge_types(plane_wave_dir):
     """Test that each type of boundary condition can be defined."""
-    periodic = Periodic()
-    pec = PECBoundary()
-    pmc = PMCBoundary()
+    _ = Periodic()
+    _ = PECBoundary()
+    _ = PMCBoundary()
 
-    bloch = BlochBoundary(bloch_vec=1)
+    _ = BlochBoundary(bloch_vec=1)
     pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     source = PlaneWave(
         size=(td.inf, td.inf, 0),
@@ -47,18 +45,18 @@ def test_boundaryedge_types(plane_wave_dir):
         angle_theta=1.5,
         angle_phi=0.3,
     )
-    bloch_from_source = BlochBoundary.from_source(source=source, domain_size=5, axis=0)
+    _ = BlochBoundary.from_source(source=source, domain_size=5, axis=0)
 
     # Bloch boundaries should raise errors if incorrectly defined
-    with pytest.raises(SetupError) as e_info:
-        bloch_from_source = BlochBoundary.from_source(source=source, domain_size=5, axis=2)
-    with pytest.raises(SetupError) as e_info:
+    with pytest.raises(SetupError):
+        _ = BlochBoundary.from_source(source=source, domain_size=5, axis=2)
+    with pytest.raises(SetupError):
         pt_dipole = PointDipole(center=(1, 2, 3), source_time=pulse, polarization="Ex")
-        bloch_from_source = BlochBoundary.from_source(source=pt_dipole, domain_size=5, axis=0)
+        _ = BlochBoundary.from_source(source=pt_dipole, domain_size=5, axis=0)
 
-    pml = PML(num_layers=10)
-    stable_pml = StablePML(num_layers=40)
-    absorber = Absorber(num_layers=40)
+    _ = PML(num_layers=10)
+    _ = StablePML(num_layers=40)
+    _ = Absorber(num_layers=40)
 
 
 def test_boundary_validators():
@@ -70,12 +68,12 @@ def test_boundary_validators():
     periodic = Periodic()
 
     # test `bloch_on_both_sides`
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        boundary = Boundary(plus=bloch, minus=pec)
+    with pytest.raises(pydantic.ValidationError):
+        _ = Boundary(plus=bloch, minus=pec)
 
     # test `periodic_with_pml`
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        boundary = Boundary(plus=periodic, minus=pml)
+    with pytest.raises(pydantic.ValidationError):
+        _ = Boundary(plus=periodic, minus=pml)
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])

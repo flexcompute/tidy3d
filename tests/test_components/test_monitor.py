@@ -32,7 +32,7 @@ def test_downsampled():
 def test_excluded_surfaces_flat():
 
     with pytest.raises(pydantic.ValidationError):
-        M = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
+        _ = td.FluxMonitor(size=(1, 1, 0), name="f", freqs=[1e12], exclude_surfaces=("x-",))
 
 
 def test_fld_mnt_freqs_none():
@@ -122,7 +122,7 @@ def test_fieldproj_surfaces_in_simulaiton():
     # test error if all projection surfaces are outside the simulation domain
     M = td.FieldProjectionAngleMonitor(size=(3, 3, 3), theta=[1], phi=[0], name="f", freqs=[2e12])
     with pytest.raises(pydantic.ValidationError):
-        sim = td.Simulation(
+        _ = td.Simulation(
             size=(2, 2, 2),
             run_time=1e-12,
             monitors=[M],
@@ -130,7 +130,7 @@ def test_fieldproj_surfaces_in_simulaiton():
         )
     # no error when some surfaces are in
     M = M.updated_copy(size=(1, 3, 3))
-    sim = td.Simulation(
+    _ = td.Simulation(
         size=(2, 2, 2),
         run_time=1e-12,
         monitors=[M],
@@ -140,7 +140,7 @@ def test_fieldproj_surfaces_in_simulaiton():
     # error when the surfaces that are in are excluded
     M = M.updated_copy(exclude_surfaces=["x-", "x+"])
     with pytest.raises(pydantic.ValidationError):
-        sim = td.Simulation(
+        _ = td.Simulation(
             size=(2, 2, 2),
             run_time=1e-12,
             monitors=[M],
@@ -151,14 +151,14 @@ def test_fieldproj_surfaces_in_simulaiton():
 def test_fieldproj_kspace_range():
     # make sure ux, uy are in [-1, 1] for k-space projection monitors
     with pytest.raises(pydantic.ValidationError):
-        M = td.FieldProjectionKSpaceMonitor(
+        _ = td.FieldProjectionKSpaceMonitor(
             size=(2, 0, 2), ux=[0.1, 2], uy=[0], name="f", freqs=[2e12], proj_axis=1
         )
     with pytest.raises(pydantic.ValidationError):
-        M = td.FieldProjectionKSpaceMonitor(
+        _ = td.FieldProjectionKSpaceMonitor(
             size=(2, 0, 2), ux=[0.1, 0.2], uy=[1.1], name="f", freqs=[2e12], proj_axis=1
         )
-    M = td.FieldProjectionKSpaceMonitor(
+    _ = td.FieldProjectionKSpaceMonitor(
         size=(2, 0, 2), ux=[1, 0.2], uy=[1.0], name="f", freqs=[2e12], proj_axis=1
     )
 
@@ -194,7 +194,7 @@ def test_monitor_freqs_empty():
     # errors when no frequencies supplied
 
     with pytest.raises(pydantic.ValidationError):
-        monitor = td.FieldMonitor(
+        _ = td.FieldMonitor(
             size=(td.inf, td.inf, td.inf),
             freqs=[],
             name="test",
@@ -239,8 +239,8 @@ def test_diffraction_validators():
         y=td.Boundary.periodic(),
         z=td.Boundary.pml(),
     )
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        sim = td.Simulation(
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
             size=(2, 2, 2),
             run_time=1e-12,
             structures=[td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium())],
@@ -250,8 +250,8 @@ def test_diffraction_validators():
         )
 
     # ensure error if monitor isn't infinite in two directions
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        monitor = td.DiffractionMonitor(size=[td.inf, 4, 0], freqs=[1e12], name="de")
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.DiffractionMonitor(size=[td.inf, 4, 0], freqs=[1e12], name="de")
 
 
 def test_monitor():
@@ -260,7 +260,7 @@ def test_monitor():
     center = (1, 2, 3)
 
     m1 = td.FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
-    m1s = td.FieldMonitor.surfaces(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
+    _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
     m2 = td.FieldTimeMonitor(size=size, center=center, name="test_mon")
     m3 = td.FluxMonitor(size=(1, 1, 0), center=center, freqs=[1, 2, 3], name="test_mon")
     m4 = td.FluxTimeMonitor(size=(1, 1, 0), center=center, name="test_mon")
@@ -281,6 +281,7 @@ def test_monitor():
 
     for m in [m1, m2, m3, m4, m5, m6, m7]:
         # m.plot(y=2)
+        # plt.close()
         m.storage_size(num_cells=100, tmesh=tmesh)
 
     for m in [m2, m4]:
@@ -294,16 +295,16 @@ def test_monitor_plane():
 
     # make sure flux, mode and diffraction monitors fail with non planar geometries
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
-        with pytest.raises(pydantic.ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError):
             td.ModeMonitor(size=size, freqs=freqs, modes=[])
-        with pytest.raises(pydantic.ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError):
             td.ModeSolverMonitor(size=size, freqs=freqs, modes=[])
-        with pytest.raises(pydantic.ValidationError) as e_info:
+        with pytest.raises(pydantic.ValidationError):
             td.DiffractionMonitor(size=size, freqs=freqs, name="de")
 
 
 def _test_freqs_nonempty():
-    with pytest.raises(ValidationError) as e_info:
+    with pytest.raises(ValidationError):
         td.FieldMonitor(size=(1, 1, 1), freqs=[])
 
 
@@ -313,8 +314,8 @@ def test_monitor_surfaces_from_volume():
 
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
-        with pytest.raises(SetupError) as e_info:
-            mon_surfaces = td.FieldMonitor.surfaces(
+        with pytest.raises(SetupError):
+            _ = td.FieldMonitor.surfaces(
                 size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
             )
 

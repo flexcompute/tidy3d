@@ -1,5 +1,6 @@
 """Tests parameter perturbations."""
 import numpy as np
+import matplotlib.pyplot as plt
 import pytest
 import pydantic
 import tidy3d as td
@@ -19,14 +20,14 @@ def test_heat_perturbation():
     # test complex type detection
     assert not perturb.is_complex
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.LinearHeatPerturbation(
             coeff=0.01,
             temperature_ref=-300,
             temperature_range=(200, 400),
         )
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.LinearHeatPerturbation(
             coeff=0.01,
             temperature_ref=300,
@@ -46,14 +47,14 @@ def test_heat_perturbation():
     assert isinstance(sampled, td.SpatialDataArray)
 
     # complex temperature
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         _ = perturb.sample(350j)
 
     # test plotting
     ax = perturb.plot(temperature=np.linspace(200, 400, 10), val="abs")
 
     # incorrect plotting value
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         _ = perturb.plot(temperature=np.linspace(200, 400, 10), val="angle")
 
     # test custom heat perturbation
@@ -87,7 +88,7 @@ def test_heat_perturbation():
         assert isinstance(sampled, td.SpatialDataArray)
 
         # test plotting
-        ax = perturb.plot(temperature=np.linspace(200, 400, 10), val="real", ax=ax)
+        perturb.plot(temperature=np.linspace(200, 400, 10), val="real", ax=ax)
 
         # check interpolation works as expected
         if interp_method == "linear":
@@ -99,11 +100,13 @@ def test_heat_perturbation():
         assert test_value_out == perturb_data.data[2]
 
     # test not allowed interpolation method
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.CustomHeatPerturbation(
             perturbation_values=perturb_data,
             interp_method="quadratic",
         )
+
+    plt.close("all")
 
 
 def test_charge_perturbation():
@@ -123,7 +126,7 @@ def test_charge_perturbation():
     # test complex type detection
     assert not perturb.is_complex
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.LinearChargePerturbation(
             electron_coeff=1e-21,
             electron_ref=0,
@@ -133,7 +136,7 @@ def test_charge_perturbation():
             hole_range=(0, 0.5e20),
         )
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.LinearChargePerturbation(
             electron_coeff=1e-21,
             electron_ref=0,
@@ -168,7 +171,7 @@ def test_charge_perturbation():
     assert isinstance(sampled, td.SpatialDataArray)
 
     # test mixing spatial data array and simple array
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         _ = perturb.sample(
             electron_density=td.SpatialDataArray(
                 1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
@@ -176,7 +179,7 @@ def test_charge_perturbation():
             hole_density=[2e17, 2e18],
         )
 
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         _ = perturb.sample(electron_density=1e19j, hole_density=2e19)
 
     # test plotting
@@ -199,7 +202,7 @@ def test_charge_perturbation():
     )
 
     # incorrect plotting value
-    with pytest.raises(ValueError) as e_info:
+    with pytest.raises(ValueError):
         _ = perturb.plot(
             electron_density=np.logspace(16, 19, 4),
             hole_density=np.logspace(17, 18, 3),
@@ -253,7 +256,7 @@ def test_charge_perturbation():
         assert isinstance(sampled, td.SpatialDataArray)
 
         # test mixing spatial data array and simple array
-        with pytest.raises(ValueError) as e_info:
+        with pytest.raises(ValueError):
             _ = perturb.sample(
                 electron_density=td.SpatialDataArray(
                     1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
@@ -262,21 +265,21 @@ def test_charge_perturbation():
             )
 
         # test plotting
-        ax = perturb.plot(
+        _ = perturb.plot(
             electron_density=np.logspace(16, 19, 4),
             hole_density=np.logspace(17, 18, 3),
             val="abs",
             ax=ax_2d,
         )
 
-        ax = perturb.plot(
+        _ = perturb.plot(
             electron_density=np.logspace(16, 19, 4),
             hole_density=1,
             val="abs",
             ax=ax_1d_e,
         )
 
-        ax = perturb.plot(
+        _ = perturb.plot(
             electron_density=2,
             hole_density=np.logspace(16, 19, 4),
             val="abs",
@@ -293,11 +296,13 @@ def test_charge_perturbation():
         assert test_value_out == perturb_data[-1, -1].item()
 
     # test not allowed interpolation method
-    with pytest.raises(pydantic.ValidationError) as e_info:
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.CustomChargePerturbation(
             perturbation_values=perturb_data,
             interp_method="quadratic",
         )
+
+    plt.close("all")
 
 
 def test_parameter_perturbation():
@@ -333,7 +338,7 @@ def test_parameter_perturbation():
     assert not param_perturb.is_complex
     assert param_perturb.perturbation_range == heat_range
 
-    after_data = param_perturb.apply_data(temperature, electron_density, hole_density)
+    _ = param_perturb.apply_data(temperature, electron_density, hole_density)
 
     param_perturb = td.ParameterPerturbation(
         charge=charge,
@@ -342,7 +347,7 @@ def test_parameter_perturbation():
     assert param_perturb.is_complex
     assert param_perturb.perturbation_range == charge_range
 
-    after_data = param_perturb.apply_data(temperature, None, hole_density)
+    _ = param_perturb.apply_data(temperature, None, hole_density)
 
     param_perturb = td.ParameterPerturbation(
         heat=heat,
@@ -352,8 +357,8 @@ def test_parameter_perturbation():
     assert param_perturb.is_complex
     assert param_perturb.perturbation_range == tuple(np.array(heat_range) + np.array(charge_range))
 
-    after_data = param_perturb.apply_data(None, electron_density, hole_density)
+    _ = param_perturb.apply_data(None, electron_density, hole_density)
 
     # array with mismatching coords
-    with pytest.raises(ValueError) as e_info:
-        after_data = param_perturb.apply_data(temperature2, electron_density, hole_density)
+    with pytest.raises(ValueError):
+        _ = param_perturb.apply_data(temperature2, electron_density, hole_density)

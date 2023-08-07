@@ -2,16 +2,14 @@
 import pytest
 import pydantic
 import tidy3d as td
-from tidy3d.exceptions import SetupError
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 
 
 def test_apodization():
-
-    a = td.ApodizationSpec(width=0.2)
-    a = td.ApodizationSpec(start=1, width=0.2)
-    a = td.ApodizationSpec(end=2, width=0.2)
-    a = td.ApodizationSpec(start=1, end=2, width=0.2)
+    _ = td.ApodizationSpec(width=0.2)
+    _ = td.ApodizationSpec(start=1, width=0.2)
+    _ = td.ApodizationSpec(end=2, width=0.2)
+    _ = td.ApodizationSpec(start=1, end=2, width=0.2)
 
 
 def test_end_lt_start():
@@ -46,6 +44,8 @@ def test_plot():
 
     a = td.ApodizationSpec(start=0.2 * run_time, end=0.8 * run_time, width=0.02 * run_time)
     a.plot(times)
+    plt.close()
 
     fig, ax = plt.subplots(1, 1)
     a.plot(times, ax=ax)
+    plt.close()

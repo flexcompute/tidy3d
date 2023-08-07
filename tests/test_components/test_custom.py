@@ -5,8 +5,6 @@ from typing import Tuple
 import pytest
 import numpy as np
 import pydantic
-
-import numpy as np
 import xarray as xr
 import tidy3d as td
 
@@ -18,14 +16,13 @@ from tidy3d import Coords
 from tidy3d.components.source import CustomFieldSource, GaussianPulse, CustomCurrentSource
 from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
 from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.exceptions import SetupError, DataError, ValidationError
+from tidy3d.exceptions import SetupError, ValidationError
 
-from ..test_data.test_monitor_data import make_field_data
-from ..utils import clear_tmp, assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
 from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye, AbstractCustomMedium
-from tidy3d.components.medium import CustomIsotropicMedium, CustomAnisotropicMedium
+from tidy3d.components.medium import CustomAnisotropicMedium
 
 np.random.seed(4)
 
@@ -98,7 +95,7 @@ def test_field_components(source):
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
 def test_custom_source_simulation(source):
     """Test adding to simulation."""
-    sim = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(source,))
+    _ = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(source,))
 
 
 def test_validator_tangential_field():
@@ -106,9 +103,7 @@ def test_validator_tangential_field():
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
     with pytest.raises(pydantic.ValidationError):
-        field_source_no_tang = CustomFieldSource(
-            size=SIZE, source_time=ST, field_dataset=field_dataset
-        )
+        _ = CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
 
 
 def test_validator_non_planar():
@@ -116,9 +111,7 @@ def test_validator_non_planar():
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
     with pytest.raises(pydantic.ValidationError):
-        field_source_no_tang = CustomFieldSource(
-            size=(1, 1, 1), source_time=ST, field_dataset=field_dataset
-        )
+        _ = CustomFieldSource(size=(1, 1, 1), source_time=ST, field_dataset=field_dataset)
 
 
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
@@ -128,7 +121,7 @@ def test_validator_freq_out_of_range_src(source):
     Ex_new = ScalarFieldDataArray(dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
     dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
-        src_out_of_range = source.updated_copy(size=SIZE, source_time=ST, **{key: dataset_fail})
+        _ = source.updated_copy(size=SIZE, source_time=ST, **{key: dataset_fail})
 
 
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
@@ -139,21 +132,20 @@ def test_validator_freq_multiple(source):
     Ex_new = ScalarFieldDataArray(new_data, coords=dict(x=X, y=Y, z=Z, f=[1, 2]))
     dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
-        source_fail = source.copy(update={key: dataset_fail})
+        _ = source.copy(update={key: dataset_fail})
 
 
-@clear_tmp
-def test_io_hdf5():
+def test_io_hdf5(tmp_path):
     """Saving and loading from hdf5 file."""
-    path = "tests/tmp/custom_source.hdf5"
+    path = str(tmp_path / "custom_source.hdf5")
     FIELD_SRC.to_file(path)
     FIELD_SRC2 = FIELD_SRC.from_file(path)
     assert FIELD_SRC == FIELD_SRC2
 
 
-def test_io_json(log_capture):
+def test_io_json(tmp_path, log_capture):
     """to json warns and then from json errors."""
-    path = "tests/tmp/custom_source.json"
+    path = str(tmp_path / "custom_source.json")
     FIELD_SRC.to_file(path)
     assert_log_level(log_capture, "WARNING")
     FIELD_SRC2 = FIELD_SRC.from_file(path)
@@ -161,14 +153,12 @@ def test_io_json(log_capture):
     assert FIELD_SRC2.field_dataset is None
 
 
-@clear_tmp
-def test_custom_source_pckl():
-    path = "tests/tmp/source.pckl"
+def test_custom_source_pckl(tmp_path):
+    path = str(tmp_path / "source.pckl")
     with open(path, "wb") as pickle_file:
         pickle.dump(FIELD_SRC, pickle_file)
 
 
-@clear_tmp
 def test_io_json_clear_tmp():
     pass
 
@@ -203,7 +193,7 @@ def test_custom_medium_simulation():
         grid_spec=GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
-    grid = sim.grid
+    _ = sim.grid
 
 
 def test_medium_raw():
@@ -276,7 +266,7 @@ def test_medium_smaller_than_one_positive_sigma():
     n_data[0, 0, 0, 0] = 0.5
     n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     with pytest.raises(pydantic.ValidationError):
-        mat_custom = CustomMedium.from_nk(n_dataarray)
+        _ = CustomMedium.from_nk(n_dataarray)
 
     # negative sigma
     n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
@@ -285,7 +275,7 @@ def test_medium_smaller_than_one_positive_sigma():
     n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     k_dataarray = ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     with pytest.raises(pydantic.ValidationError):
-        mat_custom = CustomMedium.from_nk(n_dataarray, k_dataarray)
+        _ = CustomMedium.from_nk(n_dataarray, k_dataarray)
 
 
 def test_medium_eps_diagonal_on_grid():
@@ -353,7 +343,7 @@ def test_nk_diff_coords():
     k = make_scalar_data().real
     k.coords["f"] = [3e14]
     with pytest.raises(SetupError):
-        med = CustomMedium.from_nk(n=n, k=k)
+        _ = CustomMedium.from_nk(n=n, k=k)
 
 
 def test_grids():
@@ -394,7 +384,7 @@ def verify_custom_medium_methods(mat):
         grid_spec=GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
-    grid = sim.grid
+    _ = sim.grid
 
     # bkg
     sim = Simulation(
@@ -403,7 +393,7 @@ def verify_custom_medium_methods(mat):
         grid_spec=GridSpec.auto(wavelength=1.0),
         medium=mat,
     )
-    grid = sim.grid
+    _ = sim.grid
 
 
 def test_anisotropic_custom_medium():
@@ -820,7 +810,7 @@ def test_custom_anisotropic_medium(log_capture):
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_tmp)
 
 
-def test_io_dispersive():
+def test_io_dispersive(tmp_path):
     Mx_custom = 1.0
     My_custom = 2.1
     Nx = 10
@@ -855,7 +845,7 @@ def test_io_dispersive():
         structures=(struct,),
     )
 
-    filename = "tests/tmp/sim.hdf5"
+    filename = str(tmp_path / "sim.hdf5")
     sim.to_file(filename)
     sim_load = td.Simulation.from_file(filename)
 

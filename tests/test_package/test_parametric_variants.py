@@ -1,8 +1,6 @@
 import pytest
-import pydantic
 import numpy as np
 
-from tidy3d.material_library.material_library import material_library
 from tidy3d.material_library.parametric_materials import (
     GRAPHENE_FIT_FREQ_MIN,
     GRAPHENE_FIT_FREQ_MAX,
@@ -10,7 +8,6 @@ from tidy3d.material_library.parametric_materials import (
     GRAPHENE_FIT_ATOL,
 )
 from tidy3d.material_library.parametric_materials import Graphene
-import tidy3d as td
 
 from numpy.random import default_rng
 
@@ -28,8 +25,8 @@ GRAPHENE_GAMMA_MAX = 0.03
 def test_graphene_defaults():
     freqs = np.linspace(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX, GRAPHENE_FIT_NUM_FREQS)
     graphene = Graphene()
-    sigma1 = graphene.medium.sigma_model(freqs)
-    sigma2 = graphene.numerical_conductivity(freqs)
+    _ = graphene.medium.sigma_model(freqs)
+    _ = graphene.numerical_conductivity(freqs)
 
 
 @pytest.mark.parametrize("rng_seed", np.arange(0, 15))

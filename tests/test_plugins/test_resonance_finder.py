@@ -1,8 +1,5 @@
 import pytest
 import numpy as np
-import pydantic
-
-import tidy3d as td
 
 from numpy.random import default_rng
 

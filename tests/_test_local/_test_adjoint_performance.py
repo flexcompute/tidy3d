@@ -1,52 +1,25 @@
 import pytest
 import numpy as np
-import os
 import sys
 from memory_profiler import profile
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import time
 
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.data.monitor_data import FieldData
-from tidy3d.components.data.data_array import ScalarFieldDataArray
-from tidy3d.components.monitor import FieldMonitor
-from tidy3d.components.simulation import Simulation
-from tidy3d.components.source import PointDipole, GaussianPulse
-from tidy3d.components.grid.grid_spec import GridSpec
-
-
-from typing import Callable, Tuple
-
-import pytest
-import pydantic
 import jax.numpy as jnp
-import numpy as np
-from jax import grad, custom_vjp
-import jax
-from numpy.random import random
+from jax import grad
 
 import tidy3d as td
-from typing import Tuple, Any
 
-from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
-from tidy3d.plugins.adjoint.components.base import JaxObject
-from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab
-from tidy3d.plugins.adjoint.components.medium import (
-    JaxMedium,
-    JaxAnisotropicMedium,
-    JaxCustomMedium,
-)
+from tidy3d.plugins.adjoint.components.geometry import JaxBox
+from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
-from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
-from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run
 
 from ..utils import run_emulated
 
-import tidy3d as td
 
 sys.path.append("/users/twhughes/Documents/Flexcompute/tidy3d-core")
 from tidy3d_backend.utils import Profile
@@ -190,7 +163,7 @@ def test_large_custom_medium(use_emulated_run):
 
     with Profile():
         grad_f = grad(f)
-        df_eps_values = grad_f(EPS_VALUES)
+        _ = grad_f(EPS_VALUES)
 
 
 def test_time_custom_medium(use_emulated_run):
@@ -217,7 +190,7 @@ def test_time_custom_medium(use_emulated_run):
         eps_array = 1 + np.random.random((nx, ny, 1, 1))
 
         tstart = time.time()
-        deps = g(eps_array)
+        _ = g(eps_array)
         tend = time.time()
         times_sec[i] = tend - tstart
         num_pixels[i] = eps_array.size
@@ -228,7 +201,8 @@ def test_time_custom_medium(use_emulated_run):
     plt.ylabel("grad(eps) time (sec)")
     plt.yscale("log")
     plt.xscale("log")
-    plt.show()
+    # plt.show()
+    plt.close()
 
 
 def test_simple_jax_data_array(use_emulated_run):

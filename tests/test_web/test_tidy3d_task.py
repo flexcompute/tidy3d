@@ -5,7 +5,6 @@ import tempfile
 import responses
 from responses import matchers
 
-from tidy3d.web import monitor
 from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
 from tidy3d.version import __version__
@@ -82,7 +81,7 @@ def test_query_task(set_api_key):
 
 
 @responses.activate
-def test_get_simulation_json(monkeypatch, set_api_key):
+def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
     def mock_download(*args, **kwargs):
         file_path = kwargs["to_file"]
         with open(file_path, "w") as f:
@@ -102,10 +101,9 @@ def test_get_simulation_json(monkeypatch, set_api_key):
         status=200,
     )
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
-    JSON_NAME = "tests/tmp/task.json"
-    with open(JSON_NAME, "w") as f:
-        task.get_simulation_json(JSON_NAME)
-        assert os.path.getsize(JSON_NAME) > 0
+    JSON_NAME = str(tmp_path / "task.json")
+    task.get_simulation_json(JSON_NAME)
+    assert os.path.getsize(JSON_NAME) > 0
 
 
 @responses.activate
@@ -277,7 +275,7 @@ def test_estimate_cost(set_api_key):
 
 
 @responses.activate
-def test_get_log(monkeypatch, set_api_key):
+def test_get_log(monkeypatch, set_api_key, tmp_path):
     def mock(*args, **kwargs):
         file_path = kwargs["to_file"]
         with open(file_path, "w") as f:
@@ -296,10 +294,9 @@ def test_get_log(monkeypatch, set_api_key):
         status=200,
     )
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
-    LOG_FNAME = "tests/tmp/test.log"
-    with open(LOG_FNAME, "w") as f:
-        task.get_log(LOG_FNAME)
-        assert os.path.getsize(LOG_FNAME) > 0
+    LOG_FNAME = str(tmp_path / "test.log")
+    task.get_log(LOG_FNAME)
+    assert os.path.getsize(LOG_FNAME) > 0
 
 
 @responses.activate

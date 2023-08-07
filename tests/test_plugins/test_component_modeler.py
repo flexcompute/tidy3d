@@ -1,14 +1,14 @@
 import pytest
 import numpy as np
 import pydantic
-
+import matplotlib.pyplot as plt
 import gdstk
 
 import tidy3d as td
 from tidy3d.web.container import Batch
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from ..utils import clear_tmp, run_emulated
+from ..utils import run_emulated
 
 # Waveguide height
 wg_height = 0.22
@@ -29,8 +29,6 @@ bend_length = 16
 straight_wg_length = 4
 # space between waveguide and PML
 pml_spacing = 2
-
-PATH_DIR = "tests/tmp"
 
 
 def make_coupler():
@@ -184,53 +182,50 @@ def make_component_modeler(**kwargs):
 
     sim = make_coupler()
     ports = make_ports()
-    batch_empty = Batch(simulations={}, folder_name="None")
-    return ComponentModeler(
-        simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, path_dir=PATH_DIR, **kwargs
-    )
+    _ = Batch(simulations={}, folder_name="None")
+    return ComponentModeler(simulation=sim, ports=ports, freqs=sim.monitors[0].freqs, **kwargs)
 
 
 def run_component_modeler(monkeypatch, modeler: ComponentModeler):
-
-    values = dict(
-        simulation=modeler.simulation,
-        ports=modeler.ports,
-        freqs=modeler.freqs,
-        run_only=modeler.run_only,
-        element_mappings=modeler.element_mappings,
-    )
+    # values = dict(
+    #     simulation=modeler.simulation,
+    #     ports=modeler.ports,
+    #     freqs=modeler.freqs,
+    #     run_only=modeler.run_only,
+    #     element_mappings=modeler.element_mappings,
+    # )
     sim_dict = modeler.sim_dict
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     monkeypatch.setattr(ComponentModeler, "_run_sims", lambda self, path_dir: batch_data)
-    s_matrix = modeler.run(path_dir=PATH_DIR)
+    s_matrix = modeler.run(path_dir=modeler.path_dir)
     return s_matrix
 
 
-def test_validate_no_sources():
-    modeler = make_component_modeler()
+def test_validate_no_sources(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     source = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2e14, fwidth=1e14), polarization="Ex"
     )
     sim_w_source = modeler.simulation.copy(update=dict(sources=(source,)))
     with pytest.raises(pydantic.ValidationError):
-        modeler_w_source = modeler.copy(update=dict(simulation=sim_w_source))
+        _ = modeler.copy(update=dict(simulation=sim_w_source))
 
 
-def test_element_mappings_none():
-    modeler = make_component_modeler()
+def test_element_mappings_none(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     modeler = modeler.updated_copy(ports=[], element_mappings=())
     modeler.matrix_indices_run_sim
 
 
-def test_no_port():
-    modeler = make_component_modeler()
-    ports = modeler.ports
+def test_no_port(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    _ = modeler.ports
     with pytest.raises(Tidy3dKeyError):
         modeler.get_port_by_name(port_name="NOT_A_PORT")
 
 
-def test_ports_too_close_boundary():
-    modeler = make_component_modeler()
+def test_ports_too_close_boundary(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     grid_boundaries = modeler.simulation.grid.boundaries.to_list[0]
     way_outside = grid_boundaries[0] - 1000
     xmin = grid_boundaries[1]
@@ -246,31 +241,31 @@ def test_ports_too_close_boundary():
             modeler._shift_value_signed(port=port_at_edge)
 
 
-def test_validate_batch_supplied():
-
+def test_validate_batch_supplied(tmp_path):
     sim = make_coupler()
-    modeler = ComponentModeler(
-        simulation=sim, ports=[], freqs=sim.monitors[0].freqs, path_dir=PATH_DIR
+    _ = ComponentModeler(
+        simulation=sim, ports=[], freqs=sim.monitors[0].freqs, path_dir=str(tmp_path)
     )
 
 
-def test_plot_sim():
-    modeler = make_component_modeler()
+def test_plot_sim(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     modeler.plot_sim(z=0)
+    plt.close()
 
 
-def test_make_component_modeler():
-    modeler = make_component_modeler()
+def test_make_component_modeler(tmp_path):
+    _ = make_component_modeler(path_dir=str(tmp_path))
 
 
-def test_run(monkeypatch):
-    modeler = make_component_modeler()
+def test_run(monkeypatch, tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     monkeypatch.setattr(ComponentModeler, "run", lambda self, path_dir: None)
-    modeler.run(path_dir=PATH_DIR)
+    modeler.run(path_dir=str(tmp_path))
 
 
-def test_run_component_modeler(monkeypatch):
-    modeler = make_component_modeler()
+def test_run_component_modeler(monkeypatch, tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
     s_matrix = run_component_modeler(monkeypatch, modeler)
 
     for port_in in modeler.ports:
@@ -282,22 +277,17 @@ def test_run_component_modeler(monkeypatch):
                     coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
                     coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
 
-                    try:
-                        assert np.all(
-                            s_matrix.loc[coords_in] != 0
-                        ), "source index not present in S matrix"
-                    except:
-                        import pdb
-
-                        pdb.set_trace()
+                    assert np.all(
+                        s_matrix.loc[coords_in] != 0
+                    ), "source index not present in S matrix"
                     assert np.all(
                         s_matrix.loc[coords_in].loc[coords_out] != 0
                     ), "monitor index not present in S matrix"
 
 
 def test_component_modeler_run_only(monkeypatch):
-    sim = make_coupler()
-    ports = make_ports()
+    _ = make_coupler()
+    _ = make_ports()
     ONLY_SOURCE = (port_run_only, mode_index_run_only) = ("right_bot", 0)
     run_only = [ONLY_SOURCE]
     modeler = make_component_modeler(run_only=run_only)
@@ -341,21 +331,20 @@ def _test_mappings(element_mappings, s_matrix):
         ), "mapping not applied correctly."
 
 
-def test_run_component_modeler_mappings(monkeypatch):
-
+def test_run_component_modeler_mappings(monkeypatch, tmp_path):
     element_mappings = (
         ((("left_bot", 0), ("right_bot", 0)), (("left_top", 0), ("right_top", 0)), -1j),
         ((("left_bot", 0), ("right_top", 0)), (("left_top", 0), ("right_bot", 0)), +1),
     )
-    modeler = make_component_modeler(element_mappings=element_mappings)
+    modeler = make_component_modeler(element_mappings=element_mappings, path_dir=str(tmp_path))
     s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
 
 
-def test_mapping_exclusion(monkeypatch):
+def test_mapping_exclusion(monkeypatch, tmp_path):
     """Make sure that source indices are skipped if totally covered by element mapping."""
 
-    sim = make_coupler()
+    _ = make_coupler()
     ports = make_ports()
 
     EXCLUDE_INDEX = ("right_bot", 0)
@@ -373,7 +362,7 @@ def test_mapping_exclusion(monkeypatch):
     mapping = ((("right_bot", 1), ("right_bot", 1)), (EXCLUDE_INDEX, EXCLUDE_INDEX), +1)
     element_mappings.append(mapping)
 
-    modeler = make_component_modeler(element_mappings=element_mappings)
+    modeler = make_component_modeler(element_mappings=element_mappings, path_dir=str(tmp_path))
 
     run_sim_indices = modeler.matrix_indices_run_sim
     assert EXCLUDE_INDEX not in run_sim_indices, "mapping didnt exclude row properly"

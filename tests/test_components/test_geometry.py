@@ -4,15 +4,14 @@ import pytest
 import pydantic
 import numpy as np
 import shapely
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import gdstk
 import gdspy
 import trimesh
 
 import tidy3d as td
-from tidy3d.exceptions import ValidationError, SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.components.geometry import Geometry, Planar
-from ..utils import assert_log_level, prepend_tmp, log_capture
 
 
 GEO = td.Box(size=(1, 1, 1))
@@ -31,6 +30,7 @@ _, AX = plt.subplots()
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_plot(component):
     _ = component.plot(z=0, ax=AX)
+    plt.close()
 
 
 def test_base_inside():
@@ -44,9 +44,9 @@ def test_base_inside_meshgrid():
     assert np.all(Geometry.inside_meshgrid(GEO, [0, 0], [0, 0], [0, 0]))
     # Input dimensions different than 1 error for ``inside_meshgrid``.
     with pytest.raises(ValueError):
-        b = Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
+        _ = Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
     with pytest.raises(ValueError):
-        b = Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
+        _ = Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
 
 
 def test_bounding_box():
@@ -90,27 +90,27 @@ def test_reflect_points(axis):
 
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_volume(component):
-    v = component.volume()
-    v = component.volume(bounds=GEO.bounds)
-    v = component.volume(bounds=((-100, -100, -100), (100, 100, 100)))
-    v = component.volume(bounds=((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1)))
-    v = component.volume(bounds=((-100, -100, -100), (-10, -10, -10)))
-    v = component.volume(bounds=((10, 10, 10), (100, 100, 100)))
+    _ = component.volume()
+    _ = component.volume(bounds=GEO.bounds)
+    _ = component.volume(bounds=((-100, -100, -100), (100, 100, 100)))
+    _ = component.volume(bounds=((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1)))
+    _ = component.volume(bounds=((-100, -100, -100), (-10, -10, -10)))
+    _ = component.volume(bounds=((10, 10, 10), (100, 100, 100)))
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_surface_area(component):
-    sa = component.surface_area()
-    sa = component.surface_area(bounds=GEO.bounds)
-    sa = component.surface_area(bounds=((-100, -100, -100), (100, 100, 100)))
-    sa = component.surface_area(bounds=((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1)))
-    sa = component.surface_area(bounds=((-100, -100, -100), (-10, -10, -10)))
-    sa = component.surface_area(bounds=((10, 10, 10), (100, 100, 100)))
+    _ = component.surface_area()
+    _ = component.surface_area(bounds=GEO.bounds)
+    _ = component.surface_area(bounds=((-100, -100, -100), (100, 100, 100)))
+    _ = component.surface_area(bounds=((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1)))
+    _ = component.surface_area(bounds=((-100, -100, -100), (-10, -10, -10)))
+    _ = component.surface_area(bounds=((10, 10, 10), (100, 100, 100)))
 
 
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_bounds(component):
-    b = component.bounds
+    _ = component.bounds
 
 
 def test_planar_bounds():
@@ -119,9 +119,9 @@ def test_planar_bounds():
 
 @pytest.mark.parametrize("component", GEO_TYPES)
 def test_inside(component):
-    b = component.inside(0, 0, 0)
-    bs = component.inside(np.array([0, 0]), np.array([0, 0]), np.array([0, 0]))
-    bss = component.inside(np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
+    _ = component.inside(0, 0, 0)
+    _ = component.inside(np.array([0, 0]), np.array([0, 0]), np.array([0, 0]))
+    _ = component.inside(np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
 
 
 def test_zero_dims():
@@ -162,24 +162,24 @@ def test_bounds_base():
 
 def test_center_not_inf_validate():
     with pytest.raises(pydantic.ValidationError):
-        g = td.Box(center=(td.inf, 0, 0))
+        _ = td.Box(center=(td.inf, 0, 0))
     with pytest.raises(pydantic.ValidationError):
-        g = td.Box(center=(-td.inf, 0, 0))
+        _ = td.Box(center=(-td.inf, 0, 0))
 
 
 def test_radius_not_inf_validate():
     with pytest.raises(pydantic.ValidationError):
-        g = td.Sphere(radius=td.inf)
+        _ = td.Sphere(radius=td.inf)
     with pytest.raises(pydantic.ValidationError):
-        g = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
+        _ = td.Cylinder(radius=td.inf, center=(0, 0, 0), axis=1, length=1)
 
 
 def test_slanted_cylinder_infinite_length_validate():
-    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf)
-    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="top")
-    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="bottom")
-    g = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="middle")
-    g = td.Cylinder(
+    _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf)
+    _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="top")
+    _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="bottom")
+    _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=td.inf, reference_plane="middle")
+    _ = td.Cylinder(
         radius=1,
         center=(0, 0, 0),
         axis=1,
@@ -188,7 +188,7 @@ def test_slanted_cylinder_infinite_length_validate():
         reference_plane="middle",
     )
     with pytest.raises(pydantic.ValidationError):
-        g = td.Cylinder(
+        _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
             axis=1,
@@ -197,7 +197,7 @@ def test_slanted_cylinder_infinite_length_validate():
             reference_plane="top",
         )
     with pytest.raises(pydantic.ValidationError):
-        g = td.Cylinder(
+        _ = td.Cylinder(
             radius=1,
             center=(0, 0, 0),
             axis=1,
@@ -262,29 +262,37 @@ def test_arrow_both_dirs():
     GEO._plot_arrow(direction=(1, 2, 3), x=0, both_dirs=True, ax=ax)
 
 
-def test_gds_cell():
+def test_gdstk_cell():
     gds_cell = gdstk.Cell("name")
     gds_cell.add(gdstk.rectangle((0, 0), (1, 1)))
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
     td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0, gds_dtype=0)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(Tidy3dKeyError):
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
-    with pytest.raises(pydantic.ValidationError):
+    with pytest.raises(Tidy3dKeyError):
         td.PolySlab.from_gds(
             gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1, gds_dtype=0
         )
 
 
+def test_gdspy_cell():
+    gds_cell = gdspy.Cell("name")
+    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
+    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
+    with pytest.raises(Tidy3dKeyError):
+        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
+
+
 def test_geo_group_initialize():
     """make sure you can construct one."""
-    geo_group = make_geo_group()
+    _ = make_geo_group()
 
 
 def test_geo_group_structure():
     """make sure you can construct a structure using GeometryGroup."""
 
     geo_group = make_geo_group()
-    structure = td.Structure(geometry=geo_group, medium=td.Medium())
+    _ = td.Structure(geometry=geo_group, medium=td.Medium())
 
 
 def test_geo_group_methods():
@@ -303,7 +311,7 @@ def test_geo_group_empty():
     """dont allow empty geometry list."""
 
     with pytest.raises(pydantic.ValidationError):
-        geo_group = td.GeometryGroup(geometries=[])
+        _ = td.GeometryGroup(geometries=[])
 
 
 def test_geo_group_volume():
@@ -321,44 +329,44 @@ def test_geo_group_surface_area():
 
 def test_geometry():
 
-    b = td.Box(size=(1, 1, 1), center=(0, 0, 0))
-    s = td.Sphere(radius=1, center=(0, 0, 0))
-    s = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
-    s = td.PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=2)
+    _ = td.Box(size=(1, 1, 1), center=(0, 0, 0))
+    _ = td.Sphere(radius=1, center=(0, 0, 0))
+    _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
+    _ = td.PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=2)
     # vertices_np = np.array(s.vertices)
     # s_np = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Cylinder(radius=1, center=(0, 0, 0), axis=-1, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.PolySlab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.PolySlab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=-1, length=1)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=-1, slab_bounds=(-0.5, 0.5))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=1)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PolySlab(radius=1, center=(0, 0, 0), axis=3, slab_bounds=(-0.5, 0.5))
 
     # make sure negative values error
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Sphere(radius=-1, center=(0, 0, 0))
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Cylinder(radius=-1, center=(0, 0, 0), axis=3, length=1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=-1)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Sphere(radius=-1, center=(0, 0, 0))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Cylinder(radius=-1, center=(0, 0, 0), axis=3, length=1)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=3, length=-1)
 
 
 def test_geometry_sizes():
 
     # negative in size kwargs errors
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            a = td.Box(size=size, center=(0, 0, 0))
-        with pytest.raises(pydantic.ValidationError) as e_info:
-            s = td.Simulation(size=size, run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
+        with pytest.raises(pydantic.ValidationError):
+            _ = td.Box(size=size, center=(0, 0, 0))
+        with pytest.raises(pydantic.ValidationError):
+            _ = td.Simulation(size=size, run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
     # negative grid sizes error?
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        s = td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=-1.0), run_time=1e-12)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(size=(1, 1, 1), grid_spec=td.GridSpec.uniform(dl=-1.0), run_time=1e-12)
 
 
 @pytest.mark.parametrize("x0", [5])
@@ -457,47 +465,17 @@ def test_polyslab_axis(axis):
     # inside
     point = [0, 0]
     point.insert(axis, 3)
-    assert ps.inside(point[0], point[1], point[2]) == False
+    assert not ps.inside(point[0], point[1], point[2])
 
     # intersections
     plane_coord = [None] * 3
     plane_coord[axis] = 3
-    assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
+    assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
     plane_coord[axis] = -3
-    assert ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2]) == False
+    assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
 
 
-def test_polyslab_merge():
-    """make sure polyslabs from gds get merged when they should."""
-
-    import gdspy
-
-    def make_polyslabs(gap_size):
-        """Construct two rectangular polyslabs separated by a gap."""
-        lib = gdspy.GdsLibrary()
-        cell = lib.new_cell(f"polygons_{gap_size:.2f}")
-        rect1 = gdspy.Rectangle((gap_size / 2, 0), (1, 1))
-        rect2 = gdspy.Rectangle((-1, 0), (-gap_size / 2, 1))
-        cell.add(rect1)
-        cell.add(rect2)
-        return td.PolySlab.from_gds(gds_cell=cell, gds_layer=0, axis=2, slab_bounds=(-1, 1))
-
-    polyslabs_gap = make_polyslabs(gap_size=0.3)
-    assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
-
-    polyslabs_touching = make_polyslabs(gap_size=0)
-    assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
-
-
-def test_gds_cell():
-    gds_cell = gdspy.Cell("name")
-    gds_cell.add(gdspy.Rectangle((0, 0), (1, 1)))
-    td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=0)
-    with pytest.raises(Tidy3dKeyError):
-        td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
-
-
-def test_custom_surface_geometry():
+def test_custom_surface_geometry(tmp_path):
     # create tetrahedron STL
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
     faces = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
@@ -509,8 +487,8 @@ def test_custom_surface_geometry():
     assert np.allclose(import_geom.triangles, geom.triangles)
 
     # test export and then import
-    geom.trimesh.export(prepend_tmp("export.stl"))
-    import_geom = td.TriangleMesh.from_stl(prepend_tmp("export.stl"))
+    geom.trimesh.export(str(tmp_path / "export.stl"))
+    import_geom = td.TriangleMesh.from_stl(str(tmp_path / "export.stl"))
     assert np.allclose(import_geom.triangles, geom.triangles)
 
     # assert np.array_equal(tetrahedron.vectors, export_vectors)
@@ -518,7 +496,7 @@ def test_custom_surface_geometry():
     areas = [0.5 * np.sqrt(2) * np.sqrt(1 + 2 * 0.5**2), 0.5, 0.5, 0.5]
     unit_normals_unnormalized = [[1, 1, 1], [-1, 0, 0], [0, -1, 0], [0, 0, -1]]
     unit_normals = [n / np.linalg.norm(n) for n in unit_normals_unnormalized]
-    normals = [n * a for (n, a) in zip(unit_normals, areas)]
+    _ = [n * a for (n, a) in zip(unit_normals, areas)]
 
     # test bounds
     assert np.allclose(np.array(geom.bounds), [[0, 0, 0], [1, 1, 1]])
@@ -542,6 +520,7 @@ def test_custom_surface_geometry():
     # test plot
     _, ax = plt.subplots()
     _ = geom.plot(z=0.1, ax=ax)
+    plt.close()
 
     # test inconsistent winding
     vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
@@ -579,6 +558,7 @@ def test_custom_surface_geometry():
     )
     _, ax = plt.subplots()
     _ = sim.plot(y=0, ax=ax)
+    plt.close()
 
 
 def test_geo_group_sim():

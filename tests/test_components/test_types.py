@@ -1,9 +1,8 @@
 """Tests type definitions."""
 import pytest
-import tidy3d as td
+import pydantic
 from tidy3d.components.types import ArrayLike, Complex, constrained_array, Tuple
 from tidy3d.components.base import Tidy3dBaseModel
-from tidy3d.exceptions import ValidationError
 import numpy as np
 
 
@@ -11,9 +10,9 @@ def _test_validate_array_like():
     class S(Tidy3dBaseModel):
         f: ArrayLike[float, 2]
 
-    s = S(f=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
+    _ = S(f=np.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]))
     with pytest.raises(pydantic.ValidationError):
-        s = S(f=np.array([1.0, 2.0, 3.0]))
+        _ = S(f=np.array([1.0, 2.0, 3.0]))
 
     class MyClass(Tidy3dBaseModel):
         f: constrained_array(ndim=3, shape=(1, 2, 3))
@@ -32,7 +31,7 @@ def test_schemas():
         c: Complex
 
     # TODO: unexpected behavior, if list with more than one element, it fails.
-    s = S(f=[13], c=1 + 1j, ca=1 + 1j)
+    _ = S(f=[13], c=1 + 1j, ca=1 + 1j)
     S.schema()
 
 

@@ -1,16 +1,12 @@
 """Tests tidy3d/components/data/monitor_data.py"""
 import numpy as np
+import matplotlib.pyplot as plt
 import pytest
 import pydantic
 import tidy3d as td
 
-from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
-from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
-from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor
-from tidy3d.components.mode import ModeSpec
-from tidy3d.exceptions import DataError, SetupError
+from tidy3d.exceptions import DataError
 
-from tidy3d.components.data.dataset import FieldDataset
 from tidy3d.components.data.data_array import FreqModeDataArray
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 
@@ -27,7 +23,7 @@ from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONI
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import FIELD_MONITOR_2D, FIELD_TIME_MONITOR_2D
 from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
-from ..utils import clear_tmp, assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -194,7 +190,7 @@ def test_field_data():
     data = make_field_data()
     # Check that calling flux and dot on 3D data raise errors
     with pytest.raises(DataError):
-        dot = data.dot(data)
+        _ = data.dot(data)
     data_2d = make_field_data_2d()
     for field in FIELD_MONITOR.fields:
         _ = getattr(data_2d, field)
@@ -209,10 +205,10 @@ def test_field_data():
 def test_field_data_to_source():
     data = make_field_data_2d(symmetry=True)
     data = data.copy(update={key: val.isel(f=[-1]) for key, val in data.field_components.items()})
-    source = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
+    _ = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
     data = make_field_data_2d(symmetry=False)
     data = data.copy(update={key: val.isel(f=[-1]) for key, val in data.field_components.items()})
-    source = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
+    _ = data.to_source(source_time=td.GaussianPulse(freq0=2e14, fwidth=2e13), center=(1, 2, 3))
 
 
 def test_field_time_data():
@@ -220,10 +216,10 @@ def test_field_time_data():
     for field in FIELD_TIME_MONITOR.fields:
         _ = getattr(data, field)
     # Check that flux can be computed
-    flux1 = np.abs(data.flux)
+    _ = np.abs(data.flux)
     # Check that trying to call the dot product raises an error for time data
     with pytest.raises(DataError):
-        dot = data.dot(data)
+        _ = data.dot(data)
 
 
 def test_mode_solver_data():
@@ -254,15 +250,15 @@ def test_mode_solver_data():
     assert data.Ex.mode_index == dot.mode_index
     # Check eps_spec validator
     num_freqs = len(data.monitor.freqs)
-    data_eps_spec = data.updated_copy(eps_spec=["diagonal"] * num_freqs)
-    data_eps_spec = data.updated_copy(eps_spec=["tensorial_real"] * num_freqs)
-    data_eps_spec = data.updated_copy(eps_spec=["tensorial_complex"] * num_freqs)
+    _ = data.updated_copy(eps_spec=["diagonal"] * num_freqs)
+    _ = data.updated_copy(eps_spec=["tensorial_real"] * num_freqs)
+    _ = data.updated_copy(eps_spec=["tensorial_complex"] * num_freqs)
     # wrong keyword
     with pytest.raises(pydantic.ValidationError):
-        data_eps_spec = data.updated_copy(eps_spec=["tensorial"] * num_freqs)
+        _ = data.updated_copy(eps_spec=["tensorial"] * num_freqs)
     # wrong number
     with pytest.raises(pydantic.ValidationError):
-        data_eps_spec = data.updated_copy(eps_spec=["diagonal"] * (num_freqs + 1))
+        _ = data.updated_copy(eps_spec=["diagonal"] * (num_freqs + 1))
     # check monitor direction changes upon time reversal
     data_reversed = data.time_reversed_copy
     assert data_reversed.monitor.direction == "-"
@@ -333,8 +329,8 @@ def test_colocate():
 
 
 def test_time_reversed_copy():
-    data = make_field_data().time_reversed_copy
-    data = make_mode_solver_data().time_reversed_copy
+    _ = make_field_data().time_reversed_copy
+    _ = make_mode_solver_data().time_reversed_copy
     time_data = make_field_time_data()
     reversed_time_data = time_data.time_reversed_copy
     assert np.allclose(time_data.Ex.values, reversed_time_data.Ex.values[..., ::-1])
@@ -357,7 +353,7 @@ def test_empty_array():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(
+    _ = td.FieldTimeData(
         monitor=monitor,
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
@@ -371,7 +367,7 @@ def _test_empty_list():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray([], coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(
+    _ = td.FieldTimeData(
         monitor=monitor,
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
@@ -385,7 +381,7 @@ def _test_empty_tuple():
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray((), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), fields=["Ex"], name="test")
-    field_data = td.FieldTimeData(
+    _ = td.FieldTimeData(
         monitor=monitor,
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
@@ -394,8 +390,7 @@ def _test_empty_tuple():
     )
 
 
-@clear_tmp
-def test_empty_io():
+def test_empty_io(tmp_path):
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
@@ -406,8 +401,8 @@ def test_empty_io():
         grid_expanded=SIM.discretize(monitor, extend=True),
         **fields
     )
-    field_data.to_file("tests/tmp/field_data.hdf5")
-    field_data = td.FieldTimeData.from_file("tests/tmp/field_data.hdf5")
+    field_data.to_file(str(tmp_path / "field_data.hdf5"))
+    field_data = td.FieldTimeData.from_file(str(tmp_path / "field_data.hdf5"))
     assert field_data.Ex.size == 0
 
 
@@ -416,6 +411,7 @@ def test_mode_solver_plot_field():
     ms_data = make_mode_solver_data()
     with pytest.raises(DeprecationWarning):
         ms_data.plot_field(1, 2, 3, z=5, b=True)
+    plt.close()
 
 
 def test_field_data_symmetry_present():
@@ -425,11 +421,11 @@ def test_field_data_symmetry_present():
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])
 
     # works if no symmetry specified
-    field_data = td.FieldTimeData(monitor=monitor, **fields)
+    _ = td.FieldTimeData(monitor=monitor, **fields)
 
     # fails if symmetry specified but missing symmetry center
     with pytest.raises(pydantic.ValidationError):
-        field_data = td.FieldTimeData(
+        _ = td.FieldTimeData(
             monitor=monitor,
             symmetry=(1, -1, 0),
             grid_expanded=SIM.discretize(monitor, extend=True),
@@ -438,7 +434,7 @@ def test_field_data_symmetry_present():
 
     # fails if symmetry specified but missing etended grid
     with pytest.raises(pydantic.ValidationError):
-        field_data = td.FieldTimeData(
+        _ = td.FieldTimeData(
             monitor=monitor, symmetry=(1, -1, 1), symmetry_center=(0, 0, 0), **fields
         )
 
@@ -450,15 +446,15 @@ def test_data_array_attrs():
     assert data.flux.f.attrs, "data coordinates have no attrs"
 
 
-def test_data_array_json_warns(log_capture):
+def test_data_array_json_warns(log_capture, tmp_path):
     data = make_flux_data()
-    data.to_file("tests/tmp/flux.json")
+    data.to_file(str(tmp_path / "flux.json"))
     assert_log_level(log_capture, "WARNING")
 
 
-def test_data_array_hdf5_no_warnings(log_capture):
+def test_data_array_hdf5_no_warnings(log_capture, tmp_path):
     data = make_flux_data()
-    data.to_file("tests/tmp/flux.hdf5")
+    data.to_file(str(tmp_path / "flux.hdf5"))
     assert_log_level(log_capture, None)
 
 

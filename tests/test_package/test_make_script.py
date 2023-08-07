@@ -1,13 +1,9 @@
 """Tests generation of pythons script from simulation file."""
-import os
-
 import tidy3d as td
 from make_script import main
-from ..utils import clear_tmp
 
 
-@clear_tmp
-def test_make_script():
+def test_make_script(tmp_path):
 
     # make a sim
     simulation = td.Simulation(
@@ -21,16 +17,16 @@ def test_make_script():
         run_time=1e-12,
     )
 
-    sim_path = "tests/tmp/sim.json"
-    out_path = "tests/tmp/sim.py"
+    sim_path = tmp_path / "sim.json"
+    out_path = tmp_path / "sim.py"
 
     # save it to file, assuring it does not exist already
-    simulation.to_file(sim_path)
-    assert not os.path.exists(out_path), f"out file {out_path} already exists."
+    simulation.to_file(str(sim_path))
+    assert not out_path.exists(), f"out file {out_path} already exists."
 
     # generate out script from the simulation file
-    main([sim_path, out_path])
+    main([str(sim_path), str(out_path)])
 
     # make sure that file was created and is not empty
-    assert os.path.exists(out_path), f"out file {out_path} wasn't created."
-    assert os.stat(out_path).st_size > 0, f"out file {out_path} is empty."
+    assert out_path.is_file(), f"out file {out_path} wasn't created."
+    assert len(out_path.read_text()) > 0, f"out file {out_path} is empty."

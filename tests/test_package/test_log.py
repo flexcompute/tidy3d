@@ -7,7 +7,6 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
-from ..utils import log_capture, assert_log_level
 
 
 def test_log():
@@ -19,12 +18,13 @@ def test_log():
     td.log.log(0, "zero test")
 
 
-def test_log_config():
+def test_log_config(tmp_path):
     td.config.logging_level = "DEBUG"
-    td.set_logging_file("tests/tmp/test.log")
+    td.set_logging_file(str(tmp_path / "test.log"))
     assert len(td.log.handlers) == 2
     assert td.log.handlers["console"].level == _get_level_int("DEBUG")
     assert td.log.handlers["file"].level == _get_level_int(DEFAULT_LEVEL)
+    del td.log.handlers["file"]
 
 
 def test_log_level_not_found():

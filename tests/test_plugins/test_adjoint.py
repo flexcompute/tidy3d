@@ -1,23 +1,20 @@
 """Tests adjoint plugin."""
 
-from typing import Callable, Tuple, Dict
+from typing import Tuple, Dict, List
 
 import pytest
 import pydantic
 import jax.numpy as jnp
 import numpy as np
-from jax import grad, custom_vjp
+from jax import grad
 import jax
-from numpy.random import random
 import time
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import h5py
 
 import tidy3d as td
-from typing import Tuple, Any, List
 
 from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
-from tidy3d.plugins.adjoint.components.base import JaxObject
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_NUM_VERTICES
 from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
@@ -35,14 +32,13 @@ from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRES
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector
 from tidy3d.web.container import BatchData
-from tidy3d.web import run as run_regular
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
-from ..utils import SIM_DATA_PATH, SIM_FULL, TMP_DIR
 
-FWD_SIM_DATA_FILE = TMP_DIR + "adjoint_grad_data_fwd.hdf5"
-SIM_VJP_FILE = TMP_DIR + "adjoint_sim_vjp_file.hdf5"
-RUN_PATH = TMP_DIR + "simulation.hdf5"
+TMP_PATH = None
+FWD_SIM_DATA_FILE = "adjoint_grad_data_fwd.hdf5"
+SIM_VJP_FILE = "adjoint_sim_vjp_file.hdf5"
+RUN_FILE = "simulation.hdf5"
 NUM_PROC_PARALLEL = 2
 
 EPS = 2.0
@@ -86,7 +82,7 @@ def run_emulated_fwd(
 
     # gradient data stored for later use
     jax_sim_data_store = JaxSimulationData.from_sim_data(sim_data_store, jax_info)
-    jax_sim_data_store.to_file(FWD_SIM_DATA_FILE)
+    jax_sim_data_store.to_file(str(TMP_PATH / FWD_SIM_DATA_FILE))
 
     task_id = "test"
     return sim_data_orig, task_id
@@ -105,7 +101,7 @@ def run_emulated_bwd(
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
 
     # Forward data
-    sim_data_fwd = JaxSimulationData.from_file(FWD_SIM_DATA_FILE)
+    sim_data_fwd = JaxSimulationData.from_file(str(TMP_PATH / FWD_SIM_DATA_FILE))
     grad_data_fwd = sim_data_fwd.grad_data_symmetry
     grad_eps_data_fwd = sim_data_fwd.grad_eps_data_symmetry
 
@@ -113,7 +109,7 @@ def run_emulated_bwd(
     sim_data_adj = run_emulated(
         simulation=sim_adj,
         task_name=str(task_name),
-        path=RUN_PATH,
+        path=str(TMP_PATH / RUN_FILE),
     )
 
     jax_sim_data_adj = JaxSimulationData.from_sim_data(sim_data_adj, jax_info_adj)
@@ -125,8 +121,8 @@ def run_emulated_bwd(
     )
 
     # write VJP sim to and from file to emulate webapi download and loading
-    sim_vjp.to_file(SIM_VJP_FILE)
-    sim_vjp = JaxSimulation.from_file(SIM_VJP_FILE)
+    sim_vjp.to_file(str(TMP_PATH / SIM_VJP_FILE))
+    sim_vjp = JaxSimulation.from_file(str(TMP_PATH / SIM_VJP_FILE))
 
     return sim_vjp
 
@@ -307,73 +303,6 @@ def objective(amp: complex) -> float:
     return abs(amp) ** 2
 
 
-def test_run_flux(use_emulated_run):
-    td.config.logging_level = "ERROR"
-
-    def make_components(eps, size, vertices, base_eps_val):
-        sim = make_sim(permittivity=eps, size=size, vertices=vertices, base_eps_val=base_eps_val)
-        # sim = sim.to_simulation()[0]
-        td.config.logging_level = "WARNING"
-        sim = sim.updated_copy(
-            sources=[
-                td.PointDipole(
-                    center=(0, 0, 0),
-                    polarization="Ex",
-                    source_time=td.GaussianPulse(freq0=2e14, fwidth=1e15),
-                )
-            ]
-        )
-        sim_data = run_local(sim, task_name="test", path=RUN_PATH)
-        mnt_data = sim_data[MNT_NAME + "3"]
-        flat_components = {}
-        for key, fld in mnt_data.field_components.items():
-            values = jnp.array(jax.lax.stop_gradient(fld.values))[:, 1, ...]
-            values = values[:, None, ...]
-            coords = dict(fld.coords).copy()
-            coords["y"] = [0.0]
-            if isinstance(fld, td.ScalarFieldDataArray):
-                flat_components[key] = td.ScalarFieldDataArray(values, coords=coords)
-            else:
-                flat_components[key] = fld.updated_copy(values=values, coords=coords)
-        return mnt_data.updated_copy(**flat_components)
-
-    mnt_data = make_components(EPS, SIZE, VERTICES, BASE_EPS_VAL)
-
-    # whether to run the flux pipeline through jax (True) or regular tidy3d (False)
-    use_jax = True
-    if not use_jax:
-
-        td_field_components = {}
-        for fld, jax_data_array in mnt_data.field_components.items():
-            data_array = td.ScalarFieldDataArray(
-                np.array(jax_data_array.values), coords=jax_data_array.coords
-            )
-            td_field_components[fld] = data_array
-
-        mnt_data = td.FieldData(monitor=mnt_data.monitor, **td_field_components)
-
-    def get_flux(x):
-
-        fld_components = {}
-        for fld, fld_component in mnt_data.field_components.items():
-            new_values = x * fld_component.values
-            if isinstance(fld_component, td.ScalarFieldDataArray):
-                fld_data = td.ScalarFieldDataArray(new_values, coords=fld_component.coords)
-            else:
-                fld_data = fld_component.updated_copy(values=new_values)
-            fld_components[fld] = fld_data
-
-        mnt_data2 = mnt_data.updated_copy(**fld_components)
-
-        return jnp.sum(mnt_data2.flux)
-
-    f = get_flux(1.0)
-
-    if use_jax:
-        get_flux_grad = jax.grad(get_flux)
-        g = get_flux_grad(1.0)
-
-
 def extract_amp(sim_data: td.SimulationData) -> complex:
     """get the amplitude from a simulation data object."""
 
@@ -417,39 +346,110 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
 
 @pytest.fixture
-def use_emulated_run(monkeypatch):
+def use_emulated_run(monkeypatch, tmp_path_factory):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    global TMP_PATH
     import tidy3d.plugins.adjoint.web as adjoint_web
 
+    TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
 
 
 @pytest.fixture
-def use_emulated_run_async(monkeypatch):
+def use_emulated_run_async(monkeypatch, tmp_path_factory):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    global TMP_PATH
     import tidy3d.plugins.adjoint.web as adjoint_web
 
+    TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
 
+def test_run_flux(use_emulated_run):
+    td.config.logging_level = "ERROR"
+
+    def make_components(eps, size, vertices, base_eps_val):
+        sim = make_sim(permittivity=eps, size=size, vertices=vertices, base_eps_val=base_eps_val)
+        # sim = sim.to_simulation()[0]
+        td.config.logging_level = "WARNING"
+        sim = sim.updated_copy(
+            sources=[
+                td.PointDipole(
+                    center=(0, 0, 0),
+                    polarization="Ex",
+                    source_time=td.GaussianPulse(freq0=2e14, fwidth=1e15),
+                )
+            ]
+        )
+        sim_data = run_local(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+        mnt_data = sim_data[MNT_NAME + "3"]
+        flat_components = {}
+        for key, fld in mnt_data.field_components.items():
+            values = jnp.array(jax.lax.stop_gradient(fld.values))[:, 1, ...]
+            values = values[:, None, ...]
+            coords = dict(fld.coords).copy()
+            coords["y"] = [0.0]
+            if isinstance(fld, td.ScalarFieldDataArray):
+                flat_components[key] = td.ScalarFieldDataArray(values, coords=coords)
+            else:
+                flat_components[key] = fld.updated_copy(values=values, coords=coords)
+        return mnt_data.updated_copy(**flat_components)
+
+    mnt_data = make_components(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # whether to run the flux pipeline through jax (True) or regular tidy3d (False)
+    use_jax = True
+    if not use_jax:
+
+        td_field_components = {}
+        for fld, jax_data_array in mnt_data.field_components.items():
+            data_array = td.ScalarFieldDataArray(
+                np.array(jax_data_array.values), coords=jax_data_array.coords
+            )
+            td_field_components[fld] = data_array
+
+        mnt_data = td.FieldData(monitor=mnt_data.monitor, **td_field_components)
+
+    def get_flux(x):
+
+        fld_components = {}
+        for fld, fld_component in mnt_data.field_components.items():
+            new_values = x * fld_component.values
+            if isinstance(fld_component, td.ScalarFieldDataArray):
+                fld_data = td.ScalarFieldDataArray(new_values, coords=fld_component.coords)
+            else:
+                fld_data = fld_component.updated_copy(values=new_values)
+            fld_components[fld] = fld_data
+
+        mnt_data2 = mnt_data.updated_copy(**fld_components)
+
+        return jnp.sum(mnt_data2.flux)
+
+    _ = get_flux(1.0)
+
+    if use_jax:
+        get_flux_grad = jax.grad(get_flux)
+        _ = get_flux_grad(1.0)
+
+
 @pytest.mark.parametrize("local", (True, False))
-def test_adjoint_pipeline(local, use_emulated_run):
+def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
 
     run_fn = run_local if local else run
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+    _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
             permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
         )
-        sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+        sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -470,7 +470,7 @@ def test_adjoint_pipeline_2d(local, use_emulated_run):
     sim_size_2d[1] = 0
     sim = sim.updated_copy(size=sim_size_2d)
 
-    sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+    _ = run_fn(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
 
     def f(permittivity, size, vertices, base_eps_val):
         sim = make_sim(
@@ -481,7 +481,7 @@ def test_adjoint_pipeline_2d(local, use_emulated_run):
 
         sim = sim.updated_copy(size=sim_size_2d)
 
-        sim_data = run_fn(sim, task_name="test", path=RUN_PATH)
+        sim_data = run_fn(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
         amp = extract_amp(sim_data)
         return objective(amp)
 
@@ -496,7 +496,7 @@ def test_adjoint_setup_fwd(use_emulated_run):
         simulation=sim,
         task_name="test",
         folder_name="default",
-        path=RUN_PATH,
+        path=str(TMP_PATH / RUN_FILE),
         callback_url=None,
         verbose=False,
     )
@@ -511,7 +511,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
         simulation=sim_orig,
         task_name="test",
         folder_name="default",
-        path=RUN_PATH,
+        path=str(TMP_PATH / RUN_FILE),
         callback_url=None,
     )
 
@@ -528,7 +528,7 @@ def _test_adjoint_setup_adj(use_emulated_run):
     (sim_vjp,) = run.bwd(
         task_name="test",
         folder_name="default",
-        path=RUN_PATH,
+        path=str(TMP_PATH / RUN_FILE),
         callback_url=None,
         res=(sim_data_fwd,),
         sim_data_vjp=sim_data_vjp,
@@ -566,7 +566,7 @@ def test_multiple_freqs():
     )
 
     with pytest.raises(pydantic.ValidationError):
-        sim = JaxSimulation(
+        _ = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -593,7 +593,7 @@ def test_different_freqs():
         name=MNT_NAME + "2",
     )
     with pytest.raises(pydantic.ValidationError):
-        sim = JaxSimulation(
+        _ = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -618,7 +618,7 @@ def test_get_freq_adjoint():
     )
 
     with pytest.raises(AdjointError):
-        f = sim.freq_adjoint
+        _ = sim.freq_adjoint
 
     freq0 = 2e14
     output_mnt1 = td.ModeMonitor(
@@ -762,13 +762,13 @@ def test_jax_sim_data(use_emulated_run):
     """Test mechanics of the JaxSimulationData."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=RUN_PATH)
+    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
 
     for i in range(len(sim.output_monitors)):
         mnt_name = MNT_NAME + str(i + 1)
-        mnt_data_a = sim_data.output_data[i]
-        mnt_data_b = sim_data.output_monitor_data[mnt_name]
-        mnt_data_c = sim_data[mnt_name]
+        _ = sim_data.output_data[i]
+        _ = sim_data.output_monitor_data[mnt_name]
+        _ = sim_data[mnt_name]
 
 
 def test_intersect_structures(log_capture):
@@ -798,10 +798,10 @@ def test_intersect_structures(log_capture):
         )
 
     # shouldnt error, boxes spaced enough
-    sim = make_sim_intersect(spacing=+OVERLAP)
+    _ = make_sim_intersect(spacing=+OVERLAP)
 
     # shouldnt error, just warn because of touching but not intersecting
-    sim = make_sim_intersect(spacing=0.0)
+    _ = make_sim_intersect(spacing=0.0)
     assert_log_level(log_capture, "WARNING")
 
 
@@ -816,7 +816,7 @@ def test_structure_overlaps():
         polarization="Ex",
     )
 
-    sim = JaxSimulation(
+    _ = JaxSimulation(
         size=(2, 0, 2),
         input_structures=(struct,),
         grid_spec=td.GridSpec(wavelength=1.0),
@@ -828,7 +828,7 @@ def test_structure_overlaps():
 def test_validate_subpixel():
     """Make sure errors if subpixel is off."""
     with pytest.raises(pydantic.ValidationError):
-        sim = JaxSimulation(
+        _ = JaxSimulation(
             size=(10, 10, 10),
             run_time=1e-12,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -862,7 +862,9 @@ def test_plot_sims():
         grid_spec=td.GridSpec(wavelength=1.0),
     )
     sim.plot(x=0)
+    plt.close()
     sim.plot_eps(x=0)
+    plt.close()
 
 
 def test_flip_direction():
@@ -874,7 +876,7 @@ def test_flip_direction():
 def test_strict_types():
     """Test that things fail if you try to use just any object in a Jax component."""
     with pytest.raises(pydantic.ValidationError):
-        b = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
+        _ = JaxBox(size=(1, 1, [1, 2]), center=(0, 0, 0))
 
 
 def _test_polyslab_box(use_emulated_run):
@@ -1080,7 +1082,7 @@ def test_adjoint_run_async(local, use_emulated_run_async):
             permittivity = x + 1.0
             sims.append(make_sim_simple(permittivity=permittivity))
 
-        sim_data_list = run_fn(sims, path_dir=TMP_DIR)
+        sim_data_list = run_fn(sims, path_dir=str(TMP_PATH))
 
         result = 0.0
         for sim_data in sim_data_list:
@@ -1094,9 +1096,9 @@ def test_adjoint_run_async(local, use_emulated_run_async):
     # f0 = await f(x0)
 
     # and its derivatve
-    f0 = f(x0)
+    _ = f(x0)
     g = jax.grad(f)
-    g0 = g(x0)
+    _ = g(x0)
 
 
 @pytest.mark.parametrize("axis", (0, 1, 2))
@@ -1164,30 +1166,30 @@ def test_value_filter():
     assert np.allclose(np.array(values_after), values_expected)
 
 
-def test_jax_info_to_file():
+def test_jax_info_to_file(tmp_path):
     """Test writing jax info to file."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     _, jax_info = sim.to_simulation()
-    jax_info.to_file("tests/tmp/jax_info.json")
+    jax_info.to_file(str(tmp_path / "jax_info.json"))
 
 
-def test_split_fwd_sim_data():
+def test_split_fwd_sim_data(tmp_path):
     """Test splitting of regular simulation data into user and server data."""
 
     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     sim, jax_info = jax_sim.to_simulation()
-    sim_data = run_emulated(sim, task_name="test", path=SIM_DATA_PATH)
+    sim_data = run_emulated(sim, task_name="test", path=str(tmp_path / "simulation_data.hdf5"))
     data_user, data_adj = JaxSimulationData.split_fwd_sim_data(sim_data=sim_data, jax_info=jax_info)
 
 
-def test_save_load_simdata(use_emulated_run):
+def test_save_load_simdata(use_emulated_run, tmp_path):
     """Make sure a simulation data can be saved and loaded from file and retain info."""
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim_data = run(sim, task_name="test", path=RUN_PATH)
-    sim_data.to_file("tests/tmp/adjoint_simdata.hdf5")
-    sim_data2 = JaxSimulationData.from_file("tests/tmp/adjoint_simdata.hdf5")
+    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+    sim_data.to_file(str(tmp_path / "adjoint_simdata.hdf5"))
+    sim_data2 = JaxSimulationData.from_file(str(tmp_path / "adjoint_simdata.hdf5"))
     assert sim_data == sim_data2
 
 
@@ -1263,7 +1265,7 @@ def _test_polyslab_scale(use_emulated_run):
 
         g = grad(f)
 
-        g_eval = g(1.0)
+        _ = g(1.0)
 
         total_time = time.time() - start_time
         print(f"{num_vertices} vertices took {total_time:.2e} seconds")
@@ -1275,15 +1277,16 @@ def _test_polyslab_scale(use_emulated_run):
     plt.xscale("log")
     plt.yscale("log")
     plt.show()
+    # plt.close()
 
 
 def test_validate_vertices():
     """Test the maximum number of vertices."""
     vertices = np.random.rand(MAX_NUM_VERTICES, 2)
-    poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+    _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
     vertices = np.random.rand(MAX_NUM_VERTICES + 1, 2)
     with pytest.raises(pydantic.ValidationError):
-        poly = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+        _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
 
 
 def _test_custom_medium_3D(use_emulated_run):
@@ -1351,7 +1354,7 @@ def test_custom_medium_size(use_emulated_run):
         make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)
 
 
-def test_jax_sim_io():
+def test_jax_sim_io(tmp_path):
 
     jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
 
@@ -1386,7 +1389,7 @@ def test_jax_sim_io():
         grid_spec=td.GridSpec.auto(wavelength=1.0),
     )
 
-    fname = "tests/tmp/jax_sim_io_tmp.hdf5"
+    fname = str(tmp_path / "jax_sim_io_tmp.hdf5")
     sim.to_file(fname)
 
     with h5py.File(fname, "r") as f:
@@ -1408,10 +1411,10 @@ def test_num_input_structures():
         struct = sim.input_structures[0]
         return sim.updated_copy(input_structures=num_input_structures * [struct])
 
-    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
+    _ = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
 
     with pytest.raises(pydantic.ValidationError):
-        sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
+        _ = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
 
 
 @pytest.mark.parametrize("strict_binarize", (True, False))
@@ -1433,4 +1436,4 @@ def test_adjoint_utils(strict_binarize):
     polyslab = sim.input_structures[3].geometry
 
     radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
-    penalty = radius_penalty.evaluate(polyslab.vertices)
+    _ = radius_penalty.evaluate(polyslab.vertices)

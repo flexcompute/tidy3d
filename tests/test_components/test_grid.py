@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 
 import tidy3d as td
-from tidy3d.components.grid.grid import Coords, FieldGrid, YeeGrid, Grid
+from tidy3d.components.grid.grid import Coords, FieldGrid, Grid
 from tidy3d.components.types import TYPE_TAG_STR
 from tidy3d.exceptions import SetupError
 
@@ -20,7 +20,7 @@ def test_coords():
     x = np.linspace(-1, 1, 100)
     y = np.linspace(-1, 1, 100)
     z = np.linspace(-1, 1, 100)
-    c = Coords(x=x, y=y, z=z)
+    _ = Coords(x=x, y=y, z=z)
 
 
 def test_field_grid():
@@ -28,7 +28,7 @@ def test_field_grid():
     y = np.linspace(-1, 1, 100)
     z = np.linspace(-1, 1, 100)
     c = Coords(x=x, y=y, z=z)
-    f = FieldGrid(x=c, y=c, z=c)
+    _ = FieldGrid(x=c, y=c, z=c)
 
 
 def test_grid():
@@ -36,7 +36,7 @@ def test_grid():
     boundaries_x = np.arange(-1, 2, 1)
     boundaries_y = np.arange(-2, 3, 1)
     boundaries_z = np.arange(-3, 4, 1)
-    boundaries = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
+    _ = Coords(x=boundaries_x, y=boundaries_y, z=boundaries_z)
     g = make_grid()
 
     assert np.all(g.centers.x == np.array([-0.5, 0.5]))
@@ -54,22 +54,22 @@ def test_grid():
 def test_grid_dict():
     g = make_grid()
     yee = g.yee
-    gd = yee.grid_dict
+    _ = yee.grid_dict
 
 
 def test_primal_steps():
     g = make_grid()
-    ps = g._primal_steps
+    _ = g._primal_steps
 
 
 def test_dual_steps():
     g = make_grid()
-    ps = g._dual_steps
+    _ = g._dual_steps
 
 
 def test_num_cells():
     g = make_grid()
-    nc = g.num_cells
+    _ = g.num_cells
 
 
 def test_getitem():
@@ -297,7 +297,7 @@ def test_sim_discretize_vol():
     for c in subgrid.centers.dict(exclude={TYPE_TAG_STR}).values():
         assert np.all(c == np.array([-0.5, 0.5]))
 
-    plane = td.Box(size=(6, 6, 0))
+    _ = td.Box(size=(6, 6, 0))
 
 
 def test_sim_discretize_plane():

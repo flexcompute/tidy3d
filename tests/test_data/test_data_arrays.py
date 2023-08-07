@@ -1,5 +1,4 @@
 """Tests tidy3d/components/data/data_array.py"""
-import pytest
 import numpy as np
 from typing import Tuple, List
 
@@ -22,8 +21,6 @@ from tidy3d.components.geometry import Box
 from tidy3d.components.boundary import BoundarySpec, Periodic
 from tidy3d import material_library
 from tidy3d.constants import inf
-
-from ..utils import clear_tmp
 
 np.random.seed(4)
 
@@ -272,11 +269,11 @@ def test_ops():
 
 
 def test_empty_field_time():
-    data = ScalarFieldTimeDataArray(
+    _ = ScalarFieldTimeDataArray(
         np.random.rand(5, 5, 5, 0),
         coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
     )
-    data = ScalarFieldTimeDataArray(
+    _ = ScalarFieldTimeDataArray(
         np.random.rand(5, 5, 5, 0),
         coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
     )
@@ -284,15 +281,15 @@ def test_empty_field_time():
 
 def test_abs():
     data = make_mode_amps_data_array()
-    dabs = data.abs
+    _ = data.abs
 
 
 def test_heat_data_array():
     T = [0, 1e-12, 2e-12]
-    test = HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
+    _ = HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
 
 
-def test_heat_data_array():
+def test_charge_data_array():
     n = [0, 1e-12, 2e-12]
     p = [0, 3e-12, 4e-12]
-    test = ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))
+    _ = ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))

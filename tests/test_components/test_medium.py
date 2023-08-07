@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 import pydantic
-import matplotlib.pylab as plt
+import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.exceptions import ValidationError
 from ..utils import assert_log_level, log_capture
@@ -26,6 +26,7 @@ RTOL = 0.001
 @pytest.mark.parametrize("component", MEDIUMS)
 def test_plot(component):
     _ = component.plot(freqs=[2e14, 3e14], ax=AX)
+    plt.close()
 
 
 def test_eps_sigma_freq_none():
@@ -40,7 +41,7 @@ def test_tuple_complex_convert():
 
 
 def test_str():
-    s = str(PR)
+    _ = str(PR)
 
 
 def test_from_n_less_than_1():
@@ -51,10 +52,10 @@ def test_from_n_less_than_1():
 def test_medium():
 
     # mediums error with unacceptable values
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Medium(permittivity=0.0)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Medium(conductivity=-1.0)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Medium(permittivity=0.0)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Medium(conductivity=-1.0)
 
 
 def test_medium_conversions():
@@ -82,7 +83,7 @@ def test_medium_conversions():
 
 def test_PEC():
 
-    struct = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
+    _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
 
 
 def test_medium_dispersion():
@@ -95,14 +96,14 @@ def test_medium_dispersion():
     m_DR = td.Drude(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
     m_DB = td.Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        mf_SM = td.Sellmeier(coeffs=[(2, 0), (2, 4)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Sellmeier(coeffs=[(2, 0), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        mf_DR = td.Drude(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Drude(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
 
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        mf_DB = td.Debye(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Debye(eps_inf=1.0, coeffs=[(1, 0), (2, 4)])
 
     freqs = np.linspace(0.01, 1, 1001)
     for medium in [m_PR, m_SM, m_LZ, m_LZ2, m_DR, m_DB]:
@@ -139,7 +140,7 @@ def test_medium_dispersion_create():
     m_DB = td.Debye(eps_inf=1.0, coeffs=[(1, 3), (2, 4)])
 
     for medium in [m_PR, m_SM, m_DB, m_LZ, m_DR, m_LZ2]:
-        struct = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=medium)
+        _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=medium)
 
 
 def test_sellmeier_from_dispersion():
@@ -147,7 +148,7 @@ def test_sellmeier_from_dispersion():
     wvl = 0.5
     freq = td.C_0 / wvl
     dn_dwvl = -0.1
-    with pytest.raises(ValidationError) as e:
+    with pytest.raises(ValidationError):
         # Check that postivie dispersion raises an error
         medium = td.Sellmeier.from_dispersion(n=n, freq=freq, dn_dwvl=-dn_dwvl)
 
@@ -271,43 +272,43 @@ def test_n_cfl():
 def test_gain_medium(log_capture):
     """Test passive and gain medium validations."""
     # non-dispersive
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Medium(conductivity=-0.1)
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Medium(conductivity=-1.0, allow_gain=False)
-    mM = td.Medium(conductivity=-1.0, allow_gain=True)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Medium(conductivity=-0.1)
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Medium(conductivity=-1.0, allow_gain=False)
+    _ = td.Medium(conductivity=-1.0, allow_gain=True)
 
     # pole residue, causality
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.PoleResidue(eps_inf=0.16, poles=[(1 + 1j, 2 + 2j)])
 
     # Sellmeier
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Sellmeier(coeffs=((-1, 1),))
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Sellmeier(coeffs=((-1, 1),))
     mS = td.Sellmeier(coeffs=((-1, 1),), allow_gain=True)
 
     # Lorentz
     # causality, negative gamma
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, -3)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Lorentz(eps_inf=0.04, coeffs=[(1, 2, -3)])
     # gain, negative Delta epsilon
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)])
     mL = td.Lorentz(eps_inf=0.04, coeffs=[(-1, 2, 3)], allow_gain=True)
     assert mL.pole_residue.allow_gain
 
     # f_i can take whatever sign
-    m = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
+    _ = td.Lorentz(eps_inf=0.04, coeffs=[(1, -2, 3)])
 
     # Drude, only causality constraint
-    with pytest.raises(pydantic.ValidationError) as e_info:
-        m = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
 
     # anisotropic medium, warn allow_gain is ignored
-    m = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
+    _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
     assert_log_level(log_capture, "WARNING")
 
-    m = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
+    _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
     assert_log_level(log_capture, "WARNING")
 
 
@@ -318,7 +319,9 @@ def test_medium2d():
     medium = td.Medium2D.from_medium(cond_med, thickness=thickness)
 
     _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
+    plt.close()
     _ = medium.plot_sigma(freqs=[2e14, 3e14], ax=AX)
+    plt.close()
     assert np.isclose(medium.ss.to_medium().conductivity, sigma * thickness, rtol=RTOL)
     aniso_medium = td.AnisotropicMedium(xx=td.Medium(permittivity=2), yy=cond_med, zz=td.Medium())
     medium = td.Medium2D.from_anisotropic_medium(aniso_medium, axis=2, thickness=thickness)
@@ -466,7 +469,7 @@ def test_perturbation_medium():
     # conductivity validators
     pmed = td.PerturbationMedium(conductivity_perturbation=pp_real, subpixel=False)
     cmed = pmed.perturbed_copy(0.9 * temperature)  # positive conductivity
-    assert cmed.subpixel == False
+    assert not cmed.subpixel
     with pytest.raises(pydantic.ValidationError):
         _ = pmed.perturbed_copy(1.1 * temperature)  # negative conductivity
 
