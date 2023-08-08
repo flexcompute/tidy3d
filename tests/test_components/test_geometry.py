@@ -156,6 +156,12 @@ def test_intersections_plane(component):
     assert len(component.intersections_plane(x=10000)) == 0
 
 
+@pytest.mark.parametrize("component", GEO_TYPES)
+def test_intersections_2dbox(component):
+    with pytest.raises(ValueError):
+        g = component.intersections_2dbox(plane=BOX)
+
+
 def test_bounds_base():
     assert all(a == b for a, b in zip(Planar.bounds.fget(POLYSLAB), POLYSLAB.bounds))
 

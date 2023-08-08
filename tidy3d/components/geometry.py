@@ -206,7 +206,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
         # Verify 2D
-        if plane.size.count(0.0) != 1:
+        if plane.size.count(0.0) == 0:
             raise ValueError("Input geometry must be a 2D Box.")
 
         # dont bother if the geometry doesn't intersect the plane at all
