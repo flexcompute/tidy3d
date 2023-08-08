@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in angled mode solver with negative `angle_theta`.
 - Properly include `JaxSimulation.input_structures` in `JaxSimulationData.plot_field()`.
 - Numerically stable sigmoid function in radius of curvature constraint.
+- Fixed 2d checking in `Geometry.intersections_2dbox()`.
 
 ## [2.4.0rc1] - 2023-7-27
 

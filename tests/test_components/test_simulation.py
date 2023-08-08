@@ -559,6 +559,18 @@ def test_plot():
     plt.close()
 
 
+def test_plot_1d_sim():
+    mesh1d = td.UniformGrid(dl=2e-4)
+    grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
+    s = td.Simulation(
+        size=(0, 0, 1),
+        grid_spec=grid_spec,
+        run_time=1e-13,
+    )
+    _ = s.plot(y=0)
+    plt.close()
+
+
 def test_plot_bounds():
     _ = SIM_FULL.plot(x=0, hlim=[-0.45, 0.45])
     plt.close()
