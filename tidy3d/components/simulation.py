@@ -173,8 +173,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         BoundarySpec(),
         title="Boundaries",
         description="Specification of boundary conditions along each dimension. If ``None``, "
-        "periodic boundary conditions are applied on all sides. Default will change to PML in 2.0 "
-        "so explicitly setting the boundaries is recommended.",
+        "PML boundary conditions are applied on all sides.",
     )
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
