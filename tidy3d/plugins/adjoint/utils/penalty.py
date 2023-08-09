@@ -83,13 +83,14 @@ class RadiusPenalty(Penalty):
             xp, yp = dps
             xp2, yp2 = d2ps
             num = (xp**2 + yp**2) ** (3.0 / 2.0)
-            den = abs(xp * yp2 - yp * xp2) + 1e-2
+            den = abs(xp * yp2 - yp * xp2)
             return num / den
 
         def penalty_fn(radius):
             """Get the penalty for a given radius."""
-            arg = -self.kappa * (self.min_radius - radius)
-            return self.alpha * ((1 + jnp.exp(arg)) ** (-1))
+            arg = self.kappa * (radius - self.min_radius)
+            exp_arg = jnp.exp(-arg)
+            return self.alpha * (exp_arg / (1 + exp_arg))
 
         xs, ys = jnp.array(points).T
         rs = get_radii_curvature(xs, ys)
