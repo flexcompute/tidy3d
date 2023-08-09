@@ -9,7 +9,7 @@ This is the documentation for the python API, which is the main way to build sim
    :maxdepth: 1
    :caption: User Guide
 
-   setup
+   quickstart
    examples
    faq
    howdoi

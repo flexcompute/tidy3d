@@ -1,5 +1,5 @@
-Learning FDTD Through Examples
-==============================
+Tidy3D Example Library
+======================
 
 Lecture Series
 --------------
@@ -10,11 +10,21 @@ Lecture Series
     fdtd101
     inversedesign
 
-Examples of How to Use FDTD Features
-------------------------------------
+Tidy3D Basics
+-------------
 
-Defining Structures and Materials
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/StartHere
+    notebooks/Simulation
+    notebooks/Primer
+
+Feature Tututorials
+-------------------
+
+Structures and Materials
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -28,8 +38,8 @@ Defining Structures and Materials
     notebooks/CustomMediumTutorial
     notebooks/SelfIntersectingPolyslab
 
-Defining Grid and Boundary Conditions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Grid and Boundary Conditions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -37,8 +47,8 @@ Defining Grid and Boundary Conditions
     notebooks/BoundaryConditions
     notebooks/AutoGrid
 
-Defining Sources and Monitors
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Sources and Monitors
+~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -94,8 +104,8 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin6GratingCoupler
     notebooks/AdjointPlugin7Metalens
 
-Tidy3D Case Studies
--------------------
+Case Studies
+------------
 
 Photonic Integrated Circuit Components
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
