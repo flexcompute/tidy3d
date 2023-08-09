@@ -7,7 +7,7 @@ import numpy as np
 
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Numpy
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
-from .geometry import Box
+from .geometry.base import Box
 from .validators import assert_plane
 from .base import cached_property, Tidy3dBaseModel
 from .mode import ModeSpec
@@ -295,6 +295,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
+        """Plot this monitor."""
         # call the monitor.plot() function first
         ax = super().plot(x=x, y=y, z=z, ax=ax, **patch_kwargs)
 

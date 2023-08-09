@@ -15,7 +15,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry import Box, TriangleMesh, Geometry, PolySlab, Cylinder, GeometryGroup
+from .geometry.base import Geometry, Box, GeometryGroup
+from .geometry.primitives import Cylinder
+from .geometry.mesh import TriangleMesh
+from .geometry.polyslab import PolySlab
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
@@ -1286,6 +1289,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     """ Plotting """
 
+    # pylint: disable=unused-argument
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -2370,12 +2374,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         axis, center_normal = self.parse_xyz_kwargs(x=x, y=y, z=z)
         center = self.unpop_axis(center_normal, (h_center, v_center), axis=axis)
         size = self.unpop_axis(0.0, (h_size, v_size), axis=axis)
+        plane = Box(center=center, size=size)
 
         medium_shapes = []
         for structure in structures:
-            intersections = structure.geometry.intersections_2dbox(
-                plane=Box(center=center, size=size)
-            )
+            intersections = plane.intersections_with(structure.geometry)
             for shape in intersections:
                 if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
@@ -2410,7 +2413,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         for structure in structures:
 
             # get list of Shapely shapes that intersect at the plane
-            shapes_plane = structure.geometry.intersections_2dbox(plane)
+            shapes_plane = plane.intersections_with(structure.geometry)
 
             # Append each of them and their medium information to the list of shapes
             for shape in shapes_plane:

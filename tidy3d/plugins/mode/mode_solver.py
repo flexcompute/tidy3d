@@ -11,7 +11,7 @@ import xarray as xr
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.geometry import Box
+from ...components.geometry.base import Box
 from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec

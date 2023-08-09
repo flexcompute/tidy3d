@@ -5,7 +5,7 @@ from typing import Any
 import pydantic
 import numpy as np
 
-from .geometry import Box
+from .geometry.base import Box
 from ..exceptions import ValidationError, SetupError
 from .data.dataset import Dataset, FieldDataset
 from .base import DATA_ARRAY_MAP

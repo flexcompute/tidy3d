@@ -8,16 +8,6 @@ import pydantic
 import xarray as xr
 import tidy3d as td
 
-from tidy3d.components.simulation import Simulation
-from tidy3d.components.geometry import Box
-from tidy3d.components.structure import Structure
-from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d import Coords
-from tidy3d.components.source import CustomFieldSource, GaussianPulse, CustomCurrentSource
-from tidy3d.components.data.data_array import ScalarFieldDataArray, SpatialDataArray
-from tidy3d.components.data.dataset import FieldDataset
-from tidy3d.exceptions import SetupError, ValidationError
-
 from ..utils import assert_log_level, log_capture
 from tidy3d.components.data.dataset import PermittivityDataset
 from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
@@ -32,14 +22,14 @@ Y = np.linspace(-1, 1, Ny)
 Z = np.linspace(-1, 1, Nz)
 freqs = [2e14]
 
-ST = GaussianPulse(freq0=np.mean(freqs), fwidth=np.mean(freqs) / 5)
+ST = td.GaussianPulse(freq0=np.mean(freqs), fwidth=np.mean(freqs) / 5)
 SIZE = (2, 0, 2)
 
 
 def make_scalar_data():
     """Makes a scalar field data array."""
     data = np.random.random((Nx, Ny, Nz, 1)) + 1
-    return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    return td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
 
 def make_scalar_data_multifreqs():
@@ -47,7 +37,7 @@ def make_scalar_data_multifreqs():
     Nfreq = 2
     freqs_mul = [2e14, 3e14]
     data = np.random.random((Nx, Ny, Nz, Nfreq))
-    return ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs_mul))
+    return td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs_mul))
 
 
 def make_custom_field_source():
@@ -56,8 +46,8 @@ def make_custom_field_source():
     for field in "EH":
         for component in "xyz":
             field_components[field + component] = make_scalar_data()
-    field_dataset = FieldDataset(**field_components)
-    return CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
+    field_dataset = td.FieldDataset(**field_components)
+    return td.CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
 
 
 def make_custom_current_source():
@@ -66,8 +56,8 @@ def make_custom_current_source():
     for field in "EH":
         for component in "xyz":
             field_components[field + component] = make_scalar_data()
-    current_dataset = FieldDataset(**field_components)
-    return CustomCurrentSource(size=SIZE, source_time=ST, current_dataset=current_dataset)
+    current_dataset = td.FieldDataset(**field_components)
+    return td.CustomCurrentSource(size=SIZE, source_time=ST, current_dataset=current_dataset)
 
 
 # instance, which we use in the parameterized tests
@@ -75,11 +65,11 @@ FIELD_SRC = make_custom_field_source()
 CURRENT_SRC = make_custom_current_source()
 
 
-def get_dataset(custom_source_obj) -> Tuple[str, FieldDataset]:
+def get_dataset(custom_source_obj) -> Tuple[str, td.FieldDataset]:
     """Get a dict containing dataset depending on type and its key."""
-    if isinstance(custom_source_obj, CustomFieldSource):
+    if isinstance(custom_source_obj, td.CustomFieldSource):
         return "field_dataset", custom_source_obj.field_dataset
-    if isinstance(custom_source_obj, CustomCurrentSource):
+    if isinstance(custom_source_obj, td.CustomCurrentSource):
         return "current_dataset", custom_source_obj.current_dataset
     raise ValueError("not supplied a custom current object.")
 
@@ -95,7 +85,7 @@ def test_field_components(source):
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
 def test_custom_source_simulation(source):
     """Test adding to simulation."""
-    _ = Simulation(run_time=1e-12, size=(1, 1, 1), sources=(source,))
+    _ = td.Simulation(run_time=1e-12, size=(1, 1, 1), sources=(source,))
 
 
 def test_validator_tangential_field():
@@ -103,7 +93,7 @@ def test_validator_tangential_field():
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
     with pytest.raises(pydantic.ValidationError):
-        _ = CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
+        _ = td.CustomFieldSource(size=SIZE, source_time=ST, field_dataset=field_dataset)
 
 
 def test_validator_non_planar():
@@ -111,14 +101,14 @@ def test_validator_non_planar():
     field_dataset = FIELD_SRC.field_dataset
     field_dataset = field_dataset.copy(update=dict(Ex=None, Ez=None, Hx=None, Hz=None))
     with pytest.raises(pydantic.ValidationError):
-        _ = CustomFieldSource(size=(1, 1, 1), source_time=ST, field_dataset=field_dataset)
+        _ = td.CustomFieldSource(size=(1, 1, 1), source_time=ST, field_dataset=field_dataset)
 
 
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
 def test_validator_freq_out_of_range_src(source):
     """Test that it errors if field_dataset frequency out of range of source_time."""
     key, dataset = get_dataset(source)
-    Ex_new = ScalarFieldDataArray(dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
+    Ex_new = td.ScalarFieldDataArray(dataset.Ex.data, coords=dict(x=X, y=Y, z=Z, f=[0]))
     dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
         _ = source.updated_copy(size=SIZE, source_time=ST, **{key: dataset_fail})
@@ -129,7 +119,7 @@ def test_validator_freq_multiple(source):
     """Test that it errors more than 1 frequency given."""
     key, dataset = get_dataset(source)
     new_data = np.concatenate((dataset.Ex.data, dataset.Ex.data), axis=-1)
-    Ex_new = ScalarFieldDataArray(new_data, coords=dict(x=X, y=Y, z=Z, f=[1, 2]))
+    Ex_new = td.ScalarFieldDataArray(new_data, coords=dict(x=X, y=Y, z=Z, f=[1, 2]))
     dataset_fail = dataset.copy(update=dict(Ex=Ex_new))
     with pytest.raises(pydantic.ValidationError):
         _ = source.copy(update={key: dataset_fail})
@@ -182,15 +172,15 @@ def test_medium_components():
 def test_custom_medium_simulation():
     """Test adding to simulation."""
 
-    struct = Structure(
-        geometry=Box(size=(0.5, 0.5, 0.5)),
+    struct = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5)),
         medium=CUSTOM_MEDIUM,
     )
 
-    sim = Simulation(
+    sim = td.Simulation(
         run_time=1e-12,
         size=(1, 1, 1),
-        grid_spec=GridSpec.auto(wavelength=1.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
     _ = sim.grid
@@ -199,7 +189,7 @@ def test_custom_medium_simulation():
 def test_medium_raw():
     """Test from a raw permittivity evaluated at center."""
     eps_raw = make_scalar_data().real
-    eps_raw_s = SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
+    eps_raw_s = td.SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
 
     # lossless
     med = CustomMedium.from_eps_raw(eps_raw)
@@ -208,24 +198,24 @@ def test_medium_raw():
 
     # lossy
     data = np.random.random((Nx, Ny, Nz, 1)) + 1 + 1e-2 * 1j
-    eps_raw = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    eps_raw_s = SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
+    eps_raw = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    eps_raw_s = td.SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
     med = CustomMedium.from_eps_raw(eps_raw)
     meds = CustomMedium.from_eps_raw(eps_raw_s, freq=freqs[0])
     assert med.eps_model(1e14) == meds.eps_model(1e14)
 
     # inconsistent freq
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         med = CustomMedium.from_eps_raw(eps_raw, freq=freqs[0] * 1.1)
 
     # missing freq
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         med = CustomMedium.from_eps_raw(eps_raw_s)
 
 
 def test_medium_interp():
     """Test if the interp works."""
-    coord_interp = Coords(**{ax: np.linspace(-2, 2, 20 + ind) for ind, ax in enumerate("xyz")})
+    coord_interp = td.Coords(**{ax: np.linspace(-2, 2, 20 + ind) for ind, ax in enumerate("xyz")})
 
     # more than one entries per each axis
     orig_data = make_scalar_data()
@@ -243,7 +233,7 @@ def test_medium_interp():
     Nx = 1
     X = [1.1]
     data = np.random.random((Nx, Ny, Nz, 1))
-    orig_data = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    orig_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
     data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
     assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
@@ -264,7 +254,7 @@ def test_medium_smaller_than_one_positive_sigma():
     # eps_inf < 1
     n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
     n_data[0, 0, 0, 0] = 0.5
-    n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataarray = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     with pytest.raises(pydantic.ValidationError):
         _ = CustomMedium.from_nk(n_dataarray)
 
@@ -272,15 +262,15 @@ def test_medium_smaller_than_one_positive_sigma():
     n_data = 1 + np.random.random((Nx, Ny, Nz, 1))
     k_data = np.random.random((Nx, Ny, Nz, 1))
     k_data[0, 0, 0, 0] = -0.1
-    n_dataarray = ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
-    k_dataarray = ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    n_dataarray = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    k_dataarray = td.ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     with pytest.raises(pydantic.ValidationError):
         _ = CustomMedium.from_nk(n_dataarray, k_dataarray)
 
 
 def test_medium_eps_diagonal_on_grid():
     """Test if ``eps_diagonal_on_grid`` works."""
-    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    coord_interp = td.Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     freq_interp = 1e14
 
     eps_output = CUSTOM_MEDIUM.eps_diagonal_on_grid(freq_interp, coord_interp)
@@ -293,8 +283,8 @@ def test_medium_nk():
     """Construct custom medium from n (and k) DataArrays."""
     n = make_scalar_data().real
     k = make_scalar_data().real * 0.001
-    ns = SpatialDataArray(n.squeeze(dim="f", drop=True))
-    ks = SpatialDataArray(k.squeeze(dim="f", drop=True))
+    ns = td.SpatialDataArray(n.squeeze(dim="f", drop=True))
+    ks = td.SpatialDataArray(k.squeeze(dim="f", drop=True))
 
     # lossless
     med = CustomMedium.from_nk(n=n)
@@ -315,15 +305,15 @@ def test_medium_nk():
     assert med.eps_model(1e14) == meds.eps_model(1e14)
 
     # inconsistent freq
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         med = CustomMedium.from_nk(n=n, k=k, freq=freqs[0] * 1.1)
 
     # missing freq
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         med = CustomMedium.from_nk(n=ns, k=ks)
 
     # inconsistent data type
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         med = CustomMedium.from_nk(n=ns, k=k)
 
 
@@ -342,13 +332,13 @@ def test_nk_diff_coords():
     n = make_scalar_data().real
     k = make_scalar_data().real
     k.coords["f"] = [3e14]
-    with pytest.raises(SetupError):
+    with pytest.raises(td.exceptions.SetupError):
         _ = CustomMedium.from_nk(n=n, k=k)
 
 
 def test_grids():
     """Get Dictionary of field components and select some data."""
-    bounds = Box(size=(1, 1, 1)).bounds
+    bounds = td.Box(size=(1, 1, 1)).bounds
     for key, grid in CUSTOM_MEDIUM.grids(bounds=bounds).items():
         grid.sizes
 
@@ -356,7 +346,7 @@ def test_grids():
 def test_n_cfl():
     """CFL number for custom medium"""
     data = np.random.random((Nx, Ny, Nz, 1)) + 2
-    ndata = ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+    ndata = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     med = CustomMedium.from_nk(n=ndata, k=ndata * 0.001)
     assert med.n_cfl >= 2
 
@@ -367,30 +357,30 @@ def verify_custom_medium_methods(mat):
     assert isinstance(mat, AbstractCustomMedium)
     assert isinstance(mat.eps_model(freq), np.complex128)
     assert len(mat.eps_diagonal(freq)) == 3
-    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    coord_interp = td.Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
     for i in range(3):
         assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
 
     # construct sim
-    struct = Structure(
-        geometry=Box(size=(0.5, 0.5, 0.5)),
+    struct = td.Structure(
+        geometry=td.Box(size=(0.5, 0.5, 0.5)),
         medium=mat,
     )
 
-    sim = Simulation(
+    sim = td.Simulation(
         run_time=1e-12,
         size=(1, 1, 1),
-        grid_spec=GridSpec.auto(wavelength=1.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
         structures=(struct,),
     )
     _ = sim.grid
 
     # bkg
-    sim = Simulation(
+    sim = td.Simulation(
         run_time=1e-12,
         size=(1, 1, 1),
-        grid_spec=GridSpec.auto(wavelength=1.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
         medium=mat,
     )
     _ = sim.grid
@@ -402,7 +392,7 @@ def test_anisotropic_custom_medium():
     def make_scalar_data_f():
         """Makes a scalar field data array with random f."""
         data = np.random.random((Nx, Ny, Nz, 1)) + 1
-        return ScalarFieldDataArray(
+        return td.ScalarFieldDataArray(
             data, coords=dict(x=X, y=Y, z=Z, f=[freqs[0] * np.random.random(1)[0]])
         )
 
@@ -419,30 +409,32 @@ def test_anisotropic_custom_medium():
 
 def test_custom_isotropic_medium():
     """Custom isotropic non-dispersive medium."""
-    permittivity = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    conductivity = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    permittivity = td.SpatialDataArray(
+        1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z)
+    )
+    conductivity = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
     # some terms in permittivity are complex
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(
+        epstmp = td.SpatialDataArray(
             1 + np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in permittivity are < 1
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        epstmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
         mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in conductivity are complex
     with pytest.raises(pydantic.ValidationError):
-        sigmatmp = SpatialDataArray(
+        sigmatmp = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     # some terms in conductivity are negative
-    sigmatmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+    sigmatmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
     with pytest.raises(pydantic.ValidationError):
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
     mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp, allow_gain=True)
@@ -450,7 +442,9 @@ def test_custom_isotropic_medium():
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        sigmatmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
+        sigmatmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z)
+        )
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     mat = CustomMedium(permittivity=permittivity, conductivity=conductivity)
@@ -467,7 +461,7 @@ def verify_custom_dispersive_medium_methods(mat):
     for i in range(3):
         assert mat.eps_dataarray_freq(freq)[i].shape == (Nx, Ny, Nz)
     np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
-    coord_interp = Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
+    coord_interp = td.Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     np.testing.assert_allclose(
         mat.eps_diagonal_on_grid(freq, coord_interp),
         mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp),
@@ -490,41 +484,43 @@ def verify_custom_dispersive_medium_methods(mat):
 
 def test_custom_pole_residue():
     """Custom pole residue medium."""
-    a = SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    c = SpatialDataArray(np.random.random((Nx, Ny, Nz)) * 1j, coords=dict(x=X, y=Y, z=Z))
+    a = td.SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) * 1j, coords=dict(x=X, y=Y, z=Z))
 
     # some terms in eps_inf are negative
     with pytest.raises(pydantic.ValidationError):
-        eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        eps_inf = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
     # some terms in eps_inf are complex
     with pytest.raises(pydantic.ValidationError):
-        eps_inf = SpatialDataArray(
+        eps_inf = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) + 0.1j, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
     # inconsistent coords of eps_inf with a,c
     with pytest.raises(pydantic.ValidationError):
-        eps_inf = SpatialDataArray(
+        eps_inf = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X + 1, y=Y, z=Z)
         )
         mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
 
     # break causality
     with pytest.raises(pydantic.ValidationError):
-        atmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        atmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
         mat = CustomPoleResidue(eps_inf=xr.ones_like(a), poles=((atmp, c),))
 
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl > 1
 
     # to custom non-dispersive medium
     # dispersive failure
-    with pytest.raises(ValidationError):
+    with pytest.raises(td.exceptions.ValidationError):
         mat_medium = mat.to_medium()
     # non-dispersive but gain
     a = xr.zeros_like(c)
@@ -544,29 +540,33 @@ def test_custom_pole_residue():
 
 def test_custom_sellmeier():
     """Custom Sellmeier medium."""
-    b1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    c1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    b1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
-    b2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    c2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    b2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    c2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
     # complex b
     with pytest.raises(pydantic.ValidationError):
-        btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z))
+        btmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
 
     # complex c
     with pytest.raises(pydantic.ValidationError):
-        ctmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z))
+        ctmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
     # negative c
     with pytest.raises(pydantic.ValidationError):
-        ctmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        ctmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
         mat = CustomSellmeier(coeffs=((b1, c1), (b2, ctmp)))
 
     # negative b
-    btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+    btmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
     with pytest.raises(pydantic.ValidationError):
         mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)))
     mat = CustomSellmeier(coeffs=((b1, c1), (btmp, c2)), allow_gain=True)
@@ -574,7 +574,7 @@ def test_custom_sellmeier():
 
     # inconsistent coord
     with pytest.raises(pydantic.ValidationError):
-        btmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
+        btmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
@@ -582,8 +582,8 @@ def test_custom_sellmeier():
     assert mat.n_cfl == 1
 
     # from dispersion
-    n = SpatialDataArray(2 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    dn_dwvl = SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    n = td.SpatialDataArray(2 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    dn_dwvl = td.SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     mat = CustomSellmeier.from_dispersion(n=n, dn_dwvl=dn_dwvl, freq=2, interp_method="linear")
     verify_custom_dispersive_medium_methods(mat)
     assert mat.n_cfl == 1
@@ -591,41 +591,49 @@ def test_custom_sellmeier():
 
 def test_custom_lorentz():
     """Custom Lorentz medium."""
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
 
-    de1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    de1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f1 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
-    de2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    de2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f2 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
     # complex de
     with pytest.raises(pydantic.ValidationError):
-        detmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z))
+        detmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
 
     # mixed delta > f and delta < f over spatial points
     with pytest.raises(pydantic.ValidationError):
-        deltatmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+        deltatmp = td.SpatialDataArray(
+            1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        ftmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
+        ftmp = td.SpatialDataArray(
+            1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z)
+        )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, ftmp, delta2)))
 
     # break causality with negative delta
     with pytest.raises(pydantic.ValidationError):
-        deltatmp = SpatialDataArray(
+        deltatmp = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, deltatmp)))
 
     # gain medium with negative delta epsilon
     with pytest.raises(pydantic.ValidationError):
-        detmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        detmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomLorentz(eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)))
     mat = CustomLorentz(
         eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)), allow_gain=True
@@ -643,31 +651,33 @@ def test_custom_lorentz():
 
 def test_custom_drude():
     """Custom Drude medium."""
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
 
-    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f1 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
-    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f2 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
     # complex delta
     with pytest.raises(pydantic.ValidationError):
-        deltatmp = SpatialDataArray(
+        deltatmp = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
 
     # negative delta
     with pytest.raises(pydantic.ValidationError):
-        deltatmp = SpatialDataArray(
+        deltatmp = td.SpatialDataArray(
             np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
         )
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, deltatmp)))
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        ftmp = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
+        ftmp = td.SpatialDataArray(
+            1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z)
+        )
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
 
     mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
@@ -677,37 +687,45 @@ def test_custom_drude():
 
 def test_custom_debye():
     """Custom Debye medium."""
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
 
-    eps1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    tau1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
-    eps2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    tau2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
 
     # complex eps
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z))
+        epstmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     # complex tau
     with pytest.raises(pydantic.ValidationError):
-        tautmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z))
+        tautmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5j, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
     # negative tau
     with pytest.raises(pydantic.ValidationError):
-        tautmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        tautmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tautmp)))
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
+        epstmp = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X + 1, y=Y, z=Z))
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
 
     # negative delta epsilon
     with pytest.raises(pydantic.ValidationError):
-        epstmp = SpatialDataArray(np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z))
+        epstmp = td.SpatialDataArray(
+            np.random.random((Nx, Ny, Nz)) - 0.5, coords=dict(x=X, y=Y, z=Z)
+        )
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)), allow_gain=True)
     verify_custom_dispersive_medium_methods(mat)
@@ -722,24 +740,26 @@ def test_custom_anisotropic_medium(log_capture):
     """Custom anisotropic medium."""
 
     # xx
-    permittivity = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    conductivity = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    permittivity = td.SpatialDataArray(
+        1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z)
+    )
+    conductivity = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     mat_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
 
     # yy
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
-    eps1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    tau1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    eps2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    tau2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    eps1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    tau2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     mat_yy = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
 
     # zz
-    eps_inf = SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
-    f1 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta1 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    f2 = SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
-    delta2 = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
+    f1 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta1 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    f2 = td.SpatialDataArray(1 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
+    delta2 = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     mat_zz = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
 
     # anisotropic
@@ -754,7 +774,7 @@ def test_custom_anisotropic_medium(log_capture):
     # so that xx-component is using "nearest"
     freq = 2e14
     dist_coeff = 0.6
-    coord_test = Coords(x=[X[0] * dist_coeff + X[1] * (1 - dist_coeff)], y=Y[0], z=Z[0])
+    coord_test = td.Coords(x=[X[0] * dist_coeff + X[1] * (1 - dist_coeff)], y=Y[0], z=Z[0])
     eps_nearest = mat.eps_sigma_to_eps_complex(
         permittivity.sel(x=X[0], y=Y[0], z=Z[0]), conductivity.sel(x=X[0], y=Y[0], z=Z[0]), freq
     )

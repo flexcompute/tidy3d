@@ -11,13 +11,13 @@ import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 
-from .types import Direction, Polarization, Ax, FreqBound
+from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D
 from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
 from .validators import warn_if_dataset_none, assert_single_freq_in_range
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
-from .geometry import Box, Coordinate
+from .geometry.base import Box
 from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
@@ -496,6 +496,7 @@ class Source(Box, ABC):
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
+        """Plot this source."""
 
         kwargs_arrow_base = patch_kwargs.pop("arrow_base", None)
 
