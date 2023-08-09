@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
 
 ### Fixed
+- Bug in angled mode solver with negative `angle_theta`.
 
 ## [2.4.0rc1] - 2023-7-27
 
