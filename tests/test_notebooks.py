@@ -11,7 +11,7 @@ from nbconvert.preprocessors import ExecutePreprocessor
 
 sys.path.append("tidy3d")
 
-ep = ExecutePreprocessor(timeout=1000, kernel_name="python3")
+ep = ExecutePreprocessor(timeout=3000, kernel_name="python3")
 
 # get all notebook files
 NOTEBOOK_DIR = "docs/source/notebooks/"
@@ -31,17 +31,17 @@ for i, path in enumerate(notebook_filenames_all):
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-    # "Metalens",
-]
-
-skip = [
-    '8ChannelDemultiplexer',
-    '90OpticalHybrid',
     'AdjointPlugin1Intro',
     'AdjointPlugin2GradientChecking',
     'AdjointPlugin3InverseDesign',
     'AdjointPlugin4MultiObjective',
     'AdjointPlugin5BoundaryGradients',
+    'FocusedApodGC',
+]
+
+skip = [
+    '8ChannelDemultiplexer',
+    # 'AdjointPlugin5BoundaryGradients',
     'AdjointPlugin6GratingCoupler',
     'AdjointPlugin7Metalens',
 ]
@@ -57,7 +57,7 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """ 
-as of June 29 2023
+as of Aug 1 2023
 '8ChannelDemultiplexer',
 '90OpticalHybrid',
 'AdjointPlugin1Intro',
@@ -85,6 +85,7 @@ as of June 29 2023
 'EulerWaveguideBend',
 'FieldProjections',
 'Fitting',
+'FocusedApodGC',
 'FresnelLens',
 'FullyAnisotropic',
 'GDSImport',
@@ -101,6 +102,7 @@ as of June 29 2023
 'ModalSourcesMonitors',
 'ModeSolver',
 'ModesBentAngled',
+'NanostructuredBoronNitride',
 'Near2FarSphereRCS',
 'NonHermitianMetagratings',
 'OpticalLuneburgLens',
@@ -108,6 +110,7 @@ as of June 29 2023
 'PICComponents',
 'ParameterScan',
 'PhotonicCrystalWaveguidePolarizationFilter',
+'PhotonicCrystalsComponents',
 'PlasmonicNanoparticle',
 'PlasmonicYagiUdaNanoantenna',
 'PolarizationSplitterRotator',
@@ -119,6 +122,7 @@ as of June 29 2023
 'SelfIntersectingPolyslab',
 'Simulation',
 'StartHere',
+'StripToSlotConverters',
 'TFSF',
 'THzDemultiplexerFilter',
 'VizData',
