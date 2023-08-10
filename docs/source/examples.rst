@@ -93,6 +93,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin5BoundaryGradients
     notebooks/AdjointPlugin6GratingCoupler
     notebooks/AdjointPlugin7Metalens
+    notebooks/AdjointPlugin8WaveguideBend
 
 Tidy3D Case Studies
 -------------------
