@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.
+- Properly include `JaxSimulation.input_structures` in `JaxSimulationData.plot_field()`.
 
 ## [2.4.0rc1] - 2023-7-27
 

@@ -1437,3 +1437,13 @@ def test_adjoint_utils(strict_binarize):
 
     radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
     _ = radius_penalty.evaluate(polyslab.vertices)
+
+
+def test_sim_data_plot_field(use_emulated_run):
+    """Test splitting of regular simulation data into user and server data."""
+
+    jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    jax_sim_data = run(jax_sim, task_name="test")
+    ax = jax_sim_data.plot_field("field", "Ez", "real", f=1e14)
+    plt.show()
+    assert len(ax.collections) == 1
