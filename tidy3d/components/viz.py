@@ -114,6 +114,7 @@ plot_params_pmc = PlotParams(alpha=1.0, facecolor="lightsteelblue", edgecolor="b
 plot_params_bloch = PlotParams(alpha=1.0, facecolor="orchid", edgecolor="black")
 plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6)
 plot_params_override_structures = PlotParams(linewidth=0.4, edgecolor="black", fill=False)
+plot_params_fluid = PlotParams(facecolor="white", edgecolor="lightsteelblue", lw=0.4, hatch="xx")
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
@@ -129,6 +130,7 @@ MEDIUM_CMAP = [
 
 # colormap for structure's permittivity in plot_eps
 STRUCTURE_EPS_CMAP = "gist_yarg"
+STRUCTURE_HEAT_COND_CMAP = "gist_yarg"
 
 # default arrow style
 arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)

@@ -26,6 +26,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
+from .heat_spec import HeatSpecType
 
 
 # evaluate frequency as this number (Hz) if inf
@@ -180,6 +181,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             f"A 'nonlinear_spec' of class {type(val)} is not "
             f"currently supported for medium class {cls}."
         )
+
+    heat_spec: Optional[HeatSpecType] = pd.Field(
+        None,
+        title="Heat Specification",
+        description="Specification of the medium heat properties.",
+        discriminator=TYPE_TAG_STR,
+    )
 
     _name_validator = validate_name_str()
 

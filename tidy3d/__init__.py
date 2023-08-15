@@ -1,5 +1,8 @@
 """ Tidy3d package imports"""
 
+# scene
+from .components.scene import Scene
+
 # grid
 from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
@@ -104,6 +107,19 @@ from .version import __version__
 
 # updater
 from .updater import Updater
+
+# heat
+from .components.heat_spec import FluidSpec, SolidSpec
+from .components.heat.simulation import HeatSimulation
+from .components.heat.data import HeatSimulationData
+from .components.heat.boundary import HeatBCTemperature, HeatBCConvection, HeatBCInterface
+from .components.heat.boundary import HeatBCFlux, HeatBCPlacementStructure
+from .components.heat.boundary import HeatBCPlacementStructureStructure
+from .components.heat.boundary import HeatBCPlacementMediumMedium
+from .components.heat.boundary import HeatBCPlacementStructureSimulation
+from .components.heat.boundary import HeatBCPlacementSimulation
+from .components.heat.source import UniformHeatSource  #, HeatCustomSource
+from .components.heat.grid import UniformHeatGrid, DistanceHeatGrid
 
 
 def set_logging_level(level: str) -> None:
