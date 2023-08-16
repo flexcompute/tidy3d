@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Union, Any, Callable, Optional
+from typing import List, Tuple, Union, Any, Optional
 from math import isclose
 import functools
 
 import pydantic
 import numpy as np
+import shapely
 from matplotlib import patches, path
-from shapely import unary_union
-from shapely.geometry import Point, Polygon, box, MultiPolygon, LineString
-from shapely.validation import make_valid
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Bound, Size, Coordinate, Axis, Coordinate2D, ArrayFloat3D, PlanePosition
-from .types import Vertices, Ax, Shapely, annotate_type
+from .types import Axis, Bound, Size, Coordinate, Coordinate2D, PlanePosition, ClipOperationType
+from .types import ArrayFloat2D, ArrayFloat3D
+from .types import Ax, Shapely, annotate_type
 from .viz import add_ax_if_none, equal_aspect
 from .viz import PLOT_BUFFER, ARROW_LENGTH, arrow_style
 from .viz import PlotParams, plot_params_geometry, polygon_patch
 from ..log import log
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, DataError
+from ..exceptions import Tidy3dError, Tidy3dKeyError, SetupError, ValidationError, DataError
 from ..constants import MICROMETER, LARGE_NUMBER, RADIAN, fp_eps, inf
 from .data.dataset import TriangleMeshDataset
 from .data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
@@ -46,16 +45,20 @@ except Exception:  # pylint:disable=broad-except
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
 _N_SAMPLE_POLYGON_INTERSECT = 5
+
 # for sampling conical frustum in visualization
 _N_SAMPLE_CURVE_SHAPELY = 40
+
 _IS_CLOSE_RTOL = np.finfo(float).eps
+
 # for shapely circular shapes discretization in visualization
 _N_SHAPELY_QUAD_SEGS = 200
+
 # polygon merge
 POLY_GRID_SIZE = 1e-12
 
-
-Points = ArrayFloat3D
+# Warn for too many divided polyslabs
+_COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
 
 
 # pylint:disable=too-many-public-methods
@@ -92,7 +95,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         def point_inside(x: float, y: float, z: float):
             """Returns ``True`` if a single point ``(x, y, z)`` is inside."""
             shapes_intersect = self.intersections_plane(z=z)
-            loc = Point(x, y)
+            loc = shapely.Point(x, y)
             return any(shape.contains(loc) for shape in shapes_intersect)
 
         arrays = tuple(map(np.array, (x, y, z)))
@@ -145,6 +148,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Parameters
         ----------
+
         x : np.ndarray[float]
             1D array of point positions in x direction.
         y : np.ndarray[float]
@@ -222,9 +226,9 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         # intersect all shapes with the input plane
         bs_min, bs_max = [plane.pop_axis(bounds, axis=normal_ind)[1] for bounds in plane.bounds]
-        shapely_box = box(minx=bs_min[0], miny=bs_min[1], maxx=bs_max[0], maxy=bs_max[1])
-        shapely_box = plane.evaluate_inf_shape(shapely_box)
-        return [plane.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
+        shapely_box = shapely.box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
+        shapely_box = Geometry.evaluate_inf_shape(shapely_box)
+        return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 
     def intersects(self, other) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
@@ -293,7 +297,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @cached_property
     @abstractmethod
     def bounds(self) -> Bound:  # pylint:disable=too-many-locals
-        """Returns bounding box min and max coordinates..
+        """Returns bounding box min and max coordinates.
 
         Returns
         -------
@@ -423,81 +427,16 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
-        _shape = self.evaluate_inf_shape(shape)
-        if isinstance(_shape, LineString):
+        _shape = Geometry.evaluate_inf_shape(shape)
+        if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
             ax.plot(xs, ys, color=plot_params.edgecolor)
-        elif isinstance(_shape, Point):
+        elif _shape.geom_type == "Point":
             ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             ax.add_artist(patch)
         return ax
-
-    @classmethod
-    def strip_coords(
-        cls, shape: Shapely
-    ) -> Tuple[List[float], List[float], Tuple[List[float], List[float]]]:
-        """Get the exterior and list of interior xy coords for a shape.
-
-        Parameters
-        ----------
-        shape: shapely.geometry.base.BaseGeometry
-            The shape that you want to strip coordinates from.
-
-        Returns
-        -------
-        Tuple[List[float], List[float], Tuple[List[float], List[float]]]
-            List of exterior xy coordinates
-            and a list of lists of the interior xy coordinates of the "holes" in the shape.
-        """
-
-        if isinstance(shape, Polygon):
-            ext_coords = shape.exterior.coords[:]
-            list_int_coords = [interior.coords[:] for interior in shape.interiors]
-        elif isinstance(shape, MultiPolygon):
-            all_ext_coords = []
-            list_all_int_coords = []
-            for _shape in shape.geoms:
-                all_ext_coords.append(_shape.exterior.coords[:])
-                all_int_coords = [_interior.coords[:] for _interior in _shape.interiors]
-                list_all_int_coords.append(all_int_coords)
-            ext_coords = np.concatenate(all_ext_coords, axis=0)
-            list_int_coords = [
-                np.concatenate(all_int_coords, axis=0)
-                for all_int_coords in list_all_int_coords
-                if len(all_int_coords) > 0
-            ]
-        return ext_coords, list_int_coords
-
-    @classmethod
-    def map_to_coords(cls, func: Callable[[float], float], shape: Shapely) -> Shapely:
-        """Maps a function to each coordinate in shape.
-
-        Parameters
-        ----------
-        func : Callable[[float], float]
-            Takes old coordinate and returns new coordinate.
-        shape: shapely.geometry.base.BaseGeometry
-            The shape to map this function to.
-
-        Returns
-        -------
-        shapely.geometry.base.BaseGeometry
-            A new copy of the input shape with the mapping applied to the coordinates.
-        """
-
-        if not isinstance(shape, (Polygon, MultiPolygon)):
-            return shape
-
-        def apply_func(coords):
-            return [(func(coord_x), func(coord_y)) for (coord_x, coord_y) in coords]
-
-        ext_coords, list_int_coords = cls.strip_coords(shape)
-        new_ext_coords = apply_func(ext_coords)
-        list_new_int_coords = [apply_func(int_coords) for int_coords in list_int_coords]
-
-        return Polygon(new_ext_coords, holes=list_new_int_coords)
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
@@ -556,7 +495,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         (xmin, xmax), (ymin, ymax) = self._get_plot_limits(axis=axis, buffer=buffer)
 
         # note: axes limits dont like inf values, so we need to evaluate them first if present
-        xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
+        xmin, xmax, ymin, ymax = self._evaluate_inf((xmin, xmax, ymin, ymax))
 
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
@@ -565,15 +504,31 @@ class Geometry(Tidy3dBaseModel, ABC):
         return ax
 
     @staticmethod
-    def _evaluate_inf(v):
+    def _evaluate_inf(array):
         """Processes values and evaluates any infs into large (signed) numbers."""
-        return np.sign(v) * LARGE_NUMBER if np.isinf(v) else v
+        return np.where(np.isinf(array), np.sign(array) * LARGE_NUMBER, array)
 
-    @classmethod
-    def evaluate_inf_shape(cls, shape: Shapely) -> Shapely:
+    @staticmethod
+    def evaluate_inf_shape(shape: Shapely) -> Shapely:
         """Returns a copy of shape with inf vertices replaced by large numbers if polygon."""
+        if not any(np.isinf(b) for b in shape.bounds):
+            return shape
 
-        return cls.map_to_coords(cls._evaluate_inf, shape) if isinstance(shape, Polygon) else shape
+        if shape.geom_type == "Polygon":
+            return shapely.Polygon(
+                Geometry._evaluate_inf(np.array(shape.exterior.coords)),
+                [Geometry._evaluate_inf(np.array(g.coords)) for g in shape.interiors],
+            )
+        if shape.geom_type in {"Point", "LineString", "LinearRing"}:
+            return shape.__class__(Geometry._evaluate_inf(np.array(shape.coords)))
+        if shape.geom_type in {
+            "MultiPoint",
+            "MultiLineString",
+            "MultiPolygon",
+            "GeometryCollection",
+        }:
+            return shape.__class__([Geometry.evaluate_inf_shape(g) for g in shape.geoms])
+        return shape
 
     @staticmethod
     def pop_axis(coord: Tuple[Any, Any, Any], axis: int) -> Tuple[Any, Tuple[Any, Any]]:
@@ -644,7 +599,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
-    def rotate_points(points: Points, axis: Coordinate, angle: float) -> Points:
+    def rotate_points(points: ArrayFloat3D, axis: Coordinate, angle: float) -> ArrayFloat3D:
         """Rotate a set of points in 3D.
 
         Parameters
@@ -661,11 +616,11 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def reflect_points(
         self,
-        points: Points,
+        points: ArrayFloat3D,
         polar_axis: Axis,
         angle_theta: float,
         angle_phi: float,
-    ) -> Points:
+    ) -> ArrayFloat3D:
         """Reflect a set of points in 3D at a plane passing through the coordinate origin defined
         and normal to a given axis defined in polar coordinates (theta, phi) w.r.t. the
         ``polar_axis`` which can be 0, 1, or 2.
@@ -721,7 +676,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
 
     def surface_area(self, bounds: Bound = None):
         """Returns object's surface area with optional bounds.
@@ -744,7 +699,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @abstractmethod
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
 
     """ Field and coordinate transformations """
 
@@ -897,6 +852,320 @@ class Geometry(Tidy3dBaseModel, ABC):
         theta = np.arccos(z)
         phi = np.arctan2(y, x)
         return theta, phi
+
+    @staticmethod
+    def _load_gds_vertices_gdstk(
+        gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
+    ) -> List[ArrayFloat2D]:
+        """Load polygon vertices from a ``gdstk.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``. If ``None``, imports all data for this layer into
+            the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of micrometer. For example, if gds file uses
+            nanometers, set ``gds_scale=1e-3``. Must be positive.
+
+        Returns
+        -------
+        List[ArrayFloat2D]
+            List of polygon vertices
+        """
+
+        # apply desired scaling and load the polygon vertices
+        if gds_dtype is not None:
+            # if both layer and datatype are specified, let gdstk do the filtering for better
+            # performance on large layouts
+            all_vertices = [
+                polygon.scale(gds_scale).points
+                for polygon in gds_cell.get_polygons(layer=gds_layer, datatype=gds_dtype)
+            ]
+        else:
+            all_vertices = [
+                polygon.scale(gds_scale).points
+                for polygon in gds_cell.get_polygons()
+                if polygon.layer == gds_layer
+            ]
+        # make sure something got loaded, otherwise error
+        if not all_vertices:
+            raise Tidy3dKeyError(
+                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
+                f"with specified gds_dtype={gds_dtype}."
+            )
+
+        return all_vertices
+
+    @staticmethod
+    def _load_gds_vertices_gdspy(
+        gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
+    ) -> List[ArrayFloat2D]:
+        """Load polygon vertices from a ``gdspy.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : gdspy.Cell
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``. If ``None``, imports all data for this layer into
+            the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of micrometer. For example, if gds file uses
+            nanometers, set ``gds_scale=1e-3``. Must be positive.
+
+        Returns
+        -------
+        List[ArrayFloat2D]
+            List of polygon vertices
+        """
+
+        # load the polygon vertices
+        vert_dict = gds_cell.get_polygons(by_spec=True)
+        all_vertices = []
+        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
+            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
+                all_vertices.extend(iter(vertices))
+        # make sure something got loaded, otherwise error
+        if not all_vertices:
+            raise Tidy3dKeyError(
+                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
+                f"with specified gds_dtype={gds_dtype}."
+            )
+
+        # apply scaling
+        all_vertices = [vertices * gds_scale for vertices in all_vertices]
+        return all_vertices
+
+    @staticmethod
+    def from_shapely(
+        shape: Shapely,
+        axis: Axis,
+        slab_bounds: Tuple[float, float],
+        sidewall_angle: float = 0,
+        reference_plane: PlanePosition = "middle",
+    ) -> Geometry:
+        """Convert a shapely primitive into a geometry instance by extrusion.
+
+        Parameters
+        ----------
+        shape : shapely.geometry.base.BaseGeometry
+            Shapely primitive to be converted. It must be a linear ring, a polygon or a collection
+            of any of those.
+        axis : int
+            Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
+        slab_bounds: Tuple[float, float]
+            Minimal and maximal positions of the extruded slab along ``axis``.
+        sidewall_angle : float = 0
+            Angle of the extrusion sidewalls, away from the vertical direction, in radians. Positive
+            (negative) values result in slabs larger (smaller) at the base than at the top.
+        reference_plane : PlanePosition = "middle"
+            Reference position of the (dilated/eroded) polygons along the slab axis. One of
+            ``"middle"`` (polygons correspond to the center of the slab bounds), ``"bottom"``
+            (minimal slab bound position), or ``"top"`` (maximal slab bound position). This value
+            has no effect if ``sidewall_angle == 0``.
+
+        Returns
+        -------
+        :class:`Geometry`
+            Geometry extruded from the 2D data.
+        """
+        if shape.geom_type == "LinearRing":
+            if sidewall_angle == 0:
+                return PolySlab(
+                    vertices=shape.coords[:-1],
+                    slab_bounds=slab_bounds,
+                    axis=axis,
+                    reference_plane=reference_plane,
+                )
+            group = ComplexPolySlabBase(
+                vertices=shape.coords[:-1],
+                slab_bounds=slab_bounds,
+                axis=axis,
+                sidewall_angle=sidewall_angle,
+                reference_plane=reference_plane,
+            ).geometry_group
+            return group.geometries[0] if len(group.geometries) == 1 else group
+
+        if shape.geom_type == "Polygon":
+            exterior = Geometry.from_shapely(
+                shape.exterior, axis, slab_bounds, sidewall_angle, reference_plane
+            )
+            interior = [
+                Geometry.from_shapely(hole, axis, slab_bounds, -sidewall_angle, reference_plane)
+                for hole in shape.interiors
+            ]
+            if len(interior) == 0:
+                return exterior
+            interior = interior[0] if len(interior) == 1 else GeometryGroup(geometries=interior)
+            return ClipOperation(operation="difference", geometry_a=exterior, geometry_b=interior)
+
+        if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
+            return GeometryGroup(
+                geometries=[
+                    Geometry.from_shapely(geo, axis, slab_bounds, sidewall_angle, reference_plane)
+                    for geo in shape.geoms
+                ]
+            )
+
+        raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
+
+    # pylint:disable=too-many-locals
+    @staticmethod
+    def from_gds(
+        gds_cell,
+        axis: Axis,
+        slab_bounds: Tuple[float, float],
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+        dilation: float = 0.0,
+        sidewall_angle: float = 0,
+        reference_plane: PlanePosition = "middle",
+    ) -> GeometryGroup:
+        """Import a ``gdstk.Cell`` or a ``gdspy.Cell`` and extrude it into a GeometryGroup.
+
+        Parameters
+        ----------
+        gds_cell : Union[gdstk.Cell, gdspy.Cell]
+            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
+        axis : int
+            Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
+        slab_bounds: Tuple[float, float]
+            Minimal and maximal positions of the extruded slab along ``axis``.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``. If ``None``, imports all data for this layer into
+            the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of micrometer. For example, if gds file uses
+            nanometers, set ``gds_scale=1e-3``. Must be positive.
+        dilation : float = 0.0
+            Dilation (positive) or erosion (negative) amount to be applied to the original polygons.
+        sidewall_angle : float = 0
+            Angle of the extrusion sidewalls, away from the vertical direction, in radians. Positive
+            (negative) values result in slabs larger (smaller) at the base than at the top.
+        reference_plane : PlanePosition = "middle"
+            Reference position of the (dilated/eroded) polygons along the slab axis. One of
+            ``"middle"`` (polygons correspond to the center of the slab bounds), ``"bottom"``
+            (minimal slab bound position), or ``"top"`` (maximal slab bound position). This value
+            has no effect if ``sidewall_angle == 0``.
+
+        Returns
+        -------
+        :class:`GeometryGroup`
+            Geometry group with geometries created from the 2D data.
+        """
+
+        # switch the GDS cell loader function based on the class name string
+        # TODO: make this more robust in future releases
+        gds_cell_class_name = str(gds_cell.__class__)
+
+        if "gdstk" in gds_cell_class_name:
+            gds_loader_fn = Geometry._load_gds_vertices_gdstk
+        elif "gdspy" in gds_cell_class_name:
+            gds_loader_fn = Geometry._load_gds_vertices_gdspy
+        else:
+            raise ValueError(
+                f"Argument 'gds_cell' of type '{gds_cell_class_name}' does not seem to be "
+                "a 'Cell' instance from 'gdstk' or 'gdspy' modules and, therefore, cannot be "
+                "loaded by Tidy3D."
+            )
+
+        geometries = []
+        with log as consolidated_logger:
+            for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
+                # buffer(0) is necessary to merge self-intersections before dilation/erosion
+                shape = shapely.Polygon(vertices).buffer(0).buffer(dilation)
+                try:
+                    geometries.append(
+                        Geometry.from_shapely(
+                            shape, axis, slab_bounds, sidewall_angle, reference_plane
+                        )
+                    )
+                except Tidy3dError as error:
+                    consolidated_logger.warning(str(error))
+        return GeometryGroup(geometries=geometries)
+
+    def _as_union(self) -> List[Geometry]:
+        """Return a list of geometries that, united, make up the given geometry."""
+        if isinstance(self, GeometryGroup):
+            return self.geometries
+        # pylint:disable=no-member
+        if isinstance(self, ClipOperation) and self.operation == "union":
+            return (self.geometry_a, self.geometry_b)
+        return (self,)
+
+    def __add__(self, other):
+        """Union of geometries"""
+        # This allows the user to write sum(geometries...) with the default start=0
+        if isinstance(other, int):
+            return self
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return GeometryGroup(geometries=self._as_union() + other._as_union())
+
+    def __radd__(self, other):
+        """Union of geometries"""
+        # This allows the user to write sum(geometries...) with the default start=0
+        if isinstance(other, int):
+            return self
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return GeometryGroup(geometries=other._as_union() + self._as_union())
+
+    def __or__(self, other):
+        """Union of geometries"""
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return GeometryGroup(geometries=self._as_union() + other._as_union())
+
+    def __mul__(self, other):
+        """Intersection of geometries"""
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return ClipOperation(operation="intersection", geometry_a=self, geometry_b=other)
+
+    def __and__(self, other):
+        """Intersection of geometries"""
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return ClipOperation(operation="intersection", geometry_a=self, geometry_b=other)
+
+    def __sub__(self, other):
+        """Difference of geometries"""
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return ClipOperation(operation="difference", geometry_a=self, geometry_b=other)
+
+    def __xor__(self, other):
+        """Symmetric difference of geometries"""
+        if not isinstance(other, Geometry):
+            return NotImplemented
+        return ClipOperation(operation="symmetric_difference", geometry_a=self, geometry_b=other)
+
+    def __pos__(self):
+        """No op"""
+        return self
+
+    def __neg__(self):
+        """Opposite of a geometry"""
+        return ClipOperation(
+            operation="difference", geometry_a=Box(size=(inf, inf, inf)), geometry_b=self
+        )
+
+    def __invert__(self):
+        """Opposite of a geometry"""
+        return ClipOperation(
+            operation="difference", geometry_a=Box(size=(inf, inf, inf)), geometry_b=self
+        )
 
 
 """ Abstract subclasses """
@@ -1075,8 +1344,9 @@ class Planar(Geometry, ABC):
 
     @cached_property
     def _tanq(self) -> float:
-        """
-        tan(sidewall_angle). _tanq*height gives the offset value
+        """Value of ``tan(sidewall_angle)``.
+
+        The (possibliy infinite) geometry offest is given by ``_tanq * length_axis``.
         """
         return np.tan(self.sidewall_angle)
 
@@ -1313,9 +1583,9 @@ class Box(Centered):
 
         # handle case where the box vertices are identical
         if isclose(minx, maxx) and isclose(miny, maxy):
-            return [Point(minx, miny)]
+            return [shapely.Point(minx, miny)]
 
-        return [box(minx=minx, miny=miny, maxx=maxx, maxy=maxy)]
+        return [shapely.box(minx, miny, maxx, maxy)]
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -1513,7 +1783,7 @@ class Box(Centered):
         return _cb
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
 
         volume = 1
 
@@ -1526,7 +1796,7 @@ class Box(Centered):
         return volume
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
 
         min_bounds = list(self.bounds[0])
         max_bounds = list(self.bounds[1])
@@ -1614,7 +1884,7 @@ class Sphere(Centered, Circular):
         intersect_dist = self._intersect_dist(position, z0)
         if not intersect_dist:
             return []
-        return [Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=_N_SHAPELY_QUAD_SEGS)]
+        return [shapely.Point(x0, y0).buffer(0.5 * intersect_dist, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     @cached_property
     def bounds(self) -> Bound:
@@ -1630,7 +1900,7 @@ class Sphere(Centered, Circular):
         return (coord_min, coord_max)
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
 
         volume = 4.0 / 3.0 * np.pi * self.radius**3
 
@@ -1642,7 +1912,7 @@ class Sphere(Centered, Circular):
         return volume
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
 
         area = 4.0 * np.pi * self.radius**2
 
@@ -1728,7 +1998,7 @@ class Cylinder(Centered, Circular, Planar):
             return []
 
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
-        return [Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
+        return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
     def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
@@ -1823,7 +2093,9 @@ class Cylinder(Centered, Circular, Planar):
             vertices_min.append(self._local_to_global_side_cross_section([0, height_max], axis))
 
         return [
-            Polygon(vertices_max + vertices_frustum_right + vertices_min + vertices_frustum_left)
+            shapely.Polygon(
+                vertices_max + vertices_frustum_right + vertices_min + vertices_frustum_left
+            )
         ]
 
     def inside(
@@ -1877,7 +2149,7 @@ class Cylinder(Centered, Circular, Planar):
         return (tuple(coord_min), tuple(coord_max))
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
 
         coord_min = max(self.bounds[0][self.axis], bounds[0][self.axis])
         coord_max = min(self.bounds[1][self.axis], bounds[1][self.axis])
@@ -1895,7 +2167,7 @@ class Cylinder(Centered, Circular, Planar):
         return volume
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
 
         area = 0
 
@@ -2020,8 +2292,8 @@ class PolySlab(Planar):
         units=MICROMETER,
     )
 
-    vertices: Vertices = pydantic.Field(
-        ...,
+    vertices: ArrayFloat2D = pydantic.Field(
+        ArrayFloat2D,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
         "face vertices at the ``reference_plane``. "
@@ -2029,25 +2301,6 @@ class PolySlab(Planar):
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
     )
-
-    @property
-    def center_axis(self) -> float:
-        """Gets the position of the center of the geometry in the out of plane dimension."""
-        zmin, zmax = self.slab_bounds
-        if np.isneginf(zmin) and np.isposinf(zmax):
-            return 0.0
-        return (zmax + zmin) / 2.0
-
-    @property
-    def length_axis(self) -> float:
-        """Gets the length of the geometry along the out of plane dimension."""
-        zmin, zmax = self.slab_bounds
-        return zmax - zmin
-
-    @pydantic.validator("vertices", pre=True, always=True)
-    def convert_to_numpy(cls, val):
-        """Pre-convert vertices to numpy one time."""
-        return np.array(val)
 
     @pydantic.validator("slab_bounds", always=True)
     def slab_bounds_order(cls, val):
@@ -2065,22 +2318,19 @@ class PolySlab(Planar):
         """Makes sure vertices size is correct.
         Make sure no intersecting edges.
         """
-
-        shape = val.shape
-
         # overall shape of vertices
-        if len(shape) != 2 or shape[1] != 2:
+        if val.shape[1] != 2:
             raise SetupError(
-                "PolySlab.vertices must be a 2 dimensional array shaped (N, 2).  "
-                f"Given array with shape of {shape}."
+                "PolySlab.vertices must be a 2 dimensional array shaped (N, 2). "
+                f"Given array with shape of {val.shape}."
             )
 
-        # make sure no polygon splitting, isalands, 0 area
-        poly_heal = make_valid(Polygon(val))
+        # make sure no polygon splitting, islands, 0 area
+        poly_heal = shapely.make_valid(shapely.Polygon(val))
         if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
-        if not isinstance(poly_heal, Polygon) or len(poly_heal.interiors) > 0:
+        if not poly_heal.geom_type == "Polygon" or len(poly_heal.interiors) > 0:
             raise SetupError(
                 "Polygon is self-intersecting, resulting in "
                 "polygon splitting or generation of holes/islands. "
@@ -2120,9 +2370,9 @@ class PolySlab(Planar):
             raise SetupError("Erosion value is too large. The polygon is fully eroded.")
 
         # edge events
-        poly_offset = make_valid(Polygon(poly_offset))
+        poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
         # 1) polygon split or create holes/islands
-        if not isinstance(poly_offset, Polygon) or len(poly_offset.interiors) > 0:
+        if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
             raise SetupError(
                 "Dilation/Erosion value is too large, resulting in "
                 "polygon splitting or generation of holes/islands. "
@@ -2277,7 +2527,7 @@ class PolySlab(Planar):
         gds_layer: int,
         gds_dtype: int = None,
         gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List[Vertices]:
+    ) -> List[ArrayFloat2D]:
         """Import :class:`PolySlab` from a ``gdstk.Cell`` or a ``gdspy.Cell``.
 
         Parameters
@@ -2296,8 +2546,8 @@ class PolySlab(Planar):
 
         Returns
         -------
-        List[Vertices]
-            List of :class:`.Vertices`
+        List[ArrayFloat2D]
+            List of :class:`.ArrayFloat2D`
         """
 
         # switch the GDS cell loader function based on the class name string
@@ -2305,10 +2555,12 @@ class PolySlab(Planar):
         gds_cell_class_name = str(gds_cell.__class__)
 
         if "gdstk" in gds_cell_class_name:
-            gds_loader_fn = cls._load_gds_vertices_gdstk
+            # pylint:disable=protected-access
+            gds_loader_fn = Geometry._load_gds_vertices_gdstk
 
         elif "gdspy" in gds_cell_class_name:
-            gds_loader_fn = cls._load_gds_vertices_gdspy
+            # pylint:disable=protected-access
+            gds_loader_fn = Geometry._load_gds_vertices_gdspy
 
         else:
             raise ValueError(
@@ -2322,115 +2574,28 @@ class PolySlab(Planar):
         )
 
         # convert vertices into polyslabs
-        polygons = [Polygon(vertices).buffer(0) for vertices in all_vertices]
-        polys_union = unary_union(polygons, grid_size=POLY_GRID_SIZE)
+        polygons = [shapely.Polygon(vertices).buffer(0) for vertices in all_vertices]
+        polys_union = shapely.unary_union(polygons, grid_size=POLY_GRID_SIZE)
 
-        if isinstance(polys_union, Polygon):
-            all_vertices = [PolySlab.strip_coords(polys_union)[0]]
-        elif isinstance(polys_union, MultiPolygon):
-            all_vertices = [PolySlab.strip_coords(polygon)[0] for polygon in polys_union.geoms]
+        if polys_union.geom_type == "Polygon":
+            all_vertices = [np.array(polys_union.exterior.coords)]
+        elif polys_union.geom_type == "MultiPolygon":
+            all_vertices = [np.array(polygon.exterior.coords) for polygon in polys_union.geoms]
         return all_vertices
 
-    @staticmethod
-    def _load_gds_vertices_gdstk(
-        gds_cell,
-        gds_layer: int,
-        gds_dtype: int = None,
-        gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List[Vertices]:
-        """Load :class:`PolySlab` vertices from a ``gdstk.Cell``.
+    @property
+    def center_axis(self) -> float:
+        """Gets the position of the center of the geometry in the out of plane dimension."""
+        zmin, zmax = self.slab_bounds
+        if np.isneginf(zmin) and np.isposinf(zmax):
+            return 0.0
+        return (zmax + zmin) / 2.0
 
-        Parameters
-        ----------
-        gds_cell : gdstk.Cell
-            ``gdstk.Cell`` or ``gdspy.Cell`` containing 2D geometric data.
-        gds_layer : int
-            Layer index in the ``gds_cell``.
-        gds_dtype : int = None
-            Data-type index in the ``gds_cell``.
-            If ``None``, imports all data for this layer into the returned list.
-        gds_scale : float = 1.0
-            Length scale used in GDS file in units of MICROMETER.
-            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
-            Must be positive.
-
-        Returns
-        -------
-        List[Vertices]
-            List of :class:`.Vertices`
-        """
-
-        # apply desired scaling and load the polygon vertices
-        if gds_dtype is not None:
-            # if both layer and datatype are specified, let gdstk do the filtering for better
-            # performance on large layouts
-            all_vertices = [
-                polygon.scale(gds_scale).points
-                for polygon in gds_cell.get_polygons(layer=gds_layer, datatype=gds_dtype)
-            ]
-        else:
-            all_vertices = [
-                polygon.scale(gds_scale).points
-                for polygon in gds_cell.get_polygons()
-                if polygon.layer == gds_layer
-            ]
-        # make sure something got loaded, otherwise error
-        if not all_vertices:
-            raise Tidy3dKeyError(
-                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
-                f"with specified gds_dtype={gds_dtype}."
-            )
-
-        return all_vertices
-
-    @classmethod
-    def _load_gds_vertices_gdspy(  # pylint:disable=too-many-arguments, too-many-locals
-        cls,
-        gds_cell,
-        gds_layer: int,
-        gds_dtype: int = None,
-        gds_scale: pydantic.PositiveFloat = 1.0,
-    ) -> List["PolySlab"]:
-        """Load :class:`PolySlab` vertices from a ``gdspy.Cell``.
-
-        Parameters
-        ----------
-        gds_cell :  gdspy.Cell
-            ``gdspy.Cell`` containing 2D geometric data.
-        gds_layer : int
-            Layer index in the ``gds_cell``.
-        gds_dtype : int = None
-            Data-type index in the ``gds_cell``.
-            If ``None``, imports all data for this layer into the returned list.
-        gds_scale : float = 1.0
-            Length scale used in GDS file in units of MICROMETER.
-            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
-            Must be positive.
-
-        Returns
-        -------
-        List[Vertices]
-            List of :class:`.Vertices`
-        """
-
-        # load the polygon vertices
-        vert_dict = gds_cell.get_polygons(by_spec=True)
-        all_vertices = []
-        for (gds_layer_file, gds_dtype_file), vertices in vert_dict.items():
-            if gds_layer_file == gds_layer and (gds_dtype is None or gds_dtype == gds_dtype_file):
-                all_vertices.extend(iter(vertices))
-        # make sure something got loaded, otherwise error
-        if not all_vertices:
-            raise Tidy3dKeyError(
-                f"Couldn't load gds_cell, no vertices found at gds_layer={gds_layer} "
-                f"with specified gds_dtype={gds_dtype}."
-            )
-
-        # apply scaling and convert vertices into polyslabs
-        all_vertices = [vertices * gds_scale for vertices in all_vertices]
-        all_vertices = [vertices.tolist() for vertices in all_vertices]
-
-        return all_vertices
+    @property
+    def length_axis(self) -> float:
+        """Gets the length of the geometry along the out of plane dimension."""
+        zmin, zmax = self.slab_bounds
+        return zmax - zmin
 
     @cached_property
     def reference_polygon(self) -> np.ndarray:
@@ -2535,7 +2700,7 @@ class PolySlab(Planar):
         # # to it at some point, e.g. if we introduce a MATPLOTLIB_INSTALLED flag.
         # def contains_pointwise(face_polygon):
         #     def fun_contain(xy_point):
-        #         point = Point(xy_point)
+        #         point = shapely.Point(xy_point)
         #         return face_polygon.covers(point)
         #     return fun_contain
 
@@ -2546,7 +2711,7 @@ class PolySlab(Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                # face_polygon = Polygon(self.reference_polygon)
+                # face_polygon = shapely.Polygon(self.reference_polygon)
                 # fun_contain = contains_pointwise(face_polygon)
                 # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                 poly_path = path.Path(self.reference_polygon)
@@ -2573,7 +2738,7 @@ class PolySlab(Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    # face_polygon = Polygon(vertices_z)
+                    # face_polygon = shapely.Polygon(vertices_z)
                     # fun_contain = contains_pointwise(face_polygon)
                     # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                     poly_path = path.Path(vertices_z)
@@ -2586,8 +2751,8 @@ class PolySlab(Planar):
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
             vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-            face_polygon = Polygon(vertices_z)
-            point = Point(x, y)
+            face_polygon = shapely.Polygon(vertices_z)
+            point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
 
@@ -2610,7 +2775,7 @@ class PolySlab(Planar):
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-        return [Polygon(vertices_z)]
+        return [shapely.Polygon(vertices_z)]
 
     def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
@@ -2687,7 +2852,7 @@ class PolySlab(Planar):
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
                 if isclose(self.sidewall_angle, 0):
-                    polys.append(box(minx=minx, miny=miny, maxx=maxx, maxy=maxy))
+                    polys.append(shapely.box(minx, miny, maxx, maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
                     angle_max = ints_angle[2 * y_index + 1]
@@ -2707,15 +2872,15 @@ class PolySlab(Planar):
                         plane_val=y_min + dy_min, axis_val=z_max, axis=axis
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
-                    polys.append(Polygon(vertices).buffer(0))
+                    polys.append(shapely.Polygon(vertices).buffer(0))
             # update the base coordinate for the next subsection
             h_base = h_top
 
         # merge touching polygons
-        polys_union = unary_union(polys, grid_size=POLY_GRID_SIZE)
-        if isinstance(polys_union, Polygon):
+        polys_union = shapely.unary_union(polys, grid_size=POLY_GRID_SIZE)
+        if polys_union.geom_type == "Polygon":
             return [polys_union]
-        if isinstance(polys_union, MultiPolygon):
+        if polys_union.geom_type == "MultiPolygon":
             return polys_union.geoms
         # in other cases, just return the original unmerged polygons
         return polys
@@ -3065,7 +3230,7 @@ class PolySlab(Planar):
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
     @staticmethod
-    def _proper_vertices(vertices: Vertices) -> np.ndarray:
+    def _proper_vertices(vertices: ArrayFloat2D) -> np.ndarray:
         """convert vertices to np.array format,
         removing duplicate neighbouring vertices,
         and oriented in CCW direction.
@@ -3098,7 +3263,7 @@ class PolySlab(Planar):
             return True
 
         # sample at a few dilation values
-        dist_list = dilation * np.linspace(0, 1, 1 + _N_SAMPLE_CURVE_SHAPELY)[1:]
+        dist_list = dilation * np.linspace(0, 1, 1 + _N_SAMPLE_POLYGON_INTERSECT)[1:]
         for dist in dist_list:
             # offset: we offset the vertices first, and then use shapely to make it proper
             # in principle, one can offset with shapely.buffer directly, but shapely somehow
@@ -3108,9 +3273,9 @@ class PolySlab(Planar):
             if PolySlab._area(poly_offset) < fp_eps**2:
                 return True
 
-            poly_offset = make_valid(Polygon(poly_offset))
+            poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
             # 1) polygon split or create holes/islands
-            if not isinstance(poly_offset, Polygon) or len(poly_offset.interiors) > 0:
+            if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
                 return True
 
             # 2) reduction in vertex number
@@ -3120,10 +3285,10 @@ class PolySlab(Planar):
 
             # 3) some splitted polygon might fully disappear after the offset, but they
             # can be detected if we offset back.
-            poly_offset_back = make_valid(
-                Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
+            poly_offset_back = shapely.make_valid(
+                shapely.Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
             )
-            if isinstance(poly_offset_back, MultiPolygon) or len(poly_offset_back.interiors) > 0:
+            if poly_offset_back.geom_type == "MultiPolygon" or len(poly_offset_back.interiors) > 0:
                 return True
             offset_back_vertices = list(poly_offset_back.exterior.coords)
             if PolySlab._proper_vertices(offset_back_vertices).shape[0] != num_vertices:
@@ -3168,12 +3333,12 @@ class PolySlab(Planar):
         return None
 
     @staticmethod
-    def array_to_vertices(arr_vertices: np.ndarray) -> Vertices:
+    def array_to_vertices(arr_vertices: np.ndarray) -> ArrayFloat2D:
         """Converts a numpy array of vertices to a list of tuples."""
         return list(arr_vertices)
 
     @staticmethod
-    def vertices_to_array(vertices_tuple: Vertices) -> np.ndarray:
+    def vertices_to_array(vertices_tuple: ArrayFloat2D) -> np.ndarray:
         """Converts a list of tuples (vertices) to a numpy array."""
         return np.array(vertices_tuple)
 
@@ -3279,15 +3444,15 @@ class PolySlab(Planar):
     @staticmethod
     def _heal_polygon(vertices: np.ndarray) -> np.ndarray:
         """heal a self-intersecting polygon."""
-        shapely_poly = Polygon(vertices)
+        shapely_poly = shapely.Polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
         # perform healing
-        poly_heal = make_valid(shapely_poly)
+        poly_heal = shapely.make_valid(shapely_poly)
         return PolySlab._proper_vertices(list(poly_heal.exterior.coords))
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
 
         z_min, z_max = self.slab_bounds
 
@@ -3303,7 +3468,7 @@ class PolySlab(Planar):
         return 1.0 / 3.0 * length * (top_area + base_area + np.sqrt(top_area * base_area))
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
 
         area = 0
 
@@ -3314,7 +3479,7 @@ class PolySlab(Planar):
         base_area = abs(self._area(base))
 
         top_perim = self._perimeter(top)
-        base_perim = self._perimeter(top)
+        base_perim = self._perimeter(base)
 
         z_min, z_max = self.slab_bounds
 
@@ -3333,6 +3498,207 @@ class PolySlab(Planar):
         area += 0.5 * (top_perim + base_perim) * length
 
         return area
+
+
+class ComplexPolySlabBase(PolySlab):
+    """Interface for dividing a complex polyslab where self-intersecting polygon can
+    occur during extrusion. This class should not be used directly. Use instead
+    :class:`plugins.polyslab.ComplexPolySlab`."""
+
+    @pydantic.validator("vertices", always=True)
+    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+        """Turn off the validation for this class."""
+        return val
+
+    @classmethod
+    def from_gds(  # pylint:disable=too-many-arguments
+        cls,
+        gds_cell,
+        axis: Axis,
+        slab_bounds: Tuple[float, float],
+        gds_layer: int,
+        gds_dtype: int = None,
+        gds_scale: pydantic.PositiveFloat = 1.0,
+        dilation: float = 0.0,
+        sidewall_angle: float = 0,
+        reference_plane: PlanePosition = "middle",
+    ) -> List[PolySlab]:
+        """Import :class:`.PolySlab` from a ``gdstk.Cell``.
+
+        Parameters
+        ----------
+        gds_cell : gdstk.Cell
+            ``gdstk.Cell`` containing 2D geometric data.
+        axis : int
+            Integer index into the polygon's slab axis. (0,1,2) -> (x,y,z).
+        slab_bounds: Tuple[float, float]
+            Minimum and maximum positions of the slab along ``axis``.
+        gds_layer : int
+            Layer index in the ``gds_cell``.
+        gds_dtype : int = None
+            Data-type index in the ``gds_cell``.
+            If ``None``, imports all data for this layer into the returned list.
+        gds_scale : float = 1.0
+            Length scale used in GDS file in units of MICROMETER.
+            For example, if gds file uses nanometers, set ``gds_scale=1e-3``.
+            Must be positive.
+        dilation : float = 0.0
+            Dilation of the polygon in the base by shifting each edge along its
+            normal outwards direction by a distance;
+            a negative value corresponds to erosion.
+        sidewall_angle : float = 0
+            Angle of the sidewall.
+            ``sidewall_angle=0`` (default) specifies vertical wall,
+            while ``0<sidewall_angle<np.pi/2`` for the base to be larger than the top.
+        reference_plane : PlanePosition = "middle"
+            The position of the GDS layer. It can be at the ``bottom``, ``middle``,
+            or ``top`` of the PolySlab. E.g. if ``axis=1``, ``bottom`` refers to the
+            negative side of y-axis, and ``top`` refers to the positive side of y-axis.
+
+        Returns
+        -------
+        List[:class:`.PolySlab`]
+            List of :class:`.PolySlab` objects sharing ``axis`` and  slab bound properties.
+        """
+
+        # TODO: change for 2.0
+        # handle reference plane kwarg
+        all_vertices = cls._load_gds_vertices(gds_cell, gds_layer, gds_dtype, gds_scale)
+        polyslabs = [
+            cls(
+                vertices=verts,
+                axis=axis,
+                slab_bounds=slab_bounds,
+                dilation=dilation,
+                sidewall_angle=sidewall_angle,
+                reference_plane=reference_plane,
+            )
+            for verts in all_vertices
+        ]
+        return [sub_poly for sub_polys in polyslabs for sub_poly in sub_polys.sub_polyslabs]
+
+    @property
+    def geometry_group(self) -> GeometryGroup:
+        """Divide a complex polyslab into a list of simple polyslabs, which
+        are assembled into a :class:`.GeometryGroup`.
+
+        Returns
+        -------
+        :class:`.GeometryGroup`
+            GeometryGroup for a list of simple polyslabs divided from the complex
+            polyslab.
+        """
+        return GeometryGroup(geometries=self.sub_polyslabs)
+
+    @property
+    def sub_polyslabs(self) -> List[PolySlab]:
+        """Divide a complex polyslab into a list of simple polyslabs.
+        Only neighboring vertex-vertex crossing events are treated in this
+        version.
+
+        Returns
+        -------
+        List[PolySlab]
+            A list of simple polyslabs.
+        """
+        sub_polyslab_list = []
+        num_division_count = 0
+        # initialize sub-polyslab parameters
+        sub_polyslab_dict = self.dict(exclude={"type"}).copy()
+        if isclose(self.sidewall_angle, 0):
+            return [PolySlab.parse_obj(sub_polyslab_dict)]
+
+        sub_polyslab_dict.update({"dilation": 0})  # dilation accounted in setup
+        # initalize offset distance
+        offset_distance = 0
+
+        for dist_val in self._dilation_length:
+            dist_now = 0.0
+            vertices_now = self.reference_polygon
+
+            # constructing sub-polyslabs until reaching the base/top
+            while not isclose(dist_now, dist_val):
+                # bounds for sub-polyslabs assuming no self-intersection
+                slab_bounds = [
+                    self._dilation_value_at_reference_to_coord(dist_now),
+                    self._dilation_value_at_reference_to_coord(dist_val),
+                ]
+                # 1) find out any vertices touching events between the current
+                # position to the base/top
+                max_dist = PolySlab._neighbor_vertices_crossing_detection(
+                    vertices_now, dist_val - dist_now
+                )
+
+                # vertices touching events captured, update bounds for sub-polyslab
+                if max_dist is not None:
+                    # max_dist doesn't have sign, so construct signed offset distance
+                    offset_distance = max_dist * dist_val / abs(dist_val)
+                    slab_bounds[1] = self._dilation_value_at_reference_to_coord(
+                        dist_now + offset_distance
+                    )
+
+                # 2) construct sub-polyslab
+                slab_bounds.sort()  # for reference_plane=top/bottom, bounds need to be ordered
+                # direction of marching
+                reference_plane = "bottom" if dist_val / self._tanq < 0 else "top"
+                sub_polyslab_dict.update(
+                    dict(
+                        slab_bounds=tuple(slab_bounds),
+                        vertices=vertices_now,
+                        reference_plane=reference_plane,
+                    )
+                )
+                sub_polyslab_list.append(PolySlab.parse_obj(sub_polyslab_dict))
+
+                # Now Step 3
+                if max_dist is None:
+                    break
+                dist_now += offset_distance
+                # new polygon vertices where collapsing vertices are removed but keep one
+                vertices_now = PolySlab._shift_vertices(vertices_now, offset_distance)[0]
+                vertices_now = PolySlab._remove_duplicate_vertices(vertices_now)
+                # all vertices collapse
+                if len(vertices_now) < 3:
+                    break
+                # polygon collapse into 1D
+                if shapely.Polygon(vertices_now).buffer(0).area < fp_eps:
+                    break
+                vertices_now = PolySlab._orient(vertices_now)
+                num_division_count += 1
+
+        if num_division_count > _COMPLEX_POLYSLAB_DIVISIONS_WARN:
+            log.warning(
+                f"Too many self-intersecting events: the polyslab has been divided into "
+                f"{num_division_count} polyslabs; more than {_COMPLEX_POLYSLAB_DIVISIONS_WARN} may "
+                f"slow down the simulation."
+            )
+
+        return sub_polyslab_list
+
+    @property
+    def _dilation_length(self) -> List[float]:
+        """dilation length from reference plane to the top/bottom of the polyslab."""
+
+        # for "bottom", only needs to compute the offset length to the top
+        dist = [self._extrusion_length_to_offset_distance(self.length_axis)]
+        # reverse the dilation value if the reference plane is on the top
+        if self.reference_plane == "top":
+            dist = [-dist[0]]
+        # for middle, both directions
+        elif self.reference_plane == "middle":
+            dist = [dist[0] / 2, -dist[0] / 2]
+        return dist
+
+    def _dilation_value_at_reference_to_coord(self, dilation: float) -> float:
+        """Compute the coordinate based on the dilation value to the reference plane."""
+
+        z_coord = -dilation / self._tanq + self.slab_bounds[0]
+        if self.reference_plane == "middle":
+            return z_coord + self.length_axis / 2
+        if self.reference_plane == "top":
+            return z_coord + self.length_axis
+        # bottom case
+        return z_coord
 
 
 class TriangleMesh(Geometry, ABC):
@@ -3576,12 +3942,12 @@ class TriangleMesh(Geometry, ABC):
         return self.mesh_dataset.surface_mesh.to_numpy()
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
+        """Returns object's surface area within given bounds."""
         # currently ignores bounds
         return self.trimesh.area
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
+        """Returns object's volume within given bounds."""
         # currently ignores bounds
         return self.trimesh.volume
 
@@ -3724,14 +4090,210 @@ class TriangleMesh(Geometry, ABC):
         return Geometry.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)
 
 
-# types of geometry including just one Geometry object (exluding group)
-SingleGeometryType = Union[Box, Sphere, Cylinder, PolySlab, TriangleMesh]
+class ClipOperation(Geometry):
+    """Class representing the result of a set operation between geometries."""
+
+    operation: ClipOperationType = pydantic.Field(
+        ...,
+        title="Operation Type",
+        description="Operation to be performed between geometries.",
+    )
+
+    geometry_a: annotate_type(GeometryType) = pydantic.Field(
+        ...,
+        title="Geometry A",
+        description="First operand for the set operation. It can be any geometry type, including "
+        ":class:`GeometryGroup`.",
+    )
+
+    geometry_b: annotate_type(GeometryType) = pydantic.Field(
+        ...,
+        title="Geometry B",
+        description="Second operand for the set operation. It can also be any geometry type.",
+    )
+
+    @staticmethod
+    def to_polygon_list(base_geometry: Shapely) -> List[Shapely]:
+        """Return a list of valid polygons from a shapely geometry, discarding points, lines, and
+        empty polygons.
+
+        Parameters
+        ----------
+        base_geometry : shapely.geometry.base.BaseGeometry
+            Base geometry for inspection.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            Valid polygons retrieved from ``base geometry``.
+        """
+        if base_geometry.geom_type == "GeometryCollection":
+            return [p for geom in base_geometry.geoms for p in ClipOperation.to_polygon_list(geom)]
+        if base_geometry.geom_type == "MultiPolygon":
+            return [p for p in base_geometry.geoms if not p.is_empty]
+        if base_geometry.geom_type == "Polygon" and not base_geometry.is_empty:
+            return [base_geometry]
+        return []
+
+    def intersections_plane(
+        self, x: float = None, y: float = None, z: float = None
+    ) -> List[Shapely]:
+        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        geom_a = Geometry.evaluate_inf_shape(
+            shapely.unary_union(self.geometry_a.intersections_plane(x, y, z))
+        )
+        geom_b = Geometry.evaluate_inf_shape(
+            shapely.unary_union(self.geometry_b.intersections_plane(x, y, z))
+        )
+        if self.operation == "union":
+            result = ClipOperation.to_polygon_list(shapely.union(geom_a, geom_b))
+        elif self.operation == "intersection":
+            result = ClipOperation.to_polygon_list(shapely.intersection(geom_a, geom_b))
+        elif self.operation == "difference":
+            result = ClipOperation.to_polygon_list(shapely.difference(geom_a, geom_b))
+        elif self.operation == "symmetric_difference":
+            result = ClipOperation.to_polygon_list(shapely.symmetric_difference(geom_a, geom_b))
+        else:
+            raise ValueError(
+                "'operation' must be one of 'union', 'intersection', 'difference', or "
+                "'symmetric_difference'."
+            )
+        return result
+
+    @cached_property
+    def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+        """Returns bounding box min and max coordinates.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+        # Overestimates
+        if self.operation == "difference":
+            result = self.geometry_a.bounds
+        elif self.operation == "intersection":
+            bounds = (self.geometry_a.bounds, self.geometry_b.bounds)
+            result = (
+                tuple(max(b[i] for b, _ in bounds) for i in range(3)),
+                tuple(min(b[i] for _, b in bounds) for i in range(3)),
+            )
+            if any(result[0][i] > result[1][i] for i in range(3)):
+                result = ((0, 0, 0), (0, 0, 0))
+        else:
+            bounds = (self.geometry_a.bounds, self.geometry_b.bounds)
+            result = (
+                tuple(min(b[i] for b, _ in bounds) for i in range(3)),
+                tuple(max(b[i] for _, b in bounds) for i in range(3)),
+            )
+        return result
+
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
+        """
+        inside_a = self.geometry_a.inside(x, y, z)
+        inside_b = self.geometry_b.inside(x, y, z)
+        if self.operation == "union":
+            result = inside_a | inside_b
+        elif self.operation == "intersection":
+            result = inside_a & inside_b
+        elif self.operation == "difference":
+            result = inside_a & ~inside_b
+        elif self.operation == "symmetric_difference":
+            result = inside_a != inside_b
+        else:
+            raise ValueError(
+                "'operation' must be one of 'union', 'intersection', 'difference', or "
+                "'symmetric_difference'."
+            )
+        return result
+
+    def inside_meshgrid(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """Faster way to check ``self.inside`` on a meshgrid. The input arrays are assumed sorted.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            1D array of point positions in x direction.
+        y : np.ndarray[float]
+            1D array of point positions in y direction.
+        z : np.ndarray[float]
+            1D array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
+            point that is inside the geometry.
+        """
+        inside_a = self.geometry_a.inside_meshgrid(x, y, z)
+        inside_b = self.geometry_b.inside_meshgrid(x, y, z)
+        if self.operation == "union":
+            result = inside_a | inside_b
+        elif self.operation == "intersection":
+            result = inside_a & inside_b
+        elif self.operation == "difference":
+            result = inside_a & ~inside_b
+        else:
+            result = inside_a != inside_b
+        return result
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume within given bounds."""
+        # Overestimates
+        if self.operation == "intersection":
+            return min(self.geometry_a.surface_area(bounds), self.geometry_b.surface_area(bounds))
+        if self.operation == "difference":
+            return self.geometry_a.surface_area(bounds)
+        return self.geometry_a.surface_area(bounds) + self.geometry_b.surface_area(bounds)
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area within given bounds."""
+        # Overestimates
+        return self.geometry_a.surface_area(bounds) + self.geometry_b.surface_area(bounds)
 
 
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
-    geometries: Tuple[annotate_type(SingleGeometryType), ...] = pydantic.Field(
+    geometries: Tuple[annotate_type(GeometryType), ...] = pydantic.Field(
         ...,
         title="Geometries",
         description="Tuple of geometries in a single grouping. "
@@ -3757,17 +4319,10 @@ class GeometryGroup(Geometry):
         """
 
         bounds = tuple(geometry.bounds for geometry in self.geometries)
-        rmins = (bound[0] for bound in bounds)
-        rmaxs = (bound[1] for bound in bounds)
-
-        rmin = functools.reduce(
-            lambda x, y: (min(x[0], y[0]), min(x[1], y[1]), min(x[2], y[2])), rmins
+        return (
+            tuple(min(b[i] for b, _ in bounds) for i in range(3)),
+            tuple(max(b[i] for _, b in bounds) for i in range(3)),
         )
-        rmax = functools.reduce(
-            lambda x, y: (max(x[0], y[0]), max(x[1], y[1]), max(x[2], y[2])), rmaxs
-        )
-
-        return rmin, rmax
 
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
@@ -3793,11 +4348,11 @@ class GeometryGroup(Geometry):
 
         if not self.intersects_plane(x, y, z):
             return []
-        all_intersections = (
-            geometry.intersections_plane(x=x, y=y, z=z) for geometry in self.geometries
-        )
-
-        return functools.reduce(lambda a, b: a + b, all_intersections)
+        return [
+            intersection
+            for geometry in self.geometries
+            for intersection in geometry.intersections_plane(x=x, y=y, z=z)
+        ]
 
     def intersects_axis_position(self, axis: float, position: float) -> bool:
         """Whether self intersects plane specified by a given position along a normal axis.
@@ -3814,7 +4369,6 @@ class GeometryGroup(Geometry):
         bool
             Whether this geometry intersects the plane.
         """
-
         return any(geom.intersects_axis_position(axis, position) for geom in self.geometries)
 
     def inside(
@@ -3838,9 +4392,7 @@ class GeometryGroup(Geometry):
         np.ndarray[bool]
             ``True`` for every point that is inside the geometry.
         """
-
         individual_insides = (geometry.inside(x, y, z) for geometry in self.geometries)
-
         return functools.reduce(lambda a, b: a | b, individual_insides)
 
     def inside_meshgrid(
@@ -3863,25 +4415,24 @@ class GeometryGroup(Geometry):
             Array with shape ``(x.size, y.size, z.size)``, which is ``True`` for every
             point that is inside the geometry.
         """
-
         individual_insides = (geom.inside_meshgrid(x, y, z) for geom in self.geometries)
-
         return functools.reduce(lambda a, b: a | b, individual_insides)
 
     def _volume(self, bounds: Bound) -> float:
-        """Returns object's volume given bounds."""
-
+        """Returns object's volume within given bounds."""
         individual_volumes = (geometry.volume(bounds) for geometry in self.geometries)
-
         return np.sum(individual_volumes)
 
     def _surface_area(self, bounds: Bound) -> float:
-        """Returns object's surface area given bounds."""
-
+        """Returns object's surface area within given bounds."""
         individual_areas = (geometry.surface_area(bounds) for geometry in self.geometries)
-
         return np.sum(individual_areas)
 
 
 # geometries usable to define a structure
-GeometryType = Union[SingleGeometryType, GeometryGroup]
+GeometryType = Union[
+    Box, Sphere, Cylinder, PolySlab, ComplexPolySlabBase, TriangleMesh, ClipOperation, GeometryGroup
+]
+
+ClipOperation.update_forward_refs()
+GeometryGroup.update_forward_refs()

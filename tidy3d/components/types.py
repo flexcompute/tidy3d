@@ -190,9 +190,8 @@ GridSize = Union[pydantic.PositiveFloat, Tuple[pydantic.PositiveFloat, ...]]
 Axis = Literal[0, 1, 2]
 Axis2D = Literal[0, 1]
 Shapely = BaseGeometry
-Vertices = Union[Tuple[Coordinate2D, ...], ArrayFloat2D]
-Vertices = constrained_array(ndim=2, dtype=float)
 PlanePosition = Literal["bottom", "middle", "top"]
+ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
 
 """ medium """
 

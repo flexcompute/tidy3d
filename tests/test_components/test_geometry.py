@@ -22,7 +22,45 @@ POLYSLAB = td.PolySlab(vertices=((0, 0), (1, 0), (1, 1), (0, 1)), slab_bounds=(-
 SPHERE = td.Sphere(radius=1)
 CYLINDER = td.Cylinder(axis=2, length=1, radius=1)
 
-GEO_TYPES = [BOX, CYLINDER, SPHERE, POLYSLAB]
+GROUP = td.GeometryGroup(
+    geometries=[
+        td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
+        td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
+    ]
+)
+UNION = td.ClipOperation(
+    operation="union",
+    geometry_a=td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
+    geometry_b=td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
+)
+INTERSECTION = td.ClipOperation(operation="intersection", geometry_a=UNION, geometry_b=SPHERE)
+DIFFERENCE = td.ClipOperation(operation="difference", geometry_a=CYLINDER, geometry_b=BOX)
+SYM_DIFFERENCE = td.ClipOperation(
+    operation="symmetric_difference",
+    geometry_a=td.ClipOperation(
+        operation="difference",
+        geometry_a=td.Box(size=(td.inf, td.inf, td.inf)),
+        geometry_b=td.Box(center=(-0.25, 0, 0), size=(0.5, 1, 1)),
+    ),
+    geometry_b=td.ClipOperation(
+        operation="difference",
+        geometry_a=td.Box(size=(td.inf, td.inf, td.inf)),
+        geometry_b=td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
+    ),
+)
+
+
+GEO_TYPES = [
+    BOX,
+    CYLINDER,
+    SPHERE,
+    POLYSLAB,
+    UNION,
+    INTERSECTION,
+    DIFFERENCE,
+    SYM_DIFFERENCE,
+    GROUP,
+]
 
 _, AX = plt.subplots()
 
@@ -52,23 +90,6 @@ def test_base_inside_meshgrid():
 def test_bounding_box():
     assert GEO.bounding_box == GEO
     assert GEO_INF.bounding_box == GEO_INF
-
-
-def test_strip_coords_multi():
-    lat_point_list = [0, 0, 0, 5, 9, 11, 7, 3, 9, 0, 0, 0]
-    lon_point_list = [438, 428, 427, 428, 434, 439, 443, 446, 448, 452, 452, 449]
-
-    polygon_geom = shapely.geometry.Polygon(zip(lon_point_list, lat_point_list))
-    multipolygon_geom = shapely.geometry.MultiPolygon([polygon_geom])
-    ext_coords, list_int_coords = Geometry.strip_coords(multipolygon_geom)
-    assert len(list_int_coords) == 0
-    assert np.allclose(
-        np.array(ext_coords)[:-1], np.array(list(zip(lon_point_list, lat_point_list)))
-    )
-
-
-def test_map_to_coords_not_polygon():
-    assert Geometry.map_to_coords(lambda x: None, "test") == "test"
 
 
 @pytest.mark.parametrize("points_shape", [(3,), (3, 10)])
@@ -218,7 +239,7 @@ def test_box_from_bounds():
     assert b.center[0] == 0.0
 
     with pytest.raises(SetupError):
-        b = td.Box.from_bounds(rmin=(0, 0, 0), rmax=(td.inf, 0, 0))
+        _ = td.Box.from_bounds(rmin=(0, 0, 0), rmax=(td.inf, 0, 0))
 
     b = td.Box.from_bounds(rmin=(-1, -1, -1), rmax=(1, 1, 1))
     assert b.center == (0, 0, 0)
@@ -245,12 +266,6 @@ def test_validate_polyslab_vertices_valid():
 def test_sidewall_failed_validation():
     with pytest.raises(pydantic.ValidationError):
         POLYSLAB.copy(update=dict(sidewall_angle=1000))
-
-
-def make_geo_group():
-    """Make a generic Geometry Group."""
-    boxes = [td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5)]
-    return td.GeometryGroup(geometries=boxes)
 
 
 def test_surfaces():
@@ -289,6 +304,12 @@ def test_gdspy_cell():
         td.PolySlab.from_gds(gds_cell=gds_cell, axis=2, slab_bounds=(-1, 1), gds_layer=1)
 
 
+def make_geo_group():
+    """Make a generic Geometry Group."""
+    boxes = [td.Box(size=(1, 1, 1), center=(i, 0, 0)) for i in range(-5, 5)]
+    return td.GeometryGroup(geometries=boxes)
+
+
 def test_geo_group_initialize():
     """make sure you can construct one."""
     _ = make_geo_group()
@@ -296,51 +317,81 @@ def test_geo_group_initialize():
 
 def test_geo_group_structure():
     """make sure you can construct a structure using GeometryGroup."""
-
     geo_group = make_geo_group()
     _ = td.Structure(geometry=geo_group, medium=td.Medium())
 
 
 def test_geo_group_methods():
     """Tests the geometry methods of geo group."""
-
     geo_group = make_geo_group()
     geo_group.inside(0, 1, 2)
     geo_group.inside(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
     geo_group.inside_meshgrid(np.linspace(0, 1, 10), np.linspace(0, 1, 10), np.linspace(0, 1, 10))
     geo_group.intersections_plane(y=0)
     geo_group.intersects(td.Box(size=(1, 1, 1)))
-    rmin, rmax = geo_group.bounds
+    _ = geo_group.bounds
 
 
 def test_geo_group_empty():
     """dont allow empty geometry list."""
-
     with pytest.raises(pydantic.ValidationError):
         _ = td.GeometryGroup(geometries=[])
 
 
 def test_geo_group_volume():
     geo_group = make_geo_group()
-    geo_group._volume(bounds=GEO.bounds)
+    geo_group.volume(bounds=GEO.bounds)
 
 
 def test_geo_group_surface_area():
     geo_group = make_geo_group()
-    geo_group._surface_area(bounds=GEO.bounds)
+    geo_group.surface_area(bounds=GEO.bounds)
+
+
+def test_geometryoperations():
+    assert BOX + CYLINDER == td.GeometryGroup(geometries=(BOX, CYLINDER))
+    assert BOX + UNION == td.GeometryGroup(geometries=(BOX, UNION.geometry_a, UNION.geometry_b))
+    assert UNION + CYLINDER == td.GeometryGroup(
+        geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
+    )
+    assert BOX + GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
+    assert GROUP + CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+
+    assert BOX | CYLINDER == td.GeometryGroup(geometries=(BOX, CYLINDER))
+    assert BOX | UNION == td.GeometryGroup(geometries=(BOX, UNION.geometry_a, UNION.geometry_b))
+    assert UNION | CYLINDER == td.GeometryGroup(
+        geometries=(UNION.geometry_a, UNION.geometry_b, CYLINDER)
+    )
+    assert BOX | GROUP == td.GeometryGroup(geometries=(BOX,) + GROUP.geometries)
+    assert GROUP | CYLINDER == td.GeometryGroup(geometries=GROUP.geometries + (CYLINDER,))
+
+    assert BOX * SPHERE == td.ClipOperation(
+        operation="intersection", geometry_a=BOX, geometry_b=SPHERE
+    )
+
+    assert BOX & SPHERE == td.ClipOperation(
+        operation="intersection", geometry_a=BOX, geometry_b=SPHERE
+    )
+
+    assert BOX - SPHERE == td.ClipOperation(
+        operation="difference", geometry_a=BOX, geometry_b=SPHERE
+    )
+
+    assert BOX ^ SPHERE == td.ClipOperation(
+        operation="symmetric_difference", geometry_a=BOX, geometry_b=SPHERE
+    )
 
 
 """ geometry """
 
 
 def test_geometry():
-
     _ = td.Box(size=(1, 1, 1), center=(0, 0, 0))
     _ = td.Sphere(radius=1, center=(0, 0, 0))
     _ = td.Cylinder(radius=1, center=(0, 0, 0), axis=1, length=1)
     _ = td.PolySlab(vertices=((1, 2), (3, 4), (5, 4)), slab_bounds=(-1, 1), axis=2)
     # vertices_np = np.array(s.vertices)
-    # s_np = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
+    # _ = PolySlab(vertices=vertices_np, slab_bounds=(-1, 1), axis=1)
 
     # make sure wrong axis arguments error
     with pytest.raises(pydantic.ValidationError):
@@ -479,6 +530,44 @@ def test_polyslab_axis(axis):
     assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
     plane_coord[axis] = -3
     assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
+
+
+def test_from_shapely():
+    ring = shapely.LinearRing([(-16, 9), (-8, 9), (-12, 2)])
+    poly = shapely.Polygon([(-2, 0), (-10, 0), (-6, 7)])
+    hole = shapely.Polygon(
+        [(0, 0), (9, 0), (9, 9), (0, 9), (0, 2), (2, 2), (2, 7), (7, 7), (7, 2), (0, 2)]
+    ).buffer(0)
+    collection = shapely.GeometryCollection((shapely.MultiPolygon((poly,)), hole, ring))
+
+    geo = td.Geometry.from_shapely(collection, 2, (0, 1))
+    assert len(geo.intersections_plane(z=0.5)) == 3
+
+    geo = td.Geometry.from_shapely(
+        collection, 2, (0, 1), sidewall_angle=1.0, reference_plane="bottom"
+    )
+    assert len(geo.intersections_plane(z=0)) == 3
+    assert len(geo.intersections_plane(z=1)) == 2
+
+    geo = td.Geometry.from_shapely(
+        collection, 2, (0, 1), sidewall_angle=-1.0, reference_plane="top"
+    )
+    assert len(geo.intersections_plane(z=0)) == 2
+    assert len(geo.intersections_plane(z=1)) == 3
+
+
+def test_from_gds():
+    ring = gdstk.Polygon([(-16, 9), (-8, 9), (-12, 2)], layer=1)
+    poly = gdstk.Polygon([(-2, 0), (-10, 0), (-6, 7)])
+    hole = gdstk.Polygon(
+        [(0, 0), (9, 0), (9, 9), (0, 9), (0, 2), (2, 2), (2, 7), (7, 7), (7, 2), (0, 2)]
+    )
+    cell = gdstk.Cell("CELL").add(ring, poly, hole)
+    geo = td.Geometry.from_gds(
+        cell, 2, (0, 1), gds_layer=0, dilation=-0.5, sidewall_angle=0.5, reference_plane="bottom"
+    )
+    assert len(geo.intersections_plane(z=0)) == 2
+    assert len(geo.intersections_plane(z=1)) == 5
 
 
 def test_custom_surface_geometry(tmp_path):

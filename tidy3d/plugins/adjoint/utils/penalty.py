@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 import jax.numpy as jnp
 
 from ....components.base import Tidy3dBaseModel
-from ....components.types import Vertices
+from ....components.types import ArrayFloat2D
 
 # Radius of Curvature Calculation
 
@@ -27,7 +27,7 @@ class RadiusPenalty(Penalty):
     wrap: bool = False
 
     # pylint: disable=arguments-differ
-    def evaluate(self, points: Vertices) -> float:
+    def evaluate(self, points: ArrayFloat2D) -> float:
         """Get the penalty as a function of supplied (x, y) points."""
 
         def quad_fit(p0, pc, p2):

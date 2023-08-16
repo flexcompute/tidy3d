@@ -2,7 +2,7 @@
 import pytest
 import numpy as np
 import pydantic
-from shapely.geometry import Polygon, Point
+from shapely import Polygon, Point
 
 import tidy3d as td
 from tidy3d.constants import fp_eps
