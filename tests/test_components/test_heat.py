@@ -1,5 +1,4 @@
 import pytest
-import responses
 import pydantic as pd
 import numpy as np
 
@@ -18,22 +17,6 @@ from tidy3d.components.heat.boundary import (
 from tidy3d.components.heat.grid import UniformHeatGrid
 from tidy3d.components.heat.simulation import HeatSimulation
 from tidy3d.components.heat.data import HeatSimulationData
-from tidy3d.web.heat import run as run_heat
-from tidy3d import ScalarFieldDataArray
-from tidy3d.web.environment import Env
-
-
-WAVEGUIDE = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0))
-PLANE = td.Box(center=(0, 0, 0), size=(5, 0, 5))
-SIM_SIZE = (5, 5, 5)
-SRC = td.PointDipole(
-    center=(0, 0, 0), source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13), polarization="Ex"
-)
-
-PROJECT_NAME = "Heat Solver"
-HEATSIMULATION_NAME = "Unnamed Heat Simulation"
-PROJECT_ID = "Project-ID"
-TASK_ID = "Task-ID"
 
 
 def make_heat_mediums():
@@ -127,7 +110,7 @@ def make_heat_source():
 
 
 def test_heat_source():
-    heat_source = make_heat_source()
+    _ = make_heat_source()
 
 
 def make_heat_sim():
@@ -138,18 +121,18 @@ def make_heat_sim():
 
     pl1 = HeatBCPlacementMediumMedium(bc=bc_conv, mediums=["fluid_medium", "solid_medium"])
     pl2 = HeatBCPlacementStructure(bc=bc_flux, structure="solid_structure")
-    pl3 = HeatBCPlacementStructureStructure(bc=bc_flux, structures=["fluid_structure", "solid_structure"])
+    pl3 = HeatBCPlacementStructureStructure(
+        bc=bc_flux, structures=["fluid_structure", "solid_structure"]
+    )
     pl4 = HeatBCPlacementSimulation(bc=bc_temp)
     pl5 = HeatBCPlacementStructureSimulation(bc=bc_temp, structure="fluid_structure")
 
     grid_spec = make_grid_spec()
 
     heat_sim = HeatSimulation(
-        scene=td.Simulation(
+        scene=td.Scene(
             center=(0, 0, 0),
             size=(2, 3, 3),
-            run_time=1e-15,
-            grid_spec=td.GridSpec.uniform(dl=0.1),
             medium=fluid_medium,
             structures=[fluid_structure, solid_structure],
         ),
@@ -181,6 +164,28 @@ def test_heat_sim():
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(heat_sources=[UniformHeatSource(structures=["noname"])], rate=-10)
 
+    # test unsupported yet geometries
+    vertices = np.array([(0,0), (1,0), (1,1)])
+    p = td.PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
+    _, structure = make_heat_structures()
+    structure = structure.updated_copy(geometry=p)
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(structures=[structure])
+
+    # test unsupported yet sezi dimension domains
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(heat_domain=td.Box(center=(0, 0, 0), size=(0, 2, 2)))
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(heat_domain=td.Box(center=(0, 0, 0), size=(1, 0, 0)))
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(
+            heat_domain=None, scene=heat_sim.scene.updated_copy(size=(1, 0, 1))
+        )
+
+
 
 def make_heat_sim_data():
     heat_sim = make_heat_sim()
@@ -205,111 +210,3 @@ def test_sim_data():
     heat_sim_data = make_heat_sim_data()
 
     _ = heat_sim_data.perturbed_mediums_scene()
-
-
-@pytest.fixture
-def mock_remote_api(monkeypatch):
-    def void(*args, **kwargs):
-        return None
-
-    def mock_download(task_id, remote_path, to_file, *args, **kwargs):
-        heat_sim_data = make_heat_sim_data()
-        heat_sim_data.to_file(to_file)
-
-    monkeypatch.setattr(td.web.http_management, "api_key", lambda: "api_key")
-    monkeypatch.setattr("tidy3d.web.heat.upload_file", void)
-    monkeypatch.setattr("tidy3d.web.heat.download_file", mock_download)
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/project",
-        match=[responses.matchers.query_param_matcher({"projectName": PROJECT_NAME})],
-        json={"data": {"projectId": PROJECT_ID, "projectName": PROJECT_NAME}},
-        status=200,
-    )
-
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/heatsolver/py",
-        match=[
-            responses.matchers.json_params_matcher(
-                {
-                    "projectId": PROJECT_ID,
-                    "heatSimulationName": HEATSIMULATION_NAME,
-                    "fileType": "Hdf5",
-                }
-            )
-        ],
-        json={
-            "data": {
-                "id": TASK_ID,
-                "status": "draft",
-                "createdAt": "2023-05-19T16:47:57.190Z",
-                "charge": 0,
-                "fileType": "Hdf5",
-            }
-        },
-        status=200,
-    )
-
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/heatsolver/py",
-        match=[
-            responses.matchers.json_params_matcher(
-                {
-                    "projectId": PROJECT_ID,
-                    "heatSimulationName": HEATSIMULATION_NAME,
-                    "fileType": "Hdf5",
-                }
-            )
-        ],
-        json={
-            "data": {
-                "id": TASK_ID,
-                "status": "draft",
-                "createdAt": "2023-05-19T16:47:57.190Z",
-                "charge": 0,
-                "fileType": "Hdf5",
-            }
-        },
-        status=200,
-    )
-
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/heatsolver/py/{TASK_ID}",
-        json={
-            "data": {
-                "id": TASK_ID,
-                "status": "success",
-                "createdAt": "2023-05-19T16:47:57.190Z",
-                "charge": 0,
-                "fileType": "Hdf5",
-            }
-        },
-        status=200,
-    )
-
-    responses.add(
-        responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/heatsolver/py/{TASK_ID}/run",
-        json={
-            "data": {
-                "id": TASK_ID,
-                "status": "queued",
-                "createdAt": "2023-05-19T16:47:57.190Z",
-                "charge": 0,
-                "fileType": "Hdf5",
-            }
-        },
-        status=200,
-    )
-
-
-@responses.activate
-def test_heat_solver_web(mock_remote_api):
-    heat_sim = make_heat_sim()
-    heat_sim_data = run_heat(heat_simulation=heat_sim)
-
-

@@ -646,7 +646,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
                 )
 
         if cbar:
-            self._add_cbar(vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax)
+            self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
         # clean up the axis display
@@ -655,6 +655,11 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
         return ax
+
+    @staticmethod
+    def _add_cbar_eps(eps_min: float, eps_max: float, ax: Ax = None) -> None:
+        """Add a permittivity colorbar to plot."""
+        Scene._add_cbar(vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax)
 
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""

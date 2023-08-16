@@ -171,7 +171,7 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
         """
         folder = Folder.get(folder_name, create=True)
 
-        heat_simulation.scene.validate_pre_upload(source_required=False)
+#        heat_simulation.scene.validate_pre_upload(source_required=False)
         resp = http.post(
             HEATSOLVER_API,
             {

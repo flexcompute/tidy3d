@@ -1855,3 +1855,16 @@ def test_perturbed_mediums_copy():
 
     assert isinstance(new_sim.medium, td.CustomMedium)
     assert isinstance(new_sim.structures[0].medium, td.CustomPoleResidue)
+
+
+def test_scene_from_scene():
+    """Test .scene and .from_scene functionality."""
+
+    scene = SIM_FULL.scene
+
+    sim = td.Simulation.from_scene(
+        scene=scene,
+        **SIM_FULL.dict(exclude={"structures", "medium", "size", "center"}),
+    )
+
+    assert sim == SIM_FULL

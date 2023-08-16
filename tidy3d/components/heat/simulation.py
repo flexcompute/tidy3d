@@ -26,12 +26,10 @@ from ..types import Ax, Shapely, TYPE_TAG_STR
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..scene import Scene
 from ..structure import Structure
-from ..geometry import Box
-from ..data.data_array import SpatialDataArray
+from ..geometry import Box, Sphere, Cylinder, GeometryGroup
 
 from ...exceptions import SetupError
 from ...constants import inf, VOLUMETRIC_HEAT_RATE
-from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
@@ -80,9 +78,41 @@ class HeatSimulation(Tidy3dBaseModel):
         "solved in the entire domain of the scene."
     )
 
+    @pd.validator("scene", always=True)
+    def check_unsupported_geometries(cls, val, values):
+        """Error if structures contain unsupported yet geometries."""
+        for structure in val.structures:
+            if isinstance(structure.geometry, GeometryGroup):
+                geometries = structure.geometry.geometries
+            else:
+                geometries = [structure.geometry]
+            for geom in geometries:
+                if not isinstance(geom, (Box, Cylinder, Sphere)):
+                    raise SetupError(
+                        f"HeatSimulation does not currently support geometries of type {type(geom)}"
+                        f". Allowed geometries are 'Box', 'Cylinder', and 'Sphere'."
+                    )
+        return val
+
+    @pd.validator("heat_domain", always=True)
+    def check_zero_dim_domain(cls, val, values):
+        """Error if heat domain have zero dimensions."""
+
+        if val is not None:
+            size = val.size
+        else:
+            size = values.get("scene").size
+
+        if any(length == 0 for length in size):
+            raise SetupError(
+                "HeatSimulation does not currently support domain with zero dimensions."
+            )
+
+        return val
+
     @pd.validator("boundary_conditions", always=True)
     def names_exist_bcs(cls, val, values):
-        """Error if boundary conditions point to non-existing structures/media"""
+        """Error if boundary conditions point to non-existing structures/media."""
         scene = values.get("scene")
         structures = scene.structures
         mediums = scene.mediums
@@ -114,7 +144,7 @@ class HeatSimulation(Tidy3dBaseModel):
 
     @pd.validator("heat_sources", always=True)
     def names_exist_sources(cls, val, values):
-        """Error if heat point to non-existing structures"""
+        """Error if heat point to non-existing structures."""
         scene = values.get("scene")
         structures = scene.structures
         structures_names = {s.name for s in structures}
