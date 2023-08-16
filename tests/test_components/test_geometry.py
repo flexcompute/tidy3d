@@ -11,7 +11,7 @@ import trimesh
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
-from tidy3d.components.geometry import Geometry, Planar
+from tidy3d.components.geometry.base import Geometry, Planar
 
 
 GEO = td.Box(size=(1, 1, 1))
@@ -175,12 +175,6 @@ def test_intersections_plane(component):
     assert len(component.intersections_plane(z=0.2)) > 0
     assert len(component.intersections_plane(x=0.2)) > 0
     assert len(component.intersections_plane(x=10000)) == 0
-
-
-@pytest.mark.parametrize("component", GEO_TYPES)
-def test_intersections_2dbox(component):
-    with pytest.raises(ValueError):
-        g = component.intersections_2dbox(plane=BOX)
 
 
 def test_bounds_base():

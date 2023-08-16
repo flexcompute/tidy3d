@@ -10,7 +10,7 @@ import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
 from .....components.base import cached_property
-from .....components.geometry import Box
+from .....components.geometry.base import Box
 from .....components.source import Source, GaussianPulse, PointDipole
 from .....components.source import ModeSource, PlaneWave, CustomFieldSource, CustomCurrentSource
 from .....components.data.monitor_data import MonitorData, ModeSolverData

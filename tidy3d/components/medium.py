@@ -18,7 +18,7 @@ from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
-from .geometry import Geometry
+from .geometry.base import Geometry
 from .validators import validate_name_str, validate_parameter_perturbation
 from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND

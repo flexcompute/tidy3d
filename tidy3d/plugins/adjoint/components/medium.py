@@ -11,7 +11,7 @@ import xarray as xr
 
 from ....components.types import Bound, Literal
 from ....components.medium import Medium, AnisotropicMedium, CustomMedium
-from ....components.geometry import Geometry
+from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
 from ....components.data.dataset import PermittivityDataset
 from ....components.data.data_array import ScalarFieldDataArray

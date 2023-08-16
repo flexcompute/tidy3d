@@ -15,7 +15,8 @@ import jax
 
 from ....components.base import cached_property
 from ....components.types import Bound, Coordinate2D  # , annotate_type
-from ....components.geometry import Geometry, Box, PolySlab, GeometryGroup
+from ....components.geometry.base import Geometry, Box, GeometryGroup
+from ....components.geometry.polyslab import PolySlab
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
@@ -140,6 +141,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
     @cached_property
     def bounds(self):
+        """Bounds of this box."""
         size = jax.lax.stop_gradient(self.size)
         center = jax.lax.stop_gradient(self.center)
         coord_min = tuple(c - s / 2 for (s, c) in zip(size, center))
@@ -338,11 +340,13 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         """Overrides validator enforcing that val is not inf."""
         return val
 
+    # pylint: disable=unused-argument
     @pd.validator("vertices", always=True)
     def no_self_intersecting_polygon_during_extrusion(cls, val, values):
         """Overrides validator enforcing that val is not inf."""
         return val
 
+    # pylint: disable=unused-argument
     @pd.validator("vertices", always=True)
     def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
         """Overrides validator enforcing that val is not inf."""

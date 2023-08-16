@@ -2,42 +2,26 @@
 import numpy as np
 from typing import Tuple, List
 
-from tidy3d.components.data.data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
-from tidy3d.components.data.data_array import ScalarModeFieldDataArray
-from tidy3d.components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
-from tidy3d.components.data.data_array import FluxDataArray, FluxTimeDataArray
-from tidy3d.components.data.data_array import DiffractionDataArray
-from tidy3d.components.data.data_array import HeatDataArray, ChargeDataArray
-from tidy3d.components.source import PointDipole, GaussianPulse, ModeSource
-from tidy3d.components.simulation import Simulation
-from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.mode import ModeSpec
-from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, PermittivityMonitor
-from tidy3d.components.monitor import ModeSolverMonitor, ModeMonitor
-from tidy3d.components.monitor import FluxMonitor, FluxTimeMonitor, DiffractionMonitor
-from tidy3d.components.monitor import MonitorType
-from tidy3d.components.structure import Structure
-from tidy3d.components.geometry import Box
-from tidy3d.components.boundary import BoundarySpec, Periodic
-from tidy3d import material_library
-from tidy3d.constants import inf
+import tidy3d as td
 
 np.random.seed(4)
 
 STRUCTURES = [
-    Structure(geometry=Box(size=(1, inf, 1)), medium=material_library["cSi"]["SalzbergVilla1957"])
+    td.Structure(
+        geometry=td.Box(size=(1, td.inf, 1)), medium=td.material_library["cSi"]["SalzbergVilla1957"]
+    )
 ]
 SIZE_3D = (2, 4, 5)
 SIZE_2D = list(SIZE_3D)
 SIZE_2D[1] = 0
-MODE_SPEC = ModeSpec(num_modes=4)
+MODE_SPEC = td.ModeSpec(num_modes=4)
 FREQS = [1e14, 2e14]
 SOURCES = [
-    PointDipole(source_time=GaussianPulse(freq0=FREQS[0], fwidth=1e14), polarization="Ex"),
-    ModeSource(
+    td.PointDipole(source_time=td.GaussianPulse(freq0=FREQS[0], fwidth=1e14), polarization="Ex"),
+    td.ModeSource(
         size=SIZE_2D,
         mode_spec=MODE_SPEC,
-        source_time=GaussianPulse(freq0=FREQS[1], fwidth=1e14),
+        source_time=td.GaussianPulse(freq0=FREQS[1], fwidth=1e14),
         direction="+",
     ),
 ]
@@ -56,24 +40,24 @@ TS = np.linspace(0, 1e-12, 4)
 MODE_INDICES = np.arange(0, 4)
 DIRECTIONS = ["+", "-"]
 
-FIELD_MONITOR = FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
-FIELD_TIME_MONITOR = FieldTimeMonitor(
+FIELD_MONITOR = td.FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
+FIELD_TIME_MONITOR = td.FieldTimeMonitor(
     size=SIZE_3D, fields=FIELDS, name="field_time", interval=INTERVAL
 )
-FIELD_MONITOR_2D = FieldMonitor(size=SIZE_2D, fields=FIELDS, name="field_2d", freqs=FREQS)
-FIELD_TIME_MONITOR_2D = FieldTimeMonitor(
+FIELD_MONITOR_2D = td.FieldMonitor(size=SIZE_2D, fields=FIELDS, name="field_2d", freqs=FREQS)
+FIELD_TIME_MONITOR_2D = td.FieldTimeMonitor(
     size=SIZE_2D, fields=FIELDS, name="field_time_2d", interval=INTERVAL
 )
-MODE_SOLVE_MONITOR = ModeSolverMonitor(
+MODE_SOLVE_MONITOR = td.ModeSolverMonitor(
     size=SIZE_2D, name="mode_solver", mode_spec=MODE_SPEC, freqs=FS
 )
-PERMITTIVITY_MONITOR = PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
-MODE_MONITOR = ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
-FLUX_MONITOR = FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
-FLUX_TIME_MONITOR = FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
-DIFFRACTION_MONITOR = DiffractionMonitor(
+PERMITTIVITY_MONITOR = td.PermittivityMonitor(size=SIZE_3D, name="permittivity", freqs=FREQS)
+MODE_MONITOR = td.ModeMonitor(size=SIZE_2D, name="mode", mode_spec=MODE_SPEC, freqs=FREQS)
+FLUX_MONITOR = td.FluxMonitor(size=SIZE_2D, freqs=FREQS, name="flux")
+FLUX_TIME_MONITOR = td.FluxTimeMonitor(size=SIZE_2D, interval=INTERVAL, name="flux_time")
+DIFFRACTION_MONITOR = td.DiffractionMonitor(
     center=(0, 0, 2),
-    size=(inf, inf, 0),
+    size=(td.inf, td.inf, 0),
     freqs=FS,
     name="diffraction",
 )
@@ -89,10 +73,10 @@ MONITORS = [
     DIFFRACTION_MONITOR,
 ]
 
-GRID_SPEC = GridSpec(wavelength=2.0)
+GRID_SPEC = td.GridSpec(wavelength=2.0)
 RUN_TIME = 1e-12
 
-SIM_SYM = Simulation(
+SIM_SYM = td.Simulation(
     size=SIZE_3D,
     run_time=RUN_TIME,
     grid_spec=GRID_SPEC,
@@ -100,10 +84,10 @@ SIM_SYM = Simulation(
     sources=SOURCES,
     monitors=MONITORS,
     structures=STRUCTURES,
-    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
 )
 
-SIM = Simulation(
+SIM = td.Simulation(
     size=SIZE_3D,
     run_time=RUN_TIME,
     grid_spec=GRID_SPEC,
@@ -111,14 +95,14 @@ SIM = Simulation(
     sources=SOURCES,
     monitors=MONITORS,
     structures=STRUCTURES,
-    boundary_spec=BoundarySpec.all_sides(boundary=Periodic()),
+    boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
 )
 
 """ Generate the data arrays (used in other test files) """
 
 
 def get_xyz(
-    monitor: MonitorType, grid_key: str, symmetry: bool
+    monitor: td.components.monitor.MonitorType, grid_key: str, symmetry: bool
 ) -> Tuple[List[float], List[float], List[float]]:
     if symmetry:
         grid = SIM_SYM.discretize_monitor(monitor)
@@ -135,20 +119,20 @@ def get_xyz(
 def make_scalar_field_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key, symmetry)
     values = (1 + 1j) * np.random.random((len(XS), len(YS), len(ZS), len(FS)))
-    return ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+    return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
 
 def make_scalar_field_time_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(FIELD_TIME_MONITOR, grid_key, symmetry)
     values = np.random.random((len(XS), len(YS), len(ZS), len(TS)))
-    return ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
+    return td.ScalarFieldTimeDataArray(values, coords=dict(x=XS, y=YS, z=ZS, t=TS))
 
 
 def make_scalar_mode_field_data_array(grid_key: str, symmetry=True):
     XS, YS, ZS = get_xyz(MODE_SOLVE_MONITOR, grid_key, symmetry)
     values = (1 + 0.1j) * np.random.random((len(XS), 1, len(ZS), len(FS), len(MODE_INDICES)))
 
-    return ScalarModeFieldDataArray(
+    return td.ScalarModeFieldDataArray(
         values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)
     )
 
@@ -167,31 +151,31 @@ def make_scalar_mode_field_data_array_smooth(grid_key: str, symmetry=True, rot: 
         )
     )
 
-    return ScalarModeFieldDataArray(
+    return td.ScalarModeFieldDataArray(
         values, coords=dict(x=XS, y=[0.0], z=ZS, f=FS, mode_index=MODE_INDICES)
     )
 
 
 def make_mode_amps_data_array():
     values = (1 + 1j) * np.random.random((len(DIRECTIONS), len(MODE_INDICES), len(FS)))
-    return ModeAmpsDataArray(
+    return td.ModeAmpsDataArray(
         values, coords=dict(direction=DIRECTIONS, mode_index=MODE_INDICES, f=FS)
     )
 
 
 def make_mode_index_data_array():
     values = (1 + 0.1j) * np.random.random((len(FS), len(MODE_INDICES)))
-    return ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
+    return td.ModeIndexDataArray(values, coords=dict(f=FS, mode_index=MODE_INDICES))
 
 
 def make_flux_data_array():
     values = np.random.random(len(FS))
-    return FluxDataArray(values, coords=dict(f=FS))
+    return td.FluxDataArray(values, coords=dict(f=FS))
 
 
 def make_flux_time_data_array():
     values = np.random.random(len(TS))
-    return FluxTimeDataArray(values, coords=dict(t=TS))
+    return td.FluxTimeDataArray(values, coords=dict(t=TS))
 
 
 def make_diffraction_data_array():
@@ -199,7 +183,7 @@ def make_diffraction_data_array():
     return (
         [SIZE_2D[0], SIZE_2D[2]],
         [1.0, 2.0],
-        DiffractionDataArray(values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, f=FS)),
+        td.DiffractionDataArray(values, coords=dict(orders_x=ORDERS_X, orders_y=ORDERS_Y, f=FS)),
     )
 
 
@@ -269,11 +253,11 @@ def test_ops():
 
 
 def test_empty_field_time():
-    _ = ScalarFieldTimeDataArray(
+    _ = td.ScalarFieldTimeDataArray(
         np.random.rand(5, 5, 5, 0),
         coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
     )
-    _ = ScalarFieldTimeDataArray(
+    _ = td.ScalarFieldTimeDataArray(
         np.random.rand(5, 5, 5, 0),
         coords=dict(x=np.arange(5), y=np.arange(5), z=np.arange(5), t=[]),
     )
@@ -286,10 +270,10 @@ def test_abs():
 
 def test_heat_data_array():
     T = [0, 1e-12, 2e-12]
-    _ = HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
+    _ = td.HeatDataArray((1 + 1j) * np.random.random((3,)), coords=dict(T=T))
 
 
 def test_charge_data_array():
     n = [0, 1e-12, 2e-12]
     p = [0, 3e-12, 4e-12]
-    _ = ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))
+    _ = td.ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))

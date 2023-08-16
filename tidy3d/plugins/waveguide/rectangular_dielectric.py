@@ -8,7 +8,8 @@ import pydantic
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.boundary import BoundarySpec, Periodic
 from ...components.data.data_array import ModeIndexDataArray, FreqModeDataArray
-from ...components.geometry import Box, PolySlab
+from ...components.geometry.base import Box
+from ...components.geometry.polyslab import PolySlab
 from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
 from ...components.mode import ModeSpec

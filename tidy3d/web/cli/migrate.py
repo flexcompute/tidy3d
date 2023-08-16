@@ -5,8 +5,8 @@ import click
 import requests
 import toml
 
-from tidy3d.web.cli.constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from tidy3d.web.environment import Env
+from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
+from ..environment import Env
 
 
 # disable pylint for this file

@@ -4,7 +4,7 @@ import pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry import GeometryType
+from .geometry.utils import GeometryType
 from .medium import MediumType, AbstractCustomMedium, Medium2D
 from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect

@@ -1,6 +1,6 @@
 """ Divide a complex polyslab where self-intersecting polygon can occur during extrusion."""
 
-from ...components.geometry import ComplexPolySlabBase
+from ...components.geometry.polyslab import ComplexPolySlabBase
 from ...components.medium import MediumType
 from ...components.structure import Structure
 

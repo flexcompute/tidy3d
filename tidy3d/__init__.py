@@ -5,8 +5,10 @@ from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
-from .components.geometry import Box, Sphere, Cylinder, PolySlab, TriangleMesh
-from .components.geometry import ClipOperation, GeometryGroup
+from .components.geometry.base import Box, ClipOperation, GeometryGroup
+from .components.geometry.primitives import Sphere, Cylinder
+from .components.geometry.mesh import TriangleMesh
+from .components.geometry.polyslab import PolySlab
 
 # medium
 from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
@@ -89,7 +91,7 @@ from .material_library.parametric_materials import Graphene
 
 # for docs
 from .components.medium import AbstractMedium, NonlinearSpec
-from .components.geometry import Geometry
+from .components.geometry.base import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
 from .components.grid.grid import YeeGrid, FieldGrid, Coords1D
@@ -115,3 +117,6 @@ def set_logging_level(level: str) -> None:
 
 
 log.info(f"Using client version: {__version__}")
+
+ClipOperation.update_forward_refs()
+GeometryGroup.update_forward_refs()
