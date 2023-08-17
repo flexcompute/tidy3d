@@ -6,8 +6,10 @@ python lint.py
 
 pytest -ra tests/test_components/test_apodization.py
 pytest -ra tests/test_components/test_base.py
+pytest -ra tests/test_components/test_bc_placement.py
 pytest -ra tests/test_components/test_boundaries.py
 pytest -ra tests/test_components/test_custom.py
+pytest -ra tests/test_components/test_heat.py
 pytest -ra tests/test_components/test_geometry.py
 pytest -ra tests/test_components/test_grid.py
 pytest -ra tests/test_components/test_grid_spec.py
@@ -18,6 +20,7 @@ pytest -ra tests/test_components/test_mode.py
 pytest -ra tests/test_components/test_monitor.py
 pytest -ra tests/test_components/test_parameter_perturbation.py
 pytest -ra tests/test_components/test_field_projection.py
+pytest -ra tests/test_components/test_scene.py
 pytest -ra tests/test_components/test_sidewall.py
 pytest -ra tests/test_components/test_simulation.py
 pytest -ra tests/test_components/test_source.py
@@ -42,10 +45,11 @@ pytest -ra tests/test_plugins/test_polyslab.py
 pytest -ra tests/test_plugins/test_resonance_finder.py
 
 pytest -ra tests/test_web/test_cli.py
-pytest -ra tests/test_web/test_material_fitter.py    
+pytest -ra tests/test_web/test_heat_web.py
+pytest -ra tests/test_web/test_material_fitter.py
 pytest -ra tests/test_web/test_task.py
-pytest -ra tests/test_web/test_tidy3d_folder.py    
-pytest -ra tests/test_web/test_tidy3d_material_library.py    
+pytest -ra tests/test_web/test_tidy3d_folder.py
+pytest -ra tests/test_web/test_tidy3d_material_library.py
 pytest -ra tests/test_web/test_tidy3d_task.py
 pytest -ra tests/test_web/test_webapi.py
 

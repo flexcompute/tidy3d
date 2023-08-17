@@ -74,9 +74,7 @@ def run(
 
     task = HeatSimulationTask.create(heat_simulation, heat_simulation_name, folder_name)
     if verbose:
-        console.log(
-            f"Heat simulation created with task_id='{task.task_id}'."
-        )
+        console.log(f"Heat simulation created with task_id='{task.task_id}'.")
     task.upload(verbose=verbose, progress_callback=progress_callback_upload)
     task.submit()
 
@@ -132,12 +130,12 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
         description="Heat simulation task status.",
     )
 
-#    file_type: str = pydantic.Field(
-#        None,
-#        title="file_type",
-#        description="File type used to upload the heat simulation.",
-#        alias="fileType",
-#    )
+    #    file_type: str = pydantic.Field(
+    #        None,
+    #        title="file_type",
+    #        description="File type used to upload the heat simulation.",
+    #        alias="fileType",
+    #    )
 
     heat_simulation: HeatSimulation = pydantic.Field(
         None,
@@ -171,7 +169,7 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
         """
         folder = Folder.get(folder_name, create=True)
 
-#        heat_simulation.scene.validate_pre_upload(source_required=False)
+        #        heat_simulation.scene.validate_pre_upload(source_required=False)
         resp = http.post(
             HEATSOLVER_API,
             {
@@ -180,9 +178,7 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
                 "fileType": "Hdf5",  # FIXME: still needed? probably always be hdf5
             },
         )
-        log.info(
-            "Heat simulation created with task_id='%s'.", resp["id"]
-        )
+        log.info("Heat simulation created with task_id='%s'.", resp["id"])
         return HeatSimulationTask(**resp, heat_simulation=heat_simulation)
 
     # pylint: disable=arguments-differ, too-many-arguments
@@ -223,8 +219,8 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
         Returns
         -------
         :class:`HeatSimulationTask`
-            :class:`HeatSimulationTask` object containing information about the task, without the mode
-            solver.
+            :class:`HeatSimulationTask` object containing information about the task,
+            without the heat simulation.
         """
         resp = http.get(f"{HEATSOLVER_API}/{self.task_id}")
         return HeatSimulationTask(**resp, heat_simulation=self.heat_simulation)
@@ -262,8 +258,8 @@ class HeatSimulationTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.al
     def submit(self):
         """Start the execution of this task.
 
-        The heat simulation must be uploaded to the server with the :meth:`HeatSimulationTask.upload` method
-        before this step.
+        The heat simulation must be uploaded to the server with the
+        :meth:`HeatSimulationTask.upload` method before this step.
         """
         http.post(f"{HEATSOLVER_API}/{self.task_id}/run")
 

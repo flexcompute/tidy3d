@@ -118,5 +118,3 @@ def mock_remote_api(monkeypatch):
 def test_heat_solver_web(mock_remote_api):
     heat_sim = make_heat_sim()
     _ = run_heat(heat_simulation=heat_sim)
-
-

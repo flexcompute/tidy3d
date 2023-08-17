@@ -10,4 +10,3 @@ HEAT_SOURCE_CMAP = "coolwarm"
 
 plot_params_heat_bc = PlotParams(lw=3)
 plot_params_heat_source = PlotParams(edgecolor="red", lw=0, hatch="..", fill=False)
-

@@ -20,6 +20,6 @@ from .cli import tidy3d_cli
 from .cli.app import configure_fn as configure
 from .asynchronous import run_async
 from .webapi import test
-from .heat import run, HeatSimulationTask
+from .heat import run as run_heat, HeatSimulationTask
 
 migrate()

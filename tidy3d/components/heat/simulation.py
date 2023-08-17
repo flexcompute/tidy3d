@@ -90,21 +90,21 @@ class HeatSimulation(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-#    output_grid_spec: HeatGridType = pd.Field(
-#        title="Grid Specification",
-#        description="Grid specification for heat simulation.",
-##        discriminator=TYPE_TAG_STR,
-#    )
+    #    output_grid_spec: HeatGridType = pd.Field(
+    #        title="Grid Specification",
+    #        description="Grid specification for heat simulation.",
+    ##        discriminator=TYPE_TAG_STR,
+    #    )
 
     heat_domain: Box = pd.Field(
         None,
         title="Heat Simulation Domain",
         description="Domain in which heat simulation is solved. If ``None`` heat simulation is "
-        "solved in the entire domain of the scene."
+        "solved in the entire domain of the scene.",
     )
 
     @pd.validator("scene", always=True)
-    def check_unsupported_geometries(cls, val, values):
+    def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""
         for structure in val.structures:
             if isinstance(structure.geometry, GeometryGroup):
@@ -155,7 +155,10 @@ class HeatSimulation(Tidy3dBaseModel):
                     )
             if isinstance(bc_place, (StructureStructureInterface)):
                 for ind in range(2):
-                    if bc_place.structures[ind] and bc_place.structures[ind] not in structures_names:
+                    if (
+                        bc_place.structures[ind]
+                        and bc_place.structures[ind] not in structures_names
+                    ):
                         raise SetupError(
                             f"Structure '{bc_place.structures[ind]}' provided in "
                             f"`boundary_specs[{bc_ind}].placement' (type '{bc_place.type}') "
@@ -187,10 +190,10 @@ class HeatSimulation(Tidy3dBaseModel):
                     )
         return val
 
-#    def to_perturbed_mediums_scene(self, temperature: SpatialDataArray) -> Simulation:
-#        """Returns underlying :class:`.Simulation` object."""
+    #    def to_perturbed_mediums_scene(self, temperature: SpatialDataArray) -> Simulation:
+    #        """Returns underlying :class:`.Simulation` object."""
 
-#        return self.scene.perturbed_mediums_copy(temperature=temperature)
+    #        return self.scene.perturbed_mediums_copy(temperature=temperature)
 
     @cached_property
     def heat_domain_structure(self) -> Structure:
@@ -204,10 +207,11 @@ class HeatSimulation(Tidy3dBaseModel):
         else:
             heat_domain_actual = self.scene.bounding_box
 
-#        fdtd_background = self.background_structure
-#        return fdtd_background.updated_copy(geometry=heat_domain_actual, name=HEAT_BACK_STRUCTURE_STR)
-        return Structure(geometry=heat_domain_actual, medium=self.scene.medium, name=HEAT_BACK_STRUCTURE_STR)
+        return Structure(
+            geometry=heat_domain_actual, medium=self.scene.medium, name=HEAT_BACK_STRUCTURE_STR
+        )
 
+    # pylint: disable=too-many-arguments
     @equal_aspect
     @add_ax_if_none
     def plot(
@@ -217,7 +221,6 @@ class HeatSimulation(Tidy3dBaseModel):
         z: float = None,
         ax: Ax = None,
         colorbar: str = "conductivity",
-        **patch_kwargs,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
 
@@ -241,9 +244,13 @@ class HeatSimulation(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        ax = self.scene.plot_heat_conductivity(ax=ax, x=x, y=y, z=z, cbar=(colorbar == "conductivity"))
-        ax = self.plot_heat_sources(ax=ax, x=x, y=y, z=z, cbar=(colorbar == "source"))
+        cbar_cond = colorbar == "conductivity"
+        cbar_source = colorbar == "source"
+
+        ax = self.scene.plot_heat_conductivity(ax=ax, x=x, y=y, z=z, cbar=cbar_cond)
+        ax = self.plot_heat_sources(ax=ax, x=x, y=y, z=z, cbar=cbar_source)
         ax = self.plot_heat_boundaries(ax=ax, x=x, y=y, z=z)
+        # pylint: disable=protected-access
         ax = self.scene._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -302,6 +309,7 @@ class HeatSimulation(Tidy3dBaseModel):
         ax = self.scene.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
+        # pylint: disable=protected-access
         ax = self.scene._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
         return ax
@@ -310,18 +318,20 @@ class HeatSimulation(Tidy3dBaseModel):
         """Constructs the plot parameters for given boundary conditions."""
 
         plot_params = plot_params_heat_bc
-        bc = boundary_spec.condition
+        condition = boundary_spec.condition
 
-        if isinstance(bc, TemperatureBC):
+        if isinstance(condition, TemperatureBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_TEMPERATURE)
-        elif isinstance(bc, HeatFluxBC):
+        elif isinstance(condition, HeatFluxBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_FLUX)
-        elif isinstance(bc, ConvectionBC):
+        elif isinstance(condition, ConvectionBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_CONVECTION)
 
         return plot_params
 
-    def _plot_boundary_condition(self, shape: Shapely, boundary_spec: HeatBoundarySpec, ax: Ax) -> Ax:
+    def _plot_boundary_condition(
+        self, shape: Shapely, boundary_spec: HeatBoundarySpec, ax: Ax
+    ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
         ax = self.plot_line(line=shape, plot_params=plot_params_bc, ax=ax)
@@ -336,12 +346,18 @@ class HeatSimulation(Tidy3dBaseModel):
         elif isinstance(line, LineString):
             lines = [line]
 
-        for l in lines:
-            plot_line(l, ax=ax, add_points=False, color=plot_params.edgecolor, linewidth=plot_params.linewidth)
+        for piece in lines:
+            plot_line(
+                piece,
+                ax=ax,
+                add_points=False,
+                color=plot_params.edgecolor,
+                linewidth=plot_params.linewidth,
+            )
             # ax.add_artist(patch)
         return ax
 
-    # pylint:disable=too-many-locals
+    # pylint: disable=too-many-locals,too-many-branches,too-many-statements
     @staticmethod
     def _construct_heat_boundaries(
         structures: List[Structure],
@@ -425,8 +441,9 @@ class HeatSimulation(Tidy3dBaseModel):
 
         # construct boundaries in 2 passes:
 
-        # 1. forward foop to take care of Simulation, StructureSimulation, Structure, and MediumMediums
-        boundaries = [] # bc_spec, structure name, shape, bounds
+        # 1. forward foop to take care of Simulation, StructureSimulation, Structure,
+        # and MediumMediums
+        boundaries = []  # bc_spec, structure name, shape, bounds
         background_shapes = []
         for name, medium, shape, bounds in shapes:
 
@@ -480,7 +497,8 @@ class HeatSimulation(Tidy3dBaseModel):
             # create new medium based boundary, and cut or merge relevant background shapes
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
-            # this is similar to _filter_structures_plane but only mediums participating in BCs are tracked
+            # this is similar to _filter_structures_plane but only mediums participating in BCs
+            # are tracked
             for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
 
                 _minx, _miny, _maxx, _maxy = _bounds
@@ -540,7 +558,9 @@ class HeatSimulation(Tidy3dBaseModel):
             minx, miny, maxx, maxy = bounds
 
             # intersect existing boundaries
-            for index, (_bc_spec, _name, _bdry, _bounds, _completed) in enumerate(boundaries_reverse):
+            for index, (_bc_spec, _name, _bdry, _bounds, _completed) in enumerate(
+                boundaries_reverse
+            ):
 
                 if not _completed:
 
@@ -557,12 +577,24 @@ class HeatSimulation(Tidy3dBaseModel):
                     # event (3) from above
                     if name in _bc_spec.structure.structures:
                         new_bdry = _bdry.intersection(shape)
-                        boundaries_reverse[index] = (_bc_spec, _name, new_bdry, new_bdry.bounds, True)
+                        boundaries_reverse[index] = (
+                            _bc_spec,
+                            _name,
+                            new_bdry,
+                            new_bdry.bounds,
+                            True,
+                        )
 
                     # event (2) from above
                     else:
                         new_bdry = _bdry - shape
-                        boundaries_reverse[index] = (_bc_spec, _name, new_bdry, new_bdry.bounds, _completed)
+                        boundaries_reverse[index] = (
+                            _bc_spec,
+                            _name,
+                            new_bdry,
+                            new_bdry.bounds,
+                            _completed,
+                        )
 
             # create new boundary (event (1) from above)
             if name in struct_to_bc_spec:
@@ -637,6 +669,7 @@ class HeatSimulation(Tidy3dBaseModel):
         size = Box.unpop_axis(0, (inf, inf), axis=axis)
         plane = Box(center=center, size=size)
 
+        # pylint: disable=protected-access
         source_shapes = self.scene._filter_structures_plane(
             structures=structures, plane=plane, property_list=source_list
         )
@@ -654,6 +687,7 @@ class HeatSimulation(Tidy3dBaseModel):
                 )
 
         if cbar:
+            # pylint: disable=protected-access
             self.scene._add_cbar(
                 vmin=source_min,
                 vmax=source_max,
@@ -667,16 +701,15 @@ class HeatSimulation(Tidy3dBaseModel):
         ax = self.scene.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
+        # pylint: disable=protected-access
         ax = self.scene._set_plot_bounds(ax=ax, x=x, y=y, z=z)
         return ax
 
-    def source_bounds(self, freq: float = None) -> Tuple[float, float]:
+    def source_bounds(self) -> Tuple[float, float]:
         """Compute range of heat sources present in the simulation."""
 
         rate_list = [
-            source.rate
-            for source in self.heat_sources
-            if isinstance(source, UniformHeatSource)
+            source.rate for source in self.heat_sources if isinstance(source, UniformHeatSource)
         ]
         rate_list.append(0)
         rate_min = min(rate_list)

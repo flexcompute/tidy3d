@@ -1,8 +1,8 @@
 """Defines heat grid specifications"""
 from __future__ import annotations
 
-import pydantic as pd
 from typing import Union
+import pydantic as pd
 
 from ..base import Tidy3dBaseModel
 from ...constants import MICROMETER
@@ -95,7 +95,6 @@ class DistanceHeatGrid(Tidy3dBaseModel):
             raise ValidationError("'distance_bulk' cannot be smaller than 'distance_interface'.")
 
         return val
-
 
 
 HeatGridType = Union[UniformHeatGrid, DistanceHeatGrid]

@@ -71,7 +71,6 @@ class HeatSimulationData(Tidy3dBaseModel):
     )
 
     def perturbed_mediums_scene(self) -> Scene:
-        """Apply heat data to the original Tidy3D simulation (replaces appropriate media with CustomMedia). """
+        """Apply heat data to the original scene (replaces appropriate media with CustomMedia)."""
 
         return self.heat_simulation.scene.perturbed_mediums_copy(temperature=self.temperature_data)
-

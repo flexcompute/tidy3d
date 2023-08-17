@@ -26,7 +26,9 @@ SCENE_FULL = td.Scene(
         ),
         td.Structure(
             geometry=td.Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
-            medium=td.Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)], name="sellmeier"),
+            medium=td.Sellmeier(
+                coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)], name="sellmeier"
+            ),
             name="sellmeier_sphere",
         ),
         td.Structure(
@@ -244,7 +246,7 @@ def test_plot_eps():
     plt.close()
 
 
-#def test_plot_eps_bounds():
+# def test_plot_eps_bounds():
 #    _ = SCENE_FULL.plot_eps(x=0, hlim=[-0.45, 0.45])
 #    plt.close()
 #    _ = SCENE_FULL.plot_eps(x=0, vlim=[-0.45, 0.45])
@@ -266,7 +268,7 @@ def test_plot_1d_scene():
     plt.close()
 
 
-#def test_plot_bounds():
+# def test_plot_bounds():
 #    _ = SCENE_FULL.plot(x=0, hlim=[-0.45, 0.45])
 #    plt.close()
 #    _ = SCENE_FULL.plot(x=0, vlim=[-0.45, 0.45])
@@ -275,7 +277,7 @@ def test_plot_1d_scene():
 #    plt.close()
 
 
-#def test_plot_3d():
+# def test_plot_3d():
 #    SCENE_FULL.plot_3d()
 #    plt.close()
 

@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .geometry import Box, TriangleMesh
-from .types import Ax, Shapely, FreqBound, TYPE_TAG_STR
+from .types import Ax, Shapely, TYPE_TAG_STR
 from .medium import Medium, MediumType, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, AbstractPerturbationMedium
@@ -122,7 +122,6 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""
-        pass
 
     """ Accounting """
 
@@ -429,14 +428,14 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
         medium_list = [structure.medium for structure in structures]
         return Scene._filter_structures_plane(
-            structures=structures,
-            plane=plane,
-            property_list=medium_list
+            structures=structures, plane=plane, property_list=medium_list
         )
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
-        structures: List[Structure], plane: Box, property_list: List,
+        structures: List[Structure],
+        plane: Box,
+        property_list: List,
     ) -> List[Tuple[Medium, Shapely]]:
         """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
         provided property_list.
@@ -652,7 +651,9 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
     @staticmethod
     def _add_cbar_eps(eps_min: float, eps_max: float, ax: Ax = None) -> None:
         """Add a permittivity colorbar to plot."""
-        Scene._add_cbar(vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax)
+        Scene._add_cbar(
+            vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax
+        )
 
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq".
@@ -694,6 +695,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
             )
         return eps_min, eps_max
 
+    # pylint: disable=too-many-locals
     def _pcolormesh_shape_custom_medium_structure_eps(
         self,
         x: float,
@@ -740,7 +742,9 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
             # now add points in between them
             for coords in coords_to_insert:
                 comp_axis_coords = coords[comp]
-                inds_inside_shape = np.where(np.logical_and(comp_axis_coords > rmin[ind], comp_axis_coords < rmax[ind]))[0]
+                inds_inside_shape = np.where(
+                    np.logical_and(comp_axis_coords > rmin[ind], comp_axis_coords < rmax[ind])
+                )[0]
                 if len(inds_inside_shape) > 0:
                     axis_coords = np.concatenate((axis_coords, comp_axis_coords[inds_inside_shape]))
             # remove duplicates
@@ -943,7 +947,13 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
             )
 
         if cbar:
-            self._add_cbar(vmin=heat_cond_min, vmax=heat_cond_max, label=f"Thermal conductivity ({THERMAL_CONDUCTIVITY})", cmap=STRUCTURE_HEAT_COND_CMAP, ax=ax)
+            self._add_cbar(
+                vmin=heat_cond_min,
+                vmax=heat_cond_max,
+                label=f"Thermal conductivity ({THERMAL_CONDUCTIVITY})",
+                cmap=STRUCTURE_HEAT_COND_CMAP,
+                ax=ax,
+            )
         ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
 
         # clean up the axis display
@@ -964,10 +974,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if isinstance(medium.heat_spec, SolidSpec)]
-        cond_list = [
-            medium.heat_spec.conductivity
-            for medium in medium_list
-        ]
+        cond_list = [medium.heat_spec.conductivity for medium in medium_list]
         cond_min = min(cond_list)
         cond_max = max(cond_list)
         return cond_min, cond_max
@@ -980,7 +987,9 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         reverse: bool = False,
         alpha: float = None,
     ) -> PlotParams:
-        """Constructs the plot parameters for a given medium in simulation.plot_heat_conductivity()."""
+        """Constructs the plot parameters for a given medium in
+        simulation.plot_heat_conductivity().
+        """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
         if alpha is not None:
@@ -1011,9 +1020,15 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         reverse: bool = False,
         alpha: float = None,
     ) -> Ax:
-        """Plot a structure's cross section shape for a given medium, grayscale for thermal conductivity."""
+        """Plot a structure's cross section shape for a given medium, grayscale for thermal
+        conductivity.
+        """
         plot_params = self._get_structure_heat_cond_plot_params(
-            medium=medium, heat_cond_min=heat_cond_min, heat_cond_max=heat_cond_max, alpha=alpha, reverse=reverse
+            medium=medium,
+            heat_cond_min=heat_cond_min,
+            heat_cond_max=heat_cond_max,
+            alpha=alpha,
+            reverse=reverse,
         )
         ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
@@ -1045,6 +1060,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
                 return True
         return False
 
+    # pylint: disable=too-many-locals
     def perturbed_mediums_copy(
         self,
         temperature: SpatialDataArray = None,

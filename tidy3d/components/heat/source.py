@@ -20,7 +20,7 @@ class HeatSource(ABC, Tidy3dBaseModel):
 
     structures: Tuple[str] = pd.Field(
         title="Target Structures",
-        description=f"Names of structures where to apply heat source.",
+        description="Names of structures where to apply heat source.",
     )
 
     @cached_property
@@ -39,7 +39,8 @@ class UniformHeatSource(HeatSource):
 
     rate: Union[float, TimeDataArray] = pd.Field(
         title="Volumetric Heat Rate",
-        description=f"Volumetric rate of heating or cooling (if negative) in units of {VOLUMETRIC_HEAT_RATE}.",
+        description="Volumetric rate of heating or cooling (if negative) in units of "
+        f"{VOLUMETRIC_HEAT_RATE}.",
         units=VOLUMETRIC_HEAT_RATE,
     )
 

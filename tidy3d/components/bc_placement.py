@@ -42,12 +42,11 @@ class StructureStructureInterface(AbstractBCPlacement):
     )
 
     @pd.validator("structures", always=True)
-    def unique_names(cls, val, values):
+    def unique_names(cls, val):
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError(
-                "The same structure is provided twice in "
-                ":class:`StructureStructureInterface`."
+                "The same structure is provided twice in :class:.`StructureStructureInterface`."
             )
         return val
 
@@ -66,12 +65,11 @@ class MediumMediumInterface(AbstractBCPlacement):
     )
 
     @pd.validator("mediums", always=True)
-    def unique_names(cls, val, values):
+    def unique_names(cls, val):
         """Error if the same structure is provided twice"""
         if val[0] == val[1]:
             raise SetupError(
-                "The same medium is provided twice in "
-                ":class:`MediumMediumInterface`."
+                "The same medium is provided twice in :class:.`MediumMediumInterface`."
             )
         return val
 

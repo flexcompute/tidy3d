@@ -112,7 +112,9 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
-            medium=td.Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)], name="sellmeier"),
+            medium=td.Sellmeier(
+                coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)], name="sellmeier"
+            ),
             name="sellmeier_sphere",
         ),
         td.Structure(

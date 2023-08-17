@@ -67,7 +67,7 @@ class ConvectionBC(HeatBC):
     )
 
 
-HeatBCType = Union[TemperatureBC, HeatFluxBC, ConvectionBC]
+HeatBoundaryConditionType = Union[TemperatureBC, HeatFluxBC, ConvectionBC]
 
 
 class HeatBoundarySpec(Tidy3dBaseModel):
@@ -87,7 +87,7 @@ class HeatBoundarySpec(Tidy3dBaseModel):
         description="Location to apply boundary conditions.",
     )
 
-    condition: HeatBCType = pd.Field(
+    condition: HeatBoundaryConditionType = pd.Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
     )
