@@ -29,6 +29,8 @@ the difference that can be observed when slightly modifying the grid resolution.
 - `web.download_json()` will download `simulation.hdf5.gz` and unzip it, then load the json from the hdf5 file.
 - `SimulationTask.get_simulation_hdf5()` will download simulation.hdf5.gz and unzip it to hdf5 file.
 - The width of Tidy3D logging output is changed to 80 characters.
+- Upgrades to `pydantic==2.*` with `pydantic.v1` imports.
+- Uses `ruff` for linting instead of `pylint`.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.
