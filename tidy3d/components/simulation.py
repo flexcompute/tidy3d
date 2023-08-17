@@ -3194,13 +3194,14 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
         >>> from tidy3d import Scene, Medium, Box, Structure, GridSpec
         >>> box = Structure(
         ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
-        ...     medium=Medium(permittity=5),
+        ...     medium=Medium(permittivity=5),
         ... )
         >>> scene = Scene(
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),
         ...     structures=[box],
-        ...     medium=Medium(permittity=3)
+        ...     medium=Medium(permittivity=3),
+        ... )
         >>> sim = Simulation.from_scene(
         ...     scene=scene,
         ...     run_time=1e-12,

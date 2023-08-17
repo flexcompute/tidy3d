@@ -163,7 +163,7 @@ def test_heat_sim():
         _ = heat_sim.updated_copy(heat_sources=[UniformHeatSource(structures=["noname"])], rate=-10)
 
     # test unsupported yet geometries
-    vertices = np.array([(0,0), (1,0), (1,1)])
+    vertices = np.array([(0, 0), (1, 0), (1, 1)])
     p = td.PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     _, structure = make_heat_structures()
     structure = structure.updated_copy(geometry=p)
@@ -182,7 +182,6 @@ def test_heat_sim():
         _ = heat_sim.updated_copy(
             heat_domain=None, scene=heat_sim.scene.updated_copy(size=(1, 0, 1))
         )
-
 
 
 def make_heat_sim_data():

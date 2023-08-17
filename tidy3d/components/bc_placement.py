@@ -15,7 +15,12 @@ class AbstractBCPlacement(ABC, Tidy3dBaseModel):
 
 
 class StructureBoundary(AbstractBCPlacement):
-    """Placement of boundary conditions on the structure's boundary."""
+    """Placement of boundary conditions on the structure's boundary.
+
+    Example
+    -------
+    >>> bc_placement = StructureBoundary(structure="box")
+    """
 
     structure: str = pd.Field(
         title="Structure Name",
@@ -24,7 +29,12 @@ class StructureBoundary(AbstractBCPlacement):
 
 
 class StructureStructureInterface(AbstractBCPlacement):
-    """Placement of boundary conditions between two structures."""
+    """Placement of boundary conditions between two structures.
+
+    Example
+    -------
+    >>> bc_placement = StructureStructureInterface(structures=["box", "sphere"])
+    """
 
     structures: Tuple[str, str] = pd.Field(
         title="Structures",
@@ -43,7 +53,12 @@ class StructureStructureInterface(AbstractBCPlacement):
 
 
 class MediumMediumInterface(AbstractBCPlacement):
-    """Placement of boundary conditions between two mediums."""
+    """Placement of boundary conditions between two mediums.
+
+    Example
+    -------
+    >>> bc_placement = MediumMediumInterface(mediums=["dieletric", "metal"])
+    """
 
     mediums: Tuple[str, str] = pd.Field(
         title="Mediums",
@@ -62,11 +77,21 @@ class MediumMediumInterface(AbstractBCPlacement):
 
 
 class SimulationBoundary(AbstractBCPlacement):
-    """Placement of boundary conditions on the simulation box boundary."""
+    """Placement of boundary conditions on the simulation box boundary.
+
+    Example
+    -------
+    >>> bc_placement = SimulationBoundary()
+    """
 
 
 class StructureSimulationBoundary(AbstractBCPlacement):
-    """Placement of boundary conditions on the simulation box boundary covered by the structure."""
+    """Placement of boundary conditions on the simulation box boundary covered by the structure.
+
+    Example
+    -------
+    >>> bc_placement = StructureSimulationBoundary(structure="box")
+    """
 
     structure: str = pd.Field(
         title="Structure Name",

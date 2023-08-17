@@ -34,9 +34,7 @@ class UniformHeatSource(HeatSource):
 
     Example
     -------
-    >>> from tidy3d import Structure
-    >>> structure = Structure(geometry
-    >>> heat_source = UniformHeatSource(value=1)
+    >>> heat_source = UniformHeatSource(rate=1, structures=["box"])
     """
 
     rate: Union[float, TimeDataArray] = pd.Field(

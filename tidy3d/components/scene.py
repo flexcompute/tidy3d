@@ -92,7 +92,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
     @pydantic.validator("structures", always=True)
     def _structures_not_at_edges(cls, val, values):
-        """Warn if any structures lie at the simulation boundaries."""
+        """Warn if any structures lie at the scene boundaries."""
 
         if val is None:
             return val
@@ -128,7 +128,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
     @cached_property
     def mediums(self) -> Set[MediumType]:
-        """Returns set of distinct :class:`.AbstractMedium` in simulation.
+        """Returns set of distinct :class:`.AbstractMedium` in scene.
 
         Returns
         -------
@@ -142,8 +142,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
-        ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium`
-        in simulation.
+        ``medium_map[medium]`` returns unique global index of :class:`.AbstractMedium` in scene.
 
         Returns
         -------
@@ -155,7 +154,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
     @cached_property
     def background_structure(self) -> Structure:
-        """Returns structure representing the background of the :class:`.Simulation`."""
+        """Returns structure representing the background of the :class:`.Scene`."""
         geometry = Box(size=(inf, inf, inf))
         return Structure(geometry=geometry, medium=self.medium)
 
@@ -274,7 +273,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
     def plot_structures(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None
     ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
@@ -316,7 +315,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
-        """Constructs the plot parameters for a given medium in simulation.plot()."""
+        """Constructs the plot parameters for a given medium in scene.plot()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
 
@@ -348,7 +347,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         plt.colorbar(mappable, cax=cax, label=label)
 
     def _set_plot_bounds(self, ax: Ax, x: float = None, y: float = None, z: float = None) -> Ax:
-        """Sets the xy limits of the simulation at a plane, useful after plotting.
+        """Sets the xy limits of the scene at a plane, useful after plotting.
 
         Parameters
         ----------
@@ -412,19 +411,15 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
     def _filter_structures_plane_medium(  # pylint:disable=too-many-locals
         structures: List[Structure], plane: Box
     ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on plane specified by {x,y,z}.
-        Overlaps are removed or merged depending on medium.
+        """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
+        medium.
 
         Parameters
         ----------
         structures : List[:class:`.Structure`]
-            list of structures to filter on the plane.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
+            List of structures to filter on the plane.
+        plane : Box
+            Plane specification.
 
         Returns
         -------
@@ -441,31 +436,29 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
     @staticmethod
     def _filter_structures_plane(  # pylint:disable=too-many-locals
-        structures: List[Structure], plane: Box, property_list,
+        structures: List[Structure], plane: Box, property_list: List,
     ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on plane specified by {x,y,z}.
-        Overlaps are removed or merged depending on medium.
+        """Compute list of shapes to plot on plane. Overlaps are removed or merged depending on
+        provided property_list.
 
         Parameters
         ----------
         structures : List[:class:`.Structure`]
-            list of structures to filter on the plane.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
+            List of structures to filter on the plane.
+        plane : Box
+            Plane specification.
+        property_list : List = None
+            Property value for each structure.
 
         Returns
         -------
         List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
-            List of shapes and mediums on the plane after merging.
+            List of shapes and their property value on the plane after merging.
         """
 
         if len(structures) != len(property_list):
             raise SetupError(
-                "Number of provided property entries is not equal to the number of structures."
+                "Number of provided property values is not equal to the number of structures."
             )
 
         shapes = []
@@ -529,7 +522,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         alpha: float = None,
         ax: Ax = None,
     ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
         Parameters
@@ -572,7 +565,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         reverse: bool = False,
         ax: Ax = None,
     ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
 
         Parameters
@@ -662,7 +655,19 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         Scene._add_cbar(vmin=eps_min, vmax=eps_max, label=r"$\epsilon_r$", cmap=STRUCTURE_EPS_CMAP, ax=ax)
 
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
-        """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
+        """Compute range of (real) permittivity present in the simulation at frequency "freq".
+
+        Parameters
+        ----------
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Minimal and maximal values of relative permittivity in scene.
+        """
 
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
@@ -837,8 +842,8 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         cbar: bool = True,
         ax: Ax = None,
     ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
+        """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
+        The thermal conductivity is plotted in grayscale based on its value.
 
         Parameters
         ----------
@@ -851,6 +856,8 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
+        cbar : bool = True
+            Whether to plot a colorbar for the thermal conductivity.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -876,8 +883,8 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         reverse: bool = False,
         ax: Ax = None,
     ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
+        The thermal conductivity is plotted in grayscale based on its value.
 
         Parameters
         ----------
@@ -925,9 +932,6 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
 
         heat_cond_min, heat_cond_max = self.heat_conductivity_bounds()
         for (medium, shape) in medium_shapes:
-#            if medium == self.medium and alpha < 1:
-#                continue
-            # no need to add patches for custom medium
             ax = self._plot_shape_structure_heat_cond(
                 alpha=alpha,
                 medium=medium,
@@ -950,11 +954,16 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     def heat_conductivity_bounds(self) -> Tuple[float, float]:
-        """Compute range of thermal conductivities present in the scene."""
+        """Compute range of thermal conductivities present in the scene.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Minimal and maximal values of thermal conductivity in scene.
+        """
 
         medium_list = [self.medium] + list(self.mediums)
         medium_list = [medium for medium in medium_list if isinstance(medium.heat_spec, SolidSpec)]
-        # regular medium
         cond_list = [
             medium.heat_spec.conductivity
             for medium in medium_list
@@ -1002,7 +1011,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         reverse: bool = False,
         alpha: float = None,
     ) -> Ax:
-        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
+        """Plot a structure's cross section shape for a given medium, grayscale for thermal conductivity."""
         plot_params = self._get_structure_heat_cond_plot_params(
             medium=medium, heat_cond_min=heat_cond_min, heat_cond_max=heat_cond_max, alpha=alpha, reverse=reverse
         )
@@ -1010,25 +1019,6 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         return ax
 
     """ Misc """
-
-    @cached_property
-    def frequency_range(self) -> FreqBound:
-        """Range of frequencies spanning all sources' frequency dependence.
-
-        Returns
-        -------
-        Tuple[float, float]
-            Minumum and maximum frequencies of the power spectrum of the sources.
-        """
-        source_ranges = [source.source_time.frequency_range() for source in self.sources]
-        freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
-        freq_max = max((freq_range[1] for freq_range in source_ranges), default=0.0)
-
-        return (freq_min, freq_max)
-
-#    def plot_3d(self) -> None:
-#        """Render 3D plot of ``Simulation`` (in jupyter notebook only)."""
-#        return plot_sim_3d(self)
 
     @property
     def custom_datasets(self) -> List[Dataset]:

@@ -36,7 +36,35 @@ class HeatSimulation(Tidy3dBaseModel):
 
     Example
     -------
-    >>> FIXME
+    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformHeatGrid
+    >>> scene = Scene(
+    ...     size=(3.0, 3.0, 3.0),
+    ...     structures=[
+    ...         Structure(
+    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=Medium(
+    ...                 permittivity=2.0, heat_spec=SolidSpec(
+    ...                     conductivity=1,
+    ...                     capacity=1,
+    ...                 )
+    ...             ),
+    ...             name="box",
+    ...         ),
+    ...     ],
+    ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
+    ... )
+    >>> heat_sim = HeatSimulation(
+    ...     scene=scene,
+    ...     grid_spec=UniformHeatGrid(dl=0.1),
+    ...     heat_sources=[UniformHeatSource(rate=1, structures=["box"])],
+    ...     boundary_specs=[
+    ...         HeatBoundarySpec(
+    ...             placement=StructureBoundary(structure="box"),
+    ...             condition=TemperatureBC(temperature=500),
+    ...         )
+    ...     ],
+    ...     heat_domain=Box(size=(2, 2, 2)),
+    ... )
     """
 
     scene: Scene = pd.Field(

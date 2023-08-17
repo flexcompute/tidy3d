@@ -17,7 +17,12 @@ class HeatBC(ABC, Tidy3dBaseModel):
 
 
 class TemperatureBC(HeatBC):
-    """Constant temperature thermal boundary conditions."""
+    """Constant temperature thermal boundary conditions.
+
+    Example
+    -------
+    >>> bc = TemperatureBC(temperature=300)
+    """
 
     temperature: pd.PositiveFloat = pd.Field(
         title="Temperature",
@@ -27,7 +32,12 @@ class TemperatureBC(HeatBC):
 
 
 class HeatFluxBC(HeatBC):
-    """Constant flux thermal boundary conditions."""
+    """Constant flux thermal boundary conditions.
+
+    Example
+    -------
+    >>> bc = HeatFluxBC(flux=1)
+    """
 
     flux: float = pd.Field(
         title="Heat Flux",
@@ -37,7 +47,12 @@ class HeatFluxBC(HeatBC):
 
 
 class ConvectionBC(HeatBC):
-    """Convective thermal boundary conditions."""
+    """Convective thermal boundary conditions.
+
+    Example
+    -------
+    >>> bc = ConvectionBC(ambient_temperature=300, transfer_coeff=1)
+    """
 
     ambient_temperature: pd.PositiveFloat = pd.Field(
         title="Ambient Temperature",
@@ -52,15 +67,20 @@ class ConvectionBC(HeatBC):
     )
 
 
-class HeatBCInterface(HeatBC):
-    """Temperature and flux continuity."""
-
-
-HeatBCType = Union[TemperatureBC, HeatFluxBC, ConvectionBC, HeatBCInterface]
+HeatBCType = Union[TemperatureBC, HeatFluxBC, ConvectionBC]
 
 
 class HeatBoundarySpec(Tidy3dBaseModel):
-    """Heat boundary conditions specification."""
+    """Heat boundary conditions specification.
+
+    Example
+    -------
+    >>> from tidy3d import SimulationBoundary
+    >>> bc_spec = HeatBoundarySpec(
+    ...     placement=SimulationBoundary(),
+    ...     condition=ConvectionBC(ambient_temperature=300, transfer_coeff=1),
+    ... )
+    """
 
     placement: BCPlacementType = pd.Field(
         title="Boundary Conditions Placement",

@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, STL_GEO, custom_medium, custom_drude, custom_lorentz
-from ..utils import custom_debye, custom_poleresidue, custom_sellmeier
+from ..utils import assert_log_level, log_capture, STL_GEO, custom_medium, custom_drude
+from ..utils import custom_debye, custom_lorentz, custom_poleresidue, custom_sellmeier
 
 SCENE = td.Scene(size=(1, 1, 1))
 
