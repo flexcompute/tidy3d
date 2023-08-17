@@ -1,5 +1,5 @@
 """Geometry extruded from polygonal shapes."""
-# pylint:disable=too-many-lines
+
 from __future__ import annotations
 
 from typing import List, Tuple
@@ -219,7 +219,7 @@ class PolySlab(base.Planar):
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments
+    def from_gds(
         cls,
         gds_cell,
         axis: Axis,
@@ -425,7 +425,6 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
-    # pylint:disable=too-many-locals
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
     ) -> np.ndarray[bool]:
@@ -544,7 +543,7 @@ class PolySlab(base.Planar):
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
         return [shapely.Polygon(vertices_z)]
 
-    def _intersections_side(self, position, axis) -> list:  # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
 
         For slanted polyslab, the procedure is as follows,
@@ -689,7 +688,7 @@ class PolySlab(base.Planar):
         height = height[height < self.length_axis - fp_eps]
         return height
 
-    def _find_intersecting_ys_angle_vertical(  # pylint:disable=too-many-locals
+    def _find_intersecting_ys_angle_vertical(
         self, vertices: np.ndarray, position: float, axis: int, exclude_on_vertices: bool = False
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
@@ -768,7 +767,7 @@ class PolySlab(base.Planar):
 
         return ints_y_sort, ints_angle_sort
 
-    def _find_intersecting_ys_angle_slant(  # pylint:disable=too-many-locals, too-many-statements
+    def _find_intersecting_ys_angle_slant(
         self, vertices: np.ndarray, position: float, axis: int
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Finds pairs of forward and backwards vertices where polygon intersects position at axis,
@@ -1012,7 +1011,7 @@ class PolySlab(base.Planar):
         return PolySlab._orient(PolySlab._remove_duplicate_vertices(vertices_np))
 
     @staticmethod
-    def _edge_events_detection(  # pylint:disable=too-many-return-statements
+    def _edge_events_detection(
         proper_vertices: np.ndarray, dilation: float, ignore_at_dist: bool = True
     ) -> bool:
         """Detect any edge events within the offset distance ``dilation``.
@@ -1110,7 +1109,7 @@ class PolySlab(base.Planar):
         return np.array(vertices_tuple)
 
     @staticmethod
-    def _shift_vertices(  # pylint:disable=too-many-locals
+    def _shift_vertices(
         vertices: np.ndarray, dist
     ) -> Tuple[np.ndarray, np.ndarray, Tuple[np.ndarray, np.ndarray]]:
         """Shifts the vertices of a polygon outward uniformly by distances
@@ -1278,7 +1277,7 @@ class ComplexPolySlabBase(PolySlab):
         return val
 
     @classmethod
-    def from_gds(  # pylint:disable=too-many-arguments
+    def from_gds(
         cls,
         gds_cell,
         axis: Axis,

@@ -28,7 +28,7 @@ from ..log import get_logging_console
 PTS_PER_WVL = 10
 
 # Numpy float array and related array types
-# pylint: disable=invalid-name
+
 ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayComplex4D]
 
 
@@ -93,7 +93,7 @@ class FieldProjector(Tidy3dBaseModel):
         return self.surfaces[0].monitor.freqs
 
     @classmethod
-    def from_near_field_monitors(  # pylint:disable=too-many-arguments
+    def from_near_field_monitors(
         cls,
         sim_data: SimulationData,
         near_monitors: List[FieldMonitor],
@@ -203,9 +203,7 @@ class FieldProjector(Tidy3dBaseModel):
         return currents
 
     @staticmethod
-    def _fields_to_currents(  # pylint:disable=too-many-locals
-        field_data: FieldData, surface: FieldProjectionSurface
-    ) -> FieldData:
+    def _fields_to_currents(field_data: FieldData, surface: FieldProjectionSurface) -> FieldData:
         """Returns surface current densities associated with a given :class:`.FieldData` object.
 
         Parameters
@@ -254,7 +252,6 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
     @staticmethod
-    # pylint:disable=too-many-locals, too-many-arguments
     def _resample_surface_currents(
         currents: xr.Dataset,
         sim_data: SimulationData,
@@ -337,7 +334,6 @@ class FieldProjector(Tidy3dBaseModel):
         """Trapezoidal integration in two dimensions."""
         return np.trapz(np.trapz(np.squeeze(function) * phase, pts_u, axis=0), pts_v, axis=0)
 
-    # pylint:disable=too-many-locals, too-many-arguments
     def _far_fields_for_surface(
         self,
         frequency: float,
@@ -694,7 +690,6 @@ class FieldProjector(Tidy3dBaseModel):
 
     """Exact projections"""
 
-    # pylint:disable=too-many-locals, too-many-arguments, too-many-statements, invalid-name
     def _fields_for_surface_exact(
         self,
         x: float,

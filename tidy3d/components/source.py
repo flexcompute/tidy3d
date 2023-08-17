@@ -1,5 +1,5 @@
 """Defines electric current sources for injecting light into simulation."""
-# pylint: disable=too-many-lines
+
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
@@ -22,7 +22,7 @@ from .mode import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
-from ..constants import inf  # pylint:disable=unused-import
+from ..constants import inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 
@@ -143,7 +143,6 @@ class SourceTime(ABC, Tidy3dBaseModel):
         ax.set_aspect("auto")
         return ax
 
-    # pylint:disable=too-many-arguments
     @add_ax_if_none
     def plot_spectrum(
         self,
@@ -855,7 +854,6 @@ class AngledFieldSource(DirectionalSource, ABC):
             )
         return val
 
-    # pylint: disable=no-member
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""

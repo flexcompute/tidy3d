@@ -1,4 +1,3 @@
-# pylint:disable=unused-argument
 """handles filesystem, storage
 """
 import pathlib
@@ -204,7 +203,6 @@ def get_s3_sts_token(
     return _s3_sts_tokens[cache_key]
 
 
-# pylint: disable=too-many-arguments
 def upload_file(
     resource_id: str,
     path: str,

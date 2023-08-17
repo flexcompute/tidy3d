@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name
 """ utilities for plotting """
 from __future__ import annotations
 
@@ -231,7 +230,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """Make 3D display of simulation in ipyython notebook."""
 
     try:
-        # pylint:disable=import-outside-toplevel
+
         from IPython.display import display, HTML
     except ImportError as e:
         raise SetupError(
@@ -240,7 +239,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
         ) from e
 
     uuid = str(int(time.time() * 1000)) + str(random.randint(0, 100000))
-    # pylint:disable=protected-access
+
     js_code = f"""
     window.postMessageToViewer{uuid} = event => {{
         if(event.data.type === 'viewer'&&event.data.uuid==='{uuid}'){{

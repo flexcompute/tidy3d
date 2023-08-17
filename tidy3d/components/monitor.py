@@ -287,7 +287,7 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
-    def plot(  # pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,

@@ -1,3 +1,4 @@
+"""Migrate authentication to API key."""
 import json
 import os
 
@@ -7,10 +8,6 @@ import toml
 
 from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
 from ..environment import Env
-
-
-# disable pylint for this file
-# pylint: disable-all
 
 
 def migrate() -> bool:

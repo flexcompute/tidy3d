@@ -1,4 +1,4 @@
-"""Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
+"""Holds dispersive models for several commonly used optical materials."""
 import json
 from typing import Dict, List
 import pydantic.v1 as pd
@@ -15,8 +15,7 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
 
     mat_lib_dict = {
         f'{mat.name} ("{mat_name}")': {
-            var_name: json.loads(var.medium._json_string)  # pylint: disable=protected-access
-            for var_name, var in mat.variants.items()
+            var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()
         }
         for mat_name, mat in material_library.items()
         if not isinstance(mat, type)

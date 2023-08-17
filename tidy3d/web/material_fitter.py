@@ -61,7 +61,6 @@ class MaterialFitterTask(Submittable):
         ..., title="resource path", description="resource path", alias="resourcePath"
     )
 
-    # pylint: disable=arguments-differ
     @classmethod
     def submit(cls, fitter: DispersionFitter, options: FitterOptions) -> MaterialFitterTask:
         """Create and kickoff fitter task.

@@ -38,7 +38,6 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         ..., title="Folder name", description="folder name", alias="projectName"
     )
 
-    # pylint: disable=arguments-differ
     @classmethod
     def list(cls) -> []:
         """List all folders.
@@ -58,7 +57,6 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
             else None
         )
 
-    # pylint: disable=arguments-differ
     @classmethod
     def get(cls, folder_name: str, create: bool = False):
         """Get folder by name.
@@ -86,7 +84,6 @@ class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
         FOLDER_CACHE[folder_name] = folder
         return folder
 
-    # pylint: disable=arguments-differ
     @classmethod
     def create(cls, folder_name: str):
         """Create a folder, return existing folder if there is one has the same name.
@@ -192,7 +189,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             )
         return values
 
-    # pylint: disable=arguments-differ,too-many-arguments
     @classmethod
     def create(
         cls,
@@ -246,7 +242,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         return SimulationTask(**resp, simulation=simulation, folder=folder)
 
-    # pylint: disable=arguments-differ
     @classmethod
     def get(cls, task_id: str) -> SimulationTask:
         """Get task from the server by id.

@@ -90,7 +90,6 @@ class RotationAroundAxis(AbstractRotation):
         return np.isclose(self.angle % (2 * np.pi), 0)
 
     @cached_property
-    # pylint: disable=invalid-name
     def matrix(self) -> TensorReal:
         """Rotation matrix."""
 

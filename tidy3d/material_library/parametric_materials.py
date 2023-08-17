@@ -269,7 +269,7 @@ class Graphene(ParametricVariantItem2D):
 
         return self.scaling * sigma
 
-    def _fit_interband_conductivity(  # pylint: disable=too-many-locals
+    def _fit_interband_conductivity(
         self,
         freqs: List[float],
         sigma: List[complex],
