@@ -415,6 +415,12 @@ class PermittivityMonitor(FreqMonitor):
         "point of the monitor grid is always included.",
     )
 
+    apodization: ApodizationSpec = pydantic.Field(
+        ApodizationSpec(),
+        title="Apodization Specification",
+        description="This field is ignored in this monitor.",
+    )
+
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of monitor storage given the number of points after discretization."""
         # stores 3 complex number per grid cell, per frequency
