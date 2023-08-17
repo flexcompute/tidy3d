@@ -8,16 +8,20 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic as pd
 from pydantic import Extra, Field, parse_obj_as
-from tidy3d import Simulation
-from tidy3d.version import __version__
-from tidy3d.exceptions import WebError
 
-from .cache import FOLDER_CACHE
-from .http_management import http
-from .s3utils import download_file, upload_file
+from ...cache import FOLDER_CACHE
+from ...http_management import http
+from //.s3utils import download_file, upload_file
+from rich.console import Console
+
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
-from .file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
+from .stub import Stub
+
+from ..cache import FOLDER_CACHE
+from ..http_management import http
+from ..s3utils import download_file, upload_file
+from ..file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
 
 from ..log import get_logging_console
 
@@ -144,7 +148,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    simulation: Optional[Simulation] = Field(
+    simulation: Optional[Stub] = Field(
         title="simulation", description="A copy of the Simulation being run as this task."
     )
 
@@ -177,6 +181,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     #     description="List of parent task ids for the simulation, used internally only."
     # )
 
+    # TODO: this can be moved to the front end webapi.
     @pd.root_validator(pre=True)
     def _error_if_jax_sim(cls, values):
         """Raise error if user tries to submit simulation that's a JaxSimulation."""
@@ -195,7 +200,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     @classmethod
     def create(
         cls,
-        simulation: Simulation,
+        simulation: Stub,
         task_name: str,
         folder_name: str = "default",
         callback_url: str = None,
@@ -285,7 +290,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             raise ValueError("Task id not found.")
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
-    def get_simulation(self) -> Optional[Simulation]:
+    def get_simulation(self) -> Optional[Stub]:
         """Download simulation from server.
 
         Returns
@@ -331,7 +336,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                     console = get_logging_console()
                     console.log("Generate simulation.json successfully.")
         else:
-            raise WebError("Failed to download simulation.json.")
+            raise Exception("Failed to download simulation.json.")
 
     def upload_simulation(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
@@ -442,7 +447,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if solver_version:
             protocol_version = None
         else:
-            protocol_version = __version__
+            protocol_version = self.simulation.version
 
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
@@ -471,7 +476,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if solver_version:
             protocol_version = None
         else:
-            protocol_version = __version__
+            protocol_version = self.simulation.__version__
 
         assert self.task_id
         resp = http.post(
@@ -545,7 +550,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 console = get_logging_console()
                 console.log(f"Extract {SIM_FILE_HDF5_GZ} to {to_file} successfully.")
         else:
-            raise WebError("Failed to download simulation.hdf5")
+            raise Exception("Failed to download simulation.hdf5")
 
     def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.

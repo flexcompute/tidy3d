@@ -4,7 +4,9 @@ import gzip
 
 import h5py
 
-from tidy3d.components.base import JSON_TAG
+JSON_TAG = "JSON_STRING"
+# TODO: note, duplicated from tidy3d.components.base
+# TODO: is this the best place for this?
 
 
 def compress_file_to_gzip(input_file, output_gz_file):
@@ -33,6 +35,7 @@ def extract_gz_file(input_gz_file, output_file):
             f_out.write(f_in.read())
 
 
+# TODO: this function is specific to Simulation, should be generic
 def read_simulation_from_hdf5(file_name: str):
     """read simulation str from hdf5"""
 

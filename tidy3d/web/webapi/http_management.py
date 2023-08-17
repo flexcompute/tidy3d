@@ -9,8 +9,9 @@ import requests
 import toml
 
 from .environment import Env
-from ..exceptions import WebError
-from ..version import __version__
+from ...version import __version__  # TODO: can't import this, need to grab from request
+
+# TODO : raise a more specific Exception or define WebError
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
@@ -61,7 +62,7 @@ def api_key_auth(request: requests.request) -> requests.request:
             "apikey = 'XXX'. Here XXX is your API key copied from your account page within quotes."
         )
     request.headers["simcloud-api-key"] = key
-    request.headers["tidy3d-python-version"] = __version__
+    request.headers["tidy3d-python-version"] = request.get("__version__")  # TODO: make this work
     return request
 
 
@@ -80,7 +81,7 @@ def http_interceptor(func):
                 return None
             json_resp = resp.json()
             if "error" in json_resp.keys():
-                raise WebError(json_resp["error"])
+                raise Exception(json_resp["error"])
             resp.raise_for_status()
 
         if not resp.text:

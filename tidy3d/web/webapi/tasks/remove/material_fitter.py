@@ -12,8 +12,8 @@ import requests
 from pydantic import BaseModel, Field
 from tidy3d.plugins.dispersion import DispersionFitter
 
-from .http_management import http
-from .types import Submittable
+from ..http_management import http
+from ..types import Submittable
 
 
 class ConstraintEnum(str, Enum):

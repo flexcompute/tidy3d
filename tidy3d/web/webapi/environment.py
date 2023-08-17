@@ -3,7 +3,9 @@ import os
 
 from pydantic import BaseSettings, Field
 
-from tidy3d import log
+from logging import log
+
+# TODO: decide different logger?
 
 
 class EnvironmentConfig(BaseSettings):

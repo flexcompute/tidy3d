@@ -10,11 +10,13 @@ import toml
 from requests import Session
 import requests
 
-from .cli.constants import CONFIG_FILE
 from .environment import Env
-from ..exceptions import WebError
-from ..version import __version__
 
+# TODO : raise a more specific Exception
+
+# TODO: duplicated from tidy3d/web/cli/constants.py
+TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
+CONFIG_FILE = TIDY3D_DIR + "/config"
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
 
@@ -52,7 +54,9 @@ def auth(request: requests.request) -> requests.request:
     key = api_key()
     if key:
         request.headers["simcloud-api-key"] = key
-        request.headers["tidy3d-python-version"] = __version__
+        request.headers["tidy3d-python-version"] = request.get(
+            "__version__"
+        )  # TODO: make this work
         return request
 
     headers = get_headers()
@@ -101,14 +105,14 @@ def handle_response(func):
 
         # if still unauthorized, raise an error
         if resp.status_code == ResponseCodes.UNAUTHORIZED.value:
-            raise WebError(resp.text)
+            raise Exception(resp.text)
 
         json_resp = resp.json()
 
         # if the response status is still not OK, try to raise error from the json
         if resp.status_code != ResponseCodes.OK.value:
             if "error" in json_resp.keys():
-                raise WebError(json_resp["error"])
+                raise Exception(json_resp["error"])
             resp.raise_for_status()
 
         return json_resp["data"] if "data" in json_resp else json_resp
