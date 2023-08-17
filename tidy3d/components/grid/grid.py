@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Tuple, List, Union
 
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel
 from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
@@ -111,7 +111,7 @@ class Coords(Tidy3dBaseModel):
                 return array
 
         # Apply interp for the rest
-        is_sorted = all((np.all(np.diff(array.coords[f]) > 0) for f in interp_ax))
+        is_sorted = all(np.all(np.diff(array.coords[f]) > 0) for f in interp_ax)
         interp_param = {
             "method": interp_method,
             "assume_sorted": is_sorted,

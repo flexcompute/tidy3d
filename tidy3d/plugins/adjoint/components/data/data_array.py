@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Tuple, Any, Dict, List
 
 import h5py
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import jax.numpy as jnp
 import jax

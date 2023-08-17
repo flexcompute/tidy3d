@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from pydantic import BaseModel
+from pydantic.v1 import BaseModel
 
 
 class Tidy3DResource(BaseModel, ABC):

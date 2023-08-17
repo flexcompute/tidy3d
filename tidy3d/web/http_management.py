@@ -29,7 +29,7 @@ def api_key() -> None:
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
     if os.path.exists(f"{expanduser('~')}/.tidy3d/config"):
-        with open(f"{expanduser('~')}/.tidy3d/config", "r", encoding="utf-8") as config_file:
+        with open(f"{expanduser('~')}/.tidy3d/config", encoding="utf-8") as config_file:
             config = toml.loads(config_file.read())
             return config.get("apikey", "")
 

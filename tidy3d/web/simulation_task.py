@@ -6,8 +6,9 @@ import pathlib
 import tempfile
 from datetime import datetime
 from typing import List, Optional, Callable, Tuple
-import pydantic as pd
-from pydantic import Extra, Field, parse_obj_as
+import pydantic.v1 as pd
+from pydantic.v1 import Extra, Field, parse_obj_as
+
 from tidy3d import Simulation
 from tidy3d.version import __version__
 from tidy3d.exceptions import WebError

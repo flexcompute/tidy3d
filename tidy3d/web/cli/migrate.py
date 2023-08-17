@@ -16,7 +16,7 @@ from ..environment import Env
 def migrate() -> bool:
     """Click command to migrate the credential to api key."""
     if os.path.exists(CREDENTIAL_FILE):
-        with open(CREDENTIAL_FILE, "r", encoding="utf-8") as fp:
+        with open(CREDENTIAL_FILE, encoding="utf-8") as fp:
             auth_json = json.load(fp)
         email = auth_json["email"]
         password = auth_json["password"]

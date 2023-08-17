@@ -8,7 +8,7 @@ import warnings
 
 import xarray as xr
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
@@ -2155,9 +2155,9 @@ class DiffractionData(AbstractFieldProjectionData):
         h_x, h_y, h_z = self.monitor.sph_2_car_field(
             0, self.Htheta.values, self.Hphi.values, theta, phi
         )
-        e_x, e_y, e_z, h_x, h_y, h_z = [
+        e_x, e_y, e_z, h_x, h_y, h_z = (
             np.nan_to_num(fld) for fld in [e_x, e_y, e_z, h_x, h_y, h_z]
-        ]
+        )
 
         fields = [e_x, e_y, e_z, h_x, h_y, h_z]
         keys = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]

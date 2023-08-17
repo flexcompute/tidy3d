@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 import warnings
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from ..components.medium import PoleResidue, Medium2D, Drude

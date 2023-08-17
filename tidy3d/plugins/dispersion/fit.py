@@ -9,7 +9,7 @@ import requests
 import scipy.optimize as opt
 import numpy as np
 from rich.progress import Progress
-from pydantic import Field, validator
+from pydantic.v1 import Field, validator
 
 from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property

@@ -1,7 +1,7 @@
 """Holds dispersive models for several commonly used optical materials."""  # pylint: disable=too-many-lines
 import json
 from typing import Dict, List
-import pydantic as pd
+import pydantic.v1 as pd
 
 from ..components.medium import PoleResidue, Medium2D
 from ..components.base import Tidy3dBaseModel
@@ -66,7 +66,7 @@ class MaterialItem(Tidy3dBaseModel):
     @pd.validator("default", always=True)
     def _default_in_variants(cls, val, values):
         """Make sure the default variant is already included in the ``variants``."""
-        if not val in values["variants"]:
+        if val not in values["variants"]:
             raise SetupError(
                 f"The data of the default variant '{val}' is not supplied; "
                 "please include it in the 'variants'."

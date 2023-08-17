@@ -7,7 +7,7 @@ from typing import Tuple, Union, Callable, Optional, Dict, List
 import functools
 from math import isclose
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
 
@@ -1506,7 +1506,7 @@ class PoleResidue(DispersiveMedium):
         )
 
     @classmethod
-    def from_medium(cls, medium: Medium) -> "PoleResidue":
+    def from_medium(cls, medium: Medium) -> PoleResidue:
         """Convert a :class:`.Medium` to a pole residue model.
 
         Parameters
@@ -1653,7 +1653,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         return tuple((fun_interp(a), fun_interp(c)) for (a, c) in self.poles)
 
     @classmethod
-    def from_medium(cls, medium: CustomMedium) -> "CustomPoleResidue":
+    def from_medium(cls, medium: CustomMedium) -> CustomPoleResidue:
         """Convert a :class:`.CustomMedium` to a pole residue model.
 
         Parameters
@@ -2562,7 +2562,7 @@ class AnisotropicMedium(AbstractMedium):
 
         For this medium, it takes the minimal of ``n_clf`` in all components.
         """
-        return min((mat_component.n_cfl for mat_component in self.components.values()))
+        return min(mat_component.n_cfl for mat_component in self.components.values())
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2952,7 +2952,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
         For this medium, it takes the minimal of ``n_clf`` in all components.
         """
-        return min((mat_component.n_cfl for mat_component in self.components.values()))
+        return min(mat_component.n_cfl for mat_component in self.components.values())
 
     @cached_property
     def is_isotropic(self):

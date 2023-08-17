@@ -75,9 +75,9 @@ class EigSolver(Tidy3dBaseModel):
         if isinstance(eps_cross, Numpy):
             eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
         elif len(eps_cross) == 9:
-            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = [
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = (
                 np.copy(e) for e in eps_cross
-            ]
+            )
         else:
             raise ValueError("Wrong input to mode solver pemittivity!")
 
@@ -395,7 +395,7 @@ class EigSolver(Tidy3dBaseModel):
         inv_mu_zz = sp.spdiags(1 / mu_zz, [0], N, N)
 
         if enable_incidence_matrices:
-            dnz_xx, dnz_yy, dnz_zz = [incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz]]
+            dnz_xx, dnz_yy, dnz_zz = (incidence_matrix_for_pec(i) for i in [eps_xx, eps_yy, eps_zz])
             dnz = sp.block_diag((dnz_xx, dnz_yy), format="csr")
             inv_eps_zz = (dnz_zz.T) * dnz_zz * inv_eps_zz * (dnz_zz.T) * dnz_zz
 
@@ -475,8 +475,8 @@ class EigSolver(Tidy3dBaseModel):
         h_field = qmat.dot(vecs)
         Hx = h_field[:N, :] / (1j * neff - keff)
         Hy = h_field[N:, :] / (1j * neff - keff)
-        Hz = inv_mu_zz.dot((dxf.dot(Ey) - dyf.dot(Ex)))
-        Ez = inv_eps_zz.dot((dxb.dot(Hy) - dyb.dot(Hx)))
+        Hz = inv_mu_zz.dot(dxf.dot(Ey) - dyf.dot(Ex))
+        Ez = inv_eps_zz.dot(dxb.dot(Hy) - dyb.dot(Hx))
 
         # Bundle up
         E = np.stack((Ex, Ey, Ez), axis=0)

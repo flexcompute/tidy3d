@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import time
 
 from rich.progress import Progress
-import pydantic as pd
+import pydantic.v1 as pd
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
