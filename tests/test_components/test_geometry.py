@@ -561,7 +561,7 @@ def test_from_gds():
         cell, 2, (0, 1), gds_layer=0, dilation=-0.5, sidewall_angle=0.5, reference_plane="bottom"
     )
     assert len(geo.intersections_plane(z=0)) == 2
-    assert len(geo.intersections_plane(z=1)) == 5
+    assert len(geo.intersections_plane(z=1)) == 1
 
 
 def test_custom_surface_geometry(tmp_path):

@@ -24,9 +24,6 @@ _N_SAMPLE_POLYGON_INTERSECT = 5
 
 _IS_CLOSE_RTOL = np.finfo(float).eps
 
-# polygon merge
-_POLY_GRID_SIZE = 1e-12
-
 # Warn for too many divided polyslabs
 _COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
 
@@ -335,7 +332,7 @@ class PolySlab(base.Planar):
 
         # convert vertices into polyslabs
         polygons = [shapely.Polygon(vertices).buffer(0) for vertices in all_vertices]
-        polys_union = shapely.unary_union(polygons, grid_size=_POLY_GRID_SIZE)
+        polys_union = shapely.unary_union(polygons, grid_size=base.POLY_GRID_SIZE)
 
         if polys_union.geom_type == "Polygon":
             all_vertices = [np.array(polys_union.exterior.coords)]
@@ -643,7 +640,7 @@ class PolySlab(base.Planar):
             h_base = h_top
 
         # merge touching polygons
-        polys_union = shapely.unary_union(polys, grid_size=_POLY_GRID_SIZE)
+        polys_union = shapely.unary_union(polys, grid_size=base.POLY_GRID_SIZE)
         if polys_union.geom_type == "Polygon":
             return [polys_union]
         if polys_union.geom_type == "MultiPolygon":

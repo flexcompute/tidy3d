@@ -22,10 +22,12 @@ GeometryType = Union[
 ]
 
 
+# pylint:disable=too-many-arguments
 def from_shapely(
     shape: Shapely,
     axis: Axis,
     slab_bounds: Tuple[float, float],
+    dilation: float = 0.0,
     sidewall_angle: float = 0,
     reference_plane: PlanePosition = "middle",
 ) -> base.Geometry:
@@ -40,6 +42,9 @@ def from_shapely(
         Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
     slab_bounds: Tuple[float, float]
         Minimal and maximal positions of the extruded slab along ``axis``.
+    dilation : float
+        Dilation of the polygon in the base by shifting each edge along its normal outwards
+        direction by a distance; a negative value corresponds to erosion.
     sidewall_angle : float = 0
         Angle of the extrusion sidewalls, away from the vertical direction, in radians. Positive
         (negative) values result in slabs larger (smaller) at the base than at the top.
@@ -58,23 +63,27 @@ def from_shapely(
         if sidewall_angle == 0:
             return polyslab.PolySlab(
                 vertices=shape.coords[:-1],
-                slab_bounds=slab_bounds,
                 axis=axis,
+                slab_bounds=slab_bounds,
+                dilation=dilation,
                 reference_plane=reference_plane,
             )
         group = polyslab.ComplexPolySlabBase(
             vertices=shape.coords[:-1],
-            slab_bounds=slab_bounds,
             axis=axis,
+            slab_bounds=slab_bounds,
+            dilation=dilation,
             sidewall_angle=sidewall_angle,
             reference_plane=reference_plane,
         ).geometry_group
         return group.geometries[0] if len(group.geometries) == 1 else group
 
     if shape.geom_type == "Polygon":
-        exterior = from_shapely(shape.exterior, axis, slab_bounds, sidewall_angle, reference_plane)
+        exterior = from_shapely(
+            shape.exterior, axis, slab_bounds, dilation, sidewall_angle, reference_plane
+        )
         interior = [
-            from_shapely(hole, axis, slab_bounds, -sidewall_angle, reference_plane)
+            from_shapely(hole, axis, slab_bounds, -dilation, -sidewall_angle, reference_plane)
             for hole in shape.interiors
         ]
         if len(interior) == 0:
@@ -85,7 +94,7 @@ def from_shapely(
     if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
         return base.GeometryGroup(
             geometries=[
-                from_shapely(geo, axis, slab_bounds, sidewall_angle, reference_plane)
+                from_shapely(geo, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
                 for geo in shape.geoms
             ]
         )
