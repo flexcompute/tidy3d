@@ -1,6 +1,5 @@
 # build and load models and data, no web running or plugins
 
-typing-extensions<=4.5.0; python_version <= '3.9'
 pyroots>=0.5.0
 xarray>=0.16.2
 importlib-metadata>=6.0.0
@@ -9,7 +8,7 @@ h5py>=3.0.0
 rich<12.6.0 # note: rich >= 12.6 adds double progressbars
 matplotlib
 shapely>=2.0
-pydantic>=1.10.0,<2.0.0
+pydantic==2.*
 PyYAML
 dask
 toml
