@@ -5,7 +5,7 @@ from typing import Tuple, Optional
 
 import numpy as np
 from rich.progress import Progress
-from pydantic import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
+from pydantic.v1 import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
 import scipy
 
 from .fit import DispersionFitter
@@ -192,7 +192,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("poles", always=True)
     def _generate_initial_poles(cls, val, values):
         """Generate initial poles."""
-        if not val is None:
+        if val is not None:
             return val
         if values["logspacing"] is None or values["smooth"] is None:
             return None
@@ -215,7 +215,7 @@ class FastFitterData(AdvancedFastFitterParam):
     @validator("residues", always=True)
     def _generate_initial_residues(cls, val, values):
         """Generate initial residues."""
-        if not val is None:
+        if val is not None:
             return val
         poles = values["poles"]
         if poles is None:

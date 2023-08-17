@@ -6,7 +6,7 @@ from abc import ABC
 from typing import Tuple, Union, Dict
 from multiprocessing import Pool
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
 import jax.numpy as jnp

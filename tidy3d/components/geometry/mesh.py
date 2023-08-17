@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import List, Tuple, Union, Optional
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 
 from ..base import cached_property
@@ -26,8 +26,6 @@ except Exception:  # pylint:disable=broad-except
     TRIMESH_AVAILABLE = False
 
 try:
-    import networkx  # pylint:disable=unused-import
-    import rtree  # pylint:disable=unused-import
 
     NETWORKX_RTREE_AVAILABLE = True
 except Exception:  # pylint:disable=broad-except

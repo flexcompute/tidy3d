@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Callable, Tuple
 
 import xarray as xr
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
@@ -123,7 +123,7 @@ class SimulationData(Tidy3dBaseModel):
                 "No log string in the SimulationData object, can't find final decay value."
             )
         lines = log_str.split("\n")
-        decay_lines = [l for l in lines if "field decay" in l]
+        decay_lines = [line for line in lines if "field decay" in line]
         final_decay = 1.0
         if len(decay_lines) > 0:
             final_decay_line = decay_lines[-1]

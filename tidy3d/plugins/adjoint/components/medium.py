@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Union, Callable, Optional
 from abc import ABC
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 import xarray as xr

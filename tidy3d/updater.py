@@ -6,7 +6,7 @@ import json
 import functools
 
 import yaml
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .log import log
 from .version import __version__
@@ -98,7 +98,7 @@ class Updater(pd.BaseModel):
 
         else:
             # try:
-            with open(fname, "r", encoding="utf-8") as f:
+            with open(fname, encoding="utf-8") as f:
                 if ".json" in fname:
                     sim_dict = json.load(f)
                 elif ".yaml" in fname:

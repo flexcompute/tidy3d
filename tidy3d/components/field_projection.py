@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, Union, List
 import numpy as np
 import xarray as xr
-import pydantic
+import pydantic.v1 as pydantic
 
 from rich.progress import track
 
@@ -740,7 +740,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         # transform the coordinate system so that the origin is at the source point
         # then the observation points in the new system are:
-        x_new, y_new, z_new = [pt_obs - pt_src for pt_src, pt_obs in zip(pts, [x, y, z])]
+        x_new, y_new, z_new = (pt_obs - pt_src for pt_src, pt_obs in zip(pts, [x, y, z]))
 
         # tangential source components to use
         idx_w, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
@@ -834,16 +834,16 @@ class FieldProjector(Tidy3dBaseModel):
         F, curl_F, grad_div_F = potential_terms(M, epsilon)
 
         # assemble the electric field components (Taflove 8.24, 8.27)
-        e_x_integrand, e_y_integrand, e_z_integrand = [
+        e_x_integrand, e_y_integrand, e_z_integrand = (
             i_omega * (a + grad_div_a / (wavenumber**2)) - curl_f / epsilon
             for a, grad_div_a, curl_f in zip(A, grad_div_A, curl_F)
-        ]
+        )
 
         # assemble the magnetic field components (Taflove 8.25, 8.28)
-        h_x_integrand, h_y_integrand, h_z_integrand = [
+        h_x_integrand, h_y_integrand, h_z_integrand = (
             i_omega * (f + grad_div_f / (wavenumber**2)) + curl_a / MU_0
             for f, grad_div_f, curl_a in zip(F, grad_div_F, curl_A)
-        ]
+        )
 
         # integrate over the surface
         e_x = self.integrate_2d(e_x_integrand, 1.0, pts[idx_u], pts[idx_v])

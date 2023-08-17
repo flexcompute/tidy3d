@@ -7,8 +7,8 @@ from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 
 import rich
-import pydantic
-from pydantic.fields import ModelField
+import pydantic.v1 as pydantic
+from pydantic.v1.fields import ModelField
 import yaml
 import numpy as np
 import h5py
@@ -277,7 +277,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as json_fhandle:
+        with open(fname, encoding="utf-8") as json_fhandle:
             model_dict = json.load(json_fhandle)
         return model_dict
 
@@ -339,7 +339,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_yaml(fname='folder/sim.yaml') # doctest: +SKIP
         """
-        with open(fname, "r", encoding="utf-8") as yaml_in:
+        with open(fname, encoding="utf-8") as yaml_in:
             model_dict = yaml.safe_load(yaml_in)
         return model_dict
 

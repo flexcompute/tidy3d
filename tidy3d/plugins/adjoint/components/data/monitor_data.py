@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Union, List, Dict, Any
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import jax.numpy as jnp
 
@@ -237,7 +237,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
 
         # parse the frequency from the scalar field data
         freqs = [scalar_fld.coords["f"] for _, scalar_fld in self.field_components.items()]
-        if any((len(fs) != 1 for fs in freqs)):
+        if any(len(fs) != 1 for fs in freqs):
             raise AdjointError("FieldData must have only one frequency.")
         freqs = [fs[0] for fs in freqs]
         if len(set(freqs)) != 1:
@@ -281,7 +281,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
             """How much to shift the geometry by along a dimension (only if > 1D)."""
             return 1e-5 if len(coords) > 1 else 0
 
-        for name, field_component in self.field_components.items():
+        for _, field_component in self.field_components.items():
             coords = field_component.coords
             data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
             data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})

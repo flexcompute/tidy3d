@@ -21,3 +21,20 @@ try:
     from .web import run, run_async
 except ImportError:
     pass
+
+__all__ = [
+    "JaxBox",
+    "JaxPolySlab",
+    "JaxGeometryGroup",
+    "JaxMedium",
+    "JaxAnisotropicMedium",
+    "JaxCustomMedium",
+    "JaxStructure",
+    "JaxSimulation",
+    "JaxSimulationData",
+    "JaxModeData",
+    "JaxPermittivityDataset",
+    "JaxDataArray",
+    "run",
+    "run_async",
+]

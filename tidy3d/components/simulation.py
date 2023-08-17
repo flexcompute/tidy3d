@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib.pyplot as plt
@@ -1643,11 +1643,11 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min((np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max((np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray)),
+                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
@@ -1966,7 +1966,7 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = [list(bounds) for bounds in self.bounds_pml]
+        rmin, rmax = (list(bounds) for bounds in self.bounds_pml)
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
@@ -2496,10 +2496,10 @@ class Simulation(Box):  # pylint:disable=too-many-public-methods
             Time step (seconds).
         """
         dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
-        dl_sum_inv_sq = sum((1 / dl**2 for dl in dl_mins))
+        dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
-        n_cfl = min(min((mat.n_cfl for mat in self.mediums)), 1)
+        n_cfl = min(min(mat.n_cfl for mat in self.mediums), 1)
         return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property

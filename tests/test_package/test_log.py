@@ -2,7 +2,7 @@
 
 import pytest
 
-import pydantic as pd
+import pydantic.v1 as pd
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError

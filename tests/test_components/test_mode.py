@@ -1,6 +1,6 @@
 """Tests mode objects."""
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 import tidy3d as td
 

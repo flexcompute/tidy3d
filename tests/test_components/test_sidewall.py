@@ -1,7 +1,7 @@
 """test slanted polyslab can be correctly setup and visualized. """
 import pytest
 import numpy as np
-import pydantic
+import pydantic.v1 as pydantic
 from shapely import Polygon, Point
 
 import tidy3d as td

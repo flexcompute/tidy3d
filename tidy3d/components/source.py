@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
 
 from typing_extensions import Literal
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
@@ -322,7 +322,7 @@ class CustomSourceTime(Pulse):
     ----
     .. math::
 
-        amp\\_time(t) = amplitude \\cdot \\ 
+        amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
 

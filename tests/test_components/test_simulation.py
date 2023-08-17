@@ -1,6 +1,6 @@
 """Tests the simulation and its validators."""
 import pytest
-import pydantic
+import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 
 import numpy as np

@@ -9,7 +9,7 @@ import pathlib
 import tempfile
 import time
 
-import pydantic
+import pydantic.v1 as pydantic
 
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData

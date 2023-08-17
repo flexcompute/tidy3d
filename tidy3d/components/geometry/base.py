@@ -8,7 +8,7 @@ from typing import List, Tuple, Any
 from math import isclose
 import functools
 
-import pydantic
+import pydantic.v1 as pydantic
 import numpy as np
 import shapely
 from matplotlib import patches
@@ -71,7 +71,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _ensure_equal_shape(*arrays):
         """Ensure all input arrays have the same shape."""
-        shapes = set(np.array(arr).shape for arr in arrays)
+        shapes = {np.array(arr).shape for arr in arrays}
         if len(shapes) > 1:
             raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
 
@@ -1517,7 +1517,7 @@ class Box(Centered):
         shapes_plane = other.intersections_plane(**xyz_kwargs)
 
         # intersect all shapes with the input self
-        bs_min, bs_max = [self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds]
+        bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds)
         shapely_box = shapely.box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
         return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
@@ -2079,5 +2079,4 @@ class GeometryGroup(Geometry):
         return np.sum(individual_areas)
 
 
-# pylint:disable=wrong-import-position,cyclic-import
-from .utils import GeometryType, from_shapely
+from .utils import GeometryType, from_shapely # noqa: E402

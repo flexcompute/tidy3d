@@ -6,7 +6,7 @@ from typing import Union, Dict, Callable, Any
 
 import xarray as xr
 import numpy as np
-import pydantic as pd
+import pydantic.v1 as pd
 
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
@@ -74,7 +74,7 @@ class AbstractFieldDataset(Dataset, ABC):
         Be sure to apply this method to your field data in those cases.
         """
 
-        if hasattr(self, "monitor") and getattr(self, "monitor").colocate:
+        if hasattr(self, "monitor") and self.monitor.colocate:
             with log as consolidated_logger:
                 consolidated_logger.warning(
                     "Colocating data that has already been colocated during the solver "

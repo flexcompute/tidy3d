@@ -8,7 +8,7 @@ import numpy as np
 import scipy.linalg
 import xarray as xr
 
-from pydantic import Field, NonNegativeFloat, PositiveInt, validator
+from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel
@@ -240,7 +240,7 @@ class ResonanceFinder(Tidy3dBaseModel):
         for sig_field in signals:
             for comp in comps:
                 field_comp = getattr(sig_field, comp, None)
-                if not field_comp is None:
+                if field_comp is not None:
                     curr_signal, curr_dt = self._validate_scalar_field_time(field_comp)
                     if dt == -1:
                         dt = curr_dt
@@ -273,7 +273,7 @@ class ResonanceFinder(Tidy3dBaseModel):
 
         # first check electric components
         electric_data = self._aggregate_field_time_comps(signals, electric_components)
-        if not electric_data is None:
+        if electric_data is not None:
             return electric_data
         # now check magnetic components
         magnetic_data = self._aggregate_field_time_comps(signals, magnetic_components)

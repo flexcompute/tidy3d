@@ -3,7 +3,7 @@ from typing import Tuple, Dict, List
 from functools import partial
 import tempfile
 
-import pydantic as pd
+import pydantic.v1 as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
 
