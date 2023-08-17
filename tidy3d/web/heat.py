@@ -21,7 +21,7 @@ from .types import ResourceLifecycle, Submittable
 from .webapi import wait_for_connection
 
 from ..components.heat.simulation import HeatSimulation
-from ..components.heat.data import HeatSimulationData
+from ..components.heat.sim_data import HeatSimulationData
 
 HEATSOLVER_API = "tidy3d/heatsolver/py"
 HEATSOLVER_HDF5 = "heat_simulation.hdf5"

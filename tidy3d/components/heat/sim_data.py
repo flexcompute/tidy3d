@@ -1,18 +1,13 @@
-"""Defines heat material specifications"""
+"""Defines heat simulation data class"""
 from __future__ import annotations
 
-# from abc import ABC, abstractmethod
-
 import pydantic as pd
-# import numpy as np
 
 from .simulation import HeatSimulation
-from .data_array import TemperatureFieldType
 
+from ..data.data_array import SpatialDataArray
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
-# from ..types import ArrayFloat1D, Ax
-# from ..viz import add_ax_if_none
 
 from ...constants import KELVIN
 
@@ -29,7 +24,7 @@ class HeatSimulationData(Tidy3dBaseModel):
         description="``HeatSimulation`` object describing the problem setup.",
     )
 
-    temperature_data: TemperatureFieldType = pd.Field(
+    temperature_data: SpatialDataArray = pd.Field(
         title="Temperature Field",
         description="Temperature field obtained from heat simulation.",
         units=KELVIN,

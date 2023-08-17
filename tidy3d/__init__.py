@@ -108,17 +108,18 @@ from .version import __version__
 # updater
 from .updater import Updater
 
+# boundary placement for other solvers
+from .components.bc_placement import StructureStructureInterface, StructureBoundary
+from .components.bc_placement import MediumMediumInterface
+from .components.bc_placement import StructureSimulationBoundary
+from .components.bc_placement import SimulationBoundary
+
 # heat
 from .components.heat_spec import FluidSpec, SolidSpec
 from .components.heat.simulation import HeatSimulation
-from .components.heat.data import HeatSimulationData
-from .components.heat.boundary import HeatBCTemperature, HeatBCConvection, HeatBCInterface
-from .components.heat.boundary import HeatBCFlux, HeatBCPlacementStructure
-from .components.heat.boundary import HeatBCPlacementStructureStructure
-from .components.heat.boundary import HeatBCPlacementMediumMedium
-from .components.heat.boundary import HeatBCPlacementStructureSimulation
-from .components.heat.boundary import HeatBCPlacementSimulation
-from .components.heat.source import UniformHeatSource  #, HeatCustomSource
+from .components.heat.sim_data import HeatSimulationData
+from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
+from .components.heat.source import UniformHeatSource
 from .components.heat.grid import UniformHeatGrid, DistanceHeatGrid
 
 

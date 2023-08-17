@@ -6,17 +6,17 @@ import tidy3d as td
 
 from tidy3d.components.heat_spec import FluidSpec, SolidSpec
 from tidy3d.components.heat.source import UniformHeatSource
-from tidy3d.components.heat.boundary import HeatBCTemperature, HeatBCFlux, HeatBCConvection
-from tidy3d.components.heat.boundary import (
-    HeatBCPlacementStructure,
-    HeatBCPlacementStructureStructure,
-    HeatBCPlacementSimulation,
-    HeatBCPlacementStructureSimulation,
-    HeatBCPlacementMediumMedium,
+from tidy3d.components.heat.boundary import TemperatureBC, HeatFluxBC, ConvectionBC, HeatBoundarySpec
+from tidy3d.components.bc_placement import (
+    StructureBoundary,
+    StructureStructureInterface,
+    SimulationBoundary,
+    StructureSimulationBoundary,
+    MediumMediumInterface,
 )
 from tidy3d.components.heat.grid import UniformHeatGrid
 from tidy3d.components.heat.simulation import HeatSimulation
-from tidy3d.components.heat.data import HeatSimulationData
+from tidy3d.components.heat.sim_data import HeatSimulationData
 
 
 def make_heat_mediums():
@@ -73,9 +73,9 @@ def test_heat_structures():
 
 
 def make_heat_bcs():
-    bc_temp = HeatBCTemperature(temperature=300)
-    bc_flux = HeatBCFlux(heat_flux=20)
-    bc_conv = HeatBCConvection(ambient_temperature=400, transfer_coeff=0.2)
+    bc_temp = TemperatureBC(temperature=300)
+    bc_flux = HeatFluxBC(flux=20)
+    bc_conv = ConvectionBC(ambient_temperature=400, transfer_coeff=0.2)
 
     return bc_temp, bc_flux, bc_conv
 
@@ -84,13 +84,13 @@ def test_heat_bcs():
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
 
     with pytest.raises(pd.ValidationError):
-        _ = HeatBCTemperature(temperature=-10)
+        _ = TemperatureBC(temperature=-10)
 
     with pytest.raises(pd.ValidationError):
-        _ = HeatBCConvection(ambient_temperature=-400, transfer_coeff=0.2)
+        _ = ConvectionBC(ambient_temperature=-400, transfer_coeff=0.2)
 
     with pytest.raises(pd.ValidationError):
-        _ = HeatBCConvection(ambient_temperature=400, transfer_coeff=-0.2)
+        _ = ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
 
 
 def make_grid_spec():
@@ -119,13 +119,11 @@ def make_heat_sim():
     bc_temp, bc_flux, bc_conv = make_heat_bcs()
     heat_source = make_heat_source()
 
-    pl1 = HeatBCPlacementMediumMedium(bc=bc_conv, mediums=["fluid_medium", "solid_medium"])
-    pl2 = HeatBCPlacementStructure(bc=bc_flux, structure="solid_structure")
-    pl3 = HeatBCPlacementStructureStructure(
-        bc=bc_flux, structures=["fluid_structure", "solid_structure"]
-    )
-    pl4 = HeatBCPlacementSimulation(bc=bc_temp)
-    pl5 = HeatBCPlacementStructureSimulation(bc=bc_temp, structure="fluid_structure")
+    pl1 = HeatBoundarySpec(condition=bc_conv, placement=MediumMediumInterface(mediums=["fluid_medium", "solid_medium"]))
+    pl2 = HeatBoundarySpec(condition=bc_flux, placement=StructureBoundary(structure="solid_structure"))
+    pl3 = HeatBoundarySpec(condition=bc_flux, placement=StructureStructureInterface(structures=["fluid_structure", "solid_structure"]))
+    pl4 = HeatBoundarySpec(condition=bc_temp, placement=SimulationBoundary())
+    pl5 = HeatBoundarySpec(condition=bc_temp, placement=StructureSimulationBoundary(structure="fluid_structure"))
 
     grid_spec = make_grid_spec()
 
@@ -136,7 +134,7 @@ def make_heat_sim():
             medium=fluid_medium,
             structures=[fluid_structure, solid_structure],
         ),
-        boundary_conditions=[pl1, pl2, pl3, pl4, pl5],
+        boundary_specs=[pl1, pl2, pl3, pl4, pl5],
         grid_spec=grid_spec,
         heat_domain=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
         heat_sources=[heat_source],
@@ -153,13 +151,13 @@ def test_heat_sim():
 
     # wrong names given
     for pl in [
-        HeatBCPlacementMediumMedium(bc=bc_temp, mediums=["badname", "fluid_medium"]),
-        HeatBCPlacementStructure(bc=bc_flux, structure="no_box"),
-        HeatBCPlacementStructureStructure(bc=bc_conv, structures=["no_box", "solid_structure"]),
-        HeatBCPlacementStructureSimulation(bc=bc_temp, structure="no_mesh"),
+        HeatBoundarySpec(condition=bc_temp, placement=MediumMediumInterface(mediums=["badname", "fluid_medium"])),
+        HeatBoundarySpec(condition=bc_flux, placement=StructureBoundary(structure="no_box")),
+        HeatBoundarySpec(condition=bc_conv, placement=StructureStructureInterface(structures=["no_box", "solid_structure"])),
+        HeatBoundarySpec(condition=bc_temp, placement=StructureSimulationBoundary(structure="no_mesh")),
     ]:
         with pytest.raises(pd.ValidationError):
-            _ = heat_sim.updated_copy(boundary_conditions=[pl])
+            _ = heat_sim.updated_copy(boundary_specs=[pl])
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(heat_sources=[UniformHeatSource(structures=["noname"])], rate=-10)

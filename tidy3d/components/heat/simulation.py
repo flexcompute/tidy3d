@@ -1,21 +1,18 @@
 """Defines heat simulation class"""
 from __future__ import annotations
 
-# from abc import ABC, abstractmethod
 from typing import Tuple, List
 from matplotlib import cm
 
 import pydantic as pd
-# import numpy as np
-
 from shapely.plotting import plot_line
 from shapely import LineString, MultiLineString, GeometryCollection
 
-from .boundary import HeatBCTemperature, HeatBCFlux, HeatBCConvection
-from .boundary import HeatBCPlacementType
-from .boundary import HeatBCPlacementStructure, HeatBCPlacementStructureStructure
-from .boundary import HeatBCPlacementStructureSimulation, HeatBCPlacementSimulation
-from .boundary import HeatBCPlacementMediumMedium
+from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
+from .boundary import HeatBoundarySpec
+from ..bc_placement import StructureBoundary, StructureStructureInterface
+from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
+from ..bc_placement import MediumMediumInterface
 from .source import HeatSourceType, UniformHeatSource
 from .grid import HeatGridType
 from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
@@ -47,10 +44,10 @@ class HeatSimulation(Tidy3dBaseModel):
         description="Simulation scene describing problem geometry.",
     )
 
-    boundary_conditions: Tuple[HeatBCPlacementType, ...] = pd.Field(
+    boundary_specs: Tuple[HeatBoundarySpec, ...] = pd.Field(
         (),
-        title="Boundary Conditions",
-        description="List of boundary conditions.",
+        title="Boundary Condition Specifications",
+        description="List of boundary condition specifications.",
     )
 
     heat_sources: Tuple[HeatSourceType, ...] = pd.Field(
@@ -110,7 +107,7 @@ class HeatSimulation(Tidy3dBaseModel):
 
         return val
 
-    @pd.validator("boundary_conditions", always=True)
+    @pd.validator("boundary_specs", always=True)
     def names_exist_bcs(cls, val, values):
         """Error if boundary conditions point to non-existing structures/media."""
         scene = values.get("scene")
@@ -119,25 +116,29 @@ class HeatSimulation(Tidy3dBaseModel):
         structures_names = {s.name for s in structures}
         mediums_names = {m.name for m in mediums}
 
-        for bc in val:
-            if isinstance(bc, (HeatBCPlacementStructure, HeatBCPlacementStructureSimulation)):
-                if bc.structure not in structures_names:
+        for bc_ind, bc_spec in enumerate(val):
+            bc_place = bc_spec.placement
+            if isinstance(bc_place, (StructureBoundary, StructureSimulationBoundary)):
+                if bc_place.structure not in structures_names:
                     raise SetupError(
-                        f"Structure '{bc.structure}' provided in a '{bc.type}' "
+                        f"Structure '{bc_place.structure}' provided in "
+                        f"`boundary_specs[{bc_ind}].placement' (type '{bc_place.type}')"
                         "is not found among simulation structures."
                     )
-            if isinstance(bc, (HeatBCPlacementStructureStructure)):
+            if isinstance(bc_place, (StructureStructureInterface)):
                 for ind in range(2):
-                    if bc.structures[ind] and bc.structures[ind] not in structures_names:
+                    if bc_place.structures[ind] and bc_place.structures[ind] not in structures_names:
                         raise SetupError(
-                            f"Structure '{bc.structures[ind]}' provided in a '{bc.type}' "
+                            f"Structure '{bc_place.structures[ind]}' provided in "
+                            f"`boundary_specs[{bc_ind}].placement' (type '{bc_place.type}') "
                             "is not found among simulation structures."
                         )
-            if isinstance(bc, (HeatBCPlacementMediumMedium)):
+            if isinstance(bc_place, (MediumMediumInterface)):
                 for ind in range(2):
-                    if bc.mediums[ind] not in mediums_names:
+                    if bc_place.mediums[ind] not in mediums_names:
                         raise SetupError(
-                            f"Material '{bc.mediums[ind]}' provided in a '{bc.type}' "
+                            f"Material '{bc_place.mediums[ind]}' provided in "
+                            f"`boundary_specs[{bc_ind}].placement' (type '{bc_place.type}') "
                             "is not found among simulation mediums."
                         )
         return val
@@ -261,12 +262,12 @@ class HeatSimulation(Tidy3dBaseModel):
         boundaries = self._construct_heat_boundaries(
             structures=structures,
             plane=plane,
-            boundary_conditions=self.boundary_conditions,
+            boundary_specs=self.boundary_specs,
         )
 
         # plot boundary conditions
-        for (bc, bdry) in boundaries:
-            ax = self._plot_boundary_condition(boundary=bdry, condition=bc, ax=ax)
+        for (bc_spec, shape) in boundaries:
+            ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -277,25 +278,25 @@ class HeatSimulation(Tidy3dBaseModel):
 
         return ax
 
-    def _get_bc_plot_params(self, condition: HeatBCPlacementType) -> PlotParams:
+    def _get_bc_plot_params(self, boundary_spec: HeatBoundarySpec) -> PlotParams:
         """Constructs the plot parameters for given boundary conditions."""
 
         plot_params = plot_params_heat_bc
-        bc = condition.bc
+        bc = boundary_spec.condition
 
-        if isinstance(bc, HeatBCTemperature):
+        if isinstance(bc, TemperatureBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_TEMPERATURE)
-        elif isinstance(bc, HeatBCFlux):
+        elif isinstance(bc, HeatFluxBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_FLUX)
-        elif isinstance(bc, HeatBCConvection):
+        elif isinstance(bc, ConvectionBC):
             plot_params = plot_params.updated_copy(edgecolor=HEAT_BC_COLOR_CONVECTION)
 
         return plot_params
 
-    def _plot_boundary_condition(self, boundary: Shapely, condition: HeatBCPlacementType, ax: Ax) -> Ax:
+    def _plot_boundary_condition(self, shape: Shapely, boundary_spec: HeatBoundarySpec, ax: Ax) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
-        plot_params_bc = self._get_bc_plot_params(condition=condition)
-        ax = self.plot_line(line=boundary, plot_params=plot_params_bc, ax=ax)
+        plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
+        ax = self.plot_line(line=shape, plot_params=plot_params_bc, ax=ax)
         return ax
 
     # FIXME: probably needs revision
@@ -317,8 +318,8 @@ class HeatSimulation(Tidy3dBaseModel):
     def _construct_heat_boundaries(
         structures: List[Structure],
         plane: Box,
-        boundary_conditions: List[HeatBCPlacementType],
-    ) -> List[Tuple[HeatBCPlacementType, Shapely]]:
+        boundary_specs: List[HeatBoundarySpec],
+    ) -> List[Tuple[HeatBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
         Parameters
@@ -327,17 +328,17 @@ class HeatSimulation(Tidy3dBaseModel):
             list of structures to filter on the plane.
         plane : :class:`.Box`
             target plane.
-        boundary_conditions : List[HeatBCPlacementType]
+        boundary_specs : List[HeatBoundarySpec]
             list of boundary conditions associated with structures.
 
         Returns
         -------
-        List[Tuple[:class:`.HeatBCPlacementType`, shapely.geometry.base.BaseGeometry]]
+        List[Tuple[:class:`.HeatBoundarySpec`, shapely.geometry.base.BaseGeometry]]
             List of boundary lines and boundary conditions on the plane after merging.
         """
 
         # get structures in the plane and present named structures and media
-        shapes = []
+        shapes = []  # structure name, structure medium, shape, bounds
         named_structures_present = set()
         named_mediums_present = set()
         for structure in structures:
@@ -359,53 +360,61 @@ class HeatSimulation(Tidy3dBaseModel):
         background_structure_shape = shapes[0][2]
 
         # construct an inverse mapping structure -> bc for present structures
-        struct_to_bc = {}
-        for bc in boundary_conditions:
-            if isinstance(bc, (HeatBCPlacementStructure, HeatBCPlacementStructureSimulation)) and bc.structure in named_structures_present:
-                if bc.structure in struct_to_bc:
-                    struct_to_bc[bc.structure] += [bc]
+        struct_to_bc_spec = {}
+        for bc_spec in boundary_specs:
+            bc_place = bc_spec.placement
+            if (
+                isinstance(bc_place, (StructureBoundary, StructureSimulationBoundary))
+                and bc_place.structure in named_structures_present
+            ):
+                if bc_place.structure in struct_to_bc_spec:
+                    struct_to_bc_spec[bc_place.structure] += [bc_spec]
                 else:
-                    struct_to_bc[bc.structure] = [bc]
+                    struct_to_bc_spec[bc_place.structure] = [bc_spec]
 
-            if isinstance(bc, HeatBCPlacementStructureStructure):
-                for structure in bc.structures:
+            if isinstance(bc_place, StructureStructureInterface):
+                for structure in bc_place.structures:
                     if structure in named_structures_present:
-                        if structure in struct_to_bc:
-                            struct_to_bc[structure] += [bc]
+                        if structure in struct_to_bc_spec:
+                            struct_to_bc_spec[structure] += [bc_spec]
                         else:
-                            struct_to_bc[structure] = [bc]
+                            struct_to_bc_spec[structure] = [bc_spec]
 
-            if isinstance(bc, HeatBCPlacementSimulation):
-                struct_to_bc[HEAT_BACK_STRUCTURE_STR] = [bc]
+            if isinstance(bc_place, SimulationBoundary):
+                struct_to_bc_spec[HEAT_BACK_STRUCTURE_STR] = [bc_spec]
 
         # construct an inverse mapping medium -> bc for present mediums
-        med_to_bc = {}
-        for bc in boundary_conditions:
-            if isinstance(bc, HeatBCPlacementMediumMedium):
-                for med in bc.mediums:
+        med_to_bc_spec = {}
+        for bc_spec in boundary_specs:
+            bc_place = bc_spec.placement
+            if isinstance(bc_place, MediumMediumInterface):
+                for med in bc_place.mediums:
                     if med in named_mediums_present:
-                        if med in med_to_bc:
-                            med_to_bc[med] += [bc]
+                        if med in med_to_bc_spec:
+                            med_to_bc_spec[med] += [bc_spec]
                         else:
-                            med_to_bc[med] = [bc]
+                            med_to_bc_spec[med] = [bc_spec]
 
         # construct boundaries in 2 passes:
 
         # 1. forward foop to take care of Simulation, StructureSimulation, Structure, and MediumMediums
-        boundaries = []
+        boundaries = [] # bc_spec, structure name, shape, bounds
         background_shapes = []
         for name, medium, shape, bounds in shapes:
 
             minx, miny, maxx, maxy = bounds
 
             # intersect existing boundaries (both structure based and medium based)
-            for index, (_bc, _name, _bdry, _bounds) in enumerate(boundaries):
+            for index, (_bc_spec, _name, _bdry, _bounds) in enumerate(boundaries):
 
-                # simulation bc is overriden only by HeatBCPlacementStructureSimulation
-                if isinstance(_bc, HeatBCPlacementSimulation):
-                    if name not in struct_to_bc:
+                # simulation bc is overriden only by StructureSimulationBoundary
+                if isinstance(_bc_spec.placement, SimulationBoundary):
+                    if name not in struct_to_bc_spec:
                         continue
-                    if any(not isinstance(bc, HeatBCPlacementStructureSimulation) for bc in struct_to_bc[name]):
+                    if any(
+                        not isinstance(bc_spec.placement, StructureSimulationBoundary)
+                        for bc_spec in struct_to_bc_spec[name]
+                    ):
                         continue
 
                 _minx, _miny, _maxx, _maxy = _bounds
@@ -420,25 +429,25 @@ class HeatSimulation(Tidy3dBaseModel):
 
                 diff_shape = _bdry - shape
 
-                boundaries[index] = (_bc, _name, diff_shape, diff_shape.bounds)
+                boundaries[index] = (_bc_spec, _name, diff_shape, diff_shape.bounds)
 
             # create new srtucture based boundary
 
-            if name in struct_to_bc:
-                for bc in struct_to_bc[name]:
+            if name in struct_to_bc_spec:
+                for bc_spec in struct_to_bc_spec[name]:
 
-                    if isinstance(bc, HeatBCPlacementStructure):
+                    if isinstance(bc_spec.placement, StructureBoundary):
                         bdry = shape.exterior
                         bdry = bdry.intersection(background_structure_shape)
-                        boundaries.append((bc, name, bdry, bdry.bounds))
+                        boundaries.append((bc_spec, name, bdry, bdry.bounds))
 
-                    if isinstance(bc, HeatBCPlacementSimulation):
-                        boundaries.append((bc, name, shape.exterior, shape.exterior.bounds))
+                    if isinstance(bc_spec.placement, SimulationBoundary):
+                        boundaries.append((bc_spec, name, shape.exterior, shape.exterior.bounds))
 
-                    if isinstance(bc, HeatBCPlacementStructureSimulation):
+                    if isinstance(bc_spec.placement, StructureSimulationBoundary):
                         bdry = background_structure_shape.exterior
                         bdry = bdry.intersection(shape)
-                        boundaries.append((bc, name, bdry, bdry.bounds))
+                        boundaries.append((bc_spec, name, bdry, bdry.bounds))
 
             # create new medium based boundary, and cut or merge relevant background shapes
 
@@ -464,11 +473,11 @@ class HeatSimulation(Tidy3dBaseModel):
 
                     # in case when there is a bc between two media
                     # create a new boudnary segment
-                    for bc in med_to_bc[_medium.name]:
-                        if medium.name in bc.mediums:
+                    for bc_spec in med_to_bc_spec[_medium.name]:
+                        if medium.name in bc_spec.placement.mediums:
                             bdry = shape.exterior.intersection(_shape)
                             bdry = bdry.intersection(background_structure_shape)
-                            boundaries.append((bc, name, bdry, bdry.bounds))
+                            boundaries.append((bc_spec, name, bdry, bdry.bounds))
 
                 # same medium, add diff shape to this shape and mark background shape for removal
                 # note: this only happens if this medium is listed in BCs
@@ -478,14 +487,14 @@ class HeatSimulation(Tidy3dBaseModel):
 
             # after doing this with all background shapes, add this shape to the background
             # but only if this medium is listed in BCs
-            if medium.name in med_to_bc:
+            if medium.name in med_to_bc_spec:
                 background_shapes.append((medium, shape, shape.bounds))
 
             # remove any existing background shapes that have been marked as 'None'
             background_shapes = [b for b in background_shapes if b is not None]
 
         # filter out empty geometries
-        boundaries = [(bc, bdry) for (bc, name, bdry, _) in boundaries if bdry]
+        boundaries = [(bc_spec, bdry) for (bc_spec, name, bdry, _) in boundaries if bdry]
 
         # 2. backward foop to take care of StructureStructure
         # we do it in this way because we define the boundary between
@@ -503,7 +512,7 @@ class HeatSimulation(Tidy3dBaseModel):
             minx, miny, maxx, maxy = bounds
 
             # intersect existing boundaries
-            for index, (_bc, _name, _bdry, _bounds, _completed) in enumerate(boundaries_reverse):
+            for index, (_bc_spec, _name, _bdry, _bounds, _completed) in enumerate(boundaries_reverse):
 
                 if not _completed:
 
@@ -518,27 +527,27 @@ class HeatSimulation(Tidy3dBaseModel):
                         continue
 
                     # event (3) from above
-                    if name in _bc.structures:
+                    if name in _bc_spec.structure.structures:
                         new_bdry = _bdry.intersection(shape)
-                        boundaries_reverse[index] = (_bc, _name, new_bdry, new_bdry.bounds, True)
+                        boundaries_reverse[index] = (_bc_spec, _name, new_bdry, new_bdry.bounds, True)
 
                     # event (2) from above
                     else:
                         new_bdry = _bdry - shape
-                        boundaries_reverse[index] = (_bc, _name, new_bdry, new_bdry.bounds, _completed)
+                        boundaries_reverse[index] = (_bc_spec, _name, new_bdry, new_bdry.bounds, _completed)
 
             # create new boundary (event (1) from above)
-            if name in struct_to_bc:
-                for bc in struct_to_bc[name]:
-                    if isinstance(bc, HeatBCPlacementStructureStructure):
+            if name in struct_to_bc_spec:
+                for bc_spec in struct_to_bc_spec[name]:
+                    if isinstance(bc_spec.placement, StructureStructureInterface):
                         bdry = shape.exterior
                         bdry = bdry.intersection(background_structure_shape)
-                        boundaries_reverse.append((bc, name, bdry, bdry.bounds, False))
+                        boundaries_reverse.append((bc_spec, name, bdry, bdry.bounds, False))
 
         # filter and append completed boundaries to main list
-        for bc, _, bdry, _, is_completed in boundaries_reverse:
+        for bc_spec, _, bdry, _, is_completed in boundaries_reverse:
             if bdry and is_completed:
-                boundaries.append((bc, bdry))
+                boundaries.append((bc_spec, bdry))
 
         return boundaries
 
@@ -688,40 +697,3 @@ class HeatSimulation(Tidy3dBaseModel):
         )
         ax = self.scene.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
-
-#    @equal_aspect
-#    @add_ax_if_none
-#    def plot_heat_sources(
-#        self, x: float = None, y: float = None, z: float = None, alpha: float = None, ax: Ax = None
-#    ) -> Ax:
-#        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-
-#        Parameters
-#        ----------
-#        x : float = None
-#            position of plane in x direction, only one of x, y, z must be specified to define plane.
-#        y : float = None
-#            position of plane in y direction, only one of x, y, z must be specified to define plane.
-#        z : float = None
-#            position of plane in z direction, only one of x, y, z must be specified to define plane.
-#        ax : matplotlib.axes._subplots.Axes = None
-#            Matplotlib axes to plot on, if not specified, one is created.
-
-#        Returns
-#        -------
-#        matplotlib.axes._subplots.Axes
-#            The supplied or created matplotlib axes.
-#        """
-
-#        plot_params = plot_params_heat_source.to_kwargs()
-#        if alpha:
-#            plot_params["alpha"] = alpha
-
-#        bounds = self.bounds
-##        for source in self.heat_sources:
-##            ax = source.geometry.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **plot_params)
-#        for struct in self.heat_structures:
-#            if struct.source:
-#                ax = struct.geometry.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **plot_params)
-#        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-#        return ax

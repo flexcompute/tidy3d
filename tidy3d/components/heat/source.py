@@ -46,27 +46,4 @@ class UniformHeatSource(HeatSource):
     )
 
 
-#class CustomHeatSource(HeatSource):
-#    """Spatially dependent volumetric heat source.
-
-#    Example
-#    -------
-#    >>> const_func = TemperatureDependenceConstant(value=1)
-#    """
-
-#    geometry: GeometryType = pd.Field(
-#        title="Source Geometry",
-#        description="Geometry of the heat source.",
-#    )
-
-#    rate: ScalarFieldTimeDataArray = pd.Field(
-#        title="Volumetric Heat Rate",
-#        description="Spatially dependent volumetric rate of heating or cooling (if negative) in units of {VOLUMETRIC_HEAT_RATE}.",
-#        units=VOLUMETRIC_HEAT_RATE,
-#    )
-
-
-HeatSourceType = Union[
-    UniformHeatSource,
-#    HeatCustomSource,
-]
+HeatSourceType = Union[UniformHeatSource]
