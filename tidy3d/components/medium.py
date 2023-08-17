@@ -2713,7 +2713,7 @@ class FullyAnisotropicMedium(AbstractMedium):
 
     @classmethod
     def from_diagonal(cls, xx: Medium, yy: Medium, zz: Medium, rotation: RotationType):
-        """Construct a fully anisotropic medium by rotating a diagonally ansisotropic medium.
+        """Construct a fully anisotropic medium by rotating a diagonally anisotropic medium.
 
         Parameters
         ----------
@@ -2723,7 +2723,7 @@ class FullyAnisotropicMedium(AbstractMedium):
             Medium describing the yy-component of the diagonal permittivity tensor.
         zz : :class:`.Medium`
             Medium describing the zz-component of the diagonal permittivity tensor.
-        rotation : :class:`.RotationType`
+        rotation : Union[:class:`.RotationAroundAxis`]
                 Rotation applied to diagonal permittivity tensor.
 
         Returns
