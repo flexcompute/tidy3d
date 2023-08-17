@@ -23,6 +23,7 @@ from ...log import log
 from ...exceptions import SetupError, ValidationError, Tidy3dKeyError, Tidy3dError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
 
+POLY_GRID_SIZE = 1e-12
 
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
@@ -921,12 +922,16 @@ class Geometry(Tidy3dBaseModel, ABC):
         geometries = []
         with log as consolidated_logger:
             for vertices in gds_loader_fn(gds_cell, gds_layer, gds_dtype, gds_scale):
-                # buffer(0) is necessary to merge self-intersections before dilation/erosion
-                shape = shapely.Polygon(vertices).buffer(0).buffer(dilation)
+                # buffer(0) is necessary to merge self-intersections
+                shape = shapely.set_precision(shapely.Polygon(vertices).buffer(0), POLY_GRID_SIZE)
                 try:
                     geometries.append(
-                        from_shapely(shape, axis, slab_bounds, sidewall_angle, reference_plane)
+                        from_shapely(
+                            shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane
+                        )
                     )
+                except pydantic.ValidationError as error:
+                    consolidated_logger.warning(str(error))
                 except Tidy3dError as error:
                     consolidated_logger.warning(str(error))
         return GeometryGroup(geometries=geometries)
@@ -936,6 +941,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         shape: Shapely,
         axis: Axis,
         slab_bounds: Tuple[float, float],
+        dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
     ) -> Geometry:
@@ -950,6 +956,9 @@ class Geometry(Tidy3dBaseModel, ABC):
             Integer index defining the extrusion axis: 0 (x), 1 (y), or 2 (z).
         slab_bounds: Tuple[float, float]
             Minimal and maximal positions of the extruded slab along ``axis``.
+        dilation : float
+            Dilation of the polygon in the base by shifting each edge along its normal outwards
+            direction by a distance; a negative value corresponds to erosion.
         sidewall_angle : float = 0
             Angle of the extrusion sidewalls, away from the vertical direction, in radians. Positive
             (negative) values result in slabs larger (smaller) at the base than at the top.
@@ -964,7 +973,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometry extruded from the 2D data.
         """
-        return from_shapely(shape, axis, slab_bounds, sidewall_angle, reference_plane)
+        return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
 
     def _as_union(self) -> List[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
