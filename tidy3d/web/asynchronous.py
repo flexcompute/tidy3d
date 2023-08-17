@@ -6,7 +6,6 @@ from ..components.simulation import Simulation
 from ..log import log
 
 
-# pylint:disable=too-many-arguments, too-many-locals
 def run_async(
     simulations: Dict[str, Simulation],
     folder_name: str = "default",

@@ -76,7 +76,6 @@ class JaxModeData(JaxMonitorData, ModeData):
         jax_field=True,
     )
 
-    # pylint:disable=too-many-locals
     def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
 
@@ -217,7 +216,6 @@ class JaxFieldData(JaxMonitorData, FieldData):
         """
         raise NotImplementedError("'dot' is not yet supported in the adjoint plugin.")
 
-    # pylint: disable=too-many-locals
     def outer_dot(
         self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
     ) -> MixedModeDataArray:
@@ -231,7 +229,6 @@ class JaxFieldData(JaxMonitorData, FieldData):
             "'time_reversed_copy' is not yet supported in the adjoint plugin."
         )
 
-    # pylint:disable=too-many-locals
     def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
         """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
 
@@ -398,7 +395,6 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         return JaxDataArray(values=power_values, coords=power_coords)
 
-    # pylint:disable=too-many-locals
     def to_adjoint_sources(self, fwidth: float) -> List[PlaneWave]:
         """Converts a :class:`.DiffractionData` to a list of adjoint :class:`.PlaneWave`."""
 
@@ -452,7 +448,7 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 JaxMonitorDataType = Union[JaxModeData, JaxDiffractionData, JaxFieldData]
 
 # maps regular Tidy3d MonitorData to the JaxTidy3d equivalents, used in JaxSimulationData loading
-# pylint: disable=unhashable-member
+
 JAX_MONITOR_DATA_MAP = {
     DiffractionData: JaxDiffractionData,
     ModeData: JaxModeData,

@@ -25,9 +25,8 @@ class EigSolver(Tidy3dBaseModel):
     It's a collection of static methods.
     """
 
-    # pylint:disable=too-many-statements,too-many-branches,too-many-locals
     @classmethod
-    def compute_modes(  # pylint:disable=too-many-arguments
+    def compute_modes(
         cls,
         eps_cross,
         coords,
@@ -222,7 +221,7 @@ class EigSolver(Tidy3dBaseModel):
         neff_guess,
         mat_precision,
         direction,
-    ):  # pylint:disable=too-many-arguments
+    ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
 
@@ -316,7 +315,6 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff, eps_spec
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def matrix_data_type(cls, eps, mu, der_mats, mat_precision, is_tensorial):
         """Determine data type that should be used for the matrix for diagonalization."""
@@ -351,7 +349,6 @@ class EigSolver(Tidy3dBaseModel):
         mat.data *= np.logical_or(np.abs(mat.data) / max_element > tol, np.abs(mat.data) > tol)
         mat.eliminate_zeros()
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
@@ -427,8 +424,8 @@ class EigSolver(Tidy3dBaseModel):
         eig_guess = cls.type_conversion(np.array([-(neff_guess**2)]), mat_dtype)[0]
 
         if enable_incidence_matrices:
-            mat = dnz * mat * dnz.T  # pylint: disable=used-before-assignment
-            vec_init = dnz * vec_init  # pylint: disable=used-before-assignment
+            mat = dnz * mat * dnz.T
+            vec_init = dnz * vec_init
 
         if enable_preconditioner:
             precon = sp.diags(1 / mat.diagonal())
@@ -457,7 +454,7 @@ class EigSolver(Tidy3dBaseModel):
             vecs = precon * vecs
 
         if enable_incidence_matrices:
-            vecs = dnz.T * vecs  # pylint: disable=used-before-assignment
+            vecs = dnz.T * vecs
 
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
@@ -487,7 +484,6 @@ class EigSolver(Tidy3dBaseModel):
 
         return E, H, neff, keff
 
-    # pylint:disable=too-many-arguments
     @classmethod
     def solver_tensorial(
         cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision, direction
@@ -619,9 +615,7 @@ class EigSolver(Tidy3dBaseModel):
         return E, H, neff, keff
 
     @classmethod
-    def solver_eigs(
-        cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs
-    ):  # pylint:disable=unused-argument, too-many-arguments
+    def solver_eigs(cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs):
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters

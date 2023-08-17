@@ -26,7 +26,6 @@ class NumpyArrayType(np.ndarray):
 def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:
     """Adds a schema to the ``arbitrary_type`` class without subclassing."""
 
-    # pylint: disable=unused-argument
     @classmethod
     def mod_schema_fn(cls, field_schema: dict) -> None:
         """Function that gets set to ``arbitrary_type.__modify_schema__``."""
@@ -54,10 +53,10 @@ and can make JaxFloat like
 # JaxFloat = Union[float, ArrayLike]
 """
 
-# pylint: disable= unused-argument
+
 def sanitize_validator_fn(cls, val):
     """if val is an object (untracable) return 0.0."""
-    # pylint:disable=unidiomatic-typecheck
+
     if type(val) == object:
         return 0.0
     return val

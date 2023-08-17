@@ -228,7 +228,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return coeffs * HBAR
 
     @staticmethod
-    def _eV_to_Hz(f_eV: float):  # pylint:disable=invalid-name
+    def _eV_to_Hz(f_eV: float):
         """Convert frequency in unit of eV to Hz.
 
         Parameters
@@ -239,7 +239,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return f_eV / (HBAR * 2 * np.pi)
 
     @staticmethod
-    def _Hz_to_eV(f_Hz: float):  # pylint:disable=invalid-name
+    def _Hz_to_eV(f_Hz: float):
         """Convert frequency in unit of Hz to eV.
 
         Parameters
@@ -612,7 +612,7 @@ class DispersionFitter(Tidy3dBaseModel):
 
         try:
             resp.raise_for_status()
-        except Exception as e:  # pylint:disable=broad-except
+        except Exception as e:
             raise WebError("Connection to the website failed. Please provide a valid URL.") from e
 
         data_url = list(
@@ -649,7 +649,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: str, **loadtxt_kwargs):  # pylint:disable=arguments-differ
+    def from_file(cls, fname: str, **loadtxt_kwargs):
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters

@@ -22,13 +22,13 @@ try:
     import trimesh
 
     TRIMESH_AVAILABLE = True
-except Exception:  # pylint:disable=broad-except
+except Exception:
     TRIMESH_AVAILABLE = False
 
 try:
 
     NETWORKX_RTREE_AVAILABLE = True
-except Exception:  # pylint:disable=broad-except
+except Exception:
     NETWORKX_RTREE_AVAILABLE = False
 
 

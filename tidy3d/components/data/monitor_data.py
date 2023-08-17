@@ -1,4 +1,3 @@
-# pylint:disable=too-many-lines
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
 from __future__ import annotations
 
@@ -54,7 +53,6 @@ class MonitorData(Dataset, ABC):
         """Return copy of self with symmetry applied."""
         return self.copy()
 
-    # pylint:disable=unused-argument
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
@@ -521,7 +519,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Tangential fields for current and other field data
         fields_self = self._colocated_tangential_fields
-        # pylint:disable=protected-access
+
         fields_other = field_data._colocated_tangential_fields
         if conjugate:
             fields_self = {key: field.conj() for key, field in fields_self.items()}
@@ -566,7 +564,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         return fields
 
-    # pylint: disable=too-many-locals
     def outer_dot(
         self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
     ) -> MixedModeDataArray:
@@ -599,7 +596,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         tan_dims = self._tangential_dims
 
-        # pylint: disable=protected-access
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
             raise DataError("Tangential dimentions must match between the two monitors.")
 
@@ -609,7 +605,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             fields_self = {component: field.conj() for component, field in fields_self.items()}
 
         # Tangential fields for other data
-        # pylint:disable=protected-access
+
         fields_other = field_data._interpolated_tangential_fields(self._plane_grid_boundaries)
 
         # Tangential field component names
@@ -889,7 +885,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 )
         return val
 
-    # pylint:disable=too-many-locals
     def overlap_sort(
         self,
         track_freq: TrackFreq,
@@ -942,7 +937,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 data_to_sort = self._isel(f=[freq_id])
 
                 # Compute "sorting w.r.t. to neighbor" and overlap values
-                # pylint:disable=protected-access
+
                 sorting_one_mode, amps_one_mode = data_template._find_ordering_one_freq(
                     data_to_sort, overlap_thresh
                 )
@@ -1015,7 +1010,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         for i, mode_index in enumerate(modes_to_sort):
 
             # Get one mode from data_to_sort
-            # pylint:disable=protected-access
+
             one_mode = data_to_sort._isel(mode_index=[mode_index])
 
             # Project to all modes of interest from data_template
@@ -1052,7 +1047,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         return pairs, values
 
-    # pylint:disable=too-many-locals
     def _reorder_modes(
         self,
         sorting: Numpy,
@@ -1137,7 +1131,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         for key, field in self.field_components.items():
             update_dict[key] = field.isel(f=center)
 
-        # pylint: disable=protected-access
         for key, data in self._grid_correction_dict.items():
             update_dict[key] = data.isel(f=center)
 
@@ -1929,7 +1922,6 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
         return self.make_renormalized_data(phase, proj_distance)
 
 
-# pylint: disable=too-many-public-methods
 class DiffractionData(AbstractFieldProjectionData):
     """Data for a :class:`.DiffractionMonitor`: complex components of diffracted far fields.
 

@@ -207,7 +207,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         _, (x0, y0) = self.pop_axis(self.center, axis=self.axis)
         return [shapely.Point(x0, y0).buffer(radius_offset, quad_segs=_N_SHAPELY_QUAD_SEGS)]
 
-    def _intersections_side(self, position, axis):  # pylint:disable=too-many-locals
+    def _intersections_side(self, position, axis):
         """Find shapely geometries intersecting cylindrical geometry with axis orthogonal to length.
         When ``sidewall_angle`` is nonzero, so that it's in fact a conical frustum or cone, the
         cross section can contain hyperbolic curves. This is currently approximated by a polygon

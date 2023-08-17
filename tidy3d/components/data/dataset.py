@@ -338,7 +338,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
-        # pylint:disable=no-member
+
         return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
 
     @property

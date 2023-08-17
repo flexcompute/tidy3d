@@ -33,7 +33,6 @@ MODESOLVER_LOG = "output/result.log"
 MODESOLVER_RESULT = "output/result.hdf5"
 
 
-# pylint:disable=too-many-arguments
 def run(
     mode_solver: ModeSolver,
     task_name: str = "Untitled",
@@ -156,7 +155,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         description="Mode solver being run by this task.",
     )
 
-    # pylint: disable=arguments-differ
     @classmethod
     def create(
         cls,
@@ -209,7 +207,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         )
         return ModeSolverTask(**resp, mode_solver=mode_solver)
 
-    # pylint: disable=arguments-differ, too-many-arguments
     @classmethod
     def get(
         cls,
@@ -259,7 +256,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         resp = http.get(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}")
         return ModeSolverTask(**resp, mode_solver=self.mode_solver)
 
-    # pylint: disable=protected-access
     def upload(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
     ) -> None:
@@ -320,7 +316,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             os.unlink(file_name)
             os.unlink(gz_file_name)
 
-    # pylint: disable=arguments-differ
     def submit(self):
         """Start the execution of this task.
 
@@ -329,7 +324,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         """
         http.post(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run")
 
-    # pylint: disable=arguments-differ
     def delete(self):
         """Delete the mode solver and its corresponding task from the server."""
         # Delete mode solver
@@ -460,7 +454,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}
         )
 
-        # pylint:disable=protected-access
         self.mode_solver._cached_properties["data_raw"] = data
 
         # Perform symmetry expansion

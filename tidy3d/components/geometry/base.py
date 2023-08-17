@@ -1,5 +1,5 @@
 """Abstract base classes for geometry."""
-# pylint:disable=too-many-lines
+
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from ...log import log
 from ...exceptions import SetupError, ValidationError, Tidy3dKeyError, Tidy3dError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
 
-# pylint:disable=too-many-public-methods
+
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
@@ -225,7 +225,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     @cached_property
     @abstractmethod
-    def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
         Returns
@@ -856,7 +856,6 @@ class Geometry(Tidy3dBaseModel, ABC):
         all_vertices = [vertices * gds_scale for vertices in all_vertices]
         return all_vertices
 
-    # pylint:disable=too-many-locals,too-many-arguments
     @staticmethod
     def from_gds(
         gds_cell,
@@ -971,7 +970,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """Return a list of geometries that, united, make up the given geometry."""
         if isinstance(self, GeometryGroup):
             return self.geometries
-        # pylint:disable=no-member
+
         if isinstance(self, ClipOperation) and self.operation == "union":
             return (self.geometry_a, self.geometry_b)
         return (self,)
@@ -1299,7 +1298,7 @@ class Box(Centered):
         return cls(center=center, size=size, **kwargs)
 
     @classmethod
-    def surfaces(cls, size: Size, center: Coordinate, **kwargs):  # pylint: disable=too-many-locals
+    def surfaces(cls, size: Size, center: Coordinate, **kwargs):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1389,9 +1388,7 @@ class Box(Centered):
         return surfaces
 
     @classmethod
-    def surfaces_with_exclusion(
-        cls, size: Size, center: Coordinate, **kwargs
-    ):  # pylint: disable=too-many-locals
+    def surfaces_with_exclusion(cls, size: Size, center: Coordinate, **kwargs):
         """Returns a list of 6 :class:`Box` instances corresponding to each surface of a 3D volume.
         The output surfaces are stored in the order [x-, x+, y-, y+, z-, z+], where x, y, and z
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
@@ -1420,7 +1417,6 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
-    # pylint:disable=too-many-locals
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1562,7 +1558,7 @@ class Box(Centered):
             )
         return self.size.index(0)
 
-    def _plot_arrow(  # pylint:disable=too-many-arguments, too-many-locals
+    def _plot_arrow(
         self,
         direction: Tuple[float, float, float],
         x: float = None,
@@ -1828,7 +1824,7 @@ class ClipOperation(Geometry):
         return result
 
     @cached_property
-    def bounds(self) -> Bound:  # pylint:disable=too-many-locals
+    def bounds(self) -> Bound:
         """Returns bounding box min and max coordinates.
 
         Returns
@@ -2079,4 +2075,4 @@ class GeometryGroup(Geometry):
         return np.sum(individual_areas)
 
 
-from .utils import GeometryType, from_shapely # noqa: E402
+from .utils import GeometryType, from_shapely  # noqa: E402

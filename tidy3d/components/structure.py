@@ -106,7 +106,7 @@ class Structure(AbstractStructure):
                 raise SetupError(
                     "Can't validate 2D structure because its geometry did not pass validation."
                 )
-            _ = geom._normal_2dmaterial  # pylint: disable=protected-access
+            _ = geom._normal_2dmaterial
         return val
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:

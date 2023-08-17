@@ -34,7 +34,6 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
 
-    # pylint: disable =too-many-locals
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
     ) -> Tuple[Dict[str, np.ndarray], float]:
@@ -77,7 +76,6 @@ class AbstractJaxMedium(ABC, JaxObject):
         values = inside_fn(**inside_kwargs)
         return xr.DataArray(values, coords=vol_coords)
 
-    # pylint: disable=too-many-arguments
     def e_mult_volume(
         self,
         field: Literal["Ex", "Ey", "Ez"],
@@ -170,7 +168,6 @@ class JaxMedium(Medium, AbstractJaxMedium):
         self_dict = self.dict(exclude={"type"})
         return Medium.parse_obj(self_dict)
 
-    # pylint:disable=too-many-locals, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -245,7 +242,6 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
             obj_dict[component] = JaxMedium.from_tidy3d(tidy3d_medium)
         return cls.parse_obj(obj_dict)
 
-    # pylint:disable=too-many-locals, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -428,7 +424,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         obj_dict["conductivity"] = None
         return cls.parse_obj(obj_dict)
 
-    # pylint:disable=too-many-locals, unused-argument, too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -543,7 +538,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
 JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium]
 
-# pylint: disable=unhashable-member
+
 JAX_MEDIUM_MAP = {
     Medium: JaxMedium,
     AnisotropicMedium: JaxAnisotropicMedium,

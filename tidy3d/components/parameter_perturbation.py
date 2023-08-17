@@ -1,4 +1,3 @@
-# pylint: disable=invalid-name, too-many-lines
 """Defines perturbations to properties of the medium / materials"""
 from __future__ import annotations
 

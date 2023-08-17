@@ -110,7 +110,7 @@ class ModeSolver(Tidy3dBaseModel):
         set after the solve."""
 
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
-        # pylint:disable=protected-access
+
         span_inds = self.simulation._discretize_inds_monitor(monitor)
 
         # Remove extension along monitor normal
@@ -128,7 +128,6 @@ class ModeSolver(Tidy3dBaseModel):
             if sym != 0:
                 span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
 
-        # pylint:disable=protected-access
         return self.simulation._subgrid(span_inds=span_inds)
 
     def solve(self) -> ModeSolverData:
@@ -178,10 +177,8 @@ class ModeSolver(Tidy3dBaseModel):
             update={"freqs": self._freqs_for_group_index(), "mode_spec": mode_spec}
         )
 
-        # pylint:disable=protected-access
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
-    # pylint:disable=too-many-locals
     @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
@@ -217,7 +214,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Construct and add all the data for the fields
         # Snap the solver grid to plane normal and simulation 0-sized dims if any
         grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
-        # pylint:disable=protected-access
+
         grid_snapped = self.simulation._snap_zero_dim(grid_snapped)
 
         # Construct the field data on Yee grid
@@ -372,7 +369,7 @@ class ModeSolver(Tidy3dBaseModel):
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
-            # pylint: disable=unbalanced-tuple-unpacking
+
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
@@ -382,7 +379,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         return n_complex, fields, eps_spec
 
-    # pylint:disable=too-many-locals
     def _solve_single_freq(
         self,
         freq: float,
@@ -708,7 +704,6 @@ class ModeSolver(Tidy3dBaseModel):
         new_sim = self.simulation.updated_copy(monitors=new_monitors)
         return new_sim
 
-    # pylint:disable=too-many-arguments
     def plot_field(
         self,
         field_name: str,

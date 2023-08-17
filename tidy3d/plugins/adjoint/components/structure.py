@@ -56,7 +56,6 @@ class JaxStructure(Structure, JaxObject):
 
         return cls.parse_obj(struct_dict)
 
-    # pylint:disable=too-many-arguments
     def store_vjp(
         self,
         grad_data_fwd: FieldData,

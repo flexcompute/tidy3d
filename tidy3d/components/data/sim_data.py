@@ -261,7 +261,6 @@ class SimulationData(Tidy3dBaseModel):
         # colocate to monitor grid boundaries
         return self._at_boundaries(self.load_field_monitor(field_monitor_name))
 
-    # pylint: disable=too-many-locals
     def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
         """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.
 
@@ -435,7 +434,6 @@ class SimulationData(Tidy3dBaseModel):
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
 
-    # pylint: disable=too-many-arguments,too-many-locals,too-many-branches,too-many-statements
     def plot_field(
         self,
         field_monitor_name: str,
@@ -628,7 +626,6 @@ class SimulationData(Tidy3dBaseModel):
             ax=ax,
         )
 
-    # pylint: disable=too-many-arguments,too-many-locals
     @equal_aspect
     @add_ax_if_none
     def plot_scalar_array(
