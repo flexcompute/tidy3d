@@ -33,7 +33,7 @@ RUN_REFRESH_TIME = 1.0
 SIM_FILE_JSON = "simulation.json"
 
 # number of seconds to keep re-trying connection before erroring
-CONNECTION_RETRY_TIME = 30
+CONNECTION_RETRY_TIME = 180
 
 
 def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):
