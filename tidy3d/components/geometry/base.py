@@ -25,6 +25,7 @@ from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
 
 POLY_GRID_SIZE = 1e-12
 
+
 class Geometry(Tidy3dBaseModel, ABC):
     """Abstract base class, defines where something exists in space."""
 
