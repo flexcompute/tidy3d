@@ -28,6 +28,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 - FDTD and mode solver tasks always upload `hdf5.gz` file instead of `hdf5` or `json`.
 - `web.download_json()` will download `simulation.hdf5.gz` and unzip it, then load the json from the hdf5 file.
 - `SimulationTask.get_simulation_hdf5()` will download simulation.hdf5.gz and unzip it to hdf5 file.
+- The width of Tidy3D logging output is changed to 80 characters.
 
 ### Fixed
 - Bug in angled mode solver with negative `angle_theta`.

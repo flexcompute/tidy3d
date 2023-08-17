@@ -22,6 +22,7 @@ from .medium import MediumType
 from .base import Tidy3dBaseModel, cached_property
 from ..exceptions import SetupError
 from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
+from ..log import get_logging_console
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10
@@ -432,6 +433,7 @@ class FieldProjector(Tidy3dBaseModel):
             for i_th in track(
                 np.arange(len(theta)),
                 description=f"Processing surface monitor '{surface.monitor.name}'...",
+                console=get_logging_console(),
             ):
                 integrate_for_one_theta(i_th)
 
@@ -532,6 +534,7 @@ class FieldProjector(Tidy3dBaseModel):
                 for (_theta, _phi), (i, j) in track(
                     iter_coords,
                     description=f"Processing surface monitor '{surface.monitor.name}'...",
+                    console=get_logging_console(),
                 ):
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
                     _fields = self._fields_for_surface_exact(
@@ -587,7 +590,9 @@ class FieldProjector(Tidy3dBaseModel):
             for k, _z in enumerate(z)
         ]
 
-        for (_x, _y, _z), (i, j, k) in track(iter_coords, description="Computing projected fields"):
+        for (_x, _y, _z), (i, j, k) in track(
+            iter_coords, description="Computing projected fields", console=get_logging_console()
+        ):
             r, theta, phi = monitor.car_2_sph(_x, _y, _z)
             phase = np.atleast_1d(
                 AbstractFieldProjectionData.propagation_phase(dist=r, k=wavenumber)
@@ -650,7 +655,9 @@ class FieldProjector(Tidy3dBaseModel):
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [([_ux, _uy], [i, j]) for i, _ux in enumerate(ux) for j, _uy in enumerate(uy)]
 
-        for (_ux, _uy), (i, j) in track(iter_coords, description="Computing projected fields"):
+        for (_ux, _uy), (i, j) in track(
+            iter_coords, description="Computing projected fields", console=get_logging_console()
+        ):
             theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
 
             for surface in self.surfaces:

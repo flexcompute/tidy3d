@@ -12,7 +12,6 @@ from requests.exceptions import JSONDecodeError
 from urllib3.exceptions import NewConnectionError
 
 import pytz
-from rich.console import Console
 from rich.progress import Progress
 
 from .environment import Env
@@ -21,7 +20,7 @@ from .task import TaskId, TaskInfo, ChargeType
 from ..components.data.sim_data import SimulationData
 from ..components.simulation import Simulation
 from ..components.types import Literal
-from ..log import log
+from ..log import log, get_logging_console
 from ..exceptions import WebError
 
 # time between checking task status
@@ -185,7 +184,7 @@ def upload(  # pylint:disable=too-many-locals,too-many-arguments
         simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
     )
     if verbose:
-        console = Console()
+        console = get_logging_console()
         console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
         url = f"https://tidy3d.simulation.cloud/workbench?taskId={task.task_id}"
         console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
@@ -307,7 +306,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
 
-    console = Console() if verbose else None
+    console = get_logging_console() if verbose else None
 
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
@@ -588,7 +587,7 @@ def load(
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
-        console = Console()
+        console = get_logging_console()
         console.log(f"loading SimulationData from {path}")
 
     sim_data = SimulationData.from_file(path)
@@ -792,7 +791,7 @@ def test() -> None:
     try:
         # note, this is a little slow, but the only call that doesn't require providing a task id.
         get_tasks(num_tasks=0)
-        console = Console()
+        console = get_logging_console()
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
         url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/quickstart.html"

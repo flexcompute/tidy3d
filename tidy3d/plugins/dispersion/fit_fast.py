@@ -9,7 +9,7 @@ from pydantic import Field, validator, PositiveInt, NonNegativeFloat, PositiveFl
 import scipy
 
 from .fit import DispersionFitter
-from ...log import log
+from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.medium import PoleResidue
 from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayFloat2D, ArrayComplex2D
@@ -754,7 +754,7 @@ class FastDispersionFitter(DispersionFitter):
 
         configs = make_configs()
 
-        with Progress() as progress:
+        with Progress(console=get_logging_console()) as progress:
 
             task = progress.add_task(
                 f"Fitting to weighted RMS of {tolerance_rms}...",

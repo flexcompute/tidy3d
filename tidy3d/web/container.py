@@ -6,7 +6,6 @@ from abc import ABC
 from typing import Dict, Tuple
 import time
 
-from rich.console import Console
 from rich.progress import Progress
 import pydantic as pd
 
@@ -15,7 +14,7 @@ from .task import TaskId, TaskInfo, RunInfo, TaskName
 from ..components.simulation import Simulation
 from ..components.base import Tidy3dBaseModel
 from ..components.data.sim_data import SimulationData
-from ..log import log
+from ..log import log, get_logging_console
 
 from ..exceptions import DataError
 
@@ -472,7 +471,7 @@ class Batch(WebContainer):
         end_statuses = ("success", "error", "errored", "diverged", "diverge", "deleted", "draft")
 
         if self.verbose:
-            console = Console()
+            console = get_logging_console()
             console.log("Started working on Batch.")
 
             est_flex_unit = self.estimate_cost()
