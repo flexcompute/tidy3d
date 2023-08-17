@@ -10,13 +10,11 @@ import tempfile
 import time
 
 import pydantic
-import rich
 
-from tidy3d.version import __version__
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
-from ...log import log
+from ...log import log, get_logging_console
 from ...web.file_util import compress_file_to_gzip, extract_gz_file
 from ...web.http_management import http
 from ...web.s3utils import download_file, upload_file
@@ -76,7 +74,7 @@ def run(
 
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
-        console = rich.console.Console()
+        console = get_logging_console()
 
     task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
     if verbose:

@@ -32,6 +32,9 @@ DEFAULT_LOG_STYLES = {
     "CRITICAL": "red bold",
 }
 
+# Width of the console used for rich logging (in characters).
+CONSOLE_WIDTH = 80
+
 
 def _get_level_int(level: LogValue) -> int:
     """Get the integer corresponding to the level string."""
@@ -302,7 +305,9 @@ def set_logging_console(stderr: bool = False) -> None:
         previous_level = log.handlers["console"].level
     else:
         previous_level = DEFAULT_LEVEL
-    log.handlers["console"] = LogHandler(Console(stderr=stderr), previous_level)
+    log.handlers["console"] = LogHandler(
+        Console(stderr=stderr, width=CONSOLE_WIDTH), previous_level
+    )
 
 
 def set_logging_file(
@@ -350,3 +355,10 @@ log = Logger()
 
 # Set default logging output
 set_logging_console()
+
+
+def get_logging_console() -> Console:
+    """Get console from logging handlers."""
+    if "console" not in log.handlers:
+        set_logging_console()
+    return log.handlers["console"].console

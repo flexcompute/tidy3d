@@ -11,7 +11,7 @@ import numpy as np
 from rich.progress import Progress
 from pydantic import Field, validator
 
-from ...log import log
+from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
@@ -280,7 +280,7 @@ class DispersionFitter(Tidy3dBaseModel):
         best_medium = None
         best_rms = np.inf
 
-        with Progress() as progress:
+        with Progress(console=get_logging_console()) as progress:
 
             task = progress.add_task(
                 f"Fitting with {num_poles} to RMS of {tolerance_rms}...", total=num_tries

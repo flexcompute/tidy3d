@@ -8,8 +8,6 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic as pd
 from pydantic import Extra, Field, parse_obj_as
-from rich.console import Console
-
 from tidy3d import Simulation
 from tidy3d.version import __version__
 from tidy3d.exceptions import WebError
@@ -20,6 +18,8 @@ from .s3utils import download_file, upload_file
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
 from .file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
+
+from ..log import get_logging_console
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_DATA_HDF5 = "output/monitor_data.hdf5"
@@ -328,7 +328,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 # Write the string to the file
                 file.write(json_string.decode("utf-8"))
                 if verbose:
-                    console = Console()
+                    console = get_logging_console()
                     console.log("Generate simulation.json successfully.")
         else:
             raise WebError("Failed to download simulation.json.")
@@ -542,7 +542,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             extract_gz_file(SIM_FILE_HDF5_GZ, to_file)
             os.remove(SIM_FILE_HDF5_GZ)
             if verbose:
-                console = Console()
+                console = get_logging_console()
                 console.log(f"Extract {SIM_FILE_HDF5_GZ} to {to_file} successfully.")
         else:
             raise WebError("Failed to download simulation.hdf5")
