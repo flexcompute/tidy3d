@@ -328,9 +328,8 @@ class CustomSourceTime(Pulse):
     Note
     ----
     The source time dependence is linearly interpolated to the simulation time steps.
-    To ensure that this interpolation does not introduce artifacts, it is necessary
-    to use a sampling rate that is sufficiently fast relative to the simulation time step.
-    The source should also ideally start at zero and ramp up smoothly.
+    The sampling rate should be sufficiently fast that this interpolation does not
+    introduce artifacts. The source time dependence should also start at zero and ramp up smoothly.
     The first and last values of the envelope will be used for times that are out of range
     of the provided data.
 
@@ -382,7 +381,7 @@ class CustomSourceTime(Pulse):
             Complex values of the source envelope.
         dt: float
             Time step for the `values` array. This value should be sufficiently small
-            relative to the simulation `dt` in order to avoid interpolation artifacts.
+            that the interpolation to simulation time steps does not introduce artifacts.
 
         Returns
         -------
