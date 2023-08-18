@@ -38,6 +38,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Numerically stable sigmoid function in radius of curvature constraint.
 - Fixed 2d checking in `Geometry.intersections_2dbox()`.
 - Spatial monitor downsampling when the monitor is crossing a symmetry plane or Bloch boundary conditions.
+- Cast `JaxDataArray.__abs__` output to `jnp.array`, reducing conversions needed in objective functions.
 
 ## [2.4.0rc1] - 2023-7-27
 
