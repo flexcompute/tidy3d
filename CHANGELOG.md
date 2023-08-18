@@ -36,7 +36,6 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Bug in angled mode solver with negative `angle_theta`.
 - Properly include `JaxSimulation.input_structures` in `JaxSimulationData.plot_field()`.
 - Numerically stable sigmoid function in radius of curvature constraint.
-- Fixed 2d checking in `Geometry.intersections_2dbox()`.
 - Spatial monitor downsampling when the monitor is crossing a symmetry plane or Bloch boundary conditions.
 - Cast `JaxDataArray.__abs__` output to `jnp.array`, reducing conversions needed in objective functions.
 

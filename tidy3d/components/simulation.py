@@ -2262,8 +2262,12 @@ class Simulation(Box):
             (xmin, xmax) = hlim
         if vlim is not None:
             (ymin, ymax) = vlim
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
+
+        if xmin != xmax:
+            ax.set_xlim(xmin, xmax)
+        if ymin != ymax:
+            ax.set_ylim(ymin, ymax)
+
         return ax
 
     @staticmethod
@@ -2341,8 +2345,8 @@ class Simulation(Box):
         # get center and size with h, v
         h_center = (hmin + hmax) / 2.0
         v_center = (vmin + vmax) / 2.0
-        h_size = hmax - hmin
-        v_size = vmax - vmin
+        h_size = (hmax - hmin) or inf
+        v_size = (vmax - vmin) or inf
 
         axis, center_normal = self.parse_xyz_kwargs(x=x, y=y, z=z)
         center = self.unpop_axis(center_normal, (h_center, v_center), axis=axis)
