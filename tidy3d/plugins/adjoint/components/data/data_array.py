@@ -163,7 +163,7 @@ class JaxDataArray(Tidy3dBaseModel):
 
     def __abs__(self) -> JaxDataArray:
         """Absolute value of self's values."""
-        new_values = jnp.abs(self.values)
+        new_values = jnp.abs(self.as_jnp_array)
         return self.updated_copy(values=new_values)
 
     def __pow__(self, power: int) -> JaxDataArray:
@@ -213,7 +213,7 @@ class JaxDataArray(Tidy3dBaseModel):
         """Sum (optionally along a single or multiple dimensions)."""
 
         if dim is None:
-            return jnp.sum(self.values)
+            return jnp.sum(self.as_jnp_array)
 
         # dim is supplied
         if isinstance(dim, str):
