@@ -72,10 +72,6 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
-# allow some numerical flexibility before warning about CustomSourceTime
-# in units of dt
-CUSTOMSOURCETIME_TOL = 1.1
-
 
 class Simulation(Box):
     """Contains all information about Tidy3d simulation.
@@ -844,7 +840,6 @@ class Simulation(Box):
         """Call validators taking z`self` that get run after init."""
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
-        self._validate_customsourcetime()
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -913,24 +908,6 @@ class Simulation(Box):
                             "uniform grid in both directions tangential to the TFSF injection "
                             f"axis, '{'xyz'[source.injection_axis]}'."
                         )
-
-    def _validate_customsourcetime(self) -> None:
-        """Make sure custom source time is not undersampled.
-        Also, make sure that all simulation.tmesh values are covered."""
-        for source in self.sources:
-            if isinstance(source.source_time, CustomSourceTime):
-                dataset = source.source_time.source_time_dataset
-                if dataset is None:
-                    continue
-                times = dataset.values.coords["t"].values
-                max_dt = np.amax(np.diff(times))
-                if max_dt > self.dt * CUSTOMSOURCETIME_TOL:
-                    log.warning(
-                        f"'CustomSourceTime' found with time step 'max(dt) = {max_dt:.3g}', "
-                        f"while the simulation time step is 'dt={self.dt}'. "
-                        "We recommend that the largest time step of the custom source "
-                        f"be smaller than the time step of the simulation."
-                    )
 
     """ Pre submit validation (before web.upload()) """
 
