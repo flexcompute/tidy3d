@@ -1,7 +1,7 @@
 # pylint: disable=too-many-lines, too-many-arguments, too-many-statements
 """ Container holding all information about simulation and its components"""
 from __future__ import annotations
-from typing import Dict, Tuple, List, Set
+from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
 import pydantic
@@ -562,6 +562,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         alpha: float = None,
         cbar: bool = True,
         reverse: bool = False,
+        eps_lim: Tuple[Union[float, None], Union[float, None]] = (None, None),
         ax: Ax = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
@@ -586,6 +587,8 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         alpha : float = None
             Opacity of the structures being plotted.
             Defaults to the structure default alpha.
+        eps_lim : Tuple[float, float] = None
+            Custom limits for eps coloring.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
 
@@ -614,7 +617,18 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
         else:
             medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
 
-        eps_min, eps_max = self.eps_bounds(freq=freq)
+        eps_min, eps_max = eps_lim
+
+        if eps_min is None or eps_max is None:
+
+            eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
+
+            if eps_min is None:
+                eps_min = eps_min_sim
+
+            if eps_max is None:
+                eps_max = eps_max_sim
+
         for (medium, shape) in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
             if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
@@ -811,6 +825,7 @@ class Scene(Box):  # pylint:disable=too-many-public-methods
             delta_eps_max = eps_max - eps_min + 1e-5
             eps_fraction = delta_eps / delta_eps_max
             color = eps_fraction if reverse else 1 - eps_fraction
+            color = min(1, max(color, 0))  # clip in case of custom eps limits
             plot_params = plot_params.copy(update={"facecolor": str(color)})
 
         return plot_params

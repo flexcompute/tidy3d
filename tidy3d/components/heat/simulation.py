@@ -575,7 +575,7 @@ class HeatSimulation(Tidy3dBaseModel):
                         continue
 
                     # event (3) from above
-                    if name in _bc_spec.structure.structures:
+                    if name in _bc_spec.placement.structures:
                         new_bdry = _bdry.intersection(shape)
                         boundaries_reverse[index] = (
                             _bc_spec,
