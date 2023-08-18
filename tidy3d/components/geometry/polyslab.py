@@ -53,7 +53,7 @@ class PolySlab(base.Planar):
     )
 
     vertices: ArrayFloat2D = pydantic.Field(
-        ArrayFloat2D,
+        ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
         "face vertices at the ``reference_plane``. "
