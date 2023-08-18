@@ -161,6 +161,22 @@ class Geometry(Tidy3dBaseModel, ABC):
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
+    def intersections_2dbox(self, plane: Box) -> List[Shapely]:
+        """Returns list of shapely geomtries representing the intersections of the geometry with
+        a 2D box.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane. For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        log.warning(
+            "'intersections_2dbox()' is deprecated and will be removed in the future. "
+            "Use 'plane.intersections_with(...)' for the same functionality."
+        )
+        return plane.intersections_with(self)
+
     def intersects(self, other) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
 
@@ -1509,7 +1525,9 @@ class Box(Centered):
 
         # Verify 2D
         if self.size.count(0.0) != 1:
-            raise ValueError("Intersections with other geometry are only calculated from a 2D box.")
+            raise ValidationError(
+                "Intersections with other geometry are only calculated from a 2D box."
+            )
 
         # dont bother if the geometry doesn't intersect the self at all
         if not other.intersects(self):

@@ -10,7 +10,7 @@ import gdspy
 import trimesh
 
 import tidy3d as td
-from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.components.geometry.base import Geometry, Planar
 
 
@@ -454,6 +454,26 @@ def test_pop_axis():
         assert Lz == _Lz
         assert Lx == _Lx
         assert Ly == _Ly
+
+
+def test_2b_box_intersections():
+    plane = td.Box(size=(1, 4, 0))
+    box1 = td.Box(size=(1, 1, 1))
+    box2 = td.Box(size=(1, 1, 1), center=(3, 0, 0))
+
+    result = plane.intersections_with(box1)
+    assert len(result) == 1
+    assert result[0].geom_type == "Polygon"
+    assert len(plane.intersections_with(box2)) == 0
+
+    with pytest.raises(ValidationError):
+        _ = box1.intersections_with(box2)
+
+    assert len(box1.intersections_2dbox(plane)) == 1
+    assert len(box2.intersections_2dbox(plane)) == 0
+
+    with pytest.raises(ValidationError):
+        _ = box2.intersections_2dbox(box1)
 
 
 def test_polyslab_merge():
