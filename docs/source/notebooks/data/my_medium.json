@@ -2,6 +2,7 @@
     "name": null,
     "frequency_range": null,
     "allow_gain": false,
+    "nonlinear_spec": null,
     "type": "PoleResidue",
     "eps_inf": 3.3946193815573142,
     "poles": [

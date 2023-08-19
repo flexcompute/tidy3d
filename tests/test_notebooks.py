@@ -31,19 +31,11 @@ for i, path in enumerate(notebook_filenames_all):
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-    'AdjointPlugin1Intro',
-    'AdjointPlugin2GradientChecking',
-    'AdjointPlugin3InverseDesign',
-    'AdjointPlugin4MultiObjective',
-    'AdjointPlugin5BoundaryGradients',
-    'FocusedApodGC',
+'AndersonLocalization',
+'Metalens'
 ]
 
 skip = [
-    '8ChannelDemultiplexer',
-    # 'AdjointPlugin5BoundaryGradients',
-    'AdjointPlugin6GratingCoupler',
-    'AdjointPlugin7Metalens',
 ]
 
 # if any run only supplied, only add those
@@ -57,7 +49,7 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """ 
-as of Aug 1 2023
+as of Aug 17 2023
 '8ChannelDemultiplexer',
 '90OpticalHybrid',
 'AdjointPlugin1Intro',
@@ -67,6 +59,7 @@ as of Aug 1 2023
 'AdjointPlugin5BoundaryGradients',
 'AdjointPlugin6GratingCoupler',
 'AdjointPlugin7Metalens',
+'AdjointPlugin8WaveguideBend',
 'AndersonLocalization',
 'AnimationTutorial',
 'AutoGrid',
