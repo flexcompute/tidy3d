@@ -150,6 +150,18 @@ Spatially varying
 
    CustomAnisotropicMedium   
 
+Medium Specifications (add properties to existing Medium)
+---------------------------------------------------------
+
+Nonlinear
+^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+    
+    NonlinearSpec
+    NonlinearSusceptibility
+
 Material Library
 ----------------
 
