@@ -11,7 +11,8 @@ import trimesh
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
-from tidy3d.components.geometry.base import Geometry, Planar
+from tidy3d.components.geometry.base import Planar
+from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
 
 
 GEO = td.Box(size=(1, 1, 1))
@@ -72,19 +73,21 @@ def test_plot(component):
 
 
 def test_base_inside():
-    assert Geometry.inside(GEO, x=0, y=0, z=0)
-    assert np.all(Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))
-    assert np.all(Geometry.inside(GEO, np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]])))
+    assert td.Geometry.inside(GEO, x=0, y=0, z=0)
+    assert np.all(td.Geometry.inside(GEO, np.array([0, 0]), np.array([0, 0]), np.array([0, 0])))
+    assert np.all(
+        td.Geometry.inside(GEO, np.array([[0, 0]]), np.array([[0, 0]]), np.array([[0, 0]]))
+    )
 
 
 def test_base_inside_meshgrid():
-    assert np.all(Geometry.inside_meshgrid(GEO, x=[0], y=[0], z=[0]))
-    assert np.all(Geometry.inside_meshgrid(GEO, [0, 0], [0, 0], [0, 0]))
+    assert np.all(td.Geometry.inside_meshgrid(GEO, x=[0], y=[0], z=[0]))
+    assert np.all(td.Geometry.inside_meshgrid(GEO, [0, 0], [0, 0], [0, 0]))
     # Input dimensions different than 1 error for ``inside_meshgrid``.
     with pytest.raises(ValueError):
-        _ = Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
+        _ = td.Geometry.inside_meshgrid(GEO, x=0, y=0, z=0)
     with pytest.raises(ValueError):
-        _ = Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
+        _ = td.Geometry.inside_meshgrid(GEO, [[0, 0]], [[0, 0]], [[0, 0]])
 
 
 def test_bounding_box():
@@ -95,9 +98,9 @@ def test_bounding_box():
 @pytest.mark.parametrize("points_shape", [(3,), (3, 10)])
 def test_rotate_points(points_shape):
     points = np.random.random(points_shape)
-    points_rotated = Geometry.rotate_points(points=points, axis=(0, 0, 1), angle=2 * np.pi)
+    points_rotated = td.Geometry.rotate_points(points=points, axis=(0, 0, 1), angle=2 * np.pi)
     assert np.allclose(points, points_rotated)
-    points_rotated = Geometry.rotate_points(points=points, axis=(0, 0, 1), angle=np.pi)
+    points_rotated = td.Geometry.rotate_points(points=points, axis=(0, 0, 1), angle=np.pi)
 
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
@@ -374,6 +377,95 @@ def test_geometryoperations():
     assert BOX ^ SPHERE == td.ClipOperation(
         operation="symmetric_difference", geometry_a=BOX, geometry_b=SPHERE
     )
+
+
+def test_flattening():
+    flat = list(
+        flatten_groups(
+            td.GeometryGroup(
+                geometries=[
+                    td.Box(size=(1, 1, 1)),
+                    td.Box(size=(0, 1, 0)),
+                    td.ClipOperation(
+                        operation="union",
+                        geometry_a=td.Box(size=(0, 0, 1)),
+                        geometry_b=td.GeometryGroup(
+                            geometries=[
+                                td.Box(size=(2, 2, 2)),
+                                td.GeometryGroup(
+                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                ),
+                            ]
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+    assert len(flat) == 6
+    assert all(isinstance(g, td.Box) for g in flat)
+
+    flat = list(
+        flatten_groups(
+            td.GeometryGroup(
+                geometries=[
+                    td.Box(size=(1, 1, 1)),
+                    td.Box(size=(0, 1, 0)),
+                    td.ClipOperation(
+                        operation="intersection",
+                        geometry_a=td.Box(size=(0, 0, 1)),
+                        geometry_b=td.GeometryGroup(
+                            geometries=[
+                                td.Box(size=(2, 2, 2)),
+                                td.GeometryGroup(
+                                    geometries=[td.Box(size=(3, 3, 3)), td.Box(size=(3, 0, 3))]
+                                ),
+                            ]
+                        ),
+                    ),
+                ]
+            )
+        )
+    )
+    assert len(flat) == 3
+    assert all(
+        isinstance(g, td.Box) or (isinstance(g, td.ClipOperation) and g.operation == "intersection")
+        for g in flat
+    )
+
+
+def test_geometry_traversal():
+    geometries = list(traverse_geometries(td.Box(size=(1, 1, 1))))
+    assert len(geometries) == 1
+
+    geo_tree = td.GeometryGroup(
+        geometries=[
+            td.Box(size=(1, 0, 0)),
+            td.ClipOperation(
+                operation="intersection",
+                geometry_a=td.GeometryGroup(
+                    geometries=[
+                        td.Box(size=(5, 0, 0)),
+                        td.Box(size=(6, 0, 0)),
+                    ]
+                ),
+                geometry_b=td.ClipOperation(
+                    operation="difference",
+                    geometry_a=td.Box(size=(7, 0, 0)),
+                    geometry_b=td.Box(size=(8, 0, 0)),
+                ),
+            ),
+            td.GeometryGroup(
+                geometries=[
+                    td.Box(size=(3, 0, 0)),
+                    td.Box(size=(4, 0, 0)),
+                ]
+            ),
+            td.Box(size=(2, 0, 0)),
+        ]
+    )
+    geometries = list(traverse_geometries(geo_tree))
+    assert len(geometries) == 13
 
 
 """ geometry """

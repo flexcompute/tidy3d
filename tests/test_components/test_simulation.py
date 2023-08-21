@@ -534,6 +534,40 @@ def test_validate_mnt_size(monkeypatch, log_capture):
         s._validate_monitor_size()
 
 
+def test_max_geometry_validation():
+    gs = td.GridSpec(wavelength=1.0)
+    too_many = [td.Box(size=(1, 1, 1)) for _ in range(simulation.MAX_GEOMETRY_COUNT + 1)]
+
+    fine = [
+        td.Structure(
+            geometry=td.ClipOperation(
+                operation="union",
+                geometry_a=td.Box(size=(1, 1, 1)),
+                geometry_b=td.GeometryGroup(geometries=too_many),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        ),
+        td.Structure(
+            geometry=td.GeometryGroup(geometries=too_many),
+            medium=td.Medium(permittivity=2.0),
+        ),
+    ]
+    _ = td.Simulation(size=(1, 1, 1), run_time=1, grid_spec=gs, structures=fine)
+
+    not_fine = [
+        td.Structure(
+            geometry=td.ClipOperation(
+                operation="difference",
+                geometry_a=td.Box(size=(1, 1, 1)),
+                geometry_b=td.GeometryGroup(geometries=too_many),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        ),
+    ]
+    with pytest.raises(pydantic.ValidationError, match=f" {simulation.MAX_GEOMETRY_COUNT + 2} "):
+        _ = td.Simulation(size=(1, 1, 1), run_time=1, grid_spec=gs, structures=not_fine)
+
+
 def test_no_monitor():
     with pytest.raises(Tidy3dKeyError):
         SIM.get_monitor_by_name("NOPE")

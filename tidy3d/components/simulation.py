@@ -14,10 +14,11 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry.base import Geometry, Box, GeometryGroup
+from .geometry.base import Geometry, Box, GeometryGroup, ClipOperation
 from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
+from .geometry.utils import flatten_groups, traverse_geometries
 from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
@@ -52,6 +53,9 @@ MIN_GRIDS_PER_WVL = 6.0
 
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
+
+# maximum geometry count in a single structure
+MAX_GEOMETRY_COUNT = 100
 
 # maximum numbers of simulation parameters
 MAX_TIME_STEPS = 1e7
@@ -437,6 +441,29 @@ class Simulation(Box):
         return val
 
     @pydantic.validator("structures", always=True)
+    def _validate_num_geometries(cls, val):
+        """Error if too many geometries in a single structure."""
+
+        if val is None:
+            return val
+
+        for i, structure in enumerate(val):
+            for geometry in flatten_groups(structure.geometry):
+                count = sum(
+                    1
+                    for g in traverse_geometries(geometry)
+                    if not isinstance(g, (GeometryGroup, ClipOperation))
+                )
+                if count > MAX_GEOMETRY_COUNT:
+                    raise SetupError(
+                        f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
+                        f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
+                        f"preprocessing performance."
+                    )
+
+        return val
+
+    @pydantic.validator("structures", always=True)
     def _structures_not_at_edges(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
 
@@ -456,8 +483,8 @@ class Simulation(Box):
 
                     if isclose(sim_val, struct_val):
                         consolidated_logger.warning(
-                            f"Structure at structures[{istruct}] has bounds that extend exactly to "
-                            "simulation edges. This can cause unexpected behavior. "
+                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
+                            "to simulation edges. This can cause unexpected behavior. "
                             "If intending to extend the structure to infinity along one dimension, "
                             "use td.inf as a size variable instead to make this explicit."
                         )
@@ -2905,9 +2932,7 @@ class Simulation(Box):
         datasets_geometry = []
 
         for struct in self.structures:
-            geo = struct.geometry
-            geometries = geo.geometries if isinstance(geo, GeometryGroup) else [geo]
-            for geometry in geometries:
+            for geometry in traverse_geometries(struct.geometry):
                 if isinstance(geometry, TriangleMesh):
                     datasets_geometry += [geometry.mesh_dataset]
 
