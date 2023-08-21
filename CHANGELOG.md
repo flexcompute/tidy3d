@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Operations on geometry (`+`, `|`, `*`, `&`, `-`, `^`) will create the appropriate `ClipOperation` or `GeometryGroup`.
 - `Geometry.from_shapely` to extrude shapely primitives into Tidy3D geometry.
 - `Geometry.from_gds` to extrude GDS cells into geometry groups with support for holes.
+- `components.geometry.utils.traverse_geometry` used internally to traverse geometry trees.
+- `components.geometry.utils.flatten_groups` used internally to validate large geometry trees.
 
 ### Changed
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.

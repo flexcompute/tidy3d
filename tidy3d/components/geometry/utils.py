@@ -22,6 +22,51 @@ GeometryType = Union[
 ]
 
 
+def flatten_groups(*geometries: GeometryType) -> GeometryType:
+    """Iterates over all geometries, flattening groups and unions.
+
+    Parameters
+    ----------
+    *geometries: GeometryType
+        Geometries to flatten.
+
+    Returns
+    -------
+    :class:`Geometry`
+        Geometries after flattening groups and unions."""
+    for geometry in geometries:
+        if isinstance(geometry, base.GeometryGroup):
+            yield from flatten_groups(*geometry.geometries)
+        elif isinstance(geometry, base.ClipOperation) and geometry.operation == "union":
+            yield from flatten_groups(geometry.geometry_a, geometry.geometry_b)
+        else:
+            yield geometry
+
+
+def traverse_geometries(geometry: GeometryType) -> GeometryType:
+    """Iterator over all geometries within the given geometry.
+
+    Iterates over groups and clip operations within the given geometry, yielding each one.
+
+    Parameters
+    ----------
+    geometry: GeometryType
+        Base geometry to start iteration.
+
+    Returns
+    -------
+    :class:`Geometry`
+        Geometries within the base geometry.
+    """
+    if isinstance(geometry, base.GeometryGroup):
+        for g in geometry.geometries:
+            yield from traverse_geometries(g)
+    elif isinstance(geometry, base.ClipOperation):
+        yield from traverse_geometries(geometry.geometry_a)
+        yield from traverse_geometries(geometry.geometry_b)
+    yield geometry
+
+
 # pylint:disable=too-many-arguments
 def from_shapely(
     shape: Shapely,
