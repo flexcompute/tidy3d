@@ -9,7 +9,7 @@ import time
 import matplotlib.pyplot as plt
 from matplotlib.patches import PathPatch, ArrowStyle
 from matplotlib.path import Path
-from numpy import array, concatenate, ones
+from numpy import array, concatenate, ones, inf
 import pydantic.v1 as pd
 
 from .types import Ax
@@ -26,10 +26,8 @@ ARROW_COLOR_SOURCE = "green"
 ARROW_COLOR_POLARIZATION = "brown"
 ARROW_ALPHA = 0.8
 
-
 # Arrow length in inches
 ARROW_LENGTH = 0.3
-
 
 """ Decorators """
 
@@ -83,6 +81,7 @@ class PlotParams(Tidy3dBaseModel):
     facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
     fill: bool = pd.Field(True, title="Is Filled")
     hatch: str = pd.Field(None, title="Hatch Style")
+    zorder: float = pd.Field(None, title="Display Order")
     linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
     def include_kwargs(self, **kwargs) -> PlotParams:
@@ -107,12 +106,14 @@ plot_params_geometry = PlotParams()
 plot_params_structure = PlotParams()
 plot_params_source = PlotParams(alpha=0.4, facecolor="limegreen", edgecolor="limegreen", lw=3)
 plot_params_monitor = PlotParams(alpha=0.4, facecolor="orange", edgecolor="orange", lw=3)
-plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x")
-plot_params_pec = PlotParams(alpha=1.0, facecolor="gold", edgecolor="black")
-plot_params_pmc = PlotParams(alpha=1.0, facecolor="lightsteelblue", edgecolor="black")
-plot_params_bloch = PlotParams(alpha=1.0, facecolor="orchid", edgecolor="black")
-plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6)
-plot_params_override_structures = PlotParams(linewidth=0.4, edgecolor="black", fill=False)
+plot_params_pml = PlotParams(alpha=0.7, facecolor="gray", edgecolor="gray", hatch="x", zorder=inf)
+plot_params_pec = PlotParams(alpha=1.0, facecolor="gold", edgecolor="black", zorder=inf)
+plot_params_pmc = PlotParams(alpha=1.0, facecolor="lightsteelblue", edgecolor="black", zorder=inf)
+plot_params_bloch = PlotParams(alpha=1.0, facecolor="orchid", edgecolor="black", zorder=inf)
+plot_params_symmetry = PlotParams(edgecolor="gray", facecolor="gray", alpha=0.6, zorder=inf)
+plot_params_override_structures = PlotParams(
+    linewidth=0.4, edgecolor="black", fill=False, zorder=inf
+)
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
