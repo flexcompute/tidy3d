@@ -2093,7 +2093,6 @@ class Simulation(Box):
                 xy=(xmin, ymin),
                 width=(xmax - xmin),
                 height=(ymax - ymin),
-                zorder=np.inf,
                 **plot_params.to_kwargs(),
             )
             ax.add_patch(rect)
@@ -2175,7 +2174,6 @@ class Simulation(Box):
             xy=(umin - thickness_u, vmin),
             width=thickness_u,
             height=(vmax - vmin),
-            zorder=np.inf,
             **plot_params.to_kwargs(),
             **kwargs,
         )
@@ -2187,7 +2185,6 @@ class Simulation(Box):
             xy=(umax, vmin),
             width=thickness_u,
             height=(vmax - vmin),
-            zorder=np.inf,
             **plot_params.to_kwargs(),
             **kwargs,
         )
@@ -2199,7 +2196,6 @@ class Simulation(Box):
             xy=(umin, vmin - thickness_v),
             width=(umax - umin),
             height=thickness_v,
-            zorder=np.inf,
             **plot_params.to_kwargs(),
             **kwargs,
         )
@@ -2211,7 +2207,6 @@ class Simulation(Box):
             xy=(umin, vmax),
             width=(umax - umin),
             height=thickness_v,
-            zorder=np.inf,
             **plot_params.to_kwargs(),
             **kwargs,
         )

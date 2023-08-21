@@ -361,7 +361,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         _shape = Geometry.evaluate_inf_shape(shape)
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
-            ax.plot(xs, ys, color=plot_params.edgecolor)
+            ax.plot(xs, ys, color=plot_params.facecolor)
         elif _shape.geom_type == "Point":
             ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
