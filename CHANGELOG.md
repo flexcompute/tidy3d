@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0rc2] - 2023-8-21
+
 ### Added
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
@@ -63,6 +65,7 @@ A convenience function `Simulation.perturbed_mediums_copy` is added to class `Si
 ### Fixed
 - Handles `TIDY3D_ENV` properly when set to `prod`.
 - Redundant phase compensation for shifted source in smatrix plugin.
+
 ## [2.3.3] - 2023-07-28
 
 ### Added
@@ -917,9 +920,9 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...pre/2.4
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc2...pre/2.4
+[2.4.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...v2.4.0rc2
 [2.4.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.4.0rc1
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...develop
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...v2.3.1
