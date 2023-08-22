@@ -573,6 +573,11 @@ def test_no_monitor():
         SIM.get_monitor_by_name("NOPE")
 
 
+def test_plot_structure():
+    ax = SIM_FULL.structures[0].plot(x=0)
+    plt.close()
+
+
 def test_plot_eps():
     ax = SIM_FULL.plot_eps(x=0)
     SIM_FULL._add_cbar(eps_min=1, eps_max=2, ax=ax)
