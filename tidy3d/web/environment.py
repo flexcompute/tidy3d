@@ -52,6 +52,13 @@ uat = EnvironmentConfig(
     website_endpoint="https://uat-tidy3d.simulation.cloud",
 )
 
+uat2 = EnvironmentConfig(
+    name="uat2",
+    s3_region="us-west-2",
+    web_api_endpoint="https://tidy3d-api.uat-simulation.cloud",
+    website_endpoint="https://tidy3d.uat-simulation.cloud",
+)
+
 prod = EnvironmentConfig(
     name="prod",
     s3_region="us-gov-west-1",
@@ -72,6 +79,7 @@ class Environment:
     env_map = dict(
         dev=dev,
         uat=uat,
+        uat2=uat2,
         prod=prod,
     )
 
@@ -123,6 +131,17 @@ class Environment:
             The config for the uat environment.
         """
         return uat
+
+    @property
+    def uat2(self) -> EnvironmentConfig:
+        """Get the uat2 environment.
+
+        Returns
+        -------
+        EnvironmentConfig
+            The config for the uat environment.
+        """
+        return uat2
 
     @property
     def prod(self) -> EnvironmentConfig:
