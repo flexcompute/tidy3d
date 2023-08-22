@@ -1,0 +1,14 @@
+{
+    "8ChannelDemultiplexer.ipynb": ["8ChannelDemultiplexer.gds"],
+    "90OpticalHybrid.ipynb": ["mmi_stl.stl", "optical_hybrid_stl.stl"],
+    "AdjointPlugin6GratingCoupler.ipynb": ["invdes_gc.json"],
+    "Fitting.ipynb": ["nk_data.csv"],
+    "FocusedApodGC.ipynb": ["Focusing_GC.gds"],
+    "GDSImport.ipynb": ["coupler.gds"],
+    "Near2FarSphereRCS.ipynb": ["mie_bRCS_phi0_2lambda_epsr4.txt", "mie_bRCS_phi90_2lambda_epsr4.txt"],
+    "NonHermitianMetagratings.ipynb": ["Cr_Sytchkova.csv"],
+    "OptimizedL3.ipynb": ["optimized_L3_holes.txt"],
+    "PlasmonicNanoparticle.ipynb": ["mie_plasmonic_flux_abs.txt", "mie_plasmonic_flux_scat.txt", "mie_plasmonic_RCS.txt"],
+    "PlasmonicYagiUdaNanoantenna.ipynb": ["McPeak.csv"],
+    "STLImport.ipynb": ["box.stl", "box_with_hole.stl", "box_with_indent.stl", "icecream_nonunionized.stl", "icecream_unionized.stl", "two_boxes.stl"],
+}
