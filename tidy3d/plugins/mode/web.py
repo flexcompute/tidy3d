@@ -183,13 +183,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         """
         folder = Folder.get(folder_name, create=True)
 
-        if mode_solver.mode_spec.precision != "single":
-            log.warning(
-                "Mode solver server does not support 'double' precision: setting to 'single'."
-            )
-            mode_spec = mode_solver.mode_spec.copy(update={"precision": "single"})
-            mode_solver = mode_solver.copy(update={"mode_spec": mode_spec})
-
         mode_solver.simulation.validate_pre_upload(source_required=False)
         resp = http.post(
             MODESOLVER_API,
