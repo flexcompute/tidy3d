@@ -52,6 +52,13 @@ uat = EnvironmentConfig(
     website_endpoint="https://uat-tidy3d.simulation.cloud",
 )
 
+uat2 = EnvironmentConfig(
+    name="uat2",
+    s3_region="us-west-2",
+    web_api_endpoint="https://tidy3d-api.uat-simulation.cloud",
+    website_endpoint="https://tidy3d.uat-simulation.cloud",
+)
+
 prod = EnvironmentConfig(
     name="prod",
     s3_region="us-gov-west-1",
