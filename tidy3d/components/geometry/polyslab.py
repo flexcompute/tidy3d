@@ -164,7 +164,7 @@ class PolySlab(base.Planar):
         of polygons/holes, and changes in vertices number.
         """
         if "sidewall_angle" not in values:
-            raise ValidationError("``sidewall_angle`` failed validation.")
+            raise ValidationError("'sidewall_angle' failed validation.")
 
         # no need to valiate anything here
         if isclose(values["sidewall_angle"], 0):

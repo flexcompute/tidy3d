@@ -687,6 +687,28 @@ def test_anisotropic_material_meshing():
         ),
     )
 
+    coords = dict(x=[0], y=[0], z=[0])
+    custom_medium_xx = td.CustomMedium(
+        permittivity=td.SpatialDataArray(perm_diag[0] * np.ones((1, 1, 1)), coords=coords),
+        conductivity=td.SpatialDataArray(cond_diag[0] * np.ones((1, 1, 1)), coords=coords),
+    )
+    custom_medium_yy = td.CustomMedium(
+        permittivity=td.SpatialDataArray(perm_diag[1] * np.ones((1, 1, 1)), coords=coords),
+        conductivity=td.SpatialDataArray(cond_diag[1] * np.ones((1, 1, 1)), coords=coords),
+    )
+    custom_medium_zz = td.CustomMedium(
+        permittivity=td.SpatialDataArray(perm_diag[2] * np.ones((1, 1, 1)), coords=coords),
+        conductivity=td.SpatialDataArray(cond_diag[2] * np.ones((1, 1, 1)), coords=coords),
+    )
+    box_diag_custom = td.Structure(
+        geometry=box,
+        medium=td.CustomAnisotropicMedium(
+            xx=custom_medium_xx,
+            yy=custom_medium_yy,
+            zz=custom_medium_zz,
+        ),
+    )
+
     box_full = td.Structure(
         geometry=box,
         medium=td.FullyAnisotropicMedium(
@@ -709,6 +731,13 @@ def test_anisotropic_material_meshing():
         structures=[box_diag],
     )
 
+    sim_diag_custom = td.Simulation(
+        size=(3, 3, 6),
+        grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
+        run_time=1e-13,
+        structures=[box_diag_custom],
+    )
+
     sim_full = td.Simulation(
         size=(3, 3, 6),
         grid_spec=td.GridSpec.auto(wavelength=WAVELENGTH),
@@ -718,4 +747,5 @@ def test_anisotropic_material_meshing():
 
     for dim in range(3):
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag.grid.sizes.to_list[dim])
+        assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_diag_custom.grid.sizes.to_list[dim])
         assert np.allclose(sim_iso.grid.sizes.to_list[dim], sim_full.grid.sizes.to_list[dim])

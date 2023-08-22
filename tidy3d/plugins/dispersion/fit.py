@@ -62,6 +62,9 @@ class DispersionFitter(Tidy3dBaseModel):
     @validator("n_data", always=True)
     def _ndata_length_match_wvl(cls, val, values):
         """Validate n_data"""
+        if "wvl_um" not in values:
+            raise ValidationError("'wvl_um' failed validation.")
+
         if val.shape != values["wvl_um"].shape:
             raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
         return val
@@ -69,6 +72,9 @@ class DispersionFitter(Tidy3dBaseModel):
     @validator("k_data", always=True)
     def _kdata_setup_and_length_match(cls, val, values):
         """Validate the length of k_data, or setup k if it's None."""
+        if "wvl_um" not in values:
+            raise ValidationError("'wvl_um' failed validation.")
+
         if val is None:
             return np.zeros_like(values["wvl_um"])
         if val.shape != values["wvl_um"].shape:
