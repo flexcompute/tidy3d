@@ -700,7 +700,7 @@ def get_tasks(
     List[Dict]
         List of dictionaries storing the information for each of the tasks last ``num_tasks`` tasks.
     """
-    folder = Folder.get(folder)
+    folder = Folder.get(folder, create=True)
     tasks = folder.list_tasks()
     if order == "new":
         tasks = sorted(tasks, key=lambda t: t.created_at, reverse=True)
