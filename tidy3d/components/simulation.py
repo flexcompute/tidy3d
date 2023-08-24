@@ -1634,9 +1634,8 @@ class Simulation(Box):
             for medium in medium_list
             if not isinstance(medium, AbstractCustomMedium)
         ]
-        eps_list.append(1)
-        eps_min = min(eps_list)
-        eps_max = max(eps_list)
+        eps_min = min(eps_list, default=1)
+        eps_max = max(eps_list, default=1)
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
