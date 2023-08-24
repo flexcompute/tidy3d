@@ -30,7 +30,7 @@ from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
-from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector
+from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.container import BatchData
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
@@ -1430,7 +1430,9 @@ def test_adjoint_utils(strict_binarize):
     # projection / filtering
     image = sim.input_structures[2].medium.eps_dataset.eps_xx.values
 
-    filter = ConicFilter(feature_size=1.5, design_region_dl=0.1)
+    filter = ConicFilter(radius=1.5, design_region_dl=0.1)
+    filter.evaluate(image)
+    filter = CircularFilter(radius=1.5, design_region_dl=0.1)
     filter.evaluate(image)
     projector = BinaryProjector(vmin=1.0, vmax=2.0, beta=1.5, strict_binarize=strict_binarize)
     projector.evaluate(image)

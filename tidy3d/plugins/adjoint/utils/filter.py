@@ -18,22 +18,13 @@ class Filter(Tidy3dBaseModel, ABC):
         """Process supplied array containing spatial data."""
 
 
-class ConicFilter(Filter):
-    """Filter that convolves an image with a conical mask, used for larger feature sizes.
+class AbstractCircularFilter(Filter, ABC):
+    """Abstract circular filter class. Initializes with parameters and .evaluate() on a design."""
 
-    Note
-    ----
-    .. math::
-
-        filter(radius) = max(feature_radius - radius, 0)
-
-    """
-
-    feature_size: float = pd.Field(
+    radius: float = pd.Field(
         ...,
         title="Filter Radius",
-        description="Convolve spatial data with a conic filter. "
-        "Useful for smoothing feature sizes.",
+        description="Radius of the filter to convolve with supplied spatial data.",
         units=MICROMETER,
     )
 
@@ -46,27 +37,89 @@ class ConicFilter(Filter):
     )
 
     @property
-    def filter_radius(self) -> float:
-        """Filter radius."""
-        return np.ceil((self.feature_size * np.sqrt(3)) / self.design_region_dl)
+    def filter_radius_pixels(self) -> int:
+        """Filter radius in pixels."""
+        return np.ceil(self.radius / self.design_region_dl)
+
+    @pd.root_validator(pre=True)
+    def _deprecate_feature_size(cls, values):
+        """Extra warning for user using `feature_size` field."""
+        if "feature_size" in values:
+            raise pd.ValidationError(
+                "The 'feature_size' field of circular filters available in 2.4 pre-releases was "
+                "renamed to 'radius' for the official 2.4.0 release. "
+                "If you're seeing this message, please change your script to use that field name."
+            )
+        return values
+
+    @abstractmethod
+    def make_kernel(self, coords_rad: jnp.array) -> jnp.array:
+        """Function to make the kernel out of a coordinate grid of radius values."""
 
     def evaluate(self, spatial_data: jnp.array) -> jnp.array:
         """Process on supplied spatial data."""
 
         rho = jnp.squeeze(spatial_data)
-        dims = len(rho.shape)
+        num_dims = len(rho.shape)
 
         # Builds the conic filter and apply it to design parameters.
-        coords_1d = np.linspace(
-            -self.filter_radius, self.filter_radius, int(2 * self.filter_radius + 1)
-        )
-        meshgrid_args = [coords_1d.copy() for _ in range(dims)]
-
+        coords_1d = np.arange(-self.filter_radius_pixels, self.filter_radius_pixels + 1)
+        meshgrid_args = [coords_1d.copy() for _ in range(num_dims)]
         meshgrid_coords = np.meshgrid(*meshgrid_args)
         coords_rad = np.sqrt(np.sum([np.square(v) for v in meshgrid_coords], axis=0))
-        kernel = jnp.where(self.filter_radius - coords_rad > 0, self.filter_radius - coords_rad, 0)
-        filt_den = jsp.signal.convolve(jnp.ones_like(rho), kernel, mode="same")
-        return jsp.signal.convolve(rho, kernel, mode="same") / filt_den
+
+        # construct the kernel
+        kernel = self.make_kernel(coords_rad)
+
+        # normalize by the kernel operating on a spatial_data of all ones
+        num = jsp.signal.convolve(rho, kernel, mode="same")
+        den = jsp.signal.convolve(jnp.ones_like(rho), kernel, mode="same")
+
+        return num / den
+
+
+class ConicFilter(AbstractCircularFilter):
+    """Filter that convolves an image with a conical mask, used for larger feature sizes.
+
+    Note
+    ----
+    .. math::
+
+        filter(r) = max(radius - r, 0)
+
+    """
+
+    def make_kernel(self, coords_rad: jnp.array) -> jnp.array:
+        """Function to make the kernel out of a coordinate grid of radius values (in pixels)."""
+
+        kernel = self.filter_radius_pixels - coords_rad
+        kernel[coords_rad > self.filter_radius_pixels] = 0.0
+        return kernel
+
+
+class CircularFilter(AbstractCircularFilter):
+    """Filter that convolves an image with a circular mask, used for larger feature sizes.
+
+    Note
+    ----
+    .. math::
+
+        filter(r) = 1 if r <= radius else 0
+
+    Note
+    ----
+    This uniform circular mask produces results that are harder to binarize than the conical mask.
+    We recommend you use the ``ConicFilter`` instead for most applications.
+
+    """
+
+    def make_kernel(self, coords_rad: jnp.array) -> jnp.array:
+        """Function to make the kernel out of a coordinate grid of radius values (in pixels)."""
+
+        # construct the kernel
+        kernel = np.ones_like(coords_rad)
+        kernel[coords_rad > self.filter_radius_pixels] = 0.0
+        return kernel
 
 
 class BinaryProjector(Filter):
@@ -83,7 +136,7 @@ class BinaryProjector(Filter):
 
     vmin: float = pd.Field(..., title="Min Value", description="Minimum value to project to.")
 
-    vmax: float = pd.Field(..., title="Min Value", description="Maximum value to project to.")
+    vmax: float = pd.Field(..., title="Max Value", description="Maximum value to project to.")
 
     beta: float = pd.Field(
         1.0,
