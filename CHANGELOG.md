@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Bug in `Simulation.eps_bounds` that was always setting the lower bound to 1.
+
 ## [2.4.0rc2] - 2023-8-21
 
 ### Added
