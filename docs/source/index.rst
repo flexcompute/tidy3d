@@ -15,6 +15,7 @@ This is the documentation for the python API, which is the main way to build sim
    howdoi
    api
    changelog
+   Tidy3D Solver Technology <https://www.flexcompute.com/tidy3d/solver/>
 
 .. image:: _static/ring_resonator.png
    :width: 1200
