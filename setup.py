@@ -1,10 +1,9 @@
 import setuptools
 from distutils.util import convert_path
-from setuptools.command.install import install
 import os
-from os.path import expanduser
 
-TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
+from tidy3d.web.cli.constants import TIDY3D_DIR, TIDY3D_DIR2
+
 PACKAGE_NAME = "tidy3d"
 REPO_NAME = "tidy3d"
 PIP_NAME = "tidy3d"
@@ -39,8 +38,12 @@ dev_required = read_requirements("requirements/dev.txt")
 
 
 def create_config_folder():
-    if not os.path.exists(TIDY3D_DIR):
-        os.mkdir(TIDY3D_DIR)
+    if os.access(TIDY3D_DIR, os.W_OK):
+        if not os.path.exists(TIDY3D_DIR):
+            os.mkdir(TIDY3D_DIR)
+    else:
+        if not os.path.exists(TIDY3D_DIR2):
+            os.mkdir(TIDY3D_DIR2)
 
 
 create_config_folder()

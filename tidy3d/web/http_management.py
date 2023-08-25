@@ -2,11 +2,11 @@
 
 import os
 from functools import wraps
-from os.path import expanduser
 from enum import Enum
 
 import requests
 import toml
+from tidy3d.web.cli.constants import CONFIG_FILE
 
 from .environment import Env
 from ..exceptions import WebError
@@ -28,8 +28,8 @@ def api_key() -> None:
 
     if os.environ.get(SIMCLOUD_APIKEY):
         return os.environ.get(SIMCLOUD_APIKEY)
-    if os.path.exists(f"{expanduser('~')}/.tidy3d/config"):
-        with open(f"{expanduser('~')}/.tidy3d/config", encoding="utf-8") as config_file:
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, encoding="utf-8") as config_file:
             config = toml.loads(config_file.read())
             return config.get("apikey", "")
 

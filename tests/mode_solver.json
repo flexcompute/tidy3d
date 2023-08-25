@@ -1,0 +1,442 @@
+{
+  "simulation": {
+    "type": "Simulation",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "size": [
+      6,
+      6,
+      6
+    ],
+    "run_time": 1e-12,
+    "medium": {
+      "name": "Vacuum",
+      "frequency_range": null,
+      "type": "Medium",
+      "permittivity": 1,
+      "conductivity": 0
+    },
+    "symmetry": [
+      0,
+      0,
+      0
+    ],
+    "structures": [
+      {
+        "geometry": {
+          "type": "Box",
+          "center": [
+            0,
+            0,
+            0
+          ],
+          "size": [
+            1.5,
+            "Infinity",
+            1
+          ]
+        },
+        "name": "structure_0",
+        "type": "Structure",
+        "medium": {
+          "name": "medium_1",
+          "frequency_range": null,
+          "type": "Medium",
+          "permittivity": 4,
+          "conductivity": 0
+        }
+      }
+    ],
+    "sources": [
+      {
+        "type": "ModeSource",
+        "center": [
+          0,
+          0,
+          0
+        ],
+        "size": [
+          4,
+          0,
+          3.5
+        ],
+        "source_time": {
+          "amplitude": 1,
+          "phase": 0,
+          "type": "GaussianPulse",
+          "freq0": 149896229065498,
+          "fwidth": 49965409688499.336,
+          "offset": 5
+        },
+        "name": "source_0",
+        "num_freqs": 1,
+        "direction": "-",
+        "mode_spec": {
+          "num_modes": 3,
+          "target_neff": 2,
+          "num_pml": [
+            0,
+            0
+          ],
+          "filter_pol": "tm",
+          "angle_theta": 0,
+          "angle_phi": 0,
+          "precision": "single",
+          "bend_radius": null,
+          "bend_axis": null,
+          "track_freq": "central",
+          "type": "ModeSpec"
+        },
+        "mode_index": 0
+      }
+    ],
+    "boundary_spec": {
+      "x": {
+        "plus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "minus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "type": "Boundary"
+      },
+      "y": {
+        "plus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "minus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "type": "Boundary"
+      },
+      "z": {
+        "plus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "minus": {
+          "name": null,
+          "type": "PML",
+          "num_layers": 12,
+          "parameters": {
+            "sigma_order": 3,
+            "sigma_min": 0,
+            "sigma_max": 1.5,
+            "type": "PMLParams",
+            "kappa_order": 3,
+            "kappa_min": 1,
+            "kappa_max": 3,
+            "alpha_order": 1,
+            "alpha_min": 0,
+            "alpha_max": 0
+          }
+        },
+        "type": "Boundary"
+      },
+      "type": "BoundarySpec"
+    },
+    "monitors": [
+      {
+        "type": "FieldMonitor",
+        "center": [
+          0,
+          0,
+          0.1
+        ],
+        "size": [
+          "Infinity",
+          "Infinity",
+          0
+        ],
+        "name": "field",
+        "freqs": [
+          149896229065498
+        ],
+        "apodization": {
+          "start": null,
+          "end": null,
+          "width": null,
+          "type": "ApodizationSpec"
+        },
+        "fields": [
+          "Ex",
+          "Ey",
+          "Ez",
+          "Hx",
+          "Hy",
+          "Hz"
+        ],
+        "interval_space": [
+          1,
+          1,
+          1
+        ],
+        "colocate": false
+      },
+      {
+        "type": "ModeMonitor",
+        "center": [
+          0,
+          -2,
+          0
+        ],
+        "size": [
+          4,
+          0,
+          3.5
+        ],
+        "name": "mode",
+        "freqs": [
+          124913524221248.33,
+          129910065190098.27,
+          134906606158948.19,
+          139903147127798.12,
+          144899688096648.06,
+          149896229065498,
+          154892770034347.94,
+          159889311003197.84,
+          164885851972047.78,
+          169882392940897.72,
+          174878933909747.66
+        ],
+        "apodization": {
+          "start": null,
+          "end": null,
+          "width": null,
+          "type": "ApodizationSpec"
+        },
+        "mode_spec": {
+          "num_modes": 3,
+          "target_neff": 2,
+          "num_pml": [
+            0,
+            0
+          ],
+          "filter_pol": "tm",
+          "angle_theta": 0,
+          "angle_phi": 0,
+          "precision": "single",
+          "bend_radius": null,
+          "bend_axis": null,
+          "track_freq": "central",
+          "type": "ModeSpec"
+        }
+      },
+      {
+        "type": "ModeSolverMonitor",
+        "center": [
+          0,
+          -2,
+          0
+        ],
+        "size": [
+          4,
+          0,
+          3.5
+        ],
+        "name": "mode_solver",
+        "freqs": [
+          124913524221248.33,
+          129910065190098.27,
+          134906606158948.19,
+          139903147127798.12,
+          144899688096648.06,
+          149896229065498,
+          154892770034347.94,
+          159889311003197.84,
+          164885851972047.78,
+          169882392940897.72,
+          174878933909747.66
+        ],
+        "apodization": {
+          "start": null,
+          "end": null,
+          "width": null,
+          "type": "ApodizationSpec"
+        },
+        "mode_spec": {
+          "num_modes": 3,
+          "target_neff": 2,
+          "num_pml": [
+            0,
+            0
+          ],
+          "filter_pol": "tm",
+          "angle_theta": 0,
+          "angle_phi": 0,
+          "precision": "single",
+          "bend_radius": null,
+          "bend_axis": null,
+          "track_freq": "central",
+          "type": "ModeSpec"
+        }
+      }
+    ],
+    "grid_spec": {
+      "grid_x": {
+        "type": "AutoGrid",
+        "min_steps_per_wvl": 20,
+        "max_scale": 1.4,
+        "dl_min": 0,
+        "mesher": {
+          "type": "GradedMesher"
+        }
+      },
+      "grid_y": {
+        "type": "AutoGrid",
+        "min_steps_per_wvl": 20,
+        "max_scale": 1.4,
+        "dl_min": 0,
+        "mesher": {
+          "type": "GradedMesher"
+        }
+      },
+      "grid_z": {
+        "type": "AutoGrid",
+        "min_steps_per_wvl": 20,
+        "max_scale": 1.4,
+        "dl_min": 0,
+        "mesher": {
+          "type": "GradedMesher"
+        }
+      },
+      "wavelength": 2,
+      "override_structures": [],
+      "type": "GridSpec"
+    },
+    "shutoff": 0.00001,
+    "subpixel": true,
+    "normalize_index": 0,
+    "courant": 0.99,
+    "version": "2.0.3"
+  },
+  "type": "ModeSolver",
+  "plane": {
+    "type": "Box",
+    "center": [
+      0,
+      0,
+      0
+    ],
+    "size": [
+      4,
+      0,
+      3.5
+    ]
+  },
+  "mode_spec": {
+    "num_modes": 3,
+    "target_neff": 2,
+    "num_pml": [
+      0,
+      0
+    ],
+    "filter_pol": "tm",
+    "angle_theta": 0,
+    "angle_phi": 0,
+    "precision": "single",
+    "bend_radius": null,
+    "bend_axis": null,
+    "track_freq": "central",
+    "type": "ModeSpec"
+  },
+  "freqs": [
+    115059130957084.62,
+    119222915199015.31,
+    123386699440946,
+    127550483682876.69,
+    131714267924807.38,
+    135878052166738.06,
+    140041836408668.75,
+    144205620650599.44,
+    148369404892530.12,
+    152533189134460.8,
+    156696973376391.5,
+    160860757618322.2,
+    165024541860252.88,
+    169188326102183.56,
+    173352110344114.25,
+    177515894586044.94,
+    181679678827975.62,
+    185843463069906.3,
+    190007247311837,
+    194171031553767.7,
+    198334815795698.38,
+    202498600037629.06,
+    206662384279559.75,
+    210826168521490.44,
+    214989952763421.22
+  ]
+}

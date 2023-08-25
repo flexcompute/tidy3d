@@ -29,6 +29,9 @@ SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
 
+TMP_SIM_FILE_HDF5 = "/tmp/simulation.hdf5"
+TMP_SIM_FILE_HDF5_GZ = "/tmp/simulation.hdf5.gz"
+
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
     """Tidy3D Folder."""
@@ -316,18 +319,22 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         assert self.task_id
-        self.get_simulation_hdf5(SIM_FILE_HDF5)
-        if os.path.exists(SIM_FILE_HDF5):
-            json_string = read_simulation_from_hdf5(SIM_FILE_HDF5)
-            os.remove(SIM_FILE_HDF5)
-            with open(to_file, "w") as file:
-                # Write the string to the file
-                file.write(json_string.decode("utf-8"))
-                if verbose:
-                    console = get_logging_console()
-                    console.log("Generate simulation.json successfully.")
-        else:
-            raise WebError("Failed to download simulation.json.")
+        hdf5_file, hdf5_file_path = tempfile.mkstemp()
+        os.close(hdf5_file)
+        try:
+            self.get_simulation_hdf5(hdf5_file_path)
+            if os.path.exists(hdf5_file_path):
+                json_string = read_simulation_from_hdf5(hdf5_file_path)
+                with open(to_file, "w") as file:
+                    # Write the string to the file
+                    file.write(json_string.decode("utf-8"))
+                    if verbose:
+                        console = get_logging_console()
+                        console.log(f"Generate {to_file} successfully.")
+            else:
+                raise WebError("Failed to download simulation.json.")
+        finally:
+            os.unlink(hdf5_file_path)
 
     def upload_simulation(
         self, verbose: bool = True, progress_callback: Callable[[float], None] = None
@@ -527,21 +534,22 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         assert self.task_id
-        download_file(
-            self.task_id,
-            SIM_FILE_HDF5_GZ,
-            to_file=SIM_FILE_HDF5_GZ,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
-        if os.path.exists(SIM_FILE_HDF5_GZ):
-            extract_gz_file(SIM_FILE_HDF5_GZ, to_file)
-            os.remove(SIM_FILE_HDF5_GZ)
-            if verbose:
-                console = get_logging_console()
-                console.log(f"Extract {SIM_FILE_HDF5_GZ} to {to_file} successfully.")
-        else:
-            raise WebError("Failed to download simulation.hdf5")
+        hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp()
+        os.close(hdf5_gz_file)
+        try:
+            download_file(
+                self.task_id,
+                SIM_FILE_HDF5_GZ,
+                to_file=hdf5_gz_file_path,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+            if os.path.exists(hdf5_gz_file_path):
+                extract_gz_file(hdf5_gz_file_path, to_file)
+            else:
+                raise WebError("Failed to download simulation.hdf5")
+        finally:
+            os.unlink(hdf5_gz_file_path)
 
     def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.

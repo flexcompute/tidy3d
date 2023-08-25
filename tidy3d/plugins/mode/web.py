@@ -212,8 +212,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         cls,
         task_id: str,
         solver_id: str,
-        to_file: str = "mode_solver.json",
-        sim_file: str = "simulation.json",
+        to_file: str = "mode_solver.hdf5",
+        sim_file: str = "simulation.hdf5",
         verbose: bool = True,
         progress_callback: Callable[[float], None] = None,
     ) -> ModeSolverTask:
@@ -225,9 +225,9 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
             Unique identifier of the task on server.
         solver_id: str
             Unique identifier of the mode solver in the task.
-        to_file: str = "mode_solver.json"
+        to_file: str = "mode_solver.hdf5"
             File to store the mode solver downloaded from the task.
-        sim_file: str = "simulation.json"
+        sim_file: str = "simulation.hdf5"
             File to store the simulation downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.
@@ -339,8 +339,8 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
     def get_modesolver(
         self,
-        to_file: str = "mode_solver.json",
-        sim_file: str = "simulation.json",
+        to_file: str = "mode_solver.hdf5",
+        sim_file: str = "simulation.hdf5",
         verbose: bool = True,
         progress_callback: Callable[[float], None] = None,
     ) -> ModeSolver:
@@ -348,9 +348,9 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Parameters
         ----------
-        to_file: str = "mode_solver.json"
+        to_file: str = "mode_solver.hdf5"
             File to store the mode solver downloaded from the task.
-        sim_file: str = "simulation.json"
+        sim_file: str = "simulation.hdf5"
             File to store the simulation downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.
@@ -368,32 +368,54 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         stored in the same path as 'to_file', but with '.hdf5' extension, and neither 'to_file' or
         'sim_file' will be created.
         """
-        if self.file_type == "Gz":
-            to_gz = pathlib.Path(to_file).with_suffix(".hdf5.gz")
-            to_hdf5 = pathlib.Path(to_file).with_suffix(".hdf5")
-            download_file(
-                self.task_id,
-                MODESOLVER_GZ,
-                to_file=to_gz,
-                verbose=verbose,
-                progress_callback=progress_callback,
+        if not os.access(to_file, os.W_OK):
+            raise RuntimeError(
+                f"No permission to write to {to_file}, please enter a path with permissions."
             )
-            extract_gz_file(to_gz, to_hdf5)
-            to_file = str(to_hdf5)
-            mode_solver = ModeSolver.from_hdf5(to_hdf5)
+        if not os.access(sim_file, os.W_OK):
+            raise RuntimeError(
+                f"No permission to write to {sim_file}, please enter a path with permissions."
+            )
+        if self.file_type == "Gz":
+            hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp()
+            os.close(hdf5_gz_file)
+            # keep hdf5_file_path
+            hdf5_file_path = tempfile.NamedTemporaryFile(suffix=".hdf5", delete=False).name
+            try:
+                download_file(
+                    self.solver_id,
+                    MODESOLVER_GZ,
+                    to_file=hdf5_gz_file_path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                extract_gz_file(hdf5_gz_file_path, hdf5_file_path)
+                mode_solver = ModeSolver.from_hdf5(hdf5_file_path)
+                if to_file.endswith(".json"):
+                    mode_solver.to_json(to_file)
+                    if os.path.exists(hdf5_file_path):
+                        os.remove(hdf5_file_path)
+            finally:
+                os.unlink(hdf5_gz_file_path)
 
         elif self.file_type == "Hdf5":
-            to_hdf5 = pathlib.Path(to_file).with_suffix(".hdf5")
-            download_file(
-                self.solver_id,
-                MODESOLVER_HDF5,
-                to_file=to_hdf5,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
+            hdf5_file_path = tempfile.NamedTemporaryFile(suffix=".hdf5", delete=False).name
+            try:
+                download_file(
+                    self.solver_id,
+                    MODESOLVER_HDF5,
+                    to_file=hdf5_file_path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                mode_solver = ModeSolver.from_hdf5(hdf5_file_path)
+                if to_file.endswith(".json"):
+                    mode_solver.to_json(to_file)
+                    if os.path.exists(hdf5_file_path):
+                        os.remove(hdf5_file_path)
 
-            to_file = str(to_hdf5)
-            mode_solver = ModeSolver.from_hdf5(to_hdf5)
+            finally:
+                pass
 
         else:
             download_file(
@@ -410,7 +432,6 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-
             mode_solver_dict = ModeSolver.dict_from_json(to_file)
             mode_solver_dict["simulation"] = Simulation.from_json(sim_file)
 
@@ -418,6 +439,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         # Overwrite downloaded file with valid contents
         mode_solver.to_file(to_file)
+
         return mode_solver
 
     def get_result(
