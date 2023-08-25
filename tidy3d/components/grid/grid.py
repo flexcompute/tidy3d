@@ -96,17 +96,17 @@ class Coords(Tidy3dBaseModel):
 
         # Check wich axes need interpolation or selection
         interp_ax = []
-        isel_ax = []
+        isel_axx = []
         for ax in "xyz":
             if array.sizes[ax] == 1:
-                isel_ax.append(ax)
+                isel_axx.append(ax)
             else:
                 interp_ax.append(ax)
 
         # apply iselection for the axis containing single entry
-        if len(isel_ax) > 0:
-            array = array.isel({ax: [0] * len(self.to_dict[ax]) for ax in isel_ax})
-            array = array.assign_coords({ax: self.to_dict[ax] for ax in isel_ax})
+        if len(isel_axx) > 0:
+            array = array.isel({ax: [0] * len(self.to_dict[ax]) for ax in isel_axx})
+            array = array.assign_coords({ax: self.to_dict[ax] for ax in isel_axx})
             if len(interp_ax) == 0:
                 return array
 
