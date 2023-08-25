@@ -130,9 +130,7 @@ class Graphene(ParametricVariantItem2D):
             interband_poles = interband.pole_residue.poles
             poles = intraband_poles + interband_poles
             pole_residue = self._filter_poles(
-                PoleResidue(
-                    poles=poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
-                )
+                PoleResidue(poles=poles, frequency_range=(0, GRAPHENE_FIT_FREQ_MAX))
             )
             return Medium2D(ss=pole_residue, tt=pole_residue)
         return Medium2D(ss=intraband, tt=intraband)
@@ -368,9 +366,7 @@ class Graphene(ParametricVariantItem2D):
                     flipped_poles += [(-1j * np.conj(1j * a), c)]
                 else:
                     flipped_poles += [(a, c)]
-            return PoleResidue(
-                poles=flipped_poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
-            )
+            return PoleResidue(poles=flipped_poles, frequency_range=(0, GRAPHENE_FIT_FREQ_MAX))
 
         # fitting works better with normalized quantities (THz and uS)
         omega_thz = 2 * np.pi * np.array(freqs) * 1e-12
@@ -386,9 +382,7 @@ class Graphene(ParametricVariantItem2D):
         # unnormalize, and convert from conductivity to permittivity
         poles = [(a * 1e12, -c / (a * EPSILON_0 * 1e6)) for (a, c) in pole_res.poles]
 
-        return PoleResidue(
-            poles=poles, frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX)
-        )
+        return PoleResidue(poles=poles, frequency_range=(0, GRAPHENE_FIT_FREQ_MAX))
 
     def _filter_poles(self, medium: PoleResidue) -> PoleResidue:
         """Clean up poles, merging poles at zero frequency."""
@@ -403,5 +397,5 @@ class Graphene(ParametricVariantItem2D):
                 poles += [(a, c)]
         return PoleResidue(
             poles=poles + [(0, zero_res)],
-            frequency_range=(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX),
+            frequency_range=(0, GRAPHENE_FIT_FREQ_MAX),
         )
