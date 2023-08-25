@@ -12,8 +12,7 @@ from pydantic.v1 import BaseModel, Field
 from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
 from rich.progress import TransferSpeedColumn, TimeRemainingColumn
 from ..log import get_logging_console
-
-from . import httputils as http
+from .http_management import http
 from .environment import Env
 
 

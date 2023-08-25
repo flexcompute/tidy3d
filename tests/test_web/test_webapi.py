@@ -1,12 +1,10 @@
 # Tests webapi and things that depend on it
+
 import pytest
 import responses
 from _pytest import monkeypatch
-
 import tidy3d as td
-
 from responses import matchers
-
 from tidy3d import Simulation
 from tidy3d.exceptions import SetupError
 from tidy3d.web.environment import Env
@@ -15,7 +13,6 @@ from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_inf
 from tidy3d.web.webapi import load, load_simulation, start, upload, monitor, real_cost
 from tidy3d.web.container import Job, Batch
 from tidy3d.web.asynchronous import run_async
-from tidy3d.web.file_util import compress_file_to_gzip
 
 from tidy3d.__main__ import main
 
@@ -303,11 +300,13 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
     sim = make_sim()
 
     def mock_download(*args, **kwargs):
-        file_path = "simulation.hdf5"
-        sim.to_file(file_path)
-        compress_file_to_gzip(file_path, "simulation.hdf5.gz")
+        pass
+
+    def get_str(*args, **kwargs):
+        return sim.json().encode("utf-8")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.simulation_task.read_simulation_from_hdf5", get_str)
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)
