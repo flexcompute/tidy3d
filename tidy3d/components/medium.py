@@ -3579,7 +3579,11 @@ class Medium2D(AbstractMedium):
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex]:
         """Main diagonal of the complex-valued permittivity tensor as a function of frequency."""
-        log.warning("Evaluating permittivity of a 'Medium2D' is unphysical.")
+        log.warning(
+            "The permittivity of a 'Medium2D' is unphysical. "
+            "Use 'Medium2D.to_anisotropic_medium' or 'Medium2D.to_pole_residue' first "
+            "to obtain the physical refractive index."
+        )
 
         eps_ss = self.ss.eps_model(frequency)
         eps_tt = self.tt.eps_model(frequency)

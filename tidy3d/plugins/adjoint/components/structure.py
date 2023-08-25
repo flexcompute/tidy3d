@@ -56,6 +56,11 @@ class JaxStructure(Structure, JaxObject):
 
         return cls.parse_obj(struct_dict)
 
+    @pd.validator("medium", always=True)
+    def _check_2d_geometry(cls, val, values):
+        """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
+        return val
+
     def store_vjp(
         self,
         grad_data_fwd: FieldData,

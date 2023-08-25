@@ -57,6 +57,17 @@ class JaxGeometry(Geometry, ABC):
 
         return tuple(get_center(pt_min, pt_max) for (pt_min, pt_max) in zip(rmin, rmax))
 
+    @cached_property
+    def bounding_box(self):
+        """Returns :class:`JaxBox` representation of the bounding box of a :class:`JaxGeometry`.
+
+        Returns
+        -------
+        :class:`JaxBox`
+            Geometric object representing bounding box.
+        """
+        return JaxBox.from_bounds(*self.bounds)
+
     def make_grad_monitors(
         self, freq: float, name: str
     ) -> Tuple[FieldMonitor, PermittivityMonitor]:
