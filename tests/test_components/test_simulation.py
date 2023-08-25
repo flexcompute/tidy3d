@@ -1117,7 +1117,7 @@ def test_sim_structure_extent(log_capture, box_size, log_level):
 @pytest.mark.parametrize(
     "box_length,absorb_type,log_level",
     [
-        (0, "PML", None),
+        (0.0001, "PML", None),
         (1, "PML", "WARNING"),
         (1.5, "absorber", None),
         (2.0, "PML", None),
@@ -1612,7 +1612,7 @@ def test_dt():
     assert sim_new.dt == 0.4 * dt
 
 
-def test_sim_volumetric_structures(tmp_path):
+def test_sim_volumetric_structures(log_capture, tmp_path):
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45
     thickness = 0.01
@@ -1693,6 +1693,9 @@ def test_sim_volumetric_structures(tmp_path):
         LARGE_NUMBER * thickness / grid_dl,
         rtol=RTOL,
     )
+
+    log_capture.clear()
+
     # check that plotting 2d material doesn't raise an error
     sim_data = run_emulated(sim)
     sim_data.plot_field(field_monitor_name="field_xz", field_name="Ex", val="real")
@@ -1701,6 +1704,9 @@ def test_sim_volumetric_structures(tmp_path):
     plt.close()
     _ = sim.plot(x=0)
     plt.close()
+
+    # plotting should not raise warning
+    assert_log_level(log_capture, None)
 
     # nonuniform sub/super-strate should error
     below_half = td.Structure(

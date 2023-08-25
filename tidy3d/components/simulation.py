@@ -1632,7 +1632,7 @@ class Simulation(Box):
         eps_list = [
             medium.eps_model(freq).real
             for medium in medium_list
-            if not isinstance(medium, AbstractCustomMedium)
+            if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
         ]
         eps_min = min(eps_list, default=1)
         eps_max = max(eps_list, default=1)
