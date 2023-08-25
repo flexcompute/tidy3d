@@ -403,7 +403,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             if perc_done is not None and perc_done < 100 and field_decay > 0:
                 console.log("early shutoff detected, exiting.")
 
-            progress.update(pbar_pd, completed=100, refresh=True)
+            new_description = f"solver progress (field decay = {field_decay:.2e})"
+            progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
