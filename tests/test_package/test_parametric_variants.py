@@ -11,6 +11,8 @@ from tidy3d.material_library.parametric_materials import Graphene
 
 from numpy.random import default_rng
 
+from ..utils import assert_log_level, log_capture
+
 # bounds for MU_C
 GRAPHENE_MU_C_MIN = 0
 GRAPHENE_MU_C_MAX = 3
@@ -30,7 +32,7 @@ def test_graphene_defaults():
 
 
 @pytest.mark.parametrize("rng_seed", np.arange(0, 15))
-def test_graphene(rng_seed):
+def test_graphene(rng_seed, log_capture):
     """test graphene for range of physical parameters"""
     rng = default_rng(rng_seed)
     gamma_min = GRAPHENE_GAMMA_MIN
@@ -40,7 +42,7 @@ def test_graphene(rng_seed):
     temp_min = GRAPHENE_TEMP_MIN
     temp_max = GRAPHENE_TEMP_MAX
 
-    freqs = np.linspace(GRAPHENE_FIT_FREQ_MIN, GRAPHENE_FIT_FREQ_MAX, GRAPHENE_FIT_NUM_FREQS)
+    freqs = np.linspace(1, GRAPHENE_FIT_FREQ_MAX, GRAPHENE_FIT_NUM_FREQS)
 
     gamma = gamma_min + (gamma_max - gamma_min) * rng.random()
     mu_c = mu_min + (mu_max - mu_min) * rng.random()
