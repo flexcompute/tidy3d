@@ -496,7 +496,6 @@ def download_hdf5(
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     """
-
     task = SimulationTask(taskId=task_id)
     task.get_simulation_hdf5(path, verbose=verbose, progress_callback=progress_callback)
 
@@ -521,6 +520,7 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
     """
 
     # task = SimulationTask.get(task_id)
+
     task = SimulationTask(taskId=task_id)
     task.get_simulation_json(path, verbose=verbose)
     return Simulation.from_file(path)

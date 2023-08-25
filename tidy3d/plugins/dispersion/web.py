@@ -15,7 +15,7 @@ from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
-from ...web.httputils import get_headers
+from ...web.http_management import get_headers
 from ...web.environment import Env
 
 from .fit import DispersionFitter
