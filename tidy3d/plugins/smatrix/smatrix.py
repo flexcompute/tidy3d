@@ -15,7 +15,7 @@ from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
 from ...components.data.sim_data import SimulationData
 from ...components.data.data_array import DataArray
-from ...components.types import Direction, Ax, Complex
+from ...components.types import Direction, Ax, Complex, FreqArray
 from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
@@ -91,10 +91,10 @@ class ComponentModeler(Tidy3dBaseModel):
         description="Collection of ports describing the scattering matrix elements. "
         "For each input mode, one simulation will be run with a modal source.",
     )
-    freqs: List[float] = pd.Field(
+    freqs: FreqArray = pd.Field(
         ...,
         title="Frequencies",
-        description="List of frequencies at which to evaluate the scattering matrix.",
+        description="Array or list of frequencies at which to evaluate the scattering matrix.",
         units=HERTZ,
     )
 
@@ -365,7 +365,7 @@ class ComponentModeler(Tidy3dBaseModel):
         mode_index = sim_data.simulation.sources[0].mode_index
 
         normalize_amps = port_monitor_data.amps.sel(
-            f=self.freqs,
+            f=np.array(self.freqs),
             direction=port_source.direction,
             mode_index=mode_index,
         )
@@ -419,9 +419,8 @@ class ComponentModeler(Tidy3dBaseModel):
             port_in=port_names_in,
             mode_index_out=range(num_modes_out),
             mode_index_in=range(num_modes_in),
-            f=self.freqs,
+            f=np.array(self.freqs),
         )
-
         s_matrix = SMatrixDataArray(values, coords=coords)
 
         # loop through source ports
@@ -440,7 +439,9 @@ class ComponentModeler(Tidy3dBaseModel):
                 # directly compute the element
                 mode_amps_data = sim_data[port_out.name].copy().amps
                 dir_out = "-" if port_out.direction == "+" else "+"
-                amp = mode_amps_data.sel(f=self.freqs, direction=dir_out, mode_index=mode_index_out)
+                amp = mode_amps_data.sel(
+                    f=coords["f"], direction=dir_out, mode_index=mode_index_out
+                )
                 source_norm = self._normalization_factor(port_in, sim_data)
                 s_matrix_elements = np.array(amp.data) / np.array(source_norm)
                 s_matrix.loc[

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Added lower bound validator to `freqs` in mode solver.
+- `ComponentModeler.freqs` now a `FreqArray`, so it can be initialized from numpy, list or tuple.
 
 ### Fixed
 - Bug in `Simulation.eps_bounds` that was always setting the lower bound to 1.

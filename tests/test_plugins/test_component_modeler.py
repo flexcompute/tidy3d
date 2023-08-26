@@ -278,10 +278,10 @@ def test_run_component_modeler(monkeypatch, tmp_path):
                     coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
 
                     assert np.all(
-                        s_matrix.loc[coords_in] != 0
+                        s_matrix.sel(**coords_in) != 0
                     ), "source index not present in S matrix"
                     assert np.all(
-                        s_matrix.loc[coords_in].loc[coords_out] != 0
+                        s_matrix.sel(**coords_in).sel(**coords_out) != 0
                     ), "monitor index not present in S matrix"
 
 
@@ -296,7 +296,7 @@ def test_component_modeler_run_only(monkeypatch):
     coords_in_run_only = dict(port_in=port_run_only, mode_index_in=mode_index_run_only)
 
     # make sure the run only mappings are non-zero
-    assert np.all(s_matrix.loc[coords_in_run_only] != 0)
+    assert np.all(s_matrix.sel(**coords_in_run_only) != 0)
 
     # make sure if we zero out the run_only mappings, everythging is zero
     s_matrix.loc[coords_in_run_only] = 0
@@ -327,7 +327,7 @@ def _test_mappings(element_mappings, s_matrix):
         )
 
         assert np.all(
-            s_matrix.loc[coords_to].values == mult_by * s_matrix.loc[coords_from].values
+            s_matrix.sel(**coords_to).values == mult_by * s_matrix.sel(**coords_from).values
         ), "mapping not applied correctly."
 
 
