@@ -2,12 +2,12 @@
 from typing import Dict, List
 
 from .container import DEFAULT_DATA_DIR, BatchData, Batch
-from ..components.simulation import Simulation
-from ..log import log
+from .tidy3d_stub import Tidy3dStub
+from ...log import log
 
 
 def run_async(
-    simulations: Dict[str, Simulation],
+    simulations: Dict[str, Tidy3dStub],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,

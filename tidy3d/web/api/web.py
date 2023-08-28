@@ -10,19 +10,20 @@ import tempfile
 import time
 
 import pydantic.v1 as pydantic
-
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
 from ...log import log, get_logging_console
-from ...web.http_management import http
-from ...web.s3utils import download_file, upload_file
-from ...web.simulation_task import Folder, SIMULATION_JSON, SIM_FILE_HDF5_GZ
-from ...web.types import ResourceLifecycle, Submittable
+from ..core.http_util import http
+from ..core.s3utils import download_file, upload_file
+from ..core.task_core import Folder
+from ..core.types import ResourceLifecycle, Submittable
 
-from .mode_solver import ModeSolver, MODE_MONITOR_NAME
+from ...plugins.mode.mode_solver import ModeSolver, MODE_MONITOR_NAME
 from ...version import __version__
 
+SIMULATION_JSON = "simulation.json"
+SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
 MODESOLVER_API = "tidy3d/modesolver/py"
 MODESOLVER_JSON = "mode_solver.json"
 MODESOLVER_HDF5 = "mode_solver.hdf5"

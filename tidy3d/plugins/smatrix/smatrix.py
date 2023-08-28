@@ -20,7 +20,7 @@ from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
 from ...log import log
-from ...web.container import BatchData, Batch
+from ...web.api.container import BatchData, Batch
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10

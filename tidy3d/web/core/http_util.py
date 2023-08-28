@@ -7,13 +7,27 @@ from typing import Dict
 
 import requests
 import toml
-from tidy3d.web.cli.constants import CONFIG_FILE
+
+from .constants import (
+    SIMCLOUD_APIKEY,
+    KEY_APIKEY,
+    HEADER_APIKEY,
+    HEADER_VERSION,
+)
 
 from .environment import Env
-from ..exceptions import WebError
-from ..version import __version__
+from .exceptions import WebError
+from os.path import expanduser
+from . import core_config
 
-SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+
+TIDY3D_DIR = f"{expanduser('~')}"
+if os.access(TIDY3D_DIR, os.W_OK):
+    TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
+else:
+    TIDY3D_DIR = "/tmp/.tidy3d"
+CONFIG_FILE = TIDY3D_DIR + "/config"
+CREDENTIAL_FILE = TIDY3D_DIR + "/auth.json"
 
 USER_AGENT = os.environ.get("TIDY3D_AGENT", f"Python-Client/{__version__}")
 
@@ -26,6 +40,11 @@ class ResponseCodes(Enum):
     NOT_FOUND = 404
 
 
+def get_version() -> None:
+    """Get the version for the current environment."""
+    return core_config.get_version()
+
+
 def api_key() -> None:
     """Get the api key for the current environment."""
 
@@ -34,7 +53,7 @@ def api_key() -> None:
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, encoding="utf-8") as config_file:
             config = toml.loads(config_file.read())
-            return config.get("apikey", "")
+            return config.get(KEY_APIKEY, "")
 
     return None
 
@@ -53,6 +72,7 @@ def api_key_auth(request: requests.request) -> requests.request:
         The request with authentication set.
     """
     key = api_key()
+    version = get_version()
     if not key:
         raise ValueError(
             "API key not found. To get your API key, sign into 'https://tidy3d.simulation.cloud' "
@@ -63,8 +83,10 @@ def api_key_auth(request: requests.request) -> requests.request:
             "'.tidy3d/config' (windows) containing the following line: "
             "apikey = 'XXX'. Here XXX is your API key copied from your account page within quotes."
         )
-    request.headers["simcloud-api-key"] = key
-    request.headers["tidy3d-python-version"] = __version__
+    if not version:
+        raise ValueError("version not found.")
+    request.headers[HEADER_APIKEY] = key
+    request.headers[HEADER_VERSION] = version
     request.headers["source"] = "Python"
     request.headers["User-Agent"] = USER_AGENT
     return request
@@ -78,7 +100,11 @@ def get_headers() -> Dict[str, str]:
     Dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
-    return {"simcloud-api-key": api_key(), "Application": "TIDY3D", "User-Agent": USER_AGENT}
+    return {
+        HEADER_APIKEY: api_key(),
+        "Application": "TIDY3D",
+        "User-Agent": USER_AGENT
+    }
 
 
 def http_interceptor(func):

@@ -11,9 +11,9 @@ from boto3.s3.transfer import TransferConfig
 from pydantic.v1 import BaseModel, Field
 from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
 from rich.progress import TransferSpeedColumn, TimeRemainingColumn
-from ..log import get_logging_console
-from .http_management import http
+from .http_util import http
 from .environment import Env
+from .core_config import get_logger_console
 
 
 class _UserCredential(BaseModel):
@@ -158,7 +158,7 @@ def _get_progress(action: _S3Action):
         TransferSpeedColumn(),
         "•",
         TimeRemainingColumn(),
-        console=get_logging_console(),
+        console=get_logger_console(),
     )
 
 

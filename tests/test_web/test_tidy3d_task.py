@@ -5,9 +5,10 @@ import responses
 from responses import matchers
 
 import tidy3d as td
-from tidy3d.web.environment import Env, EnvironmentConfig
-from tidy3d.web.simulation_task import Folder, SimulationTask
-from tidy3d.version import __version__
+from tidy3d.web.core import http_util
+from tidy3d.web.core.environment import Env, EnvironmentConfig
+from tidy3d.web.core.task_core import Folder, SimulationTask
+from tidy3d.web.core.types import TaskType
 
 test_env = EnvironmentConfig(
     name="test",
@@ -34,9 +35,10 @@ def make_sim():
 @pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
-    import tidy3d.web.http_management as http_module
+    import tidy3d.web.core.http_util as httputil
 
-    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+    monkeypatch.setattr(httputil, "api_key", lambda: "apikey")
+    monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
 
 
 @responses.activate
@@ -78,19 +80,6 @@ def test_query_task(set_api_key):
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     assert task
 
-    responses.add(
-        responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/xxx/detail",
-        json={
-            "data": {
-                "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
-                "createdAt": "2022-01-01T00:00:00.000Z",
-            }
-        },
-        status=404,
-    )
-    assert SimulationTask.get("xxx") is None
-
 
 @responses.activate
 def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
@@ -100,7 +89,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
         to_file = kwargs["to_file"]
         sim.to_file(to_file)
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock_download)
 
     responses.add(
         responses.GET,
@@ -136,7 +125,7 @@ def test_upload(monkeypatch, set_api_key):
     def mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.upload_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_download)
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     with tempfile.NamedTemporaryFile() as temp:
         task.upload_file(temp.name, "temp.json")
@@ -144,6 +133,7 @@ def test_upload(monkeypatch, set_api_key):
 
 @responses.activate
 def test_create(set_api_key):
+    task_id = "1234"
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
@@ -153,10 +143,11 @@ def test_create(set_api_key):
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/1234/tasks",
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{task_id}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
+                    "taskType": TaskType.FDTD,
                     "taskName": "test task",
                     "callbackUrl": None,
                     "fileType": "Gz",
@@ -167,21 +158,21 @@ def test_create(set_api_key):
         ],
         json={
             "data": {
-                "taskId": "1234",
+                "taskId": task_id,
                 "taskName": "test task",
                 "createdAt": "2022-01-01T00:00:00.000Z",
             }
         },
         status=200,
     )
-    task = SimulationTask.create(None, "test task", "test folder2")
-    assert task.task_id == "1234"
+    task = SimulationTask.create(TaskType.FDTD, "test task", "test folder2")
+    assert task.task_id == task_id
 
 
 @responses.activate
 def test_submit(set_api_key):
     project_id = "1234"
-    task_id = "1234"
+    TASK_ID = "1234"
     task_name = "test task"
     responses.add(
         responses.GET,
@@ -196,6 +187,7 @@ def test_submit(set_api_key):
         match=[
             matchers.json_params_matcher(
                 {
+                    "taskType": TaskType.FDTD,
                     "taskName": task_name,
                     "callbackUrl": None,
                     "fileType": "Gz",
@@ -206,7 +198,7 @@ def test_submit(set_api_key):
         ],
         json={
             "data": {
-                "taskId": task_id,
+                "taskId": TASK_ID,
                 "taskName": task_name,
                 "createdAt": "2022-01-01T00:00:00.000Z",
             }
@@ -215,15 +207,19 @@ def test_submit(set_api_key):
     )
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{task_id}/submit",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/submit",
         match=[
             matchers.json_params_matcher(
-                {"solverVersion": None, "workerGroup": None, "protocolVersion": __version__}
+                {
+                    "protocolVersion": http_util.get_version(),
+                    "solverVersion": None,
+                    "workerGroup": None,
+                }
             )
         ],
         json={
             "data": {
-                "taskId": task_id,
+                "taskId": TASK_ID,
                 "taskName": task_name,
                 "createdAt": "2022-01-01T00:00:00.000Z",
                 "taskBlockInfo": {
@@ -238,9 +234,9 @@ def test_submit(set_api_key):
     )
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{task_id}/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
-            "taskId": task_id,
+            "taskId": TASK_ID,
             "taskName": task_name,
             "createdAt": "2022-01-01T00:00:00.000Z",
             "status": "running",
@@ -253,17 +249,18 @@ def test_submit(set_api_key):
         },
         status=200,
     )
-    task = SimulationTask.create(None, task_name, "test folder1")
+    task = SimulationTask.create(TaskType.FDTD, task_name, "test folder1")
     task.submit()
     # test DE need to open the comment
-    # monitor(task_id, True)
+    # monitor(TASK_ID, True)
 
 
 @responses.activate
 def test_estimate_cost(set_api_key):
+    TASK_ID = "3eb06d16-208b-487b-864b-e9b1d3e010a7"
     responses.add(
         responses.GET,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
         json={
             "data": {
                 "taskId": "3eb06d16-208b-487b-864b-e9b1d3e010a7",
@@ -281,11 +278,11 @@ def test_estimate_cost(set_api_key):
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/metadata",
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/metadata",
         json={"data": {"flexUnit": 2.33}},
         status=200,
     )
-    task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
+    task = SimulationTask(taskId=TASK_ID)
     assert task.estimate_cost()["flexUnit"] == 2.33
 
 
@@ -296,7 +293,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
+    monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock)
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/tasks/3eb06d16-208b-487b-864b-e9b1d3e010a7/detail",

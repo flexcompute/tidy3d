@@ -9,11 +9,11 @@ from jax.tree_util import register_pytree_node_class
 
 from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
-from ...web.webapi import run as web_run
-from ...web.webapi import wait_for_connection
-from ...web.s3utils import download_file, upload_file
-from ...web.asynchronous import run_async as web_run_async
-from ...web.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
+from tidy3d.web.api.webapi import run as web_run
+from tidy3d.web.api.webapi import wait_for_connection
+from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.api.asynchronous import run_async as web_run_async
+from ...web.api.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
 from ...components.types import Literal
 
 from .components.base import JaxObject
@@ -65,7 +65,7 @@ def _task_name_adj(task_name: str) -> str:
 
 def tidy3d_run_fn(simulation: Simulation, task_name: str, **kwargs) -> SimulationData:
     """Run a regular :class:`.Simulation` after conversion from jax type."""
-    return web_run(simulation=simulation, task_name=task_name, **kwargs)
+    return web_run(simulations=simulation, task_name=task_name, **kwargs)
 
 
 def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchData:

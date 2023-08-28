@@ -6,16 +6,14 @@ import pydantic.v1 as pydantic
 
 import tidy3d as td
 
-from tidy3d.version import __version__
-import tidy3d.plugins.mode.web as msweb
+import tidy3d.web.api.web as msweb
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from ..utils import assert_log_level, log_capture
 from tidy3d import ScalarFieldDataArray
-from tidy3d.web.environment import Env
-from tidy3d.version import __version__
+from tidy3d.web.core.environment import Env
 
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
@@ -64,9 +62,12 @@ def mock_remote_api(monkeypatch):
         )
         ms.data_raw.to_file(to_file)
 
-    monkeypatch.setattr(td.web.http_management, "api_key", lambda: "api_key")
-    monkeypatch.setattr("tidy3d.plugins.mode.web.upload_file", void)
-    monkeypatch.setattr("tidy3d.plugins.mode.web.download_file", mock_download)
+    from tidy3d.web.core import http_util as httputil
+
+    monkeypatch.setattr(httputil, "api_key", lambda: "api_key")
+    monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
+    monkeypatch.setattr("tidy3d.web.api.web.upload_file", void)
+    monkeypatch.setattr("tidy3d.web.api.web.download_file", mock_download)
 
     responses.add(
         responses.GET,
@@ -87,7 +88,7 @@ def mock_remote_api(monkeypatch):
                     "modeSolverName": MODESOLVER_NAME,
                     "fileType": "Gz",
                     "source": "Python",
-                    "protocolVersion": __version__,
+                    "protocolVersion": td.version.__version__,
                 }
             )
         ],

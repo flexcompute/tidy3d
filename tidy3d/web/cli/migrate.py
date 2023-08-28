@@ -7,7 +7,8 @@ import requests
 import toml
 
 from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from ..environment import Env
+from ..core.constants import KEY_APIKEY, KEY_VERSION
+from ..core.environment import Env
 
 
 def migrate() -> bool:
@@ -63,7 +64,9 @@ def migrate() -> bool:
                             os.mkdir(TIDY3D_DIR)
                         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
                             toml_config = toml.loads(config_file.read())
-                            toml_config.update({"apikey": apikey})
+                            toml_config.update(
+                                {KEY_APIKEY: apikey, KEY_VERSION: toml_config.get(KEY_VERSION)}
+                            )
                             config_file.write(toml.dumps(toml_config))
 
                         # rename auth.json to auth.json.bak

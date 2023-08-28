@@ -27,7 +27,6 @@ from ...exceptions import ValidationError
 from ...constants import C_0
 from .solver import compute_modes
 
-
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 
@@ -403,7 +402,6 @@ class ModeSolver(Tidy3dBaseModel):
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
-
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
@@ -800,3 +798,6 @@ class ModeSolver(Tidy3dBaseModel):
             ax=ax,
             **sel_kwargs,
         )
+
+    def validate_pre_upload(self, source_required: bool = True):
+        pass

@@ -9,15 +9,15 @@ import time
 from rich.progress import Progress
 import pydantic.v1 as pd
 
-from . import webapi as web
-from .task import TaskId, TaskInfo, RunInfo, TaskName
-from ..components.simulation import Simulation
-from ..components.base import Tidy3dBaseModel
-from ..components.data.sim_data import SimulationData
-from ..log import log, get_logging_console
+from .tidy3d_stub import Tidy3dStubData, SimulationType
+from ..api import webapi as web
+from ..core.task_info import TaskInfo, RunInfo
+from ..core.constants import TaskId, TaskName
+from ...components.base import Tidy3dBaseModel
+from ...components.data.sim_data import SimulationData
+from ...log import log, get_logging_console
 
-from ..exceptions import DataError
-
+from ...exceptions import DataError
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
@@ -30,8 +30,8 @@ class WebContainer(Tidy3dBaseModel, ABC):
 class Job(WebContainer):
     """Interface for managing the running of a :class:`.Simulation` on server."""
 
-    simulation: Simulation = pd.Field(
-        ..., title="Simulation", description="Simulation to run as a 'task'."
+    simulation: SimulationType = pd.Field(
+        ..., title="simulation", description="Simulation to run as a 'task'."
     )
 
     task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")
@@ -178,7 +178,7 @@ class Job(WebContainer):
         """
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
+    def load(self, path: str = DEFAULT_DATA_PATH) -> Tidy3dStubData:
         """Download results from simulation (if not already) and load them into ``SimulationData``
         object.
 
@@ -189,7 +189,7 @@ class Job(WebContainer):
 
         Returns
         -------
-        :class:`.SimulationData`
+        :class:`.Tidy3dStubData`
             Object containing data about simulation.
         """
         return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
@@ -240,7 +240,7 @@ class BatchData(Tidy3dBaseModel):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    def load_sim_data(self, task_name: str) -> SimulationData:
+    def load_sim_data(self, task_name: str) -> Tidy3dStubData:
         """Load a :class:`.SimulationData` from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
@@ -252,7 +252,7 @@ class BatchData(Tidy3dBaseModel):
             verbose=self.verbose,
         )
 
-    def items(self) -> Tuple[TaskName, SimulationData]:
+    def items(self) -> Tuple[TaskName, Tidy3dStubData]:
         """Iterate through the :class:`.SimulationData` for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
@@ -285,7 +285,7 @@ class BatchData(Tidy3dBaseModel):
 class Batch(WebContainer):
     """Interface for submitting several :class:`.Simulation` objects to sever."""
 
-    simulations: Dict[TaskName, Simulation] = pd.Field(
+    simulations: Dict[TaskName, SimulationType] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
