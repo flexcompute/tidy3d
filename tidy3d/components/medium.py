@@ -101,10 +101,10 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
 class NonlinearSusceptibility(NonlinearSpec):
     """Specification adding an instantaneous nonlinear susceptibility to a medium.
+    The expression for the instantaneous nonlinear polarization is given below.
 
     Note
     ----
-    The instantaneous nonlinear polarization is given by
     .. math::
 
         P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
@@ -125,7 +125,7 @@ class NonlinearSusceptibility(NonlinearSpec):
     Note
     ----
     Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL}_x`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
     This approximation is valid when the E field is predominantly polarized along one
     of the x, y, or z axes.
 
