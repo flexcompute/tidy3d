@@ -9,6 +9,7 @@ import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
 
+from stub import Stub, TaskType
 from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.geometry.base import Box
@@ -35,7 +36,7 @@ MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 FIELD_DECAY_CUTOFF = 1e-2
 
 
-class ModeSolver(Tidy3dBaseModel):
+class ModeSolver(Tidy3dBaseModel, Stub):
     """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
     invariance in the third dimension.
     """
@@ -767,3 +768,6 @@ class ModeSolver(Tidy3dBaseModel):
             ax=ax,
             **sel_kwargs,
         )
+
+    def get_type(self) -> TaskType:
+        return TaskType.MODE_SOLVER

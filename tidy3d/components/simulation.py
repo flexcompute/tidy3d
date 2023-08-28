@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from stub import Stub, TaskType
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
@@ -77,7 +78,7 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
-class Simulation(Box):
+class Simulation(Box, Stub):
     """Contains all information about Tidy3d simulation.
 
     Example
@@ -3163,3 +3164,7 @@ class Simulation(Box):
             sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
 
         return Simulation.parse_obj(sim_dict)
+
+
+    def get_type(self) -> TaskType:
+        return TaskType.FDTD

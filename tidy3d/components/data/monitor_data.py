@@ -9,6 +9,7 @@ import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
 
+from stub import StubData
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
 from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
@@ -827,7 +828,7 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         return self.copy(update=new_data)
 
 
-class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
+class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData, StubData):
     """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
 
     Example

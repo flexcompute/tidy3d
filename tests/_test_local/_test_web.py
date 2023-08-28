@@ -35,7 +35,7 @@ class Test(TestCase):
 def test_webapi_0_run(tmp_path):
     """test complete run"""
     _ = web.run(
-        simulation=sim_original, task_name="test_webapi", path=str(tmp_path / "sim_data.hdf5")
+        stub=sim_original, task_name="test_webapi", path=str(tmp_path / "sim_data.hdf5")
     )
 
 
@@ -43,7 +43,7 @@ def test_webapi_1_upload():
     """test that task uploads ok"""
 
     task_id = web.upload(
-        simulation=sim_original, task_name="test_webapi", callback_url=CALLBACK_URL
+        stub=sim_original, task_name="test_webapi", callback_url=CALLBACK_URL
     )
     task_info = web.get_info(task_id)
     assert task_info.callbackUrl == CALLBACK_URL

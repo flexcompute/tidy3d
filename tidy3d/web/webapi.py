@@ -14,6 +14,7 @@ from urllib3.exceptions import NewConnectionError
 import pytz
 from rich.progress import Progress
 
+from stub import Stub, StubData, TaskType
 from .environment import Env
 from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
 from .task import TaskId, TaskInfo, ChargeType
@@ -69,7 +70,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
 
 @wait_for_connection
 def run(
-    simulation: Simulation,
+    stub: Stub,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -79,14 +80,14 @@ def run(
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
     worker_group: str = None,
-) -> SimulationData:
-    """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
-    and loads results as a :class:`.SimulationData` object.
+) -> StubData:
+    """Submits a :class:`.Stub` to server, starts running, monitors progress, downloads,
+    and loads results as a :class:`.StubData` object.
 
     Parameters
     ----------
-    simulation : :class:`.Simulation`
-        Simulation to upload to server.
+    stub : :class:`.Stub`
+        Simulation to upload to server(Include FDTD, MODE_SOLVER, HEAT).
     task_name : str
         Name of task.
     folder_name : str = "default"
@@ -109,11 +110,11 @@ def run(
 
     Returns
     -------
-    :class:`.SimulationData`
-        Object containing solver results for the supplied :class:`.Simulation`.
+    :class:`.StubData`
+        Object containing solver results for the supplied :class:`.Stub`.
     """
     task_id = upload(
-        simulation=simulation,
+        stub=stub,
         task_name=task_name,
         folder_name=folder_name,
         callback_url=callback_url,
@@ -133,7 +134,7 @@ def run(
 
 @wait_for_connection
 def upload(
-    simulation: Simulation,
+    stub: Stub,
     task_name: str,
     folder_name: str = "default",
     callback_url: str = None,
@@ -143,12 +144,12 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
 ) -> TaskId:
-    """Upload simulation to server, but do not start running :class:`.Simulation`.
+    """Upload simulation to server, but do not start running :class:`.Stub`.
 
     Parameters
     ----------
-    simulation : :class:`.Simulation`
-        Simulation to upload to server.
+    stub : :class:`.Stub`
+        Simulation to upload to server(Include FDTD, MODE_SOLVER, HEAT).
     task_name : str
         Name of task.
     folder_name : str
@@ -177,17 +178,20 @@ def upload(
     To start the simulation running, must call :meth:`start` after uploaded.
     """
 
-    simulation.validate_pre_upload(source_required=source_required)
+    stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
 
+    task_type = stub.get_type()
+
     task = SimulationTask.create(
-        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
+        stub, task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
     )
     if verbose:
         console = get_logging_console()
-        console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
+        console.log(f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'.")
         url = f"https://tidy3d.simulation.cloud/workbench?taskId={task.task_id}"
         console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+
     task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
@@ -198,20 +202,21 @@ def upload(
 
 
 @wait_for_connection
-def get_info(task_id: TaskId) -> TaskInfo:
+def get_info(task_id: TaskId, verbose: bool=True) -> TaskInfo:
     """Return information about a task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
     Returns
     -------
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    task = SimulationTask.get(task_id)
+    task = SimulationTask.get(task_id, verbose)
     if not task:
         raise ValueError("Task not found.")
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
@@ -260,7 +265,7 @@ def get_run_info(task_id: TaskId):
         Percentage of run done (in terms of max number of time steps).
         Is ``None`` if run info not available.
     field_decay : float
-        Average field intensity normlized to max value (1.0).
+        Average field intensity normalized to max value (1.0).
         Is ``None`` if run info not available.
     """
     task = SimulationTask(taskId=task_id)
@@ -309,39 +314,12 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     def get_estimated_cost() -> float:
         """Get estimated cost, if None, is not ready."""
-        task_info = get_info(task_id)
+        task_info = get_info(task_id, verbose)
         block_info = task_info.taskBlockInfo
         if block_info and block_info.chargeType == ChargeType.FREE:
             est_flex_unit = 0
-            grid_points = block_info.maxGridPoints
-            time_steps = block_info.maxTimeSteps
-            if grid_points < 1000:
-                grid_points_str = f"{grid_points}"
-            elif 1000 <= grid_points < 1000 * 1000:
-                grid_points_str = f"{grid_points / 1000}K"
-            else:
-                grid_points_str = f"{grid_points / 1000 / 1000}M"
-
-            if time_steps < 1000:
-                time_steps_str = f"{time_steps}"
-            elif 1000 <= grid_points < 1000 * 1000:
-                time_steps_str = f"{time_steps / 1000}K"
-            else:
-                time_steps_str = f"{time_steps / 1000 / 1000}M"
-
-            console.log(
-                f"You are running this simulation for FREE. Your current plan allows"
-                f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
-                f" day (under {grid_points_str} grid points and {time_steps_str}"
-                f" time steps)"
-            )
         else:
             est_flex_unit = task_info.estFlexUnit
-            if est_flex_unit is not None and est_flex_unit > 0:
-                console.log(
-                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
-                    f" to get the billed FlexCredit cost after a simulation run."
-                )
         return est_flex_unit
 
     def monitor_preprocess() -> None:
@@ -434,11 +412,11 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 @wait_for_connection
 def download(
     task_id: TaskId,
-    path: str = "simulation_data.hdf5",
+    path: str = "output/monitor_data.hdf5",
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
-    """Download results of task and log to file.
+    """Download results of task to file.
 
     Parameters
     ----------
@@ -519,9 +497,7 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
         Simulation loaded from downloaded json file.
     """
 
-    # task = SimulationTask.get(task_id)
-
-    task = SimulationTask(taskId=task_id)
+    task = SimulationTask.get(task_id)
     task.get_simulation_json(path, verbose=verbose)
     return Simulation.from_file(path)
 
@@ -561,8 +537,8 @@ def load(
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
-) -> SimulationData:
-    """Download and Load simulation results into :class:`.SimulationData` object.
+) -> StubData:
+    """Download and Load simulation results into :class:`.StubData` object.
 
     Parameters
     ----------
@@ -579,9 +555,11 @@ def load(
 
     Returns
     -------
-    :class:`.SimulationData`
+    :class:`.StubData`
         Object containing simulation data.
     """
+
+    task = SimulationTask(taskId=task_id)
 
     if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
@@ -590,16 +568,22 @@ def load(
         console = get_logging_console()
         console.log(f"loading SimulationData from {path}")
 
-    sim_data = SimulationData.from_file(path)
+    if TaskType.FDTD == task.task_type or TaskType.NORMAL == task.task_type:
+        sim_data = SimulationData.from_file(path)
 
-    final_decay_value = sim_data.final_decay_value
-    shutoff_value = sim_data.simulation.shutoff
-    if (shutoff_value != 0) and (final_decay_value > shutoff_value):
-        log.warning(
-            f"Simulation final field decay value of {final_decay_value} "
-            f"is greater than the simulation shutoff threshold of {shutoff_value}. "
-            "Consider simulation again with large run_time duration for more accurate results."
-        )
+        final_decay_value = sim_data.final_decay_value
+        shutoff_value = sim_data.simulation.shutoff
+        if (shutoff_value != 0) and (final_decay_value > shutoff_value):
+            log.warning(
+                f"Simulation final field decay value of {final_decay_value} "
+                f"is greater than the simulation shutoff threshold of {shutoff_value}. "
+                "Consider simulation again with large run_time duration for more accurate results."
+            )
+    elif TaskType.MODE_SOLVER == task.task_type:
+        # todo
+        pass
+    elif TaskType.HEAT == task.task_type:
+        pass
 
     return sim_data
 

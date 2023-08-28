@@ -9,6 +9,7 @@ from typing import List, Optional, Callable, Tuple
 import pydantic.v1 as pd
 from pydantic.v1 import Extra, Field, parse_obj_as
 
+from stub import TaskType, Stub
 from tidy3d import Simulation
 from tidy3d.version import __version__
 from tidy3d.exceptions import WebError
@@ -16,6 +17,7 @@ from tidy3d.exceptions import WebError
 from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file
+from .task import ChargeType
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
 from .file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
@@ -146,6 +148,10 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         title="simulation", description="A copy of the Simulation being run as this task."
     )
 
+    task_type: TaskType = Field(
+        title="task_type", description="The type of task.", alias="taskType"
+    )
+
     folder_name: Optional[str] = Field(
         "default",
         title="Folder Name",
@@ -192,7 +198,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     @classmethod
     def create(
         cls,
-        simulation: Simulation,
+        stub: Stub,
+        task_type: TaskType,
         task_name: str,
         folder_name: str = "default",
         callback_url: str = None,
@@ -204,10 +211,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Parameters
         ----------
-        simulation: :class".Simulation"
+        stub: :class".Stub"
             The :class:`.Simulation` will be uploaded to server in the submitting phase.
             If Simulation is too large to fit into memory, pass None to this parameter
             and use :meth:`.SimulationTask.upload_file` instead.
+        taskType: :class".TaskType"
+            The type of task.
         task_name: str
             The name of the task.
         folder_name: str,
@@ -233,6 +242,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {
                 "taskName": task_name,
+                "taskType": task_type,
                 "callbackUrl": callback_url,
                 "simulationType": simulation_type,
                 "parentTasks": parent_tasks,
@@ -240,16 +250,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             },
         )
 
-        return SimulationTask(**resp, simulation=simulation, folder=folder)
+        return SimulationTask(**resp, simulation=stub, folder=folder)
 
     @classmethod
-    def get(cls, task_id: str) -> SimulationTask:
+    def get(cls, task_id: str, verbose: bool=True) -> SimulationTask:
         """Get task from the server by id.
 
         Parameters
         ----------
         task_id: str
             Unique identifier of task on server.
+        verbose:
+            If `True`, will print progressbars and status, otherwise, will run silently.
 
         Returns
         -------
@@ -257,8 +269,42 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             :class:`.SimulationTask` object containing info about status,
              size, credits of task and others.
         """
+        console = get_logging_console() if verbose else None
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
-        return SimulationTask(**resp) if resp else None
+        task = SimulationTask(**resp) if resp else None
+        if task:
+            block_info = task.taskBlockInfo
+            if not task and block_info and block_info.chargeType == ChargeType.FREE:
+                grid_points = block_info.maxGridPoints
+                time_steps = block_info.maxTimeSteps
+                if grid_points < 1000:
+                    grid_points_str = f"{grid_points}"
+                elif 1000 <= grid_points < 1000 * 1000:
+                    grid_points_str = f"{grid_points / 1000}K"
+                else:
+                    grid_points_str = f"{grid_points / 1000 / 1000}M"
+
+                if time_steps < 1000:
+                    time_steps_str = f"{time_steps}"
+                elif 1000 <= grid_points < 1000 * 1000:
+                    time_steps_str = f"{time_steps / 1000}K"
+                else:
+                    time_steps_str = f"{time_steps / 1000 / 1000}M"
+
+                console.log(
+                    f"You are running this simulation for FREE. Your current plan allows"
+                    f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
+                    f" day (under {grid_points_str} grid points and {time_steps_str}"
+                    f" time steps)"
+                )
+            else:
+                est_flex_unit = task.estFlexUnit
+                if est_flex_unit is not None and est_flex_unit > 0:
+                    console.log(
+                        f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
+                        f" to get the billed FlexCredit cost after a simulation run."
+                    )
+        return task
 
     @classmethod
     def get_running_tasks(cls) -> List[SimulationTask]:

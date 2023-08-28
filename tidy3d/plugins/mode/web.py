@@ -11,6 +11,7 @@ import time
 
 import pydantic.v1 as pydantic
 
+from stub import StubData
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
@@ -42,7 +43,7 @@ def run(
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
-) -> ModeSolverData:
+) -> StubData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
 

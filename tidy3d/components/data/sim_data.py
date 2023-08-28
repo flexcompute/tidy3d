@@ -6,6 +6,7 @@ import xarray as xr
 import pydantic.v1 as pd
 import numpy as np
 
+from stub import StubData
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
 from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
@@ -20,7 +21,7 @@ from ...log import log
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
 
-class SimulationData(Tidy3dBaseModel):
+class SimulationData(Tidy3dBaseModel, StubData):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
     Example
