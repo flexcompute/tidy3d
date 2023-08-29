@@ -12,7 +12,7 @@ Getting Started
 
 Before using Tidy3D, you must first `sign up <https://tidy3d.simulation.cloud/signup>`_ for a user account.
 
-By signing up for a free account, you can obtain an API key `here <https://tidy3d.simulation.cloud/account>`_. You can also `manage your simulation jobs <https://tidy3d.simulation.cloud/folders>`_ and access `graphic user interface <https://tidy3d.simulation.cloud/workbench?taskId=pa-94c49911-132d-48bc-8ec0-f0a4e55140a3>`_ if needed.
+By signing up for a free account, you can obtain an API key `here <https://tidy3d.simulation.cloud/account?tab=apikey>`_. You can also `manage your simulation jobs <https://tidy3d.simulation.cloud/folders>`_ and access `graphic user interface <https://tidy3d.simulation.cloud/workbench?taskId=pa-94c49911-132d-48bc-8ec0-f0a4e55140a3>`_ if needed.
 
 Installation of Tidy3D Python API
 ---------------------------------

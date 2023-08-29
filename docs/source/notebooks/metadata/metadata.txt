@@ -466,5 +466,12 @@
     "description": "This notebook demonstrates how to perform field projection for a zone plate in Tidy3D FDTD.",
     "keywords": "zone plate, field projection, Tidy3D, FDTD",
     "feature_image": "./img/zone_plate.png"
+  },
+  "MoS2Waveguide.ipynb": {
+    "title": "Monolayer MoS2 waveguide | Flexcompute",
+    "description": "This notebook demonstrates how to model a monolayer MoS2 waveguide in Tidy3D FDTD.",
+    "keywords": "TMD, waveguide, MoS2, 2D material, Tidy3D, FDTD",
+    "feature_image": "./img/MoS2_waveguide.png"
   }
+
 }
