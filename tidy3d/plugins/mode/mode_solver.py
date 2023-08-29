@@ -31,6 +31,9 @@ from .solver import compute_modes
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 
+# Lowest frequency supported (Hz)
+MIN_FREQUENCY = 1e5
+
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
 
@@ -84,6 +87,16 @@ class ModeSolver(Tidy3dBaseModel):
         """Raise validation error if ``freqs`` is an empty Tuple."""
         if len(val) == 0:
             raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
+        return val
+
+    @pydantic.validator("freqs", always=True)
+    def freqs_lower_bound(cls, val):
+        """Raise validation error if any of ``freqs`` is lower than ``MIN_FREQUENCY``."""
+        if min(val) < MIN_FREQUENCY:
+            raise ValidationError(
+                f"ModeSolver 'freqs' must be no lower than {MIN_FREQUENCY:.0e} Hz. "
+                "Note that the unit of frequency is 'Hz'."
+            )
         return val
 
     @cached_property
