@@ -18,6 +18,8 @@ TOL_COMPLEX = fp_eps
 TOL_EIGS = fp_eps
 # Tolerance for deciding on the matrix to be diagonal or tensorial
 TOL_TENSORIAL = 1e-6
+# shift target neff by this value, both rel and abs, whichever results in larger shift
+TARGET_SHIFT = 10 * fp_eps
 
 
 class EigSolver(Tidy3dBaseModel):
@@ -166,7 +168,13 @@ class EigSolver(Tidy3dBaseModel):
             target = n_max
         else:
             target = mode_spec.target_neff
-        target_neff_p = target / np.linalg.norm(kp_to_k) + fp_eps
+        target_neff_p = target / np.linalg.norm(kp_to_k)
+
+        # shift target_neff slightly to avoid cases where the shiftted matrix is exactly singular
+        if abs(TARGET_SHIFT) > abs(target_neff_p * TARGET_SHIFT):
+            target_neff_p += TARGET_SHIFT
+        else:
+            target_neff_p *= 1 + TARGET_SHIFT
 
         # Solve for the modes
         E, H, neff, keff, eps_spec = cls.solver_em(

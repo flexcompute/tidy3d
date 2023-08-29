@@ -2,6 +2,7 @@ import pytest
 import responses
 import numpy as np
 import matplotlib.pyplot as plt
+import pydantic.v1 as pydantic
 
 import tidy3d as td
 
@@ -169,6 +170,38 @@ def compare_colocation(ms):
 
             # Check that colocated coords are the same
             assert np.allclose(coords1, data_at_boundaries[key].coords[dim])
+
+
+def test_mode_solver_validation():
+    """Test invalidate mode solver setups."""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+    )
+
+    # frequency is too low
+    with pytest.raises(pydantic.ValidationError):
+        ms = ModeSolver(
+            simulation=simulation,
+            plane=PLANE,
+            mode_spec=mode_spec,
+            freqs=[1.1],
+            direction="+",
+        )
+
+    # frequency not too low
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[1e12],
+        direction="+",
+    )
 
 
 @pytest.mark.parametrize("local", [True, False])
