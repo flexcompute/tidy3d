@@ -163,7 +163,12 @@ def test_intensity(monitor_name):
 @pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
 def test_poynting(monitor_name):
     sim_data = make_sim_data()
-    _ = sim_data.get_poynting_vector(monitor_name)
+    mnt_data = sim_data[monitor_name]
+    poynting = sim_data.get_poynting_vector(monitor_name)
+    zero_dims = mnt_data.monitor.zero_dims
+    if len(zero_dims) == 1:
+        comp = f"S{'xyz'[zero_dims[0]]}"
+        assert np.allclose(np.squeeze(poynting[comp].real), mnt_data.poynting)
 
 
 def test_final_decay():

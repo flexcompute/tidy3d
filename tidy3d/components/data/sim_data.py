@@ -281,8 +281,7 @@ class SimulationData(Tidy3dBaseModel):
             DataArray containing the Poynting vector calculated based on the field components
             colocated at the center locations of the Yee grid.
         """
-        # Fields from 2D monitors need a correction factor
-        mon_data = self.load_field_monitor(field_monitor_name).grid_corrected_copy
+        mon_data = self.load_field_monitor(field_monitor_name)
         field_dataset = self._at_boundaries(mon_data)
 
         time_domain = isinstance(self.monitor_data[field_monitor_name], FieldTimeData)
@@ -307,6 +306,12 @@ class SimulationData(Tidy3dBaseModel):
                 if time_domain
                 else 0.5 * (e_1 * h_2.conj() - e_2 * h_1.conj())
             )
+
+            # 2D monitors have grid correction factors that can be different from 1. For Poynting,
+            # it is always the product of a primal-located field and dual-located field, so the
+            # total grid correction factor is the product of the two
+            grid_correction = mon_data.grid_dual_correction * mon_data.grid_primal_correction
+            poynting_components["S" + dim] *= grid_correction
 
         return xr.Dataset(poynting_components)
 
