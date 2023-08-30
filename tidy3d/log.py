@@ -2,7 +2,7 @@
 
 import inspect
 
-from typing import Union
+from typing import Union, List
 from typing_extensions import Literal
 
 from rich.console import Console
@@ -190,9 +190,9 @@ class Logger:
                     new_loc = current_loc + [field]
 
                 # process current level warnings
-                for level, msg in stack_item["messages"]:
+                for level, msg, custom_loc in stack_item["messages"]:
                     if level == "WARNING":
-                        self._captured_warnings.append({"loc": new_loc, "msg": msg})
+                        self._captured_warnings.append({"loc": new_loc + custom_loc, "msg": msg})
 
                 # initialize processing at children level
                 for child_stack in stack_item["children"].values():
@@ -200,16 +200,16 @@ class Logger:
 
         else:  # for root object
             # process current level warnings
-            for level, msg in stack_item["messages"]:
+            for level, msg, custom_loc in stack_item["messages"]:
                 if level == "WARNING":
-                    self._captured_warnings.append({"loc": current_loc, "msg": msg})
+                    self._captured_warnings.append({"loc": current_loc + custom_loc, "msg": msg})
 
             # initialize processing at children level
             for child_stack in stack_item["children"].values():
                 self._parse_warning_capture(current_loc=current_loc, stack_item=child_stack)
 
     def _log(
-        self, level: int, level_name: str, message: str, *args, log_once: bool = False
+        self, level: int, level_name: str, message: str, *args, log_once: bool = False, custom_loc: List = []
     ) -> None:
         """Distribute log messages to all handlers"""
 
@@ -225,7 +225,7 @@ class Logger:
 
         # Capture all messages (even if suppressed later)
         if self._stack:
-            self._stack[-1]["messages"].append((level_name, composed_message))
+            self._stack[-1]["messages"].append((level_name, composed_message, custom_loc))
 
         # Check global cache if requested
         if log_once:

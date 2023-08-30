@@ -969,6 +969,7 @@ class Simulation(Box):
         source_required: bool = True
             If ``True``, validation will fail in case no sources are found in the simulation.
         """
+        log.begin_capture()
         self._validate_size()
         self._validate_monitor_size()
         self._validate_datasets_not_none()
@@ -977,6 +978,7 @@ class Simulation(Box):
         _ = self.volumetric_structures
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
+        log.end_capture(self)
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""

@@ -10,7 +10,7 @@ import pydantic.v1 as pd
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType
 from ..base import Tidy3dBaseModel
-from ..types import Axis, Symmetry, annotate_type
+from ..types import Axis, Symmetry, annotate_type, TYPE_TAG_STR
 from ..source import SourceType
 from ..structure import Structure, StructureType
 from ..geometry.base import Box
@@ -418,18 +418,21 @@ class GridSpec(Tidy3dBaseModel):
         AutoGrid(),
         title="Grid specification along x-axis",
         description="Grid specification along x-axis",
+        discriminator=TYPE_TAG_STR,
     )
 
     grid_y: GridType = pd.Field(
         AutoGrid(),
         title="Grid specification along y-axis",
         description="Grid specification along y-axis",
+        discriminator=TYPE_TAG_STR,
     )
 
     grid_z: GridType = pd.Field(
         AutoGrid(),
         title="Grid specification along z-axis",
         description="Grid specification along z-axis",
+        discriminator=TYPE_TAG_STR,
     )
 
     wavelength: float = pd.Field(

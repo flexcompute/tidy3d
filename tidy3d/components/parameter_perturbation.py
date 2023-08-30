@@ -14,7 +14,7 @@ from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray
 from .base import Tidy3dBaseModel, cached_property
 from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
-from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod
+from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod, TYPE_TAG_STR
 from ..components.viz import add_ax_if_none
 
 """ Generic perturbation classes """
@@ -828,12 +828,14 @@ class ParameterPerturbation(Tidy3dBaseModel):
         None,
         title="Heat Perturbation",
         description="Heat perturbation to apply.",
+        discriminator=TYPE_TAG_STR,
     )
 
     charge: ChargePerturbationType = pd.Field(
         None,
         title="Charge Perturbation",
         description="Charge perturbation to apply.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @cached_property

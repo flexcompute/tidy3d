@@ -6,7 +6,7 @@ import pydantic.v1 as pd
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
-from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
+from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level, log
 
 
 def test_log():
@@ -94,6 +94,13 @@ def test_logging_warning_capture():
         normal_dir="+",
     )
 
+    # 1 warning: large monitor size
+    monitor_time = td.FieldTimeMonitor(
+        center=(0, 0, 0),
+        size=(1, 2, 3),
+        name="time",
+    )
+
     # 6 warnings * 2 sources = 12 total: too close to each PML
     box = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(11.5, 11.5, 11.5)),
@@ -117,10 +124,10 @@ def test_logging_warning_capture():
         size=[domain_size] * 3,
         sources=[gaussian_beam, mode_source],
         structures=[box],
-        monitors=[monitor_flux, mode_mnt],
+        monitors=[monitor_flux, mode_mnt, monitor_time],
         run_time=run_time,
         boundary_spec=bspec_pml,
-        grid_spec=td.GridSpec.uniform(dl=0.04),
+        grid_spec=td.GridSpec.auto(min_steps_per_wvl=15),
     )
 
     # parse the entire simulation at once to capture warnings hierarchically
@@ -128,9 +135,42 @@ def test_logging_warning_capture():
 
     td.log.set_capture(True)
     sim = td.Simulation.parse_raw(sim_json)
+    sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
-    assert len(warning_list) == 15
+    print(warning_list)
+    assert len(warning_list) == 16
     td.log.set_capture(False)
+
+    # check that capture doesn't change validation errors
+    sim_dict_no_source = sim.dict()
+    sim_dict_no_source.update({"sources": []})
+    sim_dict_large_mnt = sim.dict()
+    sim_dict_large_mnt.update({"monitors": [monitor_time.updated_copy(size=(10, 10, 10))]})
+
+    for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
+
+        try:
+            sim = td.Simulation.parse_obj(sim_dict)
+            sim.validate_pre_upload()
+        except pd.ValidationError as e:
+            error_without = e.errors()
+        except Exception as e:
+            error_without = str(e)
+
+        td.log.set_capture(True)
+        try:
+            sim = td.Simulation.parse_obj(sim_dict)
+            sim.validate_pre_upload()
+        except pd.ValidationError as e:
+            error_with = e.errors()
+        except Exception as e:
+            error_with = str(e)
+        td.log.set_capture(False)
+
+        print(error_without)
+        print(error_with)
+
+        assert error_without == error_with
 
 
 def test_log_suppression():
