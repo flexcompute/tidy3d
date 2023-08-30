@@ -9,7 +9,7 @@ from ....constants import C_0
 from ....components.structure import Structure
 from ....components.monitor import FieldMonitor
 from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.types import Bound
+from ....components.types import Bound, TYPE_TAG_STR
 
 from .base import JaxObject
 from .medium import JaxMediumType, JAX_MEDIUM_MAP
@@ -25,6 +25,7 @@ class JaxStructure(Structure, JaxObject):
         title="Geometry",
         description="Geometry of the structure, which is jax-compatible.",
         jax_field=True,
+        discriminator=TYPE_TAG_STR,
     )
 
     medium: JaxMediumType = pd.Field(
@@ -32,6 +33,7 @@ class JaxStructure(Structure, JaxObject):
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
         jax_field=True,
+        discriminator=TYPE_TAG_STR,
     )
 
     def to_structure(self) -> Structure:

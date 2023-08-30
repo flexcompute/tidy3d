@@ -1318,6 +1318,7 @@ class AbstractFieldProjectionData(MonitorData):
         ...,
         title="Projection monitor",
         description="Field projection monitor.",
+        discriminator=TYPE_TAG_STR,
     )
 
     Er: ProjFieldType = pd.Field(
@@ -1355,6 +1356,7 @@ class AbstractFieldProjectionData(MonitorData):
         Medium(),
         title="Background Medium",
         description="Background medium through which to project fields.",
+        discriminator=TYPE_TAG_STR,
     )
 
     @property
