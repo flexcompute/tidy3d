@@ -237,14 +237,14 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
     @property
     def _in_plane(self) -> Dict[str, DataArray]:
-        """Dictionary of field components with finite grid correction factors applied and symmetry
+        """Dictionary of field components with monitor-normal direction dropped and symmetry
         expanded."""
         if len(self.monitor.zero_dims) != 1:
             raise DataError("Data must be 2D to apply grid corrections.")
 
         normal_dim = "xyz"[self.monitor.zero_dims[0]]
         fields = {}
-        for field_name, field in self.grid_corrected_copy.field_components.items():
+        for field_name, field in self.symmetry_expanded_copy.field_components.items():
             fields[field_name] = field.squeeze(dim=normal_dim, drop=True)
         return fields
 
@@ -345,7 +345,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         such that the third component would be the normal axis. This just means that the H field
         gets an extra minus sign if the normal axis is ``"y"``. Raise if any of the tangential
         field components is missing.
+
+        The finite grid correction is also applied, so the intended use of these fields is in
+        poynting, flux, and dot-like methods.
         """
+
         # Tangential field components
         tan_dims = self._tangential_dims
         components = [fname + dim for fname in "EH" for dim in tan_dims]
@@ -357,10 +361,18 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if component not in fields:
                 raise DataError(f"Tangential field component '{component}' missing in field data.")
 
+            # sign correction to H
             if normal_dim == "y" and component[0] == "H":
                 tan_fields[component] = -fields[component]
             else:
                 tan_fields[component] = fields[component]
+
+            # finite grid correction to all fields
+            eig_val = self.symmetry_eigenvalues[component](normal_dim)
+            if eig_val < 0:
+                tan_fields[component] *= self.grid_dual_correction
+            else:
+                tan_fields[component] *= self.grid_primal_correction
 
         return tan_fields
 
@@ -379,11 +391,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def _colocated_fields(self) -> Dict[str, DataArray]:
         """For a 2D monitor data, get all E and H fields colocated to the cell boundaries in the 2D
-        plane grid.
-
-        Note
-        ----
-            The finite grid correction factors are applied and symmetry is expanded.
+        plane grid, with symmetries expanded.
         """
 
         field_components = self._in_plane
