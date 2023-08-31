@@ -336,18 +336,15 @@ def test_medium2d(log_capture):
         rtol=RTOL,
     )
 
-    # 2d geometry should raise a warning, but 3d should not
     td.Structure(medium=medium3d, geometry=td.Box(size=(1, 1, 1)))
+
+    # this should also not warn, since it could be used for override structure
+    td.Structure(medium=medium3d, geometry=td.Box(size=(1, 0, 1)))
 
     # no warnings so far
     assert_log_level(log_capture, None)
 
-    # these should give warnings
-    td.Structure(medium=medium3d, geometry=td.Box(size=(1, 0, 1)))
-    assert_log_level(log_capture, "WARNING")
-
-    log_capture.clear()
-
+    # this should give warning
     _ = medium.plot(freqs=[2e14, 3e14], ax=AX)
     plt.close()
     assert_log_level(log_capture, "WARNING")
