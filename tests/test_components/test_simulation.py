@@ -1775,6 +1775,23 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)
 
+    log_capture.clear()
+    # test warning for 2d geometry in simulation without Medium2D
+    struct = td.Structure(medium=td.Medium(), geometry=td.Box(size=(1, 0, 1)))
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[struct],
+        sources=[src],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    assert_log_level(log_capture, "WARNING")
+
 
 @pytest.mark.parametrize("normal_axis", (0, 1, 2))
 def test_pml_boxes_2D(normal_axis):

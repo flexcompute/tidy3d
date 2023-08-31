@@ -491,6 +491,29 @@ class Simulation(Box):
 
         return val
 
+    @pydantic.validator("structures", always=True)
+    def _validate_2d_geometry_has_2d_medium(cls, val, values):
+        """Warn if a geometry bounding box has zero size in a certain dimension."""
+
+        if val is None:
+            return val
+
+        for i, structure in enumerate(val):
+            if isinstance(structure.medium, Medium2D):
+                continue
+            for geom in flatten_groups(structure.geometry):
+                zero_axes = [ind for ind, ele in enumerate(geom.bounding_box.size) if ele == 0.0]
+                if len(zero_axes) > 0:
+                    log.warning(
+                        f"Structure at 'structures[{i}]' has geometry with zero size along "
+                        f"dimensions {zero_axes}, and with a medium that is not a 'Medium2D'. "
+                        "This is probably not correct, since the resulting simulation will "
+                        "depend on the details of the numerical grid. Consider either "
+                        "giving the geometry a nonzero thickness or using a 'Medium2D'."
+                    )
+
+        return val
+
     @pydantic.validator("boundary_spec", always=True)
     def _structures_not_close_pml(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
