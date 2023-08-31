@@ -63,7 +63,8 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         if np.any(frequency < fmin) or np.any(frequency > fmax):
             log.warning(
                 "frequency passed to `Medium.eps_model()`"
-                f"is outside of `Medium.frequency_range` = {self.frequency_range}"
+                f"is outside of `Medium.frequency_range` = {self.frequency_range}",
+                capture=False,
             )
         return eps_model(self, frequency)
 

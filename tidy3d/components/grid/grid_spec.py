@@ -558,7 +558,8 @@ class GridSpec(Tidy3dBaseModel):
                 log.warning(
                     f"Override structures take no effect along {axis_ind}-axis. "
                     "If intending to apply override structures to this axis, "
-                    "use 'AutoGrid'."
+                    "use 'AutoGrid'.",
+                    capture=False,
                 )
 
         grids_1d = [self.grid_x, self.grid_y, self.grid_z]

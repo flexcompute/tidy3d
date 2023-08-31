@@ -748,7 +748,8 @@ class BroadbandSource(Source, ABC):
                 f"A large number ({val}) of frequency points is used in a broadband source. "
                 "This can slow down simulation time and is only needed if the mode fields are "
                 "expected to have a very sharp frequency dependence. 'num_freqs' < 20 is "
-                "sufficient in most cases."
+                "sufficient in most cases.",
+                custom_loc=["num_freqs"],
             )
 
         return val
@@ -867,7 +868,8 @@ class AngledFieldSource(DirectionalSource, ABC):
         if np.abs(np.pi / 2 - val) < GLANCING_CUTOFF:
             log.warning(
                 "Angled source propagation axis close to glancing angle. "
-                "For best results, switch the injection axis."
+                "For best results, switch the injection axis.",
+                custom_loc=["angle_theta"],
             )
         return val
 
