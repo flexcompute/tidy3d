@@ -290,7 +290,7 @@ class Simulation(Box):
         size = values.get("size")
         sim_medium = values.get("medium")
         structures = values.get("structures")
-        for source in sources:
+        for source_ind, source in enumerate(sources):
             if not isinstance(source, PlaneWave):
                 continue
 
@@ -315,6 +315,7 @@ class Simulation(Box):
                 if num_bloch > 0:
                     cls._check_bloch_vec(
                         source=source,
+                        source_ind=source_ind,
                         bloch_vec=boundary[0].bloch_vec,
                         dim=tan_dir,
                         medium=medium,
@@ -384,6 +385,7 @@ class Simulation(Box):
                     if num_bloch == 2:
                         cls._check_bloch_vec(
                             source=source,
+                            source_ind=src_idx,
                             bloch_vec=boundary[0].bloch_vec,
                             dim=tan_dir,
                             medium=medium,
@@ -420,7 +422,8 @@ class Simulation(Box):
                 log.warning(
                     f"If the simulation is intended to be 2D in the plane normal to the "
                     f"{'xyz'[dim]} axis, using a PML or absorbing boundary along that axis "
-                    f"is incorrect. Consider using a 'Periodic' boundary along {'xyz'[dim]}."
+                    f"is incorrect. Consider using a 'Periodic' boundary along {'xyz'[dim]}.",
+                    custom_loc=["boundary_spec", "xyz"[dim]],
                 )
         return val
 
@@ -486,7 +489,8 @@ class Simulation(Box):
                             f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
                             "to simulation edges. This can cause unexpected behavior. "
                             "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit."
+                            "use td.inf as a size variable instead to make this explicit.",
+                            custom_loc=["structures", istruct],
                         )
 
         return val
@@ -537,7 +541,8 @@ class Simulation(Box):
                     f"Structure at structures[{istruct}] was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
                     "To avoid inaccurate results, please increase gap between "
-                    "any structures and PML or fully extend structure through the pml."
+                    "any structures and PML or fully extend structure through the pml.",
+                    custom_loc=["structures", istruct],
                 )
 
             for istruct, structure in enumerate(structures):
@@ -603,14 +608,22 @@ class Simulation(Box):
                     if fmin_mon < fmin_med or fmax_mon > fmax_med:
                         if medium_index == 0:
                             medium_str = "The simulation background medium"
+                            custom_loc = ["medium", "frequency_range"]
                         else:
                             medium_str = f"The medium associated with structures[{medium_index-1}]"
+                            custom_loc = [
+                                "structures",
+                                medium_index - 1,
+                                "medium",
+                                "frequency_range",
+                            ]
 
                         consolidated_logger.warning(
                             f"{medium_str} has a frequency range: ({fmin_med:2e}, {fmax_med:2e}) "
                             "(Hz) that does not fully cover the frequencies contained in "
                             f"monitors[{monitor_index}]. "
-                            "This can cause inaccuracies in the recorded results."
+                            "This can cause inaccuracies in the recorded results.",
+                            custom_loc=custom_loc,
                         )
 
         return val
@@ -647,7 +660,8 @@ class Simulation(Box):
                     consolidated_logger.warning(
                         f"monitors[{monitor_index}] contains frequencies "
                         f"outside of the simulation frequency range ({freq_min:2e}, {freq_max:2e})"
-                        "(Hz) as defined by the sources."
+                        "(Hz) as defined by the sources.",
+                        custom_loc=["monitors", monitor_index, "freqs"],
                     )
         return val
 
@@ -753,7 +767,8 @@ class Simulation(Box):
                             "far-field approximations ('far_field_approx = True') for better "
                             "precision. To insist on exact projections, consider using client-side "
                             "projections via the 'FieldProjector' class, where higher precision is "
-                            "available."
+                            "available.",
+                            custom_loc=["monitors", idx, "proj_distance"],
                         )
         return val
 
@@ -806,14 +821,21 @@ class Simulation(Box):
                             isinstance(grid_spec, UniformGrid)
                             and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
                         ):
+                            if medium_index == 0:
+                                medium_str = "the simulation background medium"
+                            else:
+                                medium_str = (
+                                    f"the medium associated with structures[{medium_index-1}]"
+                                )
+
                             consolidated_logger.warning(
                                 f"The grid step in {key} has a value of {grid_spec.dl:.4f} (um)"
                                 ", which was detected as being large when compared to the "
                                 f"central wavelength of sources[{source_index}] "
-                                f"within the simulation medium "
-                                f"associated with structures[{medium_index + 1}], given by "
+                                f"within {medium_str}, given by "
                                 f"{lambda_min:.4f} (um). To avoid inaccuracies, "
-                                "it is recommended the grid size is reduced. "
+                                "it is recommended the grid size is reduced. ",
+                                custom_loc=["grid_spec", f"grid_{key}", "dl"],
                             )
                             # TODO: warn about custom grid spec
 
@@ -916,7 +938,8 @@ class Simulation(Box):
                                 "within the simulation PML. We recommend extending structures to "
                                 "infinity or completely outside of the simulation PML to avoid "
                                 "unexpected effects when the structures are not translationally "
-                                "invariant within the PML."
+                                "invariant within the PML.",
+                                custom_loc=["structures", i],
                             )
 
     def _validate_tfsf_nonuniform_grid(self) -> None:
@@ -928,7 +951,7 @@ class Simulation(Box):
             return
 
         with log as consolidated_logger:
-            for source in self.sources:
+            for source_ind, source in enumerate(self.sources):
                 if not isinstance(source, TFSF):
                     continue
 
@@ -956,7 +979,8 @@ class Simulation(Box):
                             "scattered-field region for the total-field scattered-field (TFSF) "
                             f"source '{source.name}'. For best results, we recommended ensuring a "
                             "uniform grid in both directions tangential to the TFSF injection "
-                            f"axis, '{'xyz'[source.injection_axis]}'."
+                            f"axis, '{'xyz'[source.injection_axis]}'.",
+                            custom_loc=["sources", source_ind],
                         )
 
     """ Pre submit validation (before web.upload()) """
@@ -976,9 +1000,9 @@ class Simulation(Box):
         self._validate_tfsf_structure_intersections()
         # self._validate_run_time()
         _ = self.volumetric_structures
+        log.end_capture(self)
         if source_required and len(self.sources) == 0:
             raise SetupError("No sources in simulation.")
-        log.end_capture(self)
 
     def _validate_size(self) -> None:
         """Ensures the simulation is within size limits before simulation is uploaded."""
@@ -999,7 +1023,8 @@ class Simulation(Box):
         if num_time_steps > WARN_TIME_STEPS:
             log.warning(
                 f"Simulation has {num_time_steps:.2e} time steps. The 'run_time' may be "
-                "unnecessarily large, unless there are very long-lived resonances."
+                "unnecessarily large, unless there are very long-lived resonances.",
+                custom_loc=["run_time"],
             )
 
         num_cells_times_steps = num_time_steps * num_comp_cells
@@ -1015,13 +1040,14 @@ class Simulation(Box):
         total_size_gb = 0
         with log as consolidated_logger:
             datas = self.monitors_data_size
-            for monitor_name, monitor_size in datas.items():
+            for monitor_ind, (monitor_name, monitor_size) in enumerate(datas.items()):
                 monitor_size_gb = monitor_size / 2**30
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
                         f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
                         "Consider making it smaller, using fewer frequencies, or spatial or "
-                        "temporal downsampling using 'interval_space' and 'interval', respectively."
+                        "temporal downsampling using 'interval_space' and 'interval', respectively.",
+                        custom_loc=["monitors", monitor_ind],
                     )
 
                 total_size_gb += monitor_size_gb
@@ -1275,6 +1301,7 @@ class Simulation(Box):
     @staticmethod
     def _check_bloch_vec(
         source: SourceType,
+        source_ind: int,
         bloch_vec: float,
         dim: Axis,
         medium: MediumType,
@@ -1299,7 +1326,8 @@ class Simulation(Box):
                     "boundaries along that dimension plus an integer reciprocal "
                     "lattice vector. If using a 'DiffractionMonitor', diffraction "
                     "order 0 will not correspond to the angle of propagation "
-                    "of the source. Consider using 'BlochBoundary.from_source()'."
+                    "of the source. Consider using 'BlochBoundary.from_source()'.",
+                    custom_loc=["boundary_spec", "xyz"[dim]],
                 )
             elif not np.isclose(test_val % 1, 0):
                 # the given Bloch vector is neither equal to the expected value, nor
@@ -1310,7 +1338,8 @@ class Simulation(Box):
                     "difference between the expected and provided values in "
                     "bandstructure units, up to an integer offset, is greater than "
                     "1e-6. Consider using ``BlochBoundary.from_source()``, or "
-                    "double-check that it was defined correctly."
+                    "double-check that it was defined correctly.",
+                    custom_loc=["boundary_spec", "xyz"[dim]],
                 )
 
     """ Plotting """

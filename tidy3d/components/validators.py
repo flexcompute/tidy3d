@@ -171,10 +171,11 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
                     f"'{geometric_object}' (at `simulation.{field_name}[{position_index}]`) "
                     "is completely outside of simulation domain."
                 )
+                custom_loc = [field_name, position_index]
 
                 if error:
                     raise SetupError(message)
-                log.warning(message)
+                log.warning(message, custom_loc=custom_loc)
 
         return val
 
@@ -217,7 +218,7 @@ def warn_if_dataset_none(field_name: str):
         """Warn if the DataArrays fail to load."""
         if isinstance(val, dict):
             if any((v in DATA_ARRAY_MAP for _, v in val.items() if isinstance(v, str))):
-                log.warning(f"Loading {field_name} without data.")
+                log.warning(f"Loading {field_name} without data.", custom_loc=[field_name])
                 return None
         return val
 
@@ -315,14 +316,16 @@ def validate_parameter_perturbation(
                                     log.warning(
                                         f"'{part_name}({base_field_name}{ind_pointer})' could "
                                         f"become less than '{min_allowed}' for a perturbation "
-                                        "medium."
+                                        "medium.",
+                                        custom_loc=[field_name],
                                     )
 
                                 if max_allowed is not None and part_func(max_val) > max_allowed:
                                     log.warning(
                                         f"'{part_name}({base_field_name}{ind_pointer})' could "
                                         f"become greater than '{max_allowed}' for a perturbation "
-                                        "medium."
+                                        "medium.",
+                                        custom_loc=[field_name],
                                     )
         return val
 

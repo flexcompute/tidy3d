@@ -209,7 +209,14 @@ class Logger:
                 self._parse_warning_capture(current_loc=current_loc, stack_item=child_stack)
 
     def _log(
-        self, level: int, level_name: str, message: str, *args, log_once: bool = False, custom_loc: List = []
+        self,
+        level: int,
+        level_name: str,
+        message: str,
+        *args,
+        log_once: bool = False,
+        custom_loc: List = None,
+        capture: bool = True,
     ) -> None:
         """Distribute log messages to all handlers"""
 
@@ -224,7 +231,9 @@ class Logger:
             composed_message = str(message)
 
         # Capture all messages (even if suppressed later)
-        if self._stack:
+        if self._stack and capture:
+            if custom_loc is None:
+                custom_loc = []
             self._stack[-1]["messages"].append((level_name, composed_message, custom_loc))
 
         # Check global cache if requested
@@ -262,9 +271,24 @@ class Logger:
         """Log (message) % (args) at info level"""
         self._log(_level_value["INFO"], "INFO", message, *args, log_once=log_once)
 
-    def warning(self, message: str, *args, log_once: bool = False) -> None:
+    def warning(
+        self,
+        message: str,
+        *args,
+        log_once: bool = False,
+        custom_loc: List = None,
+        capture: bool = True,
+    ) -> None:
         """Log (message) % (args) at warning level"""
-        self._log(_level_value["WARNING"], "WARNING", message, *args, log_once=log_once)
+        self._log(
+            _level_value["WARNING"],
+            "WARNING",
+            message,
+            *args,
+            log_once=log_once,
+            custom_loc=custom_loc,
+            capture=capture,
+        )
 
     def error(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at error level"""
