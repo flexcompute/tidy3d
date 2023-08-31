@@ -26,7 +26,6 @@ from ..constants import inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 
-
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8
 # when checking if custom data spans the source plane, allow for a small tolerance
@@ -98,13 +97,29 @@ class SourceTime(ABC, Tidy3dBaseModel):
             time_amps = np.real(time_amps)
 
         # Cut to only relevant times
-        count_times = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
-        time_amps = time_amps[count_times]
-        times_cut = times[count_times]
+        relevant_time_inds = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
+        # find first and last index where the filter is True
+        start_ind = relevant_time_inds[0][0]
+        stop_ind = relevant_time_inds[0][-1]
+        time_amps = time_amps[start_ind:stop_ind]
+        times_cut = times[start_ind:stop_ind]
 
-        # (Nf, Nt_cut) matrix that gives DFT when matrix multiplied with signal
-        dft_matrix = np.exp(2j * np.pi * freqs[:, None] * times_cut) / np.sqrt(2 * np.pi)
-        return dt * dft_matrix @ time_amps
+        # only need to compute DTFT kernel for distinct dts
+        # usually, there is only one dt, if times is simulation time mesh
+        dts = np.diff(times_cut)
+        dts_unique, kernel_indices = np.unique(dts, return_inverse=True)
+
+        dft_kernels = [np.exp(2j * np.pi * freqs * curr_dt) for curr_dt in dts_unique]
+        running_kernel = np.exp(2j * np.pi * freqs * times_cut[0])
+        dft = np.zeros(len(freqs), dtype=complex)
+        for amp, kernel_index in zip(time_amps, kernel_indices):
+            dft += running_kernel * amp
+            running_kernel *= dft_kernels[kernel_index]
+
+        # kernel_indices was one index shorter than time_amps
+        dft += running_kernel * time_amps[-1]
+
+        return dt * dft / np.sqrt(2 * np.pi)
 
     @add_ax_if_none
     def plot(self, times: ArrayFloat1D, val: PlotVal = "real", ax: Ax = None) -> Ax:
