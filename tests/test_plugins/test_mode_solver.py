@@ -18,9 +18,10 @@ from tidy3d.web.environment import Env
 from tidy3d.version import __version__
 
 
-WAVEGUIDE = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=td.Medium(permittivity=4.0))
+WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
+WAVEGUIDE = td.Structure(geometry=td.Box(size=(1.5, 100, 1)), medium=WG_MEDIUM)
 PLANE = td.Box(center=(0, 0, 0), size=(5, 0, 5))
-SIM_SIZE = (5, 5, 5)
+SIM_SIZE = (4, 3, 3)
 SRC = td.PointDipole(
     center=(0, 0, 0), source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13), polarization="Ex"
 )
@@ -173,6 +174,34 @@ def compare_colocation(ms):
             assert np.allclose(coords1, data_at_boundaries[key].coords[dim])
 
 
+def verify_pol_fraction(ms):
+    """Verify that polarization fraction was successfully filtered."""
+    pol_frac = ms.data.pol_fraction
+    pol_frac_wg = ms.data.pol_fraction_waveguide
+    filter_pol = ms.mode_spec.filter_pol
+
+    # print(pol_frac.isel(mode_index=0))
+    # print(pol_frac_wg.isel(mode_index=0))
+    # import matplotlib.pyplot as plt
+
+    # f, ax = plt.subplots(3, 3, tight_layout=True, figsize=(10, 6))
+    # for mode_index in range(3):
+    #     ms.plot_field("Ex", "abs", mode_index=mode_index, f=ms.freqs[0], ax=ax[mode_index, 0])
+    #     ms.plot_field("Ey", "abs", mode_index=mode_index, f=ms.freqs[0], ax=ax[mode_index, 1])
+    #     ms.plot_field("Ez", "abs", mode_index=mode_index, f=ms.freqs[0], ax=ax[mode_index, 2])
+    # plt.show()
+
+    if filter_pol is not None:
+        assert np.all(pol_frac[filter_pol].isel(mode_index=0) > 0.5)
+        other_pol = "te" if filter_pol == "tm" else "tm"
+        # There is no guarantee that the waveguide polarization fraction is also predominantly
+        # the same as the standard definition, but it is true in the cases we test here
+        assert np.all(
+            pol_frac_wg[filter_pol].isel(mode_index=0).values
+            > pol_frac_wg[other_pol].isel(mode_index=0).values
+        )
+
+
 def test_mode_solver_validation():
     """Test invalidate mode solver setups."""
 
@@ -239,7 +268,7 @@ def test_mode_solver_simple(mock_remote_api, local):
         grid_spec=td.GridSpec(wavelength=1.0),
         structures=[WAVEGUIDE],
         run_time=1e-12,
-        symmetry=(1, 0, -1),
+        symmetry=(0, 0, 1),
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[SRC],
     )
@@ -264,6 +293,9 @@ def test_mode_solver_simple(mock_remote_api, local):
 
     if local:
         compare_colocation(ms)
+        verify_pol_fraction(ms)
+        dataframe = ms.data.to_dataframe()
+
     else:
         _ = msweb.run(ms)
 
@@ -334,6 +366,70 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         assert n_eff[1] < 5
 
 
+def test_mode_solver_straight_vs_angled():
+    """Compare results for a straight and angled nominally identical waveguides.
+    Note: results do not match perfectly because of the numerical grid.
+    """
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.auto(wavelength=1.0, min_steps_per_wvl=16),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(num_modes=5, group_index_step=True)
+    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+    )
+
+    angle = np.pi / 6
+    width, height = WAVEGUIDE.geometry.size[0], WAVEGUIDE.geometry.size[2]
+    vertices = np.array(
+        [[-width / 2, -100, 0], [width / 2, -100, 0], [width / 2, 100, 0], [-width / 2, 100, 0]]
+    )
+    vertices = PLANE.rotate_points(vertices.T, axis=[0, 0, 1], angle=-angle).T
+    vertices = [verts[:2] for verts in vertices]
+    wg_angled = td.Structure(
+        geometry=td.PolySlab(vertices=vertices, slab_bounds=(-height / 2, height / 2)),
+        medium=WG_MEDIUM,
+    )
+    mode_spec_angled = mode_spec.updated_copy(angle_theta=angle)
+    src_angled = td.ModeSource(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        center=PLANE.center,
+        size=PLANE.size,
+        mode_spec=mode_spec_angled,
+        direction="-",
+        mode_index=0,
+    )
+    sim_angled = simulation.updated_copy(structures=[wg_angled], sources=[src_angled])
+    # sim_angled.plot(z=0)
+    # plt.show()
+
+    ms_angled = ModeSolver(
+        simulation=sim_angled,
+        plane=PLANE,
+        mode_spec=mode_spec_angled,
+        freqs=freqs,
+        direction="-",
+    )
+
+    for key, val in ms.data.modes_info.items():
+        tol = 1e-2
+        if key == "mode area":
+            tol = 2.5e-2 # mode area has higher error
+        # print(val, ms_angled.data.modes_info[key])
+        print(np.amax(np.abs(val - ms_angled.data.modes_info[key])))
+        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol, atol=tol)
+
+
 def test_mode_solver_angle_bend():
     """Run mode solver with angle and bend and symmetry"""
     simulation = td.Simulation(
@@ -360,6 +456,8 @@ def test_mode_solver_angle_bend():
         simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
     )
     compare_colocation(ms)
+    verify_pol_fraction(ms)
+    dataframe = ms.data.to_dataframe()
 
     # Plot field
     _, ax = plt.subplots(1)
@@ -393,6 +491,8 @@ def test_mode_solver_2D():
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
     )
     compare_colocation(ms)
+    verify_pol_fraction(ms)
+    dataframe = ms.data.to_dataframe()
 
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -412,6 +512,8 @@ def test_mode_solver_2D():
         simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="+"
     )
     compare_colocation(ms)
+    # verify_pol_fraction(ms)
+    dataframe = ms.data.to_dataframe()
 
     # The simulation and the mode plane are both 0D along the same dimension
     simulation = td.Simulation(
@@ -423,6 +525,7 @@ def test_mode_solver_2D():
     )
     ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     compare_colocation(ms)
+    verify_pol_fraction(ms)
 
 
 @pytest.mark.parametrize("local", [True, False])

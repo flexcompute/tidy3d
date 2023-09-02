@@ -3,11 +3,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [Unreleased]
+
+### Added
+- `ModeSolverData.pol_fraction` and `ModeSolverData.pol_fraction_waveguide` properties to compute polarization fraction of modes using two different definitions.
+- `ModeSolverData.to_dataframe()` and `ModeSolverData.modes_info` for a convenient summary of various modal properties of the computed modes.
 
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.
 - Support to load and save compressed HDF5 files (`.hdf5.gz`) directly from `BaseModel`.
+
+### Fixed
+- Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking
+the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
 
 ## [2.4.0] - 2023-9-11
 

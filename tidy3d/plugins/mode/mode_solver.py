@@ -267,7 +267,6 @@ class ModeSolver(Tidy3dBaseModel):
             eps_spec=eps_spec,
             **data_dict,
         )
-        self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
 
         # Colocate to grid boundaries if requested
         if self.colocate:
@@ -300,9 +299,31 @@ class ModeSolver(Tidy3dBaseModel):
             }
         )
 
+        # filter polarization if requested
+        if self.mode_spec.filter_pol is not None:
+            pol_frac = mode_solver_data.pol_fraction
+            for ifreq in range(len(self.freqs)):
+                te_frac = pol_frac.te.isel(f=ifreq)
+                if self.mode_spec.filter_pol == "te":
+                    sort_inds = np.concatenate(
+                        (np.where(te_frac >= 0.5)[0], np.where(te_frac < 0.5)[0])
+                    )
+                elif self.mode_spec.filter_pol == "tm":
+                    sort_inds = np.concatenate(
+                        (np.where(te_frac <= 0.5)[0], np.where(te_frac > 0.5)[0])
+                    )
+                for data in list(mode_solver_data.field_components.values()) + [
+                    mode_solver_data.n_complex,
+                    mode_solver_data.grid_primal_correction,
+                    mode_solver_data.grid_dual_correction,
+                ]:
+                    data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
+
         # sort modes if requested
         if self.mode_spec.track_freq and len(self.freqs) > 1:
             mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+
+        self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
 
         return mode_solver_data
 
@@ -402,7 +423,6 @@ class ModeSolver(Tidy3dBaseModel):
 
         The fields are rotated from propagation coordinates back to global coordinates.
         """
-
         solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
@@ -435,7 +455,7 @@ class ModeSolver(Tidy3dBaseModel):
     def _process_fields(
         self, mode_fields: ArrayComplex4D, mode_index: pydantic.NonNegativeInt
     ) -> Tuple[FIELD, FIELD]:
-        """Transform solver fields to simulation axes, set gauge, and check decay at boundaries."""
+        """Transform solver fields to simulation axes and set gauge."""
 
         # Separate E and H fields (in solver coordinates)
         E, H = mode_fields[..., mode_index]
