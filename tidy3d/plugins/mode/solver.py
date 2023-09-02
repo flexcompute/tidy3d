@@ -64,7 +64,6 @@ class EigSolver(Tidy3dBaseModel):
             solver's plane ("diagonal", "tensorial_real", or "tensorial_complex").
         """
 
-        # freq += 0.0001j
         num_modes = mode_spec.num_modes
         bend_radius = mode_spec.bend_radius
         bend_axis = mode_spec.bend_axis
@@ -188,22 +187,6 @@ class EigSolver(Tidy3dBaseModel):
             mode_spec.precision,
             direction,
         )
-
-        # Filter polarization if needed
-        if mode_spec.filter_pol is not None:
-            te_int = np.sum(np.abs(E[0]) ** 2, axis=0) / np.sum(np.abs(E[:2]) ** 2, axis=(0, 1))
-            if mode_spec.filter_pol == "te":
-                sort_inds = np.concatenate(
-                    (np.nonzero(te_int >= 0.5)[0], np.nonzero(te_int < 0.5)[0])
-                )
-            elif mode_spec.filter_pol == "tm":
-                sort_inds = np.concatenate(
-                    (np.nonzero(te_int <= 0.5)[0], np.nonzero(te_int > 0.5)[0])
-                )
-            E = E[..., sort_inds]
-            H = H[..., sort_inds]
-            neff = neff[..., sort_inds]
-            keff = keff[..., sort_inds]
 
         # Transform back to original axes, E = J^T E'
         E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)

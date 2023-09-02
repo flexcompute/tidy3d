@@ -8,6 +8,7 @@ import warnings
 import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
+from pandas import DataFrame
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
@@ -20,7 +21,7 @@ from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
-from ..types import EpsSpecType
+from ..types import EpsSpecType, Literal
 from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
@@ -491,7 +492,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         num = (intensity * d_area).sum(dim=d_area.dims) ** 2
         den = (intensity**2 * d_area).sum(dim=d_area.dims)
 
-        return FreqModeDataArray(num / den)
+        area = num / den
+        if hasattr(self.monitor, "mode_spec"):
+            area *= np.cos(self.monitor.mode_spec.angle_theta)
+
+        return FreqModeDataArray(area)
 
     def dot(
         self, field_data: Union[FieldData, ModeSolverData], conjugate: bool = True
@@ -1109,7 +1114,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         Returns
         -------
         :class:`.ModeSolverData`
-            Filtered data with calulated group index.
+            Filtered data with calculated group index.
         """
 
         freqs = self.n_complex.coords["f"].values
@@ -1167,6 +1172,124 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         new_direction = "+" if mnt.direction == "-" else "-"
         new_data["monitor"] = mnt.updated_copy(direction=new_direction)
         return self.copy(update=new_data)
+
+    def _colocated_propagation_axes_field(self, field_name: Literal["E", "H"]) -> xr.DataArray:
+        """Collect a field DataArray containing all 3 field components and rotate from frame
+        with normal axis along z to frame with propagation axis along z.
+        """
+        tan_dims = self._tangential_dims
+        normal_dim = "xyz"[self.monitor.zero_dims[0]]
+        fields = self._colocated_fields
+        mode_spec = self.monitor.mode_spec
+
+        # fields as a (3, ...) numpy array ordered as [tangential1, tagential2, normal]
+        field = [fields[field_name + dim].values for dim in tan_dims]
+        field = np.array(field + [fields[field_name + normal_dim].values])
+
+        # rotate axes
+        if mode_spec.angle_phi != 0:
+            field = self.monitor.rotate_points(field, [0, 0, 1], -mode_spec.angle_phi)
+        if mode_spec.angle_theta != 0:
+            field = self.monitor.rotate_points(field, [0, 1, 0], -mode_spec.angle_theta)
+
+        # new coords for the (3, ...) array
+        coords = {"component": [0, 1, 2]}
+        # fields are colocated, so all components should have the same coords
+        for dim in fields["Ex"].dims:
+            coords.update({dim: fields["Ex"].coords[dim]})
+
+        return xr.DataArray(data=field, coords=coords)
+
+    @cached_property
+    def pol_fraction(self) -> xr.Dataset:
+        """Compute the TE and TM polarization fraction defined as the field intensity along the
+        first or the second of the two tangential axes. More precisely, if ``E1`` and ``E2`` are
+        the electric field components along the two tangential axes, the TE fraction is defined as
+        ``integrate(E1.abs**2) / integrate(E1.abs**2 + E2.abs**2)``, and the ``TM`` fraction
+        is equal to one minus the TE fraction. The tangential axes are defined by popping the
+        normal axis from the list of ``x, y, z``, so e.g. ``x`` and ``z`` for propagation
+        in the ``y`` direction.
+        """
+
+        tan_dims = self._tangential_dims
+        e_field = self._colocated_propagation_axes_field("E")
+        diff_area = self._diff_area
+        tm_int = (diff_area * np.abs(e_field.sel(component=1, drop=True)) ** 2).sum(dim=tan_dims)
+        te_int = (diff_area * np.abs(e_field.sel(component=0, drop=True)) ** 2).sum(dim=tan_dims)
+        te_frac = te_int / (te_int + tm_int)
+
+        return xr.Dataset(data_vars={"te": te_frac, "tm": 1 - te_frac})
+
+    @cached_property
+    def pol_fraction_waveguide(self) -> xr.Dataset:
+        """Compute the TE and TM polarization fraction using the waveguide definition. If ``E1`` and
+        ``E2`` are the electric field components along the two tangential axes and ``En`` is the
+        component along the propagation direction, the TE fraction is defined as
+        ``1 - integrate(En.abs**2) / integrate(E1.abs**2 + E2.abs**2 + En.abs**2)``,
+        and the ``TM`` fraction is defined as
+        ``1 - integrate(Hn.abs**2) / integrate(H1.abs**2 + H2.abs**2 + Hn.abs**2)``,
+        with ``H`` denoting the magnetic field components.
+
+        Note
+        ----
+            The waveguide TE and TM fractions do not sum to one. For example, TEM modes that
+            are completely transverse (zero electric and magnetic field in the propagation
+            direction) have TE fraction and TM fraction both equal to one.
+        """
+
+        tan_dims = self._tangential_dims
+        e_field = self._colocated_propagation_axes_field("E")
+        h_field = self._colocated_propagation_axes_field("H")
+        diff_area = self._diff_area
+
+        # te fraction
+        field_int = [np.abs(e_field.sel(component=ind, drop=True)) ** 2 for ind in range(3)]
+        norm_int = (diff_area * field_int[2]).sum(dim=tan_dims)
+        tot_int = norm_int + (diff_area * (field_int[0] + field_int[1])).sum(dim=tan_dims)
+        te_frac = 1 - norm_int / tot_int
+
+        # tm fraction
+        field_int = [np.abs(h_field.sel(component=ind, drop=True)) ** 2 for ind in range(3)]
+        norm_int = (diff_area * field_int[2]).sum(dim=tan_dims)
+        tot_int = norm_int + (diff_area * (field_int[0] + field_int[1])).sum(dim=tan_dims)
+        tm_frac = 1 - norm_int / tot_int
+
+        return xr.Dataset(data_vars={"te": te_frac, "tm": tm_frac})
+
+    @property
+    def modes_info(self) -> xr.Dataset:
+        """Dataset collecting various properties of the stored modes."""
+
+        lambda_cm = C_0 / self.k_eff.f / 1e4
+        loss_db_cm = 20 * 2 * np.pi * np.log10(np.e) * self.k_eff / lambda_cm
+
+        info = {
+            "wavelength": C_0 / self.n_eff.f,
+            "n eff": self.n_eff,
+            "k eff": self.k_eff,
+            "loss (dB/cm)": loss_db_cm,
+            f"TE (E{self._tangential_dims[0]}) fraction": self.pol_fraction["te"],
+            "wg TE fraction": self.pol_fraction_waveguide["te"],
+            "wg TM fraction": self.pol_fraction_waveguide["tm"],
+            "mode area": self.mode_area,
+            "group index": self.n_group,
+        }
+
+        return xr.Dataset(data_vars=info)
+
+    def to_dataframe(self) -> DataFrame:
+        """xarray-like method to export the ``modes_info`` into a pandas dataframe which is e.g.
+        simple to visualize as a table."""
+
+        dataset = self.modes_info
+        drop = []
+
+        if dataset["group index"] is None:
+            drop.append("group index")
+        if np.all(dataset["loss (dB/cm)"] == 0):
+            drop.append("loss (dB/cm)")
+
+        return dataset.drop_vars(drop).to_dataframe()
 
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
