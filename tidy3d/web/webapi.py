@@ -324,7 +324,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
             if time_steps < 1000:
                 time_steps_str = f"{time_steps}"
-            elif 1000 <= grid_points < 1000 * 1000:
+            elif 1000 <= time_steps < 1000 * 1000:
                 time_steps_str = f"{time_steps / 1000}K"
             else:
                 time_steps_str = f"{time_steps / 1000 / 1000}M"

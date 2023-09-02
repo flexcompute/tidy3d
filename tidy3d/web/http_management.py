@@ -63,6 +63,7 @@ def api_key_auth(request: requests.request) -> requests.request:
         )
     request.headers["simcloud-api-key"] = key
     request.headers["tidy3d-python-version"] = __version__
+    request.headers["source"] = "Python"
     return request
 
 
