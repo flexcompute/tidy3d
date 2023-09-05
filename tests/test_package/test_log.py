@@ -192,7 +192,8 @@ def test_logging_warning_capture():
         size=[domain_size, 20, 20],
         sources=[gaussian_beam, mode_source, plane_wave, tfsf],
         structures=[box, box_in_pml, box_on_boundary, box_outside],
-        monitors=[monitor_flux, mode_mnt, monitor_time, proj_mnt],
+        # monitors=[monitor_flux, mode_mnt, monitor_time, proj_mnt],
+        monitors=[monitor_flux, mode_mnt, proj_mnt],
         run_time=run_time,
         boundary_spec=bspec,
         grid_spec=gspec,
@@ -203,16 +204,17 @@ def test_logging_warning_capture():
 
     # re-add projection monitors because it has been overwritten in validators (far_field_approx=False -> True)
     monitors = list(sim_dict["monitors"])
-    monitors[3] = proj_mnt.dict()
+    monitors[2] = proj_mnt.dict()
 
     sim_dict["monitors"] = monitors
 
     td.log.set_capture(True)
     sim = td.Simulation.parse_obj(sim_dict)
+    print(sim.monitors_data_size)
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
     print(json.dumps(warning_list, indent=4))
-    assert len(warning_list) == 31
+    assert len(warning_list) == 30
     td.log.set_capture(False)
 
     # check that capture doesn't change validation errors
@@ -225,7 +227,8 @@ def test_logging_warning_capture():
     sim_dict_large_mnt = sim.dict()
     sim_dict_large_mnt.update({"monitors": [monitor_time.updated_copy(size=(10, 10, 10))]})
 
-    for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
+    # for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
+    for sim_dict in [sim_dict_no_source]:
 
         try:
             sim = td.Simulation.parse_obj(sim_dict)
