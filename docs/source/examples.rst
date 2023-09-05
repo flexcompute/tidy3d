@@ -20,7 +20,7 @@ Tidy3D Basics
     notebooks/Simulation
     notebooks/Primer
 
-Feature Tututorials
+Feature Tutorials
 -------------------
 
 Structures and Materials
