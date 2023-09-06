@@ -6,6 +6,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
+from ..utils import assert_log_level, log_capture
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -268,7 +269,7 @@ def test_broadband_source():
         )
 
 
-def test_custom_source_time():
+def test_custom_source_time(log_capture):
     ts = np.linspace(0, 30, 1001)
     amp_time = ts / max(ts)
 
@@ -276,31 +277,22 @@ def test_custom_source_time():
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=amp_time, dt=ts[1] - ts[0])
     assert np.allclose(cst.amp_time(ts), amp_time * np.exp(-1j * 2 * np.pi * ts), rtol=0, atol=ATOL)
 
-    # test single value validation error
-    with pytest.raises(pydantic.ValidationError):
-        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
-        dataset = td.components.data.dataset.TimeDataset(values=vals)
-        cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=1, fwidth=0.1)
-        assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
-
     # test interpolation
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
     assert np.allclose(
         cst.amp_time(0.09), [0.9 * np.exp(-1j * 2 * np.pi * 0.09)], rtol=0, atol=ATOL
     )
 
-    # test sampling warning
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
+    # test out of range handling
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+    monitor = td.FieldMonitor(size=(td.inf, td.inf, 0), freqs=[1], name="field")
     sim = td.Simulation(
         size=(10, 10, 10),
         run_time=1e-12,
         grid_spec=td.GridSpec.uniform(dl=0.1),
         sources=[source],
+        normalize_index=None,
     )
-
-    # test out of range handling
-    vals = [1]
     cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=[0, 1], dt=sim.dt)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
     sim = sim.updated_copy(sources=[source])
@@ -308,3 +300,20 @@ def test_custom_source_time():
     assert np.allclose(
         cst.amp_time(sim.tmesh[1:]), np.exp(-1j * 2 * np.pi * sim.tmesh[1:]), rtol=0, atol=ATOL
     )
+
+    assert_log_level(log_capture, None)
+
+    # test normalization warning
+    sim = sim.updated_copy(normalize_index=0)
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+    source = source.updated_copy(source_time=td.ContinuousWave(freq0=1, fwidth=0.1))
+    sim = sim.updated_copy(sources=[source])
+    assert_log_level(log_capture, "WARNING")
+
+    # test single value validation error
+    with pytest.raises(pydantic.ValidationError):
+        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
+        dataset = td.components.data.dataset.TimeDataset(values=vals)
+        cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=1, fwidth=0.1)
+        assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)

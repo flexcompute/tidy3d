@@ -214,6 +214,22 @@ SIM_FULL = td.Simulation(
             ),
         ),
         td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=td.Medium(
+                nonlinear_spec=td.NonlinearSpec(
+                    num_iters=10,
+                    models=[
+                        td.NonlinearSusceptibility(chi3=0.1),
+                        td.TwoPhotonAbsorption(beta=1),
+                        td.KerrNonlinearity(n2=1),
+                    ],
+                )
+            ),
+        ),
+        td.Structure(
             geometry=td.PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),

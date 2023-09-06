@@ -6,9 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added support for two-photon absorption via `TwoPhotonAbsorption` class. Added `KerrNonlinearity` that implements Kerr effect without third-harmonic generation.
 
 ### Changed
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
+- API for specifying one or more nonlinear models via `NonlinearSpec.models`.
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
@@ -32,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - python 3.7 no longer tested nor supported.
 - Removed warning that monitors now have `colocate=True` by default.
 - If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
+- Remove warning that monitors now have `colocate=True` by default.
 
 ### Fixed
 - If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.

@@ -675,9 +675,63 @@
                 "frequency_range": null,
                 "allow_gain": false,
                 "nonlinear_spec": {
-                    "numiters": 20,
                     "type": "NonlinearSusceptibility",
-                    "chi3": 0.1
+                    "chi3": 0.1,
+                    "numiters": 20
+                },
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "Medium",
+                "permittivity": 1.0,
+                "conductivity": 0.0
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": {
+                    "models": [
+                        {
+                            "type": "NonlinearSusceptibility",
+                            "chi3": 0.1,
+                            "numiters": null
+                        },
+                        {
+                            "type": "TwoPhotonAbsorption",
+                            "beta": {
+                                "real": 1.0,
+                                "imag": 0.0
+                            },
+                            "n0": null
+                        },
+                        {
+                            "type": "KerrNonlinearity",
+                            "n2": {
+                                "real": 1.0,
+                                "imag": 0.0
+                            },
+                            "n0": null
+                        }
+                    ],
+                    "num_iters": 10,
+                    "type": "NonlinearSpec"
                 },
                 "modulation_spec": null,
                 "heat_spec": null,
