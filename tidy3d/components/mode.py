@@ -5,7 +5,7 @@ from typing import Tuple, Union
 import pydantic.v1 as pd
 import numpy as np
 
-from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF
+from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF, fp_eps
 from .base import Tidy3dBaseModel
 from .types import Axis2D, Literal, TrackFreq
 from ..log import log
@@ -148,4 +148,14 @@ class ModeSpec(Tidy3dBaseModel):
                     "Group index calculation without mode tracking can lead to incorrect results "
                     "around mode crossings. Consider setting 'track_freq' to 'central'."
                 )
+
+            # multiply by 5 to be safe
+            if values["group_index_step"] < 5 * fp_eps and values["precision"] == "single":
+                log.warning(
+                    "Group index step is too small! "
+                    "The results might be fully corrupted by numerical errors. "
+                    "For more accurate results, please consider using 'double' precision, "
+                    "or increasing the value of 'group_index_step'."
+                )
+
         return values

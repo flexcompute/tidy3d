@@ -12,6 +12,7 @@ from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
+from ..utils import assert_log_level, log_capture
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.environment import Env
 from tidy3d.version import __version__
@@ -202,6 +203,30 @@ def test_mode_solver_validation():
         freqs=[1e12],
         direction="+",
     )
+
+
+@pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
+def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
+    """Test mode solver setups issuing warnings."""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+        group_index_step=group_index_step,
+    )
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=[1e12],
+        direction="+",
+    )
+    assert_log_level(log_capture, log_level)
 
 
 @pytest.mark.parametrize("local", [True, False])
