@@ -263,14 +263,12 @@ def make_sim(
         size=(2, 0, 2),
         freqs=[FREQ0],
         name=MNT_NAME + "3",
-        colocate=False,
     )
 
     output_mnt4 = td.FieldMonitor(
         size=(0, 0, 0),
         freqs=[FREQ0],
         name=MNT_NAME + "4",
-        colocate=False,
     )
 
     extraneous_field_monitor = td.FieldMonitor(
@@ -1029,14 +1027,12 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
             size=(2, 0, 2),
             freqs=[FREQ0],
             name=MNT_NAME + "3",
-            colocate=False,
         )
 
         output_mnt4 = td.FieldMonitor(
             size=(0, 0, 0),
             freqs=[FREQ0],
             name=MNT_NAME + "4",
-            colocate=False,
         )
 
         sim = JaxSimulation(

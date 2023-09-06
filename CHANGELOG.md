@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extended lower limit of frequency range for `Graphene` to zero.
 - Improved warnings for `Medium2D`.
 - Improved mode solver handling of 1D problem to avoid singular matrix issue.
+- Set `colocate=False` automatically in output `FieldMonitor` objects in adjoint plugin, warning instead of erroring for backwards compatibility.
+
 
 ## [2.4.0rc2] - 2023-8-21
 
