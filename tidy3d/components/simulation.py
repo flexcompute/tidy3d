@@ -26,7 +26,7 @@ from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Per
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource, CustomSourceTime
+from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor
@@ -821,6 +821,21 @@ class Simulation(AbstractSimulation):
             if sources[val].source_time.amplitude == 0:
                 raise ValidationError("Cannot set 'normalize_index' to source with zero amplitude.")
 
+            # Warn if normalizing by a ContinuousWave or CustomSourceTime source, if frequency-domain monitors are present.
+            if isinstance(sources[val].source_time, ContinuousWave):
+                log.warning(
+                    f"'normalize_index' {val} is a source with 'ContinuousWave' "
+                    "time dependence. Normalizing frequency-domain monitors by this "
+                    "source is not meaningful because field decay does not occur. "
+                    "Consider setting 'normalize_index' to 'None' instead."
+                )
+            if isinstance(sources[val].source_time, CustomSourceTime):
+                log.warning(
+                    f"'normalize_index' {val} is a source with 'CustomSourceTime' "
+                    "time dependence. Normalizing frequency-domain monitors by this "
+                    "source is only meaningful if field decay occurs."
+                )
+
         return val
 
     """ Post-init validators """
@@ -830,6 +845,7 @@ class Simulation(AbstractSimulation):
         _ = self.scene
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
+        self._validate_nonlinear_specs()
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -900,6 +916,15 @@ class Simulation(AbstractSimulation):
                             f"axis, '{'xyz'[source.injection_axis]}'.",
                             custom_loc=["sources", source_ind],
                         )
+
+    def _validate_nonlinear_specs(self) -> None:
+        """Run :class:`.NonlinearSpec` validators that depend on knowing the central
+        frequencies of the sources."""
+        freqs = np.array([source.source_time.freq0 for source in self.sources])
+        for medium in self.scene.mediums:
+            if medium.nonlinear_spec is not None:
+                for model in medium._nonlinear_models:
+                    model._validate_medium_freqs(medium, freqs)
 
     """ Pre submit validation (before web.upload()) """
 

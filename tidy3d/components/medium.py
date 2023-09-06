@@ -14,7 +14,7 @@ from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
-from .types import Axis, TensorReal
+from .types import Axis, TensorReal, Complex
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
@@ -22,6 +22,7 @@ from .geometry.base import Geometry
 from .validators import validate_name_str, validate_parameter_perturbation
 from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps, HBAR
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
+from ..constants import WATT, VOLT
 from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
@@ -36,7 +37,8 @@ FREQ_EVAL_INF = 1e50
 FILL_VALUE = "extrapolate"
 
 # cap on number of nonlinear iterations
-NONLINEAR_MAX_NUMITERS = 100
+NONLINEAR_MAX_NUM_ITERS = 100
+NONLINEAR_DEFAULT_NUM_ITERS = 5
 
 # Range for checking upper bound of Im[eps], in addition to extrema method.
 # The range is in unit of eV and it's in log scale.
@@ -51,7 +53,6 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     @functools.wraps(eps_model)
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
-
         # evaluate infs and None as FREQ_EVAL_INF
         is_inf_scalar = isinstance(frequency, float) and np.isinf(frequency)
         if frequency is None or is_inf_scalar:
@@ -83,54 +84,96 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 """ Medium Definitions """
 
 
-class NonlinearSpec(ABC, Tidy3dBaseModel):
-    """Abstract specification for adding a nonlinearity to a medium.
+class NonlinearModel(ABC, Tidy3dBaseModel):
+    """Abstract model for a nonlinear material response.
+    Used as part of a :class:`.NonlinearSpec`."""
 
-     Note
-    ----
-    The nonlinear constitutive relation is solved iteratively; it may not converge
-    for strong nonlinearities. Increasing `numiters` can help with convergence.
-    """
-
-    numiters: pd.PositiveInt = pd.Field(
-        1,
-        title="Number of iterations",
-        description="Number of iterations for solving nonlinear constitutive relation.",
-    )
-
-    @pd.validator("numiters", always=True)
-    def _validate_numiters(cls, val):
-        """Check that numiters is not too large."""
-        if val > NONLINEAR_MAX_NUMITERS:
+    def _validate_medium_type(self, medium: AbstractMedium):
+        """Check that the model is compatible with the medium."""
+        if isinstance(medium, AbstractCustomMedium):
             raise ValidationError(
-                "'NonlinearSpec.numiters' must be less than "
-                f"{NONLINEAR_MAX_NUMITERS}, currently {val}."
+                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
+                f"for medium class '{type(medium).__name__}'."
             )
-        return val
+        if medium.time_modulated:
+            raise ValidationError(
+                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
+                f"for time-modulated medium class '{type(medium).__name__}'."
+            )
+        if not isinstance(medium, (Medium, DispersiveMedium)):
+            raise ValidationError(
+                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
+                f"for medium class '{type(medium).__name__}'."
+            )
+
+    def _validate_medium(self, medium: AbstractMedium):
+        """Any additional validation that depends on the medium"""
+        pass
+
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+        """Any additional validation that depends on the central frequencies of the sources."""
+        pass
+
+    def _get_n0(
+        self,
+        n0: complex,
+        medium: AbstractMedium,
+        freqs: List[pd.PositiveFloat],
+    ) -> complex:
+        """Get a single value for n0."""
+        freqs = np.array(freqs, dtype=float)
+        ns, ks = medium.nk_model(freqs)
+        nks = ns + 1j * ks
+
+        # n0 not specified; need to calculate it
+        if n0 is None:
+            if not len(nks):
+                raise SetupError(
+                    f"Class '{type(self).__name__}' cannot determine 'n0' in the absence of "
+                    "sources. Please either specify 'n0' or add sources to the simulation."
+                )
+            if not all(np.isclose(nk, nks[0]) for nk in nks):
+                raise SetupError(
+                    f"Class '{type(self).__name__}' cannot determine 'n0' because at the source "
+                    f"frequencies '{freqs}' the complex refractive indices '{nks}' of the medium "
+                    f"are not all equal. Please specify 'n0' in '{type(self).__name__}' "
+                    "to match the complex refractive index of the medium at the desired "
+                    "source central frequency."
+                )
+            return nks[0]
+
+        # now, n0 is specified; we use it, but warn if it might be inconsistent
+        if not all(np.isclose(nk, n0) for nk in nks):
+            log.warning(
+                f"Class '{type(self).__name__}' given 'n0={n0}'. At the source frequencies "
+                f"'{freqs}' the medium has complex refractive indices '{nks}'. In order "
+                "to obtain correct nonlinearity parameters, the provided refractive index "
+                "should agree with the complex refractive index at the source frequencies. "
+                "The provided value of 'n0' is being used; the resulting nonlinearity parameters "
+                "may be incorrect for those sources where the complex refractive index of the "
+                "medium is different from this value."
+            )
+        return n0
 
 
-class NonlinearSusceptibility(NonlinearSpec):
-    """Specification adding an instantaneous nonlinear susceptibility to a medium.
+class NonlinearSusceptibility(NonlinearModel):
+    """Model for an instantaneous nonlinear chi3 susceptibility.
     The expression for the instantaneous nonlinear polarization is given below.
 
     Note
     ----
     .. math::
 
-        P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
+        P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E
 
     Note
     ----
-    The nonlinear constitutive relation is solved iteratively; it may not converge
-    for strong nonlinearities. Increasing `numiters` can help with convergence.
-
-    Note
-    ----
+    This model uses real time-domain fields, so :math:`\\chi_3` must be real.
     For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
     is applied separately to the real and imaginary parts, so that the above equation
     holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
-    The nonlinearity is only applied to the real-valued fields since they are the
-    physical fields.
+    The nonlinearity is applied to the real and imaginary components separately since
+    each of those represents a physical field.
 
     Note
     ----
@@ -141,15 +184,237 @@ class NonlinearSusceptibility(NonlinearSpec):
 
     Example
     -------
-    >>> medium = Medium(permittivity=2, nonlinear_spec=NonlinearSusceptibility(chi3=1))
+    >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
     """
 
     chi3: float = pd.Field(
-        ..., title="Chi3", description="Chi3 nonlinear susceptibility.", units="um^2 / V^2"
+        0,
+        title="Chi3",
+        description="Chi3 nonlinear susceptibility.",
+        units=f"{MICROMETER}^2 / {VOLT}^2",
     )
 
+    numiters: pd.PositiveInt = pd.Field(
+        None,
+        title="Number of iterations",
+        description="Deprecated. The old usage 'nonlinear_spec=model' with 'model.numiters' "
+        "is deprecated and will be removed in a future release. The new usage is "
+        r"'nonlinear_spec=NonlinearSpec(models=\[model], num_iters=num_iters)'. Under the new "
+        "usage, this parameter is ignored, and 'NonlinearSpec.num_iters' is used instead.",
+    )
 
-NonlinearSpecType = Union[NonlinearSusceptibility]
+    @pd.validator("numiters", always=True)
+    def _validate_numiters(cls, val):
+        """Check that numiters is not too large."""
+        if val is None:
+            return val
+        if val > NONLINEAR_MAX_NUM_ITERS:
+            raise ValidationError(
+                "'NonlinearSusceptibility.numiters' must be less than "
+                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
+            )
+        return val
+
+
+class TwoPhotonAbsorption(NonlinearModel):
+    """Model for two-photon absorption (TPA) nonlinearity which gives an intensity-dependent
+    absorption of the form :math:`\\alpha = \\alpha_0 + \\beta I`.
+    The expression for the nonlinear polarization is given below.
+
+    Note
+    ----
+    .. math::
+
+        P_{NL} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E
+
+    Note
+    ----
+    This frequency-domain equation is implemented in the time domain using complex-valued fields.
+
+    Note
+    ----
+    Different field components do not interact nonlinearly. For example,
+    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+    This approximation is valid when the E field is predominantly polarized along one
+    of the x, y, or z axes.
+
+    Note
+    ----
+    The implementation is described in::
+
+        N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
+        High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+
+    Example
+    -------
+    >>> tpa_model = TwoPhotonAbsorption(beta=1)
+    """
+
+    beta: Complex = pd.Field(
+        0,
+        title="TPA coefficient",
+        description="Coefficient for two-photon absorption (TPA).",
+        units=f"{MICROMETER} / {WATT}",
+    )
+
+    n0: Optional[Complex] = pd.Field(
+        None,
+        title="Complex linear refractive index",
+        description="Complex linear refractive index of the medium, computed for instance using "
+        "'medium.nk_model'. If not provided, it is calculated automatically using the central "
+        "frequencies of the simulation sources (as long as these are all equal).",
+    )
+
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+        """Any validation that depends on knowing the central frequencies of the sources.
+        This includes passivity checking, if necessary."""
+        n0 = self._get_n0(self.n0, medium, freqs)
+        beta = self.beta
+        if not medium.allow_gain:
+            chi_imag = np.real(beta * n0 * np.real(n0))
+            if chi_imag < 0:
+                raise ValidationError(
+                    "For passive medium, 'beta' in 'TwoPhotonAbsorption' must satisfy "
+                    f"'Re(beta * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
+                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
+                    "'allow_gain=True' in the medium class. Caution: simulations containing "
+                    "gain medium are unstable, and are likely to diverge."
+                )
+
+    def _validate_medium(self, medium: AbstractMedium):
+        """Check that the model is compatible with the medium."""
+        # if n0 is specified, we can go ahead and validate passivity
+        if self.n0 is not None:
+            self._validate_medium_freqs(medium, [])
+
+
+class KerrNonlinearity(NonlinearModel):
+    """Model for Kerr nonlinearity which gives an intensity-dependent refractive index
+    of the form :math:`n = n_0 + n_2 I`. The expression for the nonlinear polarization
+    is given below.
+
+    Note
+    ----
+    .. math::
+
+        P_{NL} = \\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0) n_2 |E|^2 E
+
+    Note
+    ----
+    The fields in this equation are complex-valued, allowing a direct implementation of the Kerr
+    nonlinearity. In contrast, the model :class:`.NonlinearSusceptibility` implements a
+    chi3 nonlinear susceptibility using real-valued fields, giving rise to Kerr nonlinearity
+    as well as third-harmonic generation. The relationship between the parameters is given by
+    :math:`n_2 = \\frac{3}{4} \\frac{1}{\\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0)} \\chi_3`. The additional
+    factor of :math:`\\frac{3}{4}` comes from the usage of complex-valued fields for the Kerr
+    nonlinearity and real-valued fields for the nonlinear susceptibility.
+
+    Note
+    ----
+    Different field components do not interact nonlinearly. For example,
+    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+    This approximation is valid when the E field is predominantly polarized along one
+    of the x, y, or z axes.
+
+    Example
+    -------
+    >>> kerr_model = KerrNonlinearity(n2=1)
+    """
+
+    n2: Complex = pd.Field(
+        0,
+        title="Nonlinear refractive index",
+        description="Nonlinear refractive index in the Kerr nonlinearity.",
+        units=f"{MICROMETER}^2 / {WATT}",
+    )
+
+    n0: Optional[Complex] = pd.Field(
+        None,
+        title="Complex linear refractive index",
+        description="Complex linear refractive index of the medium, computed for instance using "
+        "'medium.nk_model'. If not provided, it is calculated automatically using the central "
+        "frequencies of the simulation sources (as long as these are all equal).",
+    )
+
+    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
+        """Any validation that depends on knowing the central frequencies of the sources.
+        This includes passivity checking, if necessary."""
+        n0 = self._get_n0(self.n0, medium, freqs)
+        n2 = self.n2
+        if not medium.allow_gain:
+            chi_imag = np.imag(n2 * n0 * np.real(n0))
+            if chi_imag < 0:
+                raise ValidationError(
+                    "For passive medium, 'n2' in 'KerrNonlinearity' must satisfy "
+                    f"'Im(n2 * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
+                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
+                    "'allow_gain=True' in the medium class. Caution: simulations containing "
+                    "gain medium are unstable, and are likely to diverge."
+                )
+
+    def _validate_medium(self, medium: AbstractMedium):
+        """Check that the model is compatible with the medium."""
+        # if n0 is specified, we can go ahead and validate passivity
+        if self.n0 is not None:
+            self._validate_medium_freqs(medium, [])
+
+
+NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
+
+
+class NonlinearSpec(ABC, Tidy3dBaseModel):
+    """Abstract specification for adding nonlinearities to a medium.
+
+    Note
+    ----
+    The nonlinear constitutive relation is solved iteratively; it may not converge
+    for strong nonlinearities. Increasing ``num_iters`` can help with convergence.
+
+    Example
+    -------
+    >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
+    >>> nonlinear_spec = NonlinearSpec(models=[nonlinear_susceptibility])
+    >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
+    """
+
+    models: Tuple[NonlinearModelType, ...] = pd.Field(
+        (),
+        title="Nonlinear models",
+        description="The nonlinear models present in this nonlinear spec. "
+        "Nonlinear models of different types are additive. "
+        "Multiple nonlinear models of the same type are not allowed.",
+    )
+
+    num_iters: pd.PositiveInt = pd.Field(
+        NONLINEAR_DEFAULT_NUM_ITERS,
+        title="Number of iterations",
+        description="Number of iterations for solving nonlinear constitutive relation.",
+    )
+
+    @pd.validator("models", always=True)
+    def _no_duplicate_models(cls, val):
+        """Ensure each type of model appears at most once."""
+        if val is None:
+            return val
+        models = [model.__class__ for model in val]
+        models_unique = set(models)
+        if len(models) != len(models_unique):
+            raise ValidationError(
+                "Multiple 'NonlinearModels' of the same type "
+                "were found in a single 'NonlinearSpec'. Please ensure that "
+                "each type of 'NonlinearModel' appears at most once in a single 'NonlinearSpec'."
+            )
+        return val
+
+    @pd.validator("num_iters", always=True)
+    def _validate_num_iters(cls, val, values):
+        """Check that num_iters is not too large."""
+        if val > NONLINEAR_MAX_NUM_ITERS:
+            raise ValidationError(
+                "'NonlinearSpec.num_iters' must be less than "
+                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
+            )
+        return val
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
@@ -174,7 +439,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "useful in some cases.",
     )
 
-    nonlinear_spec: NonlinearSpecType = pd.Field(
+    nonlinear_spec: Union[NonlinearSpec, NonlinearSusceptibility] = pd.Field(
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
@@ -186,15 +451,55 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         description="Modulation spec applied on top of the base medium properties.",
     )
 
-    @pd.validator("nonlinear_spec", always=True)
-    def _validate_nonlinear_spec(cls, val):
+    @cached_property
+    def _nonlinear_models(self) -> NonlinearSpec:
+        """The nonlinear models in the nonlinear_spec."""
+        if self.nonlinear_spec is None:
+            return []
+        if isinstance(self.nonlinear_spec, NonlinearModel):
+            return [self.nonlinear_spec]
+        if self.nonlinear_spec.models is None:
+            return []
+        return self.nonlinear_spec.models
+
+    @cached_property
+    def _nonlinear_num_iters(self) -> pd.PositiveInt:
+        """The num_iters of the nonlinear_spec."""
+        if self.nonlinear_spec is None:
+            return 0
+        if isinstance(self.nonlinear_spec, NonlinearModel):
+            if self.nonlinear_spec.numiters is None:
+                return 1  # old default value for backwards compatibility
+            return self.nonlinear_spec.numiters
+        return self.nonlinear_spec.num_iters
+
+    def _post_init_validators(self) -> None:
+        """Call validators taking `self` that get run after init."""
+        self._validate_nonlinear_spec()
+
+    def _validate_nonlinear_spec(self):
         """Check compatibility with nonlinear_spec."""
-        if val is None:
-            return val
-        raise ValidationError(
-            f"A 'nonlinear_spec' of class {type(val)} is not "
-            f"currently supported for medium class {cls}."
-        )
+        if self.nonlinear_spec is None:
+            return
+        if isinstance(self.nonlinear_spec, NonlinearModel):
+            log.warning(
+                "The API for 'nonlinear_spec' has changed. "
+                "The old usage 'nonlinear_spec=model' is deprecated and will be removed "
+                "in a future release. The new usage is "
+                r"'nonlinear_spec=NonlinearSpec(models=\[model])'."
+            )
+        for model in self._nonlinear_models:
+            model._validate_medium_type(self)
+            model._validate_medium(self)
+            if (
+                isinstance(self.nonlinear_spec, NonlinearSpec)
+                and isinstance(model, NonlinearSusceptibility)
+                and model.numiters is not None
+            ):
+                raise ValidationError(
+                    "'NonlinearSusceptibility.numiters' is deprecated. "
+                    "Please use 'NonlinearSpec.num_iters' instead."
+                )
 
     heat_spec: Optional[HeatSpecType] = pd.Field(
         None,
@@ -681,16 +986,6 @@ class Medium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
-    @pd.validator("nonlinear_spec", always=True)
-    def _validate_nonlinear_spec(cls, val):
-        """Check compatibility with nonlinear_spec."""
-        if val is None or isinstance(val, NonlinearSusceptibility):
-            return val
-        raise ValidationError(
-            f"A 'nonlinear_spec' of class {type(val)} is not "
-            f"currently supported for medium class {cls}."
-        )
-
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
@@ -809,16 +1104,6 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
-
-    @pd.validator("nonlinear_spec", always=True)
-    def _validate_nonlinear_spec(cls, val):
-        """Check compatibility with nonlinear_spec."""
-        if val is None:
-            return val
-        raise ValidationError(
-            f"A 'nonlinear_spec' of class {type(val)} is not "
-            f"currently supported for medium class {cls}."
-        )
 
     @pd.validator("permittivity", always=True)
     def _eps_inf_greater_no_less_than_one(cls, val):

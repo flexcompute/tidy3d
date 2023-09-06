@@ -168,6 +168,11 @@ class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation
     and holds until end of simulation.
 
+    Note
+    ----
+    Field decay will not occur, so the simulation will run for the full ``run_time``.
+    Also, source normalization of frequency-domain monitors is not meaningful.
+
     Example
     -------
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
@@ -199,6 +204,13 @@ class CustomSourceTime(Pulse):
         amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
+
+    Note
+    ----
+    Depending on the envelope, field decay may not occur.
+    If field decay does not occur, then the simulation will run for the full ``run_time``.
+    Also, if field decay does not occur, then source normalization of frequency-domain
+    monitors is not meaningful.
 
     Note
     ----

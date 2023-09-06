@@ -16,7 +16,7 @@ from .components.medium import Sellmeier, Debye, Drude, Lorentz
 from .components.medium import CustomMedium, CustomPoleResidue
 from .components.medium import CustomSellmeier, FullyAnisotropicMedium
 from .components.medium import CustomLorentz, CustomDrude, CustomDebye, CustomAnisotropicMedium
-from .components.medium import NonlinearSusceptibility
+from .components.medium import NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity
 from .components.transformation import RotationAroundAxis
 from .components.medium import PerturbationMedium, PerturbationPoleResidue
 from .components.parameter_perturbation import ParameterPerturbation
@@ -94,7 +94,7 @@ from .material_library.material_library import material_library
 from .material_library.parametric_materials import Graphene
 
 # for docs
-from .components.medium import AbstractMedium, NonlinearSpec
+from .components.medium import AbstractMedium, NonlinearSpec, NonlinearModel
 from .components.geometry.base import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
@@ -187,7 +187,10 @@ __all__ = [
     "LinearChargePerturbation",
     "CustomChargePerturbation",
     "NonlinearSpec",
+    "NonlinearModel",
     "NonlinearSusceptibility",
+    "TwoPhotonAbsorption",
+    "KerrNonlinearity",
     "Structure",
     "MeshOverrideStructure",
     "ModeSpec",
