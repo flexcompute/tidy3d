@@ -136,15 +136,19 @@ class JaxSimulation(Simulation, JaxObject):
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
         """Make sure server-side colocation is off."""
+        new_vals = []
         for mnt in val:
-            if mnt.dict().get("colocate", False):
-                raise AdjointError(
-                    "Server-side colocation ('Monitor.colocate') must be set to 'False' in the "
-                    "adjoint plugin. Instead, use 'SimulationData.at_boundaries' after the solver "
-                    "run to automatically colocate the fields to the grid boundaries, "
-                    "or 'MonitorData.colocate' if colocating to custom coordinates."
+            if mnt.colocate:
+                log.warning(
+                    "Output field monitors in the adjoint plugin require explicitly setting "
+                    "'colocate=False'. Setting 'colocate=False' in monitor '{mnt.name}'. ",
+                    "Use 'SimulationData.at_boundaries' after the solver run to automatically "
+                    "colocate the fields to the grid boundaries, or 'MonitorData.colocate' "
+                    "if colocating to custom coordinates.",
                 )
-        return val
+                mnt = mnt.updated_copy(colocate=False)
+            new_vals.append(mnt)
+        return new_vals
 
     @pd.validator("subpixel", always=True)
     def _subpixel_is_on(cls, val):
