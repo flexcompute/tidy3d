@@ -104,6 +104,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin6GratingCoupler
     notebooks/AdjointPlugin7Metalens
     notebooks/AdjointPlugin8WaveguideBend
+    notebooks/AdjointPlugin9_WDM
 
 Case Studies
 ------------
