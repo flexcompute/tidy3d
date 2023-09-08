@@ -5,22 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Added lower bound validator to `freqs` in mode solver.
-- Added lower bound validator to `group_index_step` in `ModeSpec`.
-- `ComponentModeler.freqs` now a `FreqArray`, so it can be initialized from numpy, list or tuple.
-
-### Fixed
-- Bug in `Simulation.eps_bounds` that was always setting the lower bound to 1.
-- Extended lower limit of frequency range for `Graphene` to zero.
-- Improved warnings for `Medium2D`.
-- Improved mode solver handling of 1D problem to avoid singular matrix issue.
-- Set `colocate=False` automatically in output `FieldMonitor` objects in adjoint plugin, warning instead of erroring for backwards compatibility.
-
-
-## [2.4.0rc2] - 2023-8-21
+## [2.4.0] - 2023-9-11
 
 ### Added
+- Configuration option `config.log_suppression` can be used to control the suppression of log messages.
+- `web.abort()` and `Job.abort()` methods allowing user to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
+- `FastDispersionFitter` for fast fitting of material dispersion data.
+- `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
+- Source with arbitrary user-specified time dependence through `CustomSourceTime`.
+- Interface for specifying material heat and charge perturbation models. 
+Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
+where perturbations to each parameter is specified using class `ParameterPerturbation`.
+A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
 - Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
 - Spatial downsampling allowed in ``PermittivityMonitor`` through the ``interval_space`` argument.
@@ -32,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `components.geometry.utils.flatten_groups` used internally to validate large geometry trees.
 
 ### Changed
+- Add `width` and `height` options to `Simulation.plot_3d()`.
+- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its `Simulation` with an added `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor`, respectively.
 - `nyquist_step` also taking the frequency range of frequency-domain monitors into account.
 - Added option to allow DC component in `GaussianPulse` spectrum, by setting `remove_dc_component=False` in `GaussianPulse`.
 - Jax installation from `pip install "tidy3d[jax]"` handled same way on windows as other OS if python >= 3.9.
@@ -48,36 +46,26 @@ the difference that can be observed when slightly modifying the grid resolution.
 - The width of Tidy3D logging output is changed to 80 characters.
 - Upgrades to `pydantic==2.*` with `pydantic.v1` imports.
 - Uses `ruff` for linting instead of `pylint`.
+- Added lower bound validator to `freqs` in mode solver.
+- Added lower bound validator to `group_index_step` in `ModeSpec`.
+- `ComponentModeler.freqs` now a `FreqArray`, so it can be initialized from numpy, list or tuple.
 
 ### Fixed
+- Handles `TIDY3D_ENV` properly when set to `prod`.
+- Redundant phase compensation for shifted source in smatrix plugin.
 - Bug in angled mode solver with negative `angle_theta`.
 - Properly include `JaxSimulation.input_structures` in `JaxSimulationData.plot_field()`.
 - Numerically stable sigmoid function in radius of curvature constraint.
 - Spatial monitor downsampling when the monitor is crossing a symmetry plane or Bloch boundary conditions.
 - Cast `JaxDataArray.__abs__` output to `jnp.array`, reducing conversions needed in objective functions.
 - Correct color and zorder for line segments when plotting 2D geometries.
-
-## [2.4.0rc1] - 2023-7-27
-
-### Added
-- Configuration option `config.log_suppression` can be used to control the suppression of log messages.
-- `web.abort()` and `Job.abort()` methods allowing user to abort running tasks without deleting them. If a task is aborted, it cannot be restarted later, a new one needs to be created and submitted.
-- `FastDispersionFitter` for fast fitting of material dispersion data.
-- `Simulation.monitors_data_size` property mapping monitor name to its data size in bytes.
-- Source with arbitrary user-specified time dependence through `CustomSourceTime`.
-- Interface for specifying material heat and charge perturbation models. 
-Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
-where perturbations to each parameter is specified using class `ParameterPerturbation`.
-A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
+- Bug in `Simulation.eps_bounds` that was always setting the lower bound to 1.
+- Extended lower limit of frequency range for `Graphene` to zero.
+- Improved warnings for `Medium2D`.
+- Improved mode solver handling of 1D problem to avoid singular matrix issue.
+- Set `colocate=False` automatically in output `FieldMonitor` objects in adjoint plugin, warning instead of erroring for backwards compatibility.
 
 
-### Changed
-- Add `width` and `height` options to `Simulation.plot_3d()`.
-- `sim_with_source()`, `sim_with_monitor()`, and `sim_with_mode_solver_monitor()` methods allowing the `ModeSolver` to create a copy of its `Simulation` with an added `ModeSource`, `ModeMonitor`, or `ModeSolverMonitor`, respectively.
-
-### Fixed
-- Handles `TIDY3D_ENV` properly when set to `prod`.
-- Redundant phase compensation for shifted source in smatrix plugin.
 
 ## [2.3.3] - 2023-07-28
 
@@ -933,9 +921,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc2...pre/2.4
-[2.4.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.4.0rc1...v2.4.0rc2
-[2.4.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.4.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...develop
+[2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/flexcompute/tidy3d/compare/v2.3.0...v2.3.1
