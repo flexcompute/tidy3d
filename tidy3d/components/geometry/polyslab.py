@@ -534,6 +534,9 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        if isclose(self.sidewall_angle, 0):
+            return [shapely.Polygon(self.reference_polygon)]
+
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
@@ -590,19 +593,18 @@ class PolySlab(base.Planar):
             h_length = h_top - h_base
 
             # coordinate of each subsection
-            z_min, z_max = z_base + h_base, z_base + h_top
-
-            # vertices for the base of each subsection
-            # move up by `fp_eps` in case vertices are degenerate at the base.
-            dist = -(h_base - self.length_axis / 2 + fp_eps) * self._tanq
-            vertices = self._shift_vertices(self.middle_polygon, dist)[0]
+            z_min = z_base + h_base
+            z_max = np.inf if np.isposinf(h_top) else z_base + h_top
 
             # for vertical sidewall, no need for complications
             if isclose(self.sidewall_angle, 0):
                 ints_y, ints_angle = self._find_intersecting_ys_angle_vertical(
-                    vertices, position, axis_ordered
+                    self.reference_polygon, position, axis_ordered
                 )
             else:
+                # for slanted sidewall, move up by `fp_eps` in case vertices are degenerate at the base.
+                dist = -(h_base - self.length_axis / 2 + fp_eps) * self._tanq
+                vertices = self._shift_vertices(self.middle_polygon, dist)[0]
                 ints_y, ints_angle = self._find_intersecting_ys_angle_slant(
                     vertices, position, axis_ordered
                 )
@@ -884,12 +886,13 @@ class PolySlab(base.Planar):
 
         # check for the maximum possible contribution from dilation/slant on each side
         max_offset = self.dilation
-        if self.reference_plane == "bottom":
-            max_offset += max(0, -self._tanq * self.length_axis)
-        elif self.reference_plane == "top":
-            max_offset += max(0, self._tanq * self.length_axis)
-        elif self.reference_plane == "middle":
-            max_offset += max(0, abs(self._tanq) * self.length_axis / 2)
+        if not isclose(self.sidewall_angle, 0):
+            if self.reference_plane == "bottom":
+                max_offset += max(0, -self._tanq * self.length_axis)
+            elif self.reference_plane == "top":
+                max_offset += max(0, self._tanq * self.length_axis)
+            elif self.reference_plane == "middle":
+                max_offset += max(0, abs(self._tanq) * self.length_axis / 2)
 
         # special care when dilated
         if max_offset > 0:

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import gdstk
 import gdspy
 import trimesh
+import warnings
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
@@ -243,8 +244,23 @@ def test_box_from_bounds():
 
 
 def test_polyslab_center_axis():
+    """Test the handling of center_axis in a polyslab having (-td.inf, td.inf) bounds."""
     ps = POLYSLAB.copy(update=dict(slab_bounds=(-td.inf, td.inf)))
     assert ps.center_axis == 0
+
+
+@pytest.mark.parametrize(
+    "lower_bound, upper_bound", ((-td.inf, td.inf), (-1, td.inf), (-td.inf, 1))
+)
+def test_polyslab_inf_bounds(lower_bound, upper_bound):
+    """Test the handling of various operations in a polyslab having inf bounds."""
+    ps = POLYSLAB.copy(update=dict(slab_bounds=(lower_bound, upper_bound)))
+    # catch any runtime warning related to inf operations
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        bounds = ps.bounds
+        ps.intersections_plane(x=0.5)
+        ps.intersections_plane(z=0)
 
 
 def test_polyslab_bounds():
