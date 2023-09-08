@@ -11,5 +11,4 @@
     "PlasmonicNanoparticle.ipynb": ["mie_plasmonic_flux_abs.txt", "mie_plasmonic_flux_scat.txt", "mie_plasmonic_RCS.txt"],
     "PlasmonicYagiUdaNanoantenna.ipynb": ["McPeak.csv"],
     "STLImport.ipynb": ["box.stl", "box_with_hole.stl", "box_with_indent.stl", "icecream_nonunionized.stl", "icecream_unionized.stl", "two_boxes.stl"],
-    "MoS2Waveguide.ipynb": ["MoS2_nk.csv"],
 }
