@@ -24,7 +24,10 @@ class AbstractCircularFilter(Filter, ABC):
     radius: float = pd.Field(
         ...,
         title="Filter Radius",
-        description="Radius of the filter to convolve with supplied spatial data.",
+        description="Radius of the filter to convolve with supplied spatial data. "
+        "Note: the corresponding feature size expressed in the device is typically "
+        "sqrt(3) times smaller than the radius. For best results, it is recommended to make your "
+        "radius about twice as large as the desired feature size.",
         units=MICROMETER,
     )
 
