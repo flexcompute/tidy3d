@@ -79,6 +79,8 @@ Start running simulations with just a few lines of code. Run this sample code to
    data = td.web.run(sim, task_name="quickstart", path="data/data.hdf5", verbose=False)
    ax = data.plot_field("fields", "Ey", z=0)
 
+.. image:: _static/quickstart_fields.png
+   :width: 1200
 
 3. Analyze Results
 ~~~~~~~~~~~~~~~~~~
@@ -92,7 +94,6 @@ b) View the results of this simulation on our web-based `graphical user interfac
 
 .. toctree::
    :maxdepth: 1
-   :caption: Resources
 
    quickstart
    examples
