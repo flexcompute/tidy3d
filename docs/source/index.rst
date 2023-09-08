@@ -79,6 +79,8 @@ Start running simulations with just a few lines of code. Run this sample code to
    data = td.web.run(sim, task_name="quickstart", path="data/data.hdf5", verbose=False)
    ax = data.plot_field("fields", "Ey", z=0)
 
+This will produce the following plot, which visualizes the electromagnetic fields on the central plane.
+
 .. image:: _static/quickstart_fields.png
    :width: 1200
 
