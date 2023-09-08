@@ -3,10 +3,10 @@
 import os
 from os.path import expanduser
 
-TIDY3D_DIR = f"{expanduser('~')}"
+TIDY3D_BASE_DIR = os.getenv("TIDY3D_BASE_DIR", f"{expanduser('~')}")
 
-if os.access(TIDY3D_DIR, os.W_OK):
-    TIDY3D_DIR = f"{expanduser('~')}/.tidy3d"
+if os.access(TIDY3D_BASE_DIR, os.W_OK):
+    TIDY3D_DIR = f"{TIDY3D_BASE_DIR}/.tidy3d"
 else:
     TIDY3D_DIR = "/tmp/.tidy3d"
 
