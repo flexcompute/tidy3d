@@ -53,7 +53,13 @@
     "keywords": "inverse design, metalens, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
-  "AndersonLocalization.ipynb": {
+  "AdjointPlugin8WaveguideBend.ipynb": {
+    "title": "Adjoint Optimization of a Metalens in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates the adjoint optimization of a waveguide bend in Tidy3D using the adjoint plugin.",
+    "keywords": "inverse design, bend, design optimization, adjoint, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
+    "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
     "keywords": "Optical, Anderson localization, random, medium, Tidy3D, FDTD",
@@ -460,5 +466,12 @@
     "description": "This notebook demonstrates how to perform field projection for a zone plate in Tidy3D FDTD.",
     "keywords": "zone plate, field projection, Tidy3D, FDTD",
     "feature_image": "./img/zone_plate.png"
+  },
+  "MoS2Waveguide.ipynb": {
+    "title": "Monolayer MoS2 waveguide | Flexcompute",
+    "description": "This notebook demonstrates how to model a monolayer MoS2 waveguide in Tidy3D FDTD.",
+    "keywords": "TMD, waveguide, MoS2, 2D material, Tidy3D, FDTD",
+    "feature_image": "./img/MoS2_waveguide.png"
   }
+
 }

@@ -103,6 +103,8 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin5BoundaryGradients
     notebooks/AdjointPlugin6GratingCoupler
     notebooks/AdjointPlugin7Metalens
+    notebooks/AdjointPlugin8WaveguideBend
+    notebooks/AdjointPlugin9_WDM
 
 Case Studies
 ------------
@@ -184,3 +186,4 @@ Nanophotonics
     notebooks/NanostructuredBoronNitride
     notebooks/NonHermitianMetagratings
     notebooks/AndersonLocalization
+    notebooks/MoS2Waveguide
