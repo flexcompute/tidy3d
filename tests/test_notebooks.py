@@ -31,8 +31,11 @@ for i, path in enumerate(notebook_filenames_all):
 
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-'AndersonLocalization',
-'Metalens'
+'DielectricMetasurfaceAbsorber',
+'VizData',
+'Metalens',
+'WaveguideCrossing',
+'GradientMetasurfaceReflector',
 ]
 
 skip = [
