@@ -59,6 +59,12 @@
     "keywords": "inverse design, bend, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+  "AdjointPlugin9_WDM.ipynb": {
+    "title": "Adjoint Optimization of a WDM in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates the adjoint optimization of a wavelength division multiplexer using the adjoint plugin.",
+    "keywords": "inverse design, WDM, design optimization, adjoint, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
