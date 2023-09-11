@@ -104,7 +104,7 @@ class ModeSpec(Tidy3dBaseModel):
         "If ``None`` no mode tracking is performed.",
     )
 
-    group_index_step: Union[bool, pd.PositiveFloat] = pd.Field(
+    group_index_step: Union[pd.PositiveFloat, bool] = pd.Field(
         False,
         title="Frequency step for group index computation",
         description="Control the computation of the group index alongside the effective index. If "
@@ -130,16 +130,24 @@ class ModeSpec(Tidy3dBaseModel):
             )
         return val
 
-    @pd.validator("group_index_step")
+    # Must be executed before type validation by pydantic, otherwise True is converted to 1.0
+    @pd.validator("group_index_step", pre=True)
     def assign_default_on_true(cls, val):
-        """Assing the default fractional frequency step value if not provided."""
+        """Assign the default fractional frequency step value if not provided."""
         if val is True:
             return GROUP_INDEX_STEP
-        if val >= 1:
-            raise ValidationError("Parameter 'group_index_step' must be less than 1.")
         return val
 
-    @pd.root_validator()
+    @pd.validator("group_index_step")
+    def check_group_step_size(cls, val):
+        """Ensure a reasonable group index step is used."""
+        if val >= 1:
+            raise ValidationError(
+                "Parameter 'group_index_step' is a fractional value. It must be less than 1."
+            )
+        return val
+
+    @pd.root_validator(skip_on_failure=True)
     def check_precision(cls, values):
         """Verify critical ModeSpec settings for group index calculation."""
         if values["group_index_step"] > 0:

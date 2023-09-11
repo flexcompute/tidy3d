@@ -28,3 +28,15 @@ def test_bend_axis_not_given():
 def test_glancing_incidence():
     with pytest.raises(pydantic.ValidationError):
         _ = td.ModeSpec(angle_theta=np.pi / 2)
+
+
+def test_group_index_step_validation():
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.ModeSpec(group_index_step=1.0)
+
+    ms = td.ModeSpec(group_index_step=True)
+    assert ms.group_index_step == td.components.mode.GROUP_INDEX_STEP
+
+    ms = td.ModeSpec(group_index_step=False)
+    assert ms.group_index_step is False
+    assert not ms.group_index_step > 0
