@@ -75,6 +75,8 @@ Start running simulations with just a few lines of code. Run this sample code to
        run_time=120/freq0,
    )
 
+   print(f"simulation grid is shaped {sim.grid.num_cells} for {int(np.prod(sim.grid.num_cells)/1e6)} million cells.")
+
    # run simulation through the cloud and plot the field data computed by the solver and stored in the monitor
    data = td.web.run(sim, task_name="quickstart", path="data/data.hdf5", verbose=True)
    ax = data.plot_field("fields", "Ey", z=0)
