@@ -67,6 +67,11 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
     return decorator
 
 
+def _get_url(task_id: str) -> str:
+    """Get the URL for a task on our server."""
+    return f"https://tidy3d.simulation.cloud/workbench?taskId={task_id}"
+
+
 @wait_for_connection
 def run(
     simulation: Simulation,
@@ -186,8 +191,8 @@ def upload(
     if verbose:
         console = get_logging_console()
         console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
-        url = f"https://tidy3d.simulation.cloud/workbench?taskId={task.task_id}"
-        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+        url = _get_url(task.task_id)
+        console.log(f"View task using web UI at [blue underline][link={url}]'{url}'[/link].")
     task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
@@ -426,6 +431,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                     status = new_status
                     console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
+        url = _get_url(task_id)
+        console.log(f"View simulation result at [blue underline][link={url}]'{url}'[/link].")
     else:
         while get_status(task_id) not in break_statuses:
             time.sleep(REFRESH_TIME)
@@ -799,5 +806,5 @@ def test() -> None:
         raise WebError(
             "Tidy3D not configured correctly. Please refer to our documentation for installation "
             "instructions at "
-            f"[link={url}]'{url}'[/link]."
+            f"[blue underline][link={url}]'{url}'[/link]."
         ) from e
