@@ -83,10 +83,24 @@ def test_simulation_load_export_hdf5(tmp_path):
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
+def test_simulation_load_export_hdf5_gz(tmp_path):
+    path = str(tmp_path / "simulation.hdf5.gz")
+    SIM.to_file(path)
+    SIM2 = td.Simulation.from_file(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
 def test_simulation_load_export_hdf5_explicit(tmp_path):
     path = str(tmp_path / "simulation.hdf5")
     SIM.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
+    assert SIM == SIM2, "original and loaded simulations are not the same"
+
+
+def test_simulation_load_export_hdf5_gz_explicit(tmp_path):
+    path = str(tmp_path / "simulation.hdf5.gz")
+    SIM.to_hdf5_gz(path)
+    SIM2 = td.Simulation.from_hdf5_gz(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 

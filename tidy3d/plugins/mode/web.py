@@ -15,7 +15,6 @@ from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
 from ...log import log, get_logging_console
-from ...web.file_util import compress_file_to_gzip, extract_gz_file
 from ...web.http_management import http
 from ...web.s3utils import download_file, upload_file
 from ...web.simulation_task import Folder, SIMULATION_JSON, SIM_FILE_HDF5_GZ
@@ -265,49 +264,35 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         sim = mode_solver.simulation
 
-        file, file_name = tempfile.mkstemp()
-        gz_file, gz_file_name = tempfile.mkstemp()
+        # Upload simulation.hdf5.gz for GUI display
+        file, file_name = tempfile.mkstemp(".hdf5.gz")
         os.close(file)
-        os.close(gz_file)
-
-        sim.to_hdf5(file_name)
         try:
-            # Upload simulation.hdf5.gz for GUI display
-            # compress .hdf5 to .hdf5.gz
-            compress_file_to_gzip(file_name, gz_file_name)
-
+            sim.to_hdf5_gz(file_name)
             upload_file(
                 self.task_id,
-                gz_file_name,
+                file_name,
                 SIM_FILE_HDF5_GZ,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
         finally:
             os.unlink(file_name)
-            os.unlink(gz_file_name)
 
         # Upload a single HDF5 file with the full data
-        file, file_name = tempfile.mkstemp()
-        gz_file, gz_file_name = tempfile.mkstemp()
+        file, file_name = tempfile.mkstemp(".hdf5.gz")
         os.close(file)
-        os.close(gz_file)
-        mode_solver.to_hdf5(file_name)
-
         try:
-            # compress .hdf5 to .hdf5.gz
-            compress_file_to_gzip(file_name, gz_file_name)
-
+            mode_solver.to_hdf5_gz(file_name)
             upload_file(
                 self.solver_id,
-                gz_file_name,
+                file_name,
                 MODESOLVER_GZ,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
         finally:
             os.unlink(file_name)
-            os.unlink(gz_file_name)
 
     def submit(self):
         """Start the execution of this task.
@@ -344,7 +329,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         to_file: str = "mode_solver.hdf5"
             File to store the mode solver downloaded from the task.
         sim_file: str = "simulation.hdf5"
-            File to store the simulation downloaded from the task.
+            File to store the simulation downloaded from the task, if any.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
@@ -354,62 +339,52 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         -------
         :class:`ModeSolver`
             :class:`ModeSolver` object associated with this task.
-
-        Note
-        ----
-        If the simulation contains custom datasets (such as custom media), an HDF5 file will be
-        stored in the same path as 'to_file', but with '.hdf5' extension, and neither 'to_file' or
-        'sim_file' will be created.
         """
         if self.file_type == "Gz":
-            hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp()
-            os.close(hdf5_gz_file)
-            # keep hdf5_file_path
-            hdf5_file, hdf5_file_path = tempfile.mkstemp()
-            os.close(hdf5_file)
+            file, file_path = tempfile.mkstemp(".hdf5.gz")
+            os.close(file)
             try:
                 download_file(
                     self.solver_id,
                     MODESOLVER_GZ,
-                    to_file=hdf5_gz_file_path,
+                    to_file=file_path,
                     verbose=verbose,
                     progress_callback=progress_callback,
                 )
-                extract_gz_file(hdf5_gz_file_path, hdf5_file_path)
-                mode_solver = ModeSolver.from_hdf5(hdf5_file_path)
-                if to_file.endswith(".json"):
-                    mode_solver.to_json(to_file)
-
+                mode_solver = ModeSolver.from_hdf5_gz(file_path)
             finally:
-                os.unlink(hdf5_gz_file_path)
-                os.unlink(hdf5_file_path)
+                os.unlink(file_path)
 
         elif self.file_type == "Hdf5":
-            hdf5_file, hdf5_file_path = tempfile.mkstemp()
-            os.close(hdf5_file)
+            file, file_path = tempfile.mkstemp(".hdf5")
+            os.close(file)
             try:
                 download_file(
                     self.solver_id,
                     MODESOLVER_HDF5,
-                    to_file=hdf5_file_path,
+                    to_file=file_path,
                     verbose=verbose,
                     progress_callback=progress_callback,
                 )
-                mode_solver = ModeSolver.from_hdf5(hdf5_file_path)
-                if to_file.endswith(".json"):
-                    mode_solver.to_json(to_file)
-
+                mode_solver = ModeSolver.from_hdf5(file_path)
             finally:
-                os.unlink(hdf5_file_path)
+                os.unlink(file_path)
 
         else:
-            download_file(
-                self.solver_id,
-                MODESOLVER_JSON,
-                to_file=to_file,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
+            file, file_path = tempfile.mkstemp(".json")
+            os.close(file)
+            try:
+                download_file(
+                    self.solver_id,
+                    MODESOLVER_JSON,
+                    to_file=file_path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                mode_solver_dict = ModeSolver.dict_from_json(file_path)
+            finally:
+                os.unlink(file_path)
+
             download_file(
                 self.task_id,
                 SIMULATION_JSON,
@@ -417,19 +392,17 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-            mode_solver_dict = ModeSolver.dict_from_json(to_file)
             mode_solver_dict["simulation"] = Simulation.from_json(sim_file)
-
             mode_solver = ModeSolver.parse_obj(mode_solver_dict)
 
-        # Overwrite downloaded file with valid contents
+        # Store requested mode solver file
         mode_solver.to_file(to_file)
 
         return mode_solver
 
     def get_result(
         self,
-        to_file: str = "mode_solver.hdf5",
+        to_file: str = "mode_solver_data.hdf5",
         verbose: bool = True,
         progress_callback: Callable[[float], None] = None,
     ) -> ModeSolverData:
@@ -437,7 +410,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         Parameters
         ----------
-        to_file: str = "mode_solver.hdf5"
+        to_file: str = "mode_solver_data.hdf5"
             File to store the mode solver downloaded from the task.
         verbose: bool = True
             Whether to display progress bars.

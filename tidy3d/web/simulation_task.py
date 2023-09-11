@@ -8,17 +8,19 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic.v1 as pd
 from pydantic.v1 import Extra, Field, parse_obj_as
+import h5py
 
 from tidy3d import Simulation
 from tidy3d.version import __version__
-from tidy3d.exceptions import WebError
+from tidy3d.exceptions import WebError, DataError
+from tidy3d.components.file_util import extract_gzip_file
+from tidy3d.components.base import JSON_TAG
 
 from .cache import FOLDER_CACHE
 from .http_management import http
 from .s3utils import download_file, upload_file
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
-from .file_util import compress_file_to_gzip, extract_gz_file, read_simulation_from_hdf5
 
 from ..log import get_logging_console
 
@@ -28,6 +30,14 @@ RUNNING_INFO = "output/solver_progress.csv"
 SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
+
+
+def _read_simulation_from_hdf5(file_name: str):
+    """read simulation str from hdf5"""
+
+    with h5py.File(file_name, "r") as f_handle:
+        json_string = f_handle[JSON_TAG][()]
+        return json_string
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -315,13 +325,15 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         path: pathlib.Path
             Path to saved file.
         """
-        assert self.task_id
-        hdf5_file, hdf5_file_path = tempfile.mkstemp()
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+
+        hdf5_file, hdf5_file_path = tempfile.mkstemp(".hdf5")
         os.close(hdf5_file)
         try:
             self.get_simulation_hdf5(hdf5_file_path)
             if os.path.exists(hdf5_file_path):
-                json_string = read_simulation_from_hdf5(hdf5_file_path)
+                json_string = _read_simulation_from_hdf5(hdf5_file_path)
                 with open(to_file, "w") as file:
                     # Write the string to the file
                     file.write(json_string.decode("utf-8"))
@@ -345,28 +357,25 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         progress_callback : Callable[[float], None] = None
             Optional callback function called while uploading the data.
         """
-        assert self.task_id
-        assert self.simulation
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+        if not self.simulation:
+            raise DataError("Expected field 'simulation' is unset.")
 
-        # Also upload hdf5.gz containing all data.
-        file, file_name = tempfile.mkstemp()
-        gz_file, gz_file_name = tempfile.mkstemp()
+        # Upload hdf5.gz containing all data.
+        file, file_name = tempfile.mkstemp(".hdf5.gz")
         os.close(file)
-        os.close(gz_file)
-        self.simulation.to_hdf5(file_name)
         try:
-            # compress .hdf5 to .hdf5.gz
-            compress_file_to_gzip(file_name, gz_file_name)
+            self.simulation.to_hdf5_gz(file_name)
             upload_file(
                 self.task_id,
-                gz_file_name,
+                file_name,
                 SIM_FILE_HDF5_GZ,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
         finally:
             os.unlink(file_name)
-            os.unlink(gz_file_name)
 
     def upload_file(
         self,
@@ -389,7 +398,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         progress_callback : Callable[[float], None] = None
             Optional callback function called while uploading the data.
         """
-        assert self.task_id
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
 
         upload_file(
             self.task_id,
@@ -419,25 +429,19 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
         if self.simulation:
             # Also upload hdf5.gz containing all data.
-            file, file_name = tempfile.mkstemp()
-            gz_file, gz_file_name = tempfile.mkstemp()
+            file, file_name = tempfile.mkstemp(".hdf5.gz")
             os.close(file)
-            os.close(gz_file)
-            self.simulation.to_hdf5(file_name)
             try:
-                # compress .hdf5 to .hdf5.gz
-                compress_file_to_gzip(file_name, gz_file_name)
-
+                self.simulation.to_hdf5_gz(file_name)
                 upload_file(
                     self.task_id,
-                    gz_file_name,
+                    file_name,
                     SIM_FILE_HDF5_GZ,
                     verbose=False,
                     progress_callback=None,
                 )
             finally:
                 os.unlink(file_name)
-                os.unlink(gz_file_name)
 
         if solver_version:
             protocol_version = None
@@ -473,7 +477,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         else:
             protocol_version = __version__
 
-        assert self.task_id
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+
         resp = http.post(
             f"tidy3d/tasks/{self.task_id}/metadata",
             {
@@ -502,7 +508,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         path: pathlib.Path
             Path to saved file.
         """
-        assert self.task_id
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+
         return download_file(
             self.task_id,
             SIMULATION_DATA_HDF5,
@@ -530,23 +538,34 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         path: pathlib.Path
             Path to saved file.
         """
-        assert self.task_id
-        hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp()
-        os.close(hdf5_gz_file)
-        try:
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+
+        if to_file.lower().endswith(".gz"):
             download_file(
                 self.task_id,
                 SIM_FILE_HDF5_GZ,
-                to_file=hdf5_gz_file_path,
+                to_file=to_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-            if os.path.exists(hdf5_gz_file_path):
-                extract_gz_file(hdf5_gz_file_path, to_file)
-            else:
-                raise WebError("Failed to download simulation.hdf5")
-        finally:
-            os.unlink(hdf5_gz_file_path)
+        else:
+            hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp(".hdf5.gz")
+            os.close(hdf5_gz_file)
+            try:
+                download_file(
+                    self.task_id,
+                    SIM_FILE_HDF5_GZ,
+                    to_file=hdf5_gz_file_path,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+                if os.path.exists(hdf5_gz_file_path):
+                    extract_gzip_file(hdf5_gz_file_path, to_file)
+                else:
+                    raise WebError("Failed to download simulation.hdf5")
+            finally:
+                os.unlink(hdf5_gz_file_path)
 
     def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.
@@ -560,7 +579,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Average field intensity normalized to max value (1.0).
             Is ``None`` if run info not available.
         """
-        assert self.task_id
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
 
         resp = http.get(f"tidy3d/tasks/{self.task_id}/progress")
         perc_done = resp.get("perc_done")
@@ -587,7 +607,9 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
 
-        assert self.task_id
+        if not self.task_id:
+            raise DataError("Expected field 'task_id' is unset.")
+
         return download_file(
             self.task_id,
             SIM_LOG_FILE,

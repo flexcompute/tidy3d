@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.
+- Support to load and save compressed HDF5 files (`.hdf5.gz`) directly from `BaseModel`.
 
 ## [2.4.0] - 2023-9-11
 

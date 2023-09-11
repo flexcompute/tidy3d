@@ -1,5 +1,4 @@
 import pytest
-import os
 import tempfile
 
 import responses
@@ -9,7 +8,6 @@ import tidy3d as td
 from tidy3d.web.environment import Env, EnvironmentConfig
 from tidy3d.web.simulation_task import Folder, SimulationTask
 from tidy3d.version import __version__
-from tidy3d.web.file_util import compress_file_to_gzip, read_simulation_from_hdf5
 
 test_env = EnvironmentConfig(
     name="test",
@@ -100,9 +98,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
 
     def mock_download(*args, **kwargs):
         to_file = kwargs["to_file"]
-        file_path = "simulation.hdf5"
-        sim.to_file(file_path)
-        compress_file_to_gzip(file_path, to_file)
+        sim.to_file(to_file)
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
 

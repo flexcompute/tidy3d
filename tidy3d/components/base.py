@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import pathlib
+import os
+import tempfile
 from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 
@@ -15,6 +18,7 @@ import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
+from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
 
@@ -56,6 +60,16 @@ def ndarray_encoder(val):
     if np.any(np.iscomplex(val)):
         return dict(real=val.real.tolist(), imag=val.imag.tolist())
     return val.real.tolist()
+
+
+def _get_valid_extension(fname: str) -> str:
+    """Return the file extension from fname, validated to accepted ones."""
+    extension = "".join(pathlib.Path(fname).suffixes).lower()
+    if extension not in {".json", ".yaml", ".hdf5", ".hdf5.gz"}:
+        raise FileError(
+            f"{fname}::File extension must be .json, .yaml, .hdf5, or .hdf5.gz, but '{extension}' given"
+        )
+    return extension
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -152,14 +166,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def from_file(cls, fname: str, group_path: str = None, **parse_obj_kwargs) -> Tidy3dBaseModel:
-        """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, or .hdf5 file.
+        """Loads a :class:`Tidy3dBaseModel` from .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
         ----------
         fname : str
-            Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the file to load the :class:`Tidy3dBaseModel` from.
         group_path : str, optional
-            Path to a group inside the file to use as the base level. Only for ``.hdf5`` files.
+            Path to a group inside the file to use as the base level. Only for hdf5 files.
             Starting `/` is optional.
         **parse_obj_kwargs
             Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
@@ -167,7 +181,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         Returns
         -------
         :class:`Tidy3dBaseModel`
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
 
         Example
         -------
@@ -178,12 +192,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     @classmethod
     def dict_from_file(cls, fname: str, group_path: str = None) -> dict:
-        """Loads a dictionary containing the model from a .yaml, .json, or .hdf5 file.
+        """Loads a dictionary containing the model from a .yaml, .json, .hdf5, or .hdf5.gz file.
 
         Parameters
         ----------
         fname : str
-            Full path to the .yaml or .json file to load the :class:`Tidy3dBaseModel` from.
+            Full path to the file to load the :class:`Tidy3dBaseModel` from.
         group_path : str, optional
             Path to a group inside the file to use as the base level.
 
@@ -197,19 +211,22 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation = Simulation.from_file(fname='folder/sim.json') # doctest: +SKIP
         """
 
-        if (".json" in fname or ".yaml" in fname) and (group_path is not None):
-            log.warning("'group_path' provided, but this feature only works with '.hdf5' files.")
+        extension = _get_valid_extension(fname)
+        kwargs = {"fname": fname}
 
-        if ".json" in fname:
-            return cls.dict_from_json(fname=fname)
-        if ".yaml" in fname:
-            return cls.dict_from_yaml(fname=fname)
-        if ".hdf5" in fname:
-            if group_path is None:
-                return cls.dict_from_hdf5(fname=fname)
-            return cls.dict_from_hdf5(fname=fname, group_path=group_path)
+        if group_path is not None:
+            if extension == ".hdf5" or extension == ".hdf5.gz":
+                kwargs["group_path"] = group_path
+            else:
+                log.warning("'group_path' provided, but this feature only works with hdf5 files.")
 
-        raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
+        converter = {
+            ".json": cls.dict_from_json,
+            ".yaml": cls.dict_from_yaml,
+            ".hdf5": cls.dict_from_hdf5,
+            ".hdf5.gz": cls.dict_from_hdf5_gz,
+        }[extension]
+        return converter(**kwargs)
 
     def to_file(self, fname: str) -> None:
         """Exports :class:`Tidy3dBaseModel` instance to .yaml, .json, or .hdf5 file
@@ -224,14 +241,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_file(fname='folder/sim.json') # doctest: +SKIP
         """
 
-        if ".json" in fname:
-            return self.to_json(fname=fname)
-        if ".yaml" in fname:
-            return self.to_yaml(fname=fname)
-        if ".hdf5" in fname:
-            return self.to_hdf5(fname=fname)
-
-        raise FileError(f"File must be .json, .yaml, or .hdf5 type, given {fname}")
+        extension = _get_valid_extension(fname)
+        converter = {
+            ".json": self.to_json,
+            ".yaml": self.to_yaml,
+            ".hdf5": self.to_hdf5,
+            ".hdf5.gz": self.to_hdf5_gz,
+        }[extension]
+        return converter(fname=fname)
 
     @classmethod
     def from_json(cls, fname: str, **parse_obj_kwargs) -> Tidy3dBaseModel:
@@ -517,7 +534,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         Example
         -------
-        >>> simulation = Simulation.from_file(fname='folder/sim.hdf5') # doctest: +SKIP
+        >>> simulation = Simulation.from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
         group_path = cls._construct_group_path(group_path)
@@ -572,6 +589,103 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         add_data_to_file(data_dict=value, group_path=subpath)
 
             add_data_to_file(data_dict=self.dict())
+
+    @classmethod
+    def dict_from_hdf5_gz(
+        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+    ) -> dict:
+        """Loads a dictionary containing the model contents from a .hdf5.gz file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5.gz file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to selectively load a sub-element of the model only.
+        custom_decoders : List[Callable]
+            List of functions accepting
+            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+            value in the model dict after a custom decoding.
+
+        Returns
+        -------
+        dict
+            Dictionary containing the model.
+
+        Example
+        -------
+        >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5.gz') # doctest: +SKIP
+        """
+        file, extracted = tempfile.mkstemp(".hdf5")
+        os.close(file)
+        try:
+            extract_gzip_file(fname, extracted)
+            result = cls.dict_from_hdf5(
+                extracted, group_path=group_path, custom_decoders=custom_decoders
+            )
+        finally:
+            os.unlink(extracted)
+
+        return result
+
+    @classmethod
+    def from_hdf5_gz(
+        cls,
+        fname: str,
+        group_path: str = "",
+        custom_decoders: List[Callable] = None,
+        **parse_obj_kwargs,
+    ) -> Tidy3dBaseModel:
+        """Loads :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5.gz file to load the :class:`Tidy3dBaseModel` from.
+        group_path : str, optional
+            Path to a group inside the file to selectively load a sub-element of the model only.
+            Starting `/` is optional.
+        custom_decoders : List[Callable]
+            List of functions accepting
+            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+            value in the model dict after a custom decoding.
+        **parse_obj_kwargs
+            Keyword arguments passed to pydantic's ``parse_obj`` method.
+
+        Example
+        -------
+        >>> simulation = Simulation.from_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
+        """
+
+        group_path = cls._construct_group_path(group_path)
+        model_dict = cls.dict_from_hdf5_gz(
+            fname=fname, group_path=group_path, custom_decoders=custom_decoders
+        )
+        return cls.parse_obj(model_dict, **parse_obj_kwargs)
+
+    def to_hdf5_gz(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5.gz file to save the :class:`Tidy3dBaseModel` to.
+        custom_encoders : List[Callable]
+            List of functions accepting (fname: str, group_path: str, value: Any) that take
+            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
+
+        Example
+        -------
+        >>> simulation.to_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
+        """
+
+        file, decompressed = tempfile.mkstemp(".hdf5")
+        os.close(file)
+        try:
+            self.to_hdf5(decompressed, custom_encoders=custom_encoders)
+            compress_file_to_gzip(decompressed, fname)
+        finally:
+            os.unlink(decompressed)
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
