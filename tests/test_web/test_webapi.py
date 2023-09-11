@@ -176,7 +176,7 @@ def mock_download(monkeypatch, set_api_key, mock_get_info, tmp_path):
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
     download(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json"), "r") as f:
+    with open(str(tmp_path / "web_test_tmp.json")) as f:
         assert f.read() == "0.3,5.7"
 
 
@@ -260,7 +260,7 @@ def test_get_run_info(mock_get_run_info):
 @responses.activate
 def test_download(mock_download, tmp_path):
     download(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json"), "r") as f:
+    with open(str(tmp_path / "web_test_tmp.json")) as f:
         assert f.read() == "0.3,5.7"
 
 
@@ -306,7 +306,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
         return sim.json().encode("utf-8")
 
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
-    monkeypatch.setattr("tidy3d.web.simulation_task.read_simulation_from_hdf5", get_str)
+    monkeypatch.setattr("tidy3d.web.simulation_task._read_simulation_from_hdf5", get_str)
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)
@@ -335,7 +335,7 @@ def test_download_log(monkeypatch, mock_get_info, tmp_path):
     monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
 
     download_log(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json"), "r") as f:
+    with open(str(tmp_path / "web_test_tmp.json")) as f:
         assert f.read() == "0.3,5.7"
 
 
@@ -438,10 +438,10 @@ def test_job(mock_webapi, monkeypatch, tmp_path):
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
     _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
-    j.status
+    _ = j.status
     j.estimate_cost()
     # j.download
-    j.delete
+    _ = j.delete
     assert j.real_cost() == FLEX_UNIT
 
 
