@@ -3,8 +3,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ## [2.4.0] - 2023-9-11
 
 ### Added
@@ -64,7 +62,7 @@ the difference that can be observed when slightly modifying the grid resolution.
 - Improved warnings for `Medium2D`.
 - Improved mode solver handling of 1D problem to avoid singular matrix issue.
 - Set `colocate=False` automatically in output `FieldMonitor` objects in adjoint plugin, warning instead of erroring for backwards compatibility.
-
+- Validation for `ModeSpec.group_index_step` working incorrectly if the value was set to 1.
 
 
 ## [2.3.3] - 2023-07-28
