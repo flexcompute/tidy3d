@@ -135,6 +135,7 @@ Photonic Integrated Circuit Components
     notebooks/90OpticalHybrid
     notebooks/SWGBroadbandPolarizer
     notebooks/ZeroCrossTalkTE
+    notebooks/AdiabaticCouplerLNO
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

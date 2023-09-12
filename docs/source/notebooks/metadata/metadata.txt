@@ -11,6 +11,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, optical hybrid, MMI, Tidy3D, FDTD",
     "feature_image": "./img/optical_hybrid_schematic.png"
   },
+  "AdiabaticCouplerLNO.ipynb": {
+    "title": "Lithium nobate adiabatic waveguide coupler | Flexcompute",
+    "description": "This notebook demonstrates the simulation of a thin film lithium nobate adiabatic waveguide coupler.",
+    "keywords": "LNO, lithium niobate, coupler, Tidy3D, FDTD",
+    "feature_image": "./img/LNO_adiabatic_coupler.png"
+  },
   "AdjointPlugin1Intro.ipynb": {
     "title": "FDTD Adjoint Optimization Basics | Flexcompute",
     "description": "This notebook introduces the basics of Jax, automatic differentiation, and the adjoint plugin in Tidy3D FDTD.",
