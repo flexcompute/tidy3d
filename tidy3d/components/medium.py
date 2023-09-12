@@ -12,14 +12,15 @@ import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, InterpMethod, Bound, ArrayComplex3D
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
 from .geometry.base import Geometry
 from .validators import validate_name_str, validate_parameter_perturbation
-from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps
+from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps, HBAR
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..exceptions import ValidationError, SetupError
 from ..log import log
@@ -35,6 +36,12 @@ FILL_VALUE = "extrapolate"
 
 # cap on number of nonlinear iterations
 NONLINEAR_MAX_NUMITERS = 100
+
+# Range for checking upper bound of Im[eps], in addition to extrema method.
+# The range is in unit of eV and it's in log scale.
+LOSS_CHECK_MIN = -10
+LOSS_CHECK_MAX = 4
+LOSS_CHECK_NUM = 1000
 
 
 def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[float], complex]:
@@ -60,7 +67,7 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         # don't warn for evaluating infinite frequency
         if is_inf_scalar:
             return eps_model(self, frequency)
-        if np.any(frequency < fmin) or np.any(frequency > fmax):
+        if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
             log.warning(
                 "frequency passed to `Medium.eps_model()`"
                 f"is outside of `Medium.frequency_range` = {self.frequency_range}",
@@ -1546,6 +1553,152 @@ class PoleResidue(DispersiveMedium):
             frequency_range=self.frequency_range,
         )
 
+    @staticmethod
+    def eV_to_angular_freq(f_eV: float):
+        """Convert frequency in unit of eV to rad/s.
+
+        Parameters
+        ----------
+        f_eV : float
+            Frequency in unit of eV
+        """
+        return f_eV / HBAR
+
+    @staticmethod
+    def angular_freq_to_eV(f_rad: float):
+        """Convert frequency in unit of rad/s to eV.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad * HBAR
+
+    @staticmethod
+    def angular_freq_to_Hz(f_rad: float):
+        """Convert frequency in unit of rad/s to Hz.
+
+        Parameters
+        ----------
+        f_rad : float
+            Frequency in unit of rad/s
+        """
+        return f_rad / 2 / np.pi
+
+    @staticmethod
+    def Hz_to_angular_freq(f_hz: float):
+        """Convert frequency in unit of Hz to rad/s.
+
+        Parameters
+        ----------
+        f_hz : float
+            Frequency in unit of Hz
+        """
+        return f_hz * 2 * np.pi
+
+    @staticmethod
+    def imag_ep_extrema(poles: Tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
+        """Extrema of Im[eps] in the same unit as poles.
+
+        Parameters
+        ----------
+        poles: Tuple[PoleAndResidue, ...]
+            Tuple of complex-valued (``a_i, c_i``) poles for the model.
+        """
+
+        def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
+            """For each pole, find frequencies for the extrema of Im[eps]"""
+
+            a_square = areal**2 + aimag**2
+            alpha = creal
+            beta = creal * (areal**2 - aimag**2) + 2 * cimag * areal * aimag
+            mus = 2 * (areal**2 - aimag**2)
+            nus = a_square**2
+
+            numerator = np.array([0])
+            denominator = np.array([1])
+            for i in range(len(creal)):
+                numerator_i = np.array(
+                    [
+                        -alpha[i],
+                        alpha[i] * mus[i] - 3 * beta[i],
+                        3 * alpha[i] * nus[i] - beta[i] * mus[i],
+                        beta[i] * nus[i],
+                    ]
+                )
+                denominator_i = np.array(
+                    [1, 2 * mus[i], 2 * nus[i] + mus[i] ** 2, 2 * mus[i] * nus[i], nus[i] ** 2]
+                )
+                # to avoid divergence, let's renormalize
+                if np.abs(alpha[i]) > 1:
+                    numerator_i /= alpha[i]
+                    denominator_i /= alpha[i]
+
+                # n/d + ni/di = (n*di+d*ni)/(d*di)
+                n_di = np.polymul(numerator, denominator_i)
+                d_ni = np.polymul(denominator, numerator_i)
+                numerator = np.polyadd(n_di, d_ni)
+                denominator = np.polymul(denominator, denominator_i)
+
+            roots = np.sqrt(np.roots(numerator) + 0j)
+            # cutoff to determine if it's a real number
+            r_real = roots.real[np.abs(roots.imag) / (np.abs(roots) + fp_eps) < fp_eps]
+            return r_real[r_real > 0]
+
+        try:
+            poles_a, poles_c = zip(*poles)
+            poles_a = np.array(poles_a)
+            poles_c = np.array(poles_c)
+            extrema_freq = _extrema_loss_freq_finder(
+                poles_a.real, poles_a.imag, poles_c.real, poles_c.imag
+            )
+            return extrema_freq
+        except np.linalg.LinAlgError:
+            log.warning(
+                "'LinAlgError' in computing Im[eps] extrema. "
+                "This can result in inaccurate estimation of lower and upper bound of "
+                "Im[eps]. When used in passivity enforcement, passivity is not guaranteed."
+            )
+            return np.array([])
+
+    def _imag_ep_extrema_with_samples(self) -> ArrayFloat1D:
+        """Provide a list of frequencies (in unit of rad/s) to probe the possible lower and
+        upper bound of Im[eps] within the ``frequency_range``. If ``frequency_range`` is None,
+        it checkes the entire frequency range. The returned frequencies include not only extrema,
+        but also a list of sampled frequencies.
+        """
+
+        # extrema frequencies: in the intermediate stage, convert to the unit eV for
+        # better numerical handling, since those quantities will be ~ 1 in photonics
+        extrema_freq = self.imag_ep_extrema(self.angular_freq_to_eV(np.array(self.poles)))
+        extrema_freq = self.eV_to_angular_freq(extrema_freq)
+
+        # let's check a big range in addition to the imag_extrema
+        if self.frequency_range is None:
+            range_ev = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+            range_omega = self.eV_to_angular_freq(range_ev)
+        else:
+            fmin, fmax = self.frequency_range
+            fmin = max(fmin, fp_eps)
+            range_freq = np.logspace(np.log10(fmin), np.log10(fmax), LOSS_CHECK_NUM)
+            range_omega = self.Hz_to_angular_freq(range_freq)
+
+            extrema_freq = extrema_freq[
+                np.logical_and(extrema_freq > range_omega[0], extrema_freq < range_omega[-1])
+            ]
+        return np.concatenate((range_omega, extrema_freq))
+
+    @cached_property
+    def loss_upper_bound(self) -> float:
+        """Upper bound of Im[eps] in `frequency_range`"""
+        freq_list = self.angular_freq_to_Hz(self._imag_ep_extrema_with_samples())
+        ep = self.eps_model(freq_list)
+        # filter `NAN` in case some of freq_list are exactly at the pole frequency
+        # of Sellmeier-type poles.
+        ep = ep[~np.isnan(ep)]
+        return max(ep.imag)
+
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     """A spatially varying dispersive medium described by the pole-residue pair model.
@@ -1694,6 +1847,11 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
         return CustomMedium.parse_obj(self_dict)
 
+    @cached_property
+    def loss_upper_bound(self) -> float:
+        """Not implemented yet."""
+        raise SetupError("To be implemented.")
+
 
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
@@ -1740,7 +1898,7 @@ class Sellmeier(DispersiveMedium):
         n_squared = 1.0
         for B, C in self.coeffs:
             n_squared += B * wvl2 / (wvl2 - C)
-        return np.sqrt(n_squared)
+        return np.sqrt(n_squared + 0j)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:

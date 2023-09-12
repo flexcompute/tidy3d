@@ -11,19 +11,14 @@ import scipy
 from .fit import DispersionFitter
 from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.medium import PoleResidue
+from ...components.medium import PoleResidue, LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM
 from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayFloat2D, ArrayComplex2D
-from ...constants import HBAR
 from ...exceptions import ValidationError
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8
 # numerical cutoff for passivity testing
 CUTOFF = np.finfo(np.float32).eps
-# range for checking and enforcing passivity, in addition to extrema method
-PASSIVITY_MIN = -10
-PASSIVITY_MAX = 4
-PASSIVITY_NUM = 1000
 # parameters for passivity optimization
 PASSIVITY_NUM_ITERS_DEFAULT = 50
 SLSQP_CONSTRAINT_SCALE_DEFAULT = 1e35
@@ -276,7 +271,13 @@ class FastFitterData(AdvancedFastFitterParam):
         if self.eps_inf is None or self.poles is None:
             return None
         return PoleResidue(
-            eps_inf=self.eps_inf, poles=list(zip(self.poles / HBAR, self.residues / HBAR))
+            eps_inf=self.eps_inf,
+            poles=list(
+                zip(
+                    PoleResidue.eV_to_angular_freq(self.poles),
+                    PoleResidue.eV_to_angular_freq(self.residues),
+                )
+            ),
         )
 
     def evaluate(self, omega: float) -> complex:
@@ -292,60 +293,13 @@ class FastFitterData(AdvancedFastFitterParam):
         return self.evaluate(self.omega)
 
     @cached_property
-    def imag_extrema(self) -> Tuple[ArrayFloat1D, ArrayComplex1D]:
-        """Extrema of imaginary part of eps."""
-
-        def _extrema_loss_freq_finder(areal, aimag, creal, cimag):
-            """For each pole, find frequencies for the extrema of Im[eps]"""
-
-            a_square = areal**2 + aimag**2
-            alpha = creal
-            beta = creal * (areal**2 - aimag**2) + 2 * cimag * areal * aimag
-            mus = 2 * (areal**2 - aimag**2)
-            nus = a_square**2
-
-            numerator = np.array([0])
-            denominator = np.array([1])
-            for i in range(len(creal)):
-                numerator_i = np.array(
-                    [alpha[i], 2 * beta[i], mus[i] * beta[i] - alpha[i] * nus[i]]
-                )
-                denominator_i = np.array(
-                    [1, 2 * mus[i], 2 * nus[i] + mus[i] ** 2, 2 * mus[i] * nus[i], nus[i] ** 2]
-                )
-                # to avoid divergence, let's renormalize
-                if np.abs(alpha[i]) > 1:
-                    numerator_i /= alpha[i]
-                    denominator_i /= alpha[i]
-
-                # n/d + ni/di = (n*di+d*ni)/(d*di)
-                n_di = np.polymul(numerator, denominator_i)
-                d_ni = np.polymul(denominator, numerator_i)
-                numerator = np.polyadd(n_di, d_ni)
-                denominator = np.polymul(denominator, denominator_i)
-
-            roots = np.sqrt(np.roots(numerator) + 0j)
-            # cutoff to determine if it's a real number
-            r_real = roots.real[np.abs(roots.imag) / (np.abs(roots) + CUTOFF) < CUTOFF]
-            return r_real[r_real > 0]
-
-        try:
-            return _extrema_loss_freq_finder(
-                self.poles.real,
-                self.poles.imag,
-                self.residues.real,
-                self.residues.imag,
-            )
-        except np.linalg.LinAlgError:
-            log.warning("'LinAlgError' in passivity checking, passivity not guaranteed.")
-            return []
-
-    @cached_property
     def loss_in_bounds_violations(self) -> ArrayFloat1D:
         """Return list of frequencies where model violates loss bounds."""
+
+        extrema_list = PoleResidue.imag_ep_extrema(zip(self.poles, self.residues))
         # let's check a big range in addition to the imag_extrema
-        range_omega = np.logspace(PASSIVITY_MIN, PASSIVITY_MAX, PASSIVITY_NUM)
-        omega = np.concatenate((range_omega, self.imag_extrema))
+        range_omega = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+        omega = np.concatenate((range_omega, extrema_list))
         loss = self.evaluate(omega).imag
         bmin, bmax = self.loss_bounds
         violation_inds = np.where((loss < bmin) | (loss > bmax))
@@ -620,7 +574,7 @@ class FastFitterData(AdvancedFastFitterParam):
 
         model = self.updated_copy(passivity_optimized=True)
         violations = model.loss_in_bounds_violations
-        range_omega = np.logspace(PASSIVITY_MIN, PASSIVITY_MAX, PASSIVITY_NUM)
+        range_omega = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
         violations = np.unique(np.concatenate((violations, range_omega)))
 
         # only need one iteration since poles are fixed
@@ -721,7 +675,7 @@ class FastDispersionFitter(DispersionFitter):
             Best fitting result: (dispersive medium, weighted RMS error).
         """
 
-        omega = 2 * np.pi * HBAR * self.freqs[::-1]
+        omega = PoleResidue.angular_freq_to_eV(PoleResidue.Hz_to_angular_freq(self.freqs[::-1]))
         eps = self.eps_data[::-1]
 
         init_model = FastFitterData.initialize(
