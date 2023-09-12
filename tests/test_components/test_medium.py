@@ -168,6 +168,28 @@ def eps_compare(medium: td.Medium, expected: Dict, tol: float = 1e-5):
         assert np.abs(medium.eps_model(freq) - val) < tol
 
 
+def test_pole_residue_loss_upper_bound():
+    """Test if `loss_upper_bound` in PoleResidue behaves correctly."""
+    mat_lorentz = td.Lorentz(coeffs=((15, 1e14, 0.3e14), (10, 1.5e14, 0.2e14)))
+    mat_sellmeier = td.Sellmeier(coeffs=((2, 4),))
+    mat_combined = td.PoleResidue(
+        poles=(mat_lorentz.pole_residue.poles + mat_sellmeier.pole_residue.poles)
+    )
+    # compute overall Im[eps] upper bound when `frequency_range = None`
+    assert mat_combined.loss_upper_bound > 40
+    # Im[eps] upper bound within the frequency range
+    mat_new = mat_combined.copy(update={"frequency_range": (6e13, 1.2e14)})
+    assert mat_new.loss_upper_bound > 30 and mat_new.loss_upper_bound < 35
+
+    # low loss Palik material from material library
+    loss_threshold = 2e-5
+    assert td.material_library["GaAs"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+    assert td.material_library["Ge"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+    assert td.material_library["InP"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+    assert td.material_library["SiO2"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+    assert td.material_library["cSi"]["Palik_Lossless"].loss_upper_bound < loss_threshold
+
+
 def test_epsilon_eval():
     """Compare epsilon evaluated from a dispersive various models to expected."""
 
