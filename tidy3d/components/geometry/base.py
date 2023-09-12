@@ -885,7 +885,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> GeometryGroup:
+    ) -> Geometry:
         """Import a ``gdstk.Cell`` or a ``gdspy.Cell`` and extrude it into a GeometryGroup.
 
         Parameters
@@ -917,8 +917,8 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        :class:`GeometryGroup`
-            Geometry group with geometries created from the 2D data.
+        :class:`Geometry`
+            Geometries created from the 2D data.
         """
 
         # switch the GDS cell loader function based on the class name string
@@ -951,7 +951,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     consolidated_logger.warning(str(error))
                 except Tidy3dError as error:
                     consolidated_logger.warning(str(error))
-        return GeometryGroup(geometries=geometries)
+        return geometries[0] if len(geometries) == 1 else GeometryGroup(geometries=geometries)
 
     @staticmethod
     def from_shapely(
