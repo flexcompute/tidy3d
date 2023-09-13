@@ -710,6 +710,8 @@ def get_tasks(
     """
     folder = Folder.get(folder, create=True)
     tasks = folder.list_tasks()
+    if not tasks:
+        return []
     if order == "new":
         tasks = sorted(tasks, key=lambda t: t.created_at, reverse=True)
     elif order == "old":
