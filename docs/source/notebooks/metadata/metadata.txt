@@ -5,6 +5,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, demultiplexer, Tidy3D, FDTD",
     "feature_image": "./img/8_channel_demultiplexer_1.png"
   },
+  "90BendPolarizationSplitterRotator.ipynb": {
+    "title": "PSR based on 90 degree bends | Flexcompute",
+    "description": "This notebook demonstrates how to model a PSR based on 90 degree bends in Tidy3D FDTD.",
+    "keywords": "silicon photonics, PIC, integrated photonics, PSR, Tidy3D, FDTD",
+    "feature_image": "./img/90_bend_PSR_1.png"
+  },
   "90OpticalHybrid.ipynb": {
     "title": "90 Degree Optical Hybrid Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to model a 90 degree optical hybrid in Tidy3D FDTD.",
