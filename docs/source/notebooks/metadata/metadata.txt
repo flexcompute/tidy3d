@@ -12,7 +12,7 @@
     "feature_image": "./img/optical_hybrid_schematic.png"
   },
   "AdiabaticCouplerLNO.ipynb": {
-    "title": "Lithium nobate adiabatic waveguide coupler | Flexcompute",
+    "title": "Lithium Nobate Adiabatic Waveguide Coupler | Flexcompute",
     "description": "This notebook demonstrates the simulation of a thin film lithium nobate adiabatic waveguide coupler.",
     "keywords": "LNO, lithium niobate, coupler, Tidy3D, FDTD",
     "feature_image": "./img/LNO_adiabatic_coupler.png"
@@ -60,7 +60,7 @@
     "feature_image": "N/A"
   },
   "AdjointPlugin8WaveguideBend.ipynb": {
-    "title": "Adjoint Optimization of a Metalens in Tidy3D | Flexcompute",
+    "title": "Adjoint Optimization of a Waveguide Bend in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates the adjoint optimization of a waveguide bend in Tidy3D using the adjoint plugin.",
     "keywords": "inverse design, bend, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
