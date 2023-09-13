@@ -21,6 +21,10 @@ the nonuniform grid, as well as and the propagation axis direction for modes in 
 - Bug with truly anisotropic `JaxCustomMedium` in adjoint plugin.
 - Bug in adjoint plugin when `JaxBox` is less than 1 grid cell thick.
 - Bug in `adjoint` plugin where `JaxSimulation.structures` did not accept structures containing `td.PolySlab`.
+- Return empty list if the folder cannot be queried in `web.get_tasks()`.
+
+### Fixed
+- Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
 
 ## [2.4.0] - 2023-9-11
 

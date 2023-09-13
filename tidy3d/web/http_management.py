@@ -15,6 +15,8 @@ from ..version import __version__
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
 
+USER_AGENT = os.environ.get("TIDY3D_AGENT", f"Python-Client/{__version__}")
+
 
 class ResponseCodes(Enum):
     """HTTP response codes to handle individually."""
@@ -64,6 +66,7 @@ def api_key_auth(request: requests.request) -> requests.request:
     request.headers["simcloud-api-key"] = key
     request.headers["tidy3d-python-version"] = __version__
     request.headers["source"] = "Python"
+    request.headers["User-Agent"] = USER_AGENT
     return request
 
 
@@ -75,10 +78,7 @@ def get_headers() -> Dict[str, str]:
     Dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
-    return {
-        "simcloud-api-key": api_key(),
-        "Application": "TIDY3D",
-    }
+    return {"simcloud-api-key": api_key(), "Application": "TIDY3D", "User-Agent": USER_AGENT}
 
 
 def http_interceptor(func):
