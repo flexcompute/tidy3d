@@ -424,7 +424,7 @@ def test_mode_solver_straight_vs_angled():
     for key, val in ms.data.modes_info.items():
         tol = 1e-2
         if key == "mode area":
-            tol = 2.5e-2 # mode area has higher error
+            tol = 2.5e-2  # mode area has higher error
         # print(val, ms_angled.data.modes_info[key])
         print(np.amax(np.abs(val - ms_angled.data.modes_info[key])))
         assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol, atol=tol)
