@@ -5,6 +5,7 @@ from tidy3d import material_library as lib
 from tidy3d.constants import C_0
 from tidy3d import Medium2D, PoleResidue
 
+LOW_LOSS_THRESHOLD = 2e-5
 
 def generate_material_library_doc():
 
@@ -104,7 +105,10 @@ def generate_material_library_doc():
                         # Lossy (based on model)
                         nonzero = np.sum(np.abs(np.array(medium.poles).real))
                         if nonzero:
-                            row["model"] += ", lossy"
+                            if medium.loss_upper_bound < LOW_LOSS_THRESHOLD:
+                                row["model"] += ", low loss"
+                            else:
+                                row["model"] += ", lossy"
                         else:
                             row["model"] += ", lossless"
 
