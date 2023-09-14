@@ -6,6 +6,8 @@ Tidy3D Documentation
 .. * toggle between command line - notebook / python instructions in section 1
 Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an `open source python package <https://github.com/flexcompute/tidy3d>`_ or a `web-based graphical user interface <https://tidy3d.simulation.cloud>`_.
 
+If you do not wish to install, please click this button to get `started quickly <https://tidy3d.simulation.cloud/notebook?file=StartHere.ipynb>`_.
+
 .. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
 
 1. Set up Tidy3d

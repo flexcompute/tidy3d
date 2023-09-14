@@ -3,7 +3,7 @@ on:
   push:
     branches:
       - main
-      - develop
+      - latest
   workflow_dispatch:
     inputs:
       env:
@@ -24,7 +24,7 @@ jobs:
             echo "::set-output name=env::${{ github.event.inputs.env }}"
             echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
           fi
-          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/develop'
+          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/latest'
           then
             echo "::set-output name=env::dev"
             echo "ENV=dev" >> $GITHUB_ENV
@@ -60,7 +60,7 @@ jobs:
       - run: |
           mkdir -p build_toc
           cp docs/source/examples.rst build_toc/examples.rst
-        
+
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: build_toc
