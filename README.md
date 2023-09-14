@@ -78,4 +78,6 @@ jblack docs/source/notebooks/*.ipynb
 Note: is is not in the standard requiremenents yet as we are still experimenting with it.
 
 
+## Build Troubleshooting
 
+- The build can fail if `pandoc` is not properly installed. At least on linux, `pip install pandoc` is not sufficient, as it only provides a wrapper. On Ubuntu, in additional to `pip install`, one will need to do `apt install pandoc`.
