@@ -11,6 +11,7 @@ import jax
 import time
 import matplotlib.pyplot as plt
 import h5py
+import trimesh
 
 import tidy3d as td
 
@@ -1457,3 +1458,57 @@ def test_sim_data_plot_field(use_emulated_run):
     ax = jax_sim_data.plot_field("field", "Ez", "real", f=1e14)
     # plt.show()
     assert len(ax.collections) == 1
+
+
+def test_polyslab_structures(use_emulated_run):
+
+    vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
+    polyslab = td.PolySlab(vertices=vertices, slab_bounds=(0, 1), axis=2)
+    ps = td.Structure(geometry=polyslab, medium=td.Medium())
+    gg = td.Structure(
+        geometry=td.GeometryGroup(geometries=[polyslab]),
+        medium=td.Medium(),
+    )
+    ggg = td.Structure(
+        geometry=td.GeometryGroup(geometries=[polyslab, td.GeometryGroup(geometries=[polyslab])]),
+        medium=td.Medium(),
+    )
+
+    clip_operation = td.ClipOperation(
+        operation="union", geometry_a=gg.geometry, geometry_b=ggg.geometry
+    )
+    gggg = td.Structure(
+        geometry=clip_operation,
+        medium=td.Medium(),
+    )
+
+    VERTICES = np.array(
+        [[-1.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-1.5, 0.5, -0.5], [-1.5, -0.5, 0.5]]
+    )
+    FACES = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
+    STL_GEO = td.TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
+
+    stl_struct = td.Structure(geometry=STL_GEO, medium=td.Medium())
+
+    mnt = td.ModeMonitor(size=(1, 1, 0), freqs=[1e14], name="test", mode_spec=td.ModeSpec())
+
+    def f(x):
+
+        jb = JaxBox(size=(x, x, x), center=(0, 0, 0))
+        js = JaxStructure(geometry=jb, medium=JaxMedium(permittivity=2.0))
+
+        sim = JaxSimulation(
+            size=(2.0, 2.0, 2.0),
+            structures=[ps, gg, ggg, gggg, stl_struct],
+            input_structures=[js],
+            run_time=1e-12,
+            output_monitors=[mnt],
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
+        )
+
+        sd = run(sim, task_name="test")
+
+        return jnp.sum(jnp.abs(jnp.array(sd["test"].amps.values)))
+
+    jax.grad(f)(0.5)

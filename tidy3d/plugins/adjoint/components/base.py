@@ -37,6 +37,26 @@ class JaxObject(Tidy3dBaseModel):
             sub_children, sub_aux_data = jax_tree_flatten(field)
             children.append(sub_children)
             aux_data[field_name] = sub_aux_data
+
+        def fix_polyslab(geo_dict: dict) -> None:
+            """Recursively Fix a dictionary possibly containing a polyslab geometry."""
+            if geo_dict["type"] == "PolySlab":
+                vertices = geo_dict["vertices"]
+                geo_dict["vertices"] = vertices.tolist()
+            elif geo_dict["type"] == "GeometryGroup":
+                for sub_geo_dict in geo_dict["geometries"]:
+                    fix_polyslab(sub_geo_dict)
+            elif geo_dict["type"] == "ClipOperation":
+                fix_polyslab(geo_dict["geometry_a"])
+                fix_polyslab(geo_dict["geometry_b"])
+
+        # fixes bug with jax handling 2D numpy array in polyslab vertices
+        if aux_data.get("type", "") == "JaxSimulation":
+            structures = aux_data["structures"]
+            for _i, structure in enumerate(structures):
+                geometry = structure["geometry"]
+                fix_polyslab(geometry)
+
         return children, aux_data
 
     @classmethod
