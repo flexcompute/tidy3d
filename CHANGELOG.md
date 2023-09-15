@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
 - Bug with truly anisotropic `JaxCustomMedium` in adjoint plugin.
 - Bug in adjoint plugin when `JaxBox` is less than 1 grid cell thick.
+- Bug in `adjoint` plugin where `JaxSimulation.structures` did not accept structures containing `td.PolySlab`.
 
 ## [2.4.0] - 2023-9-11
 
