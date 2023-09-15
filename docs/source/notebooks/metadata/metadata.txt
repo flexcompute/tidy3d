@@ -323,6 +323,12 @@
     "keywords": "parallel processing, batch, parameter scan, sweep, Tidy3D, FDTD",
     "feature_image": ""
   },
+  "ParticleSwarmOptimizedPBS.ipynb": {
+    "title": "Particle Swarm Optimization of a PBS| Flexcompute",
+    "description": "This notebook demonstrates how to perform a particle swarm optimization of a polarization beam splitter in Tidy3D.",
+    "keywords": "particle swarm optimization, PSO, polarization beam splitter, PBS, tidy3d, fdtd",
+    "feature_image": "./img/particle_swarm_optimization_pbs.png"
+  },
   "PhotonicCrystalsComponents.ipynb": {
     "title": "Defining Common Photonic Crystal Structures | Flexcompute",
     "description": "This notebook contains pre-defined functions used to construct commonly used photonic crystal structures such as hexagonal and square lattices.",
