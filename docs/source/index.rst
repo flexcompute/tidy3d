@@ -41,6 +41,7 @@ Start running simulations with just a few lines of code. Run this sample code to
    # import the tidy3d package and configure it with your API key
    import tidy3d as td
    import tidy3d.web as web
+   import numpy as np
 
    # set up global parameters of simulation ( speed of light / wavelength in micron )
    freq0 = td.C_0 / 0.75
