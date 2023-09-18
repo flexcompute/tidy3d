@@ -268,6 +268,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
              size, credits of task and others.
         """
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
+
         return SimulationTask(**resp) if resp else None
 
     @classmethod
