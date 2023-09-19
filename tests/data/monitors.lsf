@@ -1,0 +1,140 @@
+# https://optics.ansys.com/hc/en-us/articles/360034923553-Lumerical-scripting-language-Alphabetical-list
+# https://readthedocs.org/projects/lumopt/downloads/pdf/latest/
+
+switchtolayout;
+selectall;
+delete;
+
+## SIM PARAMS
+size_x=16e-6;
+size_y=18e-6;
+size_z=0;
+mesh_x=20e-9;
+mesh_y=20e-9;
+finer_mesh_size=0.5e-6;
+mesh_accuracy=2;
+
+addsphere;
+set("name","s");
+set("x",1e-6);
+set("y",2e-6);
+set("z",0);
+set("radius",0.5e-6);
+
+
+
+## FDTD
+addfdtd;
+set('dimension','2D');
+set('background index',1.44);
+set('mesh accuracy',mesh_accuracy);
+set('x',0.0);
+set('x span',size_x);
+set('y',0.0);
+set('y span',size_y);
+set('z span',size_z);
+set('force symmetric y mesh',true);
+set('y min bc','Anti-Symmetric');
+set('pml layers',12);
+
+
+## OPTIMIZATION FIELDS MONITOR IN OPTIMIZABLE REGION
+addpower;
+set('name','opt_fields');
+set('monitor type','2D Z-normal');
+set('x',-6.5e-6);
+set('x span',finer_mesh_size);
+set('y',7.5e-6);
+set('y span',finer_mesh_size);
+
+
+#adddipole;
+#set("x",0);
+#set("y",1e-6);
+#set("z",0e-6);
+
+addefieldmonitor;
+set("name","E_field");
+set("monitor type",6);  # 2D y-normal
+set("x",-4.5e-6);
+set("x span",0.5e-6);
+set("y",7.5e-6);
+set("z",0);
+set("y span",0.5e-6);
+set("record electrostatic potential",1);
+set("save data",1);
+filename = "electric_field.mat";
+set("filename",filename);
+
+addtestUnavailableCommand;
+
+addmodeexpansion;
+set("name","mode monitor");
+set("x",-3.5e-6);
+set("x span",5e-6);
+set("y",7.5e-6);
+set("z",0);
+set("y span",1e-6);
+
+addindex;
+set("name","index_monitor");
+set("x",0);
+set("x span",5e-6);
+set("z",0);
+set("y",8e-6);
+set("y span",2.5e-6);
+
+addeffectiveindex;
+set("name","neff");
+set("x",1e-6);
+set("x span",0.7e-6);
+set("y",5e-6);
+set("y span",0.7e-6);
+
+addtime;
+
+set("name","time_1");
+set("monitor type",1);  # point
+set("x",2.5e-6);
+set("z",0);
+set("y",5e-6);
+
+addmovie;
+set("name","movie_1");
+set("monitor type",3);  # 1 = 2D x-normal,  2 = 2D y-normal,  3 = 2D z-normal
+set("x",4e-6);
+set("x span",0.5e-6);
+set("y",5e-6);
+set("y span",5e-6);
+set("z",0);
+set("lock aspect ratio",1);
+set("horizontal resolution",240);
+
+addprofile;
+set("name","field_profile");
+set("monitor type",7);  # 2D z-normal
+set("x",6e-6);
+set("x span",1e-6);
+set("y",5);
+set("y span",1e-6);
+set("z",0);
+
+setactivesolver("EME");
+addemeindex;
+
+setactivesolver("EME");
+addemeprofile;
+
+addemfieldmonitor; 
+set("name","T");
+set("use source limits",1);
+set("reference source","plane_wave");  
+set("surface type","solid");
+set("solid","2D rectangle");
+
+addemfieldtimemonitor; 
+set("name","time");
+set("geometry type","point");
+set("x",-2.5e-6);
+set("y",2.5e-6);
+set("z",0);
