@@ -220,7 +220,7 @@ def make_sim(
         x=np.linspace(xmin, xmax, Nx).tolist(),
         y=np.linspace(ymin, ymax, Ny).tolist(),
         z=np.linspace(zmin, zmax, Nz).tolist(),
-        f=[FREQ0],
+        f=(FREQ0,),
     )
 
     jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
@@ -235,6 +235,13 @@ def make_sim(
     jax_eps_dataset = JaxPermittivityDataset(**field_components)
     jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
     jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
+
+    field_components_anis = {
+        f"eps_{dim}{dim}": const * eps_ii for const, dim in zip([1.0, 2.0, 3.0], "xyz")
+    }
+    jax_eps_dataset_anis = JaxPermittivityDataset(**field_components_anis)
+    jax_med_custom_anis = JaxCustomMedium(eps_dataset=jax_eps_dataset_anis)
+    jax_struct_custom_anis = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom_anis)
 
     jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
     jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
@@ -289,6 +296,7 @@ def make_sim(
             jax_struct_custom,
             jax_struct3,
             jax_struct_group,
+            jax_struct_custom_anis,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),

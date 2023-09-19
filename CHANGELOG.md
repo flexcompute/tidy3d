@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking
 the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
+- Bug with truly anisotropic `JaxCustomMedium` in adjoint plugin.
 
 ## [2.4.0] - 2023-9-11
 

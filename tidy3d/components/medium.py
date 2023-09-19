@@ -1038,28 +1038,36 @@ class CustomMedium(AbstractCustomMedium):
             self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
             return CustomIsotropicMedium.parse_obj(self_dict)
 
-        # isotropic, but with `eps_dataset`
-        if self.is_isotropic:
-            eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                np.array(self.eps_dataset.eps_xx.values), self.freqs[0]
-            )
-            coords = self.eps_dataset.eps_xx.coords
+        def get_eps_sigma(eps_complex: SpatialDataArray, freq: float) -> tuple:
+            """Convert a complex permittivity to real permittivity and conductivity."""
+            eps_values = np.array(eps_complex.values)
+
+            eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(eps_values, freq)
+            coords = eps_complex.coords
+
             eps_real = ScalarFieldDataArray(eps_real, coords=coords)
             sigma = ScalarFieldDataArray(sigma, coords=coords)
+
             eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
             sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
+
+            return eps_real, sigma
+
+        # isotropic, but with `eps_dataset`
+        if self.is_isotropic:
+
+            eps_complex = self.eps_dataset.eps_xx
+            eps_real, sigma = get_eps_sigma(eps_complex, freq=self.freqs[0])
+
             self_dict.update({"permittivity": eps_real, "conductivity": sigma})
             return CustomIsotropicMedium.parse_obj(self_dict)
 
         # anisotropic
-        eps_field_components = self.eps_dataset.field_components
         mat_comp = {"interp_method": self.interp_method}
-        for comp in ["xx", "yy", "zz"]:
-            eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
-                eps_field_components["eps_" + comp], eps_field_components["eps_" + comp].coords["f"]
-            )
-            eps_real = SpatialDataArray(eps_real.squeeze(dim="f", drop=True))
-            sigma = SpatialDataArray(sigma.squeeze(dim="f", drop=True))
+        for freq, comp in zip(self.freqs, ["xx", "yy", "zz"]):
+            eps_complex = self.eps_dataset.field_components["eps_" + comp]
+            eps_real, sigma = get_eps_sigma(eps_complex, freq=freq)
+
             comp_dict = self_dict.copy()
             comp_dict.update({"permittivity": eps_real, "conductivity": sigma})
             mat_comp.update({comp: CustomIsotropicMedium.parse_obj(comp_dict)})
