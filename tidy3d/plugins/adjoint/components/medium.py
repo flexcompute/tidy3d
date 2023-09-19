@@ -102,9 +102,13 @@ class AbstractJaxMedium(ABC, JaxObject):
         interp_kwargs = {key: value for key, value in vol_coords.items() if key not in isel_kwargs}
 
         fields_eval = e_dotted.isel(**isel_kwargs).interp(**interp_kwargs, assume_sorted=True)
+
         inside_mask = inside_mask.isel(**isel_kwargs)
 
-        return inside_mask * d_vol * fields_eval
+        mask_dV = inside_mask * d_vol
+        fields_eval = fields_eval.assign_coords(**mask_dV.coords)
+
+        return mask_dV * fields_eval
 
     def d_eps_map(
         self,
