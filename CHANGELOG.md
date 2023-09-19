@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.
 - Support to load and save compressed HDF5 files (`.hdf5.gz`) directly from `BaseModel`.
+- No longer print line numbers in webapi log output.
 
 ### Fixed
 - Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking
