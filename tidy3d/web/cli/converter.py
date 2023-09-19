@@ -924,7 +924,6 @@ def _addfdtd(Lines, i: int, v_dict: dict) -> str:
     gridspec_string += " wavelength=1.0)"
     sim_string += gridspec_string
     sim_string += ",\n)\n"
-
     return sim_string, gridspec_string
 
 
@@ -962,8 +961,63 @@ def _addmesh(Lines, i: int, overstrct: int):
     override_string += "\tgeometry=td.Box(center=(" + x + "," + y + "," + z + "),"
     override_string += "size=(" + xl + "," + yl + "," + zl + ")),\n"
     override_string += "\tdl=(" + dx + "," + dy + "," + dz + "),\n)\n"
-
     return override_string, name.replace(" ", "_")
+
+
+def _addindex(Lines, i: int, indexmon: int):
+    x, y, z = "0", "0", "0"
+    xl, yl, zl = "0", "0", "0"
+    name = "permittivity_monitor_" + str(indexmon)
+    freqs = " # NOTE: please specify"
+    wave_center, wave_span = "0.5", "0.1"
+    index_monitor_string = " = td.PermittivityMonitor(\n"
+    while Lines[i][0] == "\n" or Lines[i][:5] == "set('" or Lines[i][0] == "#":
+        if Lines[i][5:9] == "name":
+            name = Lines[i][12:].split("'")[0]
+        elif Lines[i][5:7] == "x'":
+            x = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:7] == "y'":
+            y = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:7] == "z'":
+            z = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:11] == "x span":
+            xl = Lines[i][13:].split(";")[0][:-1]
+        elif Lines[i][5:11] == "y span":
+            yl = Lines[i][13:].split(";")[0][:-1]
+        elif Lines[i][5:11] == "z span":
+            zl = Lines[i][13:].split(";")[0][:-1]
+        elif Lines[i][5:9] == "name":
+            name = Lines[i][12:].split("'")[0]
+        elif Lines[i][5:22] == "wavelength center":
+            wave_center = Lines[i][24:].split(";")[0][:-1] + "*1e6"
+        elif Lines[i][5:20] == "wavelength span":
+            wave_span = Lines[i][22:].split(";")[0][:-1] + "*1e6"
+        elif Lines[i][5:21] == "frequency points":
+            num_freqs = Lines[i][23:].split(";")[0][:-1]
+            freqs = (
+                "np.linspace("
+                + wave_center
+                + "-"
+                + wave_span
+                + "/2,"
+                + wave_center
+                + "+"
+                + wave_span
+                + "/2,"
+                + num_freqs
+                + ")"
+            )
+        i += 1
+        if i == len(Lines):
+            break
+    x, y, z, xl, yl, zl = _to_um([x, y, z, xl, yl, zl])
+    index_monitor_string += "\tcenter=(" + x + "," + y + "," + z + "),\n"
+    index_monitor_string += "\tsize=(" + xl + "," + yl + "," + zl + "),\n"
+    index_monitor_string += "\tname='" + name + "',\n"
+    index_monitor_string += "\tinterval_space=(1,1,1),\n"
+    index_monitor_string += "\tfreqs=" + freqs + ",\n"
+    index_monitor_string += ")\n"
+    return index_monitor_string, name.replace(" ", "_")
 
 
 def _addpower(Lines, i: int, fluxmon: int):
@@ -1019,6 +1073,62 @@ def _addpower(Lines, i: int, fluxmon: int):
     flux_monitor_string += "\tfreqs=" + freqs + ",\n"
     flux_monitor_string += ")\n"
     return flux_monitor_string, name.replace(" ", "_")
+
+
+def _addmovie(Lines, i: int, fieldTime: int):
+    # https://optics.ansys.com/hc/en-us/articles/360034924633-addefieldmonitor
+    x, y, z = "0", "0", "0"
+    xl, yl, zl = "0", "0", "0"
+    x_min, x_max = "0", "0"
+    y_min, y_max = "0", "0"
+    z_min, z_max = "0", "0"
+    name = "field_time_monitor_" + str(fieldTime)
+    field_monitor_string = " = td.FieldTimeMonitor(\n"
+    while Lines[i][0] == "\n" or Lines[i][:5] == "set('" or Lines[i][0] == "#":
+        if Lines[i][5:9] == "name":
+            name = Lines[i][12:].split("'")[0]
+        elif Lines[i][5:7] == "x'":
+            x = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:7] == "y'":
+            y = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:7] == "z'":
+            z = Lines[i][8:].split(";")[0][:-1]
+        elif Lines[i][5:10] == "x_min":
+            x_min = Lines[i][12:].split(";")[0][:-1]
+            xl = x_max + "-" + x_min
+        elif Lines[i][5:10] == "x_max":
+            x_max = Lines[i][12:].split(";")[0][:-1]
+            xl = x_max + "-" + x_min
+        elif Lines[i][5:10] == "y_min":
+            y_min = Lines[i][12:].split(";")[0][:-1]
+            yl = y_max + "-" + y_min
+        elif Lines[i][5:10] == "y_max":
+            y_max = Lines[i][12:].split(";")[0][:-1]
+            yl = y_max + "-" + y_min
+        elif Lines[i][5:10] == "z_min":
+            z_min = Lines[i][12:].split(";")[0][:-1]
+            zl = z_max + "-" + z_min
+        elif Lines[i][5:10] == "z_max":
+            z_max = Lines[i][12:].split(";")[0][:-1]
+            zl = z_max + "-" + z_min
+        elif Lines[i][5:11] == "x span":
+            xl = Lines[i][13:].split(";")[0][:-1]
+        elif Lines[i][5:11] == "y span":
+            yl = Lines[i][13:].split(";")[0][:-1]
+        elif Lines[i][5:11] == "z span":
+            zl = Lines[i][13:].split(";")[0][:-1]
+        i += 1
+        if i == len(Lines):
+            break
+    x, y, z, xl, yl, zl = _to_um([x, y, z, xl, yl, zl])
+    field_monitor_string += "\tcenter=(" + x + "," + y + "," + z + "),\n"
+    field_monitor_string += "\tsize=(" + xl + "," + yl + "," + zl + "),\n"
+    field_monitor_string += "\tname='" + name + "',\n"
+    field_monitor_string += "\tinterval=1,\n"
+    field_monitor_string += "\tstart=0.0,\n"
+    field_monitor_string += "\tstop=None,\n"
+    field_monitor_string += ")\n"
+    return field_monitor_string, name.replace(" ", "_")
 
 
 def _addefieldmonitor(Lines, i: int, fieldmon: int):
@@ -1196,7 +1306,7 @@ def lsf_reader(filename: str) -> None:
     rect, sph, cyl, polyslab = 0, 0, 0, 0
     sources, modesrc, planewv, ptdipole, gauss, tfsf = "[", 0, 0, 0, 0, 0
     monitors = "["
-    modemon, fluxmon, fieldmon = 0, 0, 0
+    modemon, fluxmon, fieldmon, fieldTime, indexmon = 0, 0, 0, 0, 0
     gridspec_string = "grid_spec=td.GridSpec.auto()"
     override_structures, overstrct = "[", 0
 
@@ -1267,12 +1377,35 @@ def lsf_reader(filename: str) -> None:
             override_structures += refine_box_name + ", "
             tidy3d_file += refine_box_name + override_string
             overstrct += 1
+        elif (
+            line[:9] == "addindex;"
+            or line[:18] == "addeffectiveindex;"
+            or line[:12] == "addemeindex;"
+        ):
+            addindex_string, index_name = _addindex(Lines, i + 1, indexmon)
+            monitors += index_name + ", "
+            tidy3d_file += index_name + addindex_string
+            indexmon += 1
         elif line[:9] == "addpower;":
             addpower_string, power_name = _addpower(Lines, i + 1, fluxmon)
             monitors += power_name + ", "
             tidy3d_file += power_name + addpower_string
             fluxmon += 1
-        elif line[:17] == "addefieldmonitor;":
+        elif (
+            line[:9] == "addmovie;"
+            or line[:22] == "addemfieldtimemonitor;"
+            or line[:8] == "addtime;"
+        ):
+            addmovie_string, movie_name = _addmovie(Lines, i + 1, fieldTime)
+            monitors += movie_name + ", "
+            tidy3d_file += movie_name + addmovie_string
+            fieldTime += 1
+        elif (
+            line[:17] == "addefieldmonitor;"
+            or line[:11] == "addprofile;"
+            or line[:18] == "addemfieldmonitor;"
+            or line[:14] == "addemeprofile;"
+        ):
             addefieldmonitor_string, monitor_name = _addefieldmonitor(Lines, i + 1, fieldmon)
             monitors += monitor_name + ", "
             tidy3d_file += monitor_name + addefieldmonitor_string
@@ -1293,11 +1426,22 @@ def lsf_reader(filename: str) -> None:
             pass
         else:
             tidy3d_file += "# " + line[:-1] + " # NOTE: does not yet parse to Tidy3D\n"
-    structures = structures[:-2] + "]"
-    sources = sources[:-2] + "]"
-    monitors = monitors[:-2] + "]"
-    override_structures = override_structures[:-2] + "]"
-
+    if len(structures) > 1:
+        structures = structures[:-2] + "]"
+    else:
+        structures = "[]"
+    if len(sources) > 1:
+        sources = sources[:-2] + "]"
+    else:
+        sources = "[]"
+    if len(monitors) > 1:
+        monitors = monitors[:-2] + "]"
+    else:
+        monitors = "[]"
+    if len(override_structures) > 1:
+        override_structures = override_structures[:-2] + "]"
+    else:
+        override_structures = "[]"
     tidy3d_file += "\nsim = sim.copy(update=dict(structures=" + structures + ","
     tidy3d_file += " # NOTE: Check order of structures for potential overlap issues\n"
     tidy3d_file += "\tsources=" + sources + ",\n"
@@ -1310,7 +1454,6 @@ def lsf_reader(filename: str) -> None:
         + ")\n\t)\n"
     )
     tidy3d_file += ")"
-
     return tidy3d_file
 
 
