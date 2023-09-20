@@ -13,6 +13,11 @@ from .constants import (
     KEY_APIKEY,
     HEADER_APIKEY,
     HEADER_VERSION,
+    HEADER_SOURCE,
+    HEADER_USER_AGENT,
+    HEADER_APPLICATION,
+    HEADER_SOURCE_VALUE,
+    HEADER_APPLICATION_VALUE,
 )
 
 from .environment import Env
@@ -88,10 +93,11 @@ def api_key_auth(request: requests.request) -> requests.request:
         )
     if not version:
         raise ValueError("version not found.")
+
     request.headers[HEADER_APIKEY] = key
     request.headers[HEADER_VERSION] = version
-    request.headers["source"] = "Python"
-    request.headers["User-Agent"] = get_user_agent()
+    request.headers[HEADER_SOURCE] = HEADER_SOURCE_VALUE
+    request.headers[HEADER_USER_AGENT] = get_user_agent()
     return request
 
 
@@ -103,7 +109,11 @@ def get_headers() -> Dict[str, str]:
     Dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
-    return {HEADER_APIKEY: api_key(), "Application": "TIDY3D", "User-Agent": get_user_agent()}
+    return {
+        HEADER_APIKEY: api_key(),
+        HEADER_APPLICATION: HEADER_APPLICATION_VALUE,
+        HEADER_USER_AGENT: get_user_agent(),
+    }
 
 
 def http_interceptor(func):

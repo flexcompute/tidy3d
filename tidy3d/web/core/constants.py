@@ -1,12 +1,17 @@
 """Defines constants for core."""
 
-SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
-
-KEY_APIKEY = "apikey"
-
+# HTTP Header key and value
 HEADER_APIKEY = "simcloud-api-key"
 HEADER_VERSION = "tidy3d-python-version"
+HEADER_SOURCE = "source"
+HEADER_SOURCE_VALUE = "Python"
+HEADER_USER_AGENT = "User-Agent"
+HEADER_APPLICATION = "Application"
+HEADER_APPLICATION_VALUE = "TIDY3D"
 
+
+SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
+KEY_APIKEY = "apikey"
 JSON_TAG = "JSON_STRING"
 # type of the task_id
 TaskId = str
@@ -20,10 +25,3 @@ RUNNING_INFO = "output/solver_progress.csv"
 SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"
 SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
-
-MODESOLVER_GZ = "mode_solver.hdf5.gz"
-MODESOLVER_API = "tidy3d/modesolver/py"
-MODESOLVER_JSON = "mode_solver.json"
-MODESOLVER_HDF5 = "mode_solver.hdf5"
-MODESOLVER_LOG = "output/result.log"
-MODESOLVER_RESULT = "output/result.hdf5"

@@ -7,7 +7,7 @@ import requests
 import toml
 
 from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from ..core.constants import KEY_APIKEY
+from ..core.constants import KEY_APIKEY, HEADER_APPLICATION, HEADER_APPLICATION_VALUE
 from ..core.environment import Env
 
 
@@ -31,7 +31,7 @@ def migrate() -> bool:
                 default=True,
             )
             if is_migrate:
-                headers = {"Application": "TIDY3D"}
+                headers = {HEADER_APPLICATION: HEADER_APPLICATION_VALUE}
                 resp = requests.get(
                     f"{Env.current.web_api_endpoint}/auth",
                     headers=headers,
