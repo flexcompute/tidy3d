@@ -3,28 +3,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.1] - 2023-9-20
 
 ### Added
 - `ModeSolverData.pol_fraction` and `ModeSolverData.pol_fraction_waveguide` properties to compute polarization fraction of modes using two different definitions.
 - `ModeSolverData.to_dataframe()` and `ModeSolverData.modes_info` for a convenient summary of various modal properties of the computed modes.
-- Loss upper bound estimation in PoleResidue material model.
+- Loss upper bound estimation in `PoleResidue` material model.
 
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.
-- Support to load and save compressed HDF5 files (`.hdf5.gz`) directly from `BaseModel`.
-- No longer print line numbers in webapi log output.
-
-### Fixed
-- Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking
-the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
-- Bug with truly anisotropic `JaxCustomMedium` in adjoint plugin.
-- Bug in adjoint plugin when `JaxBox` is less than 1 grid cell thick.
-- Bug in `adjoint` plugin where `JaxSimulation.structures` did not accept structures containing `td.PolySlab`.
-- Return empty list if the folder cannot be queried in `web.get_tasks()`.
+- Support to load and save compressed HDF5 files (`.hdf5.gz`) directly from `Tidy3dBaseModel`.
+- Line numbers no longer printed in webapi log output.
+- Empty list returned if the folder cannot be queried in `web.get_tasks()`.
 
 ### Fixed
 - Filtering based on `ModeSpec.filter_pol` now uses the user-exposed `ModeSolverData.pol_fraction` property. This also fixes the previous internal handling which was not taking the nonuniform grid, as well as and the propagation axis direction for modes in angled waveguides. In practice, the results should be similar in most cases.
+- Bug with truly anisotropic `JaxCustomMedium` in adjoint plugin.
+- Bug in adjoint plugin when `JaxBox` is less than 1 grid cell thick.
+- Bug in `adjoint` plugin where `JaxSimulation.structures` did not accept structures containing `td.PolySlab`.
+
 
 ## [2.4.0] - 2023-9-11
 
@@ -942,7 +939,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...develop
+[2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/flexcompute/tidy3d/compare/v2.3.1...v2.3.2
