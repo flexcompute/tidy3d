@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `ModeSolverData.pol_fraction` and `ModeSolverData.pol_fraction_waveguide` properties to compute polarization fraction of modes using two different definitions.
 - `ModeSolverData.to_dataframe()` and `ModeSolverData.modes_info` for a convenient summary of various modal properties of the computed modes.
 - Loss upper bound estimation in PoleResidue material model.
+- Time zone to webapi logging output.
 
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.

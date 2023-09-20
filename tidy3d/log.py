@@ -330,7 +330,8 @@ def set_logging_console(stderr: bool = False) -> None:
     else:
         previous_level = DEFAULT_LEVEL
     log.handlers["console"] = LogHandler(
-        Console(stderr=stderr, width=CONSOLE_WIDTH, log_path=False), previous_level
+        Console(stderr=stderr, width=CONSOLE_WIDTH, log_path=False, log_time_format="%X %Z"),
+        previous_level,
     )
 
 
