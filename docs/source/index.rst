@@ -38,10 +38,13 @@ Start running simulations with just a few lines of code. Run this sample code to
 
 .. code-block:: python
 
+   # !pip install tidy3d # if needed, install tidy3d in a notebook by uncommenting this line
+
    # import the tidy3d package and configure it with your API key
+   import numpy as np
    import tidy3d as td
    import tidy3d.web as web
-   import numpy as np
+   # web.configure("YOUR API KEY") # if authentication needed, uncomment this line and paste your API key here
 
    # set up global parameters of simulation ( speed of light / wavelength in micron )
    freq0 = td.C_0 / 0.75
@@ -52,10 +55,9 @@ Start running simulations with just a few lines of code. Run this sample code to
        medium=td.Medium(permittivity=2.0)
    )
 
-   # create source - A uniform current source with frequency freq0 on the left side of the domain
-   source = td.UniformCurrentSource(
+   # create source - A point dipole source with frequency freq0 on the left side of the domain
+   source = td.PointDipole(
        center=(-1.5, 0, 0),
-       size=(0, 0.4, 0.4),
        source_time=td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10.0),
        polarization="Ey",
    )
