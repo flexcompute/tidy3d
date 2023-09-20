@@ -65,7 +65,7 @@ def _task_name_adj(task_name: str) -> str:
 
 def tidy3d_run_fn(simulation: Simulation, task_name: str, **kwargs) -> SimulationData:
     """Run a regular :class:`.Simulation` after conversion from jax type."""
-    return web_run(simulations=simulation, task_name=task_name, **kwargs)
+    return web_run(simulation=simulation, task_name=task_name, **kwargs)
 
 
 def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchData:

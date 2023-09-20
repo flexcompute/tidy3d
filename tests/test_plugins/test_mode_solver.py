@@ -6,7 +6,7 @@ import pydantic.v1 as pydantic
 
 import tidy3d as td
 
-import tidy3d.web.api.web as msweb
+import tidy3d.plugins.mode.web as msweb
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
@@ -66,8 +66,8 @@ def mock_remote_api(monkeypatch):
 
     monkeypatch.setattr(httputil, "api_key", lambda: "api_key")
     monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
-    monkeypatch.setattr("tidy3d.web.api.web.upload_file", void)
-    monkeypatch.setattr("tidy3d.web.api.web.download_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.api.mode.upload_file", void)
+    monkeypatch.setattr("tidy3d.web.api.mode.download_file", mock_download)
 
     responses.add(
         responses.GET,

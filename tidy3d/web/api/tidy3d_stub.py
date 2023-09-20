@@ -31,16 +31,17 @@ class Tidy3dStub(BaseModel, TaskStub):
 
     @classmethod
     def from_file(cls, file_path: str) -> SimulationType:
-        """Loads a :class:`Stub` from .yaml, .json, or .hdf5 file.
+        """Loads a Union[:class:`.Simulation`] from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         file_path : str
-            Full path to the .yaml or .json or .hdf5 file to load the :class:`.SimulationType` from.
+            Full path to the .yaml or .json or .hdf5 file to load the
+            Union[:class:`.Simulation`] from.
 
         Returns
         -------
-        :class:`.SimulationType`
+        Union[:class:`.Simulation`]
             An instance of the component class calling `load`.
 
         Example
@@ -68,7 +69,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         self,
         file_path: str,
     ):
-        """Exports :class:`Stub` instance to .yaml, .json, or .hdf5 file
+        """Exports Union[:class:`.Simulation`] instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
@@ -82,12 +83,12 @@ class Tidy3dStub(BaseModel, TaskStub):
         self.simulation.to_file(file_path)
 
     def to_hdf5_gz(self, fname: str, custom_encoders: List[Callable] = None) -> None:
-        """Exports :class:`Tidy3dBaseModel` instance to .hdf5.gz file.
+        """Exports Union[:class:`.Simulation`] instance to .hdf5.gz file.
 
         Parameters
         ----------
         fname : str
-            Full path to the .hdf5.gz file to save the :class:`Tidy3dBaseModel` to.
+            Full path to the .hdf5.gz file to save the Union[:class:`.Simulation`] to.
         custom_encoders : List[Callable]
             List of functions accepting (fname: str, group_path: str, value: Any) that take
             the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
@@ -114,7 +115,8 @@ class Tidy3dStub(BaseModel, TaskStub):
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""
-        self.simulation.validate_pre_upload(source_required)
+        if isinstance(self.simulation, Simulation):
+            self.simulation.validate_pre_upload(source_required)
 
 
 class Tidy3dStubData(BaseModel, TaskStubData):
@@ -124,16 +126,17 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
     @classmethod
     def from_file(cls, file_path: str) -> SimulationDataType:
-        """Loads a :class:`SimulationDataType` from .yaml, .json, or .hdf5 file.
+        """Loads a Union[:class:`.SimulationData`] from .yaml, .json, or .hdf5 file.
 
         Parameters
         ----------
         file_path : str
-            Full path to the .yaml or .json or .hdf5 file to load the :class:`Stub` from.
+            Full path to the .yaml or .json or .hdf5 file to load the
+            Union[:class:`.SimulationData`] from.
 
         Returns
         -------
-        :class:`.SimulationDataType`
+        Union[:class:`.SimulationData`]
             An instance of the component class calling `load`.
         """
         extension = _get_valid_extension(file_path)
@@ -153,16 +156,14 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
         return sim_data
 
-    def to_file(
-        self,
-        file_path: str,
-    ):
-        """Exports :class:`.SimulationDataType` instance to .yaml, .json, or .hdf5 file
+    def to_file(self, file_path: str):
+        """Exports Union[:class:`.SimulationData`] instance to .yaml, .json, or .hdf5 file
 
         Parameters
         ----------
         file_path : str
-            Full path to the .yaml or .json or .hdf5 file to save the :class:`.SimulationDataType` to.
+            Full path to the .yaml or .json or .hdf5 file to save the
+            Union[:class:`.SimulationData`] to.
 
         Example
         -------
@@ -172,26 +173,28 @@ class Tidy3dStubData(BaseModel, TaskStubData):
 
     @classmethod
     def postprocess(cls, file_path: str) -> SimulationDataType:
-        """load  .yaml, .json, or .hdf5 file to :class:`.SimulationDataType` instance.
+        """Load .yaml, .json, or .hdf5 file to Union[:class:`.SimulationData`] instance.
 
         Parameters
         ----------
         file_path : str
-            Full path to the .yaml or .json or .hdf5 file to save the :class:`.SimulationDataType` to.
+            Full path to the .yaml or .json or .hdf5 file to save the
+            Union[:class:`.SimulationData`] to.
 
         Returns
         -------
-        :class:`.SimulationDataType`
+        Union[:class:`.SimulationData`]
             An instance of the component class calling `load`.
         """
         stub_data = Tidy3dStubData.from_file(file_path)
 
-        final_decay_value = stub_data.final_decay_value
-        shutoff_value = stub_data.simulation.shutoff
-        if (shutoff_value != 0) and (final_decay_value > shutoff_value):
-            log.warning(
-                f"Simulation final field decay value of {final_decay_value} "
-                f"is greater than the simulation shutoff threshold of {shutoff_value}. "
-                "Consider simulation again with large run_time duration for more accurate results."
-            )
+        if isinstance(stub_data, SimulationData):
+            final_decay_value = stub_data.final_decay_value
+            shutoff_value = stub_data.simulation.shutoff
+            if (shutoff_value != 0) and (final_decay_value > shutoff_value):
+                log.warning(
+                    f"Simulation final field decay value of {final_decay_value} "
+                    f"is greater than the simulation shutoff threshold of {shutoff_value}. "
+                    "Consider simulation again with large run_time duration for more accurate results."
+                )
         return stub_data

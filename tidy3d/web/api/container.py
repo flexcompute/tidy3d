@@ -9,12 +9,11 @@ import time
 from rich.progress import Progress
 import pydantic.v1 as pd
 
-from .tidy3d_stub import Tidy3dStubData, SimulationType
+from .tidy3d_stub import SimulationType, SimulationDataType
 from ..api import webapi as web
 from ..core.task_info import TaskInfo, RunInfo
 from ..core.constants import TaskId, TaskName
 from ...components.base import Tidy3dBaseModel
-from ...components.data.sim_data import SimulationData
 from ...log import log, get_logging_console
 
 from ...exceptions import DataError
@@ -28,7 +27,7 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a :class:`.Simulation` on server."""
+    """Interface for managing the running of Union[:class:`.Simulation`] on server."""
 
     simulation: SimulationType = pd.Field(
         ..., title="simulation", description="Simulation to run as a 'task'."
@@ -85,8 +84,8 @@ class Job(WebContainer):
         "parent_tasks",
     )
 
-    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationData:
-        """run :class:`Job` all the way through and return data.
+    def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
+        """Run :class:`Job` all the way through and return data.
 
         Parameters
         ----------
@@ -95,8 +94,8 @@ class Job(WebContainer):
 
         Returns
         -------
-        Dict[str: :class:`.SimulationData`]
-            Dictionary mapping task name to :class:`.SimulationData` for :class:`Job`.
+        Dict[str, Union[:class:`.SimulationData`]]
+            Dictionary mapping task name to Union[:class:`.SimulationData`] for :class:`Job`.
         """
 
         self.start()
@@ -174,13 +173,13 @@ class Job(WebContainer):
 
         Note
         ----
-        To load the data into :class:`.SimulationData`objets, can call :meth:`Job.load`.
+        To load the data into Union[:class:`.SimulationData`] objets, can call :meth:`Job.load`.
         """
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
-    def load(self, path: str = DEFAULT_DATA_PATH) -> Tidy3dStubData:
-        """Download results from simulation (if not already) and load them into ``SimulationData``
-        object.
+    def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
+        """Download results from simulation (if not already) and load them into
+        Union[:class:`.SimulationData`] object.
 
         Parameters
         ----------
@@ -189,8 +188,8 @@ class Job(WebContainer):
 
         Returns
         -------
-        :class:`.Tidy3dStubData`
-            Object containing data about simulation.
+        Union[:class:`.SimulationData`]
+            Object containing simulation results.
         """
         return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
 
@@ -208,7 +207,8 @@ class Job(WebContainer):
         Returns
         -------
         float
-            Estimated maximum cost for :class:`.Simulation` associated with given ``Job``.
+            Estimated maximum cost for Union[:class:`.Simulation`] associated with
+            the given :class:`.Job`.
 
         Note
         ----
@@ -224,7 +224,7 @@ class Job(WebContainer):
 
 
 class BatchData(Tidy3dBaseModel):
-    """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
+    """Holds a collection of Union[:class:`.SimulationData`] returned by :class:`.Batch`."""
 
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
@@ -240,8 +240,8 @@ class BatchData(Tidy3dBaseModel):
         True, title="Verbose", description="Whether to print info messages and progressbars."
     )
 
-    def load_sim_data(self, task_name: str) -> Tidy3dStubData:
-        """Load a :class:`.SimulationData` from file by task name."""
+    def load_sim_data(self, task_name: str) -> SimulationDataType:
+        """Load Union[:class:`.SimulationData`] from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
@@ -252,13 +252,13 @@ class BatchData(Tidy3dBaseModel):
             verbose=self.verbose,
         )
 
-    def items(self) -> Tuple[TaskName, Tidy3dStubData]:
-        """Iterate through the :class:`.SimulationData` for each task_name."""
+    def items(self) -> Tuple[TaskName, SimulationDataType]:
+        """Iterate through the Union[:class:`.SimulationData`] for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
 
-    def __getitem__(self, task_name: TaskName) -> SimulationData:
-        """Get the :class:`.SimulationData` for a given ``task_name``."""
+    def __getitem__(self, task_name: TaskName) -> SimulationDataType:
+        """Get the Union[:class:`.SimulationData`] for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
     @classmethod
@@ -274,7 +274,8 @@ class BatchData(Tidy3dBaseModel):
         Returns
         ------
         :class:`BatchData`
-            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`] for each Union[:class:`.Simulation`]
+            in :class:`Batch`.
         """
 
         batch_file = Batch._batch_path(path_dir=path_dir)
@@ -283,7 +284,7 @@ class BatchData(Tidy3dBaseModel):
 
 
 class Batch(WebContainer):
-    """Interface for submitting several :class:`.Simulation` objects to sever."""
+    """Interface for submitting several Union[:class:`.Simulation`] objects to sever."""
 
     simulations: Dict[TaskName, SimulationType] = pd.Field(
         ...,
@@ -353,7 +354,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`] of each Union[:class:`.Simulation`]
+            in :class:`Batch`.
 
         Note
         ----
@@ -363,9 +365,9 @@ class Batch(WebContainer):
         >>> for task_name, sim_data in batch_data.items():
         ...     # do something with data.
 
-        ``bach_data`` does not store all of the :class:`.SimulationData` objects in memory,
+        ``bach_data`` does not store all of the Union[:class:`.SimulationData`] objects in memory,
         rather it iterates over the task names
-        and loads the corresponding :class:`.SimulationData` from file one by one.
+        and loads the corresponding Union[:class:`.SimulationData`] from file one by one.
         If no file exists for that task, it downloads it.
         """
         self._check_path_dir(path_dir)
@@ -570,7 +572,7 @@ class Batch(WebContainer):
 
         Note
         ----
-        To load the data into :class:`.SimulationData`objets, can call :meth:`Batch.items`.
+        To load the data into Union[:class:`.SimulationData`] objets, can call :meth:`Batch.items`.
 
         The data for each task will be named as ``{path_dir}/{task_name}.hdf5``.
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
@@ -599,7 +601,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`] of each Union[:class:`.Simulation`]
+            in :class:`Batch`.
 
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
@@ -642,7 +645,8 @@ class Batch(WebContainer):
         Returns
         -------
         float
-            Estimated maximum cost for each :class:`.Simulation` associated with given ``Batch``.
+            Estimated maximum cost for each Union[:class:`.Simulation`] associated with
+            given :class:`.Batch`.
 
         Note
         ----

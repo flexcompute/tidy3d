@@ -48,12 +48,12 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
 ) -> SimulationDataType:
-    """Submits a :class:`.SimulationType` to server, starts running, monitors progress, downloads,
-    and loads results as a :class:`.SimulationType` object.
+    """Submits a Union[:class:`.Simulation`] to server, starts running, monitors progress,
+    downloads, and loads results as a corresponding Union[:class:`.SimulationData`] object.
 
     Parameters
     ----------
-    simulation : :class:`.SimulationType`
+    simulation : Union[:class:`.Simulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -77,8 +77,8 @@ def run(
 
     Returns
     -------
-    :class:`.SimulationDataType`
-        Object containing solver results for the supplied :class:`.SimulationDataType`.
+    Union[:class:`.SimulationData`]
+        Object containing solver results for the supplied simulation.
     """
     task_id = upload(
         simulation=simulation,
@@ -111,11 +111,11 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
 ) -> TaskId:
-    """Upload simulation to server, but do not start running :class:`.SimulationType`.
+    """Upload simulation to server, but do not start running Union[:class:`.Simulation`].
 
     Parameters
     ----------
-    simulation : :class:`.SimulationType`
+    simulation : Union[:class:`.Simulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -260,7 +260,6 @@ def get_status(task_id) -> str:
 
 
 def monitor(task_id: TaskId, verbose: bool = True) -> None:
-
     """Print the real time task progress until completion.
 
     Parameters
@@ -468,7 +467,7 @@ def download_hdf5(
 def load_simulation(
     task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
 ) -> SimulationType:
-    """Download the `.json` file of a task and load the associated :class:`.Simulation`.
+    """Download the `.json` file of a task and load the associated Union[:class:`.Simulation`].
 
     Parameters
     ----------
@@ -481,7 +480,7 @@ def load_simulation(
 
     Returns
     -------
-    :class:`.SimulationType`
+    Union[:class:`.Simulation`]
         SimulationType loaded from downloaded json file.
     """
 
@@ -526,7 +525,7 @@ def load(
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationDataType:
-    """Download and Load simulation results into :class:`.SimulationDataType` object.
+    """Download and Load simulation results into Union[:class:`.SimulationData`] object.
 
     Parameters
     ----------
@@ -543,7 +542,7 @@ def load(
 
     Returns
     -------
-    :class:`.SimulationDataType`
+    Union[:class:`.SimulationData`]
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:

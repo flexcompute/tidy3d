@@ -1,10 +1,8 @@
 """Defines constants for core."""
 
 SIMCLOUD_APIKEY = "SIMCLOUD_APIKEY"
-SIMCLOUD_VERSION = "SIMCLOUD_VERSION"
 
 KEY_APIKEY = "apikey"
-KEY_VERSION = "version"
 
 HEADER_APIKEY = "simcloud-api-key"
 HEADER_VERSION = "tidy3d-python-version"

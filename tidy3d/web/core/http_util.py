@@ -29,8 +29,6 @@ else:
 CONFIG_FILE = TIDY3D_DIR + "/config"
 CREDENTIAL_FILE = TIDY3D_DIR + "/auth.json"
 
-USER_AGENT = os.environ.get("TIDY3D_AGENT", f"Python-Client/{__version__}")
-
 
 class ResponseCodes(Enum):
     """HTTP response codes to handle individually."""
@@ -43,6 +41,11 @@ class ResponseCodes(Enum):
 def get_version() -> None:
     """Get the version for the current environment."""
     return core_config.get_version()
+
+
+def get_user_agent():
+    """Get the user agent the current environment."""
+    return os.environ.get("TIDY3D_AGENT", f"Python-Client/{get_version()}")
 
 
 def api_key() -> None:
@@ -88,7 +91,7 @@ def api_key_auth(request: requests.request) -> requests.request:
     request.headers[HEADER_APIKEY] = key
     request.headers[HEADER_VERSION] = version
     request.headers["source"] = "Python"
-    request.headers["User-Agent"] = USER_AGENT
+    request.headers["User-Agent"] = get_user_agent()
     return request
 
 
@@ -100,11 +103,7 @@ def get_headers() -> Dict[str, str]:
     Dict[str, str]
         dictionary with "Authorization" and "Application" keys.
     """
-    return {
-        HEADER_APIKEY: api_key(),
-        "Application": "TIDY3D",
-        "User-Agent": USER_AGENT
-    }
+    return {HEADER_APIKEY: api_key(), "Application": "TIDY3D", "User-Agent": get_user_agent()}
 
 
 def http_interceptor(func):
