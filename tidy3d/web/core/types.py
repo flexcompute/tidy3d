@@ -1,9 +1,10 @@
-"""Tidy3d abstraction types for the webapi."""
+"""Tidy3d abstraction types for the core."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 from pydantic.v1 import BaseModel
+from enum import Enum
 
 
 class Tidy3DResource(BaseModel, ABC):
@@ -43,3 +44,9 @@ class Queryable(BaseModel, ABC):
     @abstractmethod
     def list(cls, *args, **kwargs) -> [Queryable]:
         """List all resources of this type."""
+
+
+class TaskType(str, Enum):
+    FDTD = "FDTD"
+    MODE_SOLVER = "MODE_SOLVER"
+    HEAT = "HEAT"

@@ -4,67 +4,30 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Callable
-from functools import wraps
-
-from requests import HTTPError, ReadTimeout
-from requests.exceptions import ConnectionError as ConnErr
-from requests.exceptions import JSONDecodeError
-from urllib3.exceptions import NewConnectionError
-
+from requests import HTTPError
 import pytz
 from rich.progress import Progress
 
-from .environment import Env
-from .simulation_task import SimulationTask, SIM_FILE_HDF5, Folder
-from .task import TaskId, TaskInfo, ChargeType
-from ..components.data.sim_data import SimulationData
-from ..components.simulation import Simulation
-from ..components.types import Literal
-from ..log import log, get_logging_console
-from ..exceptions import WebError
-
-# time between checking task status
-REFRESH_TIME = 0.3
+from .tidy3d_stub import Tidy3dStub, Tidy3dStubData, SimulationType, SimulationDataType
+from .connect_util import (
+    wait_for_connection,
+    REFRESH_TIME,
+    get_time_steps_str,
+    get_grid_points_str,
+)
+from ..core.environment import Env
+from ..core.constants import SIM_FILE_HDF5, TaskId
+from ..core.task_core import SimulationTask, Folder
+from ..core.task_info import TaskInfo, ChargeType
+from ...components.types import Literal
+from ...log import log, get_logging_console
+from ...exceptions import WebError
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
 
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
-
-# number of seconds to keep re-trying connection before erroring
-CONNECTION_RETRY_TIME = 180
-
-
-def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RETRY_TIME):
-    """Causes function to ignore connection errors and retry for ``wait_time_sec`` secs."""
-
-    def decorator(web_fn):
-        """Decorator returned by @wait_for_connection()"""
-
-        @wraps(web_fn)
-        def web_fn_wrapped(*args, **kwargs):
-            """Function to return including connection waiting."""
-            time_start = time.time()
-            warned_previously = False
-
-            while (time.time() - time_start) < wait_time_sec:
-                try:
-                    return web_fn(*args, **kwargs)
-                except (ConnErr, ConnectionError, NewConnectionError, ReadTimeout, JSONDecodeError):
-                    if not warned_previously:
-                        log.warning(f"No connection: Retrying for {wait_time_sec} seconds.")
-                        warned_previously = True
-                    time.sleep(REFRESH_TIME)
-
-            raise WebError("No internet connection: giving up on connection waiting.")
-
-        return web_fn_wrapped
-
-    if decorated_fn:
-        return decorator(decorated_fn)
-
-    return decorator
 
 
 def _get_url(task_id: str) -> str:
@@ -74,7 +37,7 @@ def _get_url(task_id: str) -> str:
 
 @wait_for_connection
 def run(
-    simulation: Simulation,
+    simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
     path: str = "simulation_data.hdf5",
@@ -84,13 +47,13 @@ def run(
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
     worker_group: str = None,
-) -> SimulationData:
-    """Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
-    and loads results as a :class:`.SimulationData` object.
+) -> SimulationDataType:
+    """Submits a Union[:class:`.Simulation`] to server, starts running, monitors progress,
+    downloads, and loads results as a corresponding Union[:class:`.SimulationData`] object.
 
     Parameters
     ----------
-    simulation : :class:`.Simulation`
+    simulation : Union[:class:`.Simulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -114,8 +77,8 @@ def run(
 
     Returns
     -------
-    :class:`.SimulationData`
-        Object containing solver results for the supplied :class:`.Simulation`.
+    Union[:class:`.SimulationData`]
+        Object containing solver results for the supplied simulation.
     """
     task_id = upload(
         simulation=simulation,
@@ -138,7 +101,7 @@ def run(
 
 @wait_for_connection
 def upload(
-    simulation: Simulation,
+    simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
     callback_url: str = None,
@@ -148,11 +111,11 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
 ) -> TaskId:
-    """Upload simulation to server, but do not start running :class:`.Simulation`.
+    """Upload simulation to server, but do not start running Union[:class:`.Simulation`].
 
     Parameters
     ----------
-    simulation : :class:`.Simulation`
+    simulation : Union[:class:`.Simulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -181,45 +144,49 @@ def upload(
     ----
     To start the simulation running, must call :meth:`start` after uploaded.
     """
-
-    simulation.validate_pre_upload(source_required=source_required)
+    stub = Tidy3dStub(simulation=simulation)
+    stub.validate_pre_upload(source_required=source_required)
     log.debug("Creating task.")
 
+    task_type = stub.get_type()
+
     task = SimulationTask.create(
-        simulation, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
+        task_type, task_name, folder_name, callback_url, simulation_type, parent_tasks, "Gz"
     )
     if verbose:
         console = get_logging_console()
-        console.log(f"Created task '{task_name}' with task_id '{task.task_id}'.")
+        console.log(
+            f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'."
+        )
         url = _get_url(task.task_id)
-        console.log(f"View task using web UI at [blue underline][link={url}]'{url}'[/link].")
-    task.upload_simulation(verbose=verbose, progress_callback=progress_callback)
+        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+
+    task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
 
     # log the url for the task in the web UI
-    log.debug(
-        f"{Env.current.website_endpoint}/folders/{task.folder.folder_id}/tasks/{task.task_id}"
-    )
+    log.debug(f"{Env.current.website_endpoint}/folders/{task.folder_id}/tasks/{task.task_id}")
     return task.task_id
 
 
 @wait_for_connection
-def get_info(task_id: TaskId) -> TaskInfo:
+def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
     """Return information about a task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
-
+    verbose : bool = True
+        If `True`, will print progressbars and status, otherwise, will run silently.
     Returns
     -------
     :class:`TaskInfo`
         Object containing information about status, size, credits of task.
     """
-    task = SimulationTask.get(task_id)
+    task = SimulationTask.get(task_id, verbose)
     if not task:
         raise ValueError("Task not found.")
-    return TaskInfo(**{"taskId": task.task_id, **task.dict()})
+    return TaskInfo(**{"taskId": task.task_id, "taskType": task.task_type, **task.dict()})
 
 
 @wait_for_connection
@@ -247,7 +214,10 @@ def start(
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    task.submit(solver_version=solver_version, worker_group=worker_group)
+    task.submit(
+        solver_version=solver_version,
+        worker_group=worker_group,
+    )
 
 
 @wait_for_connection
@@ -265,7 +235,7 @@ def get_run_info(task_id: TaskId):
         Percentage of run done (in terms of max number of time steps).
         Is ``None`` if run info not available.
     field_decay : float
-        Average field intensity normlized to max value (1.0).
+        Average field intensity normalized to max value (1.0).
         Is ``None`` if run info not available.
     """
     task = SimulationTask(taskId=task_id)
@@ -290,7 +260,6 @@ def get_status(task_id) -> str:
 
 
 def monitor(task_id: TaskId, verbose: bool = True) -> None:
-
     """Print the real time task progress until completion.
 
     Parameters
@@ -304,7 +273,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     ----
     To load results when finished, may call :meth:`load`.
     """
-
     task_info = get_info(task_id)
     task_name = task_info.taskName
 
@@ -320,20 +288,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             est_flex_unit = 0
             grid_points = block_info.maxGridPoints
             time_steps = block_info.maxTimeSteps
-            if grid_points < 1000:
-                grid_points_str = f"{grid_points}"
-            elif 1000 <= grid_points < 1000 * 1000:
-                grid_points_str = f"{grid_points / 1000}K"
-            else:
-                grid_points_str = f"{grid_points / 1000 / 1000}M"
-
-            if time_steps < 1000:
-                time_steps_str = f"{time_steps}"
-            elif 1000 <= time_steps < 1000 * 1000:
-                time_steps_str = f"{time_steps / 1000}K"
-            else:
-                time_steps_str = f"{time_steps / 1000 / 1000}M"
-
+            grid_points_str = get_grid_points_str(grid_points)
+            time_steps_str = get_time_steps_str(time_steps)
             console.log(
                 f"You are running this simulation for FREE. Your current plan allows"
                 f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
@@ -508,8 +464,10 @@ def download_hdf5(
 
 
 @wait_for_connection
-def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> Simulation:
-    """Download the `.json` file of a task and load the associated :class:`.Simulation`.
+def load_simulation(
+    task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
+) -> SimulationType:
+    """Download the `.json` file of a task and load the associated Union[:class:`.Simulation`].
 
     Parameters
     ----------
@@ -522,15 +480,13 @@ def load_simulation(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = 
 
     Returns
     -------
-    :class:`.Simulation`
-        Simulation loaded from downloaded json file.
+    Union[:class:`.Simulation`]
+        SimulationType loaded from downloaded json file.
     """
 
-    # task = SimulationTask.get(task_id)
-
-    task = SimulationTask(taskId=task_id)
+    task = SimulationTask.get(task_id)
     task.get_simulation_json(path, verbose=verbose)
-    return Simulation.from_file(path)
+    return Tidy3dStub.from_file(path)
 
 
 @wait_for_connection
@@ -568,8 +524,8 @@ def load(
     replace_existing: bool = True,
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
-) -> SimulationData:
-    """Download and Load simulation results into :class:`.SimulationData` object.
+) -> SimulationDataType:
+    """Download and Load simulation results into Union[:class:`.SimulationData`] object.
 
     Parameters
     ----------
@@ -586,29 +542,18 @@ def load(
 
     Returns
     -------
-    :class:`.SimulationData`
+    Union[:class:`.SimulationData`]
         Object containing simulation data.
     """
-
     if not os.path.exists(path) or replace_existing:
         download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
         console = get_logging_console()
-        console.log(f"loading SimulationData from {path}")
+        console.log(f"loading simulation from {path}")
 
-    sim_data = SimulationData.from_file(path)
-
-    final_decay_value = sim_data.final_decay_value
-    shutoff_value = sim_data.simulation.shutoff
-    if (shutoff_value != 0) and (final_decay_value > shutoff_value):
-        log.warning(
-            f"Simulation final field decay value of {final_decay_value} "
-            f"is greater than the simulation shutoff threshold of {shutoff_value}. "
-            "Consider simulation again with large run_time duration for more accurate results."
-        )
-
-    return sim_data
+    stub_data = Tidy3dStubData.postprocess(path)
+    return stub_data
 
 
 @wait_for_connection
@@ -667,7 +612,7 @@ def delete_old(
 
 
 @wait_for_connection
-def abort(task_id: TaskId) -> TaskInfo:
+def abort(task_id: TaskId):
     """Abort server-side data associated with task.
 
     Parameters
@@ -681,13 +626,12 @@ def abort(task_id: TaskId) -> TaskInfo:
         Object containing information about status, size, credits of task.
     """
 
-    # task = SimulationTask.get(task_id)
-    task = SimulationTask(taskId=task_id)
+    task = SimulationTask.get(task_id)
+    # task = SimulationTask(taskId=task_id)
     task.abort()
     return TaskInfo(**{"taskId": task.task_id, **task.dict()})
 
 
-# TODO: make this return a list of TaskInfo instead?
 @wait_for_connection
 def get_tasks(
     num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"

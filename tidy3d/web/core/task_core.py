@@ -10,26 +10,20 @@ import pydantic.v1 as pd
 from pydantic.v1 import Extra, Field, parse_obj_as
 import h5py
 
-from tidy3d import Simulation
-from tidy3d.version import __version__
-from tidy3d.exceptions import WebError, DataError
-from tidy3d.components.file_util import extract_gzip_file
-from tidy3d.components.base import JSON_TAG
+from . import http_util
+from .core_config import get_logger_console
+from .exceptions import WebError
 
 from .cache import FOLDER_CACHE
-from .http_management import http
+from .http_util import http
 from .s3utils import download_file, upload_file
+from .stub import TaskStub
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
 
-from ..log import get_logging_console
 
-SIMULATION_JSON = "simulation.json"
-SIMULATION_DATA_HDF5 = "output/monitor_data.hdf5"
-RUNNING_INFO = "output/solver_progress.csv"
-SIM_LOG_FILE = "output/tidy3d.log"
-SIM_FILE_HDF5 = "simulation.hdf5"
-SIM_FILE_HDF5_GZ = "simulation.hdf5.gz"
+from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIM_LOG_FILE, JSON_TAG
+from .file_util import extract_gzip_file
 
 
 def _read_simulation_from_hdf5(file_name: str):
@@ -142,6 +136,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Task ID number, set when the task is uploaded, leave as None.",
         alias="taskId",
     )
+    folder_id: Optional[str] = Field(
+        None,
+        title="folder_id",
+        description="Folder ID number, set when the task is uploaded, leave as None.",
+        alias="projectId",
+    )
     status: Optional[str] = Field(title="status", description="Simulation task status.")
 
     real_flex_unit: float = Field(
@@ -152,8 +152,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         title="created_at", description="Time at which this task was created.", alias="createdAt"
     )
 
-    simulation: Optional[Simulation] = Field(
-        title="simulation", description="A copy of the Simulation being run as this task."
+    task_type: Optional[str] = Field(
+        title="task_type", description="The type of task.", alias="taskType"
     )
 
     folder_name: Optional[str] = Field(
@@ -162,8 +162,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         description="Name of the folder associated with this task.",
         alias="projectName",
     )
-
-    folder: Optional[Folder]
 
     callback_url: str = Field(
         None,
@@ -202,7 +200,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     @classmethod
     def create(
         cls,
-        simulation: Simulation,
+        task_type: str,
         task_name: str,
         folder_name: str = "default",
         callback_url: str = None,
@@ -214,10 +212,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
 
         Parameters
         ----------
-        simulation: :class".Simulation"
-            The :class:`.Simulation` will be uploaded to server in the submitting phase.
-            If Simulation is too large to fit into memory, pass None to this parameter
-            and use :meth:`.SimulationTask.upload_file` instead.
+        task_type: :class".TaskType"
+            The type of task.
         task_name: str
             The name of the task.
         folder_name: str,
@@ -243,23 +239,25 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             f"tidy3d/projects/{folder.folder_id}/tasks",
             {
                 "taskName": task_name,
+                "taskType": task_type,
                 "callbackUrl": callback_url,
                 "simulationType": simulation_type,
                 "parentTasks": parent_tasks,
                 "fileType": file_type,
             },
         )
-
-        return SimulationTask(**resp, simulation=simulation, folder=folder)
+        return SimulationTask(**resp, taskType=task_type)
 
     @classmethod
-    def get(cls, task_id: str) -> SimulationTask:
+    def get(cls, task_id: str, verbose: bool = True) -> SimulationTask:
         """Get task from the server by id.
 
         Parameters
         ----------
         task_id: str
             Unique identifier of task on server.
+        verbose:
+            If `True`, will print progressbars and status, otherwise, will run silently.
 
         Returns
         -------
@@ -268,7 +266,8 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
              size, credits of task and others.
         """
         resp = http.get(f"tidy3d/tasks/{task_id}/detail")
-        return SimulationTask(**resp) if resp else None
+        task = SimulationTask(**resp) if resp else None
+        return task
 
     @classmethod
     def get_running_tasks(cls) -> List[SimulationTask]:
@@ -291,25 +290,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             raise ValueError("Task id not found.")
         http.delete(f"tidy3d/tasks/{self.task_id}")
 
-    def get_simulation(self) -> Optional[Simulation]:
-        """Download simulation from server.
-
-        Returns
-        -------
-        :class:`.Simulation`
-            :class:`.Simulation` object containing info about status, size,
-            credits of task and others.
-        """
-        if self.simulation:
-            return self.simulation
-
-        with tempfile.NamedTemporaryFile(suffix=".json") as temp:
-            self.get_simulation_json(temp.name)
-            if pathlib.Path(temp.name).exists():
-                self.simulation = Simulation.from_file(temp.name)
-                return self.simulation
-        return None
-
     def get_simulation_json(self, to_file: str, verbose: bool = True) -> pathlib.Path:
         """Get json file for a :class:`.Simulation` from server.
 
@@ -326,7 +306,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         hdf5_file, hdf5_file_path = tempfile.mkstemp(".hdf5")
         os.close(hdf5_file)
@@ -338,7 +318,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                     # Write the string to the file
                     file.write(json_string.decode("utf-8"))
                     if verbose:
-                        console = get_logging_console()
+                        console = get_logger_console()
                         console.log(f"Generate {to_file} successfully.")
             else:
                 raise WebError("Failed to download simulation.json.")
@@ -346,27 +326,33 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             os.unlink(hdf5_file_path)
 
     def upload_simulation(
-        self, verbose: bool = True, progress_callback: Callable[[float], None] = None
+        self,
+        stub: TaskStub,
+        verbose: bool = True,
+        progress_callback: Callable[[float], None] = None,
     ) -> None:
         """Upload :class:`.Simulation` object to Server.
 
         Parameters
         ----------
+        stub: :class:`TaskStub`
+            An instance of TaskStub.
         verbose: bool = True
             Whether to display progress bars.
         progress_callback : Callable[[float], None] = None
             Optional callback function called while uploading the data.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
-        if not self.simulation:
-            raise DataError("Expected field 'simulation' is unset.")
-
-        # Upload hdf5.gz containing all data.
-        file, file_name = tempfile.mkstemp(".hdf5.gz")
+            raise WebError("Expected field 'task_id' is unset.")
+        if not stub:
+            raise WebError("Expected field 'simulation' is unset.")
+        # Also upload hdf5.gz containing all data.
+        file, file_name = tempfile.mkstemp()
         os.close(file)
         try:
-            self.simulation.to_hdf5_gz(file_name)
+            # upload simulation
+            # compress .hdf5 to .hdf5.gz
+            stub.to_hdf5_gz(file_name)
             upload_file(
                 self.task_id,
                 file_name,
@@ -399,7 +385,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Optional callback function called while uploading the data.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         upload_file(
             self.task_id,
@@ -416,7 +402,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     ):
         """Kick off this task.
 
-        If this task instance contain a :class:`.Simulation`, it will be uploaded to server before
+        It will be uploaded to server before
         starting the task. Otherwise, this method assumes that the Simulation has been uploaded by
         the upload_file function, so the task will be kicked off directly.
 
@@ -427,33 +413,12 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         worker_group: str = None
             worker group
         """
-        if self.simulation:
-            # Also upload hdf5.gz containing all data.
-            file, file_name = tempfile.mkstemp(".hdf5.gz")
-            os.close(file)
-            try:
-                self.simulation.to_hdf5_gz(file_name)
-                upload_file(
-                    self.task_id,
-                    file_name,
-                    SIM_FILE_HDF5_GZ,
-                    verbose=False,
-                    progress_callback=None,
-                )
-            finally:
-                os.unlink(file_name)
-
-        if solver_version:
-            protocol_version = None
-        else:
-            protocol_version = __version__
-
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
             {
                 "solverVersion": solver_version,
                 "workerGroup": worker_group,
-                "protocolVersion": protocol_version,
+                "protocolVersion": http_util.get_version(),
             },
         )
 
@@ -471,14 +436,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         flex_unit_cost: float
             estimated cost in FlexCredits
         """
+        if not self.task_id:
+            raise WebError("Expected field 'task_id' is unset.")
 
         if solver_version:
             protocol_version = None
         else:
-            protocol_version = __version__
-
-        if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            protocol_version = http_util.get_version()
 
         resp = http.post(
             f"tidy3d/tasks/{self.task_id}/metadata",
@@ -509,7 +473,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         return download_file(
             self.task_id,
@@ -539,7 +503,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Path to saved file.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         if to_file.lower().endswith(".gz"):
             download_file(
@@ -580,7 +544,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
             Is ``None`` if run info not available.
         """
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         resp = http.get(f"tidy3d/tasks/{self.task_id}/progress")
         perc_done = resp.get("perc_done")
@@ -608,7 +572,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """
 
         if not self.task_id:
-            raise DataError("Expected field 'task_id' is unset.")
+            raise WebError("Expected field 'task_id' is unset.")
 
         return download_file(
             self.task_id,
@@ -622,4 +586,6 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         """Abort current task from server."""
         if not self.task_id:
             raise ValueError("Task id not found.")
-        return http.put("tidy3d/tasks/abort", json={"taskType": "FDTD", "taskId": self.task_id})
+        return http.put(
+            "tidy3d/tasks/abort", json={"taskType": self.task_type, "taskId": self.task_id}
+        )

@@ -32,7 +32,7 @@ from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
-from tidy3d.web.container import BatchData
+from tidy3d.web.api.container import BatchData
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 

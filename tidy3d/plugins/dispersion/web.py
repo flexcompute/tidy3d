@@ -15,8 +15,8 @@ from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
 from ...exceptions import WebError, Tidy3dError, SetupError
-from ...web.http_management import get_headers
-from ...web.environment import Env
+from tidy3d.web.core.http_util import get_headers
+from tidy3d.web.core.environment import Env
 
 from .fit import DispersionFitter
 

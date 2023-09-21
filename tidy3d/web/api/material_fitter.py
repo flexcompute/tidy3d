@@ -10,10 +10,10 @@ from uuid import uuid4
 import numpy as np
 import requests
 from pydantic.v1 import BaseModel, Field
-from tidy3d.plugins.dispersion import DispersionFitter
+from ...plugins.dispersion import DispersionFitter
 
-from .http_management import http
-from .types import Submittable
+from ..core.http_util import http
+from ..core.types import Submittable
 
 
 class ConstraintEnum(str, Enum):

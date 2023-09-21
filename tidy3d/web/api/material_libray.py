@@ -6,10 +6,10 @@ import json
 from typing import List, Optional
 
 from pydantic.v1 import Field, parse_obj_as, validator
-from tidy3d.components.medium import MediumType
+from ...components.medium import MediumType
 
-from .http_management import http
-from .types import Queryable
+from ..core.http_util import http
+from ..core.types import Queryable
 
 
 class MaterialLibray(Queryable, smart_union=True):
