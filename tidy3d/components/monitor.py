@@ -6,7 +6,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Numpy
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
+from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
 from .geometry.base import Box
 from .validators import assert_plane
 from .base import cached_property, Tidy3dBaseModel
@@ -439,7 +439,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...] = pydantic.Field(
+    exclude_surfaces: Tuple[BoxSurface, ...] = pydantic.Field(
         None,
         title="Excluded surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",

@@ -26,6 +26,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
+from .heat_spec import HeatSpecType
 
 
 # evaluate frequency as this number (Hz) if inf
@@ -187,6 +188,20 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             f"A 'nonlinear_spec' of class {type(val)} is not "
             f"currently supported for medium class {cls}."
         )
+
+    heat_spec: Optional[HeatSpecType] = pd.Field(
+        None,
+        title="Heat Specification",
+        description="Specification of the medium heat properties. They are used for solving "
+        "the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for "
+        "investigating the influence of heat propagation on the properties of optical systems. "
+        "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
+        "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
+        "models defined into spatially dependent custom mediums. "
+        "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
+        "``Simulation``.",
+        discriminator=TYPE_TAG_STR,
+    )
 
     _name_validator = validate_name_str()
 

@@ -195,7 +195,7 @@ class SimulationData(Tidy3dBaseModel):
         if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
-                f"as it is a `{type(mon_data)}`."
+                f"as it is a '{type(mon_data)}'."
             )
         return mon_data
 

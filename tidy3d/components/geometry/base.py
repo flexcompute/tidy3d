@@ -358,16 +358,47 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
+        if shape.geom_type in (
+            "MultiPoint",
+            "MultiLineString",
+            "MultiPolygon",
+            "GeometryCollection",
+        ):
+            for sub_shape in shape.geoms:
+                ax = self.plot_shape(shape=sub_shape, plot_params=plot_params, ax=ax)
+
+            return ax
+
         _shape = Geometry.evaluate_inf_shape(shape)
+
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
-            ax.plot(xs, ys, color=plot_params.facecolor)
+            ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
         elif _shape.geom_type == "Point":
             ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             ax.add_artist(patch)
         return ax
+
+    @staticmethod
+    def _do_not_intersect(bounds_a, bounds_b, shape_a, shape_b):
+        """Check whether two shapes intersect."""
+
+        # do a bounding box check to see if any intersection to do anything about
+        if (
+            bounds_a[0] > bounds_b[2]
+            or bounds_b[0] > bounds_a[2]
+            or bounds_a[1] > bounds_b[3]
+            or bounds_b[1] > bounds_a[3]
+        ):
+            return True
+
+        # look more closely to see if intersected.
+        if shape_b.is_empty or not shape_a.intersects(shape_b):
+            return True
+
+        return False
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
