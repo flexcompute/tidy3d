@@ -1,9 +1,8 @@
 """Environment Setup."""
 import os
+from .core_config import get_logger
 
 from pydantic.v1 import BaseSettings, Field
-
-from tidy3d import log
 
 
 class EnvironmentConfig(BaseSettings):
@@ -84,6 +83,7 @@ class Environment:
     )
 
     def __init__(self):
+        log = get_logger()
         """Initialize the environment."""
         env_key = os.environ.get("TIDY3D_ENV")
         env_key = env_key.lower() if env_key else env_key

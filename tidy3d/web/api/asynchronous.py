@@ -2,12 +2,12 @@
 from typing import Dict, List
 
 from .container import DEFAULT_DATA_DIR, BatchData, Batch
-from ..components.simulation import Simulation
-from ..log import log
+from .tidy3d_stub import SimulationType
+from ...log import log
 
 
 def run_async(
-    simulations: Dict[str, Simulation],
+    simulations: Dict[str, SimulationType],
     folder_name: str = "default",
     path_dir: str = DEFAULT_DATA_DIR,
     callback_url: str = None,
@@ -16,12 +16,12 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: Dict[str, List[str]] = None,
 ) -> BatchData:
-    """Submits a set of :class:`.Simulation` objects to server, starts running,
+    """Submits a set of Union[:class:`.Simulation`] objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
 
     Parameters
     ----------
-    simulations : Dict[str, :class:`.Simulation`]
+    simulations : Dict[str, Union[:class:`.Simulation`]]
         Mapping of task name to simulation.
     folder_name : str = "default"
         Name of folder to store each task on web UI.
@@ -38,7 +38,8 @@ def run_async(
     Returns
     ------
     :class:`BatchData`
-        Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+        Contains the Union[:class:`.SimulationData`] for each Union[:class:`.Simulation`]
+        in :class:`Batch`.
     """
 
     if simulation_type is None:

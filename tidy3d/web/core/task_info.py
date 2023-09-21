@@ -28,13 +28,6 @@ class TaskBase(pydantic.BaseModel, ABC):
         arbitrary_types_allowed = True
 
 
-# type of the task_id
-TaskId = str
-
-# type of task_name
-TaskName = str
-
-
 class ChargeType(str, Enum):
     """The payment method of task."""
 
@@ -88,15 +81,3 @@ class RunInfo(TaskBase):
         """Print some info."""
         print(f" - {self.perc_done:.2f} (%) done")
         print(f" - {self.field_decay:.2e} field decay from max")
-
-
-class Folder(pydantic.BaseModel):
-    """Folder information of a task."""
-
-    projectName: str = None
-    projectId: str = None
-
-    class Config:
-        """Configure class."""
-
-        arbitrary_types_allowed = True
