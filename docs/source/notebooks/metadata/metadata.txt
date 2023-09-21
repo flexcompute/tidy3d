@@ -77,6 +77,12 @@
     "keywords": "inverse design, WDM, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+    "AdjointPlugin10_YBranch_Level_Set.ipynb": {
+    "title": "Adjoint Optimization of a Y-Branch in Tidy3D Using Leve Set | Flexcompute",
+    "description": "This notebook demonstrates how to set up and run a simple parameterized level set-based optimization of a Y-branch. In addition, we show how to tailor the level set function to a starting geometry, which is helpful to further optimize a device obtained by conventional design.",
+    "keywords": "inverse design, y-branch, level set, design optimization, adjoint, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
