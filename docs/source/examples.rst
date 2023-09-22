@@ -160,6 +160,7 @@ Photonic Integrated Circuit Components
     notebooks/AdiabaticCouplerLN
     notebooks/90BendPolarizationSplitterRotator
     notebooks/ParticleSwarmOptimizedPBS.ipynb
+    notebooks/BullseyeCavityPSO.ipynb
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

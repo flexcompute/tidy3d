@@ -137,6 +137,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, broadband direction coupler, Tidy3D, FDTD",
     "feature_image": "./img/broadband_DC_1.png"
   },
+  "BullseyeCavityPSO.ipynb": {
+    "title": "Particle Swarm Optimization of a Bullseye Cavity for Quantum Emitter Light Extraction | Flexcompute",
+    "description": "In this notebook, we show how to set up a bullseye cavity simulation using Tidy3D and use Particle Swarm Optimization (PSO) to enhance the coupling efficiency from quantum emitters into the fundamental mode of an optical fiber using Tidy3D FDTD.",
+    "keywords": "silicon photonics, PIC, integrated photonics, bullseye cavity, quantum emitter, particle swarm optimization, PSO, Tidy3D, FDTD",
+    "feature_image": "./img/bullseye_psa_thumb.png"
+  },  
   "CustomFieldSource.ipynb": {
     "title": "Defining Spatially-varying Sources in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to define complex, spatially-varying sources in Tidy3D FDTD.",
