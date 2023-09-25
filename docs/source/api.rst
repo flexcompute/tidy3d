@@ -75,6 +75,7 @@ Geometry
    PolySlab
    TriangleMesh
    GeometryGroup
+   ClipOperation
 
 Transformations
 ----------------
@@ -517,9 +518,9 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.boundary.AbsorberSpec
    tidy3d.components.medium.AbstractMedium
    tidy3d.components.medium.DispersiveMedium
-   tidy3d.components.geometry.Geometry
-   tidy3d.components.geometry.Planar
-   tidy3d.components.geometry.Circular
+   tidy3d.Geometry
+   tidy3d.components.geometry.base.Planar
+   tidy3d.components.geometry.base.Circular
    tidy3d.components.source.SourceTime
    tidy3d.components.source.Source
    tidy3d.components.source.FieldSource
