@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ensure same `Grid` is generated in forward and adjoint simulations by setting `GridSpec.wavelength` manually in adjoint.
-
+- Proper handling of `JaxBox` derivatives both for multi-cell and single cell thickness.
 
 ## [2.4.1] - 2023-9-20
 
