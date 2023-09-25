@@ -237,9 +237,20 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                     eps_data = grad_data_eps.field_components[eps_field_name].isel(f=0)
 
                     # get the permittivity values just inside and outside the edge
-                    n_cells_in = 2
+
+                    num_cells_normal_dim = len(eps_data.coords[dim_normal])
+
+                    # if the eps_data is <=3 grid cells thick, pick the middle cell
+                    if num_cells_normal_dim <= 3:
+                        isel_ins = num_cells_normal_dim // 2
+
+                    # otherwise, pick the cell 4 pixels from outside cell
+                    else:
+                        n_cells_in = 3
+                        isel_ins = n_cells_in if min_max_index == 0 else -n_cells_in - 1
+
                     isel_out = 0 if min_max_index == 0 else -1
-                    isel_ins = n_cells_in if min_max_index == 0 else -n_cells_in - 1
+
                     eps2 = eps_data.isel(**{dim_normal: isel_out})
                     eps1 = eps_data.isel(**{dim_normal: isel_ins})
 
