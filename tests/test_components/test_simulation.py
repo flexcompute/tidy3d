@@ -1594,6 +1594,51 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
     assert_log_level(log_capture, log_level)
 
 
+@pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
+def test_warn_large_mode_monitor(log_capture, dl, log_level):
+    """Make sure we get a warning if the epsilon grid is too large."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=dl),
+        run_time=1e-12,
+        sources=[
+            td.ModeSource(
+                size=(0.1, 0.1, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+            )
+        ],
+        monitors=[
+            td.ModeMonitor(
+                size=(td.inf, 0, td.inf), freqs=[1], name="test", mode_spec=td.ModeSpec()
+            )
+        ],
+    )
+    sim.validate_pre_upload()
+    assert_log_level(log_capture, log_level)
+
+
+@pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
+def test_warn_large_mode_source(log_capture, dl, log_level):
+    """Make sure we get a warning if the epsilon grid is too large."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=dl),
+        run_time=1e-12,
+        sources=[
+            td.ModeSource(
+                size=(td.inf, td.inf, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+            )
+        ],
+    )
+    sim.validate_pre_upload()
+    assert_log_level(log_capture, log_level)
+
+
 def test_dt():
     """make sure dt is reduced when there is a medium with eps_inf < 1."""
     sim = td.Simulation(

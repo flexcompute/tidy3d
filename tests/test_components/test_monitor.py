@@ -208,7 +208,7 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 10001),
+        freqs=np.linspace(0, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
     )
@@ -217,12 +217,38 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 10001),
+        freqs=np.linspace(0, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
         colocate=False,
     )
     assert monitor.colocate is False
+
+
+@pytest.mark.parametrize("freqs, log_level", [(np.arange(2500), "WARNING"), (np.arange(100), None)])
+def test_monitor_num_freqs(log_capture, freqs, log_level):
+    """test default colocate value, and warning if not set"""
+
+    monitor = td.FieldMonitor(
+        size=(td.inf, td.inf, td.inf),
+        freqs=freqs,
+        name="test",
+        colocate=True,
+    )
+    assert_log_level(log_capture, log_level)
+
+
+@pytest.mark.parametrize("num_modes, log_level", [(101, "WARNING"), (100, None)])
+def test_monitor_num_modes(log_capture, num_modes, log_level):
+    """test default colocate value, and warning if not set"""
+
+    monitor = td.ModeMonitor(
+        size=(td.inf, 0, td.inf),
+        freqs=np.linspace(1e14, 2e14, 100),
+        name="test",
+        mode_spec=td.ModeSpec(num_modes=num_modes),
+    )
+    assert_log_level(log_capture, log_level)
 
 
 def test_diffraction_validators():

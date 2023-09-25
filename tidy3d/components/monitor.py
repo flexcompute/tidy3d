@@ -20,6 +20,8 @@ from ..log import log
 
 BYTES_REAL = 4
 BYTES_COMPLEX = 8
+WARN_NUM_FREQS = 2000
+WARN_NUM_MODES = 100
 
 
 class Monitor(Box, ABC):
@@ -146,6 +148,19 @@ class FreqMonitor(Monitor, ABC):
             raise ValidationError("'freqs' must not be empty.")
         return val
 
+    @pydantic.validator("freqs", always=True)
+    def _warn_num_freqs(cls, val, values):
+        """Warn if number of frequencies is too large."""
+        if len(val) > WARN_NUM_FREQS:
+            log.warning(
+                f"A large number ({len(val)}) of frequencies detected in monitor "
+                f"'{values['name']}'. This can lead to solver slow-down and increased cost. "
+                "Consider decreasing the number of frequencies in the monitor. This may become a "
+                "hard limit in future Tidy3D versions.",
+                custom_loc=["freqs"],
+            )
+        return val
+
     @cached_property
     def frequency_range(self) -> FreqBound:
         """Frequency range of the array ``self.freqs``.
@@ -256,14 +271,13 @@ class AbstractFieldMonitor(Monitor, ABC):
     @pydantic.validator("colocate", always=True)
     def warn_set_colocate(cls, val):
         """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
-        with log as consolidated_logger:
-            if val is None:
-                consolidated_logger.warning(
-                    "Default value for the field monitor 'colocate' setting has changed to "
-                    "'True' in Tidy3D 2.4.0. All field components will be colocated to the grid "
-                    "boundaries. Set to 'False' to get the raw fields on the Yee grid instead."
-                )
-                return True
+        if val is None:
+            log.warning(
+                "Default value for the field monitor 'colocate' setting has changed to "
+                "'True' in Tidy3D 2.4.0. All field components will be colocated to the grid "
+                "boundaries. Set to 'False' to get the raw fields on the Yee grid instead."
+            )
+            return True
         return val
 
 
@@ -333,6 +347,20 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         in_plane[self.mode_spec.bend_axis] = 1
         direction = self.unpop_axis(0, in_plane, axis=self.normal_axis)
         return direction.index(1)
+
+    @pydantic.validator("mode_spec", always=True)
+    def _warn_num_modes(cls, val, values):
+        """Warn if number of modes is too large."""
+        if val.num_modes > WARN_NUM_MODES:
+            log.warning(
+                f"A large number ({val.num_modes}) of modes requested in monitor "
+                f"'{values['name']}'. This can lead to solver slow-down and increased cost. "
+                "Consider decreasing the number of modes and using 'ModeSpec.target_neff' "
+                "to target the modes of interest. This may become a hard limit in future "
+                "Tidy3D versions.",
+                custom_loc=["mode_spec", "num_modes"],
+            )
+        return val
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
