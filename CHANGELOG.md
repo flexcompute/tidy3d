@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Warnings for too many frequencies in monitors; too many modes requested in a ``ModeSpec``; too many number of grid points in a mode monitor or mode source.
 
 ### Changed
 

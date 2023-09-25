@@ -70,7 +70,7 @@ def test_logging_warning_capture():
     # 1 warning: too long run_time
     run_time = 10000 / fwidth
 
-    # 1 warning: frequency outside of source frequency range
+    # 2 warnings: frequency outside of source frequency range; too many points
     mode_mnt = td.ModeMonitor(
         center=(0, 0, 0),
         size=(domain_size, 0, domain_size),
@@ -79,7 +79,7 @@ def test_logging_warning_capture():
         name="mode",
     )
 
-    # 1 warning: too high num_freqs
+    # 2 warnings: too high num_freqs; too many points
     mode_source = td.ModeSource(
         size=(domain_size, 0, domain_size),
         source_time=source_time,
@@ -214,7 +214,7 @@ def test_logging_warning_capture():
     sim.validate_pre_upload()
     warning_list = td.log.captured_warnings()
     print(json.dumps(warning_list, indent=4))
-    assert len(warning_list) == 30
+    assert len(warning_list) == 32
     td.log.set_capture(False)
 
     # check that capture doesn't change validation errors
