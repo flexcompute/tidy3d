@@ -10,7 +10,7 @@ If you do not wish to install, please click this button to `get started quickly 
 
 .. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
 
-1. Set up Tidy3d
+1. Set up Tidy3D
 ~~~~~~~~~~~~~~~~
 
 Install the python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations with
