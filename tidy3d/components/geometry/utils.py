@@ -22,23 +22,36 @@ GeometryType = Union[
 ]
 
 
-def flatten_groups(*geometries: GeometryType) -> GeometryType:
+def flatten_groups(*geometries: GeometryType, flatten_nonunion_type: bool = False) -> GeometryType:
     """Iterates over all geometries, flattening groups and unions.
 
     Parameters
     ----------
-    *geometries: GeometryType
+    *geometries : GeometryType
         Geometries to flatten.
 
-    Returns
-    -------
-    :class:`Geometry`
-        Geometries after flattening groups and unions."""
+    flatten_nonunion_type : bool = False
+        If ``False``, only flatten geometry unions (and ``GeometryGroup``). If ``True``, flatten
+        all clip operations.
+
+    Yields
+    ------
+    GeometryType
+        Geometries after flattening groups and unions.
+    """
     for geometry in geometries:
         if isinstance(geometry, base.GeometryGroup):
-            yield from flatten_groups(*geometry.geometries)
-        elif isinstance(geometry, base.ClipOperation) and geometry.operation == "union":
-            yield from flatten_groups(geometry.geometry_a, geometry.geometry_b)
+            yield from flatten_groups(
+                *geometry.geometries, flatten_nonunion_type=flatten_nonunion_type
+            )
+        elif isinstance(geometry, base.ClipOperation) and (
+            flatten_nonunion_type or geometry.operation == "union"
+        ):
+            yield from flatten_groups(
+                geometry.geometry_a,
+                geometry.geometry_b,
+                flatten_nonunion_type=flatten_nonunion_type,
+            )
         else:
             yield geometry
 
