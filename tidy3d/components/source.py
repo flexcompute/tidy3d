@@ -98,6 +98,10 @@ class SourceTime(ABC, Tidy3dBaseModel):
         if not complex_fields:
             time_amps = np.real(time_amps)
 
+        # if all time amplitudes are zero, just return (complex-valued) zeros for spectrum
+        if np.allclose(time_amps, 0.0):
+            return (0.0 + 0.0j) * np.zeros_like(freqs)
+
         # Cut to only relevant times
         relevant_time_inds = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
         # find first and last index where the filter is True

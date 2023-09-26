@@ -2,13 +2,12 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, List
 from multiprocessing import Pool
 
 import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
-import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 import jax
 
@@ -69,7 +68,7 @@ class JaxGeometry(Geometry, ABC):
         return JaxBox.from_bounds(*self.bounds)
 
     def make_grad_monitors(
-        self, freq: float, name: str
+        self, freqs: List[float], name: str
     ) -> Tuple[FieldMonitor, PermittivityMonitor]:
         """Return gradient monitor associated with this object."""
         size_enlarged = tuple(s + 2 * GRAD_MONITOR_EXPANSION for s in self.bound_size)
@@ -77,7 +76,7 @@ class JaxGeometry(Geometry, ABC):
             size=size_enlarged,
             center=self.bound_center,
             fields=["Ex", "Ey", "Ez"],
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_field",
             colocate=False,
         )
@@ -85,7 +84,7 @@ class JaxGeometry(Geometry, ABC):
         eps_mnt = PermittivityMonitor(
             size=size_enlarged,
             center=self.bound_center,
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_eps",
         )
         return field_mnt, eps_mnt
@@ -234,7 +233,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
-                    eps_data = grad_data_eps.field_components[eps_field_name].isel(f=0)
+                    eps_data = grad_data_eps.field_components[eps_field_name]
 
                     # get the permittivity values just inside and outside the edge
 
@@ -265,7 +264,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                         delta_eps_inv = 1.0 / eps1 - 1.0 / eps2
                         d_integrand = -(delta_eps_inv * d_normal).real
                         d_integrand = d_integrand.interp(**area_coords, assume_sorted=True)
-                        grad_contrib = d_area * jnp.sum(d_integrand.values)
+                        grad_contrib = d_area * np.sum(d_integrand.values)
 
                     # get gradient contribution for parallel components using parallel E fields
                     else:
@@ -278,14 +277,14 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                         delta_eps = eps1 - eps2
                         e_integrand = +(delta_eps * e_parallel).real
                         e_integrand = e_integrand.interp(**area_coords, assume_sorted=True)
-                        grad_contrib = d_area * jnp.sum(e_integrand.values)
+                        grad_contrib = d_area * np.sum(e_integrand.values)
 
                     # add this field contribution to the dict storing the surface contributions
                     vjp_surfs[dim_normal][min_max_index] += grad_contrib
 
-        # convert surface vjps to center, size vjps. Note, convert these to jax types w/ jnp.sum()
-        vjp_center = tuple(jnp.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
-        vjp_size = tuple(jnp.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
+        # convert surface vjps to center, size vjps. Note, convert these to jax types w/ np.sum()
+        vjp_center = tuple(np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
+        vjp_size = tuple(np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
         return self.copy(update=dict(center=vjp_center, size=vjp_size))
 
 
@@ -448,7 +447,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
             def evaluate(scalar_field: ScalarFieldDataArray) -> float:
                 """Evaluate a scalar field at a coordinate along the edge."""
-                scalar_field = scalar_field.isel(f=0)
 
                 # if only 1 z coordinate, just isel the data.
                 if len(z) == 1:
@@ -506,7 +504,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             dz = 1.0
 
         # integrate by summing over axis edge (z) and parameterization point (s)
-        integrand = compute_integrand(s=s_vals, z=z_vals)
+        integrand = compute_integrand(s=s_vals, z=z_vals).sum(dim="f")
         integral_result = np.sum(integrand.fillna(0).values)
 
         # project to the normal direction

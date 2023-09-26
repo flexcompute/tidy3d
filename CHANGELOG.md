@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
 
 ### Changed
 
@@ -22,9 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Internal refactor of Web API functionality.
 - `Geometry.from_gds` doesn't create unecessary groups of single elements.
-- Properly handle `.freqs` in `output_monitors` of adjoint plugin.
 
 ### Fixed
+- Properly handle `.freqs` in `output_monitors` of adjoint plugin.
 
 ## [2.4.2] - 2023-9-28
 
