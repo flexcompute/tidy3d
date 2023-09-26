@@ -524,14 +524,18 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
             # grab the correpsonding dotted fields at these interp_coords and sum over len-1 pixels
             field_name = "E" + dim
-            e_dotted = self.e_mult_volume(
-                field=field_name,
-                grad_data_fwd=grad_data_fwd,
-                grad_data_adj=grad_data_adj,
-                vol_coords=interp_coords,
-                d_vol=d_vols,
-                inside_fn=inside_fn,
-            ).sum(sum_axes)
+            e_dotted = (
+                self.e_mult_volume(
+                    field=field_name,
+                    grad_data_fwd=grad_data_fwd,
+                    grad_data_adj=grad_data_adj,
+                    vol_coords=interp_coords,
+                    d_vol=d_vols,
+                    inside_fn=inside_fn,
+                )
+                .sum(sum_axes)
+                .sum(dim="f")
+            )
 
             # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())

@@ -255,7 +255,7 @@ def make_sim(
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[FREQ0],
+        freqs=[FREQ0, FREQ0 * 1.1],
         name=MNT_NAME + "1",
     )
 

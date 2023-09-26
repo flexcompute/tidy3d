@@ -600,8 +600,8 @@ class JaxSimulation(Simulation, JaxObject):
     ) -> JaxStructure:
         """Store the vjp for a single structure."""
 
-        freq = float(eps_data.eps_xx.coords["f"])
-        eps_out = self.medium.eps_model(frequency=freq)
+        freq_max = float(max(eps_data.eps_xx.coords["f"]))
+        eps_out = self.medium.eps_model(frequency=freq_max)
         return structure.store_vjp(
             grad_data_fwd=fld_fwd,
             grad_data_adj=fld_adj,

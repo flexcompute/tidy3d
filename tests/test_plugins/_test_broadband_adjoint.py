@@ -218,7 +218,7 @@ def make_sim(freq0, fwidth, slab_eps=slab_eps0, slab_ds=slab_ds0) -> tda.JaxSimu
 def post_process_T(sim_data: tda.JaxSimulationData) -> float:
     """Given some tda.JaxSimulationData from the run, return the transmission of "p" polarized light."""
     amps = sim_data.output_monitor_data["diffraction"].amps.sel(polarization="p")
-    return jnp.sum(abs(amps.values) ** 2)
+    return jnp.sum(abs(amps.values) ** 2) / len(amps.coords["f"])
 
 
 def compute_T_fdtd(slab_eps=slab_eps0, slab_ds=slab_ds0) -> float:
@@ -313,9 +313,10 @@ def grad_error(freqs, freq0, fwidth, verbose=False):
 """ Main script """
 
 freq0 = 2e14
-df = 0.00001e14
+df = 0.1e14
 num_freqs = 3
-fwidth = freq0 / 10
+fwidth = df/2
+# fwidth = freq0 / 10
 
 if num_freqs == 1:
     freqs = np.array([freq0])
