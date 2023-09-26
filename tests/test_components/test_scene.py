@@ -6,10 +6,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td
 from tidy3d.components.simulation import MAX_NUM_MEDIUMS
-from ..utils import assert_log_level, log_capture, STL_GEO, custom_medium, custom_drude, SIM_FULL
-from ..utils import custom_debye, custom_lorentz, custom_poleresidue, custom_sellmeier
+from ..utils import assert_log_level, log_capture, SIM_FULL
 
-SCENE = td.Scene(size=(1, 1, 1))
+SCENE = td.Scene()
 
 SCENE_FULL = SIM_FULL.scene
 
@@ -18,7 +17,6 @@ def test_scene_init():
     """make sure a scene can be initialized"""
 
     sim = td.Scene(
-        size=(2.0, 2.0, 2.0),
         structures=[
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -44,46 +42,8 @@ def test_scene_init():
     _ = sim.background_structure
 
 
-@pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
-def test_scene_bounds(shift_amount, log_level, log_capture):
-    """make sure bounds are working correctly"""
-
-    # make sure all things are shifted to this central location
-    CENTER_SHIFT = (-1.0, 1.0, 100.0)
-
-    def place_box(center_offset):
-
-        shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
-
-        _ = td.Scene(
-            size=(1.5, 1.5, 1.5),
-            center=CENTER_SHIFT,
-            structures=[
-                td.Structure(
-                    geometry=td.Box(size=(1, 1, 1), center=shifted_center), medium=td.Medium()
-                )
-            ],
-        )
-
-    # create all permutations of squares being shifted 1, -1, or zero in all three directions
-    bin_strings = [list(format(i, "03b")) for i in range(8)]
-    bin_ints = [[int(b) for b in bin_string] for bin_string in bin_strings]
-    bin_ints = np.array(bin_ints)
-    bin_signs = 2 * (bin_ints - 0.5)
-
-    # test all cases where box is shifted +/- 1 in x,y,z and still intersects
-    for amp in bin_ints:
-        for sign in bin_signs:
-            center = shift_amount * amp * sign
-            if np.sum(center) < 1e-12:
-                continue
-            place_box(tuple(center))
-    assert_log_level(log_capture, log_level)
-
-
 def test_validate_components_none():
 
-    assert SCENE._structures_not_at_edges(val=None, values=SCENE.dict()) is None
     assert SCENE._validate_num_mediums(val=None) is None
 
 
@@ -108,9 +68,7 @@ def test_plot():
 
 
 def test_plot_1d_scene():
-    s = td.Scene(
-        size=(0, 0, 1),
-    )
+    s = td.Scene(structures=[td.Structure(geometry=td.Box(size=(0, 0, 1)), medium=td.Medium())])
     _ = s.plot(y=0)
     plt.close()
 
@@ -163,27 +121,6 @@ def test_get_structure_plot_params():
     assert pp.facecolor == "gold"
 
 
-@pytest.mark.parametrize(
-    "box_size,log_level",
-    [
-        ((0.1, 0.1, 0.1), None),
-        ((1, 0.1, 0.1), "WARNING"),
-        ((0.1, 1, 0.1), "WARNING"),
-        ((0.1, 0.1, 1), "WARNING"),
-    ],
-)
-def test_scene_structure_extent(log_capture, box_size, log_level):
-    """Make sure we warn if structure extends exactly to scene edges."""
-
-    box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
-    _ = td.Scene(
-        size=(1, 1, 1),
-        structures=[box],
-    )
-
-    assert_log_level(log_capture, log_level)
-
-
 def test_num_mediums():
     """Make sure we error if too many mediums supplied."""
 
@@ -193,7 +130,6 @@ def test_num_mediums():
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 1))
         )
     _ = td.Scene(
-        size=(5, 5, 5),
         structures=structures,
     )
 
@@ -201,7 +137,7 @@ def test_num_mediums():
         structures.append(
             td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=i + 2))
         )
-        _ = td.Scene(size=(5, 5, 5), structures=structures)
+        _ = td.Scene(structures=structures)
 
 
 def _test_names_default():
@@ -236,7 +172,6 @@ def test_names_unique():
 
     with pytest.raises(pd.ValidationError):
         _ = td.Scene(
-            size=(2.0, 2.0, 2.0),
             structures=[
                 td.Structure(
                     geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -261,7 +196,7 @@ def test_allow_gain():
     medium_gain_ani = td.AnisotropicMedium(xx=medium, yy=medium_gain, zz=medium)
 
     # Test simulation medium
-    scene = td.Scene(size=(10, 10, 10), medium=medium)
+    scene = td.Scene(medium=medium)
     assert not scene.allow_gain
     scene = scene.updated_copy(medium=medium_gain)
     assert scene.allow_gain
@@ -270,7 +205,6 @@ def test_allow_gain():
     struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=medium_ani)
     struct_gain = struct.updated_copy(medium=medium_gain_ani)
     scene = td.Scene(
-        size=(1, 1, 1),
         medium=medium,
         structures=[struct],
     )
@@ -321,7 +255,6 @@ def test_perturbed_mediums_copy():
     struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=pmed2)
 
     scene = td.Scene(
-        size=(1, 1, 1),
         medium=pmed1,
         structures=[struct],
     )

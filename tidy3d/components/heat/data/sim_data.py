@@ -1,6 +1,6 @@
 """Defines heat simulation data class"""
 from __future__ import annotations
-from typing import Tuple, Literal
+from typing import Tuple
 
 import numpy as np
 import pydantic.v1 as pd
@@ -9,7 +9,7 @@ from .monitor_data import HeatMonitorDataType, TemperatureData
 from ..simulation import HeatSimulation
 
 from ...base_sim.data.sim_data import AbstractSimulationData
-from ...types import Ax, RealFieldVal
+from ...types import Ax, RealFieldVal, Literal
 from ...viz import equal_aspect, add_ax_if_none
 from ....exceptions import DataError
 
@@ -19,11 +19,13 @@ class HeatSimulationData(AbstractSimulationData):
 
     Example
     -------
-    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformHeatGrid, Scene, SpatialDataArray
-    >>> from tidy3d import Structure, Box, UniformHeatGrid, UniformHeatSource, HeatBoundarySpec
+    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, SpatialDataArray
+    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformHeatSource
     >>> from tidy3d import StructureBoundary, TemperatureBC, TemperatureMonitor, TemperatureData
+    >>> from tidy3d import HeatBoundarySpec
     >>> import numpy as np
-    >>> scene = Scene(
+    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> heat_sim = HeatSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
@@ -38,11 +40,7 @@ class HeatSimulationData(AbstractSimulationData):
     ...         ),
     ...     ],
     ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
-    ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
-    >>> heat_sim = HeatSimulation(
-    ...     scene=scene,
-    ...     grid_spec=UniformHeatGrid(dl=0.1),
+    ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
     ...     sources=[UniformHeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
     ...         HeatBoundarySpec(
@@ -51,7 +49,6 @@ class HeatSimulationData(AbstractSimulationData):
     ...         )
     ...     ],
     ...     monitors=[temp_mnt],
-    ...     domain=Box(size=(2, 2, 2)),
     ... )
     >>> x = [1,2]
     >>> y = [2,3,4]

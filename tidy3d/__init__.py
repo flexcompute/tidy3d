@@ -124,7 +124,7 @@ from .components.heat.data.monitor_data import TemperatureData
 from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
 from .components.heat.source import UniformHeatSource
 from .components.heat.monitor import TemperatureMonitor
-from .components.heat.grid import UniformHeatGrid, DistanceHeatGrid
+from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
 
 
 def set_logging_level(level: str) -> None:
@@ -299,8 +299,8 @@ __all__ = [
     "HeatFluxBC",
     "HeatBoundarySpec",
     "UniformHeatSource",
-    "UniformHeatGrid",
-    "DistanceHeatGrid",
+    "UniformUnstructuredGrid",
+    "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
 ]

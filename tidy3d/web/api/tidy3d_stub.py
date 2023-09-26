@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from typing import Union, Callable, List
 
+import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
 from ..core.file_util import (
@@ -28,7 +29,7 @@ SimulationDataType = Union[SimulationData, HeatSimulationData]
 
 class Tidy3dStub(BaseModel, TaskStub):
 
-    simulation: SimulationType
+    simulation: SimulationType = pd.Field(discriminator="type")
 
     @classmethod
     def from_file(cls, file_path: str) -> SimulationType:
