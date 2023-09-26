@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Tuple, Dict, Union, List
 
 import pydantic.v1 as pd
+import numpy as np
+import xarray as xr
 
 from jax.tree_util import register_pytree_node_class
 
@@ -157,7 +159,7 @@ class JaxSimulationData(SimulationData, JaxObject):
 
         return user_sim_data, adjoint_sim_data
 
-    def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
+    def make_adjoint_simulation(self, fwidth: float, run_time: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
 
         sim_fwd = self.simulation
@@ -171,11 +173,19 @@ class JaxSimulationData(SimulationData, JaxObject):
             for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth=fwidth):
                 adj_srcs.append(adj_source)
 
-        update_dict = dict(boundary_spec=bc_adj, sources=adj_srcs, monitors=(), output_monitors=())
+        update_dict = dict(
+            boundary_spec=bc_adj,
+            sources=adj_srcs,
+            monitors=(),
+            output_monitors=(),
+            run_time=run_time,
+            normalize_index=None,  # normalize later, frequency-by-frequency
+        )
+
         update_dict.update(
             sim_fwd.get_grad_monitors(
                 input_structures=sim_fwd.input_structures,
-                freq_adjoint=sim_fwd.freq_adjoint,
+                freqs_adjoint=sim_fwd.freqs_adjoint,
                 include_eps_mnts=False,
             )
         )
@@ -188,3 +198,28 @@ class JaxSimulationData(SimulationData, JaxObject):
             update_dict.update(dict(grid_spec=grid_spec_adj))
 
         return sim_fwd.updated_copy(**update_dict)
+
+    def normalize_adjoint_fields(self) -> JaxSimulationData:
+        """Make copy of jax_sim_data with grad_data (fields) normalized by adjoint sources."""
+
+        grad_data_norm = []
+        for field_data in self.grad_data:
+            field_components_norm = {}
+            for field_name, field_component in field_data.field_components.items():
+                freqs = field_component.coords["f"]
+                norm_factor_f = np.zeros(len(freqs), dtype=complex)
+                for i, freq in enumerate(freqs):
+                    freq = float(freq)
+                    for source_index, source in enumerate(self.simulation.sources):
+                        if source.source_time.freq0 == freq and source.source_time.amplitude > 0:
+                            spectrum_fn = self.source_spectrum(source_index)
+                            norm_factor_f[i] = complex(spectrum_fn([freq])[0])
+
+                norm_factor_f_darr = xr.DataArray(norm_factor_f, coords=dict(f=freqs))
+                field_component_norm = field_component / norm_factor_f_darr
+                field_components_norm[field_name] = field_component_norm
+
+            field_data_norm = field_data.updated_copy(**field_components_norm)
+            grad_data_norm.append(field_data_norm)
+
+        return self.updated_copy(grad_data=grad_data_norm)
