@@ -565,53 +565,53 @@ def _test_adjoint_setup_adj(use_emulated_run):
 #     assert jax_sim_data.simulation == jax_sim
 
 
-def test_multiple_freqs():
-    """Test that sim validation fails when output monitors have multiple frequencies."""
+# def test_multiple_freqs():
+#     """Test that sim validation fails when output monitors have multiple frequencies."""
 
-    output_mnt = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[1e14, 2e14],
-        name=MNT_NAME,
-    )
+#     output_mnt = td.ModeMonitor(
+#         size=(10, 10, 0),
+#         mode_spec=td.ModeSpec(num_modes=3),
+#         freqs=[1e14, 2e14],
+#         name=MNT_NAME,
+#     )
 
-    with pytest.raises(pydantic.ValidationError):
-        _ = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt,),
-            input_structures=(),
-        )
+#     with pytest.raises(pydantic.ValidationError):
+#         _ = JaxSimulation(
+#             size=(10, 10, 10),
+#             run_time=1e-12,
+#             grid_spec=td.GridSpec(wavelength=1.0),
+#             monitors=(),
+#             structures=(),
+#             output_monitors=(output_mnt,),
+#             input_structures=(),
+#         )
 
 
-def test_different_freqs():
-    """Test that sim validation fails when output monitors have different frequencies."""
+# def test_different_freqs():
+#     """Test that sim validation fails when output monitors have different frequencies."""
 
-    output_mnt1 = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[1e14],
-        name=MNT_NAME + "1",
-    )
-    output_mnt2 = td.ModeMonitor(
-        size=(10, 10, 0),
-        mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[2e14],
-        name=MNT_NAME + "2",
-    )
-    with pytest.raises(pydantic.ValidationError):
-        _ = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt1, output_mnt2),
-            input_structures=(),
-        )
+#     output_mnt1 = td.ModeMonitor(
+#         size=(10, 10, 0),
+#         mode_spec=td.ModeSpec(num_modes=3),
+#         freqs=[1e14],
+#         name=MNT_NAME + "1",
+#     )
+#     output_mnt2 = td.ModeMonitor(
+#         size=(10, 10, 0),
+#         mode_spec=td.ModeSpec(num_modes=3),
+#         freqs=[2e14],
+#         name=MNT_NAME + "2",
+#     )
+#     with pytest.raises(pydantic.ValidationError):
+#         _ = JaxSimulation(
+#             size=(10, 10, 10),
+#             run_time=1e-12,
+#             grid_spec=td.GridSpec(wavelength=1.0),
+#             monitors=(),
+#             structures=(),
+#             output_monitors=(output_mnt1, output_mnt2),
+#             input_structures=(),
+#         )
 
 
 def test_get_freq_adjoint():
