@@ -178,6 +178,7 @@ class tidycomplex(complex):
 """ symmetry """
 
 Symmetry = Literal[0, -1, 1]
+ScalarSymmetry = Literal[0, 1]
 
 """ geometric """
 
@@ -192,6 +193,7 @@ Axis2D = Literal[0, 1]
 Shapely = BaseGeometry
 PlanePosition = Literal["bottom", "middle", "top"]
 ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
+BoxSurface = Literal["x-", "x+", "y-", "y+", "z-", "z+"]
 
 """ medium """
 
@@ -224,6 +226,7 @@ ObsGridArray = Union[Tuple[float, ...], ArrayFloat1D]
 Ax = Axes
 PlotVal = Literal["real", "imag", "abs"]
 FieldVal = Literal["real", "imag", "abs", "abs^2", "phase"]
+RealFieldVal = Literal["real", "abs", "abs^2"]
 PlotScale = Literal["lin", "dB"]
 ColormapType = Literal["divergent", "sequential", "cyclic"]
 

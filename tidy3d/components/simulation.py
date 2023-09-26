@@ -37,6 +37,7 @@ from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProje
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
+from .scene import Scene
 
 from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
@@ -3257,3 +3258,53 @@ class Simulation(Box):
             sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
 
         return Simulation.parse_obj(sim_dict)
+
+    @cached_property
+    def scene(self) -> Scene:
+        """Return a :class:.`Scene` instance based on the current simulation."""
+
+        return Scene(
+            structures=self.structures,
+            medium=self.medium,
+            center=self.center,
+            size=self.size,
+        )
+
+    @classmethod
+    def from_scene(cls, scene: Scene, **kwargs):
+        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
+        to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
+
+        Parameters
+        ----------
+        scene : :class:.`Scene`
+            Size of object in x, y, and z directions.
+        **kwargs
+            Other arguments
+
+        Example
+        -------
+        >>> from tidy3d import Scene, Medium, Box, Structure, GridSpec
+        >>> box = Structure(
+        ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
+        ...     medium=Medium(permittivity=5),
+        ... )
+        >>> scene = Scene(
+        ...     center=(0, 0, 0),
+        ...     size=(5, 6, 7),
+        ...     structures=[box],
+        ...     medium=Medium(permittivity=3),
+        ... )
+        >>> sim = Simulation.from_scene(
+        ...     scene=scene,
+        ...     run_time=1e-12,
+        ...     grid_spec=GridSpec.uniform(dl=0.4),
+        ... )
+        """
+        return Simulation(
+            structures=scene.structures,
+            medium=scene.medium,
+            center=scene.center,
+            size=scene.size,
+            **kwargs,
+        )
