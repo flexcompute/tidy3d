@@ -329,8 +329,9 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group: ModeIndexDataArray = pd.Field(
+    n_group_raw: ModeIndexDataArray = pd.Field(
         None,
+        alias="n_group",
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
@@ -350,6 +351,17 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     def k_eff(self):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
+
+    @property
+    def n_group(self):
+        """Group index."""
+        if self.n_group_raw is None:
+            log.warning(
+                "The group index was not computed. To calculate group index, pass "
+                "'group_index_step = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.n_group_raw
 
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""

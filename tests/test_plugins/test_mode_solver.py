@@ -531,7 +531,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, local):
+def test_group_index(mock_remote_api, log_capture, local):
     """Test group index calculation"""
 
     simulation = td.Simulation(
@@ -570,6 +570,11 @@ def test_group_index(mock_remote_api, local):
     modes = ms.solve() if local else msweb.run(ms)
     if local:
         assert modes.n_group is None
+        assert len(log_capture) == 1
+        assert log_capture[0][0] == 30
+        assert "ModeSpec" in log_capture[0][1]
+        _ = modes.n_group
+        assert len(log_capture) == 1
 
     # Group index calculated
     ms = ModeSolver(
