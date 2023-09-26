@@ -1,5 +1,21 @@
 #!/usr/bin/env python
 
+"""
+Notes:
+
+## single frequency
+* RMS error normalized (avg) = 0.3308823080089637 %
+
+## multi-freq (n=3, df = 0.1) [all fields at freq0]
+* RMS error normalized (avg) = 143.55391909049393 %
+NOTE: when the df gets very small (freq0/200_000), error goes to 0%.
+
+## multi-freq
+
+
+"""
+
+
 # NOTE: move to backend test later, uses webapi
 
 import numpy as np
@@ -280,15 +296,15 @@ def grad_error(freqs, freq0, fwidth, verbose=False):
 
         print("normalized gradients:")
         print("")
-        print(f"\tgrad_eps (tmm)  = {grad_eps_tmm_norm}")
-        print(f"\tgrad_eps (FDTD)  = {grad_eps_fdtd_norm}")
+        print(f"\tgrad_eps normalized (tmm)  = {grad_eps_tmm_norm}")
+        print(f"\tgrad_eps normalized (FDTD)  = {grad_eps_fdtd_norm}")
         print("")
-        print(f"\tgrad_ds  (tmm)  = {grad_ds_tmm_norm}")
-        print(f"\tgrad_ds  (FDTD)  = {grad_ds_fdtd_norm}")
+        print(f"\tgrad_ds normalized (tmm)  = {grad_ds_tmm_norm}")
+        print(f"\tgrad_ds normalized (FDTD)  = {grad_ds_fdtd_norm}")
         print("")
-        print(f"RMS error (eps) = {rms_eps_norm * 100} %")
-        print(f"RMS error (ds)  = {rms_ds_norm * 100} %")
-        print(f"RMS error (avg) = {rms_norm * 100} %")
+        print(f"RMS error normalized (eps) = {rms_eps_norm * 100} %")
+        print(f"RMS error normalized (ds)  = {rms_ds_norm * 100} %")
+        print(f"RMS error normalized (avg) = {rms_norm * 100} %")
         print(80 * "-", "\n")
 
     return rms, rms_norm, grad_tmm, grad_fdtd
@@ -297,15 +313,15 @@ def grad_error(freqs, freq0, fwidth, verbose=False):
 """ Main script """
 
 freq0 = 2e14
-df = 0.1e14
-num_freqs = 1
+df = 0.00001e14
+num_freqs = 3
+fwidth = freq0 / 10
 
 if num_freqs == 1:
     freqs = np.array([freq0])
-    fwidth = freq0 / 10
 else:
     freqs = np.linspace(freq0 - df, freq0 + df, num_freqs)
-    fwidth = np.max(freqs) - np.min(freqs)
+    fwidth = max(fwidth, np.max(freqs) - np.min(freqs))
 
 verbose = True
 grad_results = grad_error(freqs, freq0=freq0, fwidth=fwidth, verbose=verbose)

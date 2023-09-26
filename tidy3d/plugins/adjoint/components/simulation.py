@@ -227,18 +227,25 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @staticmethod
-    def get_freq_adjoint(output_monitors: List[Monitor]) -> float:
-        """Return the single adjoint frequency stripped from the output monitors."""
+    def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
+        """Return the adjoint frequencies stripped from the output monitors."""
 
         if len(output_monitors) == 0:
             raise AdjointError("Can't get adjoint frequency as no output monitors present.")
 
-        return output_monitors[0].freqs[0]
+        freqs = []
+        for mnt in output_monitors:
+            for freq in mnt.freqs:
+                if freq not in freqs:
+                    freqs.append(freq)
+
+        freqs.sort()
+        return freqs
 
     @cached_property
-    def freq_adjoint(self) -> float:
-        """Return the single adjoint frequency stripped from the output monitors."""
-        return self.get_freq_adjoint(output_monitors=self.output_monitors)
+    def freqs_adjoint(self) -> List[float]:
+        """Return the adjoint frequencies stripped from the output monitors."""
+        return self.get_freqs_adjoint(output_monitors=self.output_monitors)
 
     @cached_property
     def _fwidth_adjoint(self) -> float:
@@ -251,9 +258,9 @@ class JaxSimulation(Simulation, JaxObject):
         # otherwise, grab from sources
         num_sources = len(self.sources)
 
-        # if no sources, just use a constant factor times the adjoint frequency
+        # if no sources, just use a constant factor times the mean adjoint frequency
         if num_sources == 0:
-            return FWIDTH_FACTOR * self.freq_adjoint
+            return FWIDTH_FACTOR * np.mean(self.freqs_adjoint)
 
         # if more than one forward source, use their average
         if num_sources > 1:
@@ -539,7 +546,7 @@ class JaxSimulation(Simulation, JaxObject):
         input_structures = structure_dict["input_structures"]
         grad_mnt_dict = cls.get_grad_monitors(
             input_structures=input_structures,
-            freq_adjoint=cls.get_freq_adjoint(output_monitors=output_monitors),
+            freqs_adjoint=cls.get_freqs_adjoint(output_monitors=output_monitors),
         )
 
         grad_mnts = grad_mnt_dict["grad_monitors"]
@@ -569,14 +576,14 @@ class JaxSimulation(Simulation, JaxObject):
 
     @staticmethod
     def get_grad_monitors(
-        input_structures: List[Structure], freq_adjoint: float, include_eps_mnts: bool = True
+        input_structures: List[Structure], freqs_adjoint: List[float], include_eps_mnts: bool = True
     ) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
         for index, structure in enumerate(input_structures):
             grad_mnt, grad_eps_mnt = structure.make_grad_monitors(
-                freq=freq_adjoint, name=f"grad_mnt_{index}"
+                freqs=freqs_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
             if include_eps_mnts:

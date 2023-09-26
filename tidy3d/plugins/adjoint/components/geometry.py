@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, List
 from multiprocessing import Pool
 
 import pydantic.v1 as pd
@@ -69,7 +69,7 @@ class JaxGeometry(Geometry, ABC):
         return JaxBox.from_bounds(*self.bounds)
 
     def make_grad_monitors(
-        self, freq: float, name: str
+        self, freqs: List[float], name: str
     ) -> Tuple[FieldMonitor, PermittivityMonitor]:
         """Return gradient monitor associated with this object."""
         size_enlarged = tuple(s + 2 * GRAD_MONITOR_EXPANSION for s in self.bound_size)
@@ -77,7 +77,7 @@ class JaxGeometry(Geometry, ABC):
             size=size_enlarged,
             center=self.bound_center,
             fields=["Ex", "Ey", "Ez"],
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_field",
             colocate=False,
         )
@@ -85,7 +85,7 @@ class JaxGeometry(Geometry, ABC):
         eps_mnt = PermittivityMonitor(
             size=size_enlarged,
             center=self.bound_center,
-            freqs=[freq],
+            freqs=freqs,
             name=name + "_eps",
         )
         return field_mnt, eps_mnt
@@ -234,7 +234,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
-                    eps_data = grad_data_eps.field_components[eps_field_name].isel(f=0)
+                    eps_data = grad_data_eps.field_components[eps_field_name].sum(dim="f")
 
                     # get the permittivity values just inside and outside the edge
 
@@ -448,7 +448,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
             def evaluate(scalar_field: ScalarFieldDataArray) -> float:
                 """Evaluate a scalar field at a coordinate along the edge."""
-                scalar_field = scalar_field.isel(f=0)
+                scalar_field = scalar_field.sum(dim="f")
 
                 # if only 1 z coordinate, just isel the data.
                 if len(z) == 1:

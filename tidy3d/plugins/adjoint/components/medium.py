@@ -193,8 +193,14 @@ class JaxMedium(Medium, AbstractJaxMedium):
 
         vjp_eps_complex = np.sum(d_eps_map.values)
 
-        freq = d_eps_map.coords["f"][0]
-        vjp_eps, vjp_sigma = self.eps_complex_to_eps_sigma(vjp_eps_complex, freq)
+        vjp_eps = 0.0
+        vjp_sigma = 0.0
+
+        for freq in d_eps_map.coords["f"]:
+
+            _vjp_eps, _vjp_sigma = self.eps_complex_to_eps_sigma(vjp_eps_complex, freq)
+            vjp_eps += _vjp_eps
+            vjp_sigma += _vjp_sigma
 
         return self.copy(
             update=dict(
@@ -276,7 +282,14 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
 
             vjp_eps_complex_ii = np.sum(e_mult_dim.values)
             freq = e_mult_dim.coords["f"][0]
-            vjp_eps_ii, vjp_sigma_ii = self.eps_complex_to_eps_sigma(vjp_eps_complex_ii, freq)
+
+            vjp_eps_ii = 0.0
+            vjp_sigma_ii = 0.0
+
+            for freq in e_mult_dim.coords["f"]:
+                _vjp_eps_ii, _vjp_sigma_ii = self.eps_complex_to_eps_sigma(vjp_eps_complex_ii, freq)
+                vjp_eps_ii += _vjp_eps_ii
+                vjp_sigma_ii += _vjp_sigma_ii
 
             vjp_fields[component_name] = JaxMedium(
                 permittivity=vjp_eps_ii,

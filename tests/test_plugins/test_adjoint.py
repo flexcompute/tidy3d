@@ -628,7 +628,7 @@ def test_get_freq_adjoint():
     )
 
     with pytest.raises(AdjointError):
-        _ = sim.freq_adjoint
+        _ = sim.freqs_adjoint
 
     freq0 = 2e14
     output_mnt1 = td.ModeMonitor(
@@ -652,7 +652,7 @@ def test_get_freq_adjoint():
         output_monitors=(output_mnt1, output_mnt2),
         input_structures=(),
     )
-    assert sim.freq_adjoint == freq0
+    assert sim.freqs_adjoint == [freq0]
 
 
 def test_get_fwidth_adjoint():

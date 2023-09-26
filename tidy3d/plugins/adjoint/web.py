@@ -647,7 +647,7 @@ def run_local_fwd(
 
     # add the gradient monitors and run the forward simulation
     grad_mnts = simulation.get_grad_monitors(
-        input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
+        input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
     sim_fwd = simulation.updated_copy(**grad_mnts)
     sim_data_fwd = run(
@@ -804,7 +804,7 @@ def run_async_local_fwd(
     for simulation in simulations:
 
         grad_mnts = simulation.get_grad_monitors(
-            input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
+            input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
         )
         sim_fwd = simulation.updated_copy(**grad_mnts)
         sims_fwd.append(sim_fwd)

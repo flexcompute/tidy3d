@@ -175,7 +175,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         update_dict.update(
             sim_fwd.get_grad_monitors(
                 input_structures=sim_fwd.input_structures,
-                freq_adjoint=sim_fwd.freq_adjoint,
+                freqs_adjoint=sim_fwd.freqs_adjoint,
                 include_eps_mnts=False,
             )
         )
