@@ -1,0 +1,283 @@
+{
+    "type": "Scene",
+    "center": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "size": [
+        13.0,
+        10.7,
+        2.0
+    ],
+    "medium": {
+        "name": "air",
+        "frequency_range": null,
+        "allow_gain": false,
+        "nonlinear_spec": null,
+        "heat_spec": {
+            "type": "FluidSpec"
+        },
+        "type": "Medium",
+        "permittivity": 1.0,
+        "conductivity": 0.0
+    },
+    "structures": [
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    0.0,
+                    0.0,
+                    -1.0
+                ],
+                "size": [
+                    "Infinity",
+                    "Infinity",
+                    2.0
+                ]
+            },
+            "name": "substrate",
+            "type": "Structure",
+            "medium": {
+                "name": "SiO2",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": null,
+                "type": "Medium",
+                "permittivity": 2.1315999999999997,
+                "conductivity": 0.0
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    "Infinity",
+                    "Infinity",
+                    1.0
+                ]
+            },
+            "name": "matrix",
+            "type": "Structure",
+            "medium": {
+                "name": "SiO2",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 1.49328e-12,
+                    "conductivity": 1.3e-06
+                },
+                "type": "Medium",
+                "permittivity": 2.1315999999999997,
+                "conductivity": 0.0
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    0.0,
+                    3.95,
+                    -0.15
+                ],
+                "size": [
+                    "Infinity",
+                    0.4,
+                    0.2
+                ]
+            },
+            "name": "waveguide_top",
+            "type": "Structure",
+            "medium": {
+                "subpixel": true,
+                "type": "PerturbationMedium",
+                "name": "Si",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 1.631e-12,
+                    "conductivity": 0.000148
+                },
+                "permittivity": 12.1104,
+                "conductivity": 0.0,
+                "permittivity_perturbation": {
+                    "heat": {
+                        "type": "LinearHeatPerturbation",
+                        "temperature_range": [
+                            0.0,
+                            "Infinity"
+                        ],
+                        "temperature_ref": 300.0,
+                        "coeff": 0.0012528
+                    },
+                    "charge": null,
+                    "type": "ParameterPerturbation"
+                },
+                "conductivity_perturbation": null
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    0.0,
+                    -3.95,
+                    -0.15
+                ],
+                "size": [
+                    "Infinity",
+                    0.4,
+                    0.2
+                ]
+            },
+            "name": "waveguide_bottom",
+            "type": "Structure",
+            "medium": {
+                "subpixel": true,
+                "type": "PerturbationMedium",
+                "name": "Si",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 1.631e-12,
+                    "conductivity": 0.000148
+                },
+                "permittivity": 12.1104,
+                "conductivity": 0.0,
+                "permittivity_perturbation": {
+                    "heat": {
+                        "type": "LinearHeatPerturbation",
+                        "temperature_range": [
+                            0.0,
+                            "Infinity"
+                        ],
+                        "temperature_ref": 300.0,
+                        "coeff": 0.0012528
+                    },
+                    "charge": null,
+                    "type": "ParameterPerturbation"
+                },
+                "conductivity_perturbation": null
+            }
+        },
+        {
+            "geometry": {
+                "type": "Cylinder",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "radius": 3.7,
+                "center": [
+                    0.0,
+                    0.0,
+                    -0.15
+                ],
+                "length": 0.2
+            },
+            "name": "outer_ring",
+            "type": "Structure",
+            "medium": {
+                "subpixel": true,
+                "type": "PerturbationMedium",
+                "name": "Si",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 1.631e-12,
+                    "conductivity": 0.000148
+                },
+                "permittivity": 12.1104,
+                "conductivity": 0.0,
+                "permittivity_perturbation": {
+                    "heat": {
+                        "type": "LinearHeatPerturbation",
+                        "temperature_range": [
+                            0.0,
+                            "Infinity"
+                        ],
+                        "temperature_ref": 300.0,
+                        "coeff": 0.0012528
+                    },
+                    "charge": null,
+                    "type": "ParameterPerturbation"
+                },
+                "conductivity_perturbation": null
+            }
+        },
+        {
+            "geometry": {
+                "type": "Cylinder",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "radius": 3.7,
+                "center": [
+                    0.0,
+                    0.0,
+                    0.175
+                ],
+                "length": 0.15
+            },
+            "name": "heater_ring",
+            "type": "Structure",
+            "medium": {
+                "name": "Cu",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 3.4496e-12,
+                    "conductivity": 0.000399
+                },
+                "type": "PECMedium"
+            }
+        },
+        {
+            "geometry": {
+                "type": "Cylinder",
+                "axis": 2,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "radius": 3.3,
+                "center": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "length": 1.0
+            },
+            "name": "inner_ring",
+            "type": "Structure",
+            "medium": {
+                "name": "SiO2",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "heat_spec": {
+                    "type": "SolidSpec",
+                    "capacity": 1.49328e-12,
+                    "conductivity": 1.3e-06
+                },
+                "type": "Medium",
+                "permittivity": 2.1315999999999997,
+                "conductivity": 0.0
+            }
+        }
+    ]
+}

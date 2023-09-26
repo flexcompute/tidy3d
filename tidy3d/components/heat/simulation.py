@@ -127,22 +127,22 @@ class HeatSimulation(AbstractSimulation):
                     )
         return val
 
-    @pd.validator("domain", always=True)
-    def check_zero_dim_domain(cls, val, values):
-        """Error if heat domain have zero dimensions."""
-
-        if val is not None:
-            bounds = val.bounds
-            size = [bmax - bmin for bmax, bmin in zip(bounds[0], bounds[1])]
-        else:
-            size = values.get("scene").size
-
-        if any(length == 0 for length in size):
-            raise SetupError(
-                "'HeatSimulation' does not currently support domains with dimensions of zero size."
-            )
-
-        return val
+    # @pd.validator("domain", always=True)
+    # def check_zero_dim_domain(cls, val, values):
+    #     """Error if heat domain have zero dimensions."""
+    #
+    #     if val is not None:
+    #         bounds = val.bounds
+    #         size = [bmax - bmin for bmax, bmin in zip(bounds[0], bounds[1])]
+    #     else:
+    #         size = values.get("scene").size
+    #
+    #     if any(length == 0 for length in size):
+    #         raise SetupError(
+    #             "'HeatSimulation' does not currently support domains with dimensions of zero size."
+    #         )
+    #
+    #     return val
 
     @pd.validator("boundary_spec", always=True)
     def names_exist_bcs(cls, val, values):
