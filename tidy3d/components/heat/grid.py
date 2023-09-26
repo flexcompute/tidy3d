@@ -9,13 +9,13 @@ from ...constants import MICROMETER
 from ...exceptions import ValidationError
 
 
-class UniformHeatGrid(Tidy3dBaseModel):
+class UniformUnstructuredGrid(Tidy3dBaseModel):
 
     """Uniform grid.
 
     Example
     -------
-    >>> heat_grid = UniformHeatGrid(dl=0.1)
+    >>> heat_grid = UniformUnstructuredGrid(dl=0.1)
     """
 
     dl: pd.PositiveFloat = pd.Field(
@@ -40,12 +40,12 @@ class UniformHeatGrid(Tidy3dBaseModel):
     )
 
 
-class DistanceHeatGrid(Tidy3dBaseModel):
+class DistanceUnstructuredGrid(Tidy3dBaseModel):
     """Adaptive grid based on distance to material interfaces.
 
     Example
     -------
-    >>> heat_grid = DistanceHeatGrid(
+    >>> heat_grid = DistanceUnstructuredGrid(
     ...     dl_interface=0.1,
     ...     dl_bulk=1,
     ...     distance_interface=0.3,
@@ -98,4 +98,4 @@ class DistanceHeatGrid(Tidy3dBaseModel):
         return val
 
 
-HeatGridType = Union[UniformHeatGrid, DistanceHeatGrid]
+HeatGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]

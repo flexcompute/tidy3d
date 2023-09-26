@@ -2,7 +2,6 @@
 """
 from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
-from math import isclose
 
 import pydantic.v1 as pd
 import numpy as np
@@ -10,11 +9,11 @@ import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cached_property
-from .validators import assert_unique_names, assert_objects_in_sim_bounds
+from .base import cached_property, Tidy3dBaseModel
+from .validators import assert_unique_names
 from .geometry.base import Box
 from .geometry.mesh import TriangleMesh
-from .types import Ax, Shapely, TYPE_TAG_STR, Bound
+from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate
 from .medium import Medium, MediumType, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, AbstractPerturbationMedium
@@ -36,14 +35,13 @@ from ..log import log
 MAX_NUM_MEDIUMS = 65530
 
 
-class Scene(Box):
+class Scene(Tidy3dBaseModel):
     """Contains generic information about the geometry and medium properties common to all types of
     simulations.
 
     Example
     -------
     >>> sim = Scene(
-    ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
     ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
@@ -71,8 +69,6 @@ class Scene(Box):
 
     """ Validating setup """
 
-    _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
-
     # make sure all names are unique
     _unique_structure_names = assert_unique_names("structures")
 
@@ -92,35 +88,62 @@ class Scene(Box):
 
         return val
 
-    @pd.validator("structures", always=True)
-    def _structures_not_at_edges(cls, val, values):
-        """Warn if any structures lie at the scene boundaries."""
-
-        if val is None:
-            return val
-
-        sim_box = Box(size=values.get("size"), center=values.get("center"))
-        sim_bound_min, sim_bound_max = sim_box.bounds
-        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
-
-        with log as consolidated_logger:
-            for istruct, structure in enumerate(val):
-                struct_bound_min, struct_bound_max = structure.geometry.bounds
-                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
-
-                for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-
-                    if isclose(sim_val, struct_val):
-                        consolidated_logger.warning(
-                            f"Structure at structures[{istruct}] has bounds that extend exactly to "
-                            "simulation edges. This can cause unexpected behavior. "
-                            "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit."
-                        )
-
-        return val
-
     """ Accounting """
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Automatically defined scene's bounds based on present structures. Infinite dimensions
+        are ignored. If the scene contains no strucutres, the bounds are set to
+        (-1, -1, -1), (1, 1, 1). Similarly, if along a given axis all structures extend infinitely,
+        the bounds along that axis are set from -1 to 1.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float, float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+
+        bounds = tuple(structure.geometry.bounds for structure in self.structures)
+        return (
+            tuple(min((b[i] for b, _ in bounds if b[i] != -inf), default=-1) for i in range(3)),
+            tuple(max((b[i] for _, b in bounds if b[i] != inf), default=1) for i in range(3)),
+        )
+
+    @cached_property
+    def size(self) -> Size:
+        """Automatically defined scene's size.
+
+        Returns
+        -------
+        Tuple[float, float, float]
+            Scene's size.
+        """
+
+        return tuple(bmax - bmin for bmin, bmax in zip(self.bounds[0], self.bounds[1]))
+
+    @cached_property
+    def center(self) -> Coordinate:
+        """Automatically defined scene's center.
+
+        Returns
+        -------
+        Tuple[float, float, float]
+            Scene's center.
+        """
+
+        return tuple(0.5 * (bmin + bmax) for bmin, bmax in zip(self.bounds[0], self.bounds[1]))
+
+    @cached_property
+    def box(self) -> Box:
+        """Automatically defined scene's :class:`.Box`.
+
+        Returns
+        -------
+        Box
+            Scene's box.
+        """
+
+        return Box(center=self.center, size=self.size)
 
     @cached_property
     def mediums(self) -> Set[MediumType]:
@@ -344,8 +367,8 @@ class Scene(Box):
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
         return ax
@@ -353,7 +376,7 @@ class Scene(Box):
     def _plot_shape_structure(self, medium: Medium, mat_index: int, shape: Shapely, ax: Ax) -> Ax:
         """Plot a structure's cross section shape for a given medium."""
         plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
-        ax = self.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
         return ax
 
     def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
@@ -722,8 +745,8 @@ class Scene(Box):
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
         return ax
@@ -793,8 +816,8 @@ class Scene(Box):
         Plot shape made of custom medium with ``pcolormesh``.
         """
         coords = "xyz"
-        normal_axis_ind, normal_position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = self.pop_axis(coords, normal_axis_ind)
+        normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
         plane_axes_inds = [0, 1, 2]
         plane_axes_inds.pop(normal_axis_ind)
 
@@ -910,7 +933,7 @@ class Scene(Box):
         plot_params = self._get_structure_eps_plot_params(
             medium=medium, freq=freq, eps_min=eps_min, eps_max=eps_max, alpha=alpha, reverse=reverse
         )
-        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
 
     """ Plotting Heat """
@@ -1053,8 +1076,8 @@ class Scene(Box):
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
         return ax
@@ -1126,7 +1149,7 @@ class Scene(Box):
             alpha=alpha,
             reverse=reverse,
         )
-        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
 
     """ Misc """

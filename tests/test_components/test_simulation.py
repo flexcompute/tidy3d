@@ -1971,7 +1971,7 @@ def test_scene_from_scene():
 
     sim = td.Simulation.from_scene(
         scene=scene,
-        **SIM_FULL.dict(exclude={"structures", "medium", "size", "center"}),
+        **SIM_FULL.dict(exclude={"structures", "medium"}),
     )
 
     assert sim == SIM_FULL

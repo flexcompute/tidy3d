@@ -1,7 +1,7 @@
 """Defines heat simulation class"""
 from __future__ import annotations
 
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, List, Dict
 from matplotlib import cm
 
 import pydantic.v1 as pd
@@ -22,6 +22,7 @@ from ..structure import Structure
 from ..geometry.base import Box, GeometryGroup
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
+from ..scene import Scene
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
 from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
@@ -32,7 +33,7 @@ from ...constants import inf, VOLUMETRIC_HEAT_RATE
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = Union[Box, Cylinder, Sphere, PolySlab]
+HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab)
 
 
 class HeatSimulation(AbstractSimulation):
@@ -40,8 +41,8 @@ class HeatSimulation(AbstractSimulation):
 
     Example
     -------
-    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformHeatGrid, TemperatureMonitor, Scene
-    >>> scene = Scene(
+    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, TemperatureMonitor
+    >>> heat_sim = HeatSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
@@ -56,11 +57,7 @@ class HeatSimulation(AbstractSimulation):
     ...         ),
     ...     ],
     ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
-    ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
-    >>> heat_sim = HeatSimulation(
-    ...     scene=scene,
-    ...     grid_spec=UniformHeatGrid(dl=0.1),
+    ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
     ...     sources=[UniformHeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
     ...         HeatBoundarySpec(
@@ -68,8 +65,7 @@ class HeatSimulation(AbstractSimulation):
     ...             condition=TemperatureBC(temperature=500),
     ...         )
     ...     ],
-    ...     monitors=[temp_mnt],
-    ...     domain=Box(size=(2, 2, 2)),
+    ...     monitors=[TemperatureMonitor(size=(1, 2, 3), name="sample")],
     ... )
     """
 
@@ -106,10 +102,10 @@ class HeatSimulation(AbstractSimulation):
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
     )
 
-    @pd.validator("scene", always=True)
+    @pd.validator("structures", always=True)
     def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""
-        for structure in val.structures:
+        for structure in val:
             if isinstance(structure.geometry, GeometryGroup):
                 geometries = structure.geometry.geometries
             else:
@@ -127,17 +123,11 @@ class HeatSimulation(AbstractSimulation):
                     )
         return val
 
-    @pd.validator("domain", always=True)
+    @pd.validator("size", always=True)
     def check_zero_dim_domain(cls, val, values):
         """Error if heat domain have zero dimensions."""
 
-        if val is not None:
-            bounds = val.bounds
-            size = [bmax - bmin for bmax, bmin in zip(bounds[0], bounds[1])]
-        else:
-            size = values.get("scene").size
-
-        if any(length == 0 for length in size):
+        if any(length == 0 for length in val):
             raise SetupError(
                 "'HeatSimulation' does not currently support domains with dimensions of zero size."
             )
@@ -147,17 +137,11 @@ class HeatSimulation(AbstractSimulation):
     @pd.validator("boundary_spec", always=True)
     def names_exist_bcs(cls, val, values):
         """Error if boundary conditions point to non-existing structures/media."""
-        scene = values.get("scene")
-        if scene is None:
-            raise SetupError(
-                "Cannot validate 'HeatSimulation.boundary_spec' because validation of "
-                "'HeatSimulation.scene' has failed."
-            )
 
-        structures = scene.structures
-        mediums = scene.mediums
+        structures = values.get("structures")
         structures_names = {s.name for s in structures}
-        mediums_names = {m.name for m in mediums}
+        mediums_names = {s.medium.name for s in structures}
+        mediums_names.add(values.get("medium").name)
 
         for bc_ind, bc_spec in enumerate(val):
             bc_place = bc_spec.placement
@@ -188,15 +172,8 @@ class HeatSimulation(AbstractSimulation):
 
     @pd.validator("sources", always=True)
     def names_exist_sources(cls, val, values):
-        """Error if heat point to non-existing structures."""
-        scene = values.get("scene")
-        if scene is None:
-            raise SetupError(
-                "Cannot validate 'HeatSimulation.sources' because validation of "
-                "'HeatSimulation.scene' has failed."
-            )
-
-        structures = scene.structures
+        """Error if a heat source point to non-existing structures."""
+        structures = values.get("structures")
         structures_names = {s.name for s in structures}
 
         for source in val:
@@ -256,7 +233,7 @@ class HeatSimulation(AbstractSimulation):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = self.scene._get_plot_lims(
+        hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
@@ -268,7 +245,9 @@ class HeatSimulation(AbstractSimulation):
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         if colorbar == "source":
@@ -305,8 +284,8 @@ class HeatSimulation(AbstractSimulation):
         """
 
         # get structure list
-        structures = [self.domain_structure]
-        structures += list(self.scene.structures)
+        structures = [self.simulation_structure]
+        structures += list(self.structures)
 
         # construct slicing plane
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -327,10 +306,10 @@ class HeatSimulation(AbstractSimulation):
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.scene.add_ax_labels_lims(axis=axis, ax=ax)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
 
         return ax
 
@@ -354,7 +333,7 @@ class HeatSimulation(AbstractSimulation):
     ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
-        ax = self.scene.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params_bc, ax=ax)
         return ax
 
     @staticmethod
@@ -686,7 +665,7 @@ class HeatSimulation(AbstractSimulation):
         """
 
         # background can't have source, so no need to add background structure
-        structures = self.scene.structures
+        structures = self.structures
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -725,11 +704,11 @@ class HeatSimulation(AbstractSimulation):
                 )
 
         # clean up the axis display
-        axis, position = self.scene.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.scene.add_ax_labels_lims(axis=axis, ax=ax)
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
         return ax
 
     def _add_heat_source_cbar(self, ax: Ax):
@@ -795,5 +774,42 @@ class HeatSimulation(AbstractSimulation):
             source_max=source_max,
             alpha=alpha,
         )
-        ax = self.scene.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
+
+    @classmethod
+    def from_scene(cls, scene: Scene, **kwargs):
+        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
+        to define a valid simulation (for example, ``size``, ``run_time``, ``grid_spec``, etc).
+
+        Parameters
+        ----------
+        scene : :class:.`Scene`
+            Scene containing structures information.
+        **kwargs
+            Other arguments
+
+        Example
+        -------
+        >>> from tidy3d import Scene, Medium, Box, Structure, UniformUnstructuredGrid
+        >>> box = Structure(
+        ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
+        ...     medium=Medium(permittivity=5),
+        ... )
+        >>> scene = Scene(
+        ...     structures=[box],
+        ...     medium=Medium(permittivity=3),
+        ... )
+        >>> sim = HeatSimulation.from_scene(
+        ...     scene=scene,
+        ...     center=(0, 0, 0),
+        ...     size=(5, 6, 7),
+        ...     grid_spec=UniformUnstructuredGrid(dl=0.4),
+        ... )
+        """
+
+        return cls(
+            structures=scene.structures,
+            medium=scene.medium,
+            **kwargs,
+        )

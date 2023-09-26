@@ -20,14 +20,14 @@ from tidy3d import (
     StructureSimulationBoundary,
     MediumMediumInterface,
 )
-from tidy3d import UniformHeatGrid, DistanceHeatGrid
+from tidy3d import UniformUnstructuredGrid, DistanceUnstructuredGrid
 from tidy3d import HeatSimulation
 from tidy3d import HeatSimulationData
 from tidy3d import TemperatureMonitor
 from tidy3d import TemperatureData
 
 from tidy3d.exceptions import DataError
-from ..utils import STL_GEO
+from ..utils import STL_GEO, assert_log_level, log_capture
 
 
 def make_heat_mediums():
@@ -137,11 +137,13 @@ def test_heat_mnt_data():
 
 
 def make_uniform_grid_spec():
-    return UniformHeatGrid(dl=0.1, min_edges_per_circumference=5, min_edges_per_side=3)
+    return UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=5, min_edges_per_side=3)
 
 
 def make_distance_grid_spec():
-    return DistanceHeatGrid(dl_interface=0.1, dl_bulk=1, distance_interface=1, distance_bulk=2)
+    return DistanceUnstructuredGrid(
+        dl_interface=0.1, dl_bulk=1, distance_interface=1, distance_bulk=2
+    )
 
 
 def test_grid_spec():
@@ -194,15 +196,12 @@ def make_heat_sim():
     temp_mnt = make_heat_mnt()
 
     heat_sim = HeatSimulation(
-        scene=td.Scene(
-            center=(0, 0, 0),
-            size=(2, 3, 3),
-            medium=fluid_medium,
-            structures=[fluid_structure, solid_structure],
-        ),
+        medium=fluid_medium,
+        structures=[fluid_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
         boundary_spec=[pl1, pl2, pl3, pl4, pl5],
         grid_spec=grid_spec,
-        domain=td.Box(center=(0, 0, 0), size=(2, 2, 2)),
         sources=[heat_source],
         monitors=[temp_mnt],
     )
@@ -241,24 +240,19 @@ def test_heat_sim():
     p = td.PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
     _, structure = make_heat_structures()
     structure = structure.updated_copy(geometry=p, name="polyslab")
-    scene = heat_sim.scene.updated_copy(structures=list(heat_sim.scene.structures) + [structure])
-    _ = heat_sim.updated_copy(scene=scene)
+    _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [structure])
 
     # test unsupported yet geometries
     structure = structure.updated_copy(geometry=STL_GEO, name="stl")
-    scene = heat_sim.scene.updated_copy(structures=list(heat_sim.scene.structures) + [structure])
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(scene=scene)
+        _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [structure])
 
     # test unsupported yet zero dimension domains
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(domain=td.Box(center=(0, 0, 0), size=(0, 2, 2)))
+        _ = heat_sim.updated_copy(center=(0, 0, 0), size=(0, 2, 2))
 
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(domain=td.Box(center=(0, 0, 0), size=(1, 0, 0)))
-
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(domain=None, scene=heat_sim.scene.updated_copy(size=(1, 0, 1)))
+        _ = heat_sim.updated_copy(center=(0, 0, 0), size=(1, 0, 0))
 
     temp_mnt = make_heat_mnt()
 
@@ -277,6 +271,65 @@ def test_heat_sim():
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(symmetry=(-1, 0, 1))
+
+
+@pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
+def test_heat_sim_bounds(shift_amount, log_level, log_capture):
+    """make sure bounds are working correctly"""
+
+    # make sure all things are shifted to this central location
+    CENTER_SHIFT = (-1.0, 1.0, 100.0)
+
+    def place_box(center_offset):
+
+        shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
+
+        _ = td.HeatSimulation(
+            size=(1.5, 1.5, 1.5),
+            center=CENTER_SHIFT,
+            structures=[
+                td.Structure(
+                    geometry=td.Box(size=(1, 1, 1), center=shifted_center), medium=td.Medium()
+                )
+            ],
+            grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+        )
+
+    # create all permutations of squares being shifted 1, -1, or zero in all three directions
+    bin_strings = [list(format(i, "03b")) for i in range(8)]
+    bin_ints = [[int(b) for b in bin_string] for bin_string in bin_strings]
+    bin_ints = np.array(bin_ints)
+    bin_signs = 2 * (bin_ints - 0.5)
+
+    # test all cases where box is shifted +/- 1 in x,y,z and still intersects
+    for amp in bin_ints:
+        for sign in bin_signs:
+            center = shift_amount * amp * sign
+            if np.sum(center) < 1e-12:
+                continue
+            place_box(tuple(center))
+    assert_log_level(log_capture, log_level)
+
+
+@pytest.mark.parametrize(
+    "box_size,log_level",
+    [
+        ((1, 0.1, 0.1), "WARNING"),
+        ((0.1, 1, 0.1), "WARNING"),
+        ((0.1, 0.1, 1), "WARNING"),
+    ],
+)
+def test_sim_structure_extent(log_capture, box_size, log_level):
+    """Make sure we warn if structure extends exactly to simulation edges."""
+
+    box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
+    _ = td.HeatSimulation(
+        size=(1, 1, 1),
+        structures=[box],
+        grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    )
+
+    assert_log_level(log_capture, log_level)
 
 
 def make_heat_sim_data():

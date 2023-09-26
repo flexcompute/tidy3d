@@ -3266,8 +3266,6 @@ class Simulation(Box):
         return Scene(
             structures=self.structures,
             medium=self.medium,
-            center=self.center,
-            size=self.size,
         )
 
     @classmethod
@@ -3290,13 +3288,13 @@ class Simulation(Box):
         ...     medium=Medium(permittivity=5),
         ... )
         >>> scene = Scene(
-        ...     center=(0, 0, 0),
-        ...     size=(5, 6, 7),
         ...     structures=[box],
         ...     medium=Medium(permittivity=3),
         ... )
         >>> sim = Simulation.from_scene(
         ...     scene=scene,
+        ...     center=(0, 0, 0),
+        ...     size=(5, 6, 7),
         ...     run_time=1e-12,
         ...     grid_spec=GridSpec.uniform(dl=0.4),
         ... )
@@ -3304,7 +3302,5 @@ class Simulation(Box):
         return Simulation(
             structures=scene.structures,
             medium=scene.medium,
-            center=scene.center,
-            size=scene.size,
             **kwargs,
         )
