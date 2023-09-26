@@ -110,28 +110,28 @@ class JaxSimulation(Simulation, JaxObject):
         units=HERTZ,
     )
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_single_freq(cls, val):
-        """Assert all output monitors have just one frequency."""
-        for mnt in val:
-            if len(mnt.freqs) != 1:
-                raise AdjointError(
-                    "All output monitors must have single frequency for adjoint feature. "
-                    f"Monitor '{mnt.name}' had {len(mnt.freqs)} frequencies."
-                )
-        return val
+    # @pd.validator("output_monitors", always=True)
+    # def _output_monitors_single_freq(cls, val):
+    #     """Assert all output monitors have just one frequency."""
+    #     for mnt in val:
+    #         if len(mnt.freqs) != 1:
+    #             raise AdjointError(
+    #                 "All output monitors must have single frequency for adjoint feature. "
+    #                 f"Monitor '{mnt.name}' had {len(mnt.freqs)} frequencies."
+    #             )
+    #     return val
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_same_freq(cls, val):
-        """Assert all output monitors have the same frequency."""
-        freqs = [mnt.freqs[0] for mnt in val]
-        if len(set(freqs)) > 1:
-            raise AdjointError(
-                "All output monitors must have the same frequency, "
-                f"given frequencies of {[f'{f:.2e}' for f in freqs]} (Hz) "
-                f"for monitors named '{[mnt.name for mnt in val]}', respectively."
-            )
-        return val
+    # @pd.validator("output_monitors", always=True)
+    # def _output_monitors_same_freq(cls, val):
+    #     """Assert all output monitors have the same frequency."""
+    #     freqs = [mnt.freqs[0] for mnt in val]
+    #     if len(set(freqs)) > 1:
+    #         raise AdjointError(
+    #             "All output monitors must have the same frequency, "
+    #             f"given frequencies of {[f'{f:.2e}' for f in freqs]} (Hz) "
+    #             f"for monitors named '{[mnt.name for mnt in val]}', respectively."
+    #         )
+    #     return val
 
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
