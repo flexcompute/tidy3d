@@ -32,7 +32,10 @@ class Job(WebContainer):
     """
 
     simulation: SimulationType = pd.Field(
-        ..., title="simulation", description="Simulation to run as a 'task'."
+        ...,
+        title="simulation",
+        description="Simulation to run as a 'task'.",
+        discriminator="type",
     )
 
     task_name: TaskName = pd.Field(..., title="Task Name", description="Unique name of the task.")

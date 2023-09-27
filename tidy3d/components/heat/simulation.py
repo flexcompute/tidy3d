@@ -116,10 +116,12 @@ class HeatSimulation(AbstractSimulation):
                         "'HeatSimulation' does not currently support recursive 'GeometryGroup's."
                     )
                 if not isinstance(geom, HeatSingleGeometryType):
+                    geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
                     raise SetupError(
                         "'HeatSimulation' does not currently support geometries of type "
-                        f"'{geom.type}'. Allowed geometries are 'Box', 'Cylinder', 'Sphere', "
-                        f"and 'PolySlab'."
+                        f"'{geom.type}'. Allowed geometries are "
+                        f"{', '.join(geom_names)}, "
+                        "and non-recursive 'GeometryGroup'."
                     )
         return val
 
@@ -401,7 +403,7 @@ class HeatSimulation(AbstractSimulation):
         med_to_bc_spec: Dict[str, HeatBoundarySpec],
         background_structure_shape: Shapely,
     ) -> Tuple[Tuple[HeatBoundarySpec, Shapely], ...]:
-        """Construct Simulation, StructureSimulation, Structure, and MediumMediums boundaries."""
+        """Construct Simulation, StructureSimulation, Structure, and MediumMedium boundaries."""
 
         # forward foop to take care of Simulation, StructureSimulation, Structure,
         # and MediumMediums
@@ -778,9 +780,9 @@ class HeatSimulation(AbstractSimulation):
         return ax
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs):
+    def from_scene(cls, scene: Scene, **kwargs) -> HeatSimulation:
         """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
-        to define a valid simulation (for example, ``size``, ``run_time``, ``grid_spec``, etc).
+        to define a valid simulation (for example, ``size``, ``grid_spec``, etc).
 
         Parameters
         ----------

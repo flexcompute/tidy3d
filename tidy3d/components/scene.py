@@ -55,14 +55,14 @@ class Scene(Tidy3dBaseModel):
     medium: MediumType3D = pd.Field(
         Medium(),
         title="Background Medium",
-        description="Background medium of simulation, defaults to vacuum if not specified.",
+        description="Background medium of scene, defaults to vacuum if not specified.",
         discriminator=TYPE_TAG_STR,
     )
 
     structures: Tuple[Structure, ...] = pd.Field(
         (),
         title="Structures",
-        description="Tuple of structures present in simulation. "
+        description="Tuple of structures present in scene. "
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
@@ -82,7 +82,7 @@ class Scene(Tidy3dBaseModel):
         mediums = {structure.medium for structure in val}
         if len(mediums) > MAX_NUM_MEDIUMS:
             raise SetupError(
-                f"Tidy3d only supports {MAX_NUM_MEDIUMS} distinct mediums."
+                f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct mediums."
                 f"{len(mediums)} were supplied."
             )
 
@@ -152,7 +152,7 @@ class Scene(Tidy3dBaseModel):
         Returns
         -------
         List[:class:`.AbstractMedium`]
-            Set of distinct mediums in the simulation.
+            Set of distinct mediums in the scene.
         """
         medium_dict = {self.medium: None}
         medium_dict.update({structure.medium: None for structure in self.structures})
@@ -166,7 +166,7 @@ class Scene(Tidy3dBaseModel):
         Returns
         -------
         Dict[:class:`.AbstractMedium`, int]
-            Mapping between distinct mediums to index in simulation.
+            Mapping between distinct mediums to index in scene.
         """
 
         return {medium: index for index, medium in enumerate(self.mediums)}
@@ -294,7 +294,7 @@ class Scene(Tidy3dBaseModel):
         vlim: Tuple[float, float] = None,
         **patch_kwargs,
     ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of scene's components on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
@@ -421,7 +421,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
     ) -> Ax:
-        """Sets the xy limits of the simulation at a plane, useful after plotting.
+        """Sets the xy limits of the scene at a plane, useful after plotting.
 
         Parameters
         ----------
@@ -759,7 +759,7 @@ class Scene(Tidy3dBaseModel):
         )
 
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
-        """Compute range of (real) permittivity present in the simulation at frequency "freq".
+        """Compute range of (real) permittivity present in the scene at frequency "freq".
 
         Parameters
         ----------
@@ -892,7 +892,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool = False,
         alpha: float = None,
     ) -> PlotParams:
-        """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
+        """Constructs the plot parameters for a given medium in scene.plot_eps()."""
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
         if alpha is not None:
@@ -1107,7 +1107,7 @@ class Scene(Tidy3dBaseModel):
         alpha: float = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in
-        simulation.plot_heat_conductivity().
+        scene.plot_heat_conductivity().
         """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
@@ -1157,7 +1157,7 @@ class Scene(Tidy3dBaseModel):
     @property
     def custom_datasets(self) -> List[Dataset]:
         """List of custom datasets for verification purposes. If the list is not empty, then
-        the simulation scene needs to be exported to hdf5 to store the data.
+        the scene needs to be exported to hdf5 to store the data.
         """
         datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
         datasets_geometry = [
@@ -1169,7 +1169,7 @@ class Scene(Tidy3dBaseModel):
 
     @cached_property
     def allow_gain(self) -> bool:
-        """``True`` if any of the mediums in the simulation allows gain."""
+        """``True`` if any of the mediums in the scene allows gain."""
 
         for medium in self.mediums:
             if isinstance(medium, AnisotropicMedium):
@@ -1255,7 +1255,7 @@ class Scene(Tidy3dBaseModel):
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
 
-            # get simulation's bounding box
+            # get scene's bounding box
             bounds = scene_bounds
 
             # for each structure select a minimal subset of data that covers it
@@ -1265,9 +1265,9 @@ class Scene(Tidy3dBaseModel):
                 if array is not None:
                     restricted_arrays[name] = array.sel_inside(bounds)
 
-                    # check provided data fully cover simulation
+                    # check provided data fully cover scene
                     if not array.does_cover(bounds):
-                        log.warning(f"Provided '{name}' does not fully cover simulation domain.")
+                        log.warning(f"Provided '{name}' does not fully cover scene domain.")
 
             scene_dict["medium"] = med.perturbed_copy(**restricted_arrays)
 

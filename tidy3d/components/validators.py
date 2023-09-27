@@ -182,39 +182,6 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
     return objects_in_sim_bounds
 
 
-def assert_objects_in_scene_bounds(field_name: str, error: bool = True):
-    """Makes sure all objects in field are at least partially inside of simulation bounds."""
-
-    @pydantic.validator(field_name, allow_reuse=True, always=True)
-    def objects_in_sim_bounds(cls, val, values):
-        """check for intersection of each structure with simulation bounds."""
-        scene = values.get("scene")
-        if scene is None:
-            raise ValidationError(
-                f"Cannot validate {field_name} because validation of 'HeatSimulation.scene' "
-                "has failed."
-            )
-        sim_center = scene.center
-        sim_size = scene.size
-        sim_box = Box(size=sim_size, center=sim_center)
-
-        for position_index, geometric_object in enumerate(val):
-            if not sim_box.intersects(geometric_object.geometry):
-
-                message = (
-                    f"'{geometric_object}' (at `simulation.{field_name}[{position_index}]`) "
-                    "is completely outside of simulation domain."
-                )
-
-                if error:
-                    raise SetupError(message)
-                log.warning(message)
-
-        return val
-
-    return objects_in_sim_bounds
-
-
 def enforce_monitor_fields_present():
     """Make sure all of the fields in the monitor are present in the correponding data."""
 

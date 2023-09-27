@@ -429,7 +429,7 @@ class AbstractSimulation(Box, ABC):
         """
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs):
+    def from_scene(cls, scene: Scene, **kwargs) -> AbstractSimulation:
         """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``size``, ``run_time``, ``grid_spec``, etc).
 
