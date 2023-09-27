@@ -125,8 +125,7 @@ class JaxSimulationData(SimulationData, JaxObject):
             mnt_data_type = JAX_MONITOR_DATA_MAP[mnt_data_type_str]
             jax_mnt_data = mnt_data_type.from_monitor_data(mnt_data)
             output_data_list.append(jax_mnt_data)
-            data_dict["output_data"] = output_data_list
-
+        data_dict["output_data"] = output_data_list
         self_dict.update(data_dict)
         self_dict.update(dict(task_id=task_id))
 

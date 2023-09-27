@@ -488,7 +488,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
         return td.FieldData(
             monitor=monitor,
-            symmetry=simulation.symmetry,
+            symmetry=(0, 0, 0),
             symmetry_center=simulation.center,
             grid_expanded=grid,
             **field_cmps,
