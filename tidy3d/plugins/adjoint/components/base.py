@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Tuple, List, Any, Callable
 import json
 
+import numpy as np
+
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
@@ -56,6 +58,12 @@ class JaxObject(Tidy3dBaseModel):
             for _i, structure in enumerate(structures):
                 geometry = structure["geometry"]
                 fix_polyslab(geometry)
+            monitors = aux_data["monitors"]
+            for _i, monitor in enumerate(monitors):
+                if "freqs" in monitor:
+                    freqs = monitor["freqs"]
+                    if isinstance(freqs, np.ndarray):
+                        monitor["freqs"] = freqs.tolist()
 
         return children, aux_data
 

@@ -186,7 +186,8 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
-                scalar_data = scalar_data.sel({dim_name: coords_interp}, method="nearest")
+
+                scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
                 scalar_data = scalar_data.assign_coords({dim_name: coords})
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values

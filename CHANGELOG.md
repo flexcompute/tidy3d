@@ -13,7 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Ensure same `Grid` is generated in forward and adjoint simulations by setting `GridSpec.wavelength` manually in adjoint.
-- Proper handling of `JaxBox` derivatives both for multi-cell and single cell thickness.
+- Properly handling of `JaxBox` derivatives both for multi-cell and single cell thickness.
+- Properly handle `JaxSimulation.monitors` with `.freqs` as `np.ndarray` in adjoint plugin.
+- Properly handle `JaxDataArray.sel()` with single coordinates and symmetry expansion.
+- Properly handle `JaxDataArray * xr.DataArray` broadcasting.
+- Stricter validation of `JaxDataArray` coordinates and values shape.
+
 
 ## [2.4.1] - 2023-9-20
 
