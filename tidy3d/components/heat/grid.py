@@ -67,17 +67,20 @@ class DistanceUnstructuredGrid(Tidy3dBaseModel):
         units=MICROMETER,
     )
 
-    distance_interface: pd.PositiveFloat = pd.Field(
+    distance_interface: pd.NonNegativeFloat = pd.Field(
         ...,
         title="Interface Distance",
-        description="Distance from interface within which ``dl_interface`` is enforced.",
+        description="Distance from interface within which ``dl_interface`` is enforced."
+        "Typically the same as ``dl_interface`` or its multiple.",
         units=MICROMETER,
     )
 
-    distance_bulk: pd.PositiveFloat = pd.Field(
+    distance_bulk: pd.NonNegativeFloat = pd.Field(
         ...,
         title="Bulk Distance",
-        description="Distance from interface outside of which ``dl_bulk`` is enforced.",
+        description="Distance from interface outside of which ``dl_bulk`` is enforced."
+        "Typically twice of ``dl_bulk`` or its multiple. Use larger values for a smoother "
+        "transition from ``dl_interface`` to ``dl_bulk``.",
         units=MICROMETER,
     )
 

@@ -21,7 +21,6 @@ class HeatMonitorData(Dataset, ABC):
         ...,
         title="Monitor",
         description="Monitor associated with the data.",
-        # discriminator=TYPE_TAG_STR,
     )
 
     symmetry: Tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
@@ -108,7 +107,7 @@ class TemperatureData(HeatMonitorData):
                 coords[dim] = new_coords
                 data = new_data
 
-        coords_dict = {"x": coords[0], "y": coords[1], "z": coords[2]}
+        coords_dict = dict(zip("xyz", coords))
         new_temperature = SpatialDataArray(data, coords=coords_dict)
 
         return self.updated_copy(temperature=new_temperature, symmetry=(0, 0, 0))

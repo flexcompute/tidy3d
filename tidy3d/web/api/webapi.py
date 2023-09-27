@@ -158,8 +158,14 @@ def upload(
         console.log(
             f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'."
         )
-        url = _get_url(task.task_id)
-        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+        if task_type == "HEAT":
+            console.log(
+                "Tidy3D's heat solver is currently in the beta stage. All heat simulations are "
+                "charged a flat fee of 0.025 FlexCredit."
+            )
+        else:
+            url = _get_url(task.task_id)
+            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
     task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
 
