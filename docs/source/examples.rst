@@ -184,6 +184,7 @@ Photonic Crystals
 
     notebooks/Bandstructure
     notebooks/OptimizedL3
+    notebooks/BistablePCCavity
 
 Optical Scattering and Far-field Radiation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

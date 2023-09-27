@@ -119,6 +119,12 @@
     "keywords": "grating, biosensor, Tidy3D, FDTD",
     "feature_image": "./img/biosensor_grating.png"
   },
+  "BistablePCCavity.ipynb": {
+    "title": "Bistability through Nonlinearity in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to achieve bistability in a photonic crystal through nonlinearity in Tidy3D FDTD.",
+    "keywords": "nonlinearity, Kerr, feedback, bistability, photonic crystal, Tidy3D, FDTD",
+    "feature_image": "./img/bistability.png"
+  },
   "BoundaryConditions.ipynb": {
     "title": "Setting up Boundary Conditions in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to set up boundary conditions in Tidy3D FDTD.",
