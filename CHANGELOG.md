@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.4.2] - 2023-9-28
+
+### Added
 - Warnings for too many frequencies in monitors; too many modes requested in a ``ModeSpec``; too many number of grid points in a mode monitor or mode source.
 
 ### Changed
 
 ### Fixed
+- Faster sorting of modes in `ModeSolverData.overlap_sort` by avoiding excessive data copying.
 - Ensure same `Grid` is generated in forward and adjoint simulations by setting `GridSpec.wavelength` manually in adjoint.
 - Properly handling of `JaxBox` derivatives both for multi-cell and single cell thickness.
 - Properly handle `JaxSimulation.monitors` with `.freqs` as `np.ndarray` in adjoint plugin.
@@ -957,7 +966,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...develop
+[2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3
