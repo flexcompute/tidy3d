@@ -1,6 +1,7 @@
 """Logging for Tidy3d."""
 
 import inspect
+from datetime import datetime
 
 from typing import Union, List
 from typing_extensions import Literal
@@ -317,6 +318,11 @@ def set_log_suppression(value: bool) -> None:
     log.suppression = value
 
 
+def get_aware_datetime() -> datetime:
+    """Get an aware current local datetime(with local timezone info)"""
+    return datetime.now().astimezone()
+
+
 def set_logging_console(stderr: bool = False) -> None:
     """Set stdout or stderr as console output
 
@@ -330,7 +336,14 @@ def set_logging_console(stderr: bool = False) -> None:
     else:
         previous_level = DEFAULT_LEVEL
     log.handlers["console"] = LogHandler(
-        Console(stderr=stderr, width=CONSOLE_WIDTH, log_path=False), previous_level
+        Console(
+            stderr=stderr,
+            width=CONSOLE_WIDTH,
+            log_path=False,
+            get_datetime=get_aware_datetime,
+            log_time_format="%X %Z",
+        ),
+        previous_level,
     )
 
 
