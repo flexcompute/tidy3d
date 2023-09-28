@@ -341,7 +341,7 @@ def set_logging_console(stderr: bool = False) -> None:
             get_datetime=get_aware_datetime,
             log_time_format="%X %Z",
         ),
-        previous_level
+        previous_level,
     )
 
 
