@@ -255,6 +255,7 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         # make mode solver data on the Yee grid for now
+        print("Making mode solver data on Yee grid")
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
         grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
@@ -268,6 +269,7 @@ class ModeSolver(Tidy3dBaseModel):
             **data_dict,
         )
 
+        print("Colocating to grid boundaries if requested")
         # Colocate to grid boundaries if requested
         if self.colocate:
             # Get colocation coordinates in the solver plane
@@ -291,6 +293,7 @@ class ModeSolver(Tidy3dBaseModel):
                 monitor=mode_solver_monitor, grid_expanded=grid_expanded, **data_dict_colocated
             )
 
+        print("Normalizing modes")
         # normalize modes
         scaling = np.sqrt(np.abs(mode_solver_data.flux))
         mode_solver_data = mode_solver_data.copy(
@@ -299,6 +302,7 @@ class ModeSolver(Tidy3dBaseModel):
             }
         )
 
+        print("Filtering polarization")
         # filter polarization if requested
         if self.mode_spec.filter_pol is not None:
             pol_frac = mode_solver_data.pol_fraction
@@ -319,10 +323,12 @@ class ModeSolver(Tidy3dBaseModel):
                 ]:
                     data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
+        print("Sorting modes")
         # sort modes if requested
         if self.mode_spec.track_freq and len(self.freqs) > 1:
             mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
 
+        print("Issuing field decay warning")
         self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
 
         return mode_solver_data
