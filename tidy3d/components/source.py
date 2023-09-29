@@ -105,6 +105,8 @@ class SourceTime(ABC, Tidy3dBaseModel):
         stop_ind = relevant_time_inds[0][-1]
         time_amps = time_amps[start_ind:stop_ind]
         times_cut = times[start_ind:stop_ind]
+        # TODO: this fails if tim_amps is all 0 (for example if amplitude=0.0)
+        # maybe if this case is detected, we automatically return `np.zeros_like(freqs)`?
 
         # only need to compute DTFT kernel for distinct dts
         # usually, there is only one dt, if times is simulation time mesh

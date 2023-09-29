@@ -694,6 +694,9 @@ def run_local_bwd(
         callback_url=callback_url,
         verbose=verbose,
     )
+
+    sim_data_adj = sim_data_adj.normalize_adjoint_fields()
+
     grad_data_adj = sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
@@ -877,6 +880,8 @@ def run_async_local_bwd(
 
     sims_vjp = []
     for i, (sim_data_fwd, sim_data_adj) in enumerate(zip(batch_data_fwd, batch_data_adj)):
+
+        sim_data_adj = sim_data_adj.normalize_adjoint_fields()
 
         grad_data_fwd = sim_data_fwd.grad_data_symmetry
         grad_data_adj = sim_data_adj.grad_data_symmetry

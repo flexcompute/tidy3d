@@ -1561,7 +1561,7 @@ fwidth_run_time_expected = [
     (None, None, RUN_TIME_FACTOR / (src.source_time.fwidth)),  # nothing supplied, use source fwidth
     (FREQ0 / 10, 1e-11, 1e-11),  # run time supplied explicitly, use that
     (FREQ0 / 10, None, RUN_TIME_FACTOR / (FREQ0 / 10)),  # no run_time, use fwidth supplied
-    (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)), # no run_time, use fwidth supplied
+    (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)),  # no run_time, use fwidth supplied
 ]
 
 
