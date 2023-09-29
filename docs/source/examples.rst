@@ -148,7 +148,7 @@ Photonic Integrated Circuit Components
     notebooks/BilevelPSR
     notebooks/WaveguideSizeConverter
     notebooks/StripToSlotConverters
-    notebooks/BraggGratings.ipynb
+    notebooks/BraggGratings
     notebooks/BroadbandDirectionalCoupler
     notebooks/PolarizationSplitterRotator
     notebooks/8ChannelDemultiplexer
@@ -159,8 +159,9 @@ Photonic Integrated Circuit Components
     notebooks/ZeroCrossTalkTE
     notebooks/AdiabaticCouplerLN
     notebooks/90BendPolarizationSplitterRotator
-    notebooks/ParticleSwarmOptimizedPBS.ipynb
-    notebooks/BullseyeCavityPSO.ipynb
+    notebooks/ParticleSwarmOptimizedPBS
+    notebooks/BullseyeCavityPSO
+    notebooks/PlasmonicWaveguideCO2Sensor
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -169,7 +170,7 @@ Metamaterials, Gratings, and Other Periodic Structures
 
     notebooks/DielectricMetasurfaceAbsorber
     notebooks/GradientMetasurfaceReflector
-    notebooks/GrapheneMetamaterial.ipynb
+    notebooks/GrapheneMetamaterial
     notebooks/MicrowaveFrequencySelectiveSurface
     notebooks/HighQSi
     notebooks/HighQGe

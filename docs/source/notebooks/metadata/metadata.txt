@@ -369,7 +369,13 @@
     "title": "Scattering of a Plasmonic Nanoparticle | Flexcompute",
     "description": "This notebook demonstrates how to model the scattering of a plasmonic nanoparticle in Tidy3D FDTD.",
     "keywords": "plasmonic nanoparticle, total-field scattered-field, TFSF, Tidy3D, FDTD",
-    "feature_image": ""
+    "feature_image": "./img/plasmonic_nanoparticle_feature_image.png"
+  },
+  "PlasmonicWaveguideCO2Sensor.ipynb": {
+    "title": "Plasmonic waveguide CO2 sensor | Flexcompute",
+    "description": "This notebook demonstrates how to model a MIM waveguide CO2 sensor in Tidy3D FDTD.",
+    "keywords": "plasmonic waveguide, MIM, sensor, Tidy3D, FDTD",
+    "feature_image": "./img/mim_co2_sensor.png"
   },
   "PlasmonicYagiUdaNanoantenna.ipynb": {
     "title": "Plasmonic Yagi-Uda Nanoantenna | Flexcompute",
