@@ -447,7 +447,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
             def evaluate(scalar_field: ScalarFieldDataArray) -> float:
                 """Evaluate a scalar field at a coordinate along the edge."""
-                scalar_field = scalar_field.sum(dim="f")
 
                 # if only 1 z coordinate, just isel the data.
                 if len(z) == 1:
@@ -505,7 +504,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             dz = 1.0
 
         # integrate by summing over axis edge (z) and parameterization point (s)
-        integrand = compute_integrand(s=s_vals, z=z_vals)
+        integrand = compute_integrand(s=s_vals, z=z_vals).sum(dim="f")
         integral_result = np.sum(integrand.fillna(0).values)
 
         # project to the normal direction
