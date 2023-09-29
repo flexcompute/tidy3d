@@ -192,10 +192,39 @@ class TimeMonitor(Monitor, ABC):
     )
 
     interval: pydantic.PositiveInt = pydantic.Field(
-        1,
+        None,
         title="Time interval",
-        description="Number of time step intervals between monitor recordings.",
+        description="Sampling rate of the monitor: number of time steps between each measurement. "
+        "Set ``inverval`` to 1 for the highest possible resolution in time. "
+        "Higher integer values downsample the data by measuring every ``interval`` time steps. "
+        "This can be useful for reducing data storage as needed by the application.",
     )
+
+    @pydantic.validator("interval", always=True)
+    def _warn_interval_default(cls, val, values):
+        """If all defaults used for time sampler, warn and set ``interval=1`` internally."""
+
+        if val is None:
+            start = values.get("start")
+            stop = values.get("stop")
+            if start == 0.0 and stop is None:
+                log.warning(
+                    "The monitor 'interval' field was left as its default value, "
+                    "which will set it to 1 internally. "
+                    "A value of 1 means that the data will be sampled at every time step, "
+                    "which may potentially produce more data than desired, "
+                    "depending on the use case. "
+                    "To reduce data storage, one may downsample the data by setting 'interval > 1'"
+                    " or by choosing alternative 'start' and 'stop' values for the time sampling. "
+                    "If you intended to use the highest resolution time sampling, "
+                    "you may suppress this warning "
+                    "by explicitly setting 'interval=1' in the monitor."
+                )
+
+            # set 'interval = 1' for backwards compatibility
+            val = 1
+
+        return val
 
     @pydantic.validator("stop", always=True, allow_reuse=True)
     def stop_greater_than_start(cls, val, values):

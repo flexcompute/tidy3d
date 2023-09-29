@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warnings for too many frequencies in monitors; too many modes requested in a ``ModeSpec``; too many number of grid points in a mode monitor or mode source.
 
 ### Changed
+- Time domain monitors warn about data usage if all defaults used in time sampler specs.
 
 ### Fixed
 - Faster sorting of modes in `ModeSolverData.overlap_sort` by avoiding excessive data copying.
