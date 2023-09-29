@@ -986,6 +986,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
 
+                print(f"Sorting mode at frequency index {freq_id}")
+
                 # Get next frequency to sort
                 data_to_sort = self._isel(f=[freq_id])
 
