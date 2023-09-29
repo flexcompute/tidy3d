@@ -282,13 +282,13 @@ def make_sim(
 
     output_mnt4 = td.FieldMonitor(
         size=(0, 0, 0),
-        freqs=[FREQ0],
+        freqs=np.array([FREQ0, FREQ0 * 1.1]),
         name=MNT_NAME + "4",
     )
 
     extraneous_field_monitor = td.FieldMonitor(
         size=(10, 10, 0),
-        freqs=[1e14, 2e14],
+        freqs=np.array([1e14, 2e14]),
         name="field",
     )
 
