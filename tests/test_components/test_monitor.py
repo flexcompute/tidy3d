@@ -12,6 +12,28 @@ def test_stop_start():
         td.FluxTimeMonitor(size=(1, 1, 0), name="f", start=2, stop=1)
 
 
+# interval, start, stop, log_out
+time_sampling_tests = [
+    (None, 0.0, None, "WARNING"),  # all defaults
+    (1, 0.0, None, None),  # interval set (=1)
+    (2, 0.0, None, None),  # interval set (=2)
+    (None, 1e-12, None, None),  # start specified
+    (None, 0.0, 5e-12, None),  # stop specified
+]
+
+
+@pytest.mark.parametrize("interval, start, stop, log_desired", time_sampling_tests)
+def test_monitor_interval_warn(log_capture, interval, start, stop, log_desired):
+    """Assert time monitor interval warning handled as expected."""
+
+    mnt = td.FluxTimeMonitor(size=(1, 1, 0), name="f", interval=interval, stop=stop, start=start)
+    assert_log_level(log_capture, log_desired)
+
+    # make sure it got set to either 1 (undefined) or the specified value
+    mnt_interval = interval if interval else 1
+    assert mnt.interval == mnt_interval
+
+
 def test_time_inds():
     M = td.FluxTimeMonitor(size=(1, 1, 0), name="f", start=0, stop=1)
     assert M.time_inds(tmesh=[]) == (0, 0)
