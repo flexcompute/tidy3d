@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Properly handle `.freqs` in `output_monitors` of adjoint plugin.
 
 ## [2.4.2] - 2023-9-28
 
