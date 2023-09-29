@@ -7,10 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
 
 ### Changed
 
 ### Fixed
+- Properly handle `freqs` as a `np.ndarray` in `output_monitors`.
 
 ## [2.4.2] - 2023-9-28
 
