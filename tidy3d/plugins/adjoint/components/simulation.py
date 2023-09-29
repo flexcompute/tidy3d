@@ -25,8 +25,11 @@ from .structure import JaxStructure
 from .geometry import JaxPolySlab, JaxGeometryGroup
 
 
-# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
+# bandwidth of adjoint source in units of freq0 if no `fwidth_adjoint`, and one output freq
 FWIDTH_FACTOR = 1.0 / 10
+
+# bandwidth of adjoint sources in units of the minimum difference between output frequencies
+FWIDTH_FACTOR_MULTIFREQ = 0.1
 
 # the adjoint run time is RUN_TIME_FACTOR / fwidth
 RUN_TIME_FACTOR = 20
@@ -273,19 +276,46 @@ class JaxSimulation(Simulation, JaxObject):
         if self.fwidth_adjoint is not None:
             return self.fwidth_adjoint
 
-        # otherwise, grab from sources
-        num_sources = len(self.sources)
+        freqs_adjoint = self.freqs_adjoint
+
+        # multiple output frequency case
+        if len(freqs_adjoint) > 1:
+
+            # differences between each of the (sorted) output frequencies (Hz)
+            delta_freqs = np.abs(np.diff(np.sort(np.array(freqs_adjoint))))
+            min_delta_freq = np.min(delta_freqs)
+
+            fwidth = FWIDTH_FACTOR_MULTIFREQ * min_delta_freq
+
+            log.warning(
+                f"{len(freqs_adjoint)} unique frequencies detected in the output monitors "
+                f"with a minimum spacing of {min_delta_freq:.3e} (Hz). "
+                f"Setting the 'fwidth' of the adjoint sources to {FWIDTH_FACTOR_MULTIFREQ} times "
+                f"this value = {fwidth:.3e} (Hz) to avoid spectral overlap, "
+                "which will introduce significant error in the gradients if not avoided. "
+                "A small 'fwidth' will automatically set a correspondingly long 'run_time' "
+                "in the adjoint simulation, which may cause it to run significantly longer than "
+                " the forward simulation in some cases. "
+                "If your output frequencies are tightly packed, it would be preferrable to instead "
+                "run one simulation per frequency using 'tidy3d.plugins.adjoint.web.run_async', "
+                "potentially, to run these simulations in parallel."
+            )
+
+            return FWIDTH_FACTOR_MULTIFREQ * min_delta_freq
+
+        # otherwise, grab from sources and output monitors
+        num_sources = len(self.sources)  # should be 0 for adjoint already but worth checking
 
         # if no sources, just use a constant factor times the mean adjoint frequency
         if num_sources == 0:
-            return FWIDTH_FACTOR * np.mean(self.freqs_adjoint)
+            return FWIDTH_FACTOR * np.mean(freqs_adjoint)
 
-        # if more than one forward source, use their average
+        # if more than one forward source, use their maximum
         if num_sources > 1:
-            log.warning(f"{num_sources} sources, using their average 'fwidth' for adjoint source.")
+            log.warning(f"{num_sources} sources, using their maximum 'fwidth' for adjoint source.")
 
         fwidths = [src.source_time.fwidth for src in self.sources]
-        return np.mean(fwidths)
+        return np.max(fwidths)
 
     @cached_property
     def _run_time_adjoint(self: float) -> float:

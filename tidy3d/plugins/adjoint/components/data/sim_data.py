@@ -179,7 +179,7 @@ class JaxSimulationData(SimulationData, JaxObject):
             monitors=(),
             output_monitors=(),
             run_time=run_time,
-            # normalize_index=None, # normalize later, frequency-by-frequency
+            normalize_index=None,  # normalize later, frequency-by-frequency
         )
 
         update_dict.update(

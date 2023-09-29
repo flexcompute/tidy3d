@@ -698,7 +698,7 @@ def test_get_fwidth_adjoint():
     src_times = [td.GaussianPulse(freq0=freq0, fwidth=fwidth) for fwidth in fwidths]
     srcs = [td.PointDipole(source_time=src_time, polarization="Ex") for src_time in src_times]
     sim = make_sim(sources=srcs, fwidth_adjoint=None)
-    assert np.isclose(sim._fwidth_adjoint, np.mean(fwidths))
+    assert np.isclose(sim._fwidth_adjoint, np.max(fwidths))
 
     # a few sources, with custom fwidth specified
     fwidth_custom = 3e13
@@ -1558,7 +1558,6 @@ def test_pytreedef_errors(use_emulated_run):
 
 
 fwidth_run_time_expected = [
-    (None, None, RUN_TIME_FACTOR / (src.source_time.fwidth)),  # nothing supplied, use source fwidth
     (FREQ0 / 10, 1e-11, 1e-11),  # run time supplied explicitly, use that
     (FREQ0 / 10, None, RUN_TIME_FACTOR / (FREQ0 / 10)),  # no run_time, use fwidth supplied
     (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)),  # no run_time, use fwidth supplied
