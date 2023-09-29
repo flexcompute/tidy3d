@@ -288,7 +288,9 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
 
             for freq in e_mult_dim.coords["f"]:
                 vjp_eps_complex_ii_f = vjp_eps_complex_ii.sel(f=freq)
-                _vjp_eps_ii, _vjp_sigma_ii = self.eps_complex_to_eps_sigma(vjp_eps_complex_ii_f, freq)
+                _vjp_eps_ii, _vjp_sigma_ii = self.eps_complex_to_eps_sigma(
+                    vjp_eps_complex_ii_f, freq
+                )
                 vjp_eps_ii += _vjp_eps_ii
                 vjp_sigma_ii += _vjp_sigma_ii
 

@@ -165,7 +165,8 @@ def run_bwd(
 
     fwd_task_id = res[0].fwd_task_id
     fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
-    jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    run_time_adj = sim_data_vjp.simulation._run_time_adjoint
+    jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
     sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
 
     sim_vjp = webapi_run_adjoint_bwd(
@@ -484,7 +485,8 @@ def run_async_bwd(
     for sim_data_vjp, fwd_task_id in zip(batch_data_vjp, fwd_task_ids):
         parent_tasks_adj.append([str(fwd_task_id)])
         fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
-        jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+        run_time_adj = sim_data_vjp.simulation._run_time_adjoint
+        jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
         sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
         sims_adj.append(sim_adj)
         jax_infos_adj.append(jax_info_adj)
@@ -682,7 +684,8 @@ def run_local_bwd(
 
     # make and run adjoint simulation
     fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
-    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    run_time_adj = sim_data_fwd.simulation._run_time_adjoint
+    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
     sim_data_adj = run(
         simulation=sim_adj,
         task_name=_task_name_adj(task_name),
@@ -857,8 +860,9 @@ def run_async_local_bwd(
     sims_adj = []
     for i, sim_data_fwd in enumerate(batch_data_fwd):
         fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
+        run_time_adj = sim_data_fwd.simulation._run_time_adjoint
         sim_data_vjp = batch_data_vjp[i]
-        sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+        sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
         sims_adj.append(sim_adj)
 
     batch_data_adj = run_async_local(

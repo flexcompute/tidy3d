@@ -21,7 +21,7 @@ from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
 from tidy3d.plugins.adjoint.components.structure import JaxStructure
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
+from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
 from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
@@ -53,6 +53,12 @@ BASE_EPS_VAL = 2.0
 
 # name of the output monitor used in tests
 MNT_NAME = "mode"
+
+src = td.PointDipole(
+    center=(0, 0, 0),
+    source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+    polarization="Ex",
+)
 
 # Emulated forward and backward run functions
 def run_emulated_fwd(
@@ -301,6 +307,7 @@ def make_sim(
             jax_struct_custom_anis,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
+        sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         symmetry=(0, 1, -1),
     )
@@ -1548,3 +1555,28 @@ def test_pytreedef_errors(use_emulated_run):
         return jnp.sum(jnp.abs(jnp.array(sd["test"].amps.values)))
 
     jax.grad(f)(0.5)
+
+
+fwidth_run_time_expected = [
+    (None, None, RUN_TIME_FACTOR / (src.source_time.fwidth)),  # nothing supplied, use source fwidth
+    (FREQ0 / 10, 1e-11, 1e-11),  # run time supplied explicitly, use that
+    (FREQ0 / 10, None, RUN_TIME_FACTOR / (FREQ0 / 10)),  # no run_time, use fwidth supplied
+    (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)), # no run_time, use fwidth supplied
+]
+
+
+@pytest.mark.parametrize("fwidth, run_time, run_time_expected", fwidth_run_time_expected)
+def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time_expected):
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    sim = sim.updated_copy(run_time_adjoint=run_time, fwidth_adjoint=fwidth)
+
+    sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    run_time_adj = sim._run_time_adjoint
+    fwidth_adj = sim._fwidth_adjoint
+
+    sim_adj = sim_data.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
+
+    assert sim_adj.run_time == run_time_expected

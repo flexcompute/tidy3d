@@ -157,7 +157,7 @@ class JaxSimulationData(SimulationData, JaxObject):
 
         return user_sim_data, adjoint_sim_data
 
-    def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
+    def make_adjoint_simulation(self, fwidth: float, run_time: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
 
         sim_fwd = self.simulation
@@ -171,7 +171,15 @@ class JaxSimulationData(SimulationData, JaxObject):
             for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth=fwidth):
                 adj_srcs.append(adj_source)
 
-        update_dict = dict(boundary_spec=bc_adj, sources=adj_srcs, monitors=(), output_monitors=())
+        update_dict = dict(
+            boundary_spec=bc_adj,
+            sources=adj_srcs,
+            monitors=(),
+            output_monitors=(),
+            run_time=run_time,
+            # normalize_index=None, # normalize later, frequency-by-frequency
+        )
+
         update_dict.update(
             sim_fwd.get_grad_monitors(
                 input_structures=sim_fwd.input_structures,

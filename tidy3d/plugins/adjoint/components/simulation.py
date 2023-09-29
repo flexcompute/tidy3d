@@ -17,7 +17,7 @@ from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
 from ....components.types import Ax, annotate_type
-from ....constants import HERTZ
+from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
 from .base import JaxObject
@@ -27,6 +27,9 @@ from .geometry import JaxPolySlab, JaxGeometryGroup
 
 # bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
 FWIDTH_FACTOR = 1.0 / 10
+
+# the adjoint run time is RUN_TIME_FACTOR / fwidth
+RUN_TIME_FACTOR = 20
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1
@@ -69,6 +72,13 @@ class JaxInfo(Tidy3dBaseModel):
         units=HERTZ,
     )
 
+    run_time_adjoint: float = pd.Field(
+        None,
+        title="Adjoint Run Time",
+        description="Custom run time of the original JaxSimulation.",
+        units=SECOND,
+    )
+
 
 @register_pytree_node_class
 class JaxSimulation(Simulation, JaxObject):
@@ -105,9 +115,17 @@ class JaxSimulation(Simulation, JaxObject):
     fwidth_adjoint: pd.PositiveFloat = pd.Field(
         None,
         title="Adjoint Frequency Width",
-        description="Custom frequency width to use for 'source_time' of adjoint sources. "
-        "If not supplied or 'None', uses the average fwidth of the original simulation's sources.",
+        description="Custom frequency width to use for ``source_time`` of adjoint sources. "
+        "If not supplied or ``None``, uses the average fwidth of the original simulation's sources.",
         units=HERTZ,
+    )
+
+    run_time_adjoint: pd.PositiveFloat = pd.Field(
+        None,
+        title="Adjoint Run Time",
+        description="Custom ``run_time`` to use for adjoint simulation. "
+        "If not supplied or ``None``, uses a factor times the adjoint source ``fwidth``.",
+        units=SECOND,
     )
 
     # @pd.validator("output_monitors", always=True)
@@ -269,6 +287,15 @@ class JaxSimulation(Simulation, JaxObject):
         fwidths = [src.source_time.fwidth for src in self.sources]
         return np.mean(fwidths)
 
+    @cached_property
+    def _run_time_adjoint(self: float) -> float:
+        """Return the run time of the adjoint simulation as a function of its fwidth."""
+
+        if self.run_time_adjoint is not None:
+            return self.run_time_adjoint
+
+        return RUN_TIME_FACTOR / self._fwidth_adjoint
+
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
 
@@ -282,8 +309,9 @@ class JaxSimulation(Simulation, JaxObject):
                 "grad_eps_monitors",
                 "input_structures",
                 "fwidth_adjoint",
+                "run_time_adjoint",
             }
-        )  # .copy()
+        )
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
@@ -295,7 +323,11 @@ class JaxSimulation(Simulation, JaxObject):
             + list(self.grad_eps_monitors)
         )
 
-        sim = sim.copy(update=dict(structures=all_structures, monitors=all_monitors))
+        sim = sim.updated_copy(
+            structures=all_structures,
+            monitors=all_monitors,
+            # run_time=self._run_time_adjoint # TODO: ADD LATER
+        )
 
         # information about the state of the original JaxSimulation to stash for reconstruction
         jax_info = JaxInfo(
@@ -304,6 +336,7 @@ class JaxSimulation(Simulation, JaxObject):
             num_grad_monitors=len(self.grad_monitors),
             num_grad_eps_monitors=len(self.grad_eps_monitors),
             fwidth_adjoint=self.fwidth_adjoint,
+            run_time_adjoint=self.run_time_adjoint,
         )
 
         return sim, jax_info
@@ -529,7 +562,12 @@ class JaxSimulation(Simulation, JaxObject):
         # update the dictionary with these and the adjoint fwidth
         sim_dict.update(**structures)
         sim_dict.update(**monitors)
-        sim_dict.update(dict(fwidth_adjoint=jax_info.fwidth_adjoint))
+        sim_dict.update(
+            dict(
+                fwidth_adjoint=jax_info.fwidth_adjoint,
+                run_time_adjoint=jax_info.run_time_adjoint,
+            )
+        )
 
         # load JaxSimulation from the dictionary
         return cls.parse_obj(sim_dict)

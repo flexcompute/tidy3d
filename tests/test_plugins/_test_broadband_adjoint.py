@@ -165,8 +165,10 @@ def make_sim(freq0, fwidth, slab_eps=slab_eps0, slab_ds=slab_ds0) -> tda.JaxSimu
         slabs.append(slab)
         z_start += d + spc
 
+    fwidth_fwd = freq0 / 10
+
     # forward source setup
-    gaussian = td.GaussianPulse(freq0=freq0, fwidth=fwidth)
+    gaussian = td.GaussianPulse(freq0=freq0, fwidth=fwidth_fwd)
     src_z = -length_z / 2 + space_below / 2.0
     source = td.PlaneWave(
         center=(0, 0, src_z),
@@ -198,7 +200,7 @@ def make_sim(freq0, fwidth, slab_eps=slab_eps0, slab_ds=slab_ds0) -> tda.JaxSimu
     )
 
     # NOTE: IMPORTANT
-    run_time = 10 / fwidth
+    run_time = 10 / fwidth_fwd
 
     # make simulation
     return tda.JaxSimulation(
@@ -212,6 +214,7 @@ def make_sim(freq0, fwidth, slab_eps=slab_eps0, slab_ds=slab_ds0) -> tda.JaxSimu
         medium=bck_medium,
         subpixel=True,
         shutoff=1e-8,
+        fwidth_adjoint=fwidth,
     )
 
 
@@ -244,7 +247,7 @@ def grad_error(freqs, freq0, fwidth, verbose=False):
     grad_eps_tmm, grad_ds_tmm = compute_average_grad_tmm(wavelengths)
 
     # set logging level to ERROR to avoid redundant warnings from adjoint run
-    td.config.logging_level = "ERROR"
+    # td.config.logging_level = "ERROR"
     T_fdtd, (grad_eps_fdtd, grad_ds_fdtd) = compute_T_and_grad_fdtd(slab_eps0, slab_ds0)
 
     grad_eps_fdtd = np.array(grad_eps_fdtd)
@@ -312,18 +315,90 @@ def grad_error(freqs, freq0, fwidth, verbose=False):
 
 """ Main script """
 
-freq0 = 2e14
-df = 0.1e14
-num_freqs = 3
-fwidth = df/2
+# freq0 = 2e14
+
+
+# df = df_factor * freq0
+# num_freqs = 3
 # fwidth = freq0 / 10
 
-if num_freqs == 1:
-    freqs = np.array([freq0])
-else:
-    freqs = np.linspace(freq0 - df, freq0 + df, num_freqs)
-    fwidth = max(fwidth, np.max(freqs) - np.min(freqs))
+# if num_freqs == 1:
+#     freqs = np.array([freq0])
+# else:
+#     freqs = np.linspace(freq0 - df, freq0 + df, num_freqs)
+#     # fwidth = np.max(freqs) - np.min(freqs)
 
-verbose = True
-grad_results = grad_error(freqs, freq0=freq0, fwidth=fwidth, verbose=verbose)
-rms_raw, rms_norm, grad_tmm, grad_fdtd = grad_results
+# verbose = False
+# grad_results = grad_error(freqs, freq0=freq0, fwidth=fwidth, verbose=verbose)
+# rms_raw, rms_norm, grad_tmm, grad_fdtd = grad_results
+# print(f"df_factor = {df_factor:.1e}")
+# print(f"rms_norm = {rms_norm:.2e}")
+
+""" Scan spacing between output freqs """
+# dfs_factors = np.logspace(-7, -1, 12)
+# rms_values = np.zeros_like(dfs_factors)
+
+# freq0 = 2e14
+
+# for i, df_factor in enumerate(dfs_factors):
+
+#     df = df_factor * freq0
+#     num_freqs = 3
+#     fwidth = freq0 / 10
+
+#     if num_freqs == 1:
+#         freqs = np.array([freq0])
+#     else:
+#         freqs = np.linspace(freq0 - df, freq0 + df, num_freqs)
+#         # fwidth = np.max(freqs) - np.min(freqs)
+
+#     verbose = False
+#     grad_results = grad_error(freqs, freq0=freq0, fwidth=fwidth, verbose=verbose)
+#     rms_raw, rms_norm, grad_tmm, grad_fdtd = grad_results
+#     rms_values[i] = rms_norm
+#     print(f'df_factor = {df_factor:.1e}')
+#     print(f'rms_norm = {rms_norm:.2e}')
+
+# plt.plot(dfs_factors, rms_values)
+# plt.xlabel('freq spacing (freq0)')
+# plt.ylabel('RMS error (normalized)')
+# plt.yscale('log')
+# plt.xscale('log')
+# plt.show()
+
+
+""" Scan fwidth of adjoint source """
+fwidth_factors = np.logspace(-2, -1, 7)
+rms_values_raw = np.zeros_like(fwidth_factors)
+rms_values_norm = np.zeros_like(fwidth_factors)
+
+freq0 = 2e14
+
+for i, fwidth_factor in enumerate(fwidth_factors):
+
+    df = 1e-4 * freq0
+    num_freqs = 3
+    fwidth = fwidth_factor * freq0
+
+    if num_freqs == 1:
+        freqs = np.array([freq0])
+    else:
+        freqs = np.linspace(freq0 - df, freq0 + df, num_freqs)
+        # fwidth = np.max(freqs) - np.min(freqs)
+
+    verbose = True
+    grad_results = grad_error(freqs, freq0=freq0, fwidth=fwidth, verbose=verbose)
+    rms_raw, rms_norm, grad_tmm, grad_fdtd = grad_results
+    rms_values_norm[i] = rms_norm
+    rms_values_raw[i] = rms_raw
+    print(f"fwidth_factor = {fwidth_factor:.1e}")
+    print(f"rms_raw = {rms_raw:.2e}")
+
+plt.plot(fwidth_factors, rms_values_raw, label="raw")
+plt.plot(fwidth_factors, rms_values_norm, label="normalized")
+plt.xlabel("adjoint fwidth (freq0)")
+plt.ylabel("RMS error")
+plt.yscale("log")
+plt.xscale("log")
+plt.legend()
+plt.show()
