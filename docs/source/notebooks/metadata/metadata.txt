@@ -149,6 +149,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, bullseye cavity, quantum emitter, particle swarm optimization, PSO, Tidy3D, FDTD",
     "feature_image": "./img/bullseye_psa_thumb.png"
   },  
+  "CreatingGeometryUsingTrimesh.ipynb": {
+    "title": "Defining complex geometries using trimesh | Flexcompute",
+    "description": "This notebook demonstrates how to define complex geometries using trimesh in Tidy3D FDTD.",
+    "keywords": "trimesh, torus, cone, ellipsoild, Tidy3D, FDTD",
+    "feature_image": ""
+  },
   "CustomFieldSource.ipynb": {
     "title": "Defining Spatially-varying Sources in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to define complex, spatially-varying sources in Tidy3D FDTD.",

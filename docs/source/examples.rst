@@ -47,6 +47,7 @@ Structures
     notebooks/SelfIntersectingPolyslab
     notebooks/PICComponents
     notebooks/PhotonicCrystalsComponents
+    notebooks/CreatingGeometryUsingTrimesh
 
 Grid Specification
 ~~~~~~~~~~~~~~~~~~
