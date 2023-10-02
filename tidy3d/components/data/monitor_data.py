@@ -524,7 +524,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Effective mode area is calculated as: (∫|E|²dA)² / (∫|E|⁴dA)
         """
-        intensity = self.intensity
+        normal_dim = "xyz"[self.monitor.size.index(0)]
+        intensity = self.intensity.squeeze(dim=normal_dim, drop=True)
         # integrate over the plane
         d_area = self._diff_area
         num = (intensity * d_area).sum(dim=d_area.dims) ** 2
@@ -1323,7 +1324,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         dataset = self.modes_info
         drop = []
 
-        if dataset["group index"] is None:
+        if np.all(dataset["group index"] == None):
             drop.append("group index")
         if np.all(dataset["loss (dB/cm)"] == 0):
             drop.append("loss (dB/cm)")
