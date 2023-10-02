@@ -235,7 +235,7 @@ def test_monitor_colocate(log_capture):
         interval_space=(1, 2, 3),
     )
     assert monitor.colocate is True
-    assert_log_level(log_capture, "WARNING")
+    assert_log_level(log_capture, None)
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),

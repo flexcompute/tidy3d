@@ -290,24 +290,11 @@ class AbstractFieldMonitor(Monitor, ABC):
     )
 
     colocate: bool = pydantic.Field(
-        None,
+        True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes). Default is ``True``.",
+        "primal grid nodes).",
     )
-
-    # TODO: remove after 2.4
-    @pydantic.validator("colocate", always=True)
-    def warn_set_colocate(cls, val):
-        """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
-        if val is None:
-            log.warning(
-                "Default value for the field monitor 'colocate' setting has changed to "
-                "'True' in Tidy3D 2.4.0. All field components will be colocated to the grid "
-                "boundaries. Set to 'False' to get the raw fields on the Yee grid instead."
-            )
-            return True
-        return val
 
 
 class PlanarMonitor(Monitor, ABC):
@@ -653,7 +640,7 @@ class ModeSolverMonitor(AbstractModeMonitor):
         True,
         title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes). Default is ``True``.",
+        "primal grid nodes).",
     )
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
