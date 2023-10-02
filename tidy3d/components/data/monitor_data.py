@@ -481,11 +481,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
+        normal_dim = "xyz"[self.monitor.size.index(0)]
         fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
         if any(cmp not in fields for cmp in components):
             raise KeyError("Can't compute intensity, all E field components must be present.")
-        return sum(fields[cmp].abs ** 2 for cmp in components)
+        intensity = sum(fields[cmp].abs ** 2 for cmp in components)
+        return intensity.squeeze(dim=normal_dim, drop=True)
 
     @property
     def poynting(self) -> ScalarFieldDataArray:
@@ -524,8 +526,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         Effective mode area is calculated as: (∫|E|²dA)² / (∫|E|⁴dA)
         """
-        normal_dim = "xyz"[self.monitor.size.index(0)]
-        intensity = self.intensity.squeeze(dim=normal_dim, drop=True)
+        intensity = self.intensity
         # integrate over the plane
         d_area = self._diff_area
         num = (intensity * d_area).sum(dim=d_area.dims) ** 2
@@ -1324,7 +1325,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         dataset = self.modes_info
         drop = []
 
-        if np.all(dataset["group index"] == None):
+        if not np.any(dataset["group index"].values):
             drop.append("group index")
         if np.all(dataset["loss (dB/cm)"] == 0):
             drop.append("loss (dB/cm)")
