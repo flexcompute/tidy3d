@@ -3239,6 +3239,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[AbstractMedium, AbstractCustomMedium]:
         """Sample perturbations on provided heat and/or charge data and create a custom medium.
         Any of ``temperature``, ``electron_density``, and ``hole_density`` can be ``None``.
@@ -3253,6 +3254,9 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3311,6 +3315,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[Medium, CustomMedium]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -3325,6 +3330,9 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3357,6 +3365,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
         new_dict["permittivity"] = permittivity_field
         new_dict["conductivity"] = conductivity_field
+        new_dict["interp_method"] = interp_method
 
         return CustomMedium.parse_obj(new_dict)
 
@@ -3422,6 +3431,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[PoleResidue, CustomPoleResidue]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -3436,6 +3446,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3469,6 +3482,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field
+        new_dict["interp_method"] = interp_method
 
         return CustomPoleResidue.parse_obj(new_dict)
 

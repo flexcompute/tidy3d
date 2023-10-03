@@ -8,13 +8,13 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ..monitor import TemperatureMonitor, HeatMonitorType
-from ...data.dataset import Dataset
+from ...base_sim.data.monitor_data import AbstractMonitorData
 from ...data.data_array import SpatialDataArray
 from ...types import ScalarSymmetry, Coordinate
 from ....constants import KELVIN
 
 
-class HeatMonitorData(Dataset, ABC):
+class HeatMonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`HeatMonitor`."""
 
     monitor: HeatMonitorType = pd.Field(

@@ -1,7 +1,7 @@
 """Defines heat grid specifications"""
 from __future__ import annotations
 
-from typing import Union
+from typing import Union, Tuple
 import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel
@@ -27,7 +27,7 @@ class UniformUnstructuredGrid(Tidy3dBaseModel):
 
     min_edges_per_circumference: pd.PositiveFloat = pd.Field(
         15,
-        title="Minimum edges per circumference",
+        title="Minimum Edges per Circumference",
         description="Enforced minimum number of mesh segments per circumference of an object. "
         "Applies to :class:`Cylinder` and :class:`Sphere`, for which the circumference "
         "is taken as 2 * pi * radius.",
@@ -35,13 +35,21 @@ class UniformUnstructuredGrid(Tidy3dBaseModel):
 
     min_edges_per_side: pd.PositiveFloat = pd.Field(
         2,
-        title="Minimum edges per side",
+        title="Minimum Edges per Side",
         description="Enforced minimum number of mesh segments per any side of an object.",
+    )
+
+    non_refined_structures: Tuple[str, ...] = pd.Field(
+        (),
+        title="Structures Without Refinement",
+        description="List of structures for which ``min_edges_per_circumference`` and "
+        "``min_edges_per_side`` will not be enforced. The original ``dl`` is used instead.",
     )
 
 
 class DistanceUnstructuredGrid(Tidy3dBaseModel):
-    """Adaptive grid based on distance to material interfaces.
+    """Adaptive grid based on distance to material interfaces. Currently not recommended for larger
+    simulations.
 
     Example
     -------
@@ -89,6 +97,13 @@ class DistanceUnstructuredGrid(Tidy3dBaseModel):
         title="Surface Sampling",
         description="An internal advanced parameter that defines number of sampling points per "
         "surface when computing distance values.",
+    )
+
+    non_refined_structures: Tuple[str, ...] = pd.Field(
+        (),
+        title="Structures Without Refinement",
+        description="List of structures for which ``dl_interface`` will not be enforced. "
+        "``dl_bulk`` is used instead.",
     )
 
     @pd.validator("distance_bulk", always=True)
