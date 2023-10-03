@@ -468,6 +468,15 @@ class ReverseInterpolatedSource(Source):
         "placement at the specified location using linear interpolation.",
     )
 
+    confine_to_bounds: bool = pydantic.Field(
+        False,
+        title="Confine to Analytical Bounds",
+        description="If ``True``, any source amplitudes which, after discretization, fall beyond "
+        "the bounding box of the source are zeroed out, but only along directions where "
+        "the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` "
+        "when the current source is being used to excite a current in a conductive material.",
+    )
+
 
 class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
     """Source in a rectangular volume with uniform time dependence.

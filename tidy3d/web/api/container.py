@@ -307,7 +307,7 @@ class Job(WebContainer):
         Cost is calculated assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
-        return web.estimate_cost(self.task_id, verbose=verbose)
+        return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
 
 
 class BatchData(Tidy3dBaseModel):

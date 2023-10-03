@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Simulation` now accepts `LumpedElementType`, which currently only supports the `LumpedResistor` type. `LumpedPort` together with `LumpedResistor` make up the new `TerminalComponentModeler` in the `smatrix` plugin.
 - Uniaxial medium Lithium niobate to material library.
 - Added support for conformal mesh methods near PEC structures that can be specified through the field `pec_conformal_mesh_spec` in the `Simulation` class.
 

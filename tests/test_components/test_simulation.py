@@ -2623,3 +2623,82 @@ def test_advanced_material_intersection():
         )
         # it's ok if these are both present as long as they don't intersect
         sim = sim.updated_copy(structures=[struct1, struct2])
+
+
+def test_num_lumped_elements():
+    """Make sure we error if too many lumped elements supplied."""
+
+    resistor = td.LumpedResistor(
+        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
+    )
+    grid_spec = td.GridSpec.auto(wavelength=1.0)
+
+    _ = td.Simulation(
+        size=(5, 5, 5),
+        grid_spec=grid_spec,
+        structures=[],
+        lumped_elements=[resistor] * MAX_NUM_MEDIUMS,
+        run_time=1e-12,
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(
+            size=(5, 5, 5),
+            grid_spec=grid_spec,
+            structures=[],
+            lumped_elements=[resistor] * (MAX_NUM_MEDIUMS + 1),
+            run_time=1e-12,
+        )
+
+
+def test_validate_lumped_elements():
+    resistor = td.LumpedResistor(
+        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
+    )
+
+    _ = td.Simulation(
+        size=(1, 2, 3),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        lumped_elements=[resistor],
+    )
+    # error for 1D/2D simulation with lumped elements
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 0, 3),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            lumped_elements=[resistor],
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 0, 0),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(dl=0.1),
+            lumped_elements=[resistor],
+        )
+
+
+def test_suggested_mesh_overrides():
+    resistor = td.LumpedResistor(
+        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
+    )
+    sim = td.Simulation(
+        size=(1, 2, 3),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        lumped_elements=[resistor],
+    )
+
+    suggested_mesh_overrides = sim.suggest_mesh_overrides()
+    assert len(suggested_mesh_overrides) == 2
+    grid_spec = sim.grid_spec.copy(
+        update={
+            "override_structures": list(sim.grid_spec.override_structures)
+            + suggested_mesh_overrides,
+        }
+    )
+
+    _ = sim.updated_copy(
+        grid_spec=grid_spec,
+    )

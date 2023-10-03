@@ -52,6 +52,9 @@ from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCart
 from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from .components.monitor import DiffractionMonitor
 
+# lumped elements
+from .components.lumped_element import LumpedResistor
+
 # simulation
 from .components.simulation import Simulation
 
@@ -300,6 +303,7 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
+    "LumpedResistor",
     "Scene",
     "StructureStructureInterface",
     "StructureBoundary",
