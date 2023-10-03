@@ -49,6 +49,7 @@ CMCUBE = "cm^3"
 PERCMCUBE = "1/cm^3"
 WATT = "W"
 VOLT = "V"
+OHM = "ohm"
 
 THERMAL_CONDUCTIVITY = "W/(um*K)"
 SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"

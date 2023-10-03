@@ -31,6 +31,7 @@ from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
+from .lumped_element import LumpedElementType, LumpedResistor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
@@ -165,6 +166,13 @@ class Simulation(AbstractSimulation):
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
+    )
+
+    lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
+        (),
+        title="Lumped Elements",
+        description="Tuple of lumped elements in the simulation. "
+        "Only ``LumpedResistor`` is supported currently.",
     )
 
     grid_spec: GridSpec = pydantic.Field(
@@ -1614,6 +1622,7 @@ class Simulation(AbstractSimulation):
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         **patch_kwargs,
@@ -1632,6 +1641,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1651,6 +1662,9 @@ class Simulation(AbstractSimulation):
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -1670,6 +1684,7 @@ class Simulation(AbstractSimulation):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
@@ -1695,6 +1710,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1725,6 +1742,9 @@ class Simulation(AbstractSimulation):
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -2133,6 +2153,51 @@ class Simulation(AbstractSimulation):
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
 
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_lumped_elements(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's lumped elements on a plane defined by one
+        nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the lumped element, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for element in self.lumped_elements:
+            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         return ax
 
     @cached_property
@@ -2638,7 +2703,10 @@ class Simulation(AbstractSimulation):
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
+        if (
+            not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
+            and not self.lumped_elements
+        ):
             return self.structures
 
         def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
@@ -2703,26 +2771,76 @@ class Simulation(AbstractSimulation):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
                 )
-                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+
+                # media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                # if len(media) > 1:
+                #     raise SetupError(
+                #         "2D materials do not support multiple neighboring media on a side. "
+                #         "Please split the 2D material into multiple smaller 2D materials, one "
+                #         "for each background medium."
+                #     )
+
+                # to prevent false positives due to 2D materials touching different materials
+                # along their sides, shrink the bounds along the tangential directions by
+                # a tiny bit before checking for intersections
+                bounds = [list(i) for i in geom_shifted.bounds]
+                _, tan_dirs = self.pop_axis([0, 1, 2], axis=axis)
+                for dim in tan_dirs:
+                    bounds[0][dim] += fp_eps
+                    bounds[1][dim] -= fp_eps
+
+                media = Scene.intersecting_media(Box.from_bounds(*bounds), structures)
                 if len(media) > 1:
                     raise SetupError(
-                        "2D materials do not support multiple neighboring media on a side. "
-                        "Please split the 2D material into multiple smaller 2D materials, one "
-                        "for each background medium."
+                        "2D materials must see a homogeneous medium on both sides, above and "
+                        "below. The medium above and below does not have to be the same, but one "
+                        "cannot have multiple neighboring media on the same side. Instead, "
+                        "please split the 2D material into multiple smaller 2D materials, "
+                        "one for each background medium."
                     )
+
                 medium_side = Medium() if len(media) == 0 else list(media)[0]
                 neighbors.append(medium_side)
             return (neighbors, grid_sizes)
 
+        lumped_structures = []
+        for lumped_element in self.lumped_elements:
+            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
+
+            if isinstance(lumped_element, LumpedResistor):
+                conductivity = lumped_element.sheet_conductance
+
+                if tan_dirs[0] == lumped_element.voltage_axis:
+                    medium_dict = {
+                        "ss": Medium(conductivity=conductivity),
+                        # "tt": Medium(conductivity=conductivity),
+                        "tt": self.medium,
+                    }
+                else:
+                    medium_dict = {
+                        "tt": Medium(conductivity=conductivity),
+                        # "ss": Medium(conductivity=conductivity),
+                        "ss": self.medium,
+                    }
+                lumped_structures.append(
+                    Structure(
+                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
+                        medium=Medium2D(**medium_dict),
+                    )
+                )
+
+        all_structures = list(self.structures) + lumped_structures
+
         simulation_background = Structure(geometry=self.geometry, medium=self.medium)
         background_structures = [simulation_background]
         new_structures = []
-        for structure in self.structures:
+        for structure in all_structures:
             if not isinstance(structure.medium, Medium2D):
                 # found a 3D material; keep it
                 background_structures.append(structure)
                 new_structures.append(structure)
                 continue
+
             # otherwise, found a 2D material; replace it with volumetric equivalent
             axis = structure.geometry._normal_2dmaterial
 
