@@ -31,6 +31,8 @@ from ..bc_placement import MediumMediumInterface
 from ...exceptions import SetupError
 from ...constants import inf, VOLUMETRIC_HEAT_RATE
 
+from ...log import log
+
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
 HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab)
@@ -170,6 +172,22 @@ class HeatSimulation(AbstractSimulation):
                             f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
                             "is not found among simulation mediums."
                         )
+        return val
+
+    @pd.validator("grid_spec", always=True)
+    def names_exist_grid_spec(cls, val, values):
+        """Warn if UniformUnstructuredGrid points at a non-existing structure."""
+
+        structures = values.get("structures")
+        structures_names = {s.name for s in structures}
+
+        for structure_name in val.non_refined_structures:
+            if structure_name not in structures_names:
+                log.warning(
+                    f"Structure '{structure_name}' listed as a non-refined structure in "
+                    "'HeatSimulation.grid_spec' is not present in 'HeatSimulation.structures'"
+                )
+
         return val
 
     @pd.validator("sources", always=True)

@@ -13,7 +13,7 @@ from .base import cached_property, Tidy3dBaseModel
 from .validators import assert_unique_names
 from .geometry.base import Box
 from .geometry.mesh import TriangleMesh
-from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate
+from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate, InterpMethod
 from .medium import Medium, MediumType, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, AbstractPerturbationMedium
@@ -1118,7 +1118,7 @@ class Scene(Tidy3dBaseModel):
             # regular medium
             cond_medium = medium.heat_spec.conductivity
             delta_cond = cond_medium - heat_cond_min
-            delta_cond_max = heat_cond_max - heat_cond_min + 1e-5
+            delta_cond_max = heat_cond_max - heat_cond_min + 1e-5 * heat_cond_min
             cond_fraction = delta_cond / delta_cond_max
             color = cond_fraction if reverse else 1 - cond_fraction
             plot_params = plot_params.copy(update={"facecolor": str(color)})
@@ -1184,6 +1184,7 @@ class Scene(Tidy3dBaseModel):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Scene:
         """Return a copy of the scene with heat and/or charge data applied to all mediums
         that have perturbation models specified. That is, such mediums will be replaced with
@@ -1199,6 +1200,9 @@ class Scene(Tidy3dBaseModel):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -1243,7 +1247,7 @@ class Scene(Tidy3dBaseModel):
                                 f"Provided '{name}' does not fully cover structures[{s_ind}]."
                             )
 
-                new_medium = med.perturbed_copy(**restricted_arrays)
+                new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
                 new_structure = structure.updated_copy(medium=new_medium)
                 new_structures.append(new_structure)
             else:
@@ -1269,6 +1273,8 @@ class Scene(Tidy3dBaseModel):
                     if not array.does_cover(bounds):
                         log.warning(f"Provided '{name}' does not fully cover scene domain.")
 
-            scene_dict["medium"] = med.perturbed_copy(**restricted_arrays)
+            scene_dict["medium"] = med.perturbed_copy(
+                **restricted_arrays, interp_method=interp_method
+            )
 
         return Scene.parse_obj(scene_dict)

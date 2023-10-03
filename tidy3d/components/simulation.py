@@ -19,7 +19,7 @@ from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR, InterpMethod
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
@@ -3130,6 +3130,7 @@ class Simulation(Box):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Simulation:
         """Return a copy of the simulation with heat and/or charge data applied to all mediums
         that have perturbation models specified. That is, such mediums will be replaced with
@@ -3145,6 +3146,9 @@ class Simulation(Box):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3189,7 +3193,7 @@ class Simulation(Box):
                                 f"Provided '{name}' does not fully cover structures[{s_ind}]."
                             )
 
-                new_medium = med.perturbed_copy(**restricted_arrays)
+                new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
                 new_structure = structure.updated_copy(medium=new_medium)
                 new_structures.append(new_structure)
             else:
@@ -3215,7 +3219,9 @@ class Simulation(Box):
                     if not array.does_cover(bounds):
                         log.warning(f"Provided '{name}' does not fully cover simulation domain.")
 
-            sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
+            sim_dict["medium"] = med.perturbed_copy(
+                **restricted_arrays, interp_method=interp_method
+            )
 
         return Simulation.parse_obj(sim_dict)
 
