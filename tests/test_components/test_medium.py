@@ -674,3 +674,45 @@ def test_nonlinear_medium(log_capture):
     with pytest.raises(ValidationError):
         structure = structure.updated_copy(medium=medium_active)
         sim.updated_copy(structures=[structure])
+
+
+def test_lumped_resistor():
+
+    resistor = td.LumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0],
+        size=[2, 0, 3],
+        voltage_axis=0,
+        name="R",
+    )
+    _ = resistor.effective_conductance
+    normal_axis = resistor.normal_axis
+    assert normal_axis == 1
+
+    # error if voltage axis is not in plane with the resistor
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LumpedResistor(
+            resistance=50.0,
+            center=[0, 0, 0],
+            size=[2, 0, 3],
+            voltage_axis=1,
+            name="R",
+        )
+
+    # error if not planar
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LumpedResistor(
+            resistance=50.0,
+            center=[0, 0, 0],
+            size=[0, 0, 3],
+            voltage_axis=2,
+            name="R",
+        )
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.LumpedResistor(
+            resistance=50.0,
+            center=[0, 0, 0],
+            size=[2, 1, 3],
+            voltage_axis=2,
+            name="R",
+        )

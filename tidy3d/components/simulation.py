@@ -7,6 +7,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib as mpl
+import shapely
 
 from .base import cached_property
 from .validators import assert_objects_in_sim_bounds
@@ -32,6 +33,7 @@ from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonito
 from .monitor import AbstractModeMonitor, FieldMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
+from .lumped_element import LumpedElementType, LumpedResistor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
@@ -166,6 +168,13 @@ class Simulation(AbstractSimulation):
         title="Monitors",
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
+    )
+
+    lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
+        (),
+        title="Lumped Elements",
+        description="Tuple of lumped elements in the simulation. "
+        "Only ``LumpedResistor`` is supported currently.",
     )
 
     grid_spec: GridSpec = pydantic.Field(
@@ -1700,6 +1709,7 @@ class Simulation(AbstractSimulation):
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         **patch_kwargs,
@@ -1718,6 +1728,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1737,6 +1749,9 @@ class Simulation(AbstractSimulation):
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -1756,6 +1771,7 @@ class Simulation(AbstractSimulation):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
@@ -1781,6 +1797,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1811,6 +1829,9 @@ class Simulation(AbstractSimulation):
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -2219,6 +2240,51 @@ class Simulation(AbstractSimulation):
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
 
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_lumped_elements(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's lumped elements on a plane defined by one
+        nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the lumped element, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for element in self.lumped_elements:
+            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         return ax
 
     @cached_property
@@ -2717,11 +2783,12 @@ class Simulation(AbstractSimulation):
             + datasets_geometry
         )
 
-    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+    def _volumetric_structures_grid_old(self, grid: Grid) -> Tuple[Structure]:
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
+        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums) and \
+            not self.lumped_elements:
             return self.structures
 
         def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
@@ -2786,26 +2853,76 @@ class Simulation(AbstractSimulation):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
                 )
-                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                
+                # media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                # if len(media) > 1:
+                #     raise SetupError(
+                #         "2D materials do not support multiple neighboring media on a side. "
+                #         "Please split the 2D material into multiple smaller 2D materials, one "
+                #         "for each background medium."
+                #     )
+  
+                # to prevent false positives due to 2D materials touching different materials
+                # along their sides, shrink the bounds along the tangential directions by
+                # a tiny bit before checking for intersections
+                bounds = [list(i) for i in geom_shifted.bounds]
+                _, tan_dirs = self.pop_axis([0, 1, 2], axis=axis)
+                for dim in tan_dirs:
+                    bounds[0][dim] += fp_eps
+                    bounds[1][dim] -= fp_eps
+
+                media = Scene.intersecting_media(Box.from_bounds(*bounds), structures)
                 if len(media) > 1:
                     raise SetupError(
-                        "2D materials do not support multiple neighboring media on a side. "
-                        "Please split the 2D material into multiple smaller 2D materials, one "
-                        "for each background medium."
+                        "2D materials must see a homogeneous medium on both sides, above and "
+                        "below. The medium above and below does not have to be the same, but one "
+                        "cannot have multiple neighboring media on the same side. Instead, "
+                        "please split the 2D material into multiple smaller 2D materials, "
+                        "one for each background medium."
                     )
+
                 medium_side = Medium() if len(media) == 0 else list(media)[0]
                 neighbors.append(medium_side)
             return (neighbors, grid_sizes)
 
+        lumped_structures = []
+        for lumped_element in self.lumped_elements:
+            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
+
+            if isinstance(lumped_element, LumpedResistor):
+                conductivity = lumped_element.sheet_conductance
+
+                if tan_dirs[0] == lumped_element.voltage_axis:
+                    medium_dict = {
+                        "ss": Medium(conductivity=conductivity),
+                        # "tt": Medium(conductivity=conductivity),
+                        "tt": self.medium,
+                    }
+                else:
+                    medium_dict = {
+                        "tt": Medium(conductivity=conductivity),
+                        # "ss": Medium(conductivity=conductivity),
+                        "ss": self.medium,
+                    }
+                lumped_structures.append(
+                    Structure(
+                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
+                        medium=Medium2D(**medium_dict),
+                    )
+                )
+
+        all_structures = list(self.structures) + lumped_structures
+
         simulation_background = Structure(geometry=self.geometry, medium=self.medium)
         background_structures = [simulation_background]
         new_structures = []
-        for structure in self.structures:
+        for structure in all_structures:
             if not isinstance(structure.medium, Medium2D):
                 # found a 3D material; keep it
                 background_structures.append(structure)
                 new_structures.append(structure)
                 continue
+
             # otherwise, found a 2D material; replace it with volumetric equivalent
             axis = structure.geometry._normal_2dmaterial
 
@@ -2827,6 +2944,294 @@ class Simulation(AbstractSimulation):
                 axis=axis, adjacent_media=neighbors, adjacent_dls=dls
             )
             new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
+
+        return tuple(new_structures)
+
+    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents, using ``grid`` as the simulation grid."""
+
+        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums) and \
+            not self.lumped_elements:
+            return self.structures
+
+        def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
+            """Get the bounds of a geometry in the axis direction."""
+            return (geom.bounds[0][axis], geom.bounds[1][axis])
+
+        def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+            """Set the bounds of a geometry in the axis direction."""
+            if isinstance(geom, Box):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_size = list(geom.size)
+                new_size[axis] = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, size=new_size)
+            if isinstance(geom, PolySlab):
+                return geom.updated_copy(slab_bounds=bounds)
+            if isinstance(geom, Cylinder):
+                new_center = list(geom.center)
+                new_center[axis] = (bounds[0] + bounds[1]) / 2
+                new_length = bounds[1] - bounds[0]
+                return geom.updated_copy(center=new_center, length=new_length)
+            raise ValidationError(
+                "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
+            )
+
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> float:
+            """Get grid size around the 2D material."""
+            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
+                axis
+            ]
+            # print("== dls --")
+            # print(dls, "\n")
+            # print(self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).boundaries.to_list[axis])
+            # print("-- dls ==")
+            if len(dls) != num_dls:
+                raise Tidy3dError(
+                    "Failed to detect grid size around the 2D material. "
+                    "Can't generate volumetric equivalent for this simulation. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )
+            return dls
+
+        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
+            """Snap a 2D material to the Yee grid."""
+            new_centers = self._discretize_grid(
+                Box.from_bounds(*geom.bounds), grid=grid
+            ).boundaries.to_list[axis]
+            new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
+            return set_bounds(geom, (new_center, new_center), axis)
+
+        def subdivide(geom: Geometry, axis: Axis, structures: List[Structure]) -> List[Medium2D]:
+            """Subdivide Medium2D into pieces with homogeneous substrate / superstrate."""
+            dl = get_dls(geom, axis, 1)[0]
+            center = get_bounds(geom, axis)[0]
+
+            _, neighbors, _ = get_neighbors(
+                geom=geom, axis=axis, structures=structures, homogeneous_only=False
+            )
+
+            # get intersecting polygons after shifting a bit upwards and downwards to catch
+            # cases that would be missed due to numerical precision issues
+            shift = dl * DIST_NEIGHBOR_REL_2D_MED
+            # shift = fp_eps # TEMP
+            geom_shifted_up = set_bounds(geom, (center + shift, center + shift), axis)
+            geom_shifted_down = set_bounds(geom, (center - shift, center - shift), axis)
+
+            subdivided = []
+            polygons = []
+            for other in neighbors:
+                polygons += geom.bounding_box.intersections_with(other)
+                polygons += geom_shifted_up.bounding_box.intersections_with(other)
+                polygons += geom_shifted_down.bounding_box.intersections_with(other)
+
+            # all_geoms = [
+            #     geom.bounding_box,
+            #     geom_shifted_up.bounding_box,
+            #     geom_shifted_down.bounding_box
+            # ] + neighbors
+
+            polygons = list(set(polygons))
+            polygons += [shapely.symmetric_difference_all(polygons)]
+
+            # if len(polygons) > 1:
+            #     polygons = shapely.difference(polygons,)
+            # print(polygons)
+            # print([polygon for polygon in polygons])
+
+            all_polygons = []
+            for polygon in polygons:
+                if isinstance(polygon, shapely.MultiPolygon):
+                    for i in range(len(polygon.geoms)):
+                        all_polygons.append(polygon.geoms[i])
+                elif not isinstance(polygon, shapely.LineString):
+                    all_polygons.append(shapely.LineString(list(polygon.exterior.coords)))
+                else:
+                    all_polygons.append(polygon)
+
+            polygons = all_polygons
+            # print(polygons)
+
+            polygon_boundaries = [
+                shapely.LineString(list(polygon.exterior.coords)) \
+                    if not isinstance(polygon, shapely.LineString) else polygon \
+                    for polygon in polygons
+            ]
+            union = shapely.ops.unary_union(polygon_boundaries)
+            results = list(shapely.ops.polygonize(union))
+            for result in results:
+                polygon = shapely.Polygon(result)
+                xx, yy = polygon.exterior.coords.xy
+                vertices = list(zip(xx, yy))
+                piece = PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
+                subdivided.append(piece)
+                # print(piece)
+            #     print(vertices)
+                # print("---")
+            # print("===")
+
+            return subdivided
+
+        def get_thickened_geom(geom: Geometry, axis: Axis):
+            """Helper to return a slightly thickened version of a planar geometry."""
+            dl = get_dls(geom, axis, 1)[0]
+            center = get_bounds(geom, axis)[0]
+            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
+            return set_bounds(
+                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
+            )            
+
+        def get_neighbors(
+            geom: Geometry,
+            axis: Axis,
+            structures: List[Structure],
+            homogeneous_only: bool = True,
+        ):
+            """Find the neighboring material properties and grid sizes."""
+            center = get_bounds(geom, axis)[0]
+            thickened_geom = get_thickened_geom(geom=geom, axis=axis)
+            grid_sizes = get_dls(thickened_geom, axis, 2)
+            dls_signed = [-grid_sizes[0], grid_sizes[1]]
+            # dls_signed = [-fp_eps, fp_eps] # TEMP
+            neighboring_media = []
+            neighboring_geoms = []
+            for _, dl_signed in enumerate(dls_signed):
+                geom_shifted = set_bounds(
+                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
+                )
+
+                # to prevent false positives due to 2D materials touching different materials
+                # along their sides, shrink the bounds along the tangential directions by
+                # a tiny bit before checking for intersections
+                bounds = [list(i) for i in geom_shifted.bounds]
+                _, tan_dirs = self.pop_axis([0, 1, 2], axis=axis)
+                bounds_center = (np.array(bounds[0]) + np.array(bounds[1])) / 2
+
+                # if homogeneous_only:
+                #     for dim in tan_dirs:
+                #         bounds[0][dim] += fp_eps
+                #         bounds[1][dim] -= fp_eps
+
+                for dim in tan_dirs:
+                    bounds[0][dim] = bounds_center[dim] - fp_eps
+                    bounds[1][dim] = bounds_center[dim] + fp_eps
+
+                media = Scene.intersecting_media(Box.from_bounds(*bounds), structures)
+                structures_side = Scene.intersecting_structures(
+                    Box.from_bounds(*bounds), structures
+                )
+
+                if len(media) > 1 and homogeneous_only:
+                    raise SetupError(
+                        "2D materials do not support multiple neighboring media on a side. "
+                        "Please split the 2D material into multiple smaller 2D materials, one "
+                        "for each background medium."
+                    )
+
+                medium_side = [Medium()] if len(media) == 0 else list(media)
+
+                neighboring_media += medium_side
+                neighboring_geoms += [struct.geometry for struct in structures_side]
+
+            return neighboring_media, neighboring_geoms, grid_sizes
+
+        lumped_structures = []
+        for lumped_element in self.lumped_elements:
+            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
+
+            if isinstance(lumped_element, LumpedResistor):
+                conductivity = lumped_element.sheet_conductance
+
+                if tan_dirs[0] == lumped_element.voltage_axis:
+                    medium_dict = {
+                        "ss": Medium(conductivity=conductivity),
+                        # "tt": Medium(conductivity=conductivity),
+                        "tt": self.medium,
+                    }
+                else:
+                    medium_dict = {
+                        "tt": Medium(conductivity=conductivity),
+                        # "ss": Medium(conductivity=conductivity),
+                        "ss": self.medium,
+                    }
+                lumped_structures.append(
+                    Structure(
+                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
+                        medium=Medium2D(**medium_dict),
+                    )
+                )
+
+        all_structures = list(self.structures) + lumped_structures
+
+        simulation_background = Structure(geometry=self.geometry, medium=self.medium)
+        background_structures = [simulation_background]
+        new_structures = []
+        for structure in all_structures:
+            if not isinstance(structure.medium, Medium2D):
+                # found a 3D material; keep it
+                background_structures.append(structure)
+                new_structures.append(structure)
+                continue
+            # otherwise, found a 2D material; replace it with volumetric equivalent
+            axis = structure.geometry._normal_2dmaterial
+
+            # old_center = get_bounds(structure.geometry, axis)[0]
+            # snap monolayer to grid
+            # print(structure.geometry.center[axis])
+            # geometry = snap_to_grid(structure.geometry, axis)
+            # print(geometry.center[axis])
+            geometry = structure.geometry
+            # center = get_bounds(geometry, axis)[0]
+
+            # subdivide
+            subdivided_geometries = subdivide(geometry, axis, background_structures)
+            background_structures_temp = []
+
+            for subdivided_geometry in subdivided_geometries:
+                # subdivided_geometry = set_bounds(
+                #     subdivided_geometry, bounds=(old_center, old_center), axis=axis
+                # )
+                # print(subdivided_geometry)
+                # print("---")
+
+                subdivided_geometry = snap_to_grid(subdivided_geometry, axis)
+                center = get_bounds(subdivided_geometry, axis)[0]
+
+                # get neighboring media and grid sizes
+                neighbors, _, dls = get_neighbors(
+                    subdivided_geometry, axis, background_structures, True
+                )
+
+                new_medium = structure.medium.volumetric_equivalent(
+                    axis=axis, adjacent_media=neighbors, adjacent_dls=dls
+                )
+
+                # print(subdivided_geometry)
+                # print("--")
+
+                subdivided_geometry = snap_to_grid(subdivided_geometry, axis)
+                center = get_bounds(subdivided_geometry, axis)[0]
+
+                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+                temp_geometry = set_bounds(subdivided_geometry, bounds=new_bounds, axis=axis)
+                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
+
+                if structure.medium.is_pec:
+                    new_bounds = (center - fp_eps, center + fp_eps)
+                new_geometry = set_bounds(subdivided_geometry, bounds=new_bounds, axis=axis)
+                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+
+                new_structures.append(new_structure)
+                background_structures_temp.append(temp_structure)
+                # background_structures_temp.append(new_structure)
+                # background_structures.append(temp_structure)
+                # print(neighbors)
+            #     print(new_medium)
+                # print("---")
+            # print("===")
+            background_structures += background_structures_temp
 
         return tuple(new_structures)
 
