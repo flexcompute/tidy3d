@@ -33,6 +33,8 @@ DFT_CUTOFF = 1e-8
 DATA_SPAN_TOL = 1e-8
 # width of Chebyshev grid used for broadband sources (in units of pulse width)
 CHEB_GRID_WIDTH = 1.5
+# Number of frequencies in a broadband source above which to issue a warning
+WARN_NUM_FREQS = 20
 
 
 class SourceTime(ABC, Tidy3dBaseModel):
@@ -743,12 +745,11 @@ class BroadbandSource(Source, ABC):
         if val is None:
             return val
 
-        if val >= 20:
+        if val >= WARN_NUM_FREQS:
             log.warning(
                 f"A large number ({val}) of frequency points is used in a broadband source. "
-                "This can slow down simulation time and is only needed if the mode fields are "
-                "expected to have a very sharp frequency dependence. 'num_freqs' < 20 is "
-                "sufficient in most cases.",
+                "This can lead to solver slow-down and increased cost, and even introduce "
+                "numerical noise. This may become a hard limit in future Tidy3D versions.",
                 custom_loc=["num_freqs"],
             )
 

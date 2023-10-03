@@ -40,11 +40,6 @@ class JaxDataArray(Tidy3dBaseModel):
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
 
-    @pd.validator("coords", always=True)
-    def _convert_coords_to_list(cls, val):
-        """Convert supplied coordinates to Dict[str, list]."""
-        return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
-
     @pd.validator("values", always=True)
     def _convert_values_to_np(cls, val):
         """Convert supplied values to numpy if they are list (from file)."""
@@ -52,39 +47,36 @@ class JaxDataArray(Tidy3dBaseModel):
             return np.array(val)
         return val
 
+    @pd.validator("coords", always=True)
+    def _coords_match_values(cls, val, values):
+        """Make sure the coordinate dimensions and shapes match the values data."""
+
+        _values = values.get("values")
+
+        # get the shape, handling both regular and jax objects
+        try:
+            values_shape = np.array(_values).shape
+        except TypeError:
+            values_shape = jnp.array(_values).shape
+
+        for (key, coord_val), size_dim in zip(val.items(), values_shape):
+            if len(coord_val) != size_dim:
+                raise ValueError(
+                    f"JaxDataArray coord {key} has {len(coord_val)} elements, "
+                    "which doesn't match the values array "
+                    f"with size {size_dim} along that dimension."
+                )
+
+        return val
+
+    @pd.validator("coords", always=True)
+    def _convert_coords_to_list(cls, val):
+        """Convert supplied coordinates to Dict[str, list]."""
+        return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
+
     def __eq__(self, other) -> bool:
         """Check if two ``JaxDataArray`` instances are equal."""
         return jnp.array_equal(self.values, other.values)
-
-    # removed because it was slowing things down.
-    # @pd.validator("coords", always=True)
-    # def _coords_match_values(cls, val, values):
-    #     """Make sure the coordinate dimensions and shapes match the values data."""
-
-    #     values = values.get("values")
-
-    #     # if values did not pass validation, just skip this validator
-    #     if values is None:
-    #         return None
-
-    #     # compute the shape, otherwise exit.
-    #     try:
-    #         shape = jnp.array(values).shape
-    #     except TypeError:
-    #         return val
-
-    #     if len(shape) != len(val):
-    #         raise AdjointError(f"'values' has '{len(shape)}' dims, but given '{len(val)}'.")
-
-    #     # make sure each coordinate list has same length as values along that axis
-    #     for len_dim, (coord_name, coord_list) in zip(shape, val.items()):
-    #         if len_dim != len(coord_list):
-    #             raise AdjointError(
-    #                 f"coordinate '{coord_name}' has '{len(coord_list)}' elements, "
-    #                 f"expected '{len_dim}' to match number of 'values' along this dimension."
-    #             )
-
-    #     return val
 
     def to_hdf5(self, fname: str, group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file with a given path to the group."""
@@ -198,11 +190,18 @@ class JaxDataArray(Tidy3dBaseModel):
             new_values = self.as_jnp_array * other.as_jnp_array
         elif isinstance(other, xr.DataArray):
 
-            other_values = other.values.reshape(self.values.shape)
-            new_values = self.as_jnp_array * other_values
+            # handle case where other is missing dims present in self
+            new_shape = list(self.shape)
+            for dim_index, dim in enumerate(self.coords.keys()):
+                if dim not in other.dims:
+                    other = other.expand_dims(dim=dim)
+                    new_shape[dim_index] = 1
 
+            other_values = other.values.reshape(new_shape)
+            new_values = self.as_jnp_array * other_values
         else:
             new_values = self.as_jnp_array * other
+
         return self.updated_copy(values=new_values)
 
     def __rmul__(self, other) -> JaxDataArray:
@@ -265,8 +264,10 @@ class JaxDataArray(Tidy3dBaseModel):
 
         # if the coord index has more than one item, keep that coordinate
         coord_index = np.array(coord_index)
-        if coord_index.size > 1:
-            new_coords[coord_name] = coord_index.tolist()
+        if len(coord_index.shape) >= 1:
+            coord_indices = coord_index.tolist()
+            new_coord_vals = [self.coords[coord_name][coord_index] for coord_index in coord_indices]
+            new_coords[coord_name] = new_coord_vals
         else:
             new_coords.pop(coord_name)
 
@@ -306,10 +307,23 @@ class JaxDataArray(Tidy3dBaseModel):
         isel_kwargs = {}
         for coord_name, sel_kwarg in sel_kwargs.items():
             coord_list = self.get_coord_list(coord_name)
-            if sel_kwarg not in coord_list:
-                raise DataError(f"Could not select '{coord_name}={sel_kwarg}', value not found.")
-            coord_index = coord_list.index(sel_kwarg)
-            isel_kwargs[coord_name] = coord_index
+            if isinstance(sel_kwarg, (tuple, list, np.ndarray)):
+                sel_kwarg = list(sel_kwarg)
+                isel_kwargs[coord_name] = []
+                for _sel_kwarg in sel_kwarg:
+                    if _sel_kwarg not in coord_list:
+                        raise DataError(
+                            f"Could not select '{coord_name}={_sel_kwarg}', value not found."
+                        )
+                    coord_index = coord_list.index(_sel_kwarg)
+                    isel_kwargs[coord_name].append(coord_index)
+            else:
+                if sel_kwarg not in coord_list:
+                    raise DataError(
+                        f"Could not select '{coord_name}={sel_kwarg}', value not found."
+                    )
+                coord_index = coord_list.index(sel_kwarg)
+                isel_kwargs[coord_name] = coord_index
         return self.isel(**isel_kwargs)
 
     def assign_coords(self, coords: dict = None, **coords_kwargs) -> JaxDataArray:
@@ -317,9 +331,12 @@ class JaxDataArray(Tidy3dBaseModel):
 
         update_kwargs = self.coords.copy()
 
-        update_kwargs.update(coords_kwargs)
+        for key, val in coords_kwargs.items():
+            update_kwargs[key] = val
+
         if coords:
-            update_kwargs.update(coords)
+            for key, val in coords.items():
+                update_kwargs[key] = val
 
         update_kwargs = {key: np.array(value).tolist() for key, value in update_kwargs.items()}
         return self.updated_copy(coords=update_kwargs)

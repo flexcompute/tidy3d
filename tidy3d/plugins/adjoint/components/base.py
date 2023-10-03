@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Tuple, List, Any, Callable
 import json
 
+import numpy as np
+
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
@@ -50,12 +52,23 @@ class JaxObject(Tidy3dBaseModel):
                 fix_polyslab(geo_dict["geometry_a"])
                 fix_polyslab(geo_dict["geometry_b"])
 
+        def fix_monitor(mnt_dict: dict) -> None:
+            """Fix a frequency containing monitor."""
+            if "freqs" in mnt_dict:
+                freqs = mnt_dict["freqs"]
+                if isinstance(freqs, np.ndarray):
+                    mnt_dict["freqs"] = freqs.tolist()
+
         # fixes bug with jax handling 2D numpy array in polyslab vertices
         if aux_data.get("type", "") == "JaxSimulation":
             structures = aux_data["structures"]
             for _i, structure in enumerate(structures):
                 geometry = structure["geometry"]
                 fix_polyslab(geometry)
+            for monitor in aux_data["monitors"]:
+                fix_monitor(monitor)
+            for monitor in aux_data["output_monitors"]:
+                fix_monitor(monitor)
 
         return children, aux_data
 

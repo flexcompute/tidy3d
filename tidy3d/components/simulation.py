@@ -30,8 +30,9 @@ from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime
-from .source import TFSF, Source
+from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
+from .monitor import AbstractModeMonitor, FieldMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
@@ -64,6 +65,7 @@ MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
 WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_SIMULATION_DATA_SIZE_GB = 50
+WARN_MODE_NUM_CELLS = 1e5
 
 # number of grid cells at which we warn about slow Simulation.epsilon()
 NUM_CELLS_WARN_EPSILON = 100_000_000
@@ -996,6 +998,7 @@ class Simulation(Box):
         log.begin_capture()
         self._validate_size()
         self._validate_monitor_size()
+        self._validate_modes_size()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
         # self._validate_run_time()
@@ -1057,6 +1060,43 @@ class Simulation(Box):
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
+
+    def _validate_modes_size(self) -> None:
+        """Warn if mode sources or monitors have a large number of points."""
+
+        def warn_mode_size(monitor: AbstractModeMonitor, msg_header: str, custom_loc: List):
+            """Warn if a mode component has a large number of points."""
+            num_cells = np.prod(self.discretize_monitor(monitor).num_cells)
+            if num_cells > WARN_MODE_NUM_CELLS:
+                consolidated_logger.warning(
+                    msg_header + f"has a large number ({num_cells:1.2e}) of grid points. "
+                    "This can lead to solver slow-down and increased cost. "
+                    "Consider making the size of the component smaller, as long as the modes "
+                    "of interest decay by the plane boundaries.",
+                    custom_loc=custom_loc,
+                )
+
+        with log as consolidated_logger:
+            for src_ind, source in enumerate(self.sources):
+                if isinstance(source, ModeSource):
+                    # Make a monitor so we can call ``discretize_monitor``
+                    monitor = FieldMonitor(
+                        center=source.center,
+                        size=source.size,
+                        name="tmp",
+                        freqs=[source.source_time.freq0],
+                        colocate=False,
+                    )
+                    msg_header = f"Mode source at sources[{src_ind}] "
+                    custom_loc = ["sources", src_ind]
+                    warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
+
+        with log as consolidated_logger:
+            for mnt_ind, monitor in enumerate(self.monitors):
+                if isinstance(monitor, AbstractModeMonitor):
+                    msg_header = f"Mode monitor '{monitor.name}' "
+                    custom_loc = ["monitors", mnt_ind]
+                    warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
 
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:

@@ -14,12 +14,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+## [Unreleased]
+
+### Added
+
+### Changed
+
+### Fixed
+- Properly handle `.freqs` in `output_monitors` of adjoint plugin.
+
+## [2.4.2] - 2023-9-28
+
+### Added
+- Warnings for too many frequencies in monitors; too many modes requested in a ``ModeSpec``; too many number of grid points in a mode monitor or mode source.
+
+### Changed
+- Time domain monitors warn about data usage if all defaults used in time sampler specs.
+
+### Fixed
+- Faster sorting of modes in `ModeSolverData.overlap_sort` by avoiding excessive data copying.
+- Ensure same `Grid` is generated in forward and adjoint simulations by setting `GridSpec.wavelength` manually in adjoint.
+- Properly handling of `JaxBox` derivatives both for multi-cell and single cell thickness.
+- Properly handle `JaxSimulation.monitors` with `.freqs` as `np.ndarray` in adjoint plugin.
+- Properly handle `JaxDataArray.sel()` with single coordinates and symmetry expansion.
+- Properly handle `JaxDataArray * xr.DataArray` broadcasting.
+- Stricter validation of `JaxDataArray` coordinates and values shape.
+
+
 ## [2.4.1] - 2023-9-20
 
 ### Added
 - `ModeSolverData.pol_fraction` and `ModeSolverData.pol_fraction_waveguide` properties to compute polarization fraction of modes using two different definitions.
 - `ModeSolverData.to_dataframe()` and `ModeSolverData.modes_info` for a convenient summary of various modal properties of the computed modes.
 - Loss upper bound estimation in `PoleResidue` material model.
+- Command line tool `tidy3d convert` for conversion from `.lsf` project files into equivalent python scripts implementing the project in Tidy3D. Usage:  `tidy3d convert example.lsf tidy3d_script.py`.
 
 ### Changed
 - Output task URL before and after simulation run and make URLs blue underline formatting.
@@ -949,7 +977,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...develop
+[2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
 [2.3.3]: https://github.com/flexcompute/tidy3d/compare/v2.3.2...v2.3.3

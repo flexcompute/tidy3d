@@ -125,8 +125,7 @@ class JaxSimulationData(SimulationData, JaxObject):
             mnt_data_type = JAX_MONITOR_DATA_MAP[mnt_data_type_str]
             jax_mnt_data = mnt_data_type.from_monitor_data(mnt_data)
             output_data_list.append(jax_mnt_data)
-            data_dict["output_data"] = output_data_list
-
+        data_dict["output_data"] = output_data_list
         self_dict.update(data_dict)
         self_dict.update(dict(task_id=task_id))
 
@@ -161,8 +160,10 @@ class JaxSimulationData(SimulationData, JaxObject):
     def make_adjoint_simulation(self, fwidth: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
 
+        sim_fwd = self.simulation
+
         # grab boundary conditions with flipped bloch vectors (for adjoint)
-        bc_adj = self.simulation.boundary_spec.flipped_bloch_vecs
+        bc_adj = sim_fwd.boundary_spec.flipped_bloch_vecs
 
         # add all adjoint sources and boundary conditions (at same time for BC validators to work)
         adj_srcs = []
@@ -172,10 +173,18 @@ class JaxSimulationData(SimulationData, JaxObject):
 
         update_dict = dict(boundary_spec=bc_adj, sources=adj_srcs, monitors=(), output_monitors=())
         update_dict.update(
-            self.simulation.get_grad_monitors(
-                input_structures=self.simulation.input_structures,
-                freq_adjoint=self.simulation.freq_adjoint,
+            sim_fwd.get_grad_monitors(
+                input_structures=sim_fwd.input_structures,
+                freq_adjoint=sim_fwd.freq_adjoint,
                 include_eps_mnts=False,
             )
         )
-        return self.simulation.updated_copy(**update_dict)
+
+        # set the ADJ grid spec wavelength to the FWD wavelength (for same meshing)
+        grid_spec_fwd = sim_fwd.grid_spec
+        if len(sim_fwd.sources) and grid_spec_fwd.wavelength is None:
+            wavelength_fwd = grid_spec_fwd.wavelength_from_sources(sim_fwd.sources)
+            grid_spec_adj = grid_spec_fwd.updated_copy(wavelength=wavelength_fwd)
+            update_dict.update(dict(grid_spec=grid_spec_adj))
+
+        return sim_fwd.updated_copy(**update_dict)
