@@ -777,7 +777,7 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(task_id: str, verbose: bool = True) -> float:
+def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -786,6 +786,8 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
         Unique identifier of task on server.  Returned by :meth:`upload`.
     verbose : bool = True
         Whether to log the cost and helpful messages.
+    solver_version : str = None
+        Target solver version.
 
     Returns
     -------
@@ -825,7 +827,7 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
     if not task:
         raise ValueError("Task not found.")
 
-    task.estimate_cost()
+    task.estimate_cost(solver_version=solver_version)
     task_info = get_info(task_id)
     status = task_info.metadataStatus
 

@@ -16,30 +16,31 @@ from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom, subdivide
+from .geometry.utils_2d import get_bounds, increment_float, set_bounds, get_thickened_geom
+from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
 from .grid.grid_spec import ConformalMeshSpecType, StaircasingConformalMeshSpec
 from .medium import MediumType, AbstractMedium
-from .medium import AbstractCustomMedium, Medium2D
+from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
-from .structure import Structure
+from .structure import Structure, MeshOverrideStructure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
-from .medium import Medium, MediumType3D
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
+from .lumped_element import LumpedElementType, LumpedResistor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
-from .scene import Scene
+from .scene import Scene, MAX_NUM_MEDIUMS
 
 from .viz import PlotParams
 from .viz import plot_params_pml, plot_params_override_structures
@@ -314,6 +315,42 @@ class Simulation(AbstractSimulation):
     **Lectures:**
         *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
         *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
+
+    lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
+        (),
+        title="Lumped Elements",
+        description="Tuple of lumped elements in the simulation. "
+        "Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
+    )
+    """
+    Tuple of lumped elements in the simulation.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+            lumped_elements=[
+                LumpedResistor(
+                    size=(0, 3, 1),
+                    center=(0, 0, 0),
+                    voltage_axis=2,
+                    resistance=50,
+                    name="resistor_1",
+                )
+            ],
+            ...
+         )
+
+    See Also
+    --------
+
+    `Index <../lumped_elements.html>`_:
+        Available lumped element types.
     """
 
     grid_spec: GridSpec = pydantic.Field(
@@ -1572,6 +1609,35 @@ class Simulation(AbstractSimulation):
 
         return val
 
+    @pydantic.validator("lumped_elements", always=True)
+    @skip_if_fields_missing(["structures"])
+    def _validate_num_lumped_elements(cls, val, values):
+        """Error if too many lumped elements present."""
+
+        if val is None:
+            return val
+        structures = values.get("structures")
+        mediums = {structure.medium for structure in structures}
+        total_num_mediums = len(val) + len(mediums)
+        if total_num_mediums > MAX_NUM_MEDIUMS:
+            raise ValidationError(
+                f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct lumped elements and structures."
+                f"{total_num_mediums} were supplied."
+            )
+
+        return val
+
+    @pydantic.validator("lumped_elements")
+    @skip_if_fields_missing(["size"])
+    def _check_3d_simulation_with_lumped_elements(cls, val, values):
+        """Error if Simulation contained lumped elements and is not a 3D simulation"""
+        size = values.get("size")
+        if val and size.count(0.0) > 0:
+            raise ValidationError(
+                f"'{cls.__name__}' must be a 3D simulation when a 'LumpedElement' is present."
+            )
+        return val
+
     """ Post-init validators """
 
     def _post_init_validators(self) -> None:
@@ -2360,6 +2426,7 @@ class Simulation(AbstractSimulation):
         ax: Ax = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         **patch_kwargs,
@@ -2378,6 +2445,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -2404,6 +2473,9 @@ class Simulation(AbstractSimulation):
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -2423,6 +2495,7 @@ class Simulation(AbstractSimulation):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         ax: Ax = None,
@@ -2448,6 +2521,8 @@ class Simulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -2484,6 +2559,9 @@ class Simulation(AbstractSimulation):
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = Scene._set_plot_bounds(
@@ -2892,6 +2970,51 @@ class Simulation(AbstractSimulation):
         ax.set_xlim([ulim_minus, ulim_plus])
         ax.set_ylim([vlim_minus, vlim_plus])
 
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_lumped_elements(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's lumped elements on a plane defined by one
+        nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the lumped element, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for element in self.lumped_elements:
+            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         return ax
 
     @cached_property
@@ -3412,7 +3535,10 @@ class Simulation(AbstractSimulation):
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
+        if (
+            not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
+            and not self.lumped_elements
+        ):
             return self.structures
 
         def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
@@ -3438,13 +3564,38 @@ class Simulation(AbstractSimulation):
 
         def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
             """Snap a 2D material to the Yee grid."""
-            new_centers = self._discretize_grid(
-                Box.from_bounds(*geom.bounds), grid=grid
-            ).boundaries.to_list[axis]
-            new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
-            return set_bounds(geom, (new_center, new_center), axis)
+            center = get_bounds(geom, axis)[0]
+            assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
+            snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
+            return set_bounds(geom, (snapped_center, snapped_center), axis)
+
+        lumped_structures = []
+        for lumped_element in self.lumped_elements:
+            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
+
+            if isinstance(lumped_element, LumpedResistor):
+                conductivity = lumped_element.sheet_conductance
+
+                if tan_dirs[0] == lumped_element.voltage_axis:
+                    medium_dict = {
+                        "ss": Medium(conductivity=conductivity),
+                        "tt": self.medium,
+                    }
+                else:
+                    medium_dict = {
+                        "tt": Medium(conductivity=conductivity),
+                        "ss": self.medium,
+                    }
+                lumped_structures.append(
+                    Structure(
+                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
+                        medium=Medium2D(**medium_dict),
+                    )
+                )
 
         # Begin volumetric structures grid
+        all_structures = list(self.structures) + lumped_structures
+
         # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
         placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
         simulation_placeholder_geometry = self.geometry.updated_copy(
@@ -3456,7 +3607,7 @@ class Simulation(AbstractSimulation):
         )
         background_structures = [simulation_background]
         new_structures = []
-        for structure in self.structures:
+        for structure in all_structures:
             if not isinstance(structure.medium, Medium2D):
                 # found a 3D material; keep it
                 background_structures.append(structure)
@@ -3488,8 +3639,9 @@ class Simulation(AbstractSimulation):
                 temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
 
                 if structure.medium.is_pec:
-                    pec_delta = fp_eps * max(np.abs(snapped_center), 1.0)
-                    new_bounds = (snapped_center - pec_delta, snapped_center + pec_delta)
+                    pec_plus = increment_float(snapped_center, 1.0)
+                    pec_minus = increment_float(snapped_center, -1.0)
+                    new_bounds = (pec_minus, pec_plus)
                 new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
@@ -3852,3 +4004,15 @@ class Simulation(AbstractSimulation):
         )
 
         return new_sim
+
+    def suggest_mesh_overrides(self, **kwargs) -> List[MeshOverrideStructure]:
+        """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
+        from structures in the simulation.
+        """
+        mesh_overrides = []
+
+        # For now we can suggest MeshOverrideStructures for lumped elements.
+        for lumped_element in self.lumped_elements:
+            mesh_overrides.extend(lumped_element.to_mesh_overrides())
+
+        return mesh_overrides
