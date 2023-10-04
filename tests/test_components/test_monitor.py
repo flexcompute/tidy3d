@@ -12,6 +12,28 @@ def test_stop_start():
         td.FluxTimeMonitor(size=(1, 1, 0), name="f", start=2, stop=1)
 
 
+# interval, start, stop, log_out
+time_sampling_tests = [
+    (None, 0.0, None, "WARNING"),  # all defaults
+    (1, 0.0, None, None),  # interval set (=1)
+    (2, 0.0, None, None),  # interval set (=2)
+    (None, 1e-12, None, None),  # start specified
+    (None, 0.0, 5e-12, None),  # stop specified
+]
+
+
+@pytest.mark.parametrize("interval, start, stop, log_desired", time_sampling_tests)
+def test_monitor_interval_warn(log_capture, interval, start, stop, log_desired):
+    """Assert time monitor interval warning handled as expected."""
+
+    mnt = td.FluxTimeMonitor(size=(1, 1, 0), name="f", interval=interval, stop=stop, start=start)
+    assert_log_level(log_capture, log_desired)
+
+    # make sure it got set to either 1 (undefined) or the specified value
+    mnt_interval = interval if interval else 1
+    assert mnt.interval == mnt_interval
+
+
 def test_time_inds():
     M = td.FluxTimeMonitor(size=(1, 1, 0), name="f", start=0, stop=1)
     assert M.time_inds(tmesh=[]) == (0, 0)
@@ -208,7 +230,7 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 10001),
+        freqs=np.linspace(0, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
     )
@@ -217,12 +239,38 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 10001),
+        freqs=np.linspace(0, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
         colocate=False,
     )
     assert monitor.colocate is False
+
+
+@pytest.mark.parametrize("freqs, log_level", [(np.arange(2500), "WARNING"), (np.arange(100), None)])
+def test_monitor_num_freqs(log_capture, freqs, log_level):
+    """test default colocate value, and warning if not set"""
+
+    monitor = td.FieldMonitor(
+        size=(td.inf, td.inf, td.inf),
+        freqs=freqs,
+        name="test",
+        colocate=True,
+    )
+    assert_log_level(log_capture, log_level)
+
+
+@pytest.mark.parametrize("num_modes, log_level", [(101, "WARNING"), (100, None)])
+def test_monitor_num_modes(log_capture, num_modes, log_level):
+    """test default colocate value, and warning if not set"""
+
+    monitor = td.ModeMonitor(
+        size=(td.inf, 0, td.inf),
+        freqs=np.linspace(1e14, 2e14, 100),
+        name="test",
+        mode_spec=td.ModeSpec(num_modes=num_modes),
+    )
+    assert_log_level(log_capture, log_level)
 
 
 def test_diffraction_validators():

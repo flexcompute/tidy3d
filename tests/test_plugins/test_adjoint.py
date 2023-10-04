@@ -35,6 +35,7 @@ from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, Ci
 from tidy3d.web.api.container import BatchData
 
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
+from ..test_components.test_custom import CUSTOM_MEDIUM
 
 TMP_PATH = None
 FWD_SIM_DATA_FILE = "adjoint_grad_data_fwd.hdf5"
@@ -766,6 +767,27 @@ def test_jax_data_array():
     da1d = JaxDataArray(values=[0.0, 1.0, 2.0, 3.0], coords=dict(x=[0, 1, 2, 3]))
     assert np.isclose(da1d.interp(x=0.5), 0.5)
 
+    # duplicate coordinates
+    sel_a_coords = [1, 2, 3, 2, 1]
+    res = da.sel(a=sel_a_coords)
+    assert res.coords["a"] == sel_a_coords
+    assert res.values.shape[0] == len(sel_a_coords)
+
+    a = [1, 2, 3]
+    b = [2, 3, 4, 5]
+    c = [4, 6]
+    shape = (len(a), len(b), len(c))
+    values = np.random.random(shape)
+    coords = dict(a=a, b=b, c=c)
+    da = JaxDataArray(values=values, coords=coords)
+    da2 = da.sel(b=[3, 4])
+    assert da2.shape == (3, 2, 2)
+
+    da3 = da.interp(b=np.array([3, 4]))
+    assert da3.shape == (3, 2, 2)
+
+    assert da2 == da3
+
 
 def test_jax_sim_data(use_emulated_run):
     """Test mechanics of the JaxSimulationData."""
@@ -1460,7 +1482,8 @@ def test_sim_data_plot_field(use_emulated_run):
     assert len(ax.collections) == 1
 
 
-def test_polyslab_structures(use_emulated_run):
+def test_pytreedef_errors(use_emulated_run):
+    """Fix errors that occur when jax doesnt know how to handle array types in aux_data."""
 
     vertices = [(0, 0), (1, 0), (1, 1), (0, 1)]
     polyslab = td.PolySlab(vertices=vertices, slab_bounds=(0, 1), axis=2)
@@ -1482,11 +1505,23 @@ def test_polyslab_structures(use_emulated_run):
         medium=td.Medium(),
     )
 
+    flux_mnt = td.FieldMonitor(
+        center=(0, 0, 0),
+        size=(1, 1, 0),
+        freqs=1e14 * np.array([1, 2, 3]),  # this previously errored
+        name="flux",
+    )
+
     VERTICES = np.array(
         [[-1.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-1.5, 0.5, -0.5], [-1.5, -0.5, 0.5]]
     )
     FACES = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
     STL_GEO = td.TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
+
+    custom_medium = td.Structure(
+        geometry=td.Box(size=(1, 1, 1)),
+        medium=CUSTOM_MEDIUM,
+    )
 
     stl_struct = td.Structure(geometry=STL_GEO, medium=td.Medium())
 
@@ -1499,10 +1534,11 @@ def test_polyslab_structures(use_emulated_run):
 
         sim = JaxSimulation(
             size=(2.0, 2.0, 2.0),
-            structures=[ps, gg, ggg, gggg, stl_struct],
+            structures=[ps, gg, ggg, gggg, stl_struct, custom_medium],
             input_structures=[js],
             run_time=1e-12,
             output_monitors=[mnt],
+            monitors=[flux_mnt],
             grid_spec=td.GridSpec.uniform(dl=0.1),
             boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         )

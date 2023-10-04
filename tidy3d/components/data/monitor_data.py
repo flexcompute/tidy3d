@@ -50,6 +50,11 @@ class MonitorData(Dataset, ABC):
     )
 
     @property
+    def symmetry_expanded(self) -> MonitorData:
+        """Return self with symmetry applied."""
+        return self
+
+    @property
     def symmetry_expanded_copy(self) -> MonitorData:
         """Return copy of self with symmetry applied."""
         return self.copy()
@@ -57,6 +62,20 @@ class MonitorData(Dataset, ABC):
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
         return self.copy()
+
+    def _updated(self, update: Dict) -> MonitorData:
+        """Similar to ``updated_copy``, but does not actually copy components, for speed.
+
+        Note
+        ----
+            This does **not** produce a copy of mutable objects, so e.g. if some of the data arrays
+            are not updated, they will point to the values in the original data. This method should
+            thus be used carefully.
+
+        """
+        data_dict = self.dict()
+        data_dict.update(update)
+        return type(self).parse_obj(data_dict)
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -102,6 +121,24 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         return self.grid_expanded[self.grid_locations[field_name]]
 
     @property
+    def symmetry_expanded(self):
+        """Return the :class:`.AbstractFieldData` with fields expanded based on symmetry. If
+        any symmetry is nonzero (i.e. expanded), the interpolation implicitly creates a copy of the
+        data array. However, if symmetry is not expanded, the returned array contains a view of
+        the data, not a copy.
+
+        Returns
+        -------
+        :class:`AbstractFieldData`
+            A data object with the symmetry expanded fields.
+        """
+
+        if all(sym == 0 for sym in self.symmetry):
+            return self
+
+        return self._updated(self._symmetry_update_dict)
+
+    @property
     def symmetry_expanded_copy(self) -> AbstractFieldData:
         """Create a copy of the :class:`.AbstractFieldData` with fields expanded based on symmetry.
 
@@ -113,6 +150,12 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
         if all(sym == 0 for sym in self.symmetry):
             return self.copy()
+
+        return self.copy(update=self._symmetry_update_dict)
+
+    @property
+    def _symmetry_update_dict(self) -> Dict:
+        """Dictionary of data fields to create data with expanded symmetry."""
 
         update_dict = {}
         for field_name, scalar_data in self.field_components.items():
@@ -143,7 +186,8 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
                 # Interpolate. There generally shouldn't be values out of bounds except potentially
                 # when handling modes, in which case they should be at the boundary and close to 0.
-                scalar_data = scalar_data.sel({dim_name: coords_interp}, method="nearest")
+
+                scalar_data = scalar_data.sel(**{dim_name: coords_interp}, method="nearest")
                 scalar_data = scalar_data.assign_coords({dim_name: coords})
 
                 # apply the symmetry eigenvalue (if defined) to the flipped values
@@ -157,7 +201,8 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
             update_dict[field_name] = scalar_data
 
         update_dict.update({"symmetry": (0, 0, 0), "symmetry_center": None})
-        return self.copy(update=update_dict)
+
+        return update_dict
 
     def at_coords(self, coords: Coords) -> xr.Dataset:
         """Colocate data to some supplied coordinates. This is a convenience method that wraps
@@ -235,19 +280,6 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tangential_dims.pop(self.monitor.zero_dims[0])
 
         return tangential_dims
-
-    @property
-    def _in_plane(self) -> Dict[str, DataArray]:
-        """Dictionary of field components with monitor-normal direction dropped and symmetry
-        expanded."""
-        if len(self.monitor.zero_dims) != 1:
-            raise DataError("Data must be 2D to apply grid corrections.")
-
-        normal_dim = "xyz"[self.monitor.zero_dims[0]]
-        fields = {}
-        for field_name, field in self.symmetry_expanded_copy.field_components.items():
-            fields[field_name] = field.squeeze(dim=normal_dim, drop=True)
-        return fields
 
     @property
     def colocation_boundaries(self) -> Coords:
@@ -348,8 +380,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         field components is missing.
 
         The finite grid correction is also applied, so the intended use of these fields is in
-        poynting, flux, and dot-like methods.
+        poynting, flux, and dot-like methods. The normal coordinate is dropped from the field data.
         """
+
+        if len(self.monitor.zero_dims) != 1:
+            raise DataError("Data must be 2D to get tangential fields.")
 
         # Tangential field components
         tan_dims = self._tangential_dims
@@ -362,18 +397,21 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
             if component not in fields:
                 raise DataError(f"Tangential field component '{component}' missing in field data.")
 
+            correction = 1
+
             # sign correction to H
             if normal_dim == "y" and component[0] == "H":
-                tan_fields[component] = -fields[component]
-            else:
-                tan_fields[component] = fields[component]
+                correction *= -1
 
             # finite grid correction to all fields
             eig_val = self.symmetry_eigenvalues[component](normal_dim)
             if eig_val < 0:
-                tan_fields[component] *= self.grid_dual_correction
+                correction *= self.grid_dual_correction
             else:
-                tan_fields[component] *= self.grid_primal_correction
+                correction *= self.grid_primal_correction
+
+            field_squeezed = fields[component].squeeze(dim=normal_dim, drop=True)
+            tan_fields[component] = field_squeezed * correction
 
         return tan_fields
 
@@ -387,7 +425,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         ----
             The finite grid correction factors are applied and symmetry is expanded.
         """
-        return self._tangential_corrected(self._in_plane)
+        return self._tangential_corrected(self.symmetry_expanded.field_components)
 
     @property
     def _colocated_fields(self) -> Dict[str, DataArray]:
@@ -395,7 +433,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         plane grid, with symmetries expanded.
         """
 
-        field_components = self._in_plane
+        field_components = self.symmetry_expanded.field_components
 
         if self.monitor.colocate:
             return field_components
@@ -443,11 +481,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     @property
     def intensity(self) -> ScalarFieldDataArray:
         """Return the sum of the squared absolute electric field components."""
+        normal_dim = "xyz"[self.monitor.size.index(0)]
         fields = self._colocated_fields
         components = ("Ex", "Ey", "Ez")
         if any(cmp not in fields for cmp in components):
             raise KeyError("Can't compute intensity, all E field components must be present.")
-        return sum(fields[cmp].abs ** 2 for cmp in components)
+        intensity = sum(fields[cmp].abs ** 2 for cmp in components)
+        return intensity.squeeze(dim=normal_dim, drop=True)
 
     @property
     def poynting(self) -> ScalarFieldDataArray:
@@ -991,7 +1031,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         update_dict = dict(self._grid_correction_dict, **self.field_components)
         update_dict = {key: field.isel(**isel_kwargs) for key, field in update_dict.items()}
-        return self.copy(update=update_dict)
+        return self._updated(update=update_dict)
 
     def _find_ordering_one_freq(
         self,
@@ -1180,6 +1220,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         tan_dims = self._tangential_dims
         normal_dim = "xyz"[self.monitor.zero_dims[0]]
         fields = self._colocated_fields
+        fields = {key: val.squeeze(dim=normal_dim, drop=True) for key, val in fields.items()}
         mode_spec = self.monitor.mode_spec
 
         # fields as a (3, ...) numpy array ordered as [tangential1, tagential2, normal]
@@ -1284,7 +1325,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         dataset = self.modes_info
         drop = []
 
-        if dataset["group index"] is None:
+        if not np.any(dataset["group index"].values):
             drop.append("group index")
         if np.all(dataset["loss (dB/cm)"] == 0):
             drop.append("loss (dB/cm)")
