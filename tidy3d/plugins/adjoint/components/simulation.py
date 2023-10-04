@@ -32,7 +32,7 @@ FWIDTH_FACTOR = 1.0 / 10
 FWIDTH_FACTOR_MULTIFREQ = 0.1
 
 # the adjoint run time is RUN_TIME_FACTOR / fwidth
-RUN_TIME_FACTOR = 20
+RUN_TIME_FACTOR = 100
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1

@@ -1,22 +1,4 @@
-#!/usr/bin/env python
-
-"""
-Notes:
-
-## single frequency
-* RMS error normalized (avg) = 0.3308823080089637 %
-
-## multi-freq (n=3, df = 0.1) [all fields at freq0]
-* RMS error normalized (avg) = 143.55391909049393 %
-NOTE: when the df gets very small (freq0/200_000), error goes to 0%.
-
-## multi-freq
-
-
-"""
-
-
-# NOTE: move to backend test later, uses webapi
+"""Tests that multi-frequency adjoint gradient matches TMM gradient."""
 
 import numpy as np
 import jax.numpy as jnp
