@@ -443,6 +443,12 @@
     "keywords": "broadband polarizer, anisotropic subwavelength grating, SWG, metamaterial, Tidy3D, FDTD",
     "feature_image": "./img/swg_polarizer.png"
   },
+    "Symmetry.ipynb": {
+    "title": "How to Set Up Symmetry in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to set up symmetries in Tidy3D FDTD.",
+    "keywords": "symmetry, symmetries, Tidy3D symmetry, FDTD symmetry, PEC, PMC, Tidy3D, FDTD",
+    "feature_image": "./img/pec_pmc.png"
+  },
   "TFSF.ipynb": {
     "title": "Using the TFSF Plane Wave Source in Tidy3D| Flexcompute",
     "description": "This notebook demonstrates how to use a total-field scattered-field (TFSF) plane wave source in Tidy3D for FDTD simulations.",
