@@ -75,7 +75,7 @@ class HeatSimulationData(AbstractSimulationData):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_data(
+    def plot_field(
         self,
         monitor_name: str,
         val: RealFieldVal = "real",

@@ -346,11 +346,11 @@ def make_heat_sim_data():
 
 def test_sim_data():
     heat_sim_data = make_heat_sim_data()
-    _ = heat_sim_data.plot_data("test", z=0)
+    _ = heat_sim_data.plot_field("test", z=0)
     plt.close()
 
     with pytest.raises(DataError):
-        _ = heat_sim_data.plot_data("test3", x=0)
+        _ = heat_sim_data.plot_field("test3", x=0)
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)
