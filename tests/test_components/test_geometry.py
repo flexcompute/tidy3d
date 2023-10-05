@@ -258,7 +258,7 @@ def test_polyslab_inf_bounds(lower_bound, upper_bound):
     # catch any runtime warning related to inf operations
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        bounds = ps.bounds
+        _ = ps.bounds
         ps.intersections_plane(x=0.5)
         ps.intersections_plane(z=0)
 
@@ -690,6 +690,21 @@ def test_from_gds():
     )
     assert len(geo.intersections_plane(z=0)) == 2
     assert len(geo.intersections_plane(z=1)) == 1
+
+
+@pytest.mark.parametrize("geometry", GEO_TYPES)
+def test_to_gds(geometry, tmp_path):
+    fname = str(tmp_path / f"{geometry.__class__.__name__}.gds")
+    geometry.to_gds_file(fname, z=0, gds_cell_name=geometry.__class__.__name__)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == geometry.__class__.__name__
+    assert len(cell.polygons) > 0
+
+    fname = str(tmp_path / f"{geometry.__class__.__name__}-empty.gds")
+    geometry.to_gds_file(fname, y=1e30, gds_cell_name=geometry.__class__.__name__)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == geometry.__class__.__name__
+    assert len(cell.polygons) == 0
 
 
 def test_custom_surface_geometry(tmp_path):

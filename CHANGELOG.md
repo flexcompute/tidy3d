@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
+- GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
 
 ### Changed
 
