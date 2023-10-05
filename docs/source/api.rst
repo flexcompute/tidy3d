@@ -324,6 +324,109 @@ Individual Datasets
    FieldProjectionKSpaceDataArray
    DiffractionDataArray
 
+Scene
+=====
+
+Scene
+-----
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Scene
+
+
+Heat Solver
+===========
+
+Heat Simulation
+---------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatSimulation
+
+Material Thermal Specification
+------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   FluidSpec
+   SolidSpec
+
+Boundary Conditions Specification
+---------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatBoundarySpec
+
+Boundary Conditions Types
+-------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureBC
+   ConvectionBC
+   HeatFluxBC
+
+Boundary Conditions Placement
+-----------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   StructureStructureInterface
+   StructureBoundary
+   MediumMediumInterface
+   StructureSimulationBoundary
+   SimulationBoundary
+
+Sources
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   UniformHeatSource
+
+Grid Specification
+------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   UniformUnstructuredGrid
+   DistanceUnstructuredGrid
+
+Monitors
+--------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureMonitor
+
+Monitor Data
+------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureData
+
+Heat Simulation Data
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatSimulationData
+
 Logging
 =======
 
@@ -375,8 +478,8 @@ Information Containers
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.task.TaskInfo
-   tidy3d.web.task.TaskStatus
+   tidy3d.web.core.task_info.TaskInfo
+   tidy3d.web.core.task_info.TaskStatus
 
 
 Plugins

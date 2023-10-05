@@ -128,6 +128,15 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin9WDM
     notebooks/AdjointPlugin10YBranchLevelSet
 
+Heat Solver
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/HeatSolver
+    notebooks/MetalHeaterPhaseShifter
+
 Case Studies
 ------------
 
