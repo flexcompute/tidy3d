@@ -19,7 +19,7 @@ from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR, InterpMethod
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
@@ -37,6 +37,7 @@ from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProje
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
+from .scene import Scene
 
 from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
 from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
@@ -3169,6 +3170,7 @@ class Simulation(Box):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Simulation:
         """Return a copy of the simulation with heat and/or charge data applied to all mediums
         that have perturbation models specified. That is, such mediums will be replaced with
@@ -3184,6 +3186,9 @@ class Simulation(Box):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3228,7 +3233,7 @@ class Simulation(Box):
                                 f"Provided '{name}' does not fully cover structures[{s_ind}]."
                             )
 
-                new_medium = med.perturbed_copy(**restricted_arrays)
+                new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
                 new_structure = structure.updated_copy(medium=new_medium)
                 new_structures.append(new_structure)
             else:
@@ -3254,6 +3259,54 @@ class Simulation(Box):
                     if not array.does_cover(bounds):
                         log.warning(f"Provided '{name}' does not fully cover simulation domain.")
 
-            sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
+            sim_dict["medium"] = med.perturbed_copy(
+                **restricted_arrays, interp_method=interp_method
+            )
 
         return Simulation.parse_obj(sim_dict)
+
+    @cached_property
+    def scene(self) -> Scene:
+        """Return a :class:.`Scene` instance based on the current simulation."""
+
+        return Scene(
+            structures=self.structures,
+            medium=self.medium,
+        )
+
+    @classmethod
+    def from_scene(cls, scene: Scene, **kwargs) -> Simulation:
+        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
+        to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
+
+        Parameters
+        ----------
+        scene : :class:.`Scene`
+            Size of object in x, y, and z directions.
+        **kwargs
+            Other arguments
+
+        Example
+        -------
+        >>> from tidy3d import Scene, Medium, Box, Structure, GridSpec
+        >>> box = Structure(
+        ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
+        ...     medium=Medium(permittivity=5),
+        ... )
+        >>> scene = Scene(
+        ...     structures=[box],
+        ...     medium=Medium(permittivity=3),
+        ... )
+        >>> sim = Simulation.from_scene(
+        ...     scene=scene,
+        ...     center=(0, 0, 0),
+        ...     size=(5, 6, 7),
+        ...     run_time=1e-12,
+        ...     grid_spec=GridSpec.uniform(dl=0.4),
+        ... )
+        """
+        return Simulation(
+            structures=scene.structures,
+            medium=scene.medium,
+            **kwargs,
+        )

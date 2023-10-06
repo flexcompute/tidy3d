@@ -705,6 +705,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def __eq__(self, other):
         """Define == for two Tidy3DBaseModels."""
+        if other is None:
+            return False
         return self._json_string == other._json_string
 
     @cached_property

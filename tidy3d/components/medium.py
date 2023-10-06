@@ -26,6 +26,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
+from .heat_spec import HeatSpecType
 
 
 # evaluate frequency as this number (Hz) if inf
@@ -187,6 +188,20 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             f"A 'nonlinear_spec' of class {type(val)} is not "
             f"currently supported for medium class {cls}."
         )
+
+    heat_spec: Optional[HeatSpecType] = pd.Field(
+        None,
+        title="Heat Specification",
+        description="Specification of the medium heat properties. They are used for solving "
+        "the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for "
+        "investigating the influence of heat propagation on the properties of optical systems. "
+        "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
+        "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
+        "models defined into spatially dependent custom mediums. "
+        "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
+        "``Simulation``.",
+        discriminator=TYPE_TAG_STR,
+    )
 
     _name_validator = validate_name_str()
 
@@ -3224,6 +3239,7 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[AbstractMedium, AbstractCustomMedium]:
         """Sample perturbations on provided heat and/or charge data and create a custom medium.
         Any of ``temperature``, ``electron_density``, and ``hole_density`` can be ``None``.
@@ -3238,6 +3254,9 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3296,6 +3315,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[Medium, CustomMedium]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -3310,6 +3330,9 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3342,6 +3365,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
         new_dict["permittivity"] = permittivity_field
         new_dict["conductivity"] = conductivity_field
+        new_dict["interp_method"] = interp_method
 
         return CustomMedium.parse_obj(new_dict)
 
@@ -3407,6 +3431,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
+        interp_method: InterpMethod = "linear",
     ) -> Union[PoleResidue, CustomPoleResidue]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -3421,6 +3446,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
+        interp_method : :class:`.InterpMethod`, optional
+            Interpolation method to obtain heat and/or charge values that are not supplied
+            at the Yee grids.
 
         Returns
         -------
@@ -3454,6 +3482,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field
+        new_dict["interp_method"] = interp_method
 
         return CustomPoleResidue.parse_obj(new_dict)
 

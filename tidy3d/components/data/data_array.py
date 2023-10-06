@@ -296,7 +296,9 @@ class SpatialDataArray(DataArray):
         return self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
     def does_cover(self, bounds: Bound) -> bool:
-        """Check whether data fully covers specified by ``bounds`` spatial region.
+        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
+        only one point along a given direction, then it is assumed the data is constant along that
+        direction and coverage is not checked.
 
 
         Parameters
@@ -311,7 +313,7 @@ class SpatialDataArray(DataArray):
         """
 
         return all(
-            coord[0] <= smin and coord[-1] >= smax
+            (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
             for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1])
         )
 
