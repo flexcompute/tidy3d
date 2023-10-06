@@ -543,7 +543,7 @@ class Simulation(Box):
                 consolidated_logger.warning(
                     f"Structure at structures[{istruct}] was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
-                    "To avoid inaccurate results, please increase gap between "
+                    "To avoid inaccurate results or divergence, please increase gap between "
                     "any structures and PML or fully extend structure through the pml.",
                     custom_loc=["structures", istruct],
                 )
