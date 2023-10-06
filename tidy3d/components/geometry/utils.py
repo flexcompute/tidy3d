@@ -80,7 +80,6 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
     yield geometry
 
 
-# pylint:disable=too-many-arguments
 def from_shapely(
     shape: Shapely,
     axis: Axis,

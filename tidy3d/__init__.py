@@ -107,6 +107,25 @@ from .version import __version__
 # updater
 from .updater import Updater
 
+# scene
+from .components.scene import Scene
+
+# boundary placement for other solvers
+from .components.bc_placement import StructureStructureInterface, StructureBoundary
+from .components.bc_placement import MediumMediumInterface
+from .components.bc_placement import StructureSimulationBoundary
+from .components.bc_placement import SimulationBoundary
+
+# heat
+from .components.heat_spec import FluidSpec, SolidSpec
+from .components.heat.simulation import HeatSimulation
+from .components.heat.data.sim_data import HeatSimulationData
+from .components.heat.data.monitor_data import TemperatureData
+from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
+from .components.heat.source import UniformHeatSource
+from .components.heat.monitor import TemperatureMonitor
+from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
+
 
 def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
@@ -265,4 +284,23 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
+    "Scene",
+    "StructureStructureInterface",
+    "StructureBoundary",
+    "MediumMediumInterface",
+    "StructureSimulationBoundary",
+    "SimulationBoundary",
+    "FluidSpec",
+    "SolidSpec",
+    "HeatSimulation",
+    "HeatSimulationData",
+    "TemperatureBC",
+    "ConvectionBC",
+    "HeatFluxBC",
+    "HeatBoundarySpec",
+    "UniformHeatSource",
+    "UniformUnstructuredGrid",
+    "DistanceUnstructuredGrid",
+    "TemperatureData",
+    "TemperatureMonitor",
 ]
