@@ -7,21 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Time zone in webAPI logging output.
+- Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
+- Solver for thermal simulation (see `HeatSimulation` and related classes).
+- Specification of material thermal properties in medium classes through an optional field `.heat_spec`.
 
 ### Changed
 - Internal refactor of Web API functionality.
 - `Geometry.from_gds` doesn't create unecessary groups of single elements.
-
-### Fixed
-
-## [Unreleased]
-
-### Added
-
-### Changed
-
-### Fixed
 - Properly handle `.freqs` in `output_monitors` of adjoint plugin.
+
+### Fixed
 
 ## [2.4.2] - 2023-9-28
 
