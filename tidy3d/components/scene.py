@@ -14,7 +14,7 @@ from .validators import assert_unique_names
 from .geometry.base import Box, GeometryGroup, ClipOperation
 from .geometry.utils import flatten_groups, traverse_geometries
 from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate, InterpMethod
-from .medium import Medium, MediumType, PECMedium
+from .medium import Medium, MediumType
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AbstractPerturbationMedium
 from .grid.grid import Grid
@@ -413,7 +413,7 @@ class Scene(Tidy3dBaseModel):
         if mat_index == 0 or medium == self.medium:
             # background medium
             plot_params = plot_params.copy(update={"facecolor": "white", "edgecolor": "white"})
-        elif isinstance(medium, PECMedium):
+        elif medium.is_pec:
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
@@ -838,7 +838,7 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_list = [self.medium] + list(self.mediums)
-        medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
+        medium_list = [medium for medium in medium_list if not medium.is_pec]
         # regular medium
         eps_list = [
             medium.eps_model(freq).real
@@ -983,7 +983,7 @@ class Scene(Tidy3dBaseModel):
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
-        if isinstance(medium, PECMedium):
+        if medium.is_pec:
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}

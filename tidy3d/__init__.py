@@ -11,7 +11,8 @@ from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 
 # medium
-from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
+from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
+from .components.medium import Medium2D, PEC2D
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
 from .components.medium import CustomMedium, CustomPoleResidue
 from .components.medium import CustomSellmeier, FullyAnisotropicMedium
@@ -166,6 +167,7 @@ __all__ = [
     "PEC",
     "PECMedium",
     "Medium2D",
+    "PEC2D",
     "Sellmeier",
     "Debye",
     "Drude",

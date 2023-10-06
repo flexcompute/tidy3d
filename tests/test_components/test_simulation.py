@@ -1712,7 +1712,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     )
     box = td.Structure(
         geometry=td.Box(size=(td.inf, td.inf, 0)),
-        medium=td.Medium2D.from_medium(td.PEC, thickness=thickness),
+        medium=td.Medium2D.from_medium(td.Medium(permittivity=1), thickness=thickness),
     )
     below = td.Structure(
         geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
@@ -1743,11 +1743,26 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
         rtol=RTOL,
     )
     assert np.isclose(sim.volumetric_structures[1].medium.yy.to_medium().permittivity, 1, rtol=RTOL)
-    assert np.isclose(
-        sim.volumetric_structures[1].medium.xx.to_medium().conductivity,
-        LARGE_NUMBER * thickness / grid_dl,
-        rtol=RTOL,
+
+    # PEC
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 0)),
+        medium=td.PEC2D,
     )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        monitors=[monitor],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    assert isinstance(sim.volumetric_structures[1].medium.xx, td.PECMedium)
 
     log_capture.clear()
 
