@@ -19,7 +19,7 @@ from .geometry.utils import flatten_groups, traverse_geometries
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
-from .medium import Medium, MediumType, AbstractMedium, PECMedium
+from .medium import Medium, MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
@@ -723,7 +723,7 @@ class Simulation(AbstractSimulation):
                 for medium_index, medium in enumerate(mediums):
 
                     # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                    if isinstance(medium, PECMedium):
+                    if medium.is_pec:
                         continue
                     # min wavelength in Medium2D is meaningless
                     if isinstance(medium, Medium2D):
@@ -731,9 +731,16 @@ class Simulation(AbstractSimulation):
 
                     eps_material = medium.eps_model(freq0)
                     n_material, _ = medium.eps_complex_to_nk(eps_material)
-                    lambda_min = C_0 / freq0 / n_material
 
-                    for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
+                    for comp, (key, grid_spec) in enumerate(
+                        zip("xyz", (val.grid_x, val.grid_y, val.grid_z))
+                    ):
+                        if medium.is_pec or (
+                            isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp)
+                        ):
+                            n_material = 1.0
+                        lambda_min = C_0 / freq0 / n_material
+
                         if (
                             isinstance(grid_spec, UniformGrid)
                             and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL

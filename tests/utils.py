@@ -140,6 +140,14 @@ SIM_FULL = td.Simulation(
             medium=td.Medium2D.from_medium(td.Medium(conductivity=0.45), thickness=0.01),
         ),
         td.Structure(
+            geometry=td.Box(size=(1, 0, 1), center=(-1, 0, 0)),
+            medium=td.PEC2D,
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
+        ),
+        td.Structure(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=td.PEC,
             name="pec_group",

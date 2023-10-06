@@ -20,7 +20,7 @@ from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_
 from .viz import add_ax_if_none
 from .geometry.base import Geometry
 from .validators import validate_name_str, validate_parameter_perturbation
-from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps, HBAR
+from ..constants import C_0, pec_val, EPSILON_0, fp_eps, HBAR
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
 from ..constants import WATT, VOLT
 from ..exceptions import ValidationError, SetupError
@@ -479,6 +479,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     def _validate_nonlinear_spec(self):
         """Check compatibility with nonlinear_spec."""
+        if self.__class__.__name__ == "AnisotropicMedium" and any(
+            comp.nonlinear_spec is not None for comp in [self.xx, self.yy, self.zz]
+        ):
+            raise ValidationError(
+                "Nonlinearities are not currently supported for the components "
+                "of an anisotropic medium."
+            )
         if self.nonlinear_spec is None:
             return
         if isinstance(self.nonlinear_spec, NonlinearModel):
@@ -781,6 +788,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         sigma = (eps_inf - eps_complex) * 1j * omega * EPSILON_0
         return sigma
 
+    @cached_property
+    def is_pec(self):
+        """Whether the medium is a PEC."""
+        return False
+
 
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
@@ -959,6 +971,11 @@ class PECMedium(AbstractMedium):
         material factor into account is multiplied by ``n_cfl``.
         """
         return 1.0
+
+    @cached_property
+    def is_pec(self):
+        """Whether the medium is a PEC."""
+        return True
 
 
 # PEC builtin instance
@@ -3161,7 +3178,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return (eps, eps, eps)
 
 
-IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
+IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -3317,6 +3334,15 @@ class AnisotropicMedium(AbstractMedium):
     def elements(self) -> Dict[str, IsotropicUniformMediumType]:
         """The diagonal elements of the medium as a dictionary."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
+
+    @cached_property
+    def is_pec(self):
+        """Whether the medium is a PEC."""
+        return any(self.is_comp_pec(i) for i in range(3))
+
+    def is_comp_pec(self, comp: Axis):
+        """Whether the medium is a PEC."""
+        return isinstance(self.components[["xx", "yy", "zz"][comp]], PECMedium)
 
 
 class FullyAnisotropicMedium(AbstractMedium):
@@ -4085,7 +4111,7 @@ class Medium2D(AbstractMedium):
     @classmethod
     def _weighted_avg(
         cls, meds: List[IsotropicUniformMediumType], weights: List[float]
-    ) -> PoleResidue:
+    ) -> Union[PoleResidue, PECMedium]:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
         poles = []
@@ -4097,7 +4123,8 @@ class Medium2D(AbstractMedium):
                 pole_res = PoleResidue.from_medium(med)
                 eps_inf += weight * (med.eps_model(np.inf) - 1)
             elif isinstance(med, PECMedium):
-                pole_res = PoleResidue.from_medium(Medium(conductivity=LARGE_NUMBER))
+                # special treatment for PEC
+                return med
             else:
                 raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
             poles += [(a, weight * c) for (a, c) in pole_res.poles]
@@ -4228,6 +4255,8 @@ class Medium2D(AbstractMedium):
         :class:`.Medium`
             The 3D equivalent of this 2D medium.
         """
+        if self.is_pec:
+            return PEC
         return self.to_pole_residue(thickness=thickness).to_medium()
 
     @classmethod
@@ -4390,6 +4419,20 @@ class Medium2D(AbstractMedium):
         """
         return 1.0
 
+    @cached_property
+    def is_pec(self):
+        """Whether the medium is a PEC."""
+        return any(isinstance(comp, PECMedium) for comp in self.elements.values())
+
+    def is_comp_pec_2d(self, comp: Axis, axis: Axis):
+        """Whether the medium is a PEC."""
+        elements_3d = Geometry.unpop_axis(
+            ax_coord=Medium(), plane_coords=self.elements.values(), axis=axis
+        )
+        return isinstance(elements_3d[comp], PECMedium)
+
+
+PEC2D = Medium2D(ss=PEC, tt=PEC)
 
 # types of mediums that can be used in Simulation and Structures
 
