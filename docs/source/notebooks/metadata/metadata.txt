@@ -521,5 +521,17 @@
     "keywords": "TMD, waveguide, MoS2, 2D material, Tidy3D, FDTD",
     "feature_image": "./img/MoS2_waveguide.png"
   }
+  "HeatSolver.ipynb": {
+    "title": "Heat Solver in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to use Tidy3D's heat solver.",
+    "keywords": "thermo-optic, heat, Tidy3D, FDTD",
+    "feature_image": ""
+  }
+  "MetalHeaterPhaseShifter.ipynb": {
+    "title": "Modeling thermally tuned waveguide in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrate how to couple heat and optic simulations in Tidy3D using thermally tuned waveguide as an example.",
+    "keywords": "waveguide, tuning, thermo-optic, heat, Tidy3D, FDTD",
+    "feature_image": ""
+  }
 
 }
