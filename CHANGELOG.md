@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
 - ``verbose`` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
 - Added support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
+- `Geometry.intersections_tilted_plane` calculates intesections with any plane, not only axis-aligned ones.
+- `Transformed` class to support for geometry transformations.
+- Methods `Geometry.translated`, `Geometry.scaled`, and `Geometry.rotated` can be used to create transformed copies of any geometry.
 
 ### Changed
 - Update versions of `boto3`, `requests`, and `click`.

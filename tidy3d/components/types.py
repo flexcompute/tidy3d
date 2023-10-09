@@ -1,6 +1,6 @@
 """ Defines 'types' that various fields can be """
 
-from typing import Tuple, Union
+from typing import Tuple, Union, Any
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
@@ -14,6 +14,12 @@ import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
 from ..exceptions import ValidationError
+
+try:
+    import trimesh
+except ImportError:
+    trimesh = None
+
 
 # type tag default name
 TYPE_TAG_STR = "type"
@@ -134,6 +140,7 @@ ArrayComplex3D = constrained_array(dtype=complex, ndim=3)
 ArrayComplex4D = constrained_array(dtype=complex, ndim=4)
 
 TensorReal = constrained_array(dtype=float, ndim=2, shape=(3, 3))
+MatrixReal4x4 = constrained_array(dtype=float, ndim=2, shape=(4, 4))
 
 """ Complex Values """
 
@@ -194,6 +201,7 @@ Shapely = BaseGeometry
 PlanePosition = Literal["bottom", "middle", "top"]
 ClipOperationType = Literal["union", "intersection", "difference", "symmetric_difference"]
 BoxSurface = Literal["x-", "x+", "y-", "y+", "z-", "z+"]
+TrimeshType = Any if trimesh is None else trimesh.Trimesh
 
 """ medium """
 

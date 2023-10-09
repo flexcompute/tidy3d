@@ -2,7 +2,9 @@
 from __future__ import annotations
 from typing import Union, Tuple
 
-from ..types import Axis, PlanePosition, Shapely, ArrayFloat2D
+import numpy as np
+
+from ..types import Axis, PlanePosition, Shapely, ArrayFloat2D, MatrixReal4x4
 from ...exceptions import Tidy3dError
 
 from . import base
@@ -12,6 +14,7 @@ from . import mesh
 
 GeometryType = Union[
     base.Box,
+    base.Transformed,
     base.ClipOperation,
     base.GeometryGroup,
     primitives.Sphere,
@@ -181,3 +184,26 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
         return sum(vertices_from_shapely(geo) for geo in shape.geoms)
 
     raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
+
+
+def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixReal4x4 = None):
+    """Prevents the creation of slanted polyslabs rotated out of plane."""
+    if transform is None:
+        transform = np.eye(4)
+    if isinstance(geometry, polyslab.PolySlab):
+        if not (
+            np.isclose(geometry.sidewall_angle, 0)
+            or base.Transformed.preserves_axis(transform, geometry.axis)
+        ):
+            raise Tidy3dError(
+                "Slanted PolySlabs are not allowed to be rotated out of the slab plane."
+            )
+    elif isinstance(geometry, base.Transformed):
+        transform = np.dot(transform, geometry.transform)
+        validate_no_transformed_polyslabs(geometry.geometry, transform)
+    elif isinstance(geometry, base.GeometryGroup):
+        for geo in geometry.geometries:
+            validate_no_transformed_polyslabs(geo, transform)
+    elif isinstance(geometry, base.ClipOperation):
+        validate_no_transformed_polyslabs(geometry.geometry_a, transform)
+        validate_no_transformed_polyslabs(geometry.geometry_b, transform)
