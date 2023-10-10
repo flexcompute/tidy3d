@@ -1179,7 +1179,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         # remove data corresponding to frequencies used only for group index calculation
-        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group": n_group}
+        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group_raw": n_group}
 
         for key, field in self.field_components.items():
             update_dict[key] = field.isel(f=center)
@@ -1313,7 +1313,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             "wg TE fraction": self.pol_fraction_waveguide["te"],
             "wg TM fraction": self.pol_fraction_waveguide["tm"],
             "mode area": self.mode_area,
-            "group index": self.n_group,
+            "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
         }
 
         return xr.Dataset(data_vars=info)
@@ -1394,8 +1394,9 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group: ModeIndexDataArray = pd.Field(
+    n_group_raw: ModeIndexDataArray = pd.Field(
         None,
+        alias="n_group",
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
@@ -1409,6 +1410,17 @@ class ModeData(MonitorData):
     def k_eff(self):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
+
+    @property
+    def n_group(self):
+        """Group index."""
+        if self.n_group_raw is None:
+            log.warning(
+                "The group index was not computed. To calculate group index, pass "
+                "'group_index_step = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.n_group_raw
 
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
