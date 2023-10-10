@@ -47,6 +47,7 @@ Structures
     notebooks/SelfIntersectingPolyslab
     notebooks/PICComponents
     notebooks/PhotonicCrystalsComponents
+    notebooks/CreatingGeometryUsingTrimesh
 
 Grid Specification
 ~~~~~~~~~~~~~~~~~~
@@ -56,12 +57,13 @@ Grid Specification
 
     notebooks/AutoGrid
 
-Boundary Conditions
+Symmetry and Boundary Conditions
 ~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
 
+    notebooks/Symmetry
     notebooks/BoundaryConditions
 
 Sources

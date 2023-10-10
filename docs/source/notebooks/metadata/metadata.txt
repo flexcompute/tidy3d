@@ -149,6 +149,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, bullseye cavity, quantum emitter, particle swarm optimization, PSO, Tidy3D, FDTD",
     "feature_image": "./img/bullseye_psa_thumb.png"
   },  
+  "CreatingGeometryUsingTrimesh.ipynb": {
+    "title": "Defining complex geometries using trimesh | Flexcompute",
+    "description": "This notebook demonstrates how to define complex geometries using trimesh in Tidy3D FDTD.",
+    "keywords": "trimesh, torus, cone, ellipsoild, Tidy3D, FDTD",
+    "feature_image": ""
+  },
   "CustomFieldSource.ipynb": {
     "title": "Defining Spatially-varying Sources in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to define complex, spatially-varying sources in Tidy3D FDTD.",
@@ -442,6 +448,12 @@
     "description": "This notebook demonstrates how to model a broadband polarizer in Tidy3D FDTD.",
     "keywords": "broadband polarizer, anisotropic subwavelength grating, SWG, metamaterial, Tidy3D, FDTD",
     "feature_image": "./img/swg_polarizer.png"
+  },
+    "Symmetry.ipynb": {
+    "title": "How to Set Up Symmetry in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to set up symmetries in Tidy3D FDTD.",
+    "keywords": "symmetry, symmetries, Tidy3D symmetry, FDTD symmetry, PEC, PMC, Tidy3D, FDTD",
+    "feature_image": "./img/pec_pmc.png"
   },
   "TFSF.ipynb": {
     "title": "Using the TFSF Plane Wave Source in Tidy3D| Flexcompute",
