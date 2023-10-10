@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.5.0rc1] - 2023-10-10
+
+### Added
 - Time zone in webAPI logging output.
 - Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
 - Solver for thermal simulation (see `HeatSimulation` and related classes).
@@ -972,7 +980,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...pre/2.5
+[2.5.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.5.0rc1
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
