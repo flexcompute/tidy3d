@@ -210,7 +210,7 @@ def update_1_8(sim_dict: dict) -> dict:
 
     def fix_missing_scalar_field(mnt_dict: dict) -> dict:
         for key, val in mnt_dict["field_dataset"].items():
-            if val == "XR.DATAARRAY":
+            if isinstance(val, str) and val == "XR.DATAARRAY":
                 mnt_dict["field_dataset"][key] = "ScalarFieldDataArray"
         return mnt_dict
 
