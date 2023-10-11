@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Geometry.zero_dims` method that uses `Geometry.bounds` and speeds up the validator for zero-sized geometries.
 
 ### Changed
 - Limited number of distinct sources to 1000. In cases where a complicated spatial dependence of the source is desired, a ``CustomFieldSource`` or a ``CustomCurrentSource`` can be used instead of multiple distinct sources.
