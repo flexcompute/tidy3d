@@ -55,6 +55,9 @@ MIN_GRIDS_PER_WVL = 6.0
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
 
+# maximum number of sources
+MAX_NUM_SOURCES = 1000
+
 # maximum geometry count in a single structure
 MAX_GEOMETRY_COUNT = 100
 
@@ -441,6 +444,22 @@ class Simulation(Box):
             raise SetupError(
                 f"Tidy3d only supports {MAX_NUM_MEDIUMS} distinct mediums."
                 f"{len(mediums)} were supplied."
+            )
+
+        return val
+
+    @pydantic.validator("sources", always=True)
+    def _validate_num_sources(cls, val):
+        """Error if too many sources present."""
+
+        if val is None:
+            return val
+
+        if len(val) > MAX_NUM_SOURCES:
+            raise SetupError(
+                f"Number of distinct sources exceeds the maximum allowed {MAX_NUM_SOURCES}. "
+                "For a complex source setup, consider using 'CustomFieldSource' or "
+                "'CustomCurrentSource' to combine multiple sources into one object."
             )
 
         return val

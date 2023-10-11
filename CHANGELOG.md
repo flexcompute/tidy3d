@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Limited number of distinct sources to 1000. In cases where a complicated spatial dependence of the source is desired, a ``CustomFieldSource`` or a ``CustomCurrentSource`` can be used instead of multiple distinct sources.
 
 ### Fixed
 - Properly handle `.freqs` in `output_monitors` of adjoint plugin.
