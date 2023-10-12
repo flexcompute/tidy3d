@@ -45,9 +45,21 @@ from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3
 
 from ..version import __version__
 from ..constants import C_0, SECOND, inf, fp_eps
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError
+from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError, Tidy3dImportError
 from ..log import log
 from ..updater import Updater
+
+try:
+    gdstk_available = True
+    import gdstk
+except ImportError:
+    gdstk_available = False
+
+try:
+    gdspy_available = True
+    import gdspy
+except ImportError:
+    gdspy_available = False
 
 
 # minimum number of grid points allowed per central wavelength in a medium
@@ -1382,6 +1394,268 @@ class Simulation(Box):
                     "double-check that it was defined correctly.",
                     custom_loc=["boundary_spec", "xyz"[dim]],
                 )
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.001
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`.
+        """
+        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, bmin = self.pop_axis(self.bounds[0], axis)
+        _, bmax = self.pop_axis(self.bounds[1], axis)
+
+        _, symmetry = self.pop_axis(self.symmetry, axis)
+        if symmetry[0] != 0:
+            bmin = (0, bmin[1])
+        if symmetry[1] != 0:
+            bmin = (bmin[0], 0)
+        clip = gdstk.rectangle(bmin, bmax)
+
+        polygons = []
+        for structure in self.structures:
+            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
+            for polygon in structure.to_gdstk(
+                x=x,
+                y=y,
+                z=z,
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                gds_layer=gds_layer,
+                gds_dtype=gds_dtype,
+            ):
+                pmin, pmax = polygon.bounding_box()
+                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
+                    polygons.extend(
+                        gdstk.boolean(clip, polygon, "and", layer=gds_layer, datatype=gds_dtype)
+                    )
+                else:
+                    polygons.append(polygon)
+
+        return polygons
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, bmin = self.pop_axis(self.bounds[0], axis)
+        _, bmax = self.pop_axis(self.bounds[1], axis)
+
+        _, symmetry = self.pop_axis(self.symmetry, axis)
+        if symmetry[0] != 0:
+            bmin = (0, bmin[1])
+        if symmetry[1] != 0:
+            bmin = (bmin[0], 0)
+        clip = gdspy.Rectangle(bmin, bmax)
+
+        polygons = []
+        for structure in self.structures:
+            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
+            for polygon in structure.to_gdspy(
+                x=x,
+                y=y,
+                z=z,
+                gds_layer=gds_layer,
+                gds_dtype=gds_dtype,
+            ):
+                pmin, pmax = polygon.get_bounding_box()
+                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
+                    polygon = gdspy.boolean(
+                        clip, polygon, "and", layer=gds_layer, datatype=gds_dtype
+                    )
+                polygons.append(polygon)
+        return polygons
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+        ] = None,
+    ) -> None:
+        """Append the simulation structures to a .gds cell.
+
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.001
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        """
+        if gds_layer_dtype_map is None:
+            gds_layer_dtype_map = {}
+
+        if gdstk_available and isinstance(cell, gdstk.Cell):
+            polygons = self.to_gdstk(
+                x=x,
+                y=y,
+                z=z,
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                gds_layer_dtype_map=gds_layer_dtype_map,
+            )
+            if len(polygons) > 0:
+                cell.add(*polygons)
+
+        elif gdspy_available and isinstance(cell, gdspy.Cell):
+            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
+            if len(polygons) > 0:
+                cell.add(polygons)
+
+        elif "gdstk" in cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+            )
+        elif "gdspy" in cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
+
+    def to_gds_file(
+        self,
+        fname: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
+        ] = None,
+        gds_cell_name: str = "MAIN",
+    ) -> None:
+        """Append the simulation structures to a .gds cell.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .gds file to save the :class:`Simulation` slice to.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.001
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        gds_cell_name : str = 'MAIN'
+            Name of the cell created in the .gds file to store the geometry.
+        """
+        if gdstk_available:
+            library = gdstk.Library()
+            reference = gdstk.Reference
+            rotation = np.pi
+        elif gdspy_available:
+            library = gdspy.GdsLibrary()
+            reference = gdspy.CellReference
+            rotation = 180
+        else:
+            raise Tidy3dImportError(
+                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                "files, please install one of those those modules."
+            )
+        cell = library.new_cell(gds_cell_name)
+
+        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, symmetry = self.pop_axis(self.symmetry, axis)
+        if symmetry[0] != 0:
+            outer_cell = cell
+            cell = library.new_cell(gds_cell_name + "_X")
+            outer_cell.add(reference(cell))
+            outer_cell.add(reference(cell, rotation=rotation, x_reflection=True))
+        if symmetry[1] != 0:
+            outer_cell = cell
+            cell = library.new_cell(gds_cell_name + "_Y")
+            outer_cell.add(reference(cell))
+            outer_cell.add(reference(cell, x_reflection=True))
+
+        self.to_gds(
+            cell,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
+        library.write_gds(fname)
 
     """ Plotting """
 

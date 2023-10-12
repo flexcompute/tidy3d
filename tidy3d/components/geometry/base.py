@@ -20,8 +20,27 @@ from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
 from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
 from ..transformation import RotationAroundAxis
 from ...log import log
-from ...exceptions import SetupError, ValidationError, Tidy3dKeyError, Tidy3dError
+from ...exceptions import (
+    SetupError,
+    ValidationError,
+    Tidy3dKeyError,
+    Tidy3dError,
+    Tidy3dImportError,
+)
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
+
+try:
+    gdstk_available = True
+    import gdstk
+except ImportError:
+    gdstk_available = False
+
+try:
+    gdspy_available = True
+    import gdspy
+except ImportError:
+    gdspy_available = False
+
 
 POLY_GRID_SIZE = 1e-12
 
@@ -952,19 +971,21 @@ class Geometry(Tidy3dBaseModel, ABC):
             Geometries created from the 2D data.
         """
 
-        # switch the GDS cell loader function based on the class name string
-        # TODO: make this more robust in future releases
-        gds_cell_class_name = str(gds_cell.__class__)
-
-        if "gdstk" in gds_cell_class_name:
+        if gdstk_available and isinstance(gds_cell, gdstk.Cell):
             gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif "gdspy" in gds_cell_class_name:
+        elif gdspy_available and isinstance(gds_cell, gdspy.Cell):
             gds_loader_fn = Geometry.load_gds_vertices_gdspy
+        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to import gdstk cells."
+            )
+        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to import to gdspy cells."
+            )
         else:
-            raise ValueError(
-                f"Argument 'gds_cell' of type '{gds_cell_class_name}' does not seem to be "
-                "a 'Cell' instance from 'gdstk' or 'gdspy' modules and, therefore, cannot be "
-                "loaded by Tidy3D."
+            raise Tidy3dError(
+                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
             )
 
         geometries = []
@@ -1022,6 +1043,201 @@ class Geometry(Tidy3dBaseModel, ABC):
             Geometry extruded from the 2D data.
         """
         return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> List:
+        """Convert a Geometry object's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`.
+        """
+        if not gdstk_available:
+            raise Tidy3dImportError(
+                "Python module 'gdstk' not found. Install the module to be able to export shapes "
+                "using it."
+            )
+
+        shapes = self.intersections_plane(x=x, y=y, z=z)
+        polygons = []
+        for shape in shapes:
+            for vertices in vertices_from_shapely(shape):
+                if len(vertices) == 1:
+                    polygons.append(gdstk.Polygon(vertices[0], gds_layer, gds_dtype))
+                else:
+                    polygons.extend(
+                        gdstk.boolean(
+                            vertices[:1],
+                            vertices[1:],
+                            "not",
+                            layer=gds_layer,
+                            datatype=gds_dtype,
+                        )
+                    )
+        return polygons
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> List:
+        """Convert a Geometry object's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+        if not gdspy_available:
+            raise Tidy3dImportError(
+                "Python module 'gdspy' not found. Install the module to be able to export shapes "
+                "using it."
+            )
+
+        shapes = self.intersections_plane(x=x, y=y, z=z)
+        polygons = []
+        for shape in shapes:
+            for vertices in vertices_from_shapely(shape):
+                if len(vertices) == 1:
+                    polygons.append(gdspy.Polygon(vertices[0], gds_layer, gds_dtype))
+                else:
+                    polygons.append(
+                        gdspy.boolean(
+                            vertices[:1],
+                            vertices[1:],
+                            "not",
+                            layer=gds_layer,
+                            datatype=gds_dtype,
+                        )
+                    )
+        return polygons
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> None:
+        """Append a Geometry object's planar slice to a .gds cell.
+
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        """
+        if gdstk_available and isinstance(cell, gdstk.Cell):
+            polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+            if len(polygons) > 0:
+                cell.add(*polygons)
+
+        elif gdspy_available and isinstance(cell, gdspy.Cell):
+            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+            if len(polygons) > 0:
+                cell.add(polygons)
+
+        elif "gdstk" in cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+            )
+        elif "gdspy" in cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
+
+    def to_gds_file(
+        self,
+        fname: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_cell_name: str = "MAIN",
+    ) -> None:
+        """Export a Geometry object's planar slice to a .gds file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .gds file to save the :class:`Geometry` slice to.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        gds_cell_name : str = 'MAIN'
+            Name of the cell created in the .gds file to store the geometry.
+        """
+        if gdstk_available:
+            library = gdstk.Library()
+        elif gdspy_available:
+            library = gdspy.GdsLibrary()
+        else:
+            raise Tidy3dImportError(
+                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                "files, please install one of those those modules."
+            )
+        cell = library.new_cell(gds_cell_name)
+        self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        library.write_gds(fname)
 
     def _as_union(self) -> List[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
@@ -2134,4 +2350,4 @@ class GeometryGroup(Geometry):
         return np.sum(individual_areas)
 
 
-from .utils import GeometryType, from_shapely  # noqa: E402
+from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

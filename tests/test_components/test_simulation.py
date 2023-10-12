@@ -2,6 +2,7 @@
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
+import gdstk
 
 import numpy as np
 import tidy3d as td
@@ -85,12 +86,12 @@ def test_sim_init():
     # plt.close()
     # sim.plot_eps(x=0)
     # plt.close()
-    sim.num_pml_layers
+    _ = sim.num_pml_layers
     # sim.plot_grid(x=0)
     # plt.close()
-    sim.frequency_range
-    sim.grid
-    sim.num_cells
+    _ = sim.frequency_range
+    _ = sim.grid
+    _ = sim.num_cells
     sim.discretize(m)
     sim.epsilon(m)
 
@@ -574,7 +575,7 @@ def test_no_monitor():
 
 
 def test_plot_structure():
-    ax = SIM_FULL.structures[0].plot(x=0)
+    _ = SIM_FULL.structures[0].plot(x=0)
     plt.close()
 
 
@@ -1975,3 +1976,70 @@ def test_scene_from_scene():
     )
 
     assert sim == SIM_FULL
+
+
+def test_to_gds(tmp_path):
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.Medium(permittivity=2.0),
+            ),
+            td.Structure(
+                geometry=td.Sphere(radius=1.4, center=(1.0, 0.0, 1.0)),
+                medium=td.Medium(permittivity=1.5),
+            ),
+            td.Structure(
+                geometry=td.Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=td.Medium(),
+            ),
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+            )
+        ],
+        monitors=[
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+        ],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=20),
+            y=td.Boundary.stable_pml(num_layers=30),
+            z=td.Boundary.absorber(num_layers=100),
+        ),
+        shutoff=1e-6,
+    )
+
+    fname = str(tmp_path / "simulation_z.gds")
+    sim.to_gds_file(
+        fname, z=0, gds_layer_dtype_map={td.Medium(permittivity=2.0): (2, 1), td.Medium(): (1, 0)}
+    )
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == "MAIN"
+    assert len(cell.polygons) >= 3
+    areas = cell.area(True)
+    assert (2, 1) in areas
+    assert (1, 0) in areas
+    assert (0, 0) in areas
+    assert np.allclose(areas[(2, 1)], 0.5)
+    assert np.allclose(areas[(1, 0)], 2.0 * (1.4**2 - 1) ** 0.5, atol=1e-2)
+    assert np.allclose(areas[(0, 0)], 0.5 * np.pi * (1.4**2 - 1), atol=1e-2)
+
+    fname = str(tmp_path / "simulation_y.gds")
+    sim.to_gds_file(
+        fname, y=0, gds_layer_dtype_map={td.Medium(permittivity=2.0): (2, 1), td.Medium(): (1, 0)}
+    )
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == "MAIN"
+    assert len(cell.polygons) >= 3
+    areas = cell.area(True)
+    assert (2, 1) in areas
+    assert (1, 0) in areas
+    assert (0, 0) in areas
+    assert np.allclose(areas[(2, 1)], 0.5)
+    assert np.allclose(areas[(1, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
+    assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
