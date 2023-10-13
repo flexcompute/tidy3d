@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.3] - 2023-10-16
+
 ### Added
 - `Geometry.zero_dims` method that uses `Geometry.bounds` and speeds up the validator for zero-sized geometries.
 
@@ -15,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Properly handle `.freqs` in `output_monitors` of adjoint plugin.
 - Simulation updater for `.hdf5` files with custom data.
+- Fix to solver geometry parsing in some edge cases of slanted polyslab and STL geometries that could lead to an error or divergence.
+- Fix to errors in some edge cases of a TFSF source setup.
 
 ## [2.4.2] - 2023-9-28
 
@@ -971,7 +975,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
+[2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0
