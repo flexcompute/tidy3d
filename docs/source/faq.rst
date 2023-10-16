@@ -15,16 +15,8 @@ From the :class:`.SimulationData` object, one can grab and plot the data for eac
 How is using Tidy3D billed?
 ---------------------------
 
-The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing 
-simulations and analyzing the results is free and 
-open source. We only bill the run time of the solver on our server, taking only the compute 
-time into account (as opposed to overhead e.g. during uploading).
-When a task is uploaded to our servers, we will print the maximum incurred cost in Flex units.
-This cost is also displayed in the online interface for that task.
-This value is determined by the cost associated with simulating the entire time stepping specified.
-If early shutoff is detected and the simulation completes before the full time stepping period, this
-cost will be pro-rated.
-For more questions or to purchase Flex units, please contact us at ``support@flexcompute.com``.
+The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing simulations and analyzing the results is free and open source. We only bill runs on our server, with a cost that is defined entirely by the simulation details. The maximum cost that a simulation can incur can be verified in advance, and is also displayed at the start of a run. This value is determined by the estimated "computational weight" of the simulation, which is the expected amount of compute time and resources that will be needed to complete the task. For FDTD simulations, if early shutoff is detected, then the part of the cost that is due to the time stepping will be pro-rated. However, the pro-rated charge cannot be smaller than 10% of the original Flex Credit estimate, due to the overhead incurred in allocating resources. 
+For more questions or to purchase Flex Credits, please contact us at ``support@flexcompute.com``.
 
 What are the units used in the simulation?
 ------------------------------------------
