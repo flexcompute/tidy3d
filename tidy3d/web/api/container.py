@@ -27,9 +27,7 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of Union[:class:`.Simulation`, :class:`.HeatSimulation`]
-    on server.
-    """
+    """Interface for managing the task runs on the server."""
 
     simulation: SimulationType = pd.Field(
         ...,
@@ -99,9 +97,8 @@ class Job(WebContainer):
 
         Returns
         -------
-        Dict[str, Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]]
-            Dictionary mapping task name to
-            Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for :class:`Job`.
+        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+            Object containing simulation results.
         """
 
         self.start()
@@ -179,14 +176,12 @@ class Job(WebContainer):
 
         Note
         ----
-        To load the data into Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] objets,
-        can call :meth:`Job.load`.
+        To load the data after download, use :meth:`Job.load`.
         """
         web.download(task_id=self.task_id, path=path, verbose=self.verbose)
 
     def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
-        """Download results from simulation (if not already) and load them into
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] object.
+        """Download job results and load them into a data object.
 
         Parameters
         ----------
@@ -204,36 +199,44 @@ class Job(WebContainer):
         """Delete server-side data associated with :class:`Job`."""
         web.delete(self.task_id)
 
-    def real_cost(self) -> float:
-        """Get the billed cost for the task associated with this job."""
-        return web.real_cost(self.task_id)
+    def real_cost(self, verbose: bool = True) -> float:
+        """Get the billed cost for the task associated with this job.
 
-    def estimate_cost(self) -> float:
-        """Compute the maximum FlexCredit charge for a given :class:`.Job`.
+        Parameters
+        ----------
+        verbose : bool = True
+            Whether to log the cost and helpful messages.
 
         Returns
         -------
         float
-            Estimated maximum cost for Union[:class:`.Simulation`, :class:`.HeatSimulation`]
-            associated with the given :class:`.Job`.
+            Billed cost of the task in FlexCredits.
+        """
+        return web.real_cost(self.task_id, verbose=verbose)
 
-        Note
-        ----
-        Cost is calculated assuming the simulation runs for
-        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+    def estimate_cost(self, verbose: bool = True) -> float:
+        """Compute the maximum FlexCredit charge for a given :class:`.Job`.
+
+        Parameters
+        ----------
+        verbose : bool = True
+            Whether to log the cost and helpful messages.
 
         Returns
         -------
         float
             Estimated cost of the task in FlexCredits.
+
+        Note
+        ----
+        Cost is calculated assuming the simulation runs for
+        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
-        return web.estimate_cost(self.task_id)
+        return web.estimate_cost(self.task_id, verbose=verbose)
 
 
 class BatchData(Tidy3dBaseModel):
-    """Holds a collection of Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] returned
-    by :class:`.Batch`.
-    """
+    """Holds a collection of data objects returned by :class:`.Batch`."""
 
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
@@ -250,9 +253,7 @@ class BatchData(Tidy3dBaseModel):
     )
 
     def load_sim_data(self, task_name: str) -> SimulationDataType:
-        """Load Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] from file
-        by task name.
-        """
+        """Load a simulation data object from file by task name."""
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
@@ -264,16 +265,12 @@ class BatchData(Tidy3dBaseModel):
         )
 
     def items(self) -> Tuple[TaskName, SimulationDataType]:
-        """Iterate through the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
-        for each task_name.
-        """
+        """Iterate through the simulations for each task_name."""
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
 
     def __getitem__(self, task_name: TaskName) -> SimulationDataType:
-        """Get the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for
-        a given ``task_name``.
-        """
+        """Get the simulation data object for a given ``task_name``."""
         return self.load_sim_data(task_name)
 
     @classmethod
@@ -299,9 +296,7 @@ class BatchData(Tidy3dBaseModel):
 
 
 class Batch(WebContainer):
-    """Interface for submitting several Union[:class:`.Simulation`, :class:`.HeatSimulation`]
-    objects to sever.
-    """
+    """Interface for submitting multiple simulations to the sever."""
 
     simulations: Dict[TaskName, SimulationType] = pd.Field(
         ...,
@@ -382,11 +377,9 @@ class Batch(WebContainer):
         >>> for task_name, sim_data in batch_data.items():
         ...     # do something with data.
 
-        ``bach_data`` does not store all of
-        the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] objects in memory,
+        ``bach_data`` does not store all of the data objects in memory,
         rather it iterates over the task names and loads the corresponding
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] from file one by one.
-        If no file exists for that task, it downloads it.
+        data from file one by one. If no file exists for that task, it downloads it.
         """
         self._check_path_dir(path_dir)
         self.start()
@@ -494,13 +487,11 @@ class Batch(WebContainer):
             console = get_logging_console()
             console.log("Started working on Batch.")
 
-            est_flex_unit = self.estimate_cost()
-            if est_flex_unit is not None and est_flex_unit > 0:
-                console.log(
-                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f} for the whole batch. "
-                    "Use 'Batch.real_cost()' to "
-                    "get the billed FlexCredit cost after the Batch has completed."
-                )
+            self.estimate_cost()
+            console.log(
+                "Use 'Batch.real_cost()' to "
+                "get the billed FlexCredit cost after the Batch has completed."
+            )
 
             with Progress(console=console) as progress:
                 # create progressbars
@@ -590,8 +581,7 @@ class Batch(WebContainer):
 
         Note
         ----
-        To load the data into Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] objets,
-        can call :meth:`Batch.items`.
+        To load and iterate through the data, use :meth:`Batch.items()`.
 
         The data for each task will be named as ``{path_dir}/{task_name}.hdf5``.
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
@@ -649,32 +639,57 @@ class Batch(WebContainer):
         for _, job in self.jobs.items():
             job.delete()
 
-    def real_cost(self) -> float:
-        """Get the sum of billed costs for each task associated with this batch."""
-        real_cost_sum = 0.0
-        for _, job in self.jobs.items():
-            cost_job = job.real_cost()
-            if cost_job is not None:
-                real_cost_sum += cost_job
-        return real_cost_sum or None
+    def real_cost(self, verbose: bool = True) -> float:
+        """Get the sum of billed costs for each task associated with this batch.
 
-    def estimate_cost(self) -> float:
-        """Compute the maximum FlexCredit charge for a given :class:`.Batch`.
+        Parameters
+        ----------
+        verbose : bool = True
+            Whether to log the cost and helpful messages.
 
         Returns
         -------
         float
-            Estimated maximum cost for each Union[:class:`.Simulation`, :class:`.HeatSimulation`]
-            associated with given :class:`.Batch`.
+            Billed cost for the entire :class:`.Batch`.
+        """
+        real_cost_sum = 0.0
+        for _, job in self.jobs.items():
+            cost_job = job.real_cost(verbose=False)
+            if cost_job is not None:
+                real_cost_sum += cost_job
+
+        real_cost_sum = real_cost_sum or None  # convert to None if 0
+
+        if real_cost_sum and verbose:
+            console = get_logging_console()
+            console.log(f"Total billed flex credit cost: {real_cost_sum:1.3f}.")
+        return real_cost_sum
+
+    def estimate_cost(self, verbose: bool = True) -> float:
+        """Compute the maximum FlexCredit charge for a given :class:`.Batch`.
+
+        Parameters
+        ----------
+        verbose : bool = True
+            Whether to log the cost and helpful messages.
 
         Note
         ----
         Cost is calculated assuming the simulation runs for
-        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proporionately.
+        the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
 
         Returns
         -------
         float
             Estimated total cost of the tasks in FlexCredits.
         """
-        return sum(job.estimate_cost() for _, job in self.jobs.items())
+        batch_cost = sum(job.estimate_cost(verbose=False) for _, job in self.jobs.items())
+
+        if verbose:
+            console = get_logging_console()
+            if batch_cost is not None and batch_cost > 0:
+                console.log(f"Maximum FlexCredit cost: {batch_cost:1.3f} for the whole batch.")
+            else:
+                console.log("Could not get estimated batch cost!")
+
+        return batch_cost
