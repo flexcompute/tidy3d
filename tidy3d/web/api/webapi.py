@@ -48,8 +48,8 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
 ) -> SimulationDataType:
-    """Submits a Union[:class:`.Simulation`, :class:`.HeatSimulation`] to server, starts running, monitors progress,
-    downloads, and loads results as a corresponding Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] object.
+    """Submits a simulation to the server, starts running, monitors progress,
+    downloads, and loads results as a corresponding data object.
 
     Parameters
     ----------
@@ -111,7 +111,7 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
 ) -> TaskId:
-    """Upload simulation to server, but do not start running Union[:class:`.Simulation`, :class:`.HeatSimulation`].
+    """Upload a simulation to the server, but do not start running.
 
     Parameters
     ----------
@@ -302,7 +302,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             status = get_status(task_id)
 
         if status == "error":
-            raise WebError("Error running mode solver.")
+            raise WebError(f"Error running {solver_name} solver.")
 
         log.log(log_level, f"{solver_name} solver status: {status}")
         if verbose:
@@ -402,7 +402,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
                 perc_done, field_decay = get_run_info(task_id)
                 if perc_done is not None and perc_done < 100 and field_decay > 0:
-                    console.log("early shutoff detected, exiting.")
+                    console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
 
                 new_description = f"solver progress (field decay = {field_decay:.2e})"
                 progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
@@ -507,7 +507,7 @@ def download_hdf5(
 def load_simulation(
     task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
 ) -> SimulationType:
-    """Download the `.json` file of a task and load the associated Union[:class:`.Simulation`, :class:`.HeatSimulation`].
+    """Download the `.json` file of a task and load the associated simulation.
 
     Parameters
     ----------
@@ -565,7 +565,7 @@ def load(
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationDataType:
-    """Download and Load simulation results into Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] object.
+    """Download and load simulation results into a data object.
 
     Parameters
     ----------
@@ -706,23 +706,26 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(task_id: str) -> float:
+def estimate_cost(task_id: str, verbose: bool = True) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
+    verbose : bool = True
+        Whether to log the cost and helpful messages.
 
     Returns
     -------
     float
-        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``..
+        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``.
 
     Note
     ----
     Cost is calculated assuming the simulation runs for
     the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
+    A minimum simulation cost may also apply, which depends on the task details.
 
     Parameters
     ----------
@@ -750,6 +753,13 @@ def estimate_cost(task_id: str) -> float:
         status = task_info.metadataStatus
 
     if status in ["processed", "success"]:
+        if verbose:
+            console = get_logging_console()
+            console.log(
+                f"Maximum FlexCredit cost: {task_info.estFlexUnit:1.3f}. Minimum cost depends on "
+                "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
+                "cost after a simulation run."
+            )
         return task_info.estFlexUnit
 
     log.warning(
@@ -760,8 +770,20 @@ def estimate_cost(task_id: str) -> float:
 
 
 @wait_for_connection
-def real_cost(task_id: str) -> float:
+def real_cost(task_id: str, verbose=True) -> float:
     """Get the billed cost for given task after it has been run.
+
+    Parameters
+    ----------
+    task_id : str
+        Unique identifier of task on server.  Returned by :meth:`upload`.
+    verbose : bool = True
+        Whether to log the cost and helpful messages.
+
+    Returns
+    -------
+    float
+        The flex credit cost that was billed for the given ``task_id``.
 
     Note
     ----
@@ -770,11 +792,22 @@ def real_cost(task_id: str) -> float:
     """
     task_info = get_info(task_id)
     flex_unit = task_info.realFlexUnit
+    ori_flex_unit = task_info.oriRealFlexUnit
     if not flex_unit:
         log.warning(
             f"Billed FlexCredit for task '{task_id}' is not available. If the task has been "
             "successfully run, it should be available shortly."
         )
+    else:
+        if verbose:
+            console = get_logging_console()
+            console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
+            if flex_unit != ori_flex_unit:
+                console.log(
+                    "Note: the task cost pro-rated due to early shutoff was below the minimum "
+                    "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
+                    "decrease the estimated, and correspondingly the billed cost of such tasks."
+                )
     return flex_unit
 
 

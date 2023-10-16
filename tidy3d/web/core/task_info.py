@@ -60,6 +60,7 @@ class TaskInfo(TaskBase):
     estCostMin: float = None
     estCostMax: float = None
     realFlexUnit: float = None
+    oriRealFlexUnit: float = None
     estFlexUnit: float = None
     s3Storage: float = None
     startSolverTime: Optional[datetime] = None
