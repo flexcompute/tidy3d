@@ -185,6 +185,12 @@
     "keywords": "distributed bragg reflector, DBR, cavity, Tidy3D, FDTD",
     "feature_image": "./img/dbr_schematic.png"
   },
+  "DivergedFDTDSimulation.ipynb": {
+    "title": "How to troubleshoot a diverged FDTD in Tidy3D | Flexcompute",
+    "description": "This notebook shows how to troubleshoot a diverged simulations in Tidy3D FDTD.",
+    "keywords": "diverged FDTD, diverged Tidy3D, FDTD divergence, Tidy3D divergence, simulation divergence, divergence troubleshoot, simulation troubleshoot, FDTD troubleshoot, Tidy3D, FDTD",
+    "feature_image": "/img/diverged-fdtd-simulation.png"
+  },  
   "EdgeCoupler.ipynb": {
     "title": "Inverse Taper Edge Coupler Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to model an inverse taper edge coupler in Tidy3D FDTD.",
@@ -399,6 +405,12 @@
     "title": "Guide to the Frontend Interface for Tidy3D | Flexcompute",
     "description": "This notebook demonstrates the basic working principles of the Tidy3D python front end interface and gives a walkthrough of various features.",
     "keywords": "FDTD, Tidy3D, tutorial, walkthrough",
+    "feature_image": ""
+  },
+  "ResonanceFinder.ipynb": {
+    "title": "Setting up the resonance finder in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to set up the resonance finder in Tidy3D FDTD.",
+    "keywords": "resonance finder, cavity resonance, quality factor, nanocavity resonance, FDTD cavity, FDTD resonance, FDTD quality factor, FDTD nanocavity, Tidy3D, FDTD",
     "feature_image": ""
   },
   "RingResonator.ipynb": {

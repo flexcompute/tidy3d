@@ -20,6 +20,7 @@ Tidy3D Basics
     notebooks/Simulation
     notebooks/Primer
     notebooks/WebAPI
+    notebooks/DivergedFDTDSimulation    
 
 Feature Tutorials
 -------------------
@@ -112,6 +113,14 @@ Scattering Matrix
     :maxdepth: 1
 
     notebooks/SMatrix
+
+Resonance Finder
+~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/ResonanceFinder
 
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
