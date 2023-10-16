@@ -69,7 +69,7 @@ def wait_for_connection(decorated_fn=None, wait_time_sec: float = CONNECTION_RET
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
-    return f"https://tidy3d.simulation.cloud/workbench?taskId={task_id}"
+    return f"{Env.current.website_endpoint}/workbench?taskId={task_id}"
 
 
 @wait_for_connection
