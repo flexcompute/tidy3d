@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
 
 ### Changed
+- Update versions of `boto3`, `requests`, and `click`.
 
 ### Fixed
 
