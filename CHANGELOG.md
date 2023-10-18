@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ``verbose`` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
 
 ### Changed
+- Update versions of `boto3`, `requests`, and `click`.
 
 ### Fixed
 
