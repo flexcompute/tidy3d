@@ -26,7 +26,6 @@ from tidy3d import HeatSimulationData
 from tidy3d import TemperatureMonitor
 from tidy3d import TemperatureData
 
-from tidy3d.exceptions import DataError
 from ..utils import STL_GEO, assert_log_level, log_capture
 
 
@@ -349,7 +348,7 @@ def test_sim_data():
     _ = heat_sim_data.plot_field("test", z=0)
     plt.close()
 
-    with pytest.raises(DataError):
+    with pytest.raises(KeyError):
         _ = heat_sim_data.plot_field("test3", x=0)
 
     with pytest.raises(pd.ValidationError):

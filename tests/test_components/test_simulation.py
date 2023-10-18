@@ -8,7 +8,8 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
-from tidy3d.components.simulation import MAX_NUM_MEDIUMS, MAX_NUM_SOURCES
+from tidy3d.components.simulation import MAX_NUM_SOURCES
+from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
 from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated
 from tidy3d.constants import LARGE_NUMBER
 
@@ -492,7 +493,6 @@ def test_validate_zero_dim_boundaries(log_capture):
 def test_validate_components_none():
 
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
-    assert SIM._validate_num_mediums(val=None) is None
     assert SIM._validate_num_sources(val=None) is None
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
@@ -538,7 +538,7 @@ def test_validate_mnt_size(monkeypatch, log_capture):
 
 def test_max_geometry_validation():
     gs = td.GridSpec(wavelength=1.0)
-    too_many = [td.Box(size=(1, 1, 1)) for _ in range(simulation.MAX_GEOMETRY_COUNT + 1)]
+    too_many = [td.Box(size=(1, 1, 1)) for _ in range(MAX_GEOMETRY_COUNT + 1)]
 
     fine = [
         td.Structure(
@@ -566,7 +566,7 @@ def test_max_geometry_validation():
             medium=td.Medium(permittivity=2.0),
         ),
     ]
-    with pytest.raises(pydantic.ValidationError, match=f" {simulation.MAX_GEOMETRY_COUNT + 2} "):
+    with pytest.raises(pydantic.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
         _ = td.Simulation(size=(1, 1, 1), run_time=1, grid_spec=gs, structures=not_fine)
 
 
@@ -582,7 +582,6 @@ def test_plot_structure():
 
 def test_plot_eps():
     ax = SIM_FULL.plot_eps(x=0)
-    SIM_FULL._add_cbar(eps_min=1, eps_max=2, ax=ax)
     plt.close()
 
 
@@ -723,26 +722,6 @@ def test_nyquist():
 def test_discretize_non_intersect(log_capture):
     SIM.discretize(box=td.Box(center=(-20, -20, -20), size=(1, 1, 1)))
     assert_log_level(log_capture, "ERROR")
-
-
-def test_filter_structures():
-    s1 = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=SIM.medium)
-    s2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)), medium=SIM.medium)
-    plane = td.Box(center=(0, 0, 1.5), size=(td.inf, td.inf, 0))
-    SIM._filter_structures_plane(structures=[s1, s2], plane=plane)
-
-
-def test_get_structure_plot_params():
-    pp = SIM_FULL._get_structure_plot_params(mat_index=0, medium=SIM_FULL.medium)
-    assert pp.facecolor == "white"
-    pp = SIM_FULL._get_structure_plot_params(mat_index=1, medium=td.PEC)
-    assert pp.facecolor == "gold"
-    pp = SIM_FULL._get_structure_eps_plot_params(
-        medium=SIM_FULL.medium, freq=1, eps_min=1, eps_max=2
-    )
-    assert float(pp.facecolor) == 1.0
-    pp = SIM_FULL._get_structure_eps_plot_params(medium=td.PEC, freq=1, eps_min=1, eps_max=2)
-    assert pp.facecolor == "gold"
 
 
 def test_warn_sim_background_medium_freq_range(log_capture):

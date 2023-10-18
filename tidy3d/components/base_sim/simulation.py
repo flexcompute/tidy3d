@@ -7,7 +7,7 @@ from math import isclose
 
 import pydantic.v1 as pd
 
-from .monitor import AbstractSurfaceIntegrationMonitor
+from .monitor import AbstractMonitor
 
 from ..base import cached_property
 from ..validators import assert_unique_names, assert_objects_in_sim_bounds
@@ -22,7 +22,7 @@ from ..medium import Medium, MediumType3D
 from ..viz import PlotParams, plot_params_symmetry
 
 from ...version import __version__
-from ...exceptions import Tidy3dKeyError, SetupError
+from ...exceptions import Tidy3dKeyError
 from ...log import log
 
 
@@ -91,29 +91,10 @@ class AbstractSimulation(Box, ABC):
     # make sure all names are unique
     _unique_monitor_names = assert_unique_names("monitors")
     _unique_structure_names = assert_unique_names("structures")
+    _unique_source_names = assert_unique_names("sources")
 
     _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
     _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
-
-    @pd.validator("monitors", always=True)
-    def _integration_surfaces_in_bounds(cls, val, values):
-        """Error if any of the integration surfaces are outside of the simulation domain."""
-
-        if val is None:
-            return val
-
-        sim_center = values.get("center")
-        sim_size = values.get("size")
-        sim_box = Box(size=sim_size, center=sim_center)
-
-        for mnt in (mnt for mnt in val if isinstance(mnt, AbstractSurfaceIntegrationMonitor)):
-            if not any(sim_box.intersects(surf) for surf in mnt.integration_surfaces):
-                raise SetupError(
-                    f"All integration surfaces of monitor '{mnt.name}' are outside of the "
-                    "simulation bounds."
-                )
-
-        return val
 
     @pd.validator("structures", always=True)
     def _structures_not_at_edges(cls, val, values):
@@ -135,13 +116,20 @@ class AbstractSimulation(Box, ABC):
 
                     if isclose(sim_val, struct_val):
                         consolidated_logger.warning(
-                            f"Structure at structures[{istruct}] has bounds that extend exactly to "
-                            "simulation edges. This can cause unexpected behavior. "
+                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
+                            "to simulation edges. This can cause unexpected behavior. "
                             "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit."
+                            "use td.inf as a size variable instead to make this explicit.",
+                            custom_loc=["structures", istruct],
                         )
 
         return val
+
+    """ Post-init validators """
+
+    def _post_init_validators(self) -> None:
+        """Call validators taking z`self` that get run after init."""
+        _ = self.scene
 
     """ Accounting """
 
@@ -151,7 +139,7 @@ class AbstractSimulation(Box, ABC):
 
         return Scene(medium=self.medium, structures=self.structures)
 
-    def get_monitor_by_name(self, name: str):  # -> Monitor:
+    def get_monitor_by_name(self, name: str) -> AbstractMonitor:
         """Return monitor named 'name'."""
         for monitor in self.monitors:
             if monitor.name == name:
@@ -271,7 +259,7 @@ class AbstractSimulation(Box, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        bounds = self.simulation_bounds
+        bounds = self.bounds
         for source in self.sources:
             ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
         ax = Scene._set_plot_bounds(
@@ -315,7 +303,7 @@ class AbstractSimulation(Box, ABC):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        bounds = self.simulation_bounds
+        bounds = self.bounds
         for monitor in self.monitors:
             ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
         ax = Scene._set_plot_bounds(

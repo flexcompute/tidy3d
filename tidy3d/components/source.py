@@ -10,10 +10,11 @@ import pydantic.v1 as pydantic
 import numpy as np
 
 from .base import cached_property
+from .base_sim.source import AbstractSource
 from .time import AbstractTimeDependence
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
-from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
+from .validators import assert_plane, assert_volumetric, get_value
 from .validators import warn_if_dataset_none, assert_single_freq_in_range
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
@@ -323,7 +324,7 @@ SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
 """ Source objects """
 
 
-class Source(Box, ABC):
+class Source(Box, AbstractSource, ABC):
     """Abstract base class for all sources."""
 
     source_time: SourceTimeType = pydantic.Field(
@@ -333,14 +334,10 @@ class Source(Box, ABC):
         discriminator=TYPE_TAG_STR,
     )
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
-
     @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Source object."""
         return plot_params_source
-
-    _name_validator = validate_name_str()
 
     @cached_property
     def geometry(self) -> Box:

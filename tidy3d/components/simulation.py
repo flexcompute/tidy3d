@@ -2,24 +2,21 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
-from math import isclose
 
 import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
 import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .base import cached_property
-from .validators import assert_unique_names, assert_objects_in_sim_bounds
+from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry.base import Geometry, Box, GeometryGroup, ClipOperation
+from .geometry.base import Geometry, Box
 from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR, InterpMethod
+from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
 from .medium import Medium, MediumType, AbstractMedium, PECMedium
@@ -39,15 +36,16 @@ from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene
 
-from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
-from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
+from .viz import PlotParams
+from .viz import plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
 
-from ..version import __version__
-from ..constants import C_0, SECOND, inf, fp_eps
-from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError, Tidy3dImportError
+from ..constants import C_0, SECOND, fp_eps
+from ..exceptions import SetupError, ValidationError, Tidy3dError, Tidy3dImportError
 from ..log import log
 from ..updater import Updater
+
+from .base_sim.simulation import AbstractSimulation
 
 try:
     gdstk_available = True
@@ -65,14 +63,8 @@ except ImportError:
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
-# maximum number of mediums supported
-MAX_NUM_MEDIUMS = 65530
-
 # maximum number of sources
 MAX_NUM_SOURCES = 1000
-
-# maximum geometry count in a single structure
-MAX_GEOMETRY_COUNT = 100
 
 # maximum numbers of simulation parameters
 MAX_TIME_STEPS = 1e7
@@ -95,7 +87,7 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
-class Simulation(Box):
+class Simulation(AbstractSimulation):
     """Contains all information about Tidy3d simulation.
 
     Example
@@ -152,33 +144,6 @@ class Simulation(Box):
         "Note: If simulation 'shutoff' is specified, "
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
-    )
-
-    medium: MediumType3D = pydantic.Field(
-        Medium(),
-        title="Background Medium",
-        description="Background medium of simulation, defaults to vacuum if not specified.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
-        (0, 0, 0),
-        title="Symmetries",
-        description="Tuple of integers defining reflection symmetry across a plane "
-        "bisecting the simulation domain normal to the x-, y-, and z-axis "
-        "at the simulation center of each axis, respectively. "
-        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
-        "``-1`` (odd, i.e. 'PEC' symmetry). "
-        "Note that the vectorial nature of the fields must be taken into account to correctly "
-        "determine the symmetry value.",
-    )
-
-    structures: Tuple[Structure, ...] = pydantic.Field(
-        (),
-        title="Structures",
-        description="Tuple of structures present in simulation. "
-        "Note: Structures defined later in this list override the "
-        "simulation material properties in regions of spatial overlap.",
     )
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
@@ -242,12 +207,6 @@ class Simulation(Box):
         le=1.0,
     )
 
-    version: str = pydantic.Field(
-        __version__,
-        title="Version",
-        description="String specifying the front end version number.",
-    )
-
     """ Validating setup """
 
     @pydantic.root_validator(pre=True)
@@ -269,16 +228,9 @@ class Simulation(Box):
             _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
-    _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
-    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
-
-    # make sure all names are unique
-    _unique_structure_names = assert_unique_names("structures")
-    _unique_source_names = assert_unique_names("sources")
-    _unique_monitor_names = assert_unique_names("monitors")
 
     # _few_enough_mediums = validate_num_mediums()
     # _structures_not_at_edges = validate_structure_bounds_not_at_edges()
@@ -445,22 +397,6 @@ class Simulation(Box):
                 )
         return val
 
-    @pydantic.validator("structures", always=True)
-    def _validate_num_mediums(cls, val):
-        """Error if too many mediums present."""
-
-        if val is None:
-            return val
-
-        mediums = {structure.medium for structure in val}
-        if len(mediums) > MAX_NUM_MEDIUMS:
-            raise SetupError(
-                f"Tidy3d only supports {MAX_NUM_MEDIUMS} distinct mediums."
-                f"{len(mediums)} were supplied."
-            )
-
-        return val
-
     @pydantic.validator("sources", always=True)
     def _validate_num_sources(cls, val):
         """Error if too many sources present."""
@@ -474,58 +410,6 @@ class Simulation(Box):
                 "For a complex source setup, consider using 'CustomFieldSource' or "
                 "'CustomCurrentSource' to combine multiple sources into one object."
             )
-
-        return val
-
-    @pydantic.validator("structures", always=True)
-    def _validate_num_geometries(cls, val):
-        """Error if too many geometries in a single structure."""
-
-        if val is None:
-            return val
-
-        for i, structure in enumerate(val):
-            for geometry in flatten_groups(structure.geometry):
-                count = sum(
-                    1
-                    for g in traverse_geometries(geometry)
-                    if not isinstance(g, (GeometryGroup, ClipOperation))
-                )
-                if count > MAX_GEOMETRY_COUNT:
-                    raise SetupError(
-                        f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
-                        f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
-                        f"preprocessing performance."
-                    )
-
-        return val
-
-    @pydantic.validator("structures", always=True)
-    def _structures_not_at_edges(cls, val, values):
-        """Warn if any structures lie at the simulation boundaries."""
-
-        if val is None:
-            return val
-
-        sim_box = Box(size=values.get("size"), center=values.get("center"))
-        sim_bound_min, sim_bound_max = sim_box.bounds
-        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
-
-        with log as consolidated_logger:
-            for istruct, structure in enumerate(val):
-                struct_bound_min, struct_bound_max = structure.geometry.bounds
-                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
-
-                for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-
-                    if isclose(sim_val, struct_val):
-                        consolidated_logger.warning(
-                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
-                            "to simulation edges. This can cause unexpected behavior. "
-                            "If intending to extend the structure to infinity along one dimension, "
-                            "use td.inf as a size variable instead to make this explicit.",
-                            custom_loc=["structures", istruct],
-                        )
 
         return val
 
@@ -944,6 +828,7 @@ class Simulation(Box):
 
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""
+        _ = self.scene
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
 
@@ -1245,9 +1130,7 @@ class Simulation(Box):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
-        medium_dict = {self.medium: None}
-        medium_dict.update({structure.medium: None for structure in self.structures})
-        return list(medium_dict.keys())
+        return self.scene.mediums
 
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
@@ -1261,20 +1144,12 @@ class Simulation(Box):
             Mapping between distinct mediums to index in simulation.
         """
 
-        return {medium: index for index, medium in enumerate(self.mediums)}
-
-    def get_monitor_by_name(self, name: str) -> Monitor:
-        """Return monitor named 'name'."""
-        for monitor in self.monitors:
-            if monitor.name == name:
-                return monitor
-        raise Tidy3dKeyError(f"No monitor named '{name}'")
+        return self.scene.medium_map
 
     @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`.Simulation`."""
-        geometry = Box(size=(inf, inf, inf))
-        return Structure(geometry=geometry, medium=self.medium)
+        return self.scene.background_structure
 
     @staticmethod
     def intersecting_media(
@@ -1296,19 +1171,7 @@ class Simulation(Box):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
-        if test_object.size.count(0.0) == 1:
-            # get all merged structures on the test_object, which is already planar
-            structures_merged = Simulation._filter_structures_plane(structures, test_object)
-            mediums = {medium for medium, _ in structures_merged}
-            return mediums
-
-        # if the test object is a volume, test each surface recursively
-        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
-        mediums = set()
-        for surface in surfaces:
-            _mediums = Simulation.intersecting_media(surface, structures)
-            mediums.update(_mediums)
-        return mediums
+        return Scene.intersecting_media(test_object=test_object, structures=structures)
 
     @staticmethod
     def intersecting_structures(
@@ -1330,26 +1193,7 @@ class Simulation(Box):
             Set of distinct structures that intersect with the given surface, or with the surfaces
             of the given volume.
         """
-        if test_object.size.count(0.0) == 1:
-            # get all merged structures on the test_object, which is already planar
-            normal_axis_index = test_object.size.index(0.0)
-            dim = "xyz"[normal_axis_index]
-            pos = test_object.center[normal_axis_index]
-            xyz_kwargs = {dim: pos}
-
-            structures_merged = []
-            for structure in structures:
-                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
-                if len(intersections) > 0:
-                    structures_merged.append(structure)
-            return structures_merged
-
-        # if the test object is a volume, test each surface recursively
-        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
-        structures_merged = []
-        for surface in surfaces:
-            structures_merged += Simulation.intersecting_structures(surface, structures)
-        return structures_merged
+        return Scene.intersecting_structures(test_object=test_object, structures=structures)
 
     def monitor_medium(self, monitor: MonitorType):
         """Return the medium in which the given monitor resides.
@@ -1718,28 +1562,18 @@ class Simulation(Box):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
-        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
-        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-
-        # account for unordered limits
-        if hlim is None:
-            hlim = (hmin, hmax)
-        if vlim is None:
-            vlim = (vmin, vmax)
-
-        if hlim[0] > hlim[1]:
-            raise Tidy3dError("Error: 'hmin' > 'hmax'")
-        if vlim[0] > vlim[1]:
-            raise Tidy3dError("Error: 'vmin' > 'vmax'")
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -1791,30 +1625,29 @@ class Simulation(Box):
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
-        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
-        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
 
-        # account for unordered limits
-        if hlim is None:
-            hlim = (hmin, hmax)
-        if vlim is None:
-            vlim = (vmin, vmax)
-
-        if hlim[0] > hlim[1]:
-            raise Tidy3dError("Error: hmin > hmax")
-        if vlim[0] > vlim[1]:
-            raise Tidy3dError("Error: vmin > vmax")
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
 
         ax = self.plot_structures_eps(
-            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            freq=freq,
+            cbar=True,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -1852,64 +1685,11 @@ class Simulation(Box):
             The supplied or created matplotlib axes.
         """
 
-        medium_shapes = self._get_structures_2dbox(
-            structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        hlim_new, vlim_new = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
-        medium_map = self.medium_map
-        for medium, shape in medium_shapes:
-            mat_index = medium_map[medium]
-            ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
-        return ax
-
-    def _plot_shape_structure(self, medium: Medium, mat_index: int, shape: Shapely, ax: Ax) -> Ax:
-        """Plot a structure's cross section shape for a given medium."""
-        plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
-        ax = self.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
-        return ax
-
-    def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
-        """Constructs the plot parameters for a given medium in simulation.plot()."""
-
-        plot_params = plot_params_structure.copy(update={"linewidth": 0})
-
-        if mat_index == 0 or medium == self.medium:
-            # background medium
-            plot_params = plot_params.copy(update={"facecolor": "white", "edgecolor": "white"})
-        elif isinstance(medium, PECMedium):
-            # perfect electrical conductor
-            plot_params = plot_params.copy(
-                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
-            )
-        elif medium.time_modulated:
-            # time modulated medium
-            plot_params = plot_params.copy(
-                update={"facecolor": "red", "linewidth": 0, "hatch": "x*"}
-            )
-        elif isinstance(medium, Medium2D):
-            # 2d material
-            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
-        else:
-            # regular medium
-            facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
-            plot_params = plot_params.copy(update={"facecolor": facecolor})
-
-        return plot_params
-
-    @staticmethod
-    def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
-        """Add a colorbar to eps plot."""
-        norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.15)
-        mappable = mpl.cm.ScalarMappable(norm=norm, cmap=STRUCTURE_EPS_CMAP)
-        plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
+        return self.scene.plot_structures(x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new)
 
     @equal_aspect
     @add_ax_if_none
@@ -1961,292 +1741,27 @@ class Simulation(Box):
             The supplied or created matplotlib axes.
         """
 
-        structures = self.structures
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
 
-        # alpha is None just means plot without any transparency
-        if alpha is None:
-            alpha = 1
-
-        if alpha <= 0:
-            return ax
-
-        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
-            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-            center = Box.unpop_axis(position, (0, 0), axis=axis)
-            size = Box.unpop_axis(0, (inf, inf), axis=axis)
-            plane = Box(center=center, size=size)
-            medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
-        else:
-            structures = [self.background_structure] + list(structures)
-            medium_shapes = self._get_structures_2dbox(
-                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-            )
-
-        eps_min, eps_max = self.eps_bounds(freq=freq)
-        for medium, shape in medium_shapes:
-            # if the background medium is custom medium, it needs to be rendered separately
-            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
-                continue
-            # no need to add patches for custom medium
-            if not isinstance(medium, AbstractCustomMedium):
-                ax = self._plot_shape_structure_eps(
-                    freq=freq,
-                    alpha=alpha,
-                    medium=medium,
-                    eps_min=eps_min,
-                    eps_max=eps_max,
-                    reverse=reverse,
-                    shape=shape,
-                    ax=ax,
-                )
-            else:
-                # For custom medium, apply pcolormesh clipped by the shape.
-                self._pcolormesh_shape_custom_medium_structure_eps(
-                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax
-                )
-
-        if cbar:
-            self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-
-        # clean up the axis display
-        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
-
-        return ax
+        return self.scene.plot_structures_eps(
+            freq=freq,
+            cbar=cbar,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            grid=self.grid,
+            reverse=reverse,
+        )
 
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
-
-        medium_list = [self.medium] + list(self.mediums)
-        medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
-        # regular medium
-        eps_list = [
-            medium.eps_model(freq).real
-            for medium in medium_list
-            if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
-        ]
-        eps_min = min(eps_list, default=1)
-        eps_max = max(eps_list, default=1)
-        # custom medium, the min and max in the supplied dataset over all components and
-        # spatial locations.
-        for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
-            eps_dataarray = mat.eps_dataarray_freq(freq)
-            eps_min = min(
-                eps_min,
-                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
-            )
-            eps_max = max(
-                eps_max,
-                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
-            )
-        return eps_min, eps_max
-
-    def _pcolormesh_shape_custom_medium_structure_eps(
-        self,
-        x: float,
-        y: float,
-        z: float,
-        freq: float,
-        alpha: float,
-        medium: Medium,
-        eps_min: float,
-        eps_max: float,
-        reverse: bool,
-        shape: Shapely,
-        ax: Ax,
-    ):
-        """
-        Plot shape made of custom medium with ``pcolormesh``.
-        """
-        coords = "xyz"
-        normal_axis_ind, normal_position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        normal_axis, plane_axes = self.pop_axis(coords, normal_axis_ind)
-
-        # First, obtain `span_inds` of grids for interpolating permittivity in the
-        # bounding box of the shape
-        shape_bounds = shape.bounds
-        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
-        rmin.insert(normal_axis_ind, normal_position)
-        rmax.insert(normal_axis_ind, normal_position)
-        span_inds = self.grid.discretize_inds(Box.from_bounds(rmin=rmin, rmax=rmax), extend=True)
-        # filter negative or too large inds
-        n_grid = [len(grid_comp) for grid_comp in self.grid.boundaries.to_list]
-        span_inds = [
-            (max(fmin, 0), min(fmax, n_grid[f_ind])) for f_ind, (fmin, fmax) in enumerate(span_inds)
-        ]
-
-        # assemble the coordinate in the 2d plane
-        plane_coord = []
-        for plane_axis in range(2):
-            ind_axis = "xyz".index(plane_axes[plane_axis])
-            plane_coord.append(self.grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
-
-        # prepare `Coords` for interpolation
-        coord_dict = {
-            plane_axes[0]: plane_coord[0],
-            plane_axes[1]: plane_coord[1],
-            normal_axis: [normal_position],
-        }
-        coord_shape = Coords(**coord_dict)
-        # interpolate permittivity and take the average over components
-        eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
-        # remove the normal_axis and take real part
-        eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
-        # reverse
-        if reverse:
-            eps_shape = eps_min + eps_max - eps_shape
-
-        # pcolormesh
-        plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
-        ax.pcolormesh(
-            plane_xp,
-            plane_yp,
-            eps_shape,
-            clip_path=(polygon_path(shape), ax.transData),
-            cmap=STRUCTURE_EPS_CMAP,
-            vmin=eps_min,
-            vmax=eps_max,
-            alpha=alpha,
-            clip_box=ax.bbox,
-        )
-
-    def _get_structure_eps_plot_params(
-        self,
-        medium: Medium,
-        freq: float,
-        eps_min: float,
-        eps_max: float,
-        reverse: bool = False,
-        alpha: float = None,
-    ) -> PlotParams:
-        """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
-
-        plot_params = plot_params_structure.copy(update={"linewidth": 0})
-        if alpha is not None:
-            plot_params = plot_params.copy(update={"alpha": alpha})
-
-        if isinstance(medium, PECMedium):
-            # perfect electrical conductor
-            plot_params = plot_params.copy(
-                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
-            )
-        elif isinstance(medium, Medium2D):
-            # 2d material
-            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
-        else:
-            # regular medium
-            eps_medium = medium.eps_model(frequency=freq).real
-            delta_eps = eps_medium - eps_min
-            delta_eps_max = eps_max - eps_min + 1e-5
-            eps_fraction = delta_eps / delta_eps_max
-            color = eps_fraction if reverse else 1 - eps_fraction
-            plot_params = plot_params.copy(update={"facecolor": str(color)})
-
-        return plot_params
-
-    def _plot_shape_structure_eps(
-        self,
-        freq: float,
-        medium: Medium,
-        shape: Shapely,
-        eps_min: float,
-        eps_max: float,
-        ax: Ax,
-        reverse: bool = False,
-        alpha: float = None,
-    ) -> Ax:
-        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        plot_params = self._get_structure_eps_plot_params(
-            medium=medium, freq=freq, eps_min=eps_min, eps_max=eps_max, alpha=alpha, reverse=reverse
-        )
-        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_sources(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        alpha : float = None
-            Opacity of the sources, If ``None`` uses Tidy3d default.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        bounds = self.bounds
-        for source in self.sources:
-            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_monitors(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        alpha : float = None
-            Opacity of the sources, If ``None`` uses Tidy3d default.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        bounds = self.bounds
-        for monitor in self.monitors:
-            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        return ax
+        return self.scene.eps_bounds(freq=freq)
 
     @cached_property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
@@ -2294,12 +1809,9 @@ class Simulation(Box):
         return (bounds_min, bounds_max)
 
     @cached_property
-    def simulation_geometry(self) -> Box:
-        """The entire simulation domain including PML layers. It is identical to
-        ``sim.geometry`` in the absence of PML.
-        """
-        rmin, rmax = self.bounds_pml
-        return Box.from_bounds(rmin=rmin, rmax=rmax)
+    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Simulation bounds including the PML regions."""
+        return self.bounds_pml
 
     @equal_aspect
     @add_ax_if_none
@@ -2339,7 +1851,9 @@ class Simulation(Box):
         pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         return ax
 
     def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
@@ -2373,77 +1887,6 @@ class Simulation(Box):
         pml_box = pml_box.updated_copy(size=new_size)
 
         return pml_box
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_symmetries(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-
-        for sym_axis, sym_value in enumerate(self.symmetry):
-            if sym_value == 0 or sym_axis == normal_axis:
-                continue
-            sym_box = self._make_symmetry_box(sym_axis=sym_axis)
-            plot_params = self._make_symmetry_plot_params(sym_value=sym_value)
-            ax = sym_box.plot(x=x, y=y, z=z, ax=ax, **plot_params.to_kwargs())
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        return ax
-
-    def _make_symmetry_plot_params(self, sym_value: Symmetry) -> PlotParams:
-        """Make PlotParams for symmetry."""
-
-        plot_params = plot_params_symmetry.copy()
-
-        if sym_value == 1:
-            plot_params = plot_params.copy(
-                update={"facecolor": "lightsteelblue", "edgecolor": "lightsteelblue", "hatch": "++"}
-            )
-        elif sym_value == -1:
-            plot_params = plot_params.copy(
-                update={"facecolor": "goldenrod", "edgecolor": "goldenrod", "hatch": "--"}
-            )
-
-        return plot_params
-
-    def _make_symmetry_box(self, sym_axis: Axis) -> Box:
-        """Construct a :class:`.Box` representing the symmetry to be plotted."""
-        sym_box = self.simulation_geometry
-        size = list(sym_box.size)
-        size[sym_axis] /= 2
-        center = list(sym_box.center)
-        center[sym_axis] -= size[sym_axis] / 2
-
-        return Box(size=size, center=center)
 
     @add_ax_if_none
     def plot_grid(
@@ -2516,7 +1959,9 @@ class Simulation(Box):
             )
             ax.add_patch(rect)
 
-        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
 
         return ax
 
@@ -2636,217 +2081,6 @@ class Simulation(Box):
         ax.set_ylim([vlim_minus, vlim_plus])
 
         return ax
-
-    def _set_plot_bounds(
-        self,
-        ax: Ax,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Ax:
-        """Sets the xy limits of the simulation at a plane, useful after plotting.
-
-        Parameters
-        ----------
-        ax : matplotlib.axes._subplots.Axes
-            Matplotlib axes to set bounds on.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The axes after setting the boundaries.
-        """
-
-        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-
-        if hlim is not None:
-            (xmin, xmax) = hlim
-        if vlim is not None:
-            (ymin, ymax) = vlim
-
-        if xmin != xmax:
-            ax.set_xlim(xmin, xmax)
-        if ymin != ymax:
-            ax.set_ylim(ymin, ymax)
-
-        return ax
-
-    @staticmethod
-    def _get_structures_plane(
-        structures: List[Structure], x: float = None, y: float = None, z: float = None
-    ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on plane specified by {x,y,z}.
-
-        Parameters
-        ----------
-        structures : List[:class:`.Structure`]
-            list of structures to filter on the plane.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-
-        Returns
-        -------
-        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
-            List of shapes and mediums on the plane.
-        """
-        medium_shapes = []
-        for structure in structures:
-            intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
-            if len(intersections) > 0:
-                for shape in intersections:
-                    shape = Geometry.evaluate_inf_shape(shape)
-                    medium_shapes.append((structure.medium, shape))
-        return medium_shapes
-
-    def _get_structures_2dbox(
-        self,
-        structures: List[Structure],
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
-
-        Parameters
-        ----------
-        structures : List[:class:`.Structure`]
-            list of structures to filter on the plane.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
-            List of shapes and mediums on the plane.
-        """
-        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
-        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
-        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
-
-        if hlim is not None:
-            (hmin, hmax) = hlim
-        if vlim is not None:
-            (vmin, vmax) = vlim
-
-        # get center and size with h, v
-        h_center = (hmin + hmax) / 2.0
-        v_center = (vmin + vmax) / 2.0
-        h_size = (hmax - hmin) or inf
-        v_size = (vmax - vmin) or inf
-
-        axis, center_normal = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        center = self.unpop_axis(center_normal, (h_center, v_center), axis=axis)
-        size = self.unpop_axis(0.0, (h_size, v_size), axis=axis)
-        plane = Box(center=center, size=size)
-
-        medium_shapes = []
-        for structure in structures:
-            intersections = plane.intersections_with(structure.geometry)
-            for shape in intersections:
-                if not shape.is_empty:
-                    shape = Box.evaluate_inf_shape(shape)
-                    medium_shapes.append((structure.medium, shape))
-        return medium_shapes
-
-    @staticmethod
-    def _filter_structures_plane(
-        structures: List[Structure], plane: Box
-    ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on plane specified by {x,y,z}.
-        Overlaps are removed or merged depending on medium.
-
-        Parameters
-        ----------
-        structures : List[:class:`.Structure`]
-            list of structures to filter on the plane.
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-
-        Returns
-        -------
-        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
-            List of shapes and mediums on the plane after merging.
-        """
-
-        shapes = []
-        for structure in structures:
-
-            # get list of Shapely shapes that intersect at the plane
-            shapes_plane = plane.intersections_with(structure.geometry)
-
-            # Append each of them and their medium information to the list of shapes
-            for shape in shapes_plane:
-                shapes.append((structure.medium, shape, shape.bounds))
-
-        background_shapes = []
-        for medium, shape, bounds in shapes:
-
-            minx, miny, maxx, maxy = bounds
-
-            # loop through background_shapes (note: all background are non-intersecting or merged)
-            for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
-
-                _minx, _miny, _maxx, _maxy = _bounds
-
-                # do a bounding box check to see if any intersection to do anything about
-                if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
-                    continue
-
-                # look more closely to see if intersected.
-                if _shape.is_empty or not shape.intersects(_shape):
-                    continue
-
-                diff_shape = _shape - shape
-
-                # different medium, remove intersection from background shape
-                if medium != _medium and len(diff_shape.bounds) > 0:
-                    background_shapes[index] = (_medium, diff_shape, diff_shape.bounds)
-
-                # same medium, add diff shape to this shape and mark background shape for removal
-                else:
-                    shape = shape | diff_shape
-                    background_shapes[index] = None
-
-            # after doing this with all background shapes, add this shape to the background
-            background_shapes.append((medium, shape, shape.bounds))
-
-            # remove any existing background shapes that have been marked as 'None'
-            background_shapes = [b for b in background_shapes if b is not None]
-
-        # filter out any remaining None or empty shapes (shapes with area completely removed)
-        return [(medium, shape) for (medium, shape, _) in background_shapes if shape]
 
     @cached_property
     def frequency_range(self) -> FreqBound:
@@ -3255,7 +2489,7 @@ class Simulation(Box):
             """returns epsilon data on grid of points defined by coords"""
             arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
             eps_background = get_eps(
-                structure=self.background_structure, frequency=freq, coords=coords
+                structure=self.scene.background_structure, frequency=freq, coords=coords
             )
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
@@ -3566,15 +2800,6 @@ class Simulation(Box):
             )
 
         return Simulation.parse_obj(sim_dict)
-
-    @cached_property
-    def scene(self) -> Scene:
-        """Return a :class:.`Scene` instance based on the current simulation."""
-
-        return Scene(
-            structures=self.structures,
-            medium=self.medium,
-        )
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> Simulation:

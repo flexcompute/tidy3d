@@ -8,14 +8,15 @@ import pydantic.v1 as pd
 
 from .viz import plot_params_heat_source
 
-from ..base import Tidy3dBaseModel, cached_property
+from ..base import cached_property
+from ..base_sim.source import AbstractSource
 from ..data.data_array import TimeDataArray
 from ..viz import PlotParams
 
 from ...constants import VOLUMETRIC_HEAT_RATE
 
 
-class HeatSource(ABC, Tidy3dBaseModel):
+class HeatSource(AbstractSource, ABC):
     """Abstract heat source."""
 
     structures: Tuple[str, ...] = pd.Field(
