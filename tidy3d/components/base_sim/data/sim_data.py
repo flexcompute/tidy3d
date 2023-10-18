@@ -41,8 +41,6 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
     def __getitem__(self, monitor_name: str) -> AbstractMonitorData:
         """Get a :class:`.AbstractMonitorData` by name. Apply symmetry if applicable."""
-        if monitor_name not in self.monitor_data:
-            raise DataError(f"'{self.type}' does not contain data for monitor '{monitor_name}'.")
         monitor_data = self.monitor_data[monitor_name]
         return monitor_data.symmetry_expanded_copy
 

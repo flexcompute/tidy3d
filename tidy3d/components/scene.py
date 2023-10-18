@@ -11,14 +11,14 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .base import cached_property, Tidy3dBaseModel
 from .validators import assert_unique_names
-from .geometry.base import Box
-from .geometry.mesh import TriangleMesh
+from .geometry.base import Box, GeometryGroup, ClipOperation
+from .geometry.utils import flatten_groups, traverse_geometries
 from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate, InterpMethod
 from .medium import Medium, MediumType, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
-from .medium import AnisotropicMedium, AbstractPerturbationMedium
+from .medium import AbstractPerturbationMedium
+from .grid.grid import Grid
 from .structure import Structure
-from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
@@ -33,6 +33,9 @@ from ..log import log
 
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
+
+# maximum geometry count in a single structure
+MAX_GEOMETRY_COUNT = 100
 
 
 class Scene(Tidy3dBaseModel):
@@ -85,6 +88,29 @@ class Scene(Tidy3dBaseModel):
                 f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct mediums."
                 f"{len(mediums)} were supplied."
             )
+
+        return val
+
+    @pd.validator("structures", always=True)
+    def _validate_num_geometries(cls, val):
+        """Error if too many geometries in a single structure."""
+
+        if val is None:
+            return val
+
+        for i, structure in enumerate(val):
+            for geometry in flatten_groups(structure.geometry):
+                count = sum(
+                    1
+                    for g in traverse_geometries(geometry)
+                    if not isinstance(g, (GeometryGroup, ClipOperation))
+                )
+                if count > MAX_GEOMETRY_COUNT:
+                    raise SetupError(
+                        f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
+                        f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
+                        f"preprocessing performance."
+                    )
 
         return val
 
@@ -357,13 +383,13 @@ class Scene(Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        medium_shapes = self._get_structures_plane(structures=self.structures, x=x, y=y, z=z)
+        medium_shapes = self._get_structures_2dbox(
+            structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
         medium_map = self.medium_map
-
         for (medium, shape) in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
-
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
@@ -391,6 +417,11 @@ class Scene(Tidy3dBaseModel):
             # perfect electrical conductor
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
+        elif medium.time_modulated:
+            # time modulated medium
+            plot_params = plot_params.copy(
+                update={"facecolor": "red", "linewidth": 0, "hatch": "x*"}
             )
         elif isinstance(medium, Medium2D):
             # 2d material
@@ -448,11 +479,16 @@ class Scene(Tidy3dBaseModel):
         ax.set_ylim(vlim)
         return ax
 
-    @staticmethod
-    def _get_structures_plane(
-        structures: List[Structure], x: float = None, y: float = None, z: float = None
+    def _get_structures_2dbox(
+        self,
+        structures: List[Structure],
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
     ) -> List[Tuple[Medium, Shapely]]:
-        """Compute list of shapes to plot on plane specified by {x,y,z}.
+        """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
 
         Parameters
         ----------
@@ -464,17 +500,42 @@ class Scene(Tidy3dBaseModel):
             position of plane in y direction, only one of x, y, z must be specified to define plane.
         z : float = None
             position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
 
         Returns
         -------
         List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
             List of shapes and mediums on the plane.
         """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = Box.pop_axis(self.bounds[0], axis=axis)
+        _, (hmax, vmax) = Box.pop_axis(self.bounds[1], axis=axis)
+
+        if hlim is not None:
+            (hmin, hmax) = hlim
+        if vlim is not None:
+            (vmin, vmax) = vlim
+
+        # get center and size with h, v
+        h_center = (hmin + hmax) / 2.0
+        v_center = (vmin + vmax) / 2.0
+        h_size = (hmax - hmin) or inf
+        v_size = (vmax - vmin) or inf
+
+        axis, center_normal = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        center = Box.unpop_axis(center_normal, (h_center, v_center), axis=axis)
+        size = Box.unpop_axis(0.0, (h_size, v_size), axis=axis)
+        plane = Box(center=center, size=size)
+
         medium_shapes = []
         for structure in structures:
-            intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
-            if len(intersections) > 0:
-                for shape in intersections:
+            intersections = plane.intersections_with(structure.geometry)
+            for shape in intersections:
+                if not shape.is_empty:
                     shape = Box.evaluate_inf_shape(shape)
                     medium_shapes.append((structure.medium, shape))
         return medium_shapes
@@ -649,6 +710,7 @@ class Scene(Tidy3dBaseModel):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        grid: Grid = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -688,7 +750,6 @@ class Scene(Tidy3dBaseModel):
         """
 
         structures = self.structures
-        structures = [self.background_structure] + list(structures)
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -704,7 +765,10 @@ class Scene(Tidy3dBaseModel):
             plane = Box(center=center, size=size)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
-            medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
+            structures = [self.background_structure] + list(structures)
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            )
 
         eps_min, eps_max = eps_lim
 
@@ -737,7 +801,7 @@ class Scene(Tidy3dBaseModel):
             else:
                 # For custom medium, apply pcolormesh clipped by the shape.
                 self._pcolormesh_shape_custom_medium_structure_eps(
-                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax
+                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax, grid
                 )
 
         if cbar:
@@ -779,11 +843,10 @@ class Scene(Tidy3dBaseModel):
         eps_list = [
             medium.eps_model(freq).real
             for medium in medium_list
-            if not isinstance(medium, AbstractCustomMedium)
+            if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
         ]
-        eps_list.append(1)
-        eps_min = min(eps_list)
-        eps_max = max(eps_list)
+        eps_min = min(eps_list, default=1)
+        eps_max = max(eps_list, default=1)
         # custom medium, the min and max in the supplied dataset over all components and
         # spatial locations.
         for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
@@ -811,6 +874,7 @@ class Scene(Tidy3dBaseModel):
         reverse: bool,
         shape: Shapely,
         ax: Ax,
+        grid: Grid,
     ):
         """
         Plot shape made of custom medium with ``pcolormesh``.
@@ -818,8 +882,6 @@ class Scene(Tidy3dBaseModel):
         coords = "xyz"
         normal_axis_ind, normal_position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         normal_axis, plane_axes = Box.pop_axis(coords, normal_axis_ind)
-        plane_axes_inds = [0, 1, 2]
-        plane_axes_inds.pop(normal_axis_ind)
 
         # make grid for eps interpolation
         # we will do this by combining shape bounds and points where custom eps is provided
@@ -828,31 +890,54 @@ class Scene(Tidy3dBaseModel):
         rmin.insert(normal_axis_ind, normal_position)
         rmax.insert(normal_axis_ind, normal_position)
 
-        # in case when different components of custom medium are defined on different grids
-        # we will combine all points along each dimension
-        eps_diag = medium.eps_dataarray_freq(frequency=freq)
-        if eps_diag[0].coords == eps_diag[1].coords and eps_diag[0].coords == eps_diag[2].coords:
-            coords_to_insert = [eps_diag[0].coords]
+        if grid is None:
+            plane_axes_inds = [0, 1, 2]
+            plane_axes_inds.pop(normal_axis_ind)
+
+            # in case when different components of custom medium are defined on different grids
+            # we will combine all points along each dimension
+            eps_diag = medium.eps_dataarray_freq(frequency=freq)
+            if (
+                eps_diag[0].coords == eps_diag[1].coords
+                and eps_diag[0].coords == eps_diag[2].coords
+            ):
+                coords_to_insert = [eps_diag[0].coords]
+            else:
+                coords_to_insert = [eps_diag[0].coords, eps_diag[1].coords, eps_diag[2].coords]
+
+            # actual combining of points along each of plane dimensions
+            plane_coord = []
+            for ind, comp in zip(plane_axes_inds, plane_axes):
+                # first start with an array made of shapes bounds
+                axis_coords = np.array([rmin[ind], rmax[ind]])
+                # now add points in between them
+                for coords in coords_to_insert:
+                    comp_axis_coords = coords[comp]
+                    inds_inside_shape = np.where(
+                        np.logical_and(comp_axis_coords > rmin[ind], comp_axis_coords < rmax[ind])
+                    )[0]
+                    if len(inds_inside_shape) > 0:
+                        axis_coords = np.concatenate(
+                            (axis_coords, comp_axis_coords[inds_inside_shape])
+                        )
+                # remove duplicates
+                axis_coords = np.unique(axis_coords)
+
+                plane_coord.append(axis_coords)
         else:
-            coords_to_insert = [eps_diag[0].coords, eps_diag[1].coords, eps_diag[2].coords]
+            span_inds = grid.discretize_inds(Box.from_bounds(rmin=rmin, rmax=rmax), extend=True)
+            # filter negative or too large inds
+            n_grid = [len(grid_comp) for grid_comp in grid.boundaries.to_list]
+            span_inds = [
+                (max(fmin, 0), min(fmax, n_grid[f_ind]))
+                for f_ind, (fmin, fmax) in enumerate(span_inds)
+            ]
 
-        # actual combining of points along each of plane dimensions
-        plane_coord = []
-        for ind, comp in zip(plane_axes_inds, plane_axes):
-            # first start with an array made of shapes bounds
-            axis_coords = np.array([rmin[ind], rmax[ind]])
-            # now add points in between them
-            for coords in coords_to_insert:
-                comp_axis_coords = coords[comp]
-                inds_inside_shape = np.where(
-                    np.logical_and(comp_axis_coords > rmin[ind], comp_axis_coords < rmax[ind])
-                )[0]
-                if len(inds_inside_shape) > 0:
-                    axis_coords = np.concatenate((axis_coords, comp_axis_coords[inds_inside_shape]))
-            # remove duplicates
-            axis_coords = np.unique(axis_coords)
-
-            plane_coord.append(axis_coords)
+            # assemble the coordinate in the 2d plane
+            plane_coord = []
+            for plane_axis in range(2):
+                ind_axis = "xyz".index(plane_axes[plane_axis])
+                plane_coord.append(grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
 
         # prepare `Coords` for interpolation
         coord_dict = {
@@ -1035,7 +1120,6 @@ class Scene(Tidy3dBaseModel):
         """
 
         structures = self.structures
-        structures = [self.background_structure] + list(structures)
 
         # alpha is None just means plot without any transparency
         if alpha is None:
@@ -1051,7 +1135,10 @@ class Scene(Tidy3dBaseModel):
             plane = Box(center=center, size=size)
             medium_shapes = self._filter_structures_plane_medium(structures=structures, plane=plane)
         else:
-            medium_shapes = self._get_structures_plane(structures=structures, x=x, y=y, z=z)
+            structures = [self.background_structure] + list(structures)
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            )
 
         heat_cond_min, heat_cond_max = self.heat_conductivity_bounds()
         for (medium, shape) in medium_shapes:
@@ -1153,31 +1240,6 @@ class Scene(Tidy3dBaseModel):
         return ax
 
     """ Misc """
-
-    @property
-    def custom_datasets(self) -> List[Dataset]:
-        """List of custom datasets for verification purposes. If the list is not empty, then
-        the scene needs to be exported to hdf5 to store the data.
-        """
-        datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
-        datasets_geometry = [
-            struct.geometry.mesh_dataset
-            for struct in self.structures
-            if isinstance(struct.geometry, TriangleMesh)
-        ]
-        return datasets_medium + datasets_geometry
-
-    @cached_property
-    def allow_gain(self) -> bool:
-        """``True`` if any of the mediums in the scene allows gain."""
-
-        for medium in self.mediums:
-            if isinstance(medium, AnisotropicMedium):
-                if np.any([med.allow_gain for med in [medium.xx, medium.yy, medium.zz]]):
-                    return True
-            elif medium.allow_gain:
-                return True
-        return False
 
     def perturbed_mediums_copy(
         self,

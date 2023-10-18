@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import tidy3d as td
-from tidy3d.components.simulation import MAX_NUM_MEDIUMS
+from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
 from ..utils import assert_log_level, log_capture, SIM_FULL
 
 SCENE = td.Scene()
@@ -187,32 +187,6 @@ def test_names_unique():
         )
 
 
-def test_allow_gain():
-    """Test if simulation allows gain."""
-
-    medium = td.Medium(permittivity=2.0)
-    medium_gain = td.Medium(permittivity=2.0, allow_gain=True)
-    medium_ani = td.AnisotropicMedium(xx=medium, yy=medium, zz=medium)
-    medium_gain_ani = td.AnisotropicMedium(xx=medium, yy=medium_gain, zz=medium)
-
-    # Test simulation medium
-    scene = td.Scene(medium=medium)
-    assert not scene.allow_gain
-    scene = scene.updated_copy(medium=medium_gain)
-    assert scene.allow_gain
-
-    # Test structure with anisotropic gain medium
-    struct = td.Structure(geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)), medium=medium_ani)
-    struct_gain = struct.updated_copy(medium=medium_gain_ani)
-    scene = td.Scene(
-        medium=medium,
-        structures=[struct],
-    )
-    assert not scene.allow_gain
-    scene = scene.updated_copy(structures=[struct_gain])
-    assert scene.allow_gain
-
-
 def test_perturbed_mediums_copy():
 
     # Non-dispersive
@@ -272,3 +246,36 @@ def test_perturbed_mediums_copy():
 
     assert isinstance(new_scene.medium, td.CustomMedium)
     assert isinstance(new_scene.structures[0].medium, td.CustomPoleResidue)
+
+
+def test_max_geometry_validation():
+    too_many = [td.Box(size=(1, 1, 1)) for _ in range(MAX_GEOMETRY_COUNT + 1)]
+
+    fine = [
+        td.Structure(
+            geometry=td.ClipOperation(
+                operation="union",
+                geometry_a=td.Box(size=(1, 1, 1)),
+                geometry_b=td.GeometryGroup(geometries=too_many),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        ),
+        td.Structure(
+            geometry=td.GeometryGroup(geometries=too_many),
+            medium=td.Medium(permittivity=2.0),
+        ),
+    ]
+    _ = td.Scene(structures=fine)
+
+    not_fine = [
+        td.Structure(
+            geometry=td.ClipOperation(
+                operation="difference",
+                geometry_a=td.Box(size=(1, 1, 1)),
+                geometry_b=td.GeometryGroup(geometries=too_many),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        ),
+    ]
+    with pytest.raises(pd.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
+        _ = td.Scene(structures=not_fine)

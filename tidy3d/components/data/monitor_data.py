@@ -35,11 +35,13 @@ from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, Vali
 from ...constants import ETA_0, C_0, MICROMETER
 from ...log import log
 
+from ..base_sim.data.monitor_data import AbstractMonitorData
+
 
 Coords1D = ArrayFloat1D
 
 
-class MonitorData(Dataset, ABC):
+class MonitorData(AbstractMonitorData, ABC):
     """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
 
     monitor: MonitorType = pd.Field(
@@ -53,11 +55,6 @@ class MonitorData(Dataset, ABC):
     def symmetry_expanded(self) -> MonitorData:
         """Return self with symmetry applied."""
         return self
-
-    @property
-    def symmetry_expanded_copy(self) -> MonitorData:
-        """Return copy of self with symmetry applied."""
-        return self.copy()
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
