@@ -23,7 +23,7 @@ Tidy3D Basics
     notebooks/DivergedFDTDSimulation    
 
 Feature Tutorials
--------------------
+-----------------
 
 Mediums
 ~~~~~~~
@@ -59,7 +59,7 @@ Grid Specification
     notebooks/AutoGrid
 
 Symmetry and Boundary Conditions
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -121,6 +121,7 @@ Resonance Finder
     :maxdepth: 1
 
     notebooks/ResonanceFinder
+    notebooks/CavityFOM    
 
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
