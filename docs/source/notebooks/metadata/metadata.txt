@@ -545,5 +545,11 @@
     "keywords": "waveguide, tuning, thermo-optic, heat, Tidy3D, FDTD",
     "feature_image": ""
   }
+  "TimeModulationTutorial.ipynb": {
+    "title": "How to apply time modulation to materials in Tidy3D FDTD | Flexcompute",
+    "description": "This notebook demonstrate how to simulation actively modulated devices such as electro-optical modulators in Tidy3D.",
+    "keywords": "active devices, electro-optical, EOM, modulators, electro-absorption, EAM, Tidy3D, FDTD",
+    "feature_image": ""
+  }
 
 }

@@ -35,6 +35,7 @@ Mediums
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
     notebooks/CustomMediumTutorial
+    notebooks/TimeModulationTutorial.ipynb
 
 Structures
 ~~~~~~~~~~

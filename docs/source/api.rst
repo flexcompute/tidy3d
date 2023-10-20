@@ -163,6 +163,17 @@ Nonlinear
     NonlinearSpec
     NonlinearSusceptibility
 
+Time Modulation
+^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ModulationSpec
+   SpaceTimeModulation   
+   ContinuousWaveTimeModulation
+   SpaceModulation
+
 Material Library
 ----------------
 
