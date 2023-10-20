@@ -160,8 +160,11 @@ Nonlinear
 .. autosummary::
    :toctree: _autosummary/
     
-    NonlinearSpec
-    NonlinearSusceptibility
+   NonlinearSpec
+   NonlinearModel
+   NonlinearSusceptibility
+   KerrNonlinearity
+   TwoPhotonAbsorption
 
 Time Modulation
 ^^^^^^^^^^^^^^^
@@ -219,7 +222,8 @@ Source Time Dependence
    :toctree: _autosummary/
 
    GaussianPulse
-   .. ContinuousWave
+   ContinuousWave
+   CustomSourceTime
 
 
 Monitors
