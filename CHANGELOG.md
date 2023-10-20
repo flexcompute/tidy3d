@@ -5,8 +5,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.4.3] - 2023-10-16
-
 ### Added
 - Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
 - GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
@@ -14,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Update versions of `boto3`, `requests`, and `click`.
+- python 3.7 no longer tested nor supported.
+- Remove warning that monitors now have `colocate=True` by default.
 
 ### Fixed
 
@@ -28,8 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Internal refactor of Web API functionality.
 - `Geometry.from_gds` doesn't create unnecessary groups of single elements.
-- python 3.7 no longer tested nor supported.
-- All monitors now have `colocate=True` by default.
+
+## [2.4.3] - 2023-10-16
+
+### Added
 - `Geometry.zero_dims` method that uses `Geometry.bounds` and speeds up the validator for zero-sized geometries.
 
 ### Changed
