@@ -64,7 +64,7 @@ setuptools.setup(
     ],
     packages=setuptools.find_packages(),
     include_package_data=True,
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=core_required,
     extras_require={
         "dev": dev_required,

@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Internal refactor of Web API functionality.
-- `Geometry.from_gds` doesn't create unecessary groups of single elements.
-- python 3.7 no longer tested.
+- `Geometry.from_gds` doesn't create unnecessary groups of single elements.
+- python 3.7 no longer tested nor supported.
 - All monitors now have `colocate=True` by default.
 
 ### Fixed
