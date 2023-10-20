@@ -413,12 +413,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         worker_group: str = None
             worker group
         """
+
+        if solver_version:
+            protocol_version = None
+        else:
+            protocol_version = http_util.get_version()
+
         http.post(
             f"tidy3d/tasks/{self.task_id}/submit",
             {
                 "solverVersion": solver_version,
                 "workerGroup": worker_group,
-                "protocolVersion": http_util.get_version(),
+                "protocolVersion": protocol_version,
             },
         )
 
