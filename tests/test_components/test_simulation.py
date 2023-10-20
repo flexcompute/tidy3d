@@ -8,7 +8,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
-from tidy3d.components.simulation import MAX_NUM_MEDIUMS
+from tidy3d.components.simulation import MAX_NUM_MEDIUMS, MAX_NUM_SOURCES
 from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated
 from tidy3d.constants import LARGE_NUMBER
 
@@ -493,6 +493,7 @@ def test_validate_components_none():
 
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
     assert SIM._validate_num_mediums(val=None) is None
+    assert SIM._validate_num_sources(val=None) is None
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_grid_size_too_small(val=None, values=SIM.dict()) is None
@@ -1178,6 +1179,22 @@ def test_num_mediums():
         _ = td.Simulation(
             size=(5, 5, 5), grid_spec=grid_spec, structures=structures, run_time=1e-12
         )
+
+
+def test_num_sources():
+    """Make sure we error if too many sources supplied."""
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+    )
+
+    _ = td.Simulation(size=(5, 5, 5), run_time=1e-12, sources=[src] * MAX_NUM_SOURCES)
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Simulation(size=(5, 5, 5), run_time=1e-12, sources=[src] * (MAX_NUM_SOURCES + 1))
 
 
 def _test_names_default():

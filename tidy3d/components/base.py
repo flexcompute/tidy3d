@@ -65,9 +65,10 @@ def ndarray_encoder(val):
 def _get_valid_extension(fname: str) -> str:
     """Return the file extension from fname, validated to accepted ones."""
     extension = "".join(pathlib.Path(fname).suffixes).lower()
-    if extension not in {".json", ".yaml", ".hdf5", ".hdf5.gz"}:
+    valid_extensions = [".json", ".yaml", ".hdf5", ".hdf5.gz", ".h5"]
+    if extension not in valid_extensions:
         raise FileError(
-            f"{fname}::File extension must be .json, .yaml, .hdf5, or .hdf5.gz, but '{extension}' given"
+            f"{fname}::File extension must be in {valid_extensions}, but '{extension}' given"
         )
     return extension
 
@@ -225,6 +226,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             ".yaml": cls.dict_from_yaml,
             ".hdf5": cls.dict_from_hdf5,
             ".hdf5.gz": cls.dict_from_hdf5_gz,
+            ".h5": cls.dict_from_hdf5,
         }[extension]
         return converter(**kwargs)
 
@@ -718,6 +720,20 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         str
             Json-formatted string holding :class:`Tidy3dBaseModel` data.
         """
+        return self._json()
+
+    def _json(self, indent=INDENT, exclude_unset=False, **kwargs) -> str:
+        """Overwrites the model ``json`` representation with some extra customized handling.
+
+        Parameters
+        -----------
+        **kwargs : kwargs passed to `self.json()`
+
+        Returns
+        -------
+        str
+            Json-formatted string holding :class:`Tidy3dBaseModel` data.
+        """
 
         def make_json_compatible(json_string: str) -> str:
             """Makes the string compatiable with json standards, notably for infinity."""
@@ -727,12 +743,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             json_string = json_string.replace("Infinity", '"Infinity"')
             return json_string.replace(tmp_string, '"-Infinity"')
 
-        json_string = self.json(indent=INDENT, exclude_unset=False)
+        json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
         json_string = make_json_compatible(json_string)
         return json_string
-        # json_dict = json.loads(json_string)
-
-        # return json.dumps(json_dict)
 
     @classmethod
     def add_type_field(cls) -> None:

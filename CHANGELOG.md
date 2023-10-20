@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.3] - 2023-10-16
+
 ### Added
 - Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
 - GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
@@ -28,9 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Geometry.from_gds` doesn't create unnecessary groups of single elements.
 - python 3.7 no longer tested nor supported.
 - All monitors now have `colocate=True` by default.
+- `Geometry.zero_dims` method that uses `Geometry.bounds` and speeds up the validator for zero-sized geometries.
+
+### Changed
+- Limited number of distinct sources to 1000. In cases where a complicated spatial dependence of the source is desired, a ``CustomFieldSource`` or a ``CustomCurrentSource`` can be used instead of multiple distinct sources.
 
 ### Fixed
 - Properly handle `.freqs` in `output_monitors` of adjoint plugin.
+- Simulation updater for `.hdf5` files with custom data.
+- Fix to solver geometry parsing in some edge cases of slanted polyslab and STL geometries that could lead to an error or divergence.
+- Fix to errors in some edge cases of a TFSF source setup.
 
 ## [2.4.2] - 2023-9-28
 
@@ -988,6 +997,8 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...pre/2.5
 [2.5.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.5.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
+[2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/flexcompute/tidy3d/compare/v2.3.3...v2.4.0

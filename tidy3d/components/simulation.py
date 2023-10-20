@@ -68,6 +68,9 @@ MIN_GRIDS_PER_WVL = 6.0
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
 
+# maximum number of sources
+MAX_NUM_SOURCES = 1000
+
 # maximum geometry count in a single structure
 MAX_GEOMETRY_COUNT = 100
 
@@ -458,6 +461,22 @@ class Simulation(Box):
 
         return val
 
+    @pydantic.validator("sources", always=True)
+    def _validate_num_sources(cls, val):
+        """Error if too many sources present."""
+
+        if val is None:
+            return val
+
+        if len(val) > MAX_NUM_SOURCES:
+            raise SetupError(
+                f"Number of distinct sources exceeds the maximum allowed {MAX_NUM_SOURCES}. "
+                "For a complex source setup, consider using 'CustomFieldSource' or "
+                "'CustomCurrentSource' to combine multiple sources into one object."
+            )
+
+        return val
+
     @pydantic.validator("structures", always=True)
     def _validate_num_geometries(cls, val):
         """Error if too many geometries in a single structure."""
@@ -521,11 +540,11 @@ class Simulation(Box):
             if isinstance(structure.medium, Medium2D):
                 continue
             for geom in flatten_groups(structure.geometry):
-                zero_axes = [ind for ind, ele in enumerate(geom.bounding_box.size) if ele == 0.0]
-                if len(zero_axes) > 0:
+                zero_dims = geom.zero_dims
+                if len(zero_dims) > 0:
                     log.warning(
                         f"Structure at 'structures[{i}]' has geometry with zero size along "
-                        f"dimensions {zero_axes}, and with a medium that is not a 'Medium2D'. "
+                        f"dimensions {zero_dims}, and with a medium that is not a 'Medium2D'. "
                         "This is probably not correct, since the resulting simulation will "
                         "depend on the details of the numerical grid. Consider either "
                         "giving the geometry a nonzero thickness or using a 'Medium2D'."

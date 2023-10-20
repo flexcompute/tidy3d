@@ -291,6 +291,15 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return Box.from_bounds(*self.bounds)
 
+    @cached_property
+    def zero_dims(self) -> List[Axis]:
+        """A list of axes along which the :class:`Geometry` is zero-sized based on its bounds."""
+        zero_dims = []
+        for dim in range(3):
+            if self.bounds[1][dim] == self.bounds[0][dim]:
+                zero_dims.append(dim)
+        return zero_dims
+
     def _pop_bounds(self, axis: Axis) -> Tuple[Coordinate2D, Tuple[Coordinate2D, Coordinate2D]]:
         """Returns min and max bounds in plane normal to and tangential to ``axis``.
 
