@@ -615,3 +615,41 @@ def test_pml_params():
     sf_f = create_sfactor_f(omega, dls, N, n_pml, dmin_pml=True)
     assert np.allclose(sf_f[:n_pml] / sf_f[n_pml - 1], target_profile[::-1])
     assert np.allclose(sf_f[N - n_pml :] / sf_f[N - n_pml], target_profile)
+
+
+def test_mode_solver_nan_pol_fraction():
+    """Test mode solver when eigensolver returns 0 for some modes."""
+    wg = td.Structure(geometry=td.Box(size=(0.5, 100, 0.22)), medium=td.Medium(permittivity=12))
+
+    simulation = td.Simulation(
+        medium=td.Medium(permittivity=2),
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=15),
+        structures=[wg],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+
+    mode_spec = td.ModeSpec(
+        num_modes=10,
+        target_neff=3.48,
+        filter_pol="tm",
+        precision="single",
+        track_freq="central",
+    )
+
+    freqs = [td.C_0 / 1.55]
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(center=(0, 0, 0), size=(2, 0, 1.1)),
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+    )
+
+    md = ms.solve()
+
+    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]

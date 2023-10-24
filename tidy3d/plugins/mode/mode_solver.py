@@ -305,11 +305,19 @@ class ModeSolver(Tidy3dBaseModel):
                 te_frac = pol_frac.te.isel(f=ifreq)
                 if self.mode_spec.filter_pol == "te":
                     sort_inds = np.concatenate(
-                        (np.where(te_frac >= 0.5)[0], np.where(te_frac < 0.5)[0])
+                        (
+                            np.where(te_frac >= 0.5)[0],
+                            np.where(te_frac < 0.5)[0],
+                            np.where(np.isnan(te_frac))[0],
+                        )
                     )
                 elif self.mode_spec.filter_pol == "tm":
                     sort_inds = np.concatenate(
-                        (np.where(te_frac <= 0.5)[0], np.where(te_frac > 0.5)[0])
+                        (
+                            np.where(te_frac <= 0.5)[0],
+                            np.where(te_frac > 0.5)[0],
+                            np.where(np.isnan(te_frac))[0],
+                        )
                     )
                 for data in list(mode_solver_data.field_components.values()) + [
                     mode_solver_data.n_complex,
