@@ -249,6 +249,23 @@ SIM_FULL = td.Simulation(
             ),
             medium=td.Medium(permittivity=5),
         ),
+        td.Structure(
+            geometry=td.ClipOperation(
+                geometry_a=td.Box(size=(1, 1, 1), center=(0.9, 0.9, 0.9)),
+                geometry_b=td.Box(size=(1, 1, 1), center=(1.1, 1.1, 1.1)),
+                operation="symmetric_difference",
+            ),
+            medium=td.Medium(permittivity=3),
+            name="clip_operation",
+        ),
+        td.Structure(
+            geometry=td.Transformed(
+                geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)),
+                transform=td.Transformed.rotation(np.pi / 12, 2),
+            ),
+            medium=td.Medium(permittivity=1.5),
+            name="transformed_box",
+        ),
     ],
     sources=[
         td.UniformCurrentSource(

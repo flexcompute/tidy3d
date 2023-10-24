@@ -8,8 +8,9 @@ import pydantic.v1 as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
-from .types import Coordinate, TensorReal, ArrayFloat2D
+from .types import Coordinate, TensorReal, ArrayFloat2D, Axis
 from ..constants import RADIAN
+from ..exceptions import ValidationError
 
 
 class AbstractRotation(ABC, Tidy3dBaseModel):
@@ -70,10 +71,11 @@ class AbstractRotation(ABC, Tidy3dBaseModel):
 class RotationAroundAxis(AbstractRotation):
     """Rotation of vectors and tensors around a given vector."""
 
-    axis: Coordinate = pd.Field(
-        [1, 0, 0],
+    axis: Union[Axis, Coordinate] = pd.Field(
+        0,
         title="Axis of Rotation",
-        description="A vector that specifies the axis of rotation.",
+        description="A vector that specifies the axis of rotation, or a single int: 0, 1, or 2, "
+        "indicating x, y, or z.",
     )
 
     angle: float = pd.Field(
@@ -82,6 +84,23 @@ class RotationAroundAxis(AbstractRotation):
         description="Angle of rotation in radians.",
         units=RADIAN,
     )
+
+    @pd.validator("axis", always=True)
+    def _convert_axis_index_to_vector(cls, val):
+        if not isinstance(val, tuple):
+            axis = [0.0, 0.0, 0.0]
+            axis[val] = 1.0
+            val = tuple(axis)
+        return val
+
+    @pd.validator("axis")
+    def _guarantee_nonzero_axis(cls, val):
+        norm = np.linalg.norm(val)
+        if np.isclose(norm, 0):
+            raise ValidationError(
+                "The norm of vector 'axis' cannot be zero. Please provide a proper rotation axis."
+            )
+        return val
 
     @cached_property
     def isidentity(self) -> bool:
@@ -96,7 +115,8 @@ class RotationAroundAxis(AbstractRotation):
         if self.isidentity:
             return np.eye(3)
 
-        n = self.axis / np.linalg.norm(self.axis)
+        norm = np.linalg.norm(self.axis)
+        n = self.axis / norm
         c = np.cos(self.angle)
         s = np.sin(self.angle)
         R = np.zeros((3, 3))

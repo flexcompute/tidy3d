@@ -11,12 +11,14 @@ import shapely
 from matplotlib import path
 
 from ..base import cached_property
-from ..types import Axis, Bound, PlanePosition, ArrayFloat2D
+from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
+from ..types import MatrixReal4x4, Shapely, trimesh
 from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, fp_eps
 
 from . import base
+from . import triangulation
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
@@ -26,6 +28,9 @@ _IS_CLOSE_RTOL = np.finfo(float).eps
 
 # Warn for too many divided polyslabs
 _COMPLEX_POLYSLAB_DIVISIONS_WARN = 100
+
+# Warn before triangulating large polyslabs due to inefficiency
+_MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION = 500
 
 
 class PolySlab(base.Planar):
@@ -518,6 +523,59 @@ class PolySlab(base.Planar):
             point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
+
+    @base.requires_trimesh
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        if len(self.base_polygon) > _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION:
+            log.warning(
+                "Processing of PolySlabs with large numbers of vertices can be slow.", log_once=True
+            )
+        base_triangles = triangulation.triangulate(self.base_polygon)
+        top_triangles = (
+            base_triangles
+            if isclose(self.sidewall_angle, 0)
+            else triangulation.triangulate(self.top_polygon)
+        )
+
+        n = len(self.base_polygon)
+        faces = (
+            [[a, b, c] for c, b, a in base_triangles]
+            + [[n + a, n + b, n + c] for a, b, c in top_triangles]
+            + [(i, (i + 1) % n, n + i) for i in range(n)]
+            + [((i + 1) % n, n + ((i + 1) % n), n + i) for i in range(n)]
+        )
+
+        x = np.hstack((self.base_polygon[:, 0], self.top_polygon[:, 0]))
+        y = np.hstack((self.base_polygon[:, 1], self.top_polygon[:, 1]))
+        z = np.hstack((np.full(n, self.slab_bounds[0]), np.full(n, self.slab_bounds[1])))
+        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
+        mesh = trimesh.Trimesh(vertices, faces)
+
+        section = mesh.section(plane_origin=origin, plane_normal=normal)
+        if section is None:
+            return []
+        path, _ = section.to_planar(to_2D=to_2D)
+        return path.polygons_full.tolist()
 
     def _intersections_normal(self, z: float):
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
@@ -1465,3 +1523,34 @@ class ComplexPolySlabBase(PolySlab):
             return z_coord + self.length_axis
         # bottom case
         return z_coord
+
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        return [
+            shapely.unary_union(
+                [
+                    shape
+                    for polyslab in self.sub_polyslabs
+                    for shape in polyslab.intersections_tilted_plane(normal, origin, to_2D)
+                ]
+            )
+        ]

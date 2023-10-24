@@ -5,7 +5,7 @@ import numpy as np
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry.utils import GeometryType
+from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
 from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect
@@ -41,6 +41,12 @@ class AbstractStructure(Tidy3dBaseModel):
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
     _name_validator = validate_name_str()
+
+    @pydantic.validator("geometry")
+    def _transformed_slanted_polyslabs_not_allowed(cls, val):
+        """Prevents the creation of slanted polyslabs rotated out of plane."""
+        validate_no_transformed_polyslabs(val)
+        return val
 
     @equal_aspect
     @add_ax_if_none

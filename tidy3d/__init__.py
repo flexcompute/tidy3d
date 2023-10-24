@@ -5,7 +5,7 @@ from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
-from .components.geometry.base import Box, ClipOperation, GeometryGroup
+from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
 from .components.geometry.primitives import Sphere, Cylinder
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
@@ -141,6 +141,7 @@ def set_logging_level(level: str) -> None:
 
 log.info(f"Using client version: {__version__}")
 
+Transformed.update_forward_refs()
 ClipOperation.update_forward_refs()
 GeometryGroup.update_forward_refs()
 
@@ -156,6 +157,8 @@ __all__ = [
     "Cylinder",
     "PolySlab",
     "GeometryGroup",
+    "ClipOperation",
+    "Transformed",
     "TriangleMesh",
     "Medium",
     "PoleResidue",
