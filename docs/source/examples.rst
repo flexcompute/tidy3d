@@ -139,6 +139,7 @@ Heat Solver
 
     notebooks/HeatSolver
     notebooks/MetalHeaterPhaseShifter
+    notebooks/ThermallyTunedRingResonator
 
 Case Studies
 ------------

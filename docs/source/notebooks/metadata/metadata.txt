@@ -551,5 +551,11 @@
     "keywords": "active devices, electro-optical, EOM, modulators, electro-absorption, EAM, Tidy3D, FDTD",
     "feature_image": ""
   }
+  "ThermallyTunedRingResonator.ipynb": {
+    "title": "Modeling thermo-optic phase-shift in a ring resonator using Tidy3D | Flexcompute",
+    "description": "This notebook investigates how temperature distribution affects the response of a ring resonator using Tidy3D thermal and optic solvers.",
+    "keywords": "ring resonator, waveguide, phase-shifter, thermo-optic, heat, Tidy3D, FDTD",
+    "feature_image": ""
+  }
 
 }
