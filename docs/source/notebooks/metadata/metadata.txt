@@ -77,10 +77,16 @@
     "keywords": "inverse design, WDM, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
-    "AdjointPlugin10_YBranch_Level_Set.ipynb": {
+    "AdjointPlugin10YBranch_Level_Set.ipynb": {
     "title": "Adjoint Optimization of a Y-Branch in Tidy3D Using Leve Set | Flexcompute",
     "description": "This notebook demonstrates how to set up and run a simple parameterized level set-based optimization of a Y-branch. In addition, we show how to tailor the level set function to a starting geometry, which is helpful to further optimize a device obtained by conventional design.",
     "keywords": "inverse design, y-branch, level set, design optimization, adjoint, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
+    "AdjointPlugin11CircuitMZI.ipynb": {
+    "title": "Modular Adjoint Optimization of an MZI using Circuit Simulation",
+    "description": "This notebook demonstrates combining the Tidy3D adjoint plugin with a differentiable circuit simulator (sax) for the inverse design of a Mach-Zehnder Interferometer (MZI). Two independent simulations are co-optimized with an objective function based on circuit level scattering parameters.",
+    "keywords": "inverse design, MZI, circuit, sax, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
     "AndersonLocalization.ipynb": {

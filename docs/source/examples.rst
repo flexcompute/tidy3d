@@ -139,6 +139,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin8WaveguideBend
     notebooks/AdjointPlugin9WDM
     notebooks/AdjointPlugin10YBranchLevelSet
+    notebooks/AdjointPlugin11CircuitMZI
 
 Case Studies
 ------------
