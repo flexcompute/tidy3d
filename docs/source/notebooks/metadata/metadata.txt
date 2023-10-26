@@ -417,7 +417,7 @@
     "title": "Radiative cooling glass coating | Flexcompute",
     "description": "This notebook simulates the emissivity of the 100 μm thick coating and the result shows that the emissivity (absorptance) of the coating is near unity in the atmospheric transparency window.",
     "keywords": "FDTD, Tidy3D, radiative cooling, emissivity",
-    "feature_image": "./img/radiative_cooling.png"
+    "feature_image": "./img/radiative_cooling_glass.png"
   },
   "ResonanceFinder.ipynb": {
     "title": "Setting up the resonance finder in Tidy3D | Flexcompute",
