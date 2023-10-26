@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove warning that monitors now have `colocate=True` by default.
 
 ### Fixed
+- If no adjoint sources for one simulation in an objective function, make a mock source with zero amplitude and warn user.
 
 ## [2.5.0rc1] - 2023-10-10
 

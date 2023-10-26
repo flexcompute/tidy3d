@@ -1568,3 +1568,50 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
     sim_adj = sim_data.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
 
     assert sim_adj.run_time == run_time_expected
+
+
+@pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
+def test_no_adjoint_sources(
+    monkeypatch, use_emulated_run, tmp_path, log_capture, has_adj_src, log_level_expected
+):
+    """Make sure warning (not error) if no adjoint sources."""
+
+    def make_sim(eps):
+        """Make a sim with given sources and fwidth_adjoint specified."""
+        struct = JaxStructure(
+            geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
+            medium=JaxMedium(permittivity=eps),
+        )
+
+        freq0 = 2e14
+        mnt = td.ModeMonitor(
+            size=(10, 10, 0),
+            mode_spec=td.ModeSpec(num_modes=3),
+            freqs=[freq0],
+            name="mnt",
+        )
+
+        return JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            monitors=(),
+            structures=(),
+            output_monitors=(mnt,),
+            input_structures=(),
+            sources=[src],
+        )
+
+    if not has_adj_src:
+        monkeypatch.setattr(JaxModeData, "to_adjoint_sources", lambda *args, **kwargs: [])
+
+    def J(x):
+        sim = make_sim(eps=x)
+        data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+        power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
+        return power
+
+    grad_J = grad(J)
+    grad_J(2.0)
+    assert_log_level(log_capture, log_level_expected)
