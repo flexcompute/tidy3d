@@ -11,6 +11,8 @@ from jax.tree_util import register_pytree_node_class
 
 from .....components.data.monitor_data import MonitorDataType, FieldData, PermittivityData
 from .....components.data.sim_data import SimulationData
+from .....components.source import PointDipole, GaussianPulse
+from .....log import log
 
 from ..base import JaxObject
 from ..simulation import JaxSimulation, JaxInfo
@@ -172,6 +174,33 @@ class JaxSimulationData(SimulationData, JaxObject):
         for mnt_data_vjp in self.output_data:
             for adj_source in mnt_data_vjp.to_adjoint_sources(fwidth=fwidth):
                 adj_srcs.append(adj_source)
+
+        # in this case (no adjoint sources) give it an "empty" source
+        if not adj_srcs:
+            log.warning(
+                "No adjoint sources, making a mock source with amplitude = 0. "
+                "All gradients will be zero for anything depending on this simulation's data. "
+                "This comes up when a simulation's data contributes to the value of an objective "
+                "function but the contribution from each member of the data is 0. "
+                "If this is intended (eg. if using 'jnp.max()' of several simulation results), "
+                "please ignore. Otherwise, this can suggest a mistake in your objective function."
+            )
+
+            # set a zero-amplitude source
+            adj_srcs.append(
+                PointDipole(
+                    center=sim_fwd.center,
+                    polarization="Ez",
+                    source_time=GaussianPulse(
+                        freq0=sim_fwd.freqs_adjoint[0],
+                        fwidth=sim_fwd._fwidth_adjoint,
+                        amplitude=0.0,
+                    ),
+                )
+            )
+
+            # set a very short run time relative to the fwidth
+            run_time = 2 / fwidth
 
         update_dict = dict(
             boundary_spec=bc_adj,
