@@ -18,7 +18,7 @@ from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod
 from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
+from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, ConformalMeshSpec
 from .medium import Medium, MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
@@ -187,6 +187,12 @@ class Simulation(AbstractSimulation):
         title="Subpixel Averaging",
         description="If ``True``, uses subpixel averaging of the permittivity "
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
+    )
+
+    conformal_mesh_spec: ConformalMeshSpec = pydantic.Field(
+        ConformalMeshSpec(),
+        title="Conformal mesh specifications",
+        description="Conformal mesh specifications applied to PEC strucures.",
     )
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
@@ -2159,6 +2165,13 @@ class Simulation(AbstractSimulation):
     """ Discretization """
 
     @cached_property
+    def scaled_courant(self) -> float:
+        """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
+        if self.subpixel:
+            return self.courant * self.conformal_mesh_spec.courant_ratio
+        return self.courant
+
+    @cached_property
     def dt(self) -> float:
         """Simulation time step (distance).
 
@@ -2172,7 +2185,7 @@ class Simulation(AbstractSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return n_cfl * self.courant * dl_avg / C_0
+        return n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:

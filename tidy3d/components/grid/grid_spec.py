@@ -10,13 +10,57 @@ import pydantic.v1 as pd
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType
 from ..base import Tidy3dBaseModel
-from ..types import Axis, Symmetry, annotate_type, TYPE_TAG_STR
+from ..types import Axis, Symmetry, annotate_type, TYPE_TAG_STR, ConformalMeshType
 from ..source import SourceType
 from ..structure import Structure, StructureType
 from ..geometry.base import Box
 from ...log import log
 from ...exceptions import SetupError
 from ...constants import MICROMETER, C_0, fp_eps
+
+# Default Courant number reduction rate in Benkler's scheme
+DEFAULT_COURANT_REDUCTION_BENKLER = 0.3
+
+
+class ConformalMeshSpec(Tidy3dBaseModel):
+    """Class defines conformal mesh specifications."""
+
+    scheme: ConformalMeshType = pd.Field(
+        "Staircasing",
+        title="Conform mesh schemes for PEC structures",
+        description="Conform mesh schemes for PEC structures. Note it only takes "
+        "effect when subpixel averaging is on. ",
+    )
+
+    courant_reduction_rate: float = pd.Field(
+        None,
+        title="Courant number reduction rate",
+        description="In some schemes such as Benkler, accuracy can be improved with "
+        "a smaller Courant number; but simulation time increased as well.",
+        lt=1,
+        ge=0,
+    )
+
+    @pd.validator("courant_reduction_rate", always=True)
+    def _unhelpful_courant_reduction(cls, val, values):
+        """courant reduction only helps in certain schemes."""
+        if values["scheme"] != "Benkler" and val is not None:
+            if val > 0:
+                log.warning(
+                    f"Courant number reduction in conformal mesh scheme {values['scheme']} "
+                    "in theory will not help with accuracy improvment. On the contrary, it "
+                    "can slow down the simulation. Therefore, the value of this field is ignored."
+                )
+        return val
+
+    @property
+    def courant_ratio(self) -> float:
+        """The courant number scaling ratio in setting up the simulation."""
+        if self.scheme != "Benkler":
+            return 1
+        if self.courant_reduction_rate is None:
+            return 1 - DEFAULT_COURANT_REDUCTION_BENKLER
+        return 1 - self.courant_reduction_rate
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):

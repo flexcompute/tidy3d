@@ -2,7 +2,8 @@
 
 # grid
 from .components.grid.grid import Grid, Coords
-from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
+from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid
+from .components.grid.grid_spec import AutoGrid, ConformalMeshSpec
 
 # geometry
 from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
@@ -319,4 +320,5 @@ __all__ = [
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
     "ModulationSpec",
+    "ConformalMeshSpec",
 ]

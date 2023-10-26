@@ -246,3 +246,6 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
+
+""" Conformal mesh """
+ConformalMeshType = Literal["Staircasing", "YuMittra", "Benkler"]
