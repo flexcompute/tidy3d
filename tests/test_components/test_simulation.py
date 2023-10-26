@@ -1896,6 +1896,34 @@ def test_dt():
     assert sim_new.dt == 0.4 * dt
 
 
+def test_conformal_dt():
+    """make sure dt is reduced when BenklerConformalMeshSpec is applied."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+    )
+    dt = sim.dt
+
+    # Benkler
+    sim_conformal = sim.updated_copy(pec_conformal_mesh_spec=td.BenklerConformalMeshSpec())
+    assert sim_conformal.dt < dt
+
+    # Benkler: same courant
+    sim_conformal2 = sim.updated_copy(
+        pec_conformal_mesh_spec=td.BenklerConformalMeshSpec(timestep_reduction=0)
+    )
+    assert sim_conformal2.dt == dt
+
+    # staircasing
+    sim_staircasing = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
+    assert sim_staircasing.dt == dt
+
+    # heuristic
+    sim_heuristic = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
+    assert sim_heuristic.dt == dt
+
+
 def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
     """Test volumetric equivalent of 2D materials."""
     sigma = 0.45

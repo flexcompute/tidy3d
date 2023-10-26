@@ -21,6 +21,7 @@ from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
+from .grid.grid_spec import ConformalMeshSpecType, StaircasingConformalMeshSpec
 from .medium import MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium2D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
@@ -699,6 +700,14 @@ class Simulation(AbstractSimulation):
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
+
+    pec_conformal_mesh_spec: ConformalMeshSpecType = pydantic.Field(
+        StaircasingConformalMeshSpec(),
+        title="Conformal mesh specifications",
+        description="Conformal mesh specifications applied to PEC strucures.",
+        discriminator=TYPE_TAG_STR,
+    )
+
     """
     You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
@@ -2885,6 +2894,13 @@ class Simulation(AbstractSimulation):
     """ Discretization """
 
     @cached_property
+    def scaled_courant(self) -> float:
+        """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
+        if self.subpixel:
+            return self.courant * self.pec_conformal_mesh_spec.courant_ratio
+        return self.courant
+
+    @cached_property
     def dt(self) -> float:
         """Simulation time step (distance).
 
@@ -2898,7 +2914,7 @@ class Simulation(AbstractSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return n_cfl * self.courant * dl_avg / C_0
+        return n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
