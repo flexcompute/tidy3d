@@ -265,7 +265,7 @@ class Simulation(AbstractSimulation):
                 continue
 
             _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
-            medium_set = cls.intersecting_media(source, structures)
+            medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
             for tan_dir in tan_dirs:
@@ -322,7 +322,7 @@ class Simulation(AbstractSimulation):
                 size=temp_size,
                 source_time=source.source_time,
             )
-            medium_set = cls.intersecting_media(temp_src, structures)
+            medium_set = Scene.intersecting_media(temp_src, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
             # the source shouldn't touch or cross any boundary in the direction of injection
@@ -628,7 +628,7 @@ class Simulation(AbstractSimulation):
 
         for monitor in val:
             if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                mediums = cls.intersecting_media(monitor, total_structures)
+                mediums = Scene.intersecting_media(monitor, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
                     raise SetupError(
@@ -698,7 +698,7 @@ class Simulation(AbstractSimulation):
         medium = values.get("medium")
         for monitor in monitors:
             if isinstance(monitor, DiffractionMonitor):
-                medium_set = Simulation.intersecting_media(monitor, structures)
+                medium_set = Scene.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
                 _, index_k = medium.nk_model(frequency=np.array(monitor.freqs))
                 if not np.all(index_k == 0):
@@ -783,7 +783,7 @@ class Simulation(AbstractSimulation):
         # for each plane wave in the sources list
         for source in val:
             if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
-                mediums = cls.intersecting_media(source, total_structures)
+                mediums = Scene.intersecting_media(source, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
                     raise SetupError(
@@ -1063,7 +1063,7 @@ class Simulation(AbstractSimulation):
 
                 if surface.name[-2] != "xyz"[source.injection_axis]:
                     sidewall_surfaces.append(surface)
-                    intersecting_structs = self.intersecting_structures(
+                    intersecting_structs = Scene.intersecting_structures(
                         test_object=surface, structures=self.structures
                     )
 
@@ -1121,6 +1121,7 @@ class Simulation(AbstractSimulation):
 
     """ Accounting """
 
+    # candidate for removal in 3.0
     @cached_property
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in simulation.
@@ -1130,8 +1131,13 @@ class Simulation(AbstractSimulation):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
+        log.warning(
+            "'Simulation.mediums' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.scene.mediums' instead."
+        )
         return self.scene.mediums
 
+    # candidate for removal in 3.0
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
@@ -1144,13 +1150,24 @@ class Simulation(AbstractSimulation):
             Mapping between distinct mediums to index in simulation.
         """
 
+        log.warning(
+            "'Simulation.medium_map' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.scene.medium_map' instead."
+        )
         return self.scene.medium_map
 
+    # candidate for removal in 3.0
     @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`.Simulation`."""
+
+        log.warning(
+            "'Simulation.background_structure' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.scene.background_structure' instead."
+        )
         return self.scene.background_structure
 
+    # candidate for removal in 3.0
     @staticmethod
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
@@ -1171,8 +1188,14 @@ class Simulation(AbstractSimulation):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
+
+        log.warning(
+            "'Simulation.intersecting_media()' will be removed in Tidy3D 3.0. "
+            "Use 'Scene.intersecting_media()' instead."
+        )
         return Scene.intersecting_media(test_object=test_object, structures=structures)
 
+    # candidate for removal in 3.0
     @staticmethod
     def intersecting_structures(
         test_object: Box, structures: Tuple[Structure, ...]
@@ -1193,6 +1216,11 @@ class Simulation(AbstractSimulation):
             Set of distinct structures that intersect with the given surface, or with the surfaces
             of the given volume.
         """
+
+        log.warning(
+            "'Simulation.intersecting_structures()' will be removed in Tidy3D 3.0. "
+            "Use 'Scene.intersecting_structures()' instead."
+        )
         return Scene.intersecting_structures(test_object=test_object, structures=structures)
 
     def monitor_medium(self, monitor: MonitorType):
@@ -1208,7 +1236,7 @@ class Simulation(AbstractSimulation):
         :class:`.AbstractMedium`
             Medium associated with the given :class:`.Monitor`.
         """
-        medium_set = self.intersecting_media(monitor, self.structures)
+        medium_set = Scene.intersecting_media(monitor, self.structures)
         if len(medium_set) > 1:
             raise SetupError(f"Monitor '{monitor.name}' intersects more than one medium.")
         medium = medium_set.pop() if medium_set else self.medium
@@ -1653,46 +1681,6 @@ class Simulation(AbstractSimulation):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_structures(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        hlim_new, vlim_new = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-
-        return self.scene.plot_structures(x=x, y=y, z=z, ax=ax, hlim=hlim_new, vlim=vlim_new)
-
-    @equal_aspect
-    @add_ax_if_none
     def plot_structures_eps(
         self,
         x: float = None,
@@ -1759,8 +1747,14 @@ class Simulation(AbstractSimulation):
             reverse=reverse,
         )
 
+    # candidate for removal in 3.0
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
+
+        log.warning(
+            "'Simulation.eps_bounds()' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.scene.eps_bounds()' instead."
+        )
         return self.scene.eps_bounds(freq=freq)
 
     @cached_property
@@ -1798,8 +1792,18 @@ class Simulation(AbstractSimulation):
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
+    # candidate for removal in 3.0
     @cached_property
     def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Simulation bounds including the PML regions."""
+        log.warning(
+            "'Simulation.bounds_pml' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.simulation_bounds' instead."
+        )
+        return self.simulation_bounds
+
+    @cached_property
+    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
         bounds_in = self.bounds
@@ -1807,11 +1811,6 @@ class Simulation(AbstractSimulation):
         bounds_max = tuple((bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)))
 
         return (bounds_min, bounds_max)
-
-    @cached_property
-    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-        """Simulation bounds including the PML regions."""
-        return self.bounds_pml
 
     @equal_aspect
     @add_ax_if_none
@@ -1872,7 +1871,7 @@ class Simulation(AbstractSimulation):
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = (list(bounds) for bounds in self.bounds_pml)
+        rmin, rmax = (list(bounds) for bounds in self.simulation_bounds)
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
@@ -1932,8 +1931,8 @@ class Simulation(AbstractSimulation):
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -2124,7 +2123,7 @@ class Simulation(AbstractSimulation):
         dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
-        n_cfl = min(min(mat.n_cfl for mat in self.mediums), 1)
+        n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
         return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property
@@ -2556,7 +2555,7 @@ class Simulation(AbstractSimulation):
         ]
         datasets_medium = [
             mat
-            for mat in self.mediums
+            for mat in self.scene.mediums
             if isinstance(mat, AbstractCustomMedium) or mat.time_modulated
         ]
         datasets_geometry = []
@@ -2578,7 +2577,7 @@ class Simulation(AbstractSimulation):
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if not any(isinstance(medium, Medium2D) for medium in self.mediums):
+        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
             return self.structures
 
         def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
@@ -2643,7 +2642,7 @@ class Simulation(AbstractSimulation):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
                 )
-                media = self.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
                 if len(media) > 1:
                     raise SetupError(
                         "2D materials do not support multiple neighboring media on a side. "
@@ -2693,7 +2692,7 @@ class Simulation(AbstractSimulation):
     def allow_gain(self) -> bool:
         """``True`` if any of the mediums in the simulation allows gain."""
 
-        for medium in self.mediums:
+        for medium in self.scene.mediums:
             if isinstance(medium, AnisotropicMedium):
                 if np.any([med.allow_gain for med in [medium.xx, medium.yy, medium.zz]]):
                     return True
@@ -2734,7 +2733,7 @@ class Simulation(AbstractSimulation):
 
         sim_dict = self.dict()
         structures = self.structures
-        sim_bounds = self.bounds_pml
+        sim_bounds = self.simulation_bounds
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
