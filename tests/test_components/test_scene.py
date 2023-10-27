@@ -16,7 +16,7 @@ SCENE_FULL = SIM_FULL.scene
 def test_scene_init():
     """make sure a scene can be initialized"""
 
-    sim = td.Scene(
+    scene = td.Scene(
         structures=[
             td.Structure(
                 geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -37,9 +37,9 @@ def test_scene_init():
         medium=td.Medium(permittivity=3.0),
     )
 
-    _ = sim.mediums
-    _ = sim.medium_map
-    _ = sim.background_structure
+    _ = scene.mediums
+    _ = scene.medium_map
+    _ = scene.background_structure
 
 
 def test_validate_components_none():

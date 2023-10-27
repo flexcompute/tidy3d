@@ -79,10 +79,15 @@ def test_sim_init():
     _ = sim.dt
     _ = sim.tmesh
     sim.validate_pre_upload()
+    m = sim.get_monitor_by_name("point")
+    # will not work in 3.0
     _ = sim.mediums
     _ = sim.medium_map
-    m = sim.get_monitor_by_name("point")
     _ = sim.background_structure
+    # will continue working in 3.0
+    _ = sim.scene.mediums
+    _ = sim.scene.medium_map
+    _ = sim.scene.background_structure
     # sim.plot(x=0)
     # plt.close()
     # sim.plot_eps(x=0)
@@ -915,9 +920,16 @@ def test_sim_monitor_homogeneous():
                 boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             )
 
+    # will be removed in 3.0
     mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box])
     assert len(mediums) == 1
     mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box_transparent])
+    assert len(mediums) == 1
+
+    # continue in 3.0
+    mediums = td.Scene.intersecting_media(monitor_n2f_vol, [box])
+    assert len(mediums) == 1
+    mediums = td.Scene.intersecting_media(monitor_n2f_vol, [box_transparent])
     assert len(mediums) == 1
 
     # when another medium intersects an excluded surface, no errors should be raised
