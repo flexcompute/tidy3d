@@ -14,5 +14,7 @@ grcwa
 sphinx-sitemap
 nbdime
 optax
+signac
+sax
 
 -r ../tidy3d/requirements/dev.txt

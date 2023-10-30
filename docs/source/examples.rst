@@ -20,9 +20,10 @@ Tidy3D Basics
     notebooks/Simulation
     notebooks/Primer
     notebooks/WebAPI
+    notebooks/DivergedFDTDSimulation    
 
 Feature Tutorials
--------------------
+-----------------
 
 Mediums
 ~~~~~~~
@@ -59,7 +60,7 @@ Grid Specification
     notebooks/AutoGrid
 
 Symmetry and Boundary Conditions
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -114,6 +115,15 @@ Scattering Matrix
 
     notebooks/SMatrix
 
+Resonance Finder
+~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/ResonanceFinder
+    notebooks/CavityFOM    
+
 FDTD Adjoint Optimization
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -130,6 +140,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin8WaveguideBend
     notebooks/AdjointPlugin9WDM
     notebooks/AdjointPlugin10YBranchLevelSet
+    notebooks/AdjointPlugin11CircuitMZI
 
 Heat Solver
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -228,3 +239,4 @@ Nanophotonics
     notebooks/NonHermitianMetagratings
     notebooks/AndersonLocalization
     notebooks/MoS2Waveguide
+    notebooks/RadiativeCoolingGlass

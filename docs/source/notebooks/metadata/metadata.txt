@@ -77,10 +77,16 @@
     "keywords": "inverse design, WDM, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
-    "AdjointPlugin10_YBranch_Level_Set.ipynb": {
+    "AdjointPlugin10YBranch_Level_Set.ipynb": {
     "title": "Adjoint Optimization of a Y-Branch in Tidy3D Using Leve Set | Flexcompute",
     "description": "This notebook demonstrates how to set up and run a simple parameterized level set-based optimization of a Y-branch. In addition, we show how to tailor the level set function to a starting geometry, which is helpful to further optimize a device obtained by conventional design.",
     "keywords": "inverse design, y-branch, level set, design optimization, adjoint, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
+    "AdjointPlugin11CircuitMZI.ipynb": {
+    "title": "Modular Adjoint Optimization of an MZI using Circuit Simulation",
+    "description": "This notebook demonstrates combining the Tidy3D adjoint plugin with a differentiable circuit simulator (sax) for the inverse design of a Mach-Zehnder Interferometer (MZI). Two independent simulations are co-optimized with an objective function based on circuit level scattering parameters.",
+    "keywords": "inverse design, MZI, circuit, sax, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
     "AndersonLocalization.ipynb": {
@@ -149,6 +155,12 @@
     "keywords": "silicon photonics, PIC, integrated photonics, bullseye cavity, quantum emitter, particle swarm optimization, PSO, Tidy3D, FDTD",
     "feature_image": "./img/bullseye_psa_thumb.png"
   },  
+  "CavityFOM.ipynb": {
+    "title": "Calculating cavity quality factor, effective mode volume, and Purcell factor in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to calculate cavity quality factor, effective mode volume, and Purcell factor in Tidy3D FDTD.",
+    "keywords": "cavity quality factor, cavity effective mode volume, cavity mode volume, Purcell factor, FDTD cavity, FDTD resonance, FDTD quality factor, FDTD mode volume, FDTD Purcell factor, Tidy3D, FDTD",
+    "feature_image": ""
+  },  
   "CreatingGeometryUsingTrimesh.ipynb": {
     "title": "Defining complex geometries using trimesh | Flexcompute",
     "description": "This notebook demonstrates how to define complex geometries using trimesh in Tidy3D FDTD.",
@@ -185,6 +197,12 @@
     "keywords": "distributed bragg reflector, DBR, cavity, Tidy3D, FDTD",
     "feature_image": "./img/dbr_schematic.png"
   },
+  "DivergedFDTDSimulation.ipynb": {
+    "title": "How to troubleshoot a diverged FDTD in Tidy3D | Flexcompute",
+    "description": "This notebook shows how to troubleshoot a diverged simulations in Tidy3D FDTD.",
+    "keywords": "diverged FDTD, diverged Tidy3D, FDTD divergence, Tidy3D divergence, simulation divergence, divergence troubleshoot, simulation troubleshoot, FDTD troubleshoot, Tidy3D, FDTD",
+    "feature_image": "/img/diverged-fdtd-simulation.png"
+  },  
   "EdgeCoupler.ipynb": {
     "title": "Inverse Taper Edge Coupler Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to model an inverse taper edge coupler in Tidy3D FDTD.",
@@ -399,6 +417,18 @@
     "title": "Guide to the Frontend Interface for Tidy3D | Flexcompute",
     "description": "This notebook demonstrates the basic working principles of the Tidy3D python front end interface and gives a walkthrough of various features.",
     "keywords": "FDTD, Tidy3D, tutorial, walkthrough",
+    "feature_image": ""
+  },
+  "RadiativeCoolingGlass.ipynb": {
+    "title": "Radiative cooling glass coating | Flexcompute",
+    "description": "This notebook simulates the emissivity of the 100 μm thick coating and the result shows that the emissivity (absorptance) of the coating is near unity in the atmospheric transparency window.",
+    "keywords": "FDTD, Tidy3D, radiative cooling, emissivity",
+    "feature_image": "./img/radiative_cooling_glass.png"
+  },
+  "ResonanceFinder.ipynb": {
+    "title": "Setting up the resonance finder in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to set up the resonance finder in Tidy3D FDTD.",
+    "keywords": "resonance finder, cavity resonance, quality factor, nanocavity resonance, FDTD cavity, FDTD resonance, FDTD quality factor, FDTD nanocavity, Tidy3D, FDTD",
     "feature_image": ""
   },
   "RingResonator.ipynb": {
