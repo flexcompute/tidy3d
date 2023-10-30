@@ -99,7 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
 where perturbations to each parameter is specified using class `ParameterPerturbation`.
 A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
-- Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
+- Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and vertical plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
 - Spatial downsampling allowed in ``PermittivityMonitor`` through the ``interval_space`` argument.
 - `ClipOperation` geometry type allows the construction of complex geometries through boolean operations.
@@ -296,7 +296,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - `JaxCustomMedium` accepts a maximum of 250,000 grid cells to avoid slow server-side processing.
 - `PolySlab.inside` now uses `matplotlib.path.contains_points`.
 - `JaxCustomMedium` accepts a maximum of 250,000 grid cells.
-- Logging messages are supressed and summarized to avoid repetitions.
+- Logging messages are suppressed and summarized to avoid repetitions.
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
@@ -395,7 +395,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Validate `slab_bounds` for `PolySlab`.
 
 ### Changed
-- Tidy3D account authentication done solely through API key. Migration option offered for useres with old username / password authentication.
+- Tidy3D account authentication done solely through API key. Migration option offered for users with old username / password authentication.
 - `export_matlib_to_file` in `material_library` exports material's full name in addition to abbreviation.
 - Simpler progress bars for `run_async`.
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
@@ -537,7 +537,7 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 
 ### Changed
 - Minimum flex unit charge reduced from `0.1` to `0.025`.
-- Default courant factor was changed from `0.9` to `0.99`.
+- Default Courant factor was changed from `0.9` to `0.99`.
 - A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the 
  symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case 
  there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal 
@@ -625,7 +625,7 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Added
 - New classes of near-to-far monitors for server-side computation of the near field to far field projection.
-- Option to exlude `DataArray` Fields from a `Tidy3dBaseModel` json.
+- Option to exclude `DataArray` Fields from a `Tidy3dBaseModel` json.
 - Option to save/load all models to/from `hdf5` format.
 - Option to load base models without validation.
 - Support negative sidewall angle for slanted `PolySlab`-s.
@@ -635,7 +635,7 @@ which fields are to be projected is now determined automatically based on the me
 ### Fixed
 - Raise a more meaningful error if login failed after `MAX_ATTEMPTS`.
 - Environment login credentials set to `""` are now ignored and credentials stored to file are still looked for.
-- Improved subpixel coefficients computation around sharp edges, cornes, and three-structure intersections.
+- Improved subpixel coefficients computation around sharp edges, corners, and three-structure intersections.
 
 ### Changed
 - Major refactor of the way data structures are used internally.
@@ -677,7 +677,7 @@ which fields are to be projected is now determined automatically based on the me
 ## [1.4.1] - 2022-6-13
 
 ### Fixed
-- Bug in plotting polarization of a nomral incidence source for some `angle_phi`.
+- Bug in plotting polarization of a normal incidence source for some `angle_phi`.
 - Bloch vector values required to be real rather than complex.
 - Web security mitigation.
 
@@ -692,9 +692,9 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Added
 - Bloch periodic boundary conditions, enabling modeling of angled plane wave.
-- `GeometryGroup` object to associate several `Geometry` intances in a single `Structure` leading to improved performance for many objects.
+- `GeometryGroup` object to associate several `Geometry` instances in a single `Structure` leading to improved performance for many objects.
 - Ability to uniquely specify boundary conditions on all 6 `Simulation` boundaries.
-- Options in field montitors for spatial downsampling and evaluation at yee grid centers.
+- Options in field monitors for spatial downsampling and evaluation at Yee grid centers.
 - `BatchData.load()` can load the data for a batch directly from a directory.
 - Utility for updating `Simulation` objects from old versions of `Tidy3d` to current version.
 - Explicit `web.` functions for downloading only `simulation.json` and `tidy3d.log` files.
@@ -704,7 +704,7 @@ which fields are to be projected is now determined automatically based on the me
 - Uses `shapely` instead of `gdspy` to merge polygons from a gds cell.
 - `ComponentModeler` (S matrix tool) stores the `Batch` rather than the `BatchData`.
 - Custom caching of properties to speed up subsequent calculations.
-- Tidy3d configuration now done through setting attributes of `tidy3d.config` object.
+- Tidy3D configuration now done through setting attributes of `tidy3d.config` object.
 
 ## [1.3.3] - 2022-5-18
 
@@ -739,7 +739,7 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Changed
 
- - The `copy()` method of Tidy3d components is deep by default.
+ - The `copy()` method of Tidy3D components is deep by default.
  - Maximum allowed number of distinct materials is now 65530.
 
 ### Fixed
@@ -799,7 +799,7 @@ which fields are to be projected is now determined automatically based on the me
 
 - `webapi` functions now only authenticate when needed.
 - Credentials storing folder only created when needed.
-- Added maximum number of attemtps in authentication.
+- Added maximum number of attempts in authentication.
 - Made plotly plotting faster.
 - Cached Simulation.medium and Simulation.medium_map computation.
 
