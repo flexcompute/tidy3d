@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
 
 ## [2.5.0rc2] - 2023-10-30
 
