@@ -173,6 +173,14 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     Example
     -------
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    * `THz integrated demultiplexer/filter based on a ring resonator <../../../notebooks/THzDemultiplexerFilter.html>`_
+    * `Photonic crystal waveguide polarization filter <../../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
     """
 
     # Provide more explanations on where radius is defined
