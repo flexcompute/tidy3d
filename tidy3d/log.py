@@ -384,7 +384,7 @@ def set_logging_file(
         log.error(f"File {fname} could not be opened")
         return
 
-    log.handlers["file"] = LogHandler(Console(file=file), level)
+    log.handlers["file"] = LogHandler(Console(file=file, force_jupyter=False), level)
 
 
 # Initialize Tidy3d's logger
