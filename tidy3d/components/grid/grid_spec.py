@@ -135,11 +135,21 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
 class UniformGrid(GridSpec1d):
 
-    """Uniform 1D grid.
+    """Uniform 1D grid. The most standard way to define a simulation is to use a constant grid size in each of the three directions.
 
     Example
     -------
     >>> grid_1d = UniformGrid(dl=0.1)
+
+    See Also
+    --------
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Photonic crystal waveguide polarization filter <../../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
     dl: pd.PositiveFloat = pd.Field(
@@ -284,6 +294,22 @@ class AutoGrid(GridSpec1d):
     Example
     -------
     >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
+
+    See Also
+    --------
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     min_steps_per_wvl: float = pd.Field(
@@ -412,6 +438,22 @@ class GridSpec(Tidy3dBaseModel):
     >>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
     >>> auto = AutoGrid(min_steps_per_wvl=12)
     >>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)
+
+    See Also
+    --------
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     grid_x: GridType = pd.Field(

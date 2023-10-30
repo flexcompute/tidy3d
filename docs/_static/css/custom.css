@@ -1,0 +1,89 @@
+/* FONTS */
+@font-face {
+  font-family: 'flexcompute_title';
+  src: url('ornitons_bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'flexcompute_subtitle';
+  src: url('inter_var.woff2') format('truetype');
+}
+
+
+.wy-side-nav-search { background-color: #b5445b; }
+.wy-nav-top { background-color: #666666; }
+.wy-menu > .caption > span.caption-text { color: #b5445b; }
+
+.wy-nav-content { max-width: 900px !important; }
+.wy-table-responsive table td { white-space: normal !important; }
+.wy-table-responsive { overflow: visible !important; }
+body { line-height: 1.42857143; }s
+.heading-style, h1, h2, h3, h4, h5, h6 {margin: 1.6rem 0 1rem;}
+h1 {font-family: 'flexcompute_title', sans-serif;}
+h2, h3, h4, h5, h6 {font-family: 'flexcompute_subtitle', sans-serif;}
+p {margin-bottom: 0.5rem; font-family: 'Roboto', sans-serif}
+iframe {width: 100%;border: unset}
+
+.toctree-wrapper li[class^=toctree-l1]>a {font-size: 1.4em; text-decoration: none}
+.toctree-wrapper li[class^=toctree-l2]>a {font-size: 1em; text-decoration: none}
+
+html[data-theme="light"] {
+    --pst-color-primary: #b5445b;
+    --pst-color-secondary: #4772ae;
+    --pst-color-link: var(--pst-color-muted);
+}
+
+html[data-theme="dark"] {
+    --pst-color-primary: #4772ae;
+    --pst-color-secondary: #b5445b;
+    --pst-color-link: var(--pst-color-muted);
+    --sd-color-info-bg:  var(--pst-color-primary);
+}
+
+html[data-theme=dark] .bd-content .nboutput .output_area.rendered_html {
+    background-color: var(--pst-color-background);
+}
+
+img {
+    margin: 0.1em;
+}
+
+/* Experimental below */
+.navbar-brand:hover .logo__image .only-light{
+    opacity: 1;
+    content: url("_static/img/demo_logo_active.gif");
+}
+
+.sphinx-tabs-panel {
+    background: var(--sd-color-info-bg);
+    padding: 1em;
+    border-radius: 0.25rem;
+    margin-bottom: 0.5em;
+    border-top-left-radius: 0;
+}
+
+.sphinx-tabs-tab {
+    background: var(--pst-color-secondary);
+    padding: 0.5em;
+    padding-right: 2em;
+    padding-left: 2em;
+    margin-top: 0.5em;
+    margin-right: 0.5em;
+    border-top-left-radius: 1em;
+    border-top-right-radius: 0.1em;
+    border: 0;
+    font-weight: bold;
+}
+
+.sphinx-tabs-tab[aria-selected="true"] {
+    background-color: var(--sd-color-info-bg);
+}
+
+/* TODO make sure this is only for the API tables */
+/*table {*/
+/*  border: solid;*/
+/*}*/
+
+/*th {*/
+/*  border: thin;*/
+/*}*/

@@ -35,6 +35,31 @@ class AbstractSimulation(Box, ABC):
         description="Background medium of simulation, defaults to vacuum if not specified.",
         discriminator=TYPE_TAG_STR,
     )
+    """
+    Background medium of simulation, defaults to vacuum if not specified.
+
+    See Also
+    --------
+
+    `Material Library <../material_library.html>`_:
+        The material library is a dictionary containing various dispersive models from real world materials.
+
+    `Index <../mediums.html>`_:
+        Dispersive and dispersionless Mediums models.
+
+    **Notebooks:**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures:**
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    **GUI:**
+
+    * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+
+    """
 
     structures: Tuple[Structure, ...] = pd.Field(
         (),
@@ -43,6 +68,63 @@ class AbstractSimulation(Box, ABC):
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
+    """
+    Tuple of structures present in simulation. Structures defined later in this list override the simulation
+    material properties in regions of spatial overlap.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+        Simulation(
+            ...
+            structures=[
+                 Structure(
+                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                 medium=Medium(permittivity=2.0),
+                 ),
+            ],
+            ...
+        )
+
+    **Usage Caveats**
+
+    It is very important to understand the way the dielectric permittivity of the :class:`Structure` list is resolved
+    by the simulation grid. Without :attr:`subpixel` averaging, the structure geometry in relation to the
+    grid points can lead to its features permittivity not being fully resolved by the
+    simulation.
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` will compute equivalently because that grid does
+    not resolve the feature permittivity in between grid points without :attr:`subpixel` averaging.
+
+    .. image:: ../../_static/img/permittivity_on_yee_grid.png
+
+    See Also
+    --------
+
+    :class:`Structure`:
+        Defines a physical object that interacts with the electromagnetic fields.
+
+    :attr:`subpixel`
+        Subpixel averaging of the permittivity based on structure definition, resulting in much higher
+        accuracy for a given grid size.
+
+    **Notebooks:**
+
+    * `Visualizing geometries in Tidy3D <../../notebooks/VizSimulation.html>`_
+
+    **Lectures:**
+
+    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
+    *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+
+    **GUI:**
+
+    * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
+    """
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
@@ -55,6 +137,23 @@ class AbstractSimulation(Box, ABC):
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
+    """
+    You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+    defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC`
+    symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value
+    correctly.
+
+    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and
+    :class:`PMC`-like symmetry planes. You can refer to this figure when considering whether a source field conforms
+    to a :class:`PEC`- or :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with
+    optical waveguide modes.
+
+    .. image:: ../../notebooks/img/pec_pmc.png
+
+
+    .. TODO maybe resize?
+    """
 
     sources: Tuple[None, ...] = pd.Field(
         (),

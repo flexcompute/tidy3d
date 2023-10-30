@@ -83,12 +83,37 @@ class Structure(AbstractStructure):
     A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
     and a :class:`Geometry`.
 
+    Notes
+    ------
+
+        Structures can indeed be larger than the simulation domain in ``tidy3d``. In such cases, ``tidy3d`` will
+        automatically truncate the geometry that goes beyond the domain boundaries. For best results, structures that
+        intersect with absorbing boundaries or simulation edges should extend all the way through. In many such
+        cases, an “infinite” size :class:`td.inf` can be used to define the size along that dimension.
+
     Example
     -------
     >>> from tidy3d import Box, Medium
     >>> box = Box(center=(0,0,1), size=(2, 2, 2))
     >>> glass = Medium(permittivity=3.9)
     >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
+
+    See Also
+    --------
+
+    **Notebooks:**
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+    * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
+    * `Visualizing geometries in Tidy3D <../../notebooks/VizSimulation.html>`_
+
+    **Lectures:**
+
+    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
+
+    **GUI:**
+
+    * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
     medium: MediumType = pydantic.Field(
@@ -387,9 +412,13 @@ class Structure(AbstractStructure):
 
 class MeshOverrideStructure(AbstractStructure):
     """Defines an object that is only used in the process of generating the mesh.
-    A :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
-    grid size along x,y,z directions, and a boolean on whether the override
-    will be enforced.
+
+    Notes
+    -----
+
+        A :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
+        grid size along ``x``, ``y``, ``z`` directions, and a boolean on whether the override
+        will be enforced.
 
     Example
     -------

@@ -4,7 +4,7 @@ This guide will explain the internals of the adjoint plugin.
 
 The following flowchart shows the entire process described in this readme for reference while reading.
 
-![FlowAdjoint](../../../img/AdjointFlow.svg)
+![FlowAdjoint](../../../docs/source/_static/img/AdjointFlow.svg)
 
 
 ## Context
@@ -236,7 +236,7 @@ Finally, the `JaxSimulation` has a few other differences with the regular `Simul
 
 ### Adjoint `web.run` function
 
-The adjoint plugin provides a wrapper for the regular `tidy3d.web.run()` function that has the VJPs defined. This function can be imported as `from tidy3d.plugins.adjoint.web import run` and functions exactly the same as the original `web.run()` in all respects. Eg. it takes the same `**kwargs` and passes them to `web.run()`. 
+The adjoint plugin provides a wrapper for the regular `tidy3d.web.api.webapi.run()` function that has the VJPs defined. This function can be imported as `from tidy3d.plugins.adjoint.web import run` and functions exactly the same as the original `web.run()` in all respects. Eg. it takes the same `**kwargs` and passes them to `web.run()`. 
 
 If a user forgets to use this custom `run()` function, the simulation will error as it will attempt to upload a `JaxSimulation` directly to the server. For this reason, I think we should consider adding a check to `web.upload()` that the `type` field is `'Simulation'`. To get around this, the adjoint wrapped `web.run()` first converts the `JaxSimulation` to a regular `Simulation`, uses regular `web.run()`, and converts the result back to a `JaxSimulationData` as there is no webapi to run a `JaxSimulation` object currently.
 

@@ -125,7 +125,7 @@ The keys of these dictionaries are the names of the components and the values ar
 - `sources`, a dictionary of `Source()` objects, defining the current sources in the simulation domain.
 - `monitors`, a dictionary of `Monitor()` objects, defining what data is being measured and where.
 
-![Call Structure](../../docs/img/diagram_Simulation.png)
+![Call Structure](../../docs/_static/img/diagram_Simulation.png)
 
 #### Validations
 
@@ -172,7 +172,7 @@ Note that there is an extensive library of pre-defined dispersive materials, all
 
 `Structure()` objects simply combine a shape definition through `Geometry()` with a medium definition through `Medium()`.
 
-![Call Structure](../../docs/img/diagram_Structure.png)
+![Call Structure](../../docs/_static/img/diagram_Structure.png)
 
 ## Modes
 
@@ -198,7 +198,7 @@ The three types of `DirectionalSources` are:
 - `GaussianBeam(waist_size)` (Gaussian Beam (tbd))
 - `ModeSource(mode)` (which defines modal injection with mode solver parameters specified in `mode`.
 
-![Call Structure](../../docs/img/diagram_Stource.png)
+![Call Structure](../../docs/_static/img/diagram_Source.png)
 
 ### Source Time-Dependence
 
@@ -221,7 +221,7 @@ There are three types of usable monitors, each stores different types of data:
 - `FluxMonitors()` store the flux through their (planar only) geometry
 - `ModeMonitors(mode)` store the mode amplitudes found by decomposition on their (planar only) geometry.
 
-![Call Structure](../../docs/img/diagram_Monitor.png)
+![Call Structure](../../docs/_static/img/diagram_Monitor.png)
 
 ### Samplers
 
