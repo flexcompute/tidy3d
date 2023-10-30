@@ -3,7 +3,9 @@
 Name](https://img.shields.io/badge/pypi-tidy3d-blue?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d)
 [![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d/)
 [![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest&style=for-the-badge)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest)
-![tests](https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge)
+![Tests](https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge)
+![License](https://img.shields.io/github/license/flexcompute/tidy3d?style=for-the-badge)
+[![Black](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
 
 [![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks)
 
