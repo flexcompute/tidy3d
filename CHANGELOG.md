@@ -3,25 +3,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0rc2] - 2023-10-30
 
 ### Added
 - Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
-- GDSII export functions to `Simulation`, `Structure`, and `Geometry`.
-- ``verbose`` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
-- Added support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
-- `Geometry.intersections_tilted_plane` calculates intesections with any plane, not only axis-aligned ones.
-- `Transformed` class to support for geometry transformations.
+- GDSII export functions `to_gds_file`, `to_gds`, `to_gdspy`, and `to_gdstk` to `Simulation`, `Structure`, and `Geometry`.
+- `verbose` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
+- Support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
+- `Geometry.intersections_tilted_plane` calculates intersections with any plane, not only axis-aligned ones.
+- `Transformed` class to support geometry transformations.
 - Methods `Geometry.translated`, `Geometry.scaled`, and `Geometry.rotated` can be used to create transformed copies of any geometry.
 
 ### Changed
-- Update versions of `boto3`, `requests`, and `click`.
+- Updated versions of `boto3`, `requests`, and `click`.
 - python 3.7 no longer tested nor supported.
-- Remove warning that monitors now have `colocate=True` by default.
+- Removed warning that monitors now have `colocate=True` by default.
 - If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
 
 ### Fixed
-- If no adjoint sources for one simulation in an objective function, make a mock source with zero amplitude and warn user.
+- If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.
 
 ## [2.5.0rc1] - 2023-10-10
 
@@ -1003,7 +1003,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...pre/2.5
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc2...pre/2.5
+[2.5.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...v2.5.0rc2
 [2.5.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.5.0rc1
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3

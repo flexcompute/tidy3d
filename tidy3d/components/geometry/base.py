@@ -2189,7 +2189,7 @@ class Transformed(Geometry):
     )
 
     transform: MatrixReal4x4 = pydantic.Field(
-        np.eye(4),
+        np.eye(4).tolist(),
         title="Transform",
         description="Transform matrix applied to the base geometry.",
     )

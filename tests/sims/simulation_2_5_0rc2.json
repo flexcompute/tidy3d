@@ -10,7 +10,6 @@
         8.0,
         8.0
     ],
-    "run_time": 1e-12,
     "medium": {
         "name": null,
         "frequency_range": null,
@@ -22,11 +21,6 @@
         "permittivity": 1.0,
         "conductivity": 0.0
     },
-    "symmetry": [
-        0,
-        0,
-        0
-    ],
     "structures": [
         {
             "geometry": {
@@ -902,8 +896,14 @@
             }
         }
     ],
+    "symmetry": [
+        0,
+        0,
+        0
+    ],
     "sources": [
         {
+            "name": null,
             "type": "UniformCurrentSource",
             "center": [
                 0.0,
@@ -924,11 +924,11 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "interpolate": true,
             "polarization": "Hx"
         },
         {
+            "name": null,
             "type": "PointDipole",
             "center": [
                 0.0,
@@ -949,11 +949,11 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "interpolate": true,
             "polarization": "Ex"
         },
         {
+            "name": null,
             "type": "ModeSource",
             "center": [
                 0.0,
@@ -974,7 +974,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "num_freqs": 1,
             "direction": "-",
             "mode_spec": {
@@ -997,6 +996,7 @@
             "mode_index": 0
         },
         {
+            "name": null,
             "type": "PlaneWave",
             "center": [
                 0.0,
@@ -1017,13 +1017,13 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "direction": "+",
             "angle_theta": 0.0,
             "angle_phi": 0.0,
             "pol_angle": 0.1
         },
         {
+            "name": null,
             "type": "GaussianBeam",
             "center": [
                 0.0,
@@ -1044,7 +1044,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
@@ -1054,6 +1053,7 @@
             "waist_distance": 0.0
         },
         {
+            "name": null,
             "type": "AstigmaticGaussianBeam",
             "center": [
                 0.0,
@@ -1074,7 +1074,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "num_freqs": 1,
             "direction": "+",
             "angle_theta": 0.0,
@@ -1090,6 +1089,7 @@
             ]
         },
         {
+            "name": null,
             "type": "CustomFieldSource",
             "center": [
                 0.0,
@@ -1110,7 +1110,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "field_dataset": {
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
@@ -1122,6 +1121,7 @@
             }
         },
         {
+            "name": null,
             "type": "CustomCurrentSource",
             "center": [
                 0.0,
@@ -1142,7 +1142,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "interpolate": true,
             "current_dataset": {
                 "type": "FieldDataset",
@@ -1155,6 +1154,7 @@
             }
         },
         {
+            "name": null,
             "type": "TFSF",
             "center": [
                 1.0,
@@ -1175,7 +1175,6 @@
                 "offset": 5.0,
                 "remove_dc_component": true
             },
-            "name": null,
             "direction": "+",
             "angle_theta": 0.5235987755982988,
             "angle_phi": 0.6283185307179586,
@@ -1183,6 +1182,7 @@
             "injection_axis": 2
         },
         {
+            "name": null,
             "type": "UniformCurrentSource",
             "center": [
                 0.0,
@@ -1206,7 +1206,6 @@
                     "values": "TimeDataArray"
                 }
             },
-            "name": null,
             "interpolate": true,
             "polarization": "Hx"
         }
@@ -2091,9 +2090,10 @@
         ],
         "type": "GridSpec"
     },
+    "version": "2.5.0rc2",
+    "run_time": 1e-12,
     "shutoff": 0.0001,
     "subpixel": false,
     "normalize_index": 0,
-    "courant": 0.8,
-    "version": "2.5.0rc2"
+    "courant": 0.8
 }
