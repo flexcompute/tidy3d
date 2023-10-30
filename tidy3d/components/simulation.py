@@ -383,17 +383,16 @@ class Simulation(AbstractSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     def boundaries_for_zero_dims(cls, val, values):
-        """Warn if an absorbing boundary is used along a zero dimension."""
+        """Error if an absorbing boundary is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
         for dim, (boundary, size_dim) in enumerate(zip(boundaries, size)):
             num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
             if num_absorbing_bdries > 0 and size_dim == 0:
-                log.warning(
-                    f"If the simulation is intended to be 2D in the plane normal to the "
-                    f"{'xyz'[dim]} axis, using a PML or absorbing boundary along that axis "
-                    f"is incorrect. Consider using a 'Periodic' boundary along {'xyz'[dim]}.",
-                    custom_loc=["boundary_spec", "xyz"[dim]],
+                raise SetupError(
+                    f"The simulation has zero size along the {'xyz'[dim]} axis, so "
+                    "using a PML or absorbing boundary along that axis is incorrect. "
+                    f"Use either 'Periodic' or 'BlochBoundary' along {'xyz'[dim]}."
                 )
         return val
 

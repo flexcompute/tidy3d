@@ -461,7 +461,7 @@ def test_validate_plane_wave_boundaries(log_capture):
 
 def test_validate_zero_dim_boundaries(log_capture):
 
-    # zero-dim simulation with an absorbing boundary in that direction should warn
+    # zero-dim simulation with an absorbing boundary in that direction should error
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
         center=(0, 0, 0),
@@ -470,19 +470,19 @@ def test_validate_zero_dim_boundaries(log_capture):
         pol_angle=0.0,
     )
 
-    td.Simulation(
-        size=(1, 1, 0),
-        run_time=1e-12,
-        sources=[src],
-        boundary_spec=td.BoundarySpec(
-            x=td.Boundary.periodic(),
-            y=td.Boundary.periodic(),
-            z=td.Boundary.pml(),
-        ),
-    )
-    assert_log_level(log_capture, "WARNING")
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 0),
+            run_time=1e-12,
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.pml(),
+            ),
+        )
 
-    # zero-dim simulation with an absorbing boundary any other direction should not warn
+    # zero-dim simulation with an absorbing boundary any other direction should not error
     td.Simulation(
         size=(1, 1, 0),
         run_time=1e-12,
@@ -490,7 +490,7 @@ def test_validate_zero_dim_boundaries(log_capture):
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(),
             y=td.Boundary.stable_pml(),
-            z=td.Boundary.pec(),
+            z=td.Boundary.periodic(),
         ),
     )
 
@@ -611,6 +611,7 @@ def test_plot_1d_sim():
         size=(0, 0, 1),
         grid_spec=grid_spec,
         run_time=1e-13,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
     _ = s.plot(y=0)
     plt.close()

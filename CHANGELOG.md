@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Update versions of `boto3`, `requests`, and `click`.
 - python 3.7 no longer tested nor supported.
 - Remove warning that monitors now have `colocate=True` by default.
+- If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
 
 ### Fixed
 - If no adjoint sources for one simulation in an objective function, make a mock source with zero amplitude and warn user.

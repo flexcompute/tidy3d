@@ -849,6 +849,11 @@ def test_structure_overlaps():
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
         sources=(src,),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
     )
 
 
