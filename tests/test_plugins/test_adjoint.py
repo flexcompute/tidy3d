@@ -1473,6 +1473,20 @@ def test_adjoint_utils(strict_binarize):
     _ = radius_penalty.evaluate(polyslab.vertices)
 
 
+@pytest.mark.parametrize(
+    "input_size_y, log_level_expected", [(13, None), (12, "WARNING"), (11, "WARNING"), (14, None)]
+)
+def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):
+    """Warn if filter size along a dim is smaller than radius."""
+
+    signal_in = np.ones((266, input_size_y))
+
+    _filter = ConicFilter(radius=0.08, design_region_dl=0.015)
+    _filter.evaluate(signal_in)
+
+    assert_log_level(log_capture, log_level_expected)
+
+
 def test_sim_data_plot_field(use_emulated_run):
     """Test splitting of regular simulation data into user and server data."""
 

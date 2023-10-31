@@ -8,6 +8,7 @@ import jax.scipy as jsp
 
 from ....components.base import Tidy3dBaseModel
 from ....constants import MICROMETER
+from ....log import log
 
 
 class Filter(Tidy3dBaseModel, ABC):
@@ -59,6 +60,39 @@ class AbstractCircularFilter(Filter, ABC):
     def make_kernel(self, coords_rad: jnp.array) -> jnp.array:
         """Function to make the kernel out of a coordinate grid of radius values."""
 
+    @staticmethod
+    def _check_kernel_size(kernel: jnp.array, signal_in: jnp.array) -> jnp.array:
+        """Make sure kernel isn't larger than signal and warn and truncate if so."""
+
+        kernel_shape = kernel.shape
+        input_shape = signal_in.shape
+
+        if any((k_shape > in_shape for k_shape, in_shape in zip(kernel_shape, input_shape))):
+
+            # remove some pixels from the kernel to make things right
+            new_kernel = kernel.copy()
+            for axis, (len_kernel, len_input) in enumerate(zip(kernel_shape, input_shape)):
+                if len_kernel > len_input:
+                    rm_pixels_total = len_kernel - len_input
+                    rm_pixels_edge = int(np.ceil(rm_pixels_total / 2))
+                    indices_truncated = np.arange(rm_pixels_edge, len_kernel - rm_pixels_edge)
+                    new_kernel = new_kernel.take(indices=indices_truncated.astype(int), axis=axis)
+
+            log.warning(
+                f"The filter input has shape {input_shape} whereas the "
+                f"kernel has shape {kernel_shape}. "
+                "These shapes are incompatible as the input must "
+                "be larger than the kernel along all dimensions. "
+                "The kernel will automatically be "
+                f"resized to {new_kernel.shape} to be less than the input shape. "
+                "If this is unexpected, "
+                "either reduce the filter 'radius' or increase the input array's size."
+            )
+
+            return new_kernel
+
+        return kernel
+
     def evaluate(self, spatial_data: jnp.array) -> jnp.array:
         """Process on supplied spatial data."""
 
@@ -73,6 +107,9 @@ class AbstractCircularFilter(Filter, ABC):
 
         # construct the kernel
         kernel = self.make_kernel(coords_rad)
+
+        # handle when kernel is too large compared to input
+        kernel = self._check_kernel_size(kernel=kernel, signal_in=rho)
 
         # normalize by the kernel operating on a spatial_data of all ones
         num = jsp.signal.convolve(rho, kernel, mode="same")
