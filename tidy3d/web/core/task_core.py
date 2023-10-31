@@ -8,7 +8,6 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic.v1 as pd
 from pydantic.v1 import Extra, Field, parse_obj_as
-import h5py
 
 from . import http_util
 from .core_config import get_logger_console
@@ -22,16 +21,8 @@ from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
 
 
-from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIM_LOG_FILE, JSON_TAG
-from .file_util import extract_gzip_file
-
-
-def _read_simulation_from_hdf5(file_name: str):
-    """read simulation str from hdf5"""
-
-    with h5py.File(file_name, "r") as f_handle:
-        json_string = f_handle[JSON_TAG][()]
-        return json_string
+from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIM_LOG_FILE
+from .file_util import extract_gzip_file, read_simulation_from_hdf5
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -313,7 +304,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         try:
             self.get_simulation_hdf5(hdf5_file_path)
             if os.path.exists(hdf5_file_path):
-                json_string = _read_simulation_from_hdf5(hdf5_file_path)
+                json_string = read_simulation_from_hdf5(hdf5_file_path)
                 with open(to_file, "w") as file:
                     # Write the string to the file
                     file.write(json_string.decode("utf-8"))

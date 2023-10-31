@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 ### Changed
+- Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
 - If input to circular filters in adjoint have size smaller than the diameter, instead of erroring, warn user and truncate the filter kernel accordingly.
+- When writing the json string of a model to an `hdf5` file, the string is split into chunks if it has more than a set (very large) number of characters. This fixes potential error if the string size is more than 4GB.
+
 
 ## [2.5.0rc2] - 2023-10-30
 

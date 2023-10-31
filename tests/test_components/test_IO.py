@@ -21,6 +21,14 @@ from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 SIM_DIR = "tests/sims"
 
 
+@pytest.fixture
+def split_string(monkeypatch):
+    """Lower the max string length in hdf5 read/write, in order to test the string splitting."""
+    from tidy3d.components import base
+
+    monkeypatch.setattr(base, "MAX_STRING_LENGTH", 100)
+
+
 def set_datasets_to_none(sim):
     sim_dict = sim.dict()
     for src in sim_dict["sources"]:
@@ -47,7 +55,7 @@ def set_datasets_to_none(sim):
     return td.Simulation.parse_obj(sim_dict)
 
 
-def test_simulation_load_export():
+def test_simulation_load_export(split_string):
     major, minor, patch = __version__.split(".")
     path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     # saving as .h5 since *.hdf5 is git ignored
@@ -81,28 +89,28 @@ def test_component_load_export_yaml(tmp_path):
     assert td.Medium() == M2, "original and loaded medium are not the same"
 
 
-def test_simulation_load_export_hdf5(tmp_path):
+def test_simulation_load_export_hdf5(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_gz(tmp_path):
+def test_simulation_load_export_hdf5_gz(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_explicit(tmp_path):
+def test_simulation_load_export_hdf5_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
     SIM.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_gz_explicit(tmp_path):
+def test_simulation_load_export_hdf5_gz_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
     SIM.to_hdf5_gz(path)
     SIM2 = td.Simulation.from_hdf5_gz(path)
