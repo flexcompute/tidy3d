@@ -502,7 +502,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     load_data_from_file(model_dict=value, group_path=subpath)
 
         with h5py.File(fname, "r") as f_handle:
+            print(f"NOTE: trying to load json string")
             json_string = f_handle[JSON_TAG][()]
+            print(f"NOTE: trying to load dict")
             model_dict = json.loads(json_string)
         print(f"NOTE: loaded json string for model {model_dict['type']}")
 
