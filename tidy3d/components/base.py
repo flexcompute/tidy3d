@@ -7,6 +7,7 @@ import os
 import tempfile
 from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
+from math import ceil
 
 import rich
 import pydantic.v1 as pydantic
@@ -22,9 +23,12 @@ from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
 
-# default indentation (# spaces) in files
-INDENT = 4
+
+INDENT_JSON_FILE = 4  # default indentation of json string in json files
+INDENT = None  # default indentation of json string used internally
 JSON_TAG = "JSON_STRING"
+# If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
+MAX_STRING_LENGTH = 1e9
 
 
 def cache(prop):
@@ -309,7 +313,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json_string
+        json_string = self._json(indent=INDENT_JSON_FILE)
         self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
@@ -375,7 +379,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self._warn_if_contains_data(json_string)
         model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
-            yaml.dump(model_dict, file_handle, indent=INDENT)
+            yaml.dump(model_dict, file_handle, indent=INDENT_JSON_FILE)
 
     @staticmethod
     def _warn_if_contains_data(json_str: str) -> None:
@@ -429,6 +433,23 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 else:
                     model_dict = model_dict[key]
         return model_dict
+
+    @staticmethod
+    def _json_string_key(index: int) -> str:
+        """Get json string key for string chunk number ``index``."""
+        if index:
+            return f"{JSON_TAG}_{index}"
+        return JSON_TAG
+
+    @classmethod
+    def _json_string_from_hdf5(cls, fname: str) -> str:
+        """Load the model json string from an hdf5 file."""
+        with h5py.File(fname, "r") as f_handle:
+            num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
+            json_string = b""
+            for ind in range(num_string_parts):
+                json_string += f_handle[cls._json_string_key(ind)][()]
+        return json_string
 
     @classmethod
     def dict_from_hdf5(
@@ -501,10 +522,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 elif isinstance(value, dict):
                     load_data_from_file(model_dict=value, group_path=subpath)
 
-        with h5py.File(fname, "r") as f_handle:
-            json_string = f_handle[JSON_TAG][()]
-            model_dict = json.loads(json_string)
-
+        model_dict = json.loads(cls._json_string_from_hdf5(fname=fname))
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         load_data_from_file(model_dict=model_dict, group_path=group_path)
@@ -563,7 +581,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         with h5py.File(fname, "w") as f_handle:
 
-            f_handle[JSON_TAG] = self._json_string
+            json_str = self._json_string
+            for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
+                ind_start = int(ind * MAX_STRING_LENGTH)
+                ind_stop = min(int(ind + 1) * MAX_STRING_LENGTH, len(json_str))
+                f_handle[self._json_string_key(ind)] = json_str[ind_start:ind_stop]
 
             def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
                 """For every DataArray item in dictionary, write path of hdf5 group as value."""

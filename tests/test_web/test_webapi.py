@@ -357,7 +357,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
         return sim.json().encode("utf-8")
 
     monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
-    monkeypatch.setattr(f"{task_core_path}._read_simulation_from_hdf5", get_str)
+    monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)

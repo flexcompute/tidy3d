@@ -49,12 +49,28 @@ def read_simulation_from_hdf5_gz(file_name: str) -> str:
     return json_str
 
 
+"""TODO: _json_string_key and read_simulation_from_hdf5 are duplicated functions that also exist
+as methods in Tidy3dBaseModel. For consistency it would be best if this duplication is avoided."""
+
+
+def _json_string_key(index):
+    """Get json string key for string chunk number ``index``."""
+    if index:
+        return f"{JSON_TAG}_{index}"
+    return JSON_TAG
+
+
 def read_simulation_from_hdf5(file_name: str) -> str:
     """read simulation str from hdf5"""
-
     with h5py.File(file_name, "r") as f_handle:
-        json_string = f_handle[JSON_TAG][()]
-        return json_string
+        num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
+        json_string = b""
+        for ind in range(num_string_parts):
+            json_string += f_handle[_json_string_key(ind)][()]
+    return json_string
+
+
+"""End TODO"""
 
 
 def read_simulation_from_json(file_name: str) -> str:
