@@ -504,10 +504,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         with h5py.File(fname, "r") as f_handle:
             json_string = f_handle[JSON_TAG][()]
             model_dict = json.loads(json_string)
+        print(f"NOTE: loaded json string for model {model_dict['type']}")
 
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
+        print(f"NOTE: got sub model for {model_dict['type']}")
+
         load_data_from_file(model_dict=model_dict, group_path=group_path)
+        print(f"NOTE: loaded data from file for {model_dict['type']}")
+
         return model_dict
 
     @classmethod
