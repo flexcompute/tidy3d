@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
+- If input to circular filters in adjoint have size smaller than the diameter, instead of erroring, warn user and truncate the filter kernel accordingly.
 
 ## [2.5.0rc2] - 2023-10-30
 
