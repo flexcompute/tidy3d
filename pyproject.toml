@@ -42,20 +42,37 @@ click = "8.0.3"
 responses = "*"
 
 [tool.poetry.dev-dependencies]
-pre-commit = "*"
 black = "22.3.0"
-ruff = "*"
-tox = "*"
-pytest = "*"
-pytest-timeout = "*"
-memory_profiler = "*"
 dill = "*"
-ipython = "*"
 gdspy = "*"
 gdstk = "*"
-trimesh = "3.20.0"
-networkx = { version = ">=2.6.3, <=3.0" }
+ipython = "*"
+jax = [
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "!windows"},
+    {version = "==0.3.14", extras = ["cpu"], platform = "windows", python = "<3.9"},
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9"}
+]
+jaxlib = [
+    {version = ">=0.3.14,<=0.4.14", platform = "!windows"},
+    {version = "==0.3.14", platform = "windows", python = "<3.9"},
+    {version = ">=0.3.14,<=0.4.14", platform = "windows", python = ">=3.9"}
+]
+memory_profiler = "*"
+networkx = {version = ">=2.6.3, <=3.0"}
+pre-commit = "*"
+pytest = "*"
+pytest-timeout = "*"
 rtree = "1.0.1"
+ruff = "*"
+tox = "*"
+trimesh = "3.20.0"
+
+[tool.poetry.extras]
+dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh"]
+gdspy = ["gdspy"]
+gdstk = ["gdstk"]
+jax = ["jaxlib", "jax"]
+trimesh = ["trimesh", "networkx", "rtree"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
