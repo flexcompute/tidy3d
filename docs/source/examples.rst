@@ -86,6 +86,7 @@ Data Visualization and Postprocessing
 
     notebooks/VizSimulation
     notebooks/VizData
+    notebooks/XarrayTutorial
     notebooks/AnimationTutorial  
     notebooks/FieldProjections  
 

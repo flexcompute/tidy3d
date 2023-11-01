@@ -539,6 +539,12 @@
     "keywords": "web API, job, batch, Tidy3D, FDTD",
     "feature_image": ""
   },
+  "XarrayTutorial.ipynb": {
+    "title": "Advanced monitor data manipulation and visualization | Flexcompute",
+    "description": "This notebook demonstrates advanced xarray features for postprocessing and visualization.",
+    "keywords": "xarray, postprocessing, visualization, Tidy3D, FDTD",
+    "feature_image": ""
+  },
   "YJunction.ipynb": {
     "title": "Waveguide Y Junction Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to simulate a waveguide Y junction in Tidy3D FDTD.",
