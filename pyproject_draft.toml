@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "tidy3d"
-version = "0.1.0"  # Replace with your actual version
+version = "0.1.0"  # Thinking about bump2version
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "GNU Lesser General Public License (LGPL) Version 2.1, February 1999"
@@ -19,7 +19,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Operating System :: OS Independent",
 ]
-documentation = ""  # Add if available
+documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
@@ -75,4 +75,5 @@ gdstk = ["gdstk"]
 trimesh = ["trimesh==3.20.0", "networkx >=2.6.3, <=3.0", "rtree==1.0.1"]
 dev = ["pre-commit", "black==22.3.0", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh"]
 
-
+[tool.poetry.scripts]
+tidy3d = "tidy3d.web.cli:tidy3d_cli"
