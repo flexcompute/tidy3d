@@ -1,12 +1,24 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "tidy3d"
 version = "0.1.0"  # Replace with your actual version
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
-license = "MIT"
+license = "GNU Lesser General Public License (LGPL) Version 2.1, February 1999"
 readme = "README.md"
 homepage = "https://github.com/flexcompute/tidy3d"
 repository = "https://github.com/flexcompute/tidy3d"
+classifiers = [
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Operating System :: OS Independent",
+]
 documentation = ""  # Add if available
 
 [tool.poetry.urls]
@@ -63,6 +75,4 @@ gdstk = ["gdstk"]
 trimesh = ["trimesh==3.20.0", "networkx >=2.6.3, <=3.0", "rtree==1.0.1"]
 dev = ["pre-commit", "black==22.3.0", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh"]
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+
