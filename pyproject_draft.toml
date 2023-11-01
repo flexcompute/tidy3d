@@ -1,66 +1,56 @@
-[build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools]
+[tool.poetry]
 name = "tidy3d"
-version = "0.1.0"  # Replace with dynamic versioning method if necessary
-author = "Tyler Hughes"
-author_email = "tyler@flexcompute.com"
+version = "0.1.0"  # Replace with your actual version
 description = "A fast FDTD solver"
-long_description = "file: README.md"
-long_description_content_type = "text/markdown"
-url = "https://github.com/flexcompute/tidy3d"
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-]
-packages = ["find:"]
-include_package_data = true
-python_requires = ">=3.7"
+authors = ["Tyler Hughes <tyler@flexcompute.com>"]
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/flexcompute/tidy3d"
+repository = "https://github.com/flexcompute/tidy3d"
+documentation = ""  # Add if available
 
-[tool.setuptools.project_urls]
+[tool.poetry.urls]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
-[tool.setuptools.install_requires]
-dependencies = [
-    "pyroots>=0.5.0",
-    "xarray>=0.16.2",
-    "importlib-metadata>=6.0.0",
-    "h5netcdf==1.0.2",
-    "h5py>=3.0.0",
-    "rich<12.6.0",
-    "matplotlib",
-    "shapely>=2.0",
-    "pydantic==2.*",
-    "PyYAML",
-    "dask",
-    "toml",
-    "scipy",
-    "boto3==1.23.1",
-    "requests",
-    "pyjwt",
-    "click==8.0.3",
-    "responses"
-]
+[tool.poetry.dependencies]
+python = "^3.7"
+pyroots = "^0.5.0"
+xarray = "^0.16.2"
+importlib-metadata = "^6.0.0"
+h5netcdf = "1.0.2"
+h5py = "^3.0.0"
+rich = "<12.6.0"
+matplotlib = "*"
+shapely = "^2.0"
+pydantic = "^2.0"
+PyYAML = "*"
+dask = "*"
+toml = "*"
+scipy = "*"
+boto3 = "1.23.1"
+requests = "*"
+pyjwt = "*"
+click = "8.0.3"
+responses = "*"
 
-[tool.setuptools.extras_require]
-dev = [
-    "pre-commit",
-    "black==22.3.0",
-    "ruff",
-    "tox",
-    "pytest",
-    "pytest-timeout",
-    "memory_profiler",
-    "dill",
-    "ipython",
-    "gdspy",
-    "gdstk",
-    "trimesh==3.20.0",
-    "networkx >=2.6.3, <=3.0",
-    "rtree==1.0.1",
+[tool.poetry.dev-dependencies]
+pre-commit = "*"
+black = "22.3.0"
+ruff = "*"
+tox = "*"
+pytest = "*"
+pytest-timeout = "*"
+memory_profiler = "*"
+dill = "*"
+ipython = "*"
+gdspy = "*"
+gdstk = "*"
+trimesh = "3.20.0"
+networkx = { version = ">=2.6.3, <=3.0" }
+rtree = "1.0.1"
+
+[tool.poetry.extras]
+jax = [
     "jaxlib>=0.3.14,<=0.4.14; platform_system != 'Windows'",
     "jax[cpu]>=0.3.14,<=0.4.14; platform_system != 'Windows'",
     "jaxlib==0.3.14; platform_system == 'Windows' and python_version < '3.9'",
@@ -70,21 +60,9 @@ dev = [
 ]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
-jax = [
-    "jaxlib>=0.3.14,<=0.4.14; platform_system != 'Windows'",
-    "jax[cpu]>=0.3.14,<=0.4.14; platform_system != 'Windows'",
-    "jaxlib==0.3.14; platform_system == 'Windows' and python_version < '3.9'",
-    "jax[cpu]==0.3.14; platform_system == 'Windows' and python_version < '3.9'",
-    "jaxlib>=0.3.14,<=0.4.14; platform_system == 'Windows' and python_version >= '3.9'",
-    "jax[cpu]>=0.3.14,<=0.4.14; platform_system == 'Windows' and python_version >= '3.9'"
-]
-trimesh = [
-    "trimesh==3.20.0",
-    "networkx >=2.6.3, <=3.0",
-    "rtree==1.0.1"
-]
+trimesh = ["trimesh==3.20.0", "networkx >=2.6.3, <=3.0", "rtree==1.0.1"]
+dev = ["pre-commit", "black==22.3.0", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh"]
 
-[tool.setuptools.entry_points]
-console_scripts = [
-    "tidy3d = tidy3d.web.cli:tidy3d_cli",
-]
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
