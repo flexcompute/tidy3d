@@ -1,0 +1,50 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.ruff]
+ignore-init-module-imports = true
+typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
+line-length = 100
+fix = true
+ignore = [
+  "E501",  # line too long, handled by black
+  "B008",  # do not perform function calls in argument defaults
+  "C901",  # too complex
+  "UP007", # use x | y instead of union[x,y] (doesnt work)
+  "B905",  # `zip()` without an explicit `strict=` parameter
+  "C408",  # C408 Unnecessary `dict` call (rewrite as a literal)
+  "B904",
+  "B028",  # stacklevel
+  "UP006", # typy annotation with Tuple[float] messes up pydantic
+]
+select = [
+  "E",  # pycodestyle errors
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes
+  "C",  # flake8-comprehensions
+  "B",  # flake8-bugbear
+  "UP"
+]
+
+target-version = "py37"
