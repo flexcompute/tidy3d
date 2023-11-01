@@ -141,6 +141,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin9WDM
     notebooks/AdjointPlugin10YBranchLevelSet
     notebooks/AdjointPlugin11CircuitMZI
+    notebooks/AdjointPlugin12LightExtractor
 
 Case Studies
 ------------

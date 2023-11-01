@@ -89,6 +89,12 @@
     "keywords": "inverse design, MZI, circuit, sax, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+    "AdjointPlugin12LightExtractor.ipynb": {
+    "title": "How to perform the inverse design of a quantum emitter light extractor in Tidy3D FDTD",
+    "description": "This notebook demonstrates how to set up and run a quantum emitter light extractor optimization.",
+    "keywords": "inverse design, adjointt optimization, quantum emitter, light extractor, single-photon source, nanocavity optimization, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },  
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
