@@ -58,6 +58,7 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
             frequency = FREQ_EVAL_INF
 
         if isinstance(frequency, np.ndarray):
+            frequency = frequency.astype(float)
             frequency[np.where(np.isinf(frequency))] = FREQ_EVAL_INF
 
         # if frequency range not present just return original function

@@ -113,6 +113,9 @@ def test_medium_dispersion():
         eps_c = medium.eps_model(freqs)
         assert np.all(eps_c.imag >= 0)
 
+    # test eps_model for int arguments
+    m_SM.eps_model(np.array([1, 2]))
+
 
 def test_medium_dispersion_conversion():
 
