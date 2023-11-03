@@ -9,10 +9,8 @@ homepage = "https://github.com/flexcompute/tidy3d"
 repository = "https://github.com/flexcompute/tidy3d"
 classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
@@ -23,7 +21,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 pyroots = "^0.5.0"
-xarray = ">=0.16.2" # TODO sort out exactly what's equivalence the deal here
+xarray = ">=0.16.2"
 importlib-metadata = "^6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
