@@ -192,6 +192,12 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
     @cached_property
+    def grid_snapped(self) -> Grid:
+        """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
+        grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
+        return self.simulation._snap_zero_dim(grid_snapped)
+
+    @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
 
@@ -204,6 +210,30 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
+        # Compute data on the Yee grid
+        mode_solver_data = self._data_on_yee_grid()
+
+        # Colocate to grid boundaries if requested
+        if self.colocate:
+            mode_solver_data = self._colocate_data(mode_solver_data=mode_solver_data)
+
+        # normalize modes
+        self._normalize_modes(mode_solver_data=mode_solver_data)
+
+        # filter polarization if requested
+        if self.mode_spec.filter_pol is not None:
+            self._filter_polarization(mode_solver_data=mode_solver_data)
+
+        # sort modes if requested
+        if self.mode_spec.track_freq and len(self.freqs) > 1:
+            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+
+        self._field_decay_warning(mode_solver_data.symmetry_expanded)
+
+        return mode_solver_data
+
+    def _data_on_yee_grid(self) -> ModeSolverData:
+        """Solve for all modes, and construct data with fields on the Yee grid."""
         _, _solver_coords = self.plane.pop_axis(
             self._solver_grid.boundaries.to_list, axis=self.normal_axis
         )
@@ -223,15 +253,9 @@ class ModeSolver(Tidy3dBaseModel):
         )
         data_dict = {"n_complex": index_data}
 
-        # Construct and add all the data for the fields
-        # Snap the solver grid to plane normal and simulation 0-sized dims if any
-        grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
-
-        grid_snapped = self.simulation._snap_zero_dim(grid_snapped)
-
         # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-            xyz_coords = grid_snapped[field_name].to_list
+            xyz_coords = self.grid_snapped[field_name].to_list
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(
@@ -253,7 +277,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
         )
 
-        # make mode solver data on the Yee grid for now
+        # make mode solver data on the Yee grid
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
         grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
@@ -267,72 +291,68 @@ class ModeSolver(Tidy3dBaseModel):
             **data_dict,
         )
 
-        # Colocate to grid boundaries if requested
-        if self.colocate:
-            # Get colocation coordinates in the solver plane
-            _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
-            colocate_coords = {}
-            for dim, sym in zip(plane_dims, self.solver_symmetry):
-                coords = grid_snapped.boundaries.to_dict[dim]
-                if len(coords) > 2:
-                    if sym == 0:
-                        colocate_coords[dim] = coords[1:-1]
-                    else:
-                        colocate_coords[dim] = coords[:-1]
-            # Colocate to new coordinates using the previously created data
-            data_dict_colocated = {}
-            for key, field in mode_solver_data.symmetry_expanded_copy.field_components.items():
-                data_dict_colocated[key] = field.interp(**colocate_coords)
-            # Update data
-            mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-            grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
-            mode_solver_data = mode_solver_data.updated_copy(
-                monitor=mode_solver_monitor, grid_expanded=grid_expanded, **data_dict_colocated
-            )
+        return mode_solver_data
 
-        # normalize modes
-        scaling = np.sqrt(np.abs(mode_solver_data.flux))
-        mode_solver_data = mode_solver_data.copy(
-            update={
-                key: field / scaling for key, field in mode_solver_data.field_components.items()
-            }
-        )
+    def _colocate_data(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
+        """Colocate data to Yee grid boundaries."""
 
-        # filter polarization if requested
-        if self.mode_spec.filter_pol is not None:
-            pol_frac = mode_solver_data.pol_fraction
-            for ifreq in range(len(self.freqs)):
-                te_frac = pol_frac.te.isel(f=ifreq)
-                if self.mode_spec.filter_pol == "te":
-                    sort_inds = np.concatenate(
-                        (
-                            np.where(te_frac >= 0.5)[0],
-                            np.where(te_frac < 0.5)[0],
-                            np.where(np.isnan(te_frac))[0],
-                        )
-                    )
-                elif self.mode_spec.filter_pol == "tm":
-                    sort_inds = np.concatenate(
-                        (
-                            np.where(te_frac <= 0.5)[0],
-                            np.where(te_frac > 0.5)[0],
-                            np.where(np.isnan(te_frac))[0],
-                        )
-                    )
-                for data in list(mode_solver_data.field_components.values()) + [
-                    mode_solver_data.n_complex,
-                    mode_solver_data.grid_primal_correction,
-                    mode_solver_data.grid_dual_correction,
-                ]:
-                    data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
+        # Get colocation coordinates in the solver plane
+        _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
+        colocate_coords = {}
+        for dim, sym in zip(plane_dims, self.solver_symmetry):
+            coords = self.grid_snapped.boundaries.to_dict[dim]
+            if len(coords) > 2:
+                if sym == 0:
+                    colocate_coords[dim] = coords[1:-1]
+                else:
+                    colocate_coords[dim] = coords[:-1]
 
-        # sort modes if requested
-        if self.mode_spec.track_freq and len(self.freqs) > 1:
-            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+        # Colocate input data to new coordinates
+        data_dict_colocated = {}
+        for key, field in mode_solver_data.symmetry_expanded.field_components.items():
+            data_dict_colocated[key] = field.interp(**colocate_coords)
 
-        self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
+        # Update data
+        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+        data_dict_colocated.update({"monitor": mode_solver_monitor, "grid_expanded": grid_expanded})
+        mode_solver_data = mode_solver_data._updated(update=data_dict_colocated)
 
         return mode_solver_data
+
+    def _normalize_modes(self, mode_solver_data: ModeSolverData):
+        """Normalize modes. Note: this modifies ``mode_solver_data`` in-place."""
+        scaling = np.sqrt(np.abs(mode_solver_data.flux))
+        for field in mode_solver_data.field_components.values():
+            field /= scaling
+
+    def _filter_polarization(self, mode_solver_data: ModeSolverData):
+        """Filter polarization. Note: this modifies ``mode_solver_data`` in-place."""
+        pol_frac = mode_solver_data.pol_fraction
+        for ifreq in range(len(self.freqs)):
+            te_frac = pol_frac.te.isel(f=ifreq)
+            if self.mode_spec.filter_pol == "te":
+                sort_inds = np.concatenate(
+                    (
+                        np.where(te_frac >= 0.5)[0],
+                        np.where(te_frac < 0.5)[0],
+                        np.where(np.isnan(te_frac))[0],
+                    )
+                )
+            elif self.mode_spec.filter_pol == "tm":
+                sort_inds = np.concatenate(
+                    (
+                        np.where(te_frac <= 0.5)[0],
+                        np.where(te_frac > 0.5)[0],
+                        np.where(np.isnan(te_frac))[0],
+                    )
+                )
+            for data in list(mode_solver_data.field_components.values()) + [
+                mode_solver_data.n_complex,
+                mode_solver_data.grid_primal_correction,
+                mode_solver_data.grid_dual_correction,
+            ]:
+                data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
     @cached_property
     def data(self) -> ModeSolverData:
