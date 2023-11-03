@@ -31,7 +31,6 @@ jobs:
       uses: snok/install-poetry@v1
       with:
         version: 1.6.1
-        virtualenvs-create: true
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
