@@ -23,7 +23,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 [tool.poetry.dependencies]
 python = ">=3.10,<3.12"
 pyroots = "^0.5.0"
-xarray = "2023.10.1  " # TODO sort out exactly what's equivalence the deal here
+xarray = ">=0.16.2" # TODO sort out exactly what's equivalence the deal here
 importlib-metadata = "^6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
@@ -60,12 +60,14 @@ gdstk = "*"
 
 [tool.poetry.group.jax.dependencies]
 jax = [
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "!windows"},
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "linux"},
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "darwin"}, # TODO verify with a mac user
     {version = "==0.3.14", extras = ["cpu"], platform = "windows", python = "<3.9"},
     {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9"}
 ]
 jaxlib = [
-    {version = ">=0.3.14,<=0.4.14", platform = "!windows"},
+    {version = ">=0.3.14,<=0.4.14", platform = "linux"},
+    {version = ">=0.3.14,<=0.4.14", platform = "darwin"}, # TODO verify with a mac user
     {version = "==0.3.14", platform = "windows", python = "<3.9"},
     {version = ">=0.3.14,<=0.4.14", platform = "windows", python = ">=3.9"}
 ]

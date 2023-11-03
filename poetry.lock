@@ -2409,4 +2409,4 @@ trimesh = []
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "ba03870a0e3aeae1c37634eea066ec610fba122f74d2432b05d5df4d91394385"
+content-hash = "f69b0bfbc3d912b788e75a480e70198e42087e90f170f204807dee0e54a0929e"
