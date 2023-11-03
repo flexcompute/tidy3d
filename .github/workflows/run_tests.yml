@@ -64,4 +64,4 @@ jobs:
         source $VENV
         black . --check --diff
         ruff check tidy3d --fix --exit-non-zero-on-fix
-        pytest --version
+        pytest
