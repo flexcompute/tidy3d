@@ -77,28 +77,28 @@ networkx = {version = ">=2.6.3, <=3.0"}
 rtree = "1.0.1"
 
 [tool.poetry.group.docs.dependencies]
-jupyter
-jinja2==3.0
-nbconvert==6.0.6
-sphinx
-nbsphinx==0.8.7
-ipython
-autodoc_pydantic>=1.8.0
-sphinx-copybutton
-sphinx-book-theme==0.3.3
-m2r2
-tmm
-gdstk
-grcwa
-sphinx-sitemap
-nbdime
-optax
-signac
-sax
+jupyter = "*"
+jinja2 = "3.0"
+nbconvert = "6.0.6"
+sphinx = "*"
+nbsphinx = "0.8.7"
+ipython = "*"
+autodoc_pydantic = ">=1.8.0"
+sphinx-copybutton = "*"
+sphinx-book-theme = "0.3.3"
+m2r2 = "*"
+tmm = "*"
+gdstk = "*"
+grcwa = "*"
+sphinx-sitemap = "*"
+nbdime = "*" 
+optax = "*"
+signac = "*"
+sax = "*"
 
 [tool.poetry.extras]
-dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "autodoc_pydantic", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint"]
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "autodoc_pydantic", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint"]
+dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "autodoc_pydantic", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "autodoc_pydantic", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]
