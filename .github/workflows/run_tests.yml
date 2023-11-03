@@ -61,7 +61,7 @@ jobs:
     #----------------------------------------------
     - name: Run tests
       run: |
-        source .venv/bin/activate
+        source $VENV
         black . --check --diff
         ruff check tidy3d --fix --exit-non-zero-on-fix
-        pytest
+        pytest --version
