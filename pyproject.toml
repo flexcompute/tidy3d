@@ -21,9 +21,9 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = ">=3.10,<3.12"
 pyroots = "^0.5.0"
-xarray = "^0.16.2"
+xarray = "2023.10.1  " # TODO sort out exactly what's equivalence the deal here
 importlib-metadata = "^6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
@@ -51,21 +51,6 @@ pytest-timeout = "*"
 memory_profiler = "*"
 dill = "*"
 ipython = "*"
-gdspy = "*"
-gdstk = "*"
-jax = [
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "!windows"},
-    {version = "==0.3.14", extras = ["cpu"], platform = "windows", python = "<3.9"},
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9"}
-]
-jaxlib = [
-    {version = ">=0.3.14,<=0.4.14", platform = "!windows"},
-    {version = "==0.3.14", platform = "windows", python = "<3.9"},
-    {version = ">=0.3.14,<=0.4.14", platform = "windows", python = ">=3.9"}
-]
-trimesh = "3.20.0"
-networkx = {version = ">=2.6.3, <=3.0"}
-rtree = "1.0.1"
 
 [tool.poetry.group.gdspy.dependencies]
 gdspy = "*"
@@ -91,7 +76,7 @@ networkx = {version = ">=2.6.3, <=3.0"}
 rtree = "1.0.1"
 
 [tool.poetry.extras]
-dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh"]
+dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]
