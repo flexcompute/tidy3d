@@ -573,7 +573,7 @@ class ModeSolver(Tidy3dBaseModel):
     def to_source(
         self,
         source_time: SourceTime,
-        direction: Direction,
+        direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`ModeSolver` instance plus additional
@@ -583,8 +583,9 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
-        direction : Direction
+        direction : Direction = None
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+            If not specified, uses the direction from the mode solver.
         mode_index : int = 0
             Index into the list of modes returned by mode solver to use in source.
 
@@ -595,6 +596,9 @@ class ModeSolver(Tidy3dBaseModel):
             inputs.
         """
 
+        if direction is None:
+            direction = self.direction
+
         return ModeSource(
             center=self.plane.center,
             size=self.plane.size,
@@ -604,7 +608,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=direction,
         )
 
-    def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
+    def to_monitor(self, freqs: List[float] = None, name: str = None) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a :class:`ModeSolver` instance plus additional
         specifications.
 
@@ -612,6 +616,7 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         freqs : List[float]
             Frequencies to include in Monitor (Hz).
+            If not specified, passes ``self.freqs``.
         name : str
             Required name of monitor.
 
@@ -621,6 +626,15 @@ class ModeSolver(Tidy3dBaseModel):
             Mode monitor with specifications taken from the ModeSolver instance and the method
             inputs.
         """
+
+        if freqs is None:
+            freqs = self.freqs
+
+        if name is None:
+            raise ValueError(
+                "A 'name' must be passed to 'ModeSolver.to_monitor'. "
+                "The default value of 'None' is for backwards compatibility and is not accepted."
+            )
 
         return ModeMonitor(
             center=self.plane.center,
@@ -663,7 +677,7 @@ class ModeSolver(Tidy3dBaseModel):
     def sim_with_source(
         self,
         source_time: SourceTime,
-        direction: Direction,
+        direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> Simulation:
         """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a copy of
@@ -674,8 +688,9 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
-        direction : Direction
+        direction : Direction = None
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+            If not specified, uses the direction from the mode solver.
         mode_index : int = 0
             Index into the list of modes returned by mode solver to use in source.
 
@@ -685,6 +700,7 @@ class ModeSolver(Tidy3dBaseModel):
             Copy of the simulation with a :class:`.ModeSource` with specifications taken
             from the ModeSolver instance and the method inputs.
         """
+
         mode_source = self.to_source(
             mode_index=mode_index, direction=direction, source_time=source_time
         )
@@ -694,8 +710,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def sim_with_monitor(
         self,
-        freqs: List[float],
-        name: str,
+        freqs: List[float] = None,
+        name: str = None,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a mode monitor added corresponding to
@@ -703,8 +719,9 @@ class ModeSolver(Tidy3dBaseModel):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : List[float] = None
             Frequencies to include in Monitor (Hz).
+            If not specified, uses the frequencies from the mode solver.
         name : str
             Required name of monitor.
 
@@ -714,6 +731,7 @@ class ModeSolver(Tidy3dBaseModel):
             Copy of the simulation with a :class:`.ModeMonitor` with specifications taken
             from the ModeSolver instance and the method inputs.
         """
+
         mode_monitor = self.to_monitor(freqs=freqs, name=name)
         new_monitors = list(self.simulation.monitors) + [mode_monitor]
         new_sim = self.simulation.updated_copy(monitors=new_monitors)
