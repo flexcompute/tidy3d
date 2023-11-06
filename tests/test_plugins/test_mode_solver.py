@@ -653,3 +653,56 @@ def test_mode_solver_nan_pol_fraction():
     md = ms.solve()
 
     assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]
+
+
+def test_mode_solver_method_defaults():
+    """Test that changes to mode solver default values in methods work."""
+
+    simulation = td.Simulation(
+        medium=td.Medium(permittivity=2),
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=15),
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+
+    mode_spec = td.ModeSpec(
+        num_modes=10,
+        target_neff=3.48,
+        filter_pol="tm",
+        precision="single",
+        track_freq="central",
+    )
+
+    freqs = [td.C_0 / 1.55]
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(center=(0, 0, 0), size=(2, 0, 1.1)),
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+    )
+
+    # test defaults
+    st = td.GaussianPulse(freq0=1.0, fwidth=1.0)
+
+    src = ms.to_source(source_time=st)
+    assert src.direction == ms.direction
+
+    src = ms.to_source(source_time=st, direction="+")
+    assert src.direction != ms.direction
+
+    mnt = ms.to_monitor(name="mode_mnt")
+    assert np.allclose(mnt.freqs, ms.freqs)
+
+    mnt = ms.to_monitor(name="mode_mnt", freqs=[2e14])
+    assert not np.allclose(mnt.freqs, ms.freqs)
+
+    sim = ms.sim_with_source(source_time=st)
+    assert sim.sources[-1].direction == ms.direction
+
+    sim = ms.sim_with_monitor(name="test")
+    assert np.allclose(sim.monitors[-1].freqs, ms.freqs)
