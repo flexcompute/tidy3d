@@ -1,4 +1,0 @@
-pytest
-pylint
-black
-nbconvert
