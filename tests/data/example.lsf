@@ -1,0 +1,179 @@
+# https://optics.ansys.com/hc/en-us/articles/360034923553-Lumerical-scripting-language-Alphabetical-list
+# https://readthedocs.org/projects/lumopt/downloads/pdf/latest/
+
+switchtolayout;
+selectall;
+delete;
+
+## SIM PARAMS
+size_x=6e-6;
+size_y=8e-6;
+size_z=0;
+mesh_x=20e-9;
+mesh_y=20e-9;
+finer_mesh_size=2.5e-6;
+mesh_accuracy=2;
+
+addsphere;
+set("name","new_sphere");
+set("x",1e-6);
+set("y",2e-6);
+set("z",0);
+set("radius",0.5e-6);
+
+  # testing space with comment
+test_dict1 = 'yee';
+test_dict2 = test_dict1; # check comment after declaration
+test_dict3 = True;  # further weird ## comment # case
+test_dict4 = False;
+
+## GEOMETRY
+#INPUT WAVEGUIDE
+addrect;
+set('name','input wg');
+set('x span',3e-6);
+set('y span',0.5e-6);
+set('z span',220e-9);
+set('y',0.0);
+set('x',-2.5e-6);
+set('index',2.8);
+
+addplane;
+set("injection axis","z");
+set("direction","backward");
+set("x",0);
+set("x span",0.5e-6);
+set("y",0);
+set("y span",5e-6);
+set("z",0e-6);
+set("wavelength start",0.3e-6);
+set("wavelength stop",1.2e-6);
+
+#OUTPUT WAVEGUIDES
+addrect;
+set('name','output wg top');
+set('x span',3e-6);
+set('y span',0.5e-6);
+set('z span',220e-9);
+set('y',0.35e-6);
+set('x',2.5e-6);
+set('index',2.8);
+
+addrect;
+set('name','output wg bottom');
+set('x span',3e-6);
+set('y span',0.5e-6);
+set('z span',220e-9);
+set('y',-0.35e-6);
+   set('x',2.5e-6);
+set('index',2.8);
+
+## SOURCE
+addmode;
+set('direction','Forward');
+set('injection axis','x-axis');
+#set('polarization angle',0);
+set('wavelength start',0.55e-6);
+set('wavelength stop', 0.55e-6);
+set('y',0.0);
+set('y span',size_y);
+set('x span',size_x);
+set('x',-1.25e-6);
+set('override global source settings',false);
+set('mode selection','fundamental TE mode');
+addgaussian;
+set("injection axis","z");
+set("direction","backward");
+set("x",0);
+set("x span",0.5e-6);
+set("y",3);
+set("y span",0.3e-6);
+set("z",0e-6);
+set("use scalar approximation",1);
+set("waist radius w0",0.5e-6);
+set("distance from waist",-5e-6);
+
+## FDTD
+addfdtd;
+set('dimension','2D');
+set('background index',1.44);
+set('mesh accuracy',mesh_accuracy);
+set('x',0.0);
+set('x span',size_x);
+set('y',0.0);
+set('y span',size_y);
+set('z span',size_z);
+set('force symmetric y mesh',true);
+set('y min bc','Anti-Symmetric');
+set('pml layers',12);
+
+## MESH IN OPTIMIZABLE REGION
+addmesh;
+set('x',0);
+set('x span',finer_mesh_size+2.0*mesh_x);
+
+set('y',0);
+set('y span',finer_mesh_size);
+set('dx',mesh_x);
+set('dy',mesh_y);
+
+## OPTIMIZATION FIELDS MONITOR IN OPTIMIZABLE REGION
+addpower;
+set('name','opt_fields');
+set('monitor type','2D Z-normal');
+set('x',0);
+set('x span',finer_mesh_size);
+set('y',0);
+set('y span',finer_mesh_size);
+
+addcircle;
+set("name","new_circle");
+set("x",-1e-6);
+set("y",2e-6);
+set("radius",0.25e-6);
+set("z",0);
+set("z span",10e-6);
+
+
+
+vtx = [(1,1),(2,2),(2.5,2),(2,1.5),(2.2,1)];  # comment
+addpoly;
+set("name","random_polygon");
+set("vertices",vtx);
+set("z span",2e-6);
+
+adddipole;
+set("x",0);
+set("y",1e-6);
+set("z",0e-6);
+
+## FOM FIELDS
+addpower;
+set('name','fom');
+set('monitor type','2D X-normal');
+set('x',finer_mesh_size/2.0);
+set('y',0.0);
+set('y span',size_y);
+
+addefieldmonitor;
+set("name","E_field");
+set("monitor type",6);  # 2D y-normal
+set("x",0);
+set("x span",5e-6);
+set("y",0);
+set("z",0);
+set("y span",5e-6);
+set("record electrostatic potential",1);
+set("save data",1);
+filename = "electric_field.mat";
+set("filename",filename);
+
+addtestUnavailableCommand;
+
+addmodeexpansion;
+set("name","mode monitor");
+set("x",0);
+set("x span",5e-6);
+set("y",0);
+set("z",0);
+set("y span",5e-6);

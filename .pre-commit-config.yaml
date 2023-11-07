@@ -1,0 +1,6 @@
+repos:
+-   repo: https://github.com/psf/black
+    rev: 22.12.0
+    hooks:
+    - id: black
+      name: black <<< NOTE:, if you get a message stating that "All done! n file(s) reformatted", you must git add and commit the changes again to complete the commit. >>>
