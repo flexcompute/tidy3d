@@ -731,7 +731,49 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """Define == for two Tidy3DBaseModels."""
         if other is None:
             return False
-        return self._json_string == other._json_string
+
+        def check_equal(dict1: dict, dict2: dict) -> bool:
+            """Check if two dictionaries are equal, with special handlings."""
+
+            # if different keys, automatically fail
+            if not dict1.keys() == dict2.keys():
+                return False
+
+            # loop through elements in each dict
+            for key in dict1.keys():
+                val1 = dict1[key]
+                val2 = dict2[key]
+
+                # if one of val1 or val2 is None (exclusive OR)
+                if (val1 is None) != (val2 is None):
+                    return False
+
+                # convert tuple to dict to use this recursive function
+                if isinstance(val1, tuple) or isinstance(val2, tuple):
+                    val1 = dict(zip(range(len(val1)), val1))
+                    val2 = dict(zip(range(len(val2)), val2))
+
+                # if dictionaries, recurse
+                if isinstance(val1, dict) or isinstance(val2, dict):
+                    are_equal = check_equal(val1, val2)
+                    if not are_equal:
+                        return False
+
+                # if numpy arrays, use numpy to do equality check
+                elif isinstance(val1, np.ndarray) or isinstance(val2, np.ndarray):
+                    if not np.array_equal(val1, val2):
+                        return False
+
+                # everything else
+                else:
+
+                    # note: this logic is because != is handled differently in DataArrays apparently
+                    if not val1 == val2:
+                        return False
+
+            return True
+
+        return check_equal(self.dict(), other.dict())
 
     @cached_property
     def _json_string(self) -> str:

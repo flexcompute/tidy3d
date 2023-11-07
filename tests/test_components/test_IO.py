@@ -64,7 +64,9 @@ def test_simulation_load_export(split_string):
     SIM.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
     SIM_HDF5 = td.Simulation.from_hdf5(path_hdf5)
-    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
     assert SIM == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
 
 
@@ -72,7 +74,9 @@ def test_simulation_load_export_yaml(tmp_path):
     path = str(tmp_path / "simulation.yaml")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
 
 
 def test_component_load_export(tmp_path):
@@ -131,7 +135,7 @@ def test_simulation_preserve_types(tmp_path):
     path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
     sim_2 = td.Simulation.from_file(path)
-    assert set_datasets_to_none(SIM) == sim_2
+    assert set_datasets_to_none(SIM)._json_string == sim_2._json_string
 
     M_types = [type(s.medium) for s in sim_2.structures]
     for M in (td.Medium, td.PoleResidue, td.Lorentz, td.Sellmeier, td.Debye):
@@ -186,7 +190,7 @@ def test_validation_speed(tmp_path):
         _S = td.Simulation.from_file(path)
         time_validate = time() - time_start
         times_sec.append(time_validate)
-        assert set_datasets_to_none(S) == _S
+        assert set_datasets_to_none(S)._json_string == _S._json_string
 
         size = os.path.getsize(path)
         sizes_bytes.append(size)

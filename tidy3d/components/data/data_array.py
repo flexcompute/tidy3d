@@ -115,6 +115,10 @@ class DataArray(xr.DataArray):
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
+
+        if not isinstance(other, xr.DataArray):
+            return False
+
         if not self.data.shape == other.data.shape or not np.all(self.data == other.data):
             return False
         for key, val in self.coords.items():
