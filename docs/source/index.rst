@@ -105,7 +105,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
    :maxdepth: 1
 
    quickstart
-   examples
+   notebooks/examples
    faq
    howdoi
    api

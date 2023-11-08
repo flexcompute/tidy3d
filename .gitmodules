@@ -1,0 +1,3 @@
+[submodule "tidy3d"]
+	path = docs/source/
+	url = git@github.com:flexcompute-readthedocs/tidy3d-docs.git
