@@ -1,5 +1,0 @@
-# build and run simulations, use plugins (no tests)
--r basic.txt
--r web.txt
-
-scipy
