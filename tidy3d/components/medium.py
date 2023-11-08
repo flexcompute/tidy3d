@@ -2063,6 +2063,111 @@ class PoleResidue(DispersiveMedium):
         )
 
     @staticmethod
+    def lo_to_eps_model(
+        poles: Tuple[Tuple[float, float, float, float], ...],
+        eps_inf: pd.PositiveFloat,
+        frequency: float,
+    ) -> complex:
+        """Complex permittivity as a function of frequency for a given set of LO-TO coefficients.
+        See ``from_lo_to`` in :class:`.PoleResidue` for the detailed form of the model
+        and a reference paper.
+
+        Parameters
+        ----------
+        poles : Tuple[Tuple[float, float, float, float], ...]
+            The LO-TO poles, given as list of tuples of the form
+            (omega_LO, gamma_LO, omega_TO, gamma_TO).
+        eps_inf: pd.PositiveFloat
+            The relative permittivity at infinite frequency.
+        frequency: float
+            Frequency at which to evaluate the permittivity.
+
+        Returns
+        -------
+        complex
+            The complex permittivity of the given LO-TO model at the given frequency.
+        """
+        omega = 2 * np.pi * frequency
+        eps = eps_inf
+        for (omega_lo, gamma_lo, omega_to, gamma_to) in poles:
+            eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
+            eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
+        return eps
+
+    @classmethod
+    def from_lo_to(
+        cls, poles: Tuple[Tuple[float, float, float, float], ...], eps_inf: pd.PositiveFloat = 1
+    ) -> PoleResidue:
+        """Construct a pole residue model from the LO-TO form
+        (longitudinal and transverse optical modes).
+        The LO-TO form is :math:`\\epsilon_\\infty \\prod_{i=1}^l \\frac{\\omega_{LO, i}^2 - \\omega^2 - i \\omega \\gamma_{LO, i}}{\\omega_{TO, i}^2 - \\omega^2 - i \\omega \\gamma_{TO, i}}` as given in the paper:
+
+            M. Schubert, T. E. Tiwald, and C. M. Herzinger,
+            "Infrared dielectric anisotropy and phonon modes of sapphire,"
+            Phys. Rev. B 61, 8187 (2000).
+
+        Parameters
+        ----------
+        poles : Tuple[Tuple[float, float, float, float], ...]
+            The LO-TO poles, given as list of tuples of the form
+            (omega_LO, gamma_LO, omega_TO, gamma_TO).
+        eps_inf: pd.PositiveFloat
+            The relative permittivity at infinite frequency.
+
+        Returns
+        -------
+        :class:`.PoleResidue`
+            The pole residue equivalent of the LO-TO form provided.
+        """
+
+        omegas_lo, gammas_lo, omegas_to, gammas_to = map(np.array, zip(*poles))
+
+        # discriminants of quadratic factors of denominator
+        discs = 2 * np.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
+
+        # require nondegenerate TO poles
+        if len({(omega_to, gamma_to) for (_, _, omega_to, gamma_to) in poles}) != len(poles) or any(
+            disc == 0 for disc in discs
+        ):
+            raise ValidationError(
+                "Unable to construct a pole residue model "
+                "from an LO-TO form with degenerate TO poles. Consider adding a "
+                "perturbation to split the poles, or using "
+                "'PoleResidue.lo_to_eps_model' and fitting with the 'FastDispersionFitter'."
+            )
+
+        # roots of denominator, in pairs
+        roots = []
+        for gamma_to, disc in zip(gammas_to, discs):
+            roots.append(-gamma_to / 2 + disc / 2)
+            roots.append(-gamma_to / 2 - disc / 2)
+
+        # interpolants
+        interpolants = eps_inf * np.ones(len(roots), dtype=complex)
+        for i, a in enumerate(roots):
+            for omega_lo, gamma_lo in zip(omegas_lo, gammas_lo):
+                interpolants[i] *= omega_lo**2 + a**2 + a * gamma_lo
+            for j, a2 in enumerate(roots):
+                if j != i:
+                    interpolants[i] /= a - a2
+
+        a_coeffs = []
+        c_coeffs = []
+
+        for i in range(0, len(roots), 2):
+            if not np.isreal(roots[i]):
+                a_coeffs.append(roots[i])
+                c_coeffs.append(interpolants[i])
+            else:
+                a_coeffs.append(roots[i])
+                a_coeffs.append(roots[i + 1])
+                # factor of two from adding conjugate pole of real pole
+                c_coeffs.append(interpolants[i] / 2)
+                c_coeffs.append(interpolants[i + 1] / 2)
+
+        return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
+
+    @staticmethod
     def eV_to_angular_freq(f_eV: float):
         """Convert frequency in unit of eV to rad/s.
 

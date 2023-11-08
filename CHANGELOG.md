@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Added support for two-photon absorption via `TwoPhotonAbsorption` class. Added `KerrNonlinearity` that implements Kerr effect without third-harmonic generation.
+- Can create `PoleResidue` from LO-TO form via `PoleResidue.from_lo_to`.
 
 - Support for an anisotropic medium containing PEC components.
 
