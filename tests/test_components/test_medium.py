@@ -116,6 +116,14 @@ def test_medium_dispersion():
     # test eps_model for int arguments
     m_SM.eps_model(np.array([1, 2]))
 
+    # test LO-TO form
+    poles = [(1, 0.1, 2, 5), (3, 0.4, 1, 0.4)]
+    m_LO_TO = td.PoleResidue.from_lo_to(poles=poles, eps_inf=2)
+    assert np.allclose(
+        m_LO_TO.eps_model(freqs),
+        td.PoleResidue.lo_to_eps_model(poles=poles, eps_inf=2, frequency=freqs),
+    )
+
 
 def test_medium_dispersion_conversion():
 
