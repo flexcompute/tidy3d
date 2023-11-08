@@ -1,3 +1,4 @@
 [submodule "tidy3d"]
-	path = docs/source/
-	url = git@github.com:flexcompute-readthedocs/tidy3d-docs.git
+	path = docs/source/notebooks
+	url = git@github.com:daquinteroflex/tidy3d-docs.git
+    branch = convert_notebooks_repo
