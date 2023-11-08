@@ -1,4 +1,4 @@
-[submodule "tidy3d"]
+[submodule "tidy3d-docs"]
 	path = docs/source/notebooks
-	url = git@github.com:daquinteroflex/tidy3d-docs.git
+	url = https://github.com/daquinteroflex/tidy3d-docs.git
     branch = convert_notebooks_repo
