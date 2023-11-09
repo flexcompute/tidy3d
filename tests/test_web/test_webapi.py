@@ -406,13 +406,8 @@ def test_delete_old(set_api_key):
 
     responses.add(
         responses.DELETE,
-        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}",
-        json={
-            "data": {
-                "taskId": TASK_ID,
-                "createdAt": CREATED_AT,
-            }
-        },
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{FOLDER_ID}/tasks?daysOld=100",
+        json={"data": 10},
         status=200,
     )
 
