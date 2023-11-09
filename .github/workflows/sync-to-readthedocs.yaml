@@ -5,6 +5,11 @@ on:
       - main
       - latest
       - repo_merge_no_history
+  pull_request:
+    branches:
+      - develop
+      - 'pre/*'
+      - poetry_upgrade
   workflow_dispatch:
     inputs:
       env:
