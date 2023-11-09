@@ -9,6 +9,7 @@ build:
   os: "ubuntu-20.04"
   tools:
     python: "3.10"
+    poetry: "1.6.1"
 sphinx:
   fail_on_warning: false
   configuration: docs/source/conf.py
@@ -16,10 +17,10 @@ sphinx:
 python:
   # Install our python package before building the docs
   install:
-    - method: pip
+    - method: poetry
       path: .
-    - requirements: docs/requirements.txt
-    - requirements: tidy3d/requirements.txt
+      extras:
+        - dev
 
 formats: []
 
