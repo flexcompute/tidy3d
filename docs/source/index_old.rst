@@ -10,7 +10,7 @@ This is the documentation for the python API, which is the main way to build sim
    :caption: User Guide
 
    quickstart
-   examples
+   notebooks/examples
    faq
    howdoi
    api

@@ -7,13 +7,13 @@ import sys
 import subprocess
 
 here = os.path.abspath(os.path.dirname(__file__))
-sys.path.insert(0, os.path.abspath("../notebooks"))
-sys.path.insert(0, os.path.abspath("../../../tidy3d"))
+sys.path.insert(0, os.path.abspath("./notebooks"))
+# sys.path.insert(0, os.path.abspath("../../../"))
 sys.path.insert(0, os.path.abspath("../../tidy3d"))
-sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d"))
-sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/components"))
-sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/web"))
-sys.path.insert(0, os.path.abspath("../../tidy3d/tidy3d/plugins"))
+# sys.path.insert(0, os.path.abspath("../../tidy3d"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/components"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/web"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/plugins"))
 sys.path.append(os.path.abspath("./_ext"))
 # sys.path.insert(0, "../notebooks")
 # sys.path.insert(0, "../tidy3d/tidy3d/components")
@@ -153,7 +153,7 @@ html_static_path = ["_static"]
 
 html_theme = "sphinx_book_theme"
 html_title = "Tidy3D Electromagnetic Solver"
-html_logo = "../../tidy3d/img/Tidy3D-logo.svg"
+html_logo = "../../img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.ico"
 html_show_sourcelink = False
 html_theme_options = {
@@ -174,8 +174,8 @@ html_theme_options = {
 # html_logo = "_static/logo.svg"
 # html_favicon = "_static/logo.svg"
 
-html_css_files = ["css/custom.css"]
-html_js_files = ["js/custom-download.js"]
+html_css_files = ["./_static/css/custom.css"]
+html_js_files = ["./_static/js/custom-download.js"]
 
 # sphinx_github_changelog_token = "..."
 
