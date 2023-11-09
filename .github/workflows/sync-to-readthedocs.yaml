@@ -53,7 +53,7 @@ jobs:
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: .
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ secrets.GH_RTD_PAT }}
           repository-name: flexcompute-readthedocs/tidy3d-docs-demo
           target-folder: .
           branch: ${{ needs.set_env.outputs.dest-branch }}
