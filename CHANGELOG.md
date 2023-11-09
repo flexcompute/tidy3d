@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
 - API for specifying one or more nonlinear models via `NonlinearSpec.models`.
 - `freqs` and `direction` are optional in `ModeSolver` methods converting to monitor and source, respectively. If not supplied, uses the values from the `ModeSolver` instance calling the method.
+- Removed spurious ``-1`` factor in field amplitudes injected by field sources in some cases. The injected ``E``-field should now exactly match the analytic, mode, or custom fields that the source is expected to inject, both in the forward and in the backward direction.
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
