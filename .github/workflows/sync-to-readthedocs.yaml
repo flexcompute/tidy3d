@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - latest
+      - repo_merge_no_history
   workflow_dispatch:
     inputs:
       env:
