@@ -1,4 +1,6 @@
 name: sync-to-readthedocs-repo
+permissions:
+  contents: write
 on:
   push:
     branches:
