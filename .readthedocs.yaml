@@ -2,7 +2,7 @@ version: 2
 
 submodules:
   include:
-    - tidy3d
+    - docs/source/notebooks
   recursive: true
 
 build:
