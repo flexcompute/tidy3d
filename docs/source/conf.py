@@ -72,7 +72,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "sphinx_copybutton",
-    "m2r2",
+    #    "m2r2",
     "sphinx_sitemap",
     "custom-meta",
     "custom-sitemap",
@@ -80,9 +80,9 @@ extensions = [
 ]
 
 source_suffix = [".rst", ".md"]
-html_sourcelink_suffix = ''
+html_sourcelink_suffix = ""
 
-autodoc_default_options = {"inherited-members": True, "show-inheritance":True}
+autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
 
 autodoc_inherit_docstrings = True
 # autosummary_generate = True
@@ -189,8 +189,8 @@ html_js_files = ["./_static/js/custom-download.js"]
 #     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
 # }
 latex_engine = "xelatex"
-language='en'
-html_extra_path=['./_static/robots.txt']
+language = "en"
+html_extra_path = ["./_static/robots.txt"]
 # for sphinx-sitemap
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
 
@@ -202,7 +202,7 @@ print(current_tag, current_branch)
 if not current_tag and current_branch:
     if current_branch == "develop":
         version = "stable"
-    elif current_branch == 'latest':
+    elif current_branch == "latest":
         version = "latest"
     else:
         version = "latest"
@@ -212,7 +212,7 @@ elif current_tag:
     else:
         version = "latest"
 
-custom_sitemap_excludes=[r'/notebooks/']
+custom_sitemap_excludes = [r"/notebooks/"]
 sitemap_url_scheme = "{lang}{version}{link}"
 
 # if pandoc isnt working, uncomment below but make sure to not commit the bin/ library
