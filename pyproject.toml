@@ -19,7 +19,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<3.12"
+python = ">=3.8,<3.12"
 pyroots = "^0.5.0"
 xarray = ">=0.16.2"
 importlib-metadata = "^6.0.0"
@@ -39,62 +39,61 @@ pyjwt = "*"
 click = "8.0.3"
 responses = "*"
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "*"
-black = "22.3.0"
-ruff = "*"
-tox = "*"
-pylint = "*"
-pytest = "*"
-pytest-timeout = "*"
-memory_profiler = "*"
-dill = "*"
-ipython = "*"
+### Optional dependencies ### 
+# develop core
+pre-commit = {version="*", optional = true}
+black = {version="22.3.0", optional = true}
+ruff = {version="*", optional = true}
+tox = {version="*", optional = true}
+pylint = {version="*", optional = true}
+pytest = {version="*", optional = true}
+pytest-timeout = {version="*", optional = true}
+memory_profiler = {version="*", optional = true}
+dill = {version="*", optional = true}
+ipython = {version="*", optional = true}
 
-[tool.poetry.group.gdspy.dependencies]
-gdspy = "*"
+# gdspy
+gdspy = {version="*", optional = true}
 
-[tool.poetry.group.gdstk.dependencies]
-gdstk = "*"
+# gdstk
+gdstk = {version="*", optional = true}
 
-[tool.poetry.group.jax.dependencies]
+# jax
 jax = [
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "linux"},
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "darwin"}, # TODO verify with a mac user
-    {version = "==0.3.14", extras = ["cpu"], platform = "windows", python = "<3.9"},
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9"}
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "linux", optional = true},
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "darwin", optional = true}, # TODO verify with a mac user
+    {version = "==0.3.14", extras = ["cpu"], platform = "windows", python = "<3.9", optional = true},
+    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9", optional = true}
 ]
 jaxlib = [
-    {version = ">=0.3.14,<=0.4.14", platform = "linux"},
-    {version = ">=0.3.14,<=0.4.14", platform = "darwin"}, # TODO verify with a mac user
-    {version = "==0.3.14", platform = "windows", python = "<3.9"},
-    {version = ">=0.3.14,<=0.4.14", platform = "windows", python = ">=3.9"}
+    {version = ">=0.3.14,<=0.4.14", platform = "linux", optional = true},
+    {version = ">=0.3.14,<=0.4.14", platform = "darwin", optional = true}, # TODO verify with a mac user
+    {version = "==0.3.14", platform = "windows", python = "<3.9", optional = true},
+    {version = ">=0.3.14,<=0.4.14", platform = "windows", python = ">=3.9", optional = true}
 ]
 
-[tool.poetry.group.trimesh.dependencies]
-trimesh = "3.20.0"
-networkx = {version = ">=2.6.3, <=3.0"}
-rtree = "1.0.1"
+# trimesh
+trimesh = {version = "3.20.0", optional = true}
+networkx = {version = ">=2.6.3, <=3.0", optional = true}
+rtree = {version = "1.0.1", optional = true}
 
-[tool.poetry.group.docs.dependencies]
-jupyter = "*"
-jinja2 = "3.0"
-nbconvert = "6.0.6"
-sphinx = "*"
-nbsphinx = "0.8.7"
-ipython = "*"
-autodoc_pydantic = ">=1.8.0"
-sphinx-copybutton = "*"
-sphinx-book-theme = "0.3.3"
-m2r2 = "*"
-tmm = "*"
-gdstk = "*"
-grcwa = "*"
-sphinx-sitemap = "*"
-nbdime = "*" 
-optax = "*"
-signac = "*"
-sax = "*"
+# docs
+jupyter = {version="*", optional = true}
+jinja2 = {version = "3.0", optional = true}
+nbconvert = {version = "6.0.6", optional = true}
+sphinx = {version="*", optional = true}
+nbsphinx = {version = "0.8.7", optional = true}
+autodoc_pydantic = {version = ">=1.8.0", optional = true}
+sphinx-copybutton = {version="*", optional = true}
+sphinx-book-theme = {version = "0.3.3", optional = true}
+m2r2 = {version="*", optional = true}
+tmm = {version="*", optional = true}
+grcwa = {version="*", optional = true}
+sphinx-sitemap = {version="*", optional = true}
+nbdime = {version="*", optional = true}
+optax = {version="*", optional = true}
+signac = {version="*", optional = true}
+sax = {version="*", optional = true}
 
 [tool.poetry.extras]
 dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "autodoc_pydantic", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack"]
