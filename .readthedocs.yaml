@@ -9,7 +9,6 @@ build:
   os: "ubuntu-20.04"
   tools:
     python: "3.10"
-    poetry: "1.6.1"
 sphinx:
   fail_on_warning: false
   configuration: docs/source/conf.py
@@ -17,9 +16,9 @@ sphinx:
 python:
   # Install our python package before building the docs
   install:
-    - method: poetry
+    - method: pip
       path: .
-      extras:
+      extra_requirements:
         - dev
 
 formats: []
