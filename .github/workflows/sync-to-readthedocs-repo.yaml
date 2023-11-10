@@ -62,7 +62,7 @@ jobs:
       - name: Pushes to another repository
         uses: cpina/github-action-push-to-another-repository@main
         env:
-          API_TOKEN_GITHUB: ${{ secrets.RTD_PAT }}
+          API_TOKEN_GITHUB: ${{ secrets.GH_PAT }}
         with:
           source-directory: './'
           destination-github-username: 'flexcompute-readthedocs'
