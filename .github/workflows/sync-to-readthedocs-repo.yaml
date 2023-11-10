@@ -59,10 +59,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - uses: JamesIves/github-pages-deploy-action@v4
+      - name: Pushes to another repository
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.RTD_PAT }}
         with:
-          folder: .
-          token: ${{ secrets.RTD_PAT }}
-          repository-name: flexcompute-readthedocs/tidy3d-docs-demo
-          target-folder: .
-          branch: ${{ needs.set_env.outputs.dest-branch }}
+          source-directory: './'
+          destination-github-username: 'flexcompute-readthedocs'
+          destination-repository-name: 'tidy3d-docs-demo'
+          target-branch: ${{ needs.set_env.outputs.dest-branch }}
