@@ -157,7 +157,7 @@ html_logo = "../../img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.ico"
 html_show_sourcelink = False
 html_theme_options = {
-    "logo_only": True,
+    # "logo_only": True,
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
