@@ -423,13 +423,18 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         :class:`.ModeSolverData`
             Mode solver data with the calculated results.
         """
-        download_file(
-            self.solver_id,
-            MODESOLVER_RESULT,
-            to_file=to_file,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
+        try:
+            download_file(
+                self.solver_id,
+                MODESOLVER_RESULT,
+                to_file=to_file,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        except Exception:
+            raise WebError(
+                f"Failed to download file '{MODESOLVER_RESULT}' from server. Please confirm that the task was successful."
+            )
         data = ModeSolverData.from_hdf5(to_file)
         data = data.copy(
             update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}

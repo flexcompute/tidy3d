@@ -472,13 +472,18 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
 
-        return download_file(
-            self.task_id,
-            SIMULATION_DATA_HDF5,
-            to_file=to_file,
-            verbose=verbose,
-            progress_callback=progress_callback,
-        )
+        try:
+            return download_file(
+                self.task_id,
+                SIMULATION_DATA_HDF5,
+                to_file=to_file,
+                verbose=verbose,
+                progress_callback=progress_callback,
+            )
+        except Exception:
+            raise WebError(
+                f"Failed to download file '{SIMULATION_DATA_HDF5}' from server. Please confirm that the task was successful."
+            )
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
