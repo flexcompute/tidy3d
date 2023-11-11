@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - When writing the json string of a model to an `hdf5` file, the string is split into chunks if it has more than a set (very large) number of characters. This fixes potential error if the string size is more than 4GB.
 - Proper equality checking between `Tidy3dBaseModel` instances, which takes `DataArray` values and coords into account and handles `np.ndarray` types.
 - Correctly set the contour length scale when exporting 2D (or 1D) structures with custom medium to GDSII.
-
+- Improved error handling if file can not be downloaded from server.
 
 ## [2.5.0rc2] - 2023-10-30
 
