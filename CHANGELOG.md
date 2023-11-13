@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Can create `PoleResidue` from LO-TO form via `PoleResidue.from_lo_to`.
 
 - Support for an anisotropic medium containing PEC components.
+- `SimulationData.mnt_data_from_file()` method to load only a single monitor data object from a simulation data `.hdf5` file.
 
 ### Changed
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
