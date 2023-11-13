@@ -80,10 +80,10 @@ rtree = {version = "1.0.1", optional = true}
 # docs
 jupyter = {version="*", optional = true}
 jinja2 = {version = "3.0", optional = true}
-nbconvert = {version = "6.0.6", optional = true}
-sphinx = {version=">=4,<7", optional = true}
-nbsphinx = {version = "0.8.7", optional = true}
-autodoc_pydantic = {version = ">=1.8.0", optional = true}
+nbconvert = {version = "*", optional = true}
+sphinx = {version=">=7", optional = true}
+nbsphinx = {version = "*", optional = true}
+autodoc_pydantic = {version = "*", optional = true}
 sphinx-copybutton = {version="*", optional = true}
 sphinx-book-theme = {version = "*", optional = true}
 pydata-sphinx-theme = {version = ">=0.13.3", optional= true}

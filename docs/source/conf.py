@@ -34,21 +34,15 @@ master_doc = "index"  # The master toctree document.s
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
-autoapi_add_toctree_entry = True
-autoapi_dirs = ["../tidy3d"]
-autoapi_keep_files = True
-autoapi_template_dir = "_autoapi_templates"
-autosummary_generate = True  # Turn on sphinx.ext.autosummary
+autosummary_generate = False  # Turn on sphinx.ext.autosummary
 autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 author = "Dario Quintero"
 copyright = "2023, Dario Quintero"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "examples/designs"]
 extensions = [
-    "autoapi.extension",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
-    "myst_parser",
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",
@@ -57,9 +51,6 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
-    "sphinx_autodoc_typehints",  # Automatically document param types (less noise in class signature)
-    "sphinx_gallery.load_style",
-    "sphinx-pydantic",
 ]
 
 # Grouping the document tree into LaTeX files. List of tuples
