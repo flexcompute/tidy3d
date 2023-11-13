@@ -71,7 +71,7 @@ class SourceTime(AbstractTimeDependence):
         """
 
         fmin, fmax = self.frequency_range()
-        self.plot_spectrum_in_frequency_range(
+        return self.plot_spectrum_in_frequency_range(
             times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax, complex_fields=complex_fields
         )
 
