@@ -6,21 +6,21 @@ import codecs
 import sys
 import subprocess
 
+# TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("./notebooks"))
-# sys.path.insert(0, os.path.abspath("../../../"))
+sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../../tidy3d"))
-# sys.path.insert(0, os.path.abspath("../../tidy3d"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/components"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/web"))
 sys.path.insert(0, os.path.abspath("../../tidy3d/plugins"))
 sys.path.append(os.path.abspath("./_ext"))
+# sys.path.insert(0, os.path.abspath("../../tidy3d"))
 # sys.path.insert(0, "../notebooks")
 # sys.path.insert(0, "../tidy3d/tidy3d/components")
 # sys.path.insert(0, "../tidy3d/tidy3d")
 # sys.path.insert(0, "../tidy3d")
-sys.path.insert(0, os.path.abspath(".."))
-
 print(sys.path)
 
 
@@ -48,16 +48,40 @@ generate_doc.main()
 import datetime
 
 project = "Tidy3D"
-
 author = "Flexcompute"
-
 year = datetime.date.today().strftime("%Y")
 copyright = f"Flexcompute 2020-{year}"
 
-master_doc = "index"
 
 # -- General configuration ---------------------------------------------------
 
+autosummary_generate = False  # TODO long builds
+# autodoc_typehints = "none"
+autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
+autodoc_inherit_docstrings = True
+# autosummary_generate = True
+# autodoc_pydantic_model_show_json = True
+# autodoc_pydantic_settings_show_json = False
+autodoc_pydantic_model_signature_prefix = "class"
+autodoc_pydantic_field_signature_prefix = "attribute"
+autodoc_pydantic_model_show_config_member = False
+autodoc_pydantic_model_show_config_summary = False
+autodoc_pydantic_model_show_validator_summary = False
+autodoc_pydantic_model_show_validator_members = False
+autodoc_pydantic_model_show_field_summary = False
+# autodoc_pydantic_model_members = False
+# autodoc_pydantic_field_list_validators = False
+# autodoc_pydantic_settings_summary_list_order = 'bysource'
+# autodoc_pydantic_model_undoc_members = False
+# autoclass_content = "class"
+# python prompts for copy / paste.  Ignore `>>>` and `...` stuff so pasted runs in interpreter.
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+# List of patterns, relative to source directory, that match files and
+# directories to ignore when looking for source files.
+# This pattern also affects html_static_path and html_extra_path.
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
+extlinks = {}
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
@@ -78,86 +102,18 @@ extensions = [
     "custom-sitemap",
     "custom-robots",
 ]
-
-source_suffix = [".rst", ".md"]
-html_sourcelink_suffix = ""
-
-autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
-
-autodoc_inherit_docstrings = True
-# autosummary_generate = True
-
-# autodoc_pydantic_model_show_json = True
-# autodoc_pydantic_settings_show_json = False
-autodoc_pydantic_model_signature_prefix = "class"
-autodoc_pydantic_field_signature_prefix = "attribute"
-autodoc_pydantic_model_show_config_member = False
-autodoc_pydantic_model_show_config_summary = False
-autodoc_pydantic_model_show_validator_summary = False
-autodoc_pydantic_model_show_validator_members = False
-autodoc_pydantic_model_show_field_summary = False
-# autodoc_pydantic_model_members = False
-# autodoc_pydantic_field_list_validators = False
-# autodoc_pydantic_settings_summary_list_order = 'bysource'
-# autodoc_pydantic_model_undoc_members = False
-# autoclass_content = "class"
-extlinks = {}
-
-# Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
-
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
-
-autosummary_generate = True
-# autodoc_typehints = "none"
-
-napoleon_google_docstring = False
-napoleon_numpy_docstring = True
-napoleon_include_init_with_doc = False
-napoleon_include_private_with_doc = False
-napoleon_include_special_with_doc = True
-napoleon_use_admonition_for_examples = False
-napoleon_use_admonition_for_notes = False
-napoleon_use_admonition_for_references = False
-napoleon_use_ivar = False
-napoleon_use_param = True
-napoleon_use_rtype = True
-
-# python prompts for copy / paste.  Ignore `>>>` and `...` stuff so pasted runs in interpreter.
-copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
-copybutton_prompt_is_regexp = True
-
-# -- Options for HTML output -------------------------------------------------
-
-# The theme to use for HTML and HTML Help pages.
-# html_theme_path = ["_themes"]
-# html_theme = "sphinx_rtd_theme"
-# html_theme = "sphinx_book_theme"
-# pygments_style = 'monokai-dark'
-
-# import stanford_theme
-# html_theme = "stanford_theme"
-# html_theme_path = [stanford_theme.get_html_theme_path()]
-
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-# html_static_path = ["_static"]
-
-# html_theme_options = {"logo_only": True}
-
+html_sourcelink_suffix = ""
 html_static_path = ["_static"]
-
 html_theme = "sphinx_book_theme"
 html_title = "Tidy3D Electromagnetic Solver"
 html_logo = "../../img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.ico"
 html_show_sourcelink = False
 html_theme_options = {
-    # "logo_only": True,
+    "logo_only": True,
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
@@ -170,29 +126,37 @@ html_theme_options = {
     "use_repository_button": True,
     "use_download_button": True,
 }
-
-# html_logo = "_static/logo.svg"
-# html_favicon = "_static/logo.svg"
-
 html_css_files = ["./_static/css/custom.css"]
 html_js_files = ["./_static/js/custom-download.js"]
-
-# sphinx_github_changelog_token = "..."
-
-# def setup(app):
-# app.add_css_file("css/custom.css")
-
-
+html_extra_path = ["./_static/robots.txt"]
+# for sphinx-sitemap
+html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
 # -- Latex fixes? ------------------------------------------
-
 # latex_elements = {
 #     'preamble': r'''\renewcommand{\hyperref}[2][]{#2}'''
 # }
 latex_engine = "xelatex"
 language = "en"
-html_extra_path = ["./_static/robots.txt"]
-# for sphinx-sitemap
-html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
+master_doc = "index"
+# Add any paths that contain templates here, relative to this directory.
+source_suffix = [".rst", ".md"]
+templates_path = ["_templates"]
+
+# sphinx_github_changelog_token = "..."
+
+# def setup(app):
+# app.add_css_file("css/custom.css")
 
 GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
 GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
