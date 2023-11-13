@@ -2,8 +2,9 @@ import xml.etree.ElementTree as ET
 import os
 from urllib.parse import urljoin
 
+
 def process_robots_txt(app, exception):
-     # Get the path to the source directory
+    # Get the path to the source directory
     srcdir = app.builder.srcdir
 
     # Get the path to the robots.txt file
@@ -15,7 +16,9 @@ def process_robots_txt(app, exception):
 
     # Modify the contents as needed
     # site_map = app.config['html_baseurl'] + app.config['version'] + app.config['language'] + 'sitemap.xml'
-    site_map = '/'.join([app.config['html_baseurl'],app.config['language'],app.config['version'],'sitemap.xml']).replace('//','/')
+    site_map = "/".join(
+        [app.config["html_baseurl"], app.config["language"], app.config["version"], "sitemap.xml"]
+    ).replace("//", "/")
     new_content = f"\nSitemap: {site_map}"
     contents += new_content
 
@@ -23,7 +26,8 @@ def process_robots_txt(app, exception):
     with open(robots_file, "w") as f:
         f.write(contents)
 
+
 def setup(app):
     # Bind the process_sitemap function to build-finished event
     # exclude_pattern= dir(app.config)
-    app.connect('build-finished', process_robots_txt)
+    app.connect("build-finished", process_robots_txt)

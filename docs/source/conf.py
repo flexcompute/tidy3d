@@ -20,7 +20,15 @@
 import os
 import sys
 
+here = os.path.abspath(os.path.dirname(__file__))
+sys.path.insert(0, os.path.abspath("."))
+sys.path.insert(0, os.path.abspath("./notebooks"))
 sys.path.insert(0, os.path.abspath(".."))
+sys.path.insert(0, os.path.abspath("../../tidy3d"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/components"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/web"))
+sys.path.insert(0, os.path.abspath("../../tidy3d/plugins"))
+sys.path.append(os.path.abspath("./_ext"))
 
 import tidy3d
 
@@ -76,7 +84,7 @@ pygments_style = "sphinx"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
 source_suffix = [".rst", ".md"]
-templates_path = ["_templates"]
+# templates_path = ["_templates"]
 texinfo_documents = [
     (
         master_doc,
