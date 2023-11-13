@@ -50,6 +50,28 @@ def test_custom_medium_to_gds(tmp_path):
     assert len(cell.polygons) == 0
 
 
+def test_lower_dimension_custom_medium_to_gds(tmp_path):
+    geometry = td.Box(size=(2, 0, 2))
+
+    nx, nz = 100, 80
+    x = np.linspace(0, 2, nx)
+    y = np.array([0.0])
+    z = np.linspace(-1, 1, nz)
+    f = np.array([td.C_0])
+    mx, my, mz, _ = np.meshgrid(x, y, z, f, indexing="ij", sparse=True)
+    data = 1 + 1 / (1 + (mx - 1) ** 2 + mz**2)
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=x, y=y, z=z, f=f))
+    eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    eps_dataset = td.PermittivityDataset(**eps_components)
+    medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+    structure = td.Structure(geometry=geometry, medium=medium)
+
+    fname = str(tmp_path / "structure-custom-y.gds")
+    structure.to_gds_file(fname, y=0, permittivity_threshold=1.5, frequency=td.C_0)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert np.allclose(cell.area(), np.pi / 2, atol=3e-2)
+
+
 def test_non_symmetric_custom_medium_to_gds(tmp_path):
     geometry = td.Box(size=(1, 2, 1), center=(0.5, 0, 2.5))
 

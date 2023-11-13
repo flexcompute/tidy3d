@@ -197,11 +197,17 @@ class Structure(AbstractStructure):
 
         if isinstance(self.medium, AbstractCustomMedium):
             axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-
-            eps, _, _ = self.medium.eps_dataarray_freq(frequency=frequency)
-            scale = min(np.diff(eps.x).min(), np.diff(eps.y).min(), np.diff(eps.z).min())
-
             bb_min, bb_max = self.geometry.bounds
+
+            # Set the contour scale to be the minimal cooridante step size w.r.t. the 3 main axes,
+            # skipping those with a single coordniate. In case all axes have only a single coordinate,
+            # use the largest bounding box dimension.
+            eps, _, _ = self.medium.eps_dataarray_freq(frequency=frequency)
+            scale = max(b - a for a, b in zip(bb_min, bb_max))
+            for coord in (eps.x, eps.y, eps.z):
+                if len(coord) > 1:
+                    scale = min(scale, np.diff(coord).min())
+
             coords = Coords(
                 x=np.arange(bb_min[0], bb_max[0] + scale * 0.9, scale) if x is None else x,
                 y=np.arange(bb_min[1], bb_max[1] + scale * 0.9, scale) if y is None else y,
