@@ -2,9 +2,12 @@
 from __future__ import annotations
 from typing import Callable, Tuple
 
+import pathlib
 import xarray as xr
 import pydantic.v1 as pd
 import numpy as np
+import h5py
+import json
 
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
 from ..simulation import Simulation
@@ -14,11 +17,15 @@ from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
+from ..base import JSON_TAG
 
 from ..base_sim.data.sim_data import AbstractSimulationData
 
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
+
+# maps monitor type (string) to the class of the corresponding data
+DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
 
 class SimulationData(AbstractSimulationData):
@@ -368,6 +375,65 @@ class SimulationData(AbstractSimulationData):
         return self._get_scalar_field(
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
+
+    @classmethod
+    def mnt_data_from_file(cls, fname: str, mnt_name: str, **parse_obj_kwargs) -> MonitorDataType:
+        """Loads data for a specific monitor from a .hdf5 file with data for a ``SimulationData``.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to an hdf5 file containing :class:`.SimulationData` data.
+        mnt_name : str, optional
+            `.name` of the monitor to load the data from.
+        **parse_obj_kwargs
+            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
+
+        Returns
+        -------
+        :class:`MonitorData`
+            Monitor data corresponding to the `mnt_name` type.
+
+        Example
+        -------
+        >>> field_data = SimulationData.from_file(fname='folder/data.hdf5', mnt_name="field") # doctest: +SKIP
+        """
+
+        if pathlib.Path(fname).suffix != ".hdf5":
+            raise ValueError("'mnt_data_from_file' only works with '.hdf5' files.")
+
+        # open file and ensure it has data
+        with h5py.File(fname) as f_handle:
+            if "data" not in f_handle:
+                raise ValueError(f"could not find data in the supplied file {fname}")
+
+            # get the monitor list from the json string
+            json_string = f_handle[JSON_TAG][()]
+            json_dict = json.loads(json_string)
+            monitor_list = json_dict["simulation"]["monitors"]
+
+            # loop through data
+            for monitor_index_str, _mnt_data in f_handle["data"].items():
+
+                # grab the monitor data for this data element
+                monitor_dict = monitor_list[int(monitor_index_str)]
+
+                # if a match on the monitor name
+                if monitor_dict["name"] == mnt_name:
+
+                    # try to grab the monitor data type
+                    monitor_type_str = monitor_dict["type"]
+                    if monitor_type_str not in DATA_TYPE_NAME_MAP:
+                        raise ValueError(f"Could not find data type '{monitor_type_str}'.")
+                    monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
+
+                    # load the monitor data from the file using the group_path
+                    group_path = f"data/{monitor_index_str}"
+                    return monitor_data_type.from_file(
+                        fname, group_path=group_path, **parse_obj_kwargs
+                    )
+
+        raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
 
     def plot_field(
         self,

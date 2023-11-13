@@ -15,6 +15,8 @@ from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
+from ..utils import run_emulated
+
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 # Store an example of every minor release simulation to test updater in the future
@@ -278,3 +280,39 @@ def test_group_name_tuple():
         assert index == true_index
         group_name = tidy.get_tuple_group_name(index=index)
         assert group_name == key_name
+
+
+def test_monitor_data_from_file():
+    """Test the ability to load specific monitor data from a file."""
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        monitors=[
+            td.FieldMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=[2e14], name="field"),
+            td.ModeMonitor(
+                center=(0, 0, 0), size=(1, 1, 0), freqs=[2e14], mode_spec=td.ModeSpec(), name="mode"
+            ),
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            )
+        ],
+        run_time=2e-12,
+    )
+
+    sim_data = run_emulated(sim, task_name="test")
+
+    fname = "tests/data/sim_data.hdf5"
+    sim_data.to_file(fname)
+
+    fld_data = td.SimulationData.mnt_data_from_file(fname, mnt_name="field")
+    assert isinstance(fld_data, td.FieldData)
+    assert fld_data.monitor == sim.monitors[0]
+
+    mode_data = td.SimulationData.mnt_data_from_file(fname, mnt_name="mode")
+    assert isinstance(mode_data, td.ModeData)
+    assert mode_data.monitor == sim.monitors[1]
