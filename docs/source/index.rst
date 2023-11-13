@@ -101,16 +101,15 @@ b) View the results of this simulation on our web-based `graphical user interfac
 4. Learn More
 ~~~~~~~~~~~~~
 
-..
-  .. toctree::
-     :maxdepth: 1
+.. toctree::
+ :maxdepth: 1
 
-     quickstart
-     notebooks/examples
-     faq
-     howdoi
-     api
-     changelog
-     Tidy3D Solver Technology <https://www.flexcompute.com/tidy3d/solver/>
+ quickstart
+ notebooks/examples
+ faq
+ howdoi
+ api
+ changelog
+ Tidy3D Solver Technology <https://www.flexcompute.com/tidy3d/solver/>
 
 

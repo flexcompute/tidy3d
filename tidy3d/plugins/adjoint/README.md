@@ -4,7 +4,7 @@ This guide will explain the internals of the adjoint plugin.
 
 The following flowchart shows the entire process described in this readme for reference while reading.
 
-![FlowAdjoint](../../../img/AdjointFlow.svg)
+![FlowAdjoint](../../../docs/source/_static/img/AdjointFlow.svg)
 
 
 ## Context

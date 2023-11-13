@@ -32,7 +32,17 @@ sys.path.append(os.path.abspath("./_ext"))
 
 import tidy3d
 
+# -- Project information -----------------------------------------------------
+
+import datetime
+
+project = "Tidy3D"
+author = "Flexcompute"
+year = datetime.date.today().strftime("%Y")
+copyright = f"Flexcompute 2020-{year}"
 master_doc = "index"  # The master toctree document.s
+
+
 # -- General configuration ---------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -45,8 +55,6 @@ add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = False  # Turn on sphinx.ext.autosummary
 autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
-author = "Dario Quintero"
-copyright = "2023, Dario Quintero"
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "examples/designs"]
 extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
@@ -67,17 +75,39 @@ extensions = [
 latex_documents = [
     (master_doc, "tidy3d.tex", "tidy3d Documentation", "Dario Quintero", "manual"),
 ]
-html_logo = "_static/img/logo.png"
+html_logo = "_static/img/Tidy3D-logo.svg"
+html_favicon = "_static/logo.ico"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_static_path = ["_static"]
 html_theme = "sphinx_book_theme"
 html_title = "tidy3d"
 html_theme_options = {
-    "repository_url": "https://github.com/daquintero/tidy3d",
-    "use_repository_button": True,
+    "path_to_docs": "docs",
+    "repository_url": "https://github.com/flexcompute/tidy3d",
+    "repository_branch": "main",
+    "launch_buttons": {
+        "binderhub_url": "https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks",
+        "notebook_interface": "jupyterlab",
+    },
+    "use_edit_page_button": False,
     "use_issues_button": True,
+    "use_repository_button": True,
+    "use_download_button": True,
 }
 htmlhelp_basename = "tidy3ddoc"
+latex_engine = "xelatex"
+language = "en"
+napoleon_google_docstring = False
+napoleon_numpy_docstring = True
+napoleon_include_init_with_doc = False
+napoleon_include_private_with_doc = False
+napoleon_include_special_with_doc = True
+napoleon_use_admonition_for_examples = False
+napoleon_use_admonition_for_notes = False
+napoleon_use_admonition_for_references = False
+napoleon_use_ivar = False
+napoleon_use_param = True
+napoleon_use_rtype = True
 man_pages = [(master_doc, "tidy3d", "tidy3d Documentation", [author], 1)]
 project = "tidy3d"
 pygments_style = "sphinx"
