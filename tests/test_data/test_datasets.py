@@ -1,19 +1,16 @@
 """Tests tidy3d/components/data/dataset.py"""
 import pytest
 import numpy as np
-from typing import Tuple, List
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
 
 import tidy3d as td
-from tidy3d.exceptions import DataError, Tidy3dKeyError
-
-import tidy3d as td
+from tidy3d.exceptions import DataError
 
 np.random.seed(4)
 
 
-def test_triangular_dataset():
+def test_triangular_dataset(tmp_path):
 
     # basic create
     tri_grid_points = td.PointDataArray(
@@ -198,13 +195,13 @@ def test_triangular_dataset():
         _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
 
     # writting/reading .vtu
-    tri_grid.to_vtu("./tri_grid_test.vtu")
-    tri_grid_loaded = td.TriangularGridDataset.from_vtu("./tri_grid_test.vtu")
+    tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
+    tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
 
     assert tri_grid == tri_grid_loaded
 
 
-def test_tetrahedral_dataset():
+def test_tetrahedral_dataset(tmp_path):
 
     # basic create
     tet_grid_points = td.PointDataArray(
@@ -336,7 +333,7 @@ def test_tetrahedral_dataset():
         _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
 
     # writting/reading .vtu
-    tet_grid.to_vtu("./tet_grid_test.vtu")
-    tet_grid_loaded = td.TetrahedralGridDataset.from_vtu("./tet_grid_test.vtu")
+    tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
+    tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
 
     assert tet_grid == tet_grid_loaded

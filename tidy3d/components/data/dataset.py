@@ -22,7 +22,6 @@ from .data_array import TriangleMeshDataArray
 from .data_array import TimeDataArray
 from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
 
-# from ..scene import Scene
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Axis, Bound, VtkCellType, ArrayLike, Ax, Coordinate, Literal
@@ -481,7 +480,8 @@ class UnstructuredGridDataset(Dataset, ABC):
 
         if num_points != num_values:
             raise ValidationError(
-                f"The number of data values ({num_values}) does not match the number of grid points ({num_points})."
+                f"The number of data values ({num_values}) does not match the number of grid "
+                f"points ({num_points})."
             )
         return val
 
@@ -492,7 +492,8 @@ class UnstructuredGridDataset(Dataset, ABC):
         axis_coords_given = val.axis.data
         if np.any(axis_coords_given != axis_coords_expected):
             raise ValidationError(
-                f"Points array is expected to have {axis_coords_expected} coord values along 'axis' (given: {axis_coords_given})."
+                f"Points array is expected to have {axis_coords_expected} coord values along 'axis'"
+                f" (given: {axis_coords_given})."
             )
         return val
 
@@ -503,7 +504,8 @@ class UnstructuredGridDataset(Dataset, ABC):
         vertex_coords_given = val.vertex_index.data
         if np.any(vertex_coords_given != vertex_coords_expected):
             raise ValidationError(
-                f"Cell connections array is expected to have {vertex_coords_expected} coord values along 'vertex_index' (given: {vertex_coords_given})."
+                f"Cell connections array is expected to have {vertex_coords_expected} coord values"
+                f" along 'vertex_index' (given: {vertex_coords_given})."
             )
         return val
 
@@ -521,8 +523,9 @@ class UnstructuredGridDataset(Dataset, ABC):
 
         if max_index_used != num_points - 1 or min_index_used != 0:
             raise ValidationError(
-                f"Cell connections array used undefined point indecies ([{min_index_used}, {max_index_used}]). "
-                f" The."
+                "Cell connections array uses undefined point indicies in the range "
+                f"[{min_index_used}, {max_index_used}]. The valid range of point indicies is "
+                f"[0, {num_points-1}]."
             )
         return val
 
@@ -530,7 +533,7 @@ class UnstructuredGridDataset(Dataset, ABC):
     def check_valid_cells(cls, val):
         """Check that cell connections does not have duplicate points."""
         indices = val.data
-        for i in range(0, cls._cell_num_vertices() - 1):
+        for i in range(cls._cell_num_vertices() - 1):
             for j in range(i + 1, cls._cell_num_vertices()):
                 if np.any(indices[:, i] == indices[:, j]):
                     log.warning("Unstructured grid contains degenerate cells.")
@@ -1023,7 +1026,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         if axis == self.normal_axis:
             raise DataError(
-                f"Triangular grid (normal: {self.normal_axis}) cannot be sliced by a parallel plane."
+                f"Triangular grid (normal: {self.normal_axis}) cannot be sliced by a parallel "
+                "plane."
             )
 
         # perform slicing in vtk and get unprocessed points and values
@@ -1039,8 +1043,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # assemble coords for SpatialDataArray
         coords = [None, None, None]
-        coords[axis] = pos
-        coords[self.normal_axis] = self.normal_pos
+        coords[axis] = [pos]
+        coords[self.normal_axis] = [self.normal_pos]
         coords[slice_axis] = points_numpy[sorting, slice_axis]
         coords_dict = dict(zip("xyz", coords))
 
@@ -1165,9 +1169,13 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Interpolated data.
         """
 
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        z = np.atleast_1d(z)
+
         if ignore_normal_pos:
             xyz = [x, y, z]
-            xyz[self.normal_axis] = self.normal_pos
+            xyz[self.normal_axis] = [self.normal_pos]
             interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value)
             interp_broadcasted = np.broadcast_to(
                 interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
@@ -1208,8 +1216,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
         if self.normal_axis in axes:
             if xyz[self.normal_axis] != self.normal_pos:
                 raise DataError(
-                    f"No data for {'xyz'[self.normal_axis]} = {xyz[self.normal_axis]}"
-                    f" (unstructured grid is defined at {'xyz'[self.normal_axis]} = {self.normal_pos}."
+                    f"No data for {'xyz'[self.normal_axis]} = {xyz[self.normal_axis]} (unstructured"
+                    f" grid is defined at {'xyz'[self.normal_axis]} = {self.normal_pos})."
                 )
 
             if num_provided < 3:

@@ -556,7 +556,9 @@ class PointDataArray(DataArray):
 
     Example
     -------
-    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    >>> point_array = PointDataArray(
+    ...     (1+1j) * np.random.random((5, 3)), coords=dict(index=np.arange(5), axis=np.arange(3)),
+    ... )
     """
 
     __slots__ = ()
@@ -568,7 +570,10 @@ class CellDataArray(DataArray):
 
     Example
     -------
-    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    >>> cell_array = CellDataArray(
+    ...     (1+1j) * np.random.random((4, 3)),
+    ...     coords=dict(cell_index=np.arange(4), vertex_index=np.arange(3)),
+    ... )
     """
 
     __slots__ = ()
@@ -580,7 +585,9 @@ class IndexedDataArray(DataArray):
 
     Example
     -------
-    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    >>> indexed_array = IndexedDataArray(
+    ...     (1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3))
+    ... )
     """
 
     __slots__ = ()
