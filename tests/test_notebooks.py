@@ -29,16 +29,19 @@ for i, path in enumerate(notebook_filenames_all):
     notebook_base = path.split('/')[-1]
     print(f"'{notebook_base[:-6]}',")
 
+
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = [
-'DielectricMetasurfaceAbsorber',
-'VizData',
-'Metalens',
-'WaveguideCrossing',
-'GradientMetasurfaceReflector',
 ]
 
 skip = [
+'AdjointPlugin4MultiObjective',
+'AdjointPlugin5BoundaryGradients',
+'AdjointPlugin6GratingCoupler',
+'AdjointPlugin7Metalens',
+'AdjointPlugin8WaveguideBend',
+'AdjointPlugin9WDM',
+'Simulation',
 ]
 
 # if any run only supplied, only add those
@@ -52,9 +55,13 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """ 
-as of Aug 17 2023
+as of Nov 10 2023
 '8ChannelDemultiplexer',
+'90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
+'AdiabaticCouplerLN',
+'AdjointPlugin10YBranchLevelSet',
+'AdjointPlugin11CircuitMZI',
 'AdjointPlugin1Intro',
 'AdjointPlugin2GradientChecking',
 'AdjointPlugin3InverseDesign',
@@ -63,20 +70,26 @@ as of Aug 17 2023
 'AdjointPlugin6GratingCoupler',
 'AdjointPlugin7Metalens',
 'AdjointPlugin8WaveguideBend',
+'AdjointPlugin9WDM',
 'AndersonLocalization',
 'AnimationTutorial',
 'AutoGrid',
 'Bandstructure',
 'BilevelPSR',
 'BiosensorGrating',
+'BistablePCCavity',
 'BoundaryConditions',
 'BraggGratings',
 'BroadbandDirectionalCoupler',
+'BullseyeCavityPSO',
+'CavityFOM',
+'CreatingGeometryUsingTrimesh',
 'CustomFieldSource',
 'CustomMediumTutorial',
 'DielectricMetasurfaceAbsorber',
 'Dispersion',
 'DistributedBraggReflectorCavity',
+'DivergedFDTDSimulation',
 'EdgeCoupler',
 'EulerWaveguideBend',
 'FieldProjections',
@@ -90,11 +103,14 @@ as of Aug 17 2023
 'GratingCoupler',
 'GratingEfficiency',
 'Gyrotropic',
+'HeatSolver',
 'HighQGe',
 'HighQSi',
 'MMI1x4',
+'MetalHeaterPhaseShifter',
 'Metalens',
 'MicrowaveFrequencySelectiveSurface',
+'MoS2Waveguide',
 'ModalSourcesMonitors',
 'ModeSolver',
 'ModesBentAngled',
@@ -105,12 +121,16 @@ as of Aug 17 2023
 'OptimizedL3',
 'PICComponents',
 'ParameterScan',
+'ParticleSwarmOptimizedPBS',
 'PhotonicCrystalWaveguidePolarizationFilter',
 'PhotonicCrystalsComponents',
 'PlasmonicNanoparticle',
+'PlasmonicWaveguideCO2Sensor',
 'PlasmonicYagiUdaNanoantenna',
 'PolarizationSplitterRotator',
 'Primer',
+'RadiativeCoolingGlass',
+'ResonanceFinder',
 'RingResonator',
 'SMatrix',
 'STLImport',
@@ -119,8 +139,11 @@ as of Aug 17 2023
 'Simulation',
 'StartHere',
 'StripToSlotConverters',
+'Symmetry',
 'TFSF',
 'THzDemultiplexerFilter',
+'ThermallyTunedRingResonator',
+'TimeModulationTutorial',
 'VizData',
 'VizSimulation',
 'WaveguideCrossing',
