@@ -1,5 +1,5 @@
-Tidy3D Documentation
-====================
+Tidy3D Electromagnetic Solver
+=============================
 
 .. To do items:
 .. * open simple example in colab with API saved as environment variable and `!pip install tidy3d` in the first line.
@@ -19,7 +19,7 @@ Install the python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for
 
    pip install tidy3d
 
-Next, configure your tidy3d package with the API key from your account.
+Next, configure your `tidy3d` package with the API key from your account.
 
 `Get your free API key <https://tidy3d.simulation.cloud/account?tab=apikey>`_
 
@@ -102,14 +102,15 @@ b) View the results of this simulation on our web-based `graphical user interfac
 ~~~~~~~~~~~~~
 
 .. toctree::
- :maxdepth: 1
+  :maxdepth: 2
 
- quickstart
- notebooks/examples
- faq
- howdoi
- api
- changelog
- Tidy3D Solver Technology <https://www.flexcompute.com/tidy3d/solver/>
+  quickstart
+  lectures
+  notebooks/examples
+  howdoi
+  faq
+  api
+  changelog
+  About our Solver <https://www.flexcompute.com/tidy3d/solver/>
 
 

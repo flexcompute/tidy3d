@@ -20,6 +20,7 @@
 import os
 import sys
 
+# TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("./notebooks"))
@@ -55,18 +56,24 @@ add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = False  # Turn on sphinx.ext.autosummary
 autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "examples/designs"]
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
+    "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",
+    "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",  # Link to other project's documentation (see mapping below)
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
+    "sphinx_copybutton",
+    "sphinx_sitemap",
 ]
 
 # Grouping the document tree into LaTeX files. List of tuples
@@ -75,12 +82,15 @@ extensions = [
 latex_documents = [
     (master_doc, "tidy3d.tex", "tidy3d Documentation", "Dario Quintero", "manual"),
 ]
+html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
+html_extra_path = ["./_static/robots.txt"]
 html_logo = "_static/img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.ico"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
+html_sourcelink_suffix = ""
 html_static_path = ["_static"]
 html_theme = "sphinx_book_theme"
-html_title = "tidy3d"
+html_title = "Tidy3D Electromagnetic Solver"
 html_theme_options = {
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",

@@ -1,5 +1,5 @@
 *************************
-Installation instructions
+Installation
 *************************
 
 Welcome to Tidy3D
