@@ -10,7 +10,7 @@ import pydantic.v1 as pd
 from vtk import vtkCellArray, vtkPoints, vtkUnstructuredGrid, vtkPolyData, vtkPlane, vtkPlaneCutter
 from vtk import vtkCleanPolyData, vtkXMLUnstructuredGridReader, vtkXMLUnstructuredGridWriter
 from vtk import vtkBoxClipDataSet, vtkRemoveUnusedPoints, vtkRectilinearGrid, vtkResampleWithDataSet
-from vtk import VTK_TRIANGLE, VTK_TETRA, vtkLineSource, vtkExtractCellsAlongPolyLine
+from vtk import VTK_TRIANGLE, VTK_TETRA, vtkLineSource, vtkExtractCellsAlongPolyLine, vtkIdTypeArray
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtkIdTypeArray, numpy_to_vtk
 from matplotlib.tri import Triangulation
 from matplotlib import pyplot as plt
@@ -468,6 +468,16 @@ class UnstructuredGridDataset(Dataset, ABC):
         "points.",
     )
 
+    @pd.validator("cells", always=True)
+    def match_cells_to_vtk_type(cls, val):
+        """Check that cell connections does not have duplicate points."""
+        vtk_ind_size = vtkIdTypeArray().GetDataTypeSize()
+        # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
+        if vtk_ind_size == 4:
+            return CellDataArray(val.data.astype(np.int32, copy=False), coords=val.coords)
+        else:
+            return CellDataArray(val.data.astype(np.int64, copy=False), coords=val.coords)
+
     @pd.validator("values", always=True)
     def number_of_values_matches_points(cls, val, values):
         """Check that the number of data values matches the number of grid points."""
@@ -567,7 +577,13 @@ class UnstructuredGridDataset(Dataset, ABC):
     @cached_property
     def _vtk_offsets(self) -> ArrayLike:
         """Offsets array to use in the VTK representation."""
-        return np.arange(len(self.cells) + 1) * self._cell_num_vertices()
+        offsets = np.arange(len(self.cells) + 1) * self._cell_num_vertices()
+
+        vtk_ind_size = vtkIdTypeArray().GetDataTypeSize()
+        if vtk_ind_size == 4:
+            return offsets.astype(np.int32, copy=False)
+        else:
+            return offsets.astype(np.int64, copy=False)
 
     @cached_property
     def _vtk_cells(self) -> vtkCellArray:
@@ -1291,7 +1307,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
-        cells_numpy = np.int64(vtk_to_numpy(grid.GetCells().GetConnectivityArray()))
+        cells_numpy = vtk_to_numpy(grid.GetCells().GetConnectivityArray())
         points_numpy = vtk_to_numpy(grid.GetPoints().GetData())
         values = cls._get_values_from_vtk(grid, len(points_numpy))
 
