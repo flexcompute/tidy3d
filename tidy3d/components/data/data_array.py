@@ -551,6 +551,42 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
+class PointDataArray(DataArray):
+    """Indexed data array.
+
+    Example
+    -------
+    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis")
+
+
+class CellDataArray(DataArray):
+    """Cell connection data array.
+
+    Example
+    -------
+    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    """
+
+    __slots__ = ()
+    _dims = ("cell_index", "vertex_index")
+
+
+class IndexedDataArray(DataArray):
+    """Indexed data array.
+
+    Example
+    -------
+    >>> td = IndexedDataArray((1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3)))
+    """
+
+    __slots__ = ()
+    _dims = ("index",)
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -571,5 +607,8 @@ DATA_ARRAY_TYPES = [
     TriangleMeshDataArray,
     HeatDataArray,
     ChargeDataArray,
+    PointDataArray,
+    CellDataArray,
+    IndexedDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

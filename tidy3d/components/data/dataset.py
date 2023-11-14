@@ -7,16 +7,26 @@ from typing import Union, Dict, Callable, Any
 import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
+from vtk import vtkCellArray, vtkPoints, vtkUnstructuredGrid, vtkPolyData, vtkPlane, vtkPlaneCutter
+from vtk import vtkCleanPolyData, vtkXMLUnstructuredGridReader, vtkXMLUnstructuredGridWriter
+from vtk import vtkBoxClipDataSet, vtkRemoveUnusedPoints, vtkRectilinearGrid, vtkResampleWithDataSet
+from vtk import VTK_TRIANGLE, VTK_TETRA, vtkLineSource, vtkExtractCellsAlongPolyLine
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtkIdTypeArray, numpy_to_vtk
+from matplotlib.tri import Triangulation
+from matplotlib import pyplot as plt
 
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import ModeIndexDataArray
 from .data_array import TriangleMeshDataArray
 from .data_array import TimeDataArray
+from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
 
-from ..base import Tidy3dBaseModel
-from ..types import Axis
-from ...exceptions import DataError
+# from ..scene import Scene
+from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
+from ..base import Tidy3dBaseModel, cached_property
+from ..types import Axis, Bound, VtkCellType, ArrayLike, Ax, Coordinate, Literal
+from ...exceptions import DataError, ValidationError
 from ...log import log
 
 
@@ -435,3 +445,995 @@ class TimeDataset(Dataset):
     values: TimeDataArray = pd.Field(
         ..., title="Values", description="Values as a function of time."
     )
+
+
+class UnstructuredGridDataset(Dataset, ABC):
+    """Abstract base for datasets that store unstructured grid data."""
+
+    points: PointDataArray = pd.Field(
+        ...,
+        title="Grid Points",
+        description="Coordinates of points composing the unstructured grid.",
+    )
+
+    values: IndexedDataArray = pd.Field(
+        ...,
+        title="Point Values",
+        description="Values stored at the grid points.",
+    )
+
+    cells: CellDataArray = pd.Field(
+        ...,
+        title="Grid Cells",
+        description="Cells composing the unstructured grid specified as connections between grid "
+        "points.",
+    )
+
+    @pd.validator("values", always=True)
+    def number_of_values_matches_points(cls, val, values):
+        """Check that the number of data values matches the number of grid points."""
+        num_values = len(val)
+
+        points = values.get("points")
+        if points is None:
+            raise ValidationError("Cannot validate '.values' because '.points' failed validation.")
+        num_points = len(points)
+
+        if num_points != num_values:
+            raise ValidationError(
+                f"The number of data values ({num_values}) does not match the number of grid points ({num_points})."
+            )
+        return val
+
+    @pd.validator("points", always=True)
+    def points_right_dims(cls, val):
+        """Check that point coordinates have the right dimensionality."""
+        axis_coords_expected = np.arange(cls._point_dims())
+        axis_coords_given = val.axis.data
+        if np.any(axis_coords_given != axis_coords_expected):
+            raise ValidationError(
+                f"Points array is expected to have {axis_coords_expected} coord values along 'axis' (given: {axis_coords_given})."
+            )
+        return val
+
+    @pd.validator("cells", always=True)
+    def cells_right_type(cls, val):
+        """Check that cell are of the right type."""
+        vertex_coords_expected = np.arange(cls._cell_num_vertices())
+        vertex_coords_given = val.vertex_index.data
+        if np.any(vertex_coords_given != vertex_coords_expected):
+            raise ValidationError(
+                f"Cell connections array is expected to have {vertex_coords_expected} coord values along 'vertex_index' (given: {vertex_coords_given})."
+            )
+        return val
+
+    @pd.validator("cells", always=True)
+    def check_cell_vertex_range(cls, val, values):
+        """Check that cell connections use only defined points."""
+        all_point_indices_used = val.data.ravel()
+        min_index_used = np.min(all_point_indices_used)
+        max_index_used = np.max(all_point_indices_used)
+
+        points = values.get("points")
+        if points is None:
+            raise ValidationError("Cannot validate '.values' because '.points' failed validation.")
+        num_points = len(points)
+
+        if max_index_used != num_points - 1 or min_index_used != 0:
+            raise ValidationError(
+                f"Cell connections array used undefined point indecies ([{min_index_used}, {max_index_used}]). "
+                f" The."
+            )
+        return val
+
+    @pd.validator("cells", always=True)
+    def check_valid_cells(cls, val):
+        """Check that cell connections does not have duplicate points."""
+        indices = val.data
+        for i in range(0, cls._cell_num_vertices() - 1):
+            for j in range(i + 1, cls._cell_num_vertices()):
+                if np.any(indices[:, i] == indices[:, j]):
+                    log.warning("Unstructured grid contains degenerate cells.")
+        return val
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Grid bounds."""
+        return tuple(np.min(self.points.data, axis=0)), tuple(np.max(self.points.data, axis=0))
+
+    @classmethod
+    @abstractmethod
+    def _point_dims(cls) -> VtkCellType:
+        """Dimensionality of stored grid point coordinates."""
+
+    @cached_property
+    @abstractmethod
+    def _points_3d_array(self) -> Bound:
+        """3D coordinates of grid points."""
+
+    @classmethod
+    @abstractmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
+
+    @classmethod
+    @abstractmethod
+    def _vtk_cell_type(cls) -> VtkCellType:
+        """VTK cell type to use in the VTK representation."""
+
+    @cached_property
+    def _vtk_offsets(self) -> ArrayLike:
+        """Offsets array to use in the VTK representation."""
+        return np.arange(len(self.cells) + 1) * self._cell_num_vertices()
+
+    @cached_property
+    def _vtk_cells(self) -> vtkCellArray:
+        """VTK cell array to use in the VTK representation."""
+        cells = vtkCellArray()
+        cells.SetData(
+            numpy_to_vtkIdTypeArray(self._vtk_offsets),
+            numpy_to_vtkIdTypeArray(self.cells.data.ravel()),
+        )
+        return cells
+
+    @cached_property
+    def _vtk_points(self) -> vtkPoints:
+        """VTK point array to use in the VTK representation."""
+        pts = vtkPoints()
+        pts.SetData(numpy_to_vtk(self._points_3d_array))
+        return pts
+
+    @cached_property
+    def _vtk_obj(self) -> vtkUnstructuredGrid:
+        """A VTK representation (vtkUnstructuredGrid) of the grid."""
+
+        grid = vtkUnstructuredGrid()
+
+        grid.SetPoints(self._vtk_points)
+        grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
+        point_data_vtk = numpy_to_vtk(self.values.data)
+        point_data_vtk.SetName("values")
+        grid.GetPointData().AddArray(point_data_vtk)
+
+        return grid
+
+    def _plane_slice_raw(self, axis: Axis, pos: float) -> vtkPolyData:
+        """Slice data with a plane and return the resulting VTK object."""
+
+        if pos > self.bounds[1][axis] or pos < self.bounds[0][axis]:
+            raise DataError(
+                f"Slicing plane (axis: {axis}, pos: {pos}) does not intersect the unstructured grid "
+                f"(extent along axis {axis}: {self.bounds[0][axis]}, {self.bounds[1][axis]})."
+            )
+
+        origin = [0, 0, 0]
+        origin[axis] = pos
+
+        normal = [0, 0, 0]
+        normal[axis] = 1
+
+        # create cutting plane
+        plane = vtkPlane()
+        plane.SetOrigin(origin[0], origin[1], origin[2])
+        plane.SetNormal(normal[0], normal[1], normal[2])
+
+        # create cutter
+        cutter = vtkPlaneCutter()
+        cutter.SetPlane(plane)
+        cutter.SetInputData(self._vtk_obj)
+        cutter.InterpolateAttributesOn()
+        cutter.Update()
+
+        # clean up the slice
+        cleaner = vtkCleanPolyData()
+        cleaner.SetInputData(cutter.GetOutput())
+        cleaner.Update()
+
+        return cleaner.GetOutput()
+
+    @abstractmethod
+    def plane_slice(
+        self, axis: Axis, pos: float
+    ) -> Union[SpatialDataArray, UnstructuredGridDataset]:
+        """Slice data with a plane and return the Tidy3D representation of the result
+        (``UnstructuredGridDataset``).
+
+        Parameters
+        ----------
+        axis : Axis
+            The normal direction of the slicing plane.
+        pos : float
+            Position of the slicing plane along its normal direction.
+
+        Returns
+        -------
+        Union[SpatialDataArray, UnstructuredGridDataset]
+            The resulting slice.
+        """
+
+    @staticmethod
+    def _read_vtkUnstructuredGrid(fname: str) -> vtkUnstructuredGrid:
+        """Load a :class:`vtkUnstructuredGrid` from a file."""
+        reader = vtkXMLUnstructuredGridReader()
+        reader.SetFileName(fname)
+        reader.Update()
+        grid = reader.GetOutput()
+
+        return grid
+
+    @classmethod
+    @abstractmethod
+    def _from_vtk_obj(cls, vtk_obj) -> UnstructuredGridDataset:
+        """Initialize from a vtk object."""
+
+    @classmethod
+    def from_vtu(cls, file: str) -> UnstructuredGridDataset:
+        """Load unstructured data from a vtu file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .vtu file to load the unstructured data from.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Unstructured data.
+        """
+        grid = cls._read_vtkUnstructuredGrid(file)
+        return cls._from_vtk_obj(grid)
+
+    def to_vtu(self, fname: str):
+        """Exports unstructured grid data into a .vtu file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .vtu file to save the unstructured data to.
+        """
+
+        writer = vtkXMLUnstructuredGridWriter()
+        writer.SetFileName(fname)
+        writer.SetInputData(self._vtk_obj)
+        writer.Write()
+
+    @classmethod
+    def _get_values_from_vtk(
+        cls,
+        vtk_obj: Union[vtkPolyData, vtkUnstructuredGrid],
+        num_points: pd.PositiveInt,
+    ) -> IndexedDataArray:
+        """Get point data values from a VTK object."""
+
+        point_data = vtk_obj.GetPointData()
+        num_point_arrays = point_data.GetNumberOfArrays()
+
+        if num_point_arrays == 0:
+            log.warning(
+                "No point data is found in a VTK object. '.values' will be initialized to zeros."
+            )
+            values_numpy = np.zeros(num_points)
+
+        else:
+            array_vtk = point_data.GetAbstractArray(0)
+
+            # currently we assume there is only one point data array provided in the VTK object
+            if num_point_arrays > 1:
+                array_name = array_vtk.GetName()
+                log.warning(
+                    f"{num_point_arrays} point data arrays are found in a VTK object. "
+                    f"Only the first array (name: {array_name}) will be used to initialize "
+                    "'.values' while the rest will be ignored."
+                )
+
+            # currently we assume data is scalar
+            num_components = array_vtk.GetNumberOfComponents()
+            if num_components > 1:
+                raise DataError(
+                    f"Found point data array in a VTK object is expected to have only 1 component. Found {num_components} components."
+                )
+
+            # check that number of values matches number of grid points
+            num_tuples = array_vtk.GetNumberOfTuples()
+            if num_tuples != num_points:
+                raise DataError(
+                    f"The length of found point data array ({num_tuples}) does not match the number of grid points ({num_points})."
+                )
+
+            values_numpy = vtk_to_numpy(array_vtk)
+
+        values = IndexedDataArray(values_numpy, coords=dict(index=np.arange(len(values_numpy))))
+
+        return values
+
+    def box_clip(self, bounds: Bound) -> UnstructuredGridDataset:
+        """Clip the unstructured grid using a box defined by ``bounds``.
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Clipped grid.
+        """
+
+        # make and run a VTK clipper
+        clipper = vtkBoxClipDataSet()
+        clipper.SetOrientation(0)
+        clipper.SetBoxClip(
+            bounds[0][0], bounds[1][0], bounds[0][1], bounds[1][1], bounds[0][2], bounds[1][2]
+        )
+        clipper.SetInputData(self._vtk_obj)
+        clipper.GenerateClipScalarsOn()
+        clipper.GenerateClippedOutputOff()
+        clipper.Update()
+        clip = clipper.GetOutput()
+
+        # cleann grid from unused points
+        grid_cleaner = vtkRemoveUnusedPoints()
+        grid_cleaner.SetInputData(clip)
+        grid_cleaner.GenerateOriginalPointIdsOff()
+        grid_cleaner.Update()
+        clean_clip = grid_cleaner.GetOutput()
+
+        # no intersection check
+        if clean_clip.GetNumberOfPoints() == 0:
+            raise DataError("Clipping box does not intersect the unstructured grid.")
+
+        return self._from_vtk_obj(clean_clip)
+
+    def interp(
+        self,
+        x: Union[float, ArrayLike],
+        y: Union[float, ArrayLike],
+        z: Union[float, ArrayLike],
+        fill_value: float = 0,
+    ) -> SpatialDataArray:
+        """Interpolate data at provided x, y, and z.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float = 0
+            Value to use when filling points without interpolated values.
+
+        Returns
+        -------
+        SpatialDataArray
+            Interpolated data.
+        """
+
+        # calculate the resulting array shape
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        z = np.atleast_1d(z)
+        shape = (len(x), len(y), len(z))
+
+        # create a VTK rectilinear grid to sample onto
+        structured_grid = vtkRectilinearGrid()
+        structured_grid.SetDimensions(shape)
+        structured_grid.SetXCoordinates(numpy_to_vtk(x))
+        structured_grid.SetYCoordinates(numpy_to_vtk(y))
+        structured_grid.SetZCoordinates(numpy_to_vtk(z))
+
+        # create and execute VTK interpolator
+        interpolator = vtkResampleWithDataSet()
+        interpolator.SetInputData(structured_grid)
+        interpolator.SetSourceData(self._vtk_obj)
+        interpolator.Update()
+        interpolated = interpolator.GetOutput()
+
+        # get results in a numpy representation
+        values_numpy = vtk_to_numpy(interpolated.GetPointData().GetAbstractArray("values"))
+
+        # fill points without interpolated values
+        if fill_value != 0:
+            mask = vtk_to_numpy(interpolated.GetPointData().GetAbstractArray("vtkValidPointMask"))
+            values_numpy[mask != 1] = fill_value
+
+        # VTK arrays are the z-y-x order, reorder interpolation results to x-y-z order
+        values_reordered = np.transpose(np.reshape(values_numpy, shape[::-1]), (2, 1, 0))
+
+        return SpatialDataArray(values_reordered, coords=dict(x=x, y=y, z=z))
+
+    @abstractmethod
+    def sel(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+    ) -> Union[UnstructuredGridDataset, SpatialDataArray]:
+        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
+        must be provided.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+
+        Returns
+        -------
+        Union[TriangularGridDataset, SpatialDataArray]
+            Extracted data.
+        """
+
+
+class TriangularGridDataset(UnstructuredGridDataset):
+    """Dataset for storing triangular grid data.
+
+    Example
+    -------
+    >>> tri_grid_points = PointDataArray(
+    ...     [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+    ...     coords=dict(index=np.arange(4), axis=np.arange(2)),
+    ... )
+    >>>
+    >>> tri_grid_cells = CellDataArray(
+    ...     [[0, 1, 2], [1, 2, 3]],
+    ...     coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+    ... )
+    >>>
+    >>> tri_grid_values = IndexedDataArray(
+    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ... )
+    >>>
+    >>> tri_grid = TriangularGridDataset(
+    ...     normal_axis=1,
+    ...     normal_pos=0,
+    ...     points=tri_grid_points,
+    ...     cells=tri_grid_cells,
+    ...     values=tri_grid_values,
+    ... )
+    """
+
+    normal_axis: Axis = pd.Field(
+        ...,
+        title="Grid Axis",
+        description="Orientation of the grid.",
+    )
+
+    normal_pos: float = pd.Field(
+        ...,
+        title="Position",
+        description="Coordinate of the grid along the normal direction.",
+    )
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Grid bounds."""
+        bounds_2d = super().bounds
+        bounds_3d = self._points_2d_to_3d(bounds_2d)
+        return tuple(bounds_3d[0]), tuple(bounds_3d[1])
+
+    @classmethod
+    def _point_dims(cls) -> VtkCellType:
+        """Dimensionality of stored grid point coordinates."""
+        return 2
+
+    def _points_2d_to_3d(self, pts: ArrayLike) -> ArrayLike:
+        """Convert 2d points into 3d points."""
+        return np.insert(pts, obj=self.normal_axis, values=self.normal_pos, axis=1)
+
+    @cached_property
+    def _points_3d_array(self):
+        """3D representation of grid points."""
+        return self._points_2d_to_3d(self.points.data)
+
+    @classmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
+        return 3
+
+    @classmethod
+    def _vtk_cell_type(cls) -> VtkCellType:
+        """VTK cell type to use in the VTK representation."""
+        return VTK_TRIANGLE
+
+    @classmethod
+    def _from_vtk_obj(cls, vtk_obj: Union[vtkPolyData, vtkUnstructuredGrid]):
+        """Initialize from a vtkUnstructuredGrid instance."""
+
+        # get points cells data from vtk object
+        if isinstance(vtk_obj, vtkPolyData):
+            cells_vtk = vtk_obj.GetPolys()
+        elif isinstance(vtk_obj, vtkUnstructuredGrid):
+            cells_vtk = vtk_obj.GetCells()
+
+        cells_numpy = vtk_to_numpy(cells_vtk.GetConnectivityArray())
+
+        cell_offsets = vtk_to_numpy(cells_vtk.GetOffsetsArray())
+        if not np.all(np.diff(cell_offsets) == cls._cell_num_vertices()):
+            raise DataError(
+                "Only triangular 'vtkUnstructuredGrid' or 'vtkPolyData' can be converted into 'TriangularGridDataset'."
+            )
+
+        points_numpy = vtk_to_numpy(vtk_obj.GetPoints().GetData())
+
+        # data values are read directly into Tidy3D array
+        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy))
+
+        # detect zero size dimension
+        bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
+        zero_dims = np.where(bounds == 0)[0]
+
+        if len(zero_dims) != 1:
+            raise DataError(
+                f"Provided vtk grid does not represent a two dimensional grid. Found zero size dimensions are {zero_dims}."
+            )
+
+        normal_axis = zero_dims[0]
+        normal_pos = points_numpy[0][normal_axis]
+        tan_dims = [0, 1, 2]
+        tan_dims.remove(normal_axis)
+
+        # convert 3d coordinates into 2d
+        points_2d_numpy = points_numpy[:, tan_dims]
+
+        # create Tidy3D points and cells arrays
+        num_cells = len(cells_numpy) // cls._cell_num_vertices()
+        cells_numpy = np.reshape(cells_numpy, (num_cells, cls._cell_num_vertices()))
+
+        cells = CellDataArray(
+            cells_numpy,
+            coords=dict(
+                cell_index=np.arange(num_cells), vertex_index=np.arange(cls._cell_num_vertices())
+            ),
+        )
+
+        points = PointDataArray(
+            points_2d_numpy,
+            coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
+        )
+
+        return cls(
+            normal_axis=normal_axis,
+            normal_pos=normal_pos,
+            points=points,
+            cells=cells,
+            values=values,
+        )
+
+    def plane_slice(self, axis: Axis, pos: float) -> SpatialDataArray:
+        """Slice data with a plane and return the resulting line as a SpatialDataArray.
+
+        Parameters
+        ----------
+        axis : Axis
+            The normal direction of the slicing plane.
+        pos : float
+            Position of the slicing plane along its normal direction.
+
+        Returns
+        -------
+        SpatialDataArray
+            The resulting slice.
+        """
+
+        if axis == self.normal_axis:
+            raise DataError(
+                f"Triangular grid (normal: {self.normal_axis}) cannot be sliced by a parallel plane."
+            )
+
+        # perform slicing in vtk and get unprocessed points and values
+        slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
+        points_numpy = vtk_to_numpy(slice_vtk.GetPoints().GetData())
+        values = self._get_values_from_vtk(slice_vtk, len(points_numpy))
+
+        # axis of the resulting line
+        slice_axis = 3 - self.normal_axis - axis
+
+        # sort found intersection in ascending order
+        sorting = np.argsort(points_numpy[:, slice_axis], kind="mergesort")
+
+        # assemble coords for SpatialDataArray
+        coords = [None, None, None]
+        coords[axis] = pos
+        coords[self.normal_axis] = self.normal_pos
+        coords[slice_axis] = points_numpy[sorting, slice_axis]
+        coords_dict = dict(zip("xyz", coords))
+
+        # reshape values from a 1d array into a 3d array
+        new_shape = [1, 1, 1]
+        new_shape[slice_axis] = len(values)
+        values_reshaped = np.reshape(values.data[sorting], new_shape)
+
+        return SpatialDataArray(values_reshaped, coords=coords_dict)
+
+    @cached_property
+    def _triangulation_obj(self) -> Triangulation:
+        """Matplotlib triangular representation of the grid to use in plotting."""
+        return Triangulation(self.points[:, 0], self.points[:, 1], self.cells)
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot(
+        self,
+        ax: Ax = None,
+        field: bool = True,
+        grid: bool = True,
+        cbar: bool = True,
+        cmap: str = "viridis",
+        vmin: float = None,
+        vmax: float = None,
+        shading: Literal["gourand", "flat"] = "gouraud",
+        cbar_kwargs: Dict = None,
+    ) -> Ax:
+        """Plot the data field and/or the unstructured grid.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes = None
+            matplotlib axes to plot on, if not specified, one is created.
+        field : bool = True
+            Whether to plot the data field.
+        grid : bool = True
+            Whether to plot the unstructured grid.
+        cbar : bool = True
+            Display colorbar (only if `field == True`).
+        cmap : str = "viridis"
+            Color map to use for plotting.
+        vmin : float = None
+            The lower bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        vmax : float = None
+            The upper bound of data range that the colormap covers. If `None`, they are
+            inferred from the data and other keyword arguments.
+        shading : Literal["gourand", "flat"] = "gourand"
+            Type of shading to use when plotting the data field.
+        cbar_kwargs : Dict = {}
+            Additional parameters passed to colorbar object.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        if cbar_kwargs is None:
+            cbar_kwargs = {}
+        if not (field or grid):
+            raise DataError("Nothing to plot ('field == False', 'grid == False').")
+
+        # plot data field if requested
+        if field:
+            contours = ax.tripcolor(
+                self._triangulation_obj,
+                self.values.data,
+                shading=shading,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+            )
+
+            if cbar:
+                plt.colorbar(contours, **cbar_kwargs)
+
+        # plot grid if requested
+        if grid:
+            ax.triplot(
+                self._triangulation_obj,
+                color=plot_params_grid.edgecolor,
+                linewidth=plot_params_grid.linewidth,
+            )
+
+        # set labels and titles
+        ax_labels = ["x", "y", "z"]
+        normal_axis_name = ax_labels.pop(self.normal_axis)
+        ax.set_xlabel(ax_labels[0])
+        ax.set_ylabel(ax_labels[1])
+        ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
+        return ax
+
+    def interp(
+        self,
+        x: Union[float, ArrayLike],
+        y: Union[float, ArrayLike],
+        z: Union[float, ArrayLike],
+        fill_value: float = 0,
+        ignore_normal_pos: bool = True,
+    ) -> SpatialDataArray:
+        """Interpolate data at provided x, y, and z.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float = 0
+            Value to use when filling points without interpolated values.
+        ignore_normal_pos : bool = True
+            Assume data is invariant along the normal direction to the grid plane.
+
+        Returns
+        -------
+        SpatialDataArray
+            Interpolated data.
+        """
+
+        if ignore_normal_pos:
+            xyz = [x, y, z]
+            xyz[self.normal_axis] = self.normal_pos
+            interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value)
+            interp_broadcasted = np.broadcast_to(
+                interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
+            )
+
+            return SpatialDataArray(interp_broadcasted, coords=dict(x=x, y=y, z=z))
+
+        return super().interp(x=x, y=y, z=z, fill_value=fill_value)
+
+    def sel(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+    ) -> SpatialDataArray:
+        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
+        must be provided.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+
+        Returns
+        -------
+        SpatialDataArray
+            Extracted data.
+        """
+
+        xyz = [x, y, z]
+        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
+        num_provided = len(axes)
+
+        if self.normal_axis in axes:
+            if xyz[self.normal_axis] != self.normal_pos:
+                raise DataError(
+                    f"No data for {'xyz'[self.normal_axis]} = {xyz[self.normal_axis]}"
+                    f" (unstructured grid is defined at {'xyz'[self.normal_axis]} = {self.normal_pos}."
+                )
+
+            if num_provided < 3:
+                num_provided -= 1
+                axes.remove(self.normal_axis)
+
+        if num_provided == 0:
+            raise DataError("At least one of 'x', 'y', and 'z' must be specified.")
+
+        if num_provided == 1:
+            axis = axes[0]
+            return self.plane_slice(axis=axis, pos=xyz[axis])
+
+        if num_provided == 2:
+            pos = [x, y, z]
+            pos[self.normal_axis] = [self.normal_pos]
+            return self.interp(x=pos[0], y=pos[1], z=pos[2])
+
+        if num_provided == 3:
+            return self.interp(x=x, y=y, z=z)
+
+
+class TetrahedralGridDataset(UnstructuredGridDataset):
+    """Dataset for storing tetrahedral grid data.
+
+    Example
+    -------
+    >>> tet_grid_points = PointDataArray(
+    ...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+    ...     coords=dict(index=np.arange(4), axis=np.arange(3)),
+    ... )
+    >>>
+    >>> tet_grid_cells = CellDataArray(
+    ...     [[0, 1, 2, 3]],
+    ...     coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
+    ... )
+    >>>
+    >>> tet_grid_values = IndexedDataArray(
+    ...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),
+    ... )
+    >>>
+    >>> tet_grid = TetrahedralGridDataset(
+    ...     points=tet_grid_points,
+    ...     cells=tet_grid_cells,
+    ...     values=tet_grid_values,
+    ... )
+    """
+
+    @classmethod
+    def _point_dims(cls) -> VtkCellType:
+        """Dimensionality of stored grid point coordinates."""
+        return 3
+
+    @cached_property
+    def _points_3d_array(self) -> Bound:
+        """3D coordinates of grid points."""
+        return self.points.data
+
+    @classmethod
+    def _cell_num_vertices(cls) -> pd.PositiveInt:
+        """Number of vertices in a cell."""
+        return 4
+
+    @classmethod
+    def _vtk_cell_type(cls) -> VtkCellType:
+        """VTK cell type to use in the VTK representation."""
+        return VTK_TETRA
+
+    @classmethod
+    def _from_vtk_obj(cls, grid: vtkUnstructuredGrid) -> TetrahedralGridDataset:
+        """Initialize from a vtkUnstructuredGrid instance."""
+
+        # read point, cells, and values info from a vtk instance
+        cells_numpy = np.int64(vtk_to_numpy(grid.GetCells().GetConnectivityArray()))
+        points_numpy = vtk_to_numpy(grid.GetPoints().GetData())
+        values = cls._get_values_from_vtk(grid, len(points_numpy))
+
+        # verify cell_types
+        cells_types = vtk_to_numpy(grid.GetCellTypesArray())
+        if not np.all(cells_types == cls._vtk_cell_type()):
+            raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
+
+        # pack point and cell information into Tidy3D arrays
+        num_cells = len(cells_numpy) // cls._cell_num_vertices()
+        cells_numpy = np.reshape(cells_numpy, (num_cells, cls._cell_num_vertices()))
+
+        cells = CellDataArray(
+            cells_numpy,
+            coords=dict(
+                cell_index=np.arange(num_cells), vertex_index=np.arange(cls._cell_num_vertices())
+            ),
+        )
+
+        points = PointDataArray(
+            points_numpy,
+            coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
+        )
+
+        return cls(points=points, cells=cells, values=values)
+
+    def plane_slice(self, axis: Axis, pos: float) -> TriangularGridDataset:
+        """Slice data with a plane and return the resulting :class:.`TriangularGridDataset`.
+
+        Parameters
+        ----------
+        axis : Axis
+            The normal direction of the slicing plane.
+        pos : float
+            Position of the slicing plane along its normal direction.
+
+        Returns
+        -------
+        TriangularGridDataset
+            The resulting slice.
+        """
+
+        slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
+
+        return TriangularGridDataset._from_vtk_obj(slice_vtk)
+
+    def line_slice(self, axis: Axis, pos: Coordinate) -> SpatialDataArray:
+        """Slice data with a line and return the resulting :class:.`SpatialDataArray`.
+
+        Parameters
+        ----------
+        axis : Axis
+            The axis of the slicing line.
+        pos : Tuple[float, float, float]
+            Position of the slicing line.
+
+        Returns
+        -------
+        SpatialDataArray
+            The resulting slice.
+        """
+
+        bounds = self.bounds
+        start = list(pos)
+        end = list(pos)
+
+        start[axis] = bounds[0][axis]
+        end[axis] = bounds[1][axis]
+
+        # create cutting plane
+        line = vtkLineSource()
+        line.SetPoint1(start)
+        line.SetPoint2(end)
+        line.SetResolution(1)
+
+        # this should be done using vtkProbeLineFilter
+        # but for some reason it crashes Python
+        # so, we use a workaround:
+        # 1) extract cells that are intersected by line (to speed up further slicing)
+        # 2) do plane slice along first direction
+        # 3) do second plane slice along second direction
+
+        prober = vtkExtractCellsAlongPolyLine()
+        prober.SetSourceConnection(line.GetOutputPort())
+        prober.SetInputData(self._vtk_obj)
+        prober.Update()
+
+        extracted_cells_vtk = prober.GetOutput()
+
+        if extracted_cells_vtk.GetNumberOfPoints() == 0:
+            raise DataError("Slicing line does not intersect the unstructured grid.")
+
+        extracted_cells = TetrahedralGridDataset._from_vtk_obj(extracted_cells_vtk)
+
+        tan_dims = [0, 1, 2]
+        tan_dims.remove(axis)
+
+        # first plane slice
+        plane_slice = extracted_cells.plane_slice(axis=tan_dims[0], pos=pos[tan_dims[0]])
+        # second plane slice
+        line_slice = plane_slice.plane_slice(axis=tan_dims[1], pos=pos[tan_dims[1]])
+
+        return line_slice
+
+    def sel(
+        self,
+        x: Union[float, ArrayLike] = None,
+        y: Union[float, ArrayLike] = None,
+        z: Union[float, ArrayLike] = None,
+    ) -> Union[TriangularGridDataset, SpatialDataArray]:
+        """Extract/interpolate data along one or more Cartesian directions. At least of x, y, and z
+        must be provided.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike] = None
+            x-coordinate of the slice.
+        y : Union[float, ArrayLike] = None
+            y-coordinate of the slice.
+        z : Union[float, ArrayLike] = None
+            z-coordinate of the slice.
+
+        Returns
+        -------
+        Union[TriangularGridDataset, SpatialDataArray]
+            Extracted data.
+        """
+
+        xyz = [x, y, z]
+        axes = [ind for ind, comp in enumerate(xyz) if comp is not None]
+
+        num_provided = len(axes)
+
+        if num_provided < 3 and any(not np.isscalar(comp) for comp in xyz if comp is not None):
+            raise DataError(
+                "Providing x, y, or z as array is only allowed for interpolation. That is, when all"
+                " three x, y, and z are provided or method '.interp()' is used explicitly."
+            )
+
+        if num_provided == 0:
+            raise DataError("At least one of 'x', 'y', and 'z' must be specified.")
+
+        if num_provided == 1:
+            axis = axes[0]
+            return self.plane_slice(axis=axis, pos=xyz[axis])
+
+        if num_provided == 2:
+            axis = 3 - axes[0] - axes[1]
+            xyz[axis] = 0
+            return self.line_slice(axis=axis, pos=xyz)
+
+        if num_provided == 3:
+            return self.interp(x=x, y=y, z=z)

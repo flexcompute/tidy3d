@@ -13,7 +13,9 @@ import pydantic.v1 as pydantic
 import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
+from vtk import VTK_TRIANGLE, VTK_TETRA
 from ..exceptions import ValidationError
+
 
 try:
     import trimesh
@@ -246,3 +248,7 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
+
+""" VTK """
+
+VtkCellType = Literal[VTK_TRIANGLE, VTK_TETRA]

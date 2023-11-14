@@ -115,6 +115,7 @@ plot_params_override_structures = PlotParams(
     linewidth=0.4, edgecolor="black", fill=False, zorder=inf
 )
 plot_params_fluid = PlotParams(facecolor="white", edgecolor="lightsteelblue", lw=0.4, hatch="xx")
+plot_params_grid = PlotParams(edgecolor="black", lw=0.2)
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [

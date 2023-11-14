@@ -78,6 +78,8 @@ from .components.data.monitor_data import FieldProjectionKSpaceData
 from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP
+from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
+from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
@@ -130,6 +132,11 @@ from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, H
 from .components.heat.source import UniformHeatSource
 from .components.heat.monitor import TemperatureMonitor
 from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
+
+
+from vtkmodules.vtkCommonCore import vtkLogger
+
+vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
 
 
 def set_logging_level(level: str) -> None:
@@ -319,4 +326,9 @@ __all__ = [
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
     "ModulationSpec",
+    "PointDataArray",
+    "CellDataArray",
+    "IndexedDataArray",
+    "TriangularGridDataset",
+    "TetrahedralGridDataset",
 ]

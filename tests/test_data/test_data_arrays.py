@@ -277,3 +277,24 @@ def test_charge_data_array():
     n = [0, 1e-12, 2e-12]
     p = [0, 3e-12, 4e-12]
     _ = td.ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))
+
+
+def test_point_data_array():
+    _ = td.PointDataArray(
+        np.random.rand(2, 3),
+        coords=dict(index=np.arange(2), axis=np.arange(3)),
+    )
+
+
+def test_cell_data_array():
+    _ = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+    )
+
+
+def test_indexed_data_array():
+    _ = td.IndexedDataArray(
+        np.random.rand(10),
+        coords=dict(index=np.arange(10)),
+    )
