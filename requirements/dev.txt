@@ -5,6 +5,7 @@
 -r gdspy.txt
 -r jax.txt
 -r trimesh.txt
+-r vtk.txt
 
 # required for development
 pre-commit

@@ -13,7 +13,6 @@ import pydantic.v1 as pydantic
 import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
-from vtk import VTK_TRIANGLE, VTK_TETRA
 from ..exceptions import ValidationError
 
 
@@ -21,6 +20,14 @@ try:
     import trimesh
 except ImportError:
     trimesh = None
+
+try:
+    import vtk
+    from vtkmodules.vtkCommonCore import vtkLogger
+
+    vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
+except ImportError:
+    vtk = None
 
 
 # type tag default name
@@ -251,4 +258,4 @@ TrackFreq = Literal["central", "lowest", "highest"]
 
 """ VTK """
 
-VtkCellType = Literal[VTK_TRIANGLE, VTK_TETRA]
+VtkCellType = Any if vtk is None else Literal[vtk.VTK_TRIANGLE, vtk.VTK_TETRA]

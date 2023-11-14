@@ -134,11 +134,6 @@ from .components.heat.monitor import TemperatureMonitor
 from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
 
 
-from vtkmodules.vtkCommonCore import vtkLogger
-
-vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
-
-
 def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
     raise DeprecationWarning(

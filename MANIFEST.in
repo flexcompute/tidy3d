@@ -8,4 +8,5 @@ include requirements/gdspy.txt
 include requirements/gdstk.txt
 include requirements/dev.txt
 include requirements/trimesh.txt
+include requirements/vtk.txt
 include tidy3d/web/cacert.pem

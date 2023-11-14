@@ -12,4 +12,3 @@ pydantic==2.*
 PyYAML
 dask
 toml
-vtk

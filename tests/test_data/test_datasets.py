@@ -4,13 +4,15 @@ import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
 
-import tidy3d as td
-from tidy3d.exceptions import DataError
 
 np.random.seed(4)
 
 
 def test_triangular_dataset(tmp_path):
+
+    import tidy3d as td
+    from tidy3d.components.types import vtk
+    from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
     tri_grid_points = td.PointDataArray(
@@ -117,45 +119,66 @@ def test_triangular_dataset(tmp_path):
     assert tri_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 0.0, 1.0))
     assert np.all(tri_grid._vtk_offsets == np.array([0, 3, 6]))
 
-    _ = tri_grid._vtk_cells
-    _ = tri_grid._vtk_points
-    _ = tri_grid._vtk_obj
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid._vtk_cells
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid._vtk_points
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid._vtk_obj
+    else:
+        _ = tri_grid._vtk_cells
+        _ = tri_grid._vtk_points
+        _ = tri_grid._vtk_obj
 
     # plane slicing
-    _ = tri_grid.plane_slice(axis=2, pos=0.5)
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid.plane_slice(axis=2, pos=0.5)
+    else:
+        _ = tri_grid.plane_slice(axis=2, pos=0.5)
 
-    # can't slice parallel grid plane
-    with pytest.raises(DataError):
-        _ = tri_grid.plane_slice(axis=1, pos=0.5)
+        # can't slice parallel grid plane
+        with pytest.raises(DataError):
+            _ = tri_grid.plane_slice(axis=1, pos=0.5)
 
-    # can't slice outside of bounds
-    with pytest.raises(DataError):
-        _ = tri_grid.plane_slice(axis=0, pos=2)
+        # can't slice outside of bounds
+        with pytest.raises(DataError):
+            _ = tri_grid.plane_slice(axis=0, pos=2)
 
     # clipping by a box
-    _ = tri_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
+    else:
+        _ = tri_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
 
-    # can't clip outside of grid
-    with pytest.raises(DataError):
-        _ = tri_grid.box_clip([[0.1, 0.1, 0.3], [0.2, 0.2, 0.9]])
+        # can't clip outside of grid
+        with pytest.raises(DataError):
+            _ = tri_grid.box_clip([[0.1, 0.1, 0.3], [0.2, 0.2, 0.9]])
 
     # interpolation
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            invariant = tri_grid.interp(
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
+            )
+    else:
+        # default = invariant along normal direction
+        invariant = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+        assert np.all(invariant.isel(y=0).data == invariant.isel(y=1).data)
 
-    # default = invariant along normal direction
-    invariant = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
-    assert np.all(invariant.isel(y=0).data == invariant.isel(y=1).data)
+        # no invariance
+        out_of_plane = tri_grid.interp(
+            x=0.4, y=[1], z=np.linspace(0.2, 0.6, 10), fill_value=123, ignore_normal_pos=False
+        )
+        assert np.all(out_of_plane.data == 123)
 
-    # no invariance
-    out_of_plane = tri_grid.interp(
-        x=0.4, y=[1], z=np.linspace(0.2, 0.6, 10), fill_value=123, ignore_normal_pos=False
-    )
-    assert np.all(out_of_plane.data == 123)
-
-    # ouside of grid
-    invariant_no_intersection = tri_grid.interp(
-        x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
-    )
-    assert np.all(invariant_no_intersection.data == 909)
+        # ouside of grid
+        invariant_no_intersection = tri_grid.interp(
+            x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
+        )
+        assert np.all(invariant_no_intersection.data == 909)
 
     # plotting
     _ = tri_grid.plot()
@@ -186,22 +209,36 @@ def test_triangular_dataset(tmp_path):
         _ = tri_grid.plot(field=False, grid=False)
 
     # generalized selection method
-    _ = tri_grid.sel(x=0.2)
-    _ = tri_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
-    _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=tri_grid.normal_pos, z=[0.3, 0.4, 0.5])
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tri_grid.sel(x=0.2)
+    else:
+        _ = tri_grid.sel(x=0.2)
+        _ = tri_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
+        _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=tri_grid.normal_pos, z=[0.3, 0.4, 0.5])
 
-    # can't select out of plane
-    with pytest.raises(DataError):
-        _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
+        # can't select out of plane
+        with pytest.raises(DataError):
+            _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
 
     # writting/reading .vtu
-    tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
-    tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
+        with pytest.raises(Tidy3dImportError):
+            tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
+    else:
+        tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
+        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
 
-    assert tri_grid == tri_grid_loaded
+        assert tri_grid == tri_grid_loaded
 
 
 def test_tetrahedral_dataset(tmp_path):
+
+    import tidy3d as td
+    from tidy3d.components.types import vtk
+    from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
     tet_grid_points = td.PointDataArray(
@@ -296,44 +333,75 @@ def test_tetrahedral_dataset(tmp_path):
     assert tet_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
     assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8]))
 
-    _ = tet_grid._vtk_cells
-    _ = tet_grid._vtk_points
-    _ = tet_grid._vtk_obj
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid._vtk_cells
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid._vtk_points
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid._vtk_obj
+    else:
+        _ = tet_grid._vtk_cells
+        _ = tet_grid._vtk_points
+        _ = tet_grid._vtk_obj
 
     # plane slicing
-    _ = tet_grid.plane_slice(axis=2, pos=0.5)
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid.plane_slice(axis=2, pos=0.5)
+    else:
+        _ = tet_grid.plane_slice(axis=2, pos=0.5)
 
-    # can't slice outside of bounds
-    with pytest.raises(DataError):
-        _ = tet_grid.plane_slice(axis=1, pos=2)
+        # can't slice outside of bounds
+        with pytest.raises(DataError):
+            _ = tet_grid.plane_slice(axis=1, pos=2)
 
     # clipping by a box
-    _ = tet_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
+    else:
+        _ = tet_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
 
-    # can't clip outside of grid
-    with pytest.raises(DataError):
-        _ = tet_grid.box_clip([[0.1, 1.1, 0.3], [0.2, 1.2, 0.9]])
+        # can't clip outside of grid
+        with pytest.raises(DataError):
+            _ = tet_grid.box_clip([[0.1, 1.1, 0.3], [0.2, 1.2, 0.9]])
 
     # interpolation
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+    else:
+        # default = invariant along normal direction
+        _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
 
-    # default = invariant along normal direction
-    _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
-
-    # outside of grid
-    no_intersection = tet_grid.interp(x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909)
-    assert np.all(no_intersection.data == 909)
+        # outside of grid
+        no_intersection = tet_grid.interp(
+            x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
+        )
+        assert np.all(no_intersection.data == 909)
 
     # generalized selection method
-    _ = tet_grid.sel(x=0.2)
-    _ = tet_grid.sel(x=0.2, y=0.4)
-    _ = tet_grid.sel(x=np.linspace(0, 1, 3), y=0.55, z=[0.3, 0.4, 0.5])
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            _ = tet_grid.sel(x=0.2)
+    else:
+        _ = tet_grid.sel(x=0.2)
+        _ = tet_grid.sel(x=0.2, y=0.4)
+        _ = tet_grid.sel(x=np.linspace(0, 1, 3), y=0.55, z=[0.3, 0.4, 0.5])
 
-    # can't do plane slicing with array of values
-    with pytest.raises(DataError):
-        _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
+        # can't do plane slicing with array of values
+        with pytest.raises(DataError):
+            _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
 
     # writting/reading .vtu
-    tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
-    tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
+    if vtk is None:
+        with pytest.raises(Tidy3dImportError):
+            tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
+        with pytest.raises(Tidy3dImportError):
+            tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
+    else:
+        tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
+        tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
 
-    assert tet_grid == tet_grid_loaded
+        assert tet_grid == tet_grid_loaded

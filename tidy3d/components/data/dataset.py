@@ -3,15 +3,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Union, Dict, Callable, Any
+import functools
 
 import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
-from vtk import vtkCellArray, vtkPoints, vtkUnstructuredGrid, vtkPolyData, vtkPlane, vtkPlaneCutter
-from vtk import vtkCleanPolyData, vtkXMLUnstructuredGridReader, vtkXMLUnstructuredGridWriter
-from vtk import vtkBoxClipDataSet, vtkRemoveUnusedPoints, vtkRectilinearGrid, vtkResampleWithDataSet
-from vtk import VTK_TRIANGLE, VTK_TETRA, vtkLineSource, vtkExtractCellsAlongPolyLine, vtkIdTypeArray
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtkIdTypeArray, numpy_to_vtk
 from matplotlib.tri import Triangulation
 from matplotlib import pyplot as plt
 
@@ -24,9 +20,33 @@ from .data_array import PointDataArray, IndexedDataArray, CellDataArray, Spatial
 
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
-from ..types import Axis, Bound, VtkCellType, ArrayLike, Ax, Coordinate, Literal
-from ...exceptions import DataError, ValidationError
+from ..types import Axis, Bound, VtkCellType, ArrayLike, Ax, Coordinate, Literal, vtk
+from ...exceptions import DataError, ValidationError, Tidy3dImportError
 from ...log import log
+
+if vtk is not None:
+    from vtk import vtkCellArray, vtkPoints, vtkUnstructuredGrid, vtkPolyData, vtkPlane
+    from vtk import vtkLineSource, vtkRectilinearGrid, vtkIdTypeArray
+    from vtk import vtkCleanPolyData, vtkXMLUnstructuredGridReader, vtkXMLUnstructuredGridWriter
+    from vtk import vtkBoxClipDataSet, vtkRemoveUnusedPoints, vtkResampleWithDataSet, vtkPlaneCutter
+    from vtk import VTK_TRIANGLE, VTK_TETRA, vtkExtractCellsAlongPolyLine
+    from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtkIdTypeArray, numpy_to_vtk
+
+
+def requires_vtk(fn):
+    """When decorating a method, requires that vtk is available."""
+
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        if vtk is None:
+            raise Tidy3dImportError(
+                "The package 'vtk' is required for this operation, but it was not found. "
+                "Please install the 'vtk' dependencies using, for example, "
+                "'pip install -r requirements/vtk.txt'."
+            )
+        return fn(*args, **kwargs)
+
+    return _fn
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -471,6 +491,9 @@ class UnstructuredGridDataset(Dataset, ABC):
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
         """Check that cell connections does not have duplicate points."""
+        if vtk is None:
+            return val
+
         vtk_ind_size = vtkIdTypeArray().GetDataTypeSize()
         # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
         if vtk_ind_size == 4:
@@ -556,7 +579,7 @@ class UnstructuredGridDataset(Dataset, ABC):
 
     @classmethod
     @abstractmethod
-    def _point_dims(cls) -> VtkCellType:
+    def _point_dims(cls) -> pd.PositiveInt:
         """Dimensionality of stored grid point coordinates."""
 
     @cached_property
@@ -571,6 +594,7 @@ class UnstructuredGridDataset(Dataset, ABC):
 
     @classmethod
     @abstractmethod
+    @requires_vtk
     def _vtk_cell_type(cls) -> VtkCellType:
         """VTK cell type to use in the VTK representation."""
 
@@ -578,6 +602,8 @@ class UnstructuredGridDataset(Dataset, ABC):
     def _vtk_offsets(self) -> ArrayLike:
         """Offsets array to use in the VTK representation."""
         offsets = np.arange(len(self.cells) + 1) * self._cell_num_vertices()
+        if vtk is None:
+            return offsets
 
         vtk_ind_size = vtkIdTypeArray().GetDataTypeSize()
         if vtk_ind_size == 4:
@@ -586,6 +612,7 @@ class UnstructuredGridDataset(Dataset, ABC):
             return offsets.astype(np.int64, copy=False)
 
     @cached_property
+    @requires_vtk
     def _vtk_cells(self) -> vtkCellArray:
         """VTK cell array to use in the VTK representation."""
         cells = vtkCellArray()
@@ -596,6 +623,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         return cells
 
     @cached_property
+    @requires_vtk
     def _vtk_points(self) -> vtkPoints:
         """VTK point array to use in the VTK representation."""
         pts = vtkPoints()
@@ -603,6 +631,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         return pts
 
     @cached_property
+    @requires_vtk
     def _vtk_obj(self) -> vtkUnstructuredGrid:
         """A VTK representation (vtkUnstructuredGrid) of the grid."""
 
@@ -616,6 +645,7 @@ class UnstructuredGridDataset(Dataset, ABC):
 
         return grid
 
+    @requires_vtk
     def _plane_slice_raw(self, axis: Axis, pos: float) -> vtkPolyData:
         """Slice data with a plane and return the resulting VTK object."""
 
@@ -651,6 +681,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         return cleaner.GetOutput()
 
     @abstractmethod
+    @requires_vtk
     def plane_slice(
         self, axis: Axis, pos: float
     ) -> Union[SpatialDataArray, UnstructuredGridDataset]:
@@ -671,6 +702,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         """
 
     @staticmethod
+    @requires_vtk
     def _read_vtkUnstructuredGrid(fname: str) -> vtkUnstructuredGrid:
         """Load a :class:`vtkUnstructuredGrid` from a file."""
         reader = vtkXMLUnstructuredGridReader()
@@ -682,10 +714,12 @@ class UnstructuredGridDataset(Dataset, ABC):
 
     @classmethod
     @abstractmethod
+    @requires_vtk
     def _from_vtk_obj(cls, vtk_obj) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
+    @requires_vtk
     def from_vtu(cls, file: str) -> UnstructuredGridDataset:
         """Load unstructured data from a vtu file.
 
@@ -702,6 +736,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         grid = cls._read_vtkUnstructuredGrid(file)
         return cls._from_vtk_obj(grid)
 
+    @requires_vtk
     def to_vtu(self, fname: str):
         """Exports unstructured grid data into a .vtu file.
 
@@ -717,6 +752,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         writer.Write()
 
     @classmethod
+    @requires_vtk
     def _get_values_from_vtk(
         cls,
         vtk_obj: Union[vtkPolyData, vtkUnstructuredGrid],
@@ -765,6 +801,7 @@ class UnstructuredGridDataset(Dataset, ABC):
 
         return values
 
+    @requires_vtk
     def box_clip(self, bounds: Bound) -> UnstructuredGridDataset:
         """Clip the unstructured grid using a box defined by ``bounds``.
 
@@ -804,6 +841,7 @@ class UnstructuredGridDataset(Dataset, ABC):
 
         return self._from_vtk_obj(clean_clip)
 
+    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
@@ -864,6 +902,7 @@ class UnstructuredGridDataset(Dataset, ABC):
         return SpatialDataArray(values_reordered, coords=dict(x=x, y=y, z=z))
 
     @abstractmethod
+    @requires_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
@@ -937,7 +976,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         return tuple(bounds_3d[0]), tuple(bounds_3d[1])
 
     @classmethod
-    def _point_dims(cls) -> VtkCellType:
+    def _point_dims(cls) -> pd.PositiveInt:
         """Dimensionality of stored grid point coordinates."""
         return 2
 
@@ -956,11 +995,13 @@ class TriangularGridDataset(UnstructuredGridDataset):
         return 3
 
     @classmethod
+    @requires_vtk
     def _vtk_cell_type(cls) -> VtkCellType:
         """VTK cell type to use in the VTK representation."""
         return VTK_TRIANGLE
 
     @classmethod
+    @requires_vtk
     def _from_vtk_obj(cls, vtk_obj: Union[vtkPolyData, vtkUnstructuredGrid]):
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -1024,6 +1065,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
             values=values,
         )
 
+    @requires_vtk
     def plane_slice(self, axis: Axis, pos: float) -> SpatialDataArray:
         """Slice data with a plane and return the resulting line as a SpatialDataArray.
 
@@ -1156,6 +1198,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
+    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
@@ -1201,6 +1244,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         return super().interp(x=x, y=y, z=z, fill_value=fill_value)
 
+    @requires_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
@@ -1283,7 +1327,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
     """
 
     @classmethod
-    def _point_dims(cls) -> VtkCellType:
+    def _point_dims(cls) -> pd.PositiveInt:
         """Dimensionality of stored grid point coordinates."""
         return 3
 
@@ -1298,11 +1342,13 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         return 4
 
     @classmethod
+    @requires_vtk
     def _vtk_cell_type(cls) -> VtkCellType:
         """VTK cell type to use in the VTK representation."""
         return VTK_TETRA
 
     @classmethod
+    @requires_vtk
     def _from_vtk_obj(cls, grid: vtkUnstructuredGrid) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
@@ -1334,6 +1380,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return cls(points=points, cells=cells, values=values)
 
+    @requires_vtk
     def plane_slice(self, axis: Axis, pos: float) -> TriangularGridDataset:
         """Slice data with a plane and return the resulting :class:.`TriangularGridDataset`.
 
@@ -1354,6 +1401,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return TriangularGridDataset._from_vtk_obj(slice_vtk)
 
+    @requires_vtk
     def line_slice(self, axis: Axis, pos: Coordinate) -> SpatialDataArray:
         """Slice data with a line and return the resulting :class:.`SpatialDataArray`.
 
@@ -1412,6 +1460,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return line_slice
 
+    @requires_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
