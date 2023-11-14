@@ -19,7 +19,7 @@ Install the python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for
 
    pip install tidy3d
 
-Next, configure your `tidy3d` package with the API key from your account.
+Next, configure your ``tidy3d`` package with the API key from your account.
 
 `Get your free API key <https://tidy3d.simulation.cloud/account?tab=apikey>`_
 
@@ -106,7 +106,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
 
   quickstart
   lectures
-  notebooks/examples
+  notebooks/docs/index
   howdoi
   faq
   api
