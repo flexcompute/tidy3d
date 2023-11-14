@@ -167,6 +167,12 @@
     "keywords": "cavity quality factor, cavity effective mode volume, cavity mode volume, Purcell factor, FDTD cavity, FDTD resonance, FDTD quality factor, FDTD mode volume, FDTD Purcell factor, Tidy3D, FDTD",
     "feature_image": ""
   },  
+  "CMOSRGBSensor.ipynb": {
+    "title": "How to perform the simulation of a RGB CMOS image sensor in Tidy3D FDTD",
+    "description": "This notebook demonstrates how to set up and run a FDTD simulation of a RGB CMOS image sensor.",
+    "keywords": "CMOS sensor, RBG CMOS sensor, RGB CMOS image sensor, image sensor, RGB image sensor, Bayer cell, Tidy3D, FDTD",
+    "feature_image": "./img/rgb_cmos_sensor.png"
+  },    
   "CreatingGeometryUsingTrimesh.ipynb": {
     "title": "Defining complex geometries using trimesh | Flexcompute",
     "description": "This notebook demonstrates how to define complex geometries using trimesh in Tidy3D FDTD.",
