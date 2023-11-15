@@ -98,7 +98,7 @@ def verify_development_environment(args=None):
     verify_pandoc_is_installed_and_version_less_than_3()
     # Dry run the poetry install to understand the configuration
     subprocess.run(["poetry", "env", "use", "python"])
-    subprocess.run(["poetry", "install", "-E dev", "--dry-run"])
+    subprocess.run(["poetry", "install", "-E", "dev", "--dry-run"])
     print(
         "`poetry install -E dev` dry run on the `poetry.lock` complete.\nManually verify packages are properly installed."
     )
@@ -112,8 +112,8 @@ def configure_development_environment(args=None):
     try:
         verify_pipx_is_installed()
     except:
-        subprocess.run(["python -m", "pip", "install", "--user pipx"])
-        subprocess.run(["python -m", "pipx", "ensurepath"])
+        subprocess.run(["python", "-m", "pip", "install", "--user", "pipx"])
+        subprocess.run(["python", "-m", "pipx", "ensurepath"])
 
     # Verify and install poetry if required
     try:
@@ -131,7 +131,7 @@ def configure_development_environment(args=None):
         )
 
     # Makes sure the package has installed all the development dependencies.
-    subprocess.run(["poetry", "install", "-E dev"])
+    subprocess.run(["poetry", "install", "-E", "dev"])
 
     # # Verify the sphinx installation.
     # try:
@@ -145,6 +145,8 @@ def configure_development_environment(args=None):
 @develop.command(name="build-docs", help="Verifies the documentation configuration.")
 def build_documentation(args=None):
     """Verifies and builds the documentation."""
-    click.echo("Replace this message by putting your code into " "tidy3d.cli.main")
-    click.echo("See click documentation at https://click.palletsprojects.com/")
+    # Runs the documentation build from the poetry environment
+    # TODO cd to local path
+    # TODO update generic path management.
+    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "docs/", "build_docs/"])
     return 0
