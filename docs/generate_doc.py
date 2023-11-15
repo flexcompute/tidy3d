@@ -130,7 +130,7 @@ def generate_material_library_doc():
                         if unit == "um":
                             rng = wl
                             # unit_disp = '$\mu$m' # for .md file
-                            unit_disp = ":math:`{\mu}m`"
+                            unit_disp = r":math:`{\mu}m`"
                         elif unit == "THz":
                             rng = freq
                         elif unit == "eV":

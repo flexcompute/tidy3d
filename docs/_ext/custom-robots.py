@@ -1,6 +1,4 @@
-import xml.etree.ElementTree as ET
 import os
-from urllib.parse import urljoin
 
 
 def process_robots_txt(app, exception):
@@ -11,7 +9,7 @@ def process_robots_txt(app, exception):
     robots_file = os.path.join(app.outdir, "robots.txt")
 
     # Read the contents of the robots.txt file
-    with open(robots_file, "r") as f:
+    with open(robots_file) as f:
         contents = f.read()
 
     # Modify the contents as needed
