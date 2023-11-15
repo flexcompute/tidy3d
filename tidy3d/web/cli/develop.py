@@ -105,7 +105,18 @@ def verify_development_environment(args=None):
     return 0
 
 
-@develop.command(name="configure-dev-environment", help="Verifies the development environment.")
+def configure_notebook_submodule(args=None):
+    # TODO cd to local installation environment
+    subprocess.run(["git", "submodule", "init"])
+    subprocess.run(["git", "submodule", "update", "--remote"])
+    print("Notebook submodule updated from remote.")
+    return 0
+
+
+@develop.command(
+    name="configure-dev-environment",
+    help="Installs and configures the full required development environment.",
+)
 def configure_development_environment(args=None):
     """Configure development environment."""
     # Verify and install pipx if required
@@ -139,10 +150,50 @@ def configure_development_environment(args=None):
     # except:
     #     print("There has been an error on your poetry sphinx installation.\nManually run `poetry run python -m sphinx --version` to verify.")
 
+    # Configure notebook submodule
+    try:
+        configure_notebook_submodule()
+    except:
+        print("Notebook submodule not configured.")
+
     return 0
 
 
-@develop.command(name="build-docs", help="Verifies the documentation configuration.")
+@develop.command(
+    name="commit", help="Adds and commits the state of the repository and its submodule."
+)
+@click.argument("message")
+@click.option("--submodule-path", default="./docs/notebooks", help="Path to the submodule.")
+def commit(message, submodule_path):
+    """
+    Commit changes in both a Git repository and its submodule.
+    TODO sort out tidy3d installation directory defined path
+
+    Args
+        commit_message: The commit message to use for both commits.
+        submodule_path: The relative path to the submodule.
+    """
+
+    def commit_repository(repository_path, commit_message):
+        """
+        Commit changes in the specified Git repository.
+
+        Args:
+            repo_path: Path to the repository.
+            message: Commit message.
+        """
+        subprocess.check_call(["git", "-C", repository_path, "add", "."])
+        subprocess.check_call(["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message])
+
+    # TODO fix errors when commiting between the two repos.
+    # Commit to the submodule
+    commit_repository(submodule_path, message)
+    # Commit to the main repository
+    commit_repository(".", message)
+    return 0
+
+
+@develop.command(name="build-docs", help="Builds the sphinx documentation.")
 def build_documentation(args=None):
     """Verifies and builds the documentation."""
     # Runs the documentation build from the poetry environment
