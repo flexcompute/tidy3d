@@ -1,6 +1,6 @@
 # Test and temporary files
 tests/tmp/*
-docs/source/notebooks/tmp/*
+docs/notebooks/tmp/*
 
 # HDF5 files
 *.hdf5
@@ -23,7 +23,8 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
+build/*
+build_docs/*
 develop-eggs/
 dist/
 downloads/
@@ -86,8 +87,6 @@ instance/
 # Sphinx documentation
 docs/_build/
 docs/_autosummary/
-docs/source/_build/
-docs/source/_autosummary/
 
 # PyBuilder
 target/

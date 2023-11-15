@@ -1,6 +1,6 @@
 import sys
 
-sys.path.append("../")
+sys.path.append("/")
 
 # note, run from docs/
 

@@ -7,6 +7,7 @@ from tidy3d import Medium2D, PoleResidue
 
 LOW_LOSS_THRESHOLD = 2e-5
 
+
 def generate_material_library_doc():
 
     # Display unit for "Valid range" in table, select from 'eV', 'um', 'THz'
@@ -31,7 +32,7 @@ def generate_material_library_doc():
             ".. currentmodule:: tidy3d\n\n"
             "The material library is a dictionary containing various dispersive models from real world materials. To use the materials in the library, import it first by:\n\n"
             ">>> from tidy3d import material_library\n\n"
-            'The key of the dictionary is the abbreviated material name.\n\n'
+            "The key of the dictionary is the abbreviated material name.\n\n"
             'Note: some materials have multiple variant models, in which case the second key is the "variant" name.\n\n'
             'To import a material "mat" of variant "var":\n\n'
             ">>> medium = material_library['mat']['var']\n\n"
@@ -112,7 +113,8 @@ def generate_material_library_doc():
                         else:
                             row["model"] += ", lossless"
 
-                    else: row["model"] = ""
+                    else:
+                        row["model"] = ""
 
                     # Valid range
                     if medium.frequency_range is None:
@@ -128,12 +130,14 @@ def generate_material_library_doc():
                         if unit == "um":
                             rng = wl
                             # unit_disp = '$\mu$m' # for .md file
-                            unit_disp = ":math:`{\mu}m`"
+                            unit_disp = r":math:`{\mu}m`"
                         elif unit == "THz":
                             rng = freq
                         elif unit == "eV":
                             rng = ev
-                        row["range"] = num2str(min(rng)) + " - " + num2str(max(rng)) + " " + unit_disp
+                        row["range"] = (
+                            num2str(min(rng)) + " - " + num2str(max(rng)) + " " + unit_disp
+                        )
 
                     # Reference
                     if var.reference is not None:
@@ -205,8 +209,10 @@ def generate_material_library_doc():
                     f.write(ref_string)
                     f.write("\n")
 
+
 def main():
     generate_material_library_doc()
+
 
 if __name__ == "__main__":
     main()

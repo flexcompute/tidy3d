@@ -13,6 +13,7 @@ from tidy3d.web.cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
 from tidy3d.web.cli.migrate import migrate
 from tidy3d.web.environment import Env
 from tidy3d.web.cli.converter import converter_arg
+from tidy3d.web.cli.develop import develop
 
 if not os.path.exists(TIDY3D_DIR):
     os.mkdir(TIDY3D_DIR)
@@ -126,3 +127,4 @@ def convert(lsf_file, new_file):
 tidy3d_cli.add_command(configure)
 tidy3d_cli.add_command(migration)
 tidy3d_cli.add_command(convert)
+tidy3d_cli.add_command(develop)
