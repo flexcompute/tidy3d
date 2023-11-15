@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Proper equality checking between `Tidy3dBaseModel` instances, which takes `DataArray` values and coords into account and handles `np.ndarray` types.
 - Correctly set the contour length scale when exporting 2D (or 1D) structures with custom medium to GDSII.
 - Improved error handling if file can not be downloaded from server.
+- Fix for detection of file extensions for file names with dots.
 
 ## [2.5.0rc2] - 2023-10-30
 

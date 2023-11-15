@@ -68,13 +68,20 @@ def ndarray_encoder(val):
 
 def _get_valid_extension(fname: str) -> str:
     """Return the file extension from fname, validated to accepted ones."""
-    extension = "".join(pathlib.Path(fname).suffixes).lower()
-    valid_extensions = [".json", ".yaml", ".hdf5", ".hdf5.gz", ".h5"]
-    if extension not in valid_extensions:
-        raise FileError(
-            f"{fname}::File extension must be in {valid_extensions}, but '{extension}' given"
-        )
-    return extension
+    valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
+    extensions = [s.lower() for s in pathlib.Path(fname).suffixes[-2:]]
+    if len(extensions) == 0:
+        raise FileError(f"File '{fname}' missing extension.")
+    single_extension = extensions[-1]
+    if single_extension in valid_extensions:
+        return single_extension
+    double_extension = "".join(extensions)
+    if double_extension in valid_extensions:
+        return double_extension
+    raise FileError(
+        f"File extension must be one of {', '.join(valid_extensions)}; file '{fname}' does not "
+        "match any of those."
+    )
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
