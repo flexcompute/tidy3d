@@ -84,14 +84,20 @@ latex_documents = [
 ]
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
 html_extra_path = ["./_static/robots.txt"]
-html_logo = "_static/img/Tidy3D-logo.svg"
 html_favicon = "_static/logo.ico"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_sourcelink_suffix = ""
 html_static_path = ["_static"]
+html_css_files = [
+    "css/custom.css",
+]
 html_theme = "sphinx_book_theme"
 html_title = "Tidy3D Electromagnetic Solver"
 html_theme_options = {
+    "logo": {
+        "image_light": "_static/img/Tidy3D-logo.svg",
+        "image_dark": "_static/img/Tidy3D-logo.svg",
+    },
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
