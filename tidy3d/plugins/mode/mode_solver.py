@@ -16,6 +16,7 @@ from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
+from ...components.medium import FullyAnisotropicMedium
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
 from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D, EpsSpecType
@@ -25,7 +26,7 @@ from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import ValidationError, SetupError
 from ...constants import C_0
-from .solver import compute_modes
+from .solver import compute_modes, EigSolver
 
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
@@ -592,6 +593,44 @@ class ModeSolver(Tidy3dBaseModel):
             phase_dual = phase_dual.squeeze(dim=normal_dim)
 
         return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
+
+    @property
+    def _is_tensorial(self) -> bool:
+        """Whether the mode computation should be fully tensorial. This is either due to fully
+        anisotropic media, or due to an angled waveguide, in which case the transformed eps and mu
+        become tensorial. A separate check is done inside the solver, which looks at the actual
+        eps and mu and uses a tolerance to determine whether to invoke the tensorial solver, so
+        the actual behavior may differ from what's predicted by this property."""
+        return abs(self.mode_spec.angle_theta) > 0 or self._has_fully_anisotropic_media
+
+    @cached_property
+    def _intersecting_media(self) -> List:
+        """List of media (including simulation background) intersecting the mode plane."""
+        total_structures = [self.simulation.scene.background_structure]
+        total_structures += list(self.simulation.structures)
+        return self.simulation.scene.intersecting_media(self.plane, total_structures)
+
+    @cached_property
+    def _has_fully_anisotropic_media(self) -> bool:
+        """Check if there are any fully anisotropic media in the plane of the mode."""
+        if np.any(
+            [isinstance(mat, FullyAnisotropicMedium) for mat in self.simulation.scene.mediums]
+        ):
+            for int_mat in self._intersecting_media:
+                if isinstance(int_mat, FullyAnisotropicMedium):
+                    return True
+        return False
+
+    @cached_property
+    def _has_complex_eps(self) -> bool:
+        """Check if there are media with a complex-valued epsilon in the plane of the mode at the
+        mode solver freqs. A separate check is done inside the solver, which looks at the actual
+        eps and mu and uses a tolerance to determine whether to use real or complex fields, so
+        the actual behavior may differ from what's predicted by this property."""
+        for int_mat in self._intersecting_media:
+            if EigSolver.isinstance_complex(int_mat.eps_model(np.array(self.freqs))):
+                return True
+        return False
 
     def to_source(
         self,
