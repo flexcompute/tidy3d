@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed spurious ``-1`` factor in field amplitudes injected by field sources in some cases. The injected ``E``-field should now exactly match the analytic, mode, or custom fields that the source is expected to inject, both in the forward and in the backward direction.
 - Restriction on the maximum memory that a monitor would need internally during the solver run, even if the final monitor data is smaller.
 - Restriction on the maximum size of mode solver data produced by a `ModeSolver` server call.
+- Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapses runtime. On average, there should be little difference in the cost.
+- Mode solves that are part of an FDTD simulation (i.e. for mode sources and monitors) are now charged at the same flex credit cost as a corresponding standalone mode solver call.
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
