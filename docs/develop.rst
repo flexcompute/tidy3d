@@ -1,10 +1,11 @@
+********
 Develop
-=================
+********
 
 Welecome to the ``tidy3d`` developer's guide! These are just some recommendations I've compiled, but we can change anything as we think might help the development more.
 
 Project Structure
------------------
+=================
 
 As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the development cycle. The project follows the following structure, which is derived from some recommended Python project architecture guides https://docs.python-guide.org/writing/structure/ . This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
 
@@ -32,6 +33,9 @@ It is important to note the new tools we are using to manage our development env
 - ``pipx``
 
 
+Development Installation
+=========================
+
 The Fast Lane
 --------------
 
@@ -51,7 +55,11 @@ If you are transitioning from the new development flow, to this new one, there a
 
 This command should run successfully. It will first check if you already have installed the development requirements, and if not, it will run the installation scripts for ``pipx``, ``poetry``, and ask you to install the required version of ``pandoc``. It will also install the development requirements and ``tidy3d`` package in a specific ``poetry`` environment.
 
+If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run the following command to verify that your environment conforms to the reproducible development environment:
 
+.. code::
+
+    tidy3d develop verify-dev-environment
 
 The Detailed Lane
 ------------------
@@ -102,7 +110,37 @@ This function will install the package with all the development dependencies aut
 It is important to note the function above is equivalent to ``pip install tidy3d[dev]``, but by using ``poetry`` there is a guarantee of using the reproducible locked environment.
 
 
-Get Started
-------------
+Interacting with external virtual environment
+"""""""""""""""""""""""""""""""""""""""""""""
+
+It is recommended to use ``poetry`` for package development.
+
+Packaging Equivalent Functionality
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow which means that independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
+
+.. code::
+
+    pip install tidy3d[dev]
+    pip install tidy3d[docs]
+    pip install tidy3d[web]
+    ...
+    pip install tidy3d[jax]
+
+All these options can be found inside the `pyproject.toml` `tool.poetry.extras` section. Each has a corresponding list of dependencies whose versions are defined on the `tool.poetry.dependencies` section of the file.
+
+Streamlining Development
+=========================
 
 There are a range of handy development functions that you might want to use to streamline your development experience.
+
+.. list-table:: Use Cases
+   :header-rows: 1
+
+    * - Description
+      - Caveats
+      - Command
+    * - Dual snapshot between the ``tidy3d`` and ``notebooks`` source and submodule repository.
+      - Make sure you are on the correct git branches you wish to commit to on both repositories, and all `non-git-ignored` files will be added to the commit.
+      - ``tidy3d develop commit <your message>``
