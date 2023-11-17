@@ -113,7 +113,9 @@ It is important to note the function above is equivalent to ``pip install tidy3d
 Interacting with external virtual environment
 """""""""""""""""""""""""""""""""""""""""""""
 
-It is recommended to use ``poetry`` for package development.
+It is recommended to use ``poetry`` for package development. However, there are some cases where you might need to use an external virtual environment for some operations. There are a few workarounds where you can leverage the reproducibility of the ``poetry`` managed environment with the freedom of a standard virtual envrionment. See the following example:
+
+
 
 Packaging Equivalent Functionality
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

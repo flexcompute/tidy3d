@@ -5,6 +5,7 @@ import re
 
 
 def verify_pandoc_is_installed_and_version_less_than_3():
+    # TODO ADD DOCSTRINGS AND DOCUMENTATION
     try:
         # Running 'pandoc --version' command
         result = subprocess.run(["pandoc", "--version"], capture_output=True, text=True, check=True)
@@ -122,21 +123,20 @@ def configure_development_environment(args=None):
     # Verify and install pipx if required
     try:
         verify_pipx_is_installed()
-    except:
+    except:  # NOQA: E722
         subprocess.run(["python", "-m", "pip", "install", "--user", "pipx"])
         subprocess.run(["python", "-m", "pipx", "ensurepath"])
 
     # Verify and install poetry if required
     try:
         verify_poetry_is_installed()
-    except:
+    except:  # NOQA: E722
         subprocess.run(["pipx", "install", "poetry"])
 
     # Verify pandoc is installed
     try:
         verify_pandoc_is_installed_and_version_less_than_3()
-    except:
-
+    except:  # NOQA: E722
         raise OSError(
             "Please install pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this command again."
         )
@@ -153,7 +153,7 @@ def configure_development_environment(args=None):
     # Configure notebook submodule
     try:
         configure_notebook_submodule()
-    except:
+    except:  # NOQA: E722
         print("Notebook submodule not configured.")
 
     return 0
@@ -183,7 +183,9 @@ def commit(message, submodule_path):
             message: Commit message.
         """
         subprocess.check_call(["git", "-C", repository_path, "add", "."])
-        subprocess.check_call(["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message])
+        subprocess.check_call(
+            ["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message]
+        )
 
     # TODO fix errors when commiting between the two repos.
     # Commit to the submodule

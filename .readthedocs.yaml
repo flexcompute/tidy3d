@@ -2,7 +2,7 @@ version: 2
 
 submodules:
   include:
-    - docs/source/notebooks
+    - docs/notebooks
   recursive: true
 
 build:
@@ -11,7 +11,7 @@ build:
     python: "3.10"
 sphinx:
   fail_on_warning: false
-  configuration: docs/source/conf.py
+  configuration: docs/conf.py
   
 python:
   # Install our python package before building the docs
