@@ -2703,7 +2703,11 @@ class Simulation(AbstractSimulation):
             # get neighboring media and grid sizes
             (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
 
-            new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+            if not structure.medium.is_pec:
+                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+            else:
+                new_bounds = (center, center)
+
             new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
 
             new_medium = structure.medium.volumetric_equivalent(
