@@ -79,12 +79,12 @@ autodoc_pydantic_model_show_field_summary = False
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
-custom_sitemap_excludes=[r'/notebooks/']
+# custom_sitemap_excludes=[r'/notebooks/'] # TODO FIX
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
-    "custom-meta",
-    "custom-sitemap",
-    "custom-robots",
+    # "custom-meta", # TODO FIX
+    # "custom-sitemap", # TODO FIX
+    # "custom-robots", # TODO FIX
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
@@ -98,7 +98,7 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
-    "sphinx_sitemap",
+    # "sphinx_sitemap", # TODO FIX
 ]
 extlinks = {}
 # Grouping the document tree into LaTeX files. List of tuples
@@ -152,11 +152,16 @@ napoleon_use_ivar = False
 napoleon_use_param = True
 napoleon_use_rtype = True
 man_pages = [(master_doc, "tidy3d", "tidy3d Documentation", [author], 1)]
+mathjax3_config = {
+    "tex": {"tags": "ams", "useLabelIds": True},
+}
+nbsphinx_allow_errors = True  # Continue through Jupyter errors
+nbsphinx_execute = "never"
 project = "tidy3d"
 pygments_style = "sphinx"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
-sitemap_url_scheme = "{lang}{version}{link}"
+# sitemap_url_scheme = "{lang}{version}{link}" # TODO FIX
 source_suffix = [".rst", ".md"]
 # templates_path = ["_templates"] # TODO evaluate
 texinfo_documents = [
@@ -172,11 +177,7 @@ texinfo_documents = [
 ]
 todo_include_todos = False
 
-mathjax3_config = {
-    "tex": {"tags": "ams", "useLabelIds": True},
-}
-nbsphinx_allow_errors = True  # Continue through Jupyter errors
-nbsphinx_execute = "never"
+
 
 GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
 GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])

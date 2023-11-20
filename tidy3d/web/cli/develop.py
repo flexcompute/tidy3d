@@ -80,7 +80,7 @@ def verify_sphinx_is_installed():
         raise OSError("sphinx is not installed or not found in the poetry environment.")
 
 
-@click.group(name="development")
+@click.group(name="develop")
 def develop():
     """Development related commands."""
     pass
@@ -201,5 +201,5 @@ def build_documentation(args=None):
     # Runs the documentation build from the poetry environment
     # TODO cd to local path
     # TODO update generic path management.
-    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "docs/", "build_docs/"])
+    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0

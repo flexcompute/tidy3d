@@ -6,5 +6,4 @@ Welecome to the ``tidy3d`` developer's guide! These are just some recommendation
 
 .. include:: project_structure.rst
 .. include:: installation.rst
-.. include:: development_flow.rst
-
+.. include:: usage.rst

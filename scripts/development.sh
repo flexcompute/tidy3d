@@ -96,7 +96,7 @@ commit_changes() {
 
 # Function to build documentation
 build_documentation() {
-    poetry run python -m sphinx docs/ build_docs/
+    poetry run python -m sphinx docs/ _docs/
 }
 
 # Command line argument parsing (can be expanded as needed)
