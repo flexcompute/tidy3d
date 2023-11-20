@@ -30,7 +30,7 @@ iframe {width: 100%;border: unset}
 html[data-theme="light"] {
     --pst-color-primary: #b5445b;
     --pst-color-secondary: #4772ae;
-    --pst-color-link: var(--pst-color-light-text);
+    --pst-color-link: var(--pst-color-muted);
 }
 
 html[data-theme="dark"] {
