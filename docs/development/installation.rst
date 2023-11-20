@@ -60,7 +60,7 @@ Then install `poetry`:
 
     python3 -m pipx install poetry
 
-After restarting the bash terminal, you should be able to find `poetry` in your `PATH` if it has been installed correctly:
+After restarting the bash terminal, you should be able to find ``poetry`` in your ``PATH`` if it has been installed correctly:
 
 .. code::
 
@@ -81,4 +81,4 @@ This package installation process should be  approximately equivalent to the pre
     ...
     pip install tidy3d[jax]
 
-All these options can be found inside the `pyproject.toml` `tool.poetry.extras` section. Each has a corresponding list of dependencies whose versions are defined on the `tool.poetry.dependencies` section of the file.
+All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.

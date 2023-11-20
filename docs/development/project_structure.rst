@@ -30,6 +30,6 @@ It is important to note the new tools we are using to manage our development env
 Release Flow
 ^^^^^^^^^^^^^^^
 
-This is very straightforward. You just need to make sure that the `develop` branches of both `tidy3d/` and `tidy3d-notebooks/` are updated. Then these will be automatically updated on the `readthedocs` documentation through the Github actions.
+This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` are updated. Then these will be automatically updated on the ``readthedocs`` documentation through the Github actions.
 
 

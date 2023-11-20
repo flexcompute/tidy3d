@@ -23,3 +23,20 @@ h1 {font-family: 'flexcompute_title', sans-serif;}
 h2, h3, h4, h5, h6 {font-family: 'flexcompute_subtitle', sans-serif;}
 p {margin-bottom: 0.5rem; font-family: 'Roboto', sans-serif}
 iframe {width: 100%;border: unset}
+
+.toctree-wrapper li[class^=toctree-l1]>a {font-size: 1.4em; text-decoration: none}
+.toctree-wrapper li[class^=toctree-l2]>a {font-size: 1em; text-decoration: none}
+
+html[data-theme="light"] {
+    --pst-color-primary: #b5445b;
+    --pst-color-secondary: #4772ae;
+    --pst-color-link: var(--pst-color-light-text);
+}
+
+html[data-theme="dark"] {
+    --pst-color-primary: #4772ae;
+    --pst-color-secondary: #b5445b;
+    --pst-color-link: var(--pst-color-muted);
+}
+
+
