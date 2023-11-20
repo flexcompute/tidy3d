@@ -110,7 +110,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
   howdoi
   faq
   api
-  develop/index
+  development/index
   changelog
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
 
