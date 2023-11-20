@@ -17,10 +17,14 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
+import codecs
 import datetime
 import os
+import re
 import sys
+import subprocess
 import tidy3d
+
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
@@ -100,6 +104,7 @@ extlinks = {}
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
+language='en'
 latex_documents = [
     (master_doc, "tidy3d.tex", "tidy3d Documentation", "Dario Quintero", "manual"),
 ]
@@ -172,7 +177,25 @@ mathjax3_config = {
 }
 nbsphinx_allow_errors = True  # Continue through Jupyter errors
 nbsphinx_execute = "never"
-version = tidy3d.__version__
+
+GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
+GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
+current_tag = GIT_TAG_OUTPUT.decode().strip()
+current_branch = GIT_BRANCH_OUTPUT.decode().strip()
+print(current_tag, current_branch)
+if not current_tag and current_branch:
+    if current_branch == "develop":
+        version = "stable"
+    elif current_branch == 'latest':
+        version = "latest"
+    else:
+        version = "latest"
+elif current_tag:
+    if re.match(r"^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$", current_tag):
+        version = current_tag
+    else:
+        version = "latest"
+# version = tidy3d.__version__
 
 latex_elements: dict = {
     "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",

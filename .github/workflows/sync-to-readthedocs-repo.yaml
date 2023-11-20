@@ -42,7 +42,7 @@ jobs:
         run: |
           case ${{ env.ENV }} in
             dev)
-            echo "::set-output name=branch::develop"
+            echo "::set-output name=branch::repo_merge_no_history"
             ;;
             prod)
             echo "::set-output name=branch::main"
