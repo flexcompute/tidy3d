@@ -25,7 +25,7 @@ import sys
 import subprocess
 import tidy3d
 
-full_build = False
+full_build = True
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
