@@ -40,7 +40,7 @@ click = "8.0.3"
 responses = "*"
 
 ### Optional dependencies ### 
-# develop core
+# development core
 pre-commit = {version="*", optional = true}
 black = {version="22.3.0", optional = true}
 ruff = {version="*", optional = true}

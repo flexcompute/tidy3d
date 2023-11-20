@@ -1,0 +1,28 @@
+
+Project Structure
+=================
+
+As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the development cycle. The project follows the following structure, which is derived from some recommended Python project architecture guides https://docs.python-guide.org/writing/structure/ . This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
+
+.. code::
+
+    docs/
+        # sphinx rst files
+        ...
+        notebooks/
+            # Git submodule repository
+    tests/
+        # pytest source and docs
+        # pytest notebooks
+    scripts/
+        # useful handy scripts
+    tidy3d/
+        # python source code
+    ...
+    pyproject.toml # python packaging
+    poetry.lock # environment management
+
+It is important to note the new tools we are using to manage our development environment and workflow.
+
+- ``poetry``
+- ``pipx``

@@ -3,10 +3,10 @@ name: Tidy3dTests
 on:
   workflow_dispatch:
   push:
-    branches: [ develop ]
+    branches: [ development ]
   pull_request:
     branches:
-      - develop
+      - development
       - 'pre/*'
       - poetry_upgrade
 

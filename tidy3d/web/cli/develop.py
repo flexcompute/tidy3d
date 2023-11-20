@@ -80,7 +80,7 @@ def verify_sphinx_is_installed():
         raise OSError("sphinx is not installed or not found in the poetry environment.")
 
 
-@click.group(name="develop")
+@click.group(name="development")
 def develop():
     """Development related commands."""
     pass
