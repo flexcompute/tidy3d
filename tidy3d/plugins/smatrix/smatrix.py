@@ -349,7 +349,8 @@ class ComponentModeler(Tidy3dBaseModel):
     @cached_property
     def _batch_path(self) -> str:
         """Where we store the batch for this ComponentModeler instance after the run."""
-        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".json")
+        hash_str = self._hash_self()
+        return os.path.join(self.path_dir, "batch" + hash_str + ".json")
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""

@@ -369,3 +369,8 @@ def test_mapping_exclusion(monkeypatch, tmp_path):
 
     s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
+
+
+def test_batch_filename(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    path = modeler._batch_path

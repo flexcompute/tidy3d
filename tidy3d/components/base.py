@@ -8,6 +8,8 @@ import tempfile
 from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 from math import ceil
+import io
+import hashlib
 
 import rich
 import pydantic.v1 as pydantic
@@ -98,6 +100,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             return super().__hash__(self)
         except TypeError:
             return hash(self.json())
+
+    def _hash_self(self) -> str:
+        """Hash this component with ``hashlib`` in a way that is the same every session."""
+        bf = io.BytesIO()
+        self.to_hdf5(bf)
+        return hashlib.sha256(bf.getvalue()).hexdigest()
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
