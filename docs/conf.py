@@ -25,6 +25,7 @@ import sys
 import subprocess
 import tidy3d
 
+full_build = False
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
@@ -57,7 +58,7 @@ master_doc = "index"  # The master toctree document.s
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
-autosummary_generate = True  # Turn on sphinx.ext.autosummary
+autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 ## TODO DEBATE KEEP

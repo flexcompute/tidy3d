@@ -1,17 +1,17 @@
-Development Installation
-=========================
+Installation
+==============
 
 The Fast Lane
---------------
+^^^^^^^^^^^^^
 
 Maybe you already have ``tidy3d`` installed in some form. After TODOVERSION, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your installation, :code:`tidy3d develop` to get the latest list of commands.
 
 It does not matter how you have installed ``tidy3d`` before, this will set up the development environment you require to continue the development process.
 
-To the New Development Flow
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Transitioning
+--------------
 
-If you are transitioning from the new development flow, to this new one, there are a list of commands you can run to make your life easier.
+If you are transitioning from the old development flow, to this new one, there are a list of commands you can run to make your life easier.
 
 .. code::
 
@@ -26,14 +26,24 @@ If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run 
 
     tidy3d develop verify-dev-environment
 
+You can also run the following on your terminal:
+
+.. code::
+
+    # /bin/bash
+    cd tidy3d/
+    source scripts/development.sh configure-dev-environment
+
+
+
 The Detailed Lane
-------------------
+^^^^^^^^^^^^^^^^^
 
 If you do not have any of the above tools already installed, let's go through the process of setting things up from scatch.
 
 
 Environment Requirements
-^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------
 
 TODO implement platform specific stuff and add links.
 Make sure you have installed ``pipx``:
@@ -59,7 +69,7 @@ After restarting the bash terminal, you should be able to find `poetry` in your 
 
 
 Packaging Equivalent Functionality
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-----------------------------------
 
 This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow which means that independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
 
