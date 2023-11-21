@@ -570,7 +570,10 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+        bytes_single = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+        if self.mode_spec.precision == "double":
+            return 2 * bytes_single
+        return bytes_single
 
 
 class FieldProjectionSurface(Tidy3dBaseModel):

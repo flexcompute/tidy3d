@@ -310,7 +310,7 @@ class ModeSolver(Tidy3dBaseModel):
         # Colocate input data to new coordinates
         data_dict_colocated = {}
         for key, field in mode_solver_data.symmetry_expanded.field_components.items():
-            data_dict_colocated[key] = field.interp(**colocate_coords)
+            data_dict_colocated[key] = field.interp(**colocate_coords).astype(field.dtype)
 
         # Update data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
