@@ -1121,7 +1121,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 ]
 
             # Apply phase shift
-            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
+            phase_fact = np.exp(-1j * phase[None, None, None, :, :]).astype(field_sorted.data.dtype)
+            field_sorted.data = field_sorted.data * phase_fact
 
             update_dict[field_name] = field_sorted
 

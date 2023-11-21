@@ -162,7 +162,7 @@ def compare_colocation(ms):
     for key, field in data_col.field_components.items():
 
         # Check the colocated data is the same
-        assert np.allclose(data_at_boundaries[key], field)
+        assert np.allclose(data_at_boundaries[key], field, atol=1e-7)
 
         # Also check coordinates
         for dim, coords1 in field.coords.items():
@@ -201,6 +201,15 @@ def verify_pol_fraction(ms):
             pol_frac_wg[filter_pol].isel(mode_index=0).values
             > pol_frac_wg[other_pol].isel(mode_index=0).values
         )
+
+
+def verify_dtype(ms):
+    """Verify that the returned fields have the correct dtype w.r.t. the specified precision."""
+
+    dtype = np.complex64 if ms.mode_spec.precision == "single" else np.complex128
+    for field in ms.data.field_components.values():
+        print(dtype, field.dtype, type(field.dtype))
+        assert dtype == field.dtype
 
 
 def test_mode_solver_validation():
@@ -295,6 +304,7 @@ def test_mode_solver_simple(mock_remote_api, local):
     if local:
         compare_colocation(ms)
         verify_pol_fraction(ms)
+        verify_dtype(ms)
         dataframe = ms.data.to_dataframe()
 
     else:
@@ -458,6 +468,7 @@ def test_mode_solver_angle_bend():
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
 
     # Plot field
@@ -493,6 +504,7 @@ def test_mode_solver_2D():
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
 
     mode_spec = td.ModeSpec(

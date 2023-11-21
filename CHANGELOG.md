@@ -34,8 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Restrict to `matplotlib` >= 3.5, avoiding bug in plotting `CustomMedium`.
 - Fixes `ComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
 - Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
-- Fixed a couple bugs in the handling of 2D PEC materials.
-
+- Ensure that mode solver fields are returned in single precision if `ModeSolver.ModeSpec.precision == "single"`.
 
 ## [2.5.0rc2] - 2023-10-30
 
