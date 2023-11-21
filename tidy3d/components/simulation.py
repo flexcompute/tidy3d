@@ -7,6 +7,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib as mpl
+import shapely
 
 from .base import cached_property
 from .validators import assert_objects_in_sim_bounds
@@ -2656,6 +2657,44 @@ class Simulation(AbstractSimulation):
             new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
             return set_bounds(geom, (new_center, new_center), axis)
 
+        def subdivide(geom: Geometry, axis: Axis, structures: List[Structure]) -> List[Medium2D]:
+            """Subdivide Medium2D into pieces with homogeneous substrate / superstrate."""
+            dl = get_dls(geom, axis, 1)[0]
+            center = get_bounds(geom, axis)[0]
+            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
+            thickened_geom = set_bounds(
+                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
+            )
+            grid_sizes = get_dls(thickened_geom, axis, 2)
+            dls_signed = [-grid_sizes[0], grid_sizes[1]]
+            neighbors = []
+            for _, dl_signed in enumerate(dls_signed):
+                geom_shifted = set_bounds(
+                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
+                )
+                structures_side = Scene.intersecting_structures(
+                    Box.from_bounds(*geom_shifted.bounds), structures
+                )
+                neighbors = neighbors + [struct.geometry for struct in structures_side]
+
+            subdivided = []
+            polygons = []
+            for other in neighbors:
+                polygons += geom.bounding_box.intersections_with(other)
+            polygon_boundaries = [
+                shapely.LineString(list(polygon.exterior.coords)) for polygon in polygons
+            ]
+            union = shapely.ops.unary_union(polygon_boundaries)
+            results = list(shapely.ops.polygonize(union))
+            for result in results:
+                polygon = shapely.Polygon(result)
+                xx, yy = polygon.exterior.coords.xy
+                vertices = list(zip(xx, yy))
+                piece = PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
+                subdivided.append(piece)
+
+            return subdivided
+
         def get_neighboring_media(
             geom: Geometry, axis: Axis, structures: List[Structure]
         ) -> Tuple[List[MediumType3D], List[float]]:
@@ -2673,7 +2712,16 @@ class Simulation(AbstractSimulation):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
                 )
-                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+
+                # to prevent false positives due to 2D materials touching different materials
+                # along their sides, shrink the bounds along the tangential directions by
+                # a tiny bit before checking for intersections
+                bounds = [list(i) for i in geom_shifted.bounds]
+                _, tan_dirs = self.pop_axis([0, 1, 2], axis=axis)
+                for dim in tan_dirs:
+                    bounds[0][dim] += fp_eps
+                    bounds[1][dim] -= fp_eps
+                media = Scene.intersecting_media(Box.from_bounds(*bounds), structures)
                 if len(media) > 1:
                     raise SetupError(
                         "2D materials do not support multiple neighboring media on a side. "
@@ -2696,20 +2744,31 @@ class Simulation(AbstractSimulation):
             # otherwise, found a 2D material; replace it with volumetric equivalent
             axis = structure.geometry._normal_2dmaterial
 
+            old_center = get_bounds(structure.geometry, axis)[0]
             # snap monolayer to grid
             geometry = snap_to_grid(structure.geometry, axis)
             center = get_bounds(geometry, axis)[0]
 
-            # get neighboring media and grid sizes
-            (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
+            # subdivide
+            subdivided_geometries = subdivide(geometry, axis, background_structures)
 
-            new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
-            new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
+            for subdivided_geometry in subdivided_geometries:
+                geometry = set_bounds(
+                    subdivided_geometry, bounds=(old_center, old_center), axis=axis
+                )
 
-            new_medium = structure.medium.volumetric_equivalent(
-                axis=axis, adjacent_media=neighbors, adjacent_dls=dls
-            )
-            new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
+                # get neighboring media and grid sizes
+                (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
+
+                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+                new_geometry = set_bounds(geometry, bounds=new_bounds, axis=axis)
+
+                new_medium = structure.medium.volumetric_equivalent(
+                    axis=axis, adjacent_media=neighbors, adjacent_dls=dls
+                )
+                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+                new_structures.append(new_structure)
+                background_structures.append(new_structure)
 
         return tuple(new_structures)
 

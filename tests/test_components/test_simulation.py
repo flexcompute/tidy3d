@@ -1698,7 +1698,9 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
             run_time=1e-12,
         )
         if isinstance(struct.geometry, td.Box):
-            assert np.isclose(sim.volumetric_structures[0].geometry.size[2], grid_dl, rtol=RTOL)
+            assert np.isclose(
+                sim.volumetric_structures[0].geometry.bounding_box.size[2], grid_dl, rtol=RTOL
+            )
         else:
             assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, grid_dl, rtol=RTOL)
         assert np.isclose(
@@ -1778,7 +1780,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     # plotting should not raise warning
     assert_log_level(log_capture, None)
 
-    # nonuniform sub/super-strate should error
+    # nonuniform sub/super-strate should not error
     below_half = td.Structure(
         geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
         medium=aniso_medium,
@@ -1797,8 +1799,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
         run_time=1e-12,
     )
 
-    with pytest.raises(SetupError):
-        _ = sim.volumetric_structures
+    _ = sim.volumetric_structures
 
     # structure overlaying the 2D material should overwrite it like normal
     sim = td.Simulation(
