@@ -38,8 +38,6 @@ sys.path.insert(0, os.path.abspath("../tidy3d/web"))
 sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
 sys.path.append(os.path.abspath("_ext"))
 
-
-
 # -- Project information -----------------------------------------------------
 
 project = "Tidy3D"
@@ -47,7 +45,6 @@ author = "Flexcompute"
 year = datetime.date.today().strftime("%Y")
 copyright = f"Flexcompute 2020-{year}"
 master_doc = "index"  # The master toctree document.s
-
 
 # -- General configuration ---------------------------------------------
 
@@ -62,7 +59,7 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 ## TODO DEBATE KEEP
-autodoc_default_options = {"inherited-members": True, "show-inheritance":True}
+autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
 # autodoc_pydantic_model_show_json = True
 # autodoc_pydantic_settings_show_json = False
 autodoc_pydantic_model_signature_prefix = "class"
@@ -80,12 +77,9 @@ autodoc_pydantic_model_show_field_summary = False
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
-# custom_sitemap_excludes=[r'/notebooks/'] # TODO FIX
+custom_sitemap_excludes = [r'/notebooks/']  # TODO FIX
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
-    # "custom-meta", # TODO FIX
-    # "custom-sitemap", # TODO FIX
-    # "custom-robots", # TODO FIX
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
@@ -100,17 +94,20 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
-    # "sphinx_sitemap", # TODO FIX
+    "sphinx_sitemap",  # TODO FIX
+    "custom-meta",  # TODO FIX
+    # "custom-sitemap",  # TODO FIX
+    "custom-robots",  # TODO FIX
 ]
 extlinks = {}
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
-language='en'
+language = 'en'
 latex_documents = [
     (master_doc, "tidy3d.tex", "tidy3d Documentation", "Dario Quintero", "manual"),
 ]
-html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"
+html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"  # for sphinx-sitemap
 html_css_files = [
     "css/custom.css",
 ]
@@ -163,9 +160,9 @@ project = "tidy3d"
 pygments_style = "sphinx"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
-# sitemap_url_scheme = "{lang}{version}{link}" # TODO FIX
+sitemap_url_scheme = "{lang}{version}{link}"  # TODO FIX
 source_suffix = [".rst", ".md"]
-# templates_path = ["_templates"] # TODO evaluate
+templates_path = ["_templates"]  # TODO evaluate
 texinfo_documents = [
     (
         master_doc,
@@ -178,8 +175,6 @@ texinfo_documents = [
     ),
 ]
 todo_include_todos = False
-
-
 
 GIT_TAG_OUTPUT = subprocess.check_output(["git", "tag", "--points-at", "HEAD"])
 GIT_BRANCH_OUTPUT = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"])
