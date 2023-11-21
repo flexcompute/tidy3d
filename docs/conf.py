@@ -25,7 +25,7 @@ import sys
 import subprocess
 import tidy3d
 
-full_build = True
+full_build = False
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
@@ -89,6 +89,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
+    "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",

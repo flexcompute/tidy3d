@@ -4,9 +4,9 @@ Installation
 The Fast Lane
 ^^^^^^^^^^^^^
 
-Maybe you already have ``tidy3d`` installed in some form. After TODOVERSION, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your installation, :code:`tidy3d develop` to get the latest list of commands.
+Maybe you already have ``tidy3d`` installed in some form. After installing version TODOVERSION, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your terminal, :code:`tidy3d develop` to get the latest list of commands.
 
-It does not matter how you have installed ``tidy3d`` before, this will set up the development environment you require to setup the reproducible development environment.
+It does not matter how you have installed ``tidy3d`` before, this will set up the environment you require to reproducibly develop.
 
 Transitioning
 --------------
@@ -65,11 +65,12 @@ After restarting the bash terminal, you should be able to find ``poetry`` in you
     poetry --version
     poetry # prints all commands
 
+Congratulations! Now you have all the required tools installed.
 
 Packaging Equivalent Functionality
 -----------------------------------
 
-This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow which means that independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
+This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow. Independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
 
 .. code::
 
