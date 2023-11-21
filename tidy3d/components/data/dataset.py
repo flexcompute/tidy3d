@@ -927,6 +927,38 @@ class UnstructuredGridDataset(Dataset, ABC):
             Extracted data.
         """
 
+    @requires_vtk
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False
+    ) -> UnstructuredGridDataset:
+        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
+        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
+        produce only deflected data.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Data after reflextion is performed.
+        """
+
+        reflector = vtk.vtkReflectionFilter()
+        reflector.SetPlane([reflector.USE_X, reflector.USE_Y, reflector.USE_Z][axis])
+        reflector.SetCenter(center)
+        reflector.SetCopyInput(not reflection_only)
+        reflector.SetInputData(self._vtk_obj)
+        reflector.Update()
+
+        return self._from_vtk_obj(reflector.GetOutput())
+
 
 class TriangularGridDataset(UnstructuredGridDataset):
     """Dataset for storing triangular grid data.
@@ -1026,7 +1058,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
-        zero_dims = np.where(bounds == 0)[0]
+        print(bounds)
+        zero_dims = np.where(np.isclose(bounds, 0))[0]
 
         if len(zero_dims) != 1:
             raise DataError(
@@ -1298,6 +1331,35 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         if num_provided == 3:
             return self.interp(x=x, y=y, z=z)
+
+    @requires_vtk
+    def reflect(
+        self, axis: Axis, center: float, reflection_only: bool = False
+    ) -> UnstructuredGridDataset:
+        """Reflect unstructured data across the plane define by parameters ``axis`` and ``center``.
+        By default the original data is preserved, setting ``reflection_only`` to ``True`` will
+        produce only deflected data.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
+
+        Returns
+        -------
+        UnstructuredGridDataset
+            Data after reflextion is performed.
+        """
+
+        # disallow reflecting along normal direction
+        if axis == self.normal_axis:
+            raise DataError("Reflection in the normal direction to the grid is prohibited.")
+
+        return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):

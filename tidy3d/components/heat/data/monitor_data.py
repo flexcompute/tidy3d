@@ -10,7 +10,8 @@ import pydantic.v1 as pd
 from ..monitor import TemperatureMonitor, HeatMonitorType
 from ...base_sim.data.monitor_data import AbstractMonitorData
 from ...data.data_array import SpatialDataArray
-from ...types import ScalarSymmetry, Coordinate
+from ...data.dataset import TriangularGridDataset, TetrahedralGridDataset
+from ...types import ScalarSymmetry, Coordinate, TYPE_TAG_STR, annotate_type
 from ....constants import KELVIN
 
 
@@ -61,8 +62,10 @@ class TemperatureData(HeatMonitorData):
         ..., title="Monitor", description="Temperature monitor associated with the data."
     )
 
-    temperature: SpatialDataArray = pd.Field(
-        ..., title="Temperature", description="Spatial temperature field.", units=KELVIN
+    temperature: Union[
+        SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
+    ]= pd.Field(
+        ..., title="Temperature", description="Spatial temperature field.", units=KELVIN,
     )
 
     @property
@@ -72,45 +75,14 @@ class TemperatureData(HeatMonitorData):
         if all(sym == 0 for sym in self.symmetry):
             return self.copy()
 
-        coords = list(self.temperature.coords.values())
-        data = np.array(self.temperature.data)
+        new_temp = self.temperature
 
         for dim in range(3):
             if self.symmetry[dim] == 1:
 
-                sym_center = self.symmetry_center[dim]
+                new_temp = new_temp.reflect(axis=dim, center=self.symmetry_center[dim])
 
-                if sym_center == coords[dim].data[0]:
-                    num_duplicates = 1
-                else:
-                    num_duplicates = 0
-
-                shape = np.array(np.shape(data))
-                old_len = shape[dim]
-                shape[dim] = 2 * old_len - num_duplicates
-
-                ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
-                ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
-
-                ind_left[dim] = slice(old_len - 1, None, -1)
-                ind_right[dim] = slice(old_len - num_duplicates, None)
-
-                new_data = np.zeros(shape)
-
-                new_data[ind_left[0], ind_left[1], ind_left[2]] = data
-                new_data[ind_right[0], ind_right[1], ind_right[2]] = data
-
-                new_coords = np.zeros(shape[dim])
-                new_coords[old_len - num_duplicates :] = coords[dim]
-                new_coords[old_len - 1 :: -1] = 2 * sym_center - coords[dim]
-
-                coords[dim] = new_coords
-                data = new_data
-
-        coords_dict = dict(zip("xyz", coords))
-        new_temperature = SpatialDataArray(data, coords=coords_dict)
-
-        return self.updated_copy(temperature=new_temperature, symmetry=(0, 0, 0))
+        return self.updated_copy(temperature=new_temp, symmetry=(0, 0, 0))
 
 
 HeatMonitorDataType = Union[TemperatureData]

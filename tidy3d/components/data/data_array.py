@@ -9,7 +9,7 @@ import h5py
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...exceptions import DataError, FileError
-from ..types import Bound
+from ..types import Bound, Axis
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -320,6 +320,54 @@ class SpatialDataArray(DataArray):
             (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
             for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1])
         )
+
+    def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
+        """Reflect data across the plane define by parameters ``axis`` and ``center``.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+
+        Returns
+        -------
+        SpatialDataArray
+            Data after reflection is performed.
+        """
+
+        coords = list(self.coords.values())
+        data = np.array(self.data)
+
+        if center == coords[axis].data[0]:
+            num_duplicates = 1
+        else:
+            num_duplicates = 0
+
+        shape = np.array(np.shape(data))
+        old_len = shape[axis]
+        shape[axis] = 2 * old_len - num_duplicates
+
+        ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+        ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+
+        ind_left[axis] = slice(old_len - 1, None, -1)
+        ind_right[axis] = slice(old_len - num_duplicates, None)
+
+        new_data = np.zeros(shape)
+
+        new_data[ind_left[0], ind_left[1], ind_left[2]] = data
+        new_data[ind_right[0], ind_right[1], ind_right[2]] = data
+
+        new_coords = np.zeros(shape[axis])
+        new_coords[old_len - num_duplicates :] = coords[axis]
+        new_coords[old_len - 1 :: -1] = 2 * center - coords[axis]
+
+        coords[axis] = new_coords
+        coords_dict = dict(zip("xyz", coords))
+
+        return SpatialDataArray(new_data, coords=coords_dict)
 
 
 class ScalarFieldDataArray(DataArray):
