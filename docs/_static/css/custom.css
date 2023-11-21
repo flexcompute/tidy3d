@@ -39,4 +39,7 @@ html[data-theme="dark"] {
     --pst-color-link: var(--pst-color-muted);
 }
 
+img {
+    margin: 0.1em;
+}
 

@@ -118,7 +118,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
   :maxdepth: 2
 
   quickstart
-  lectures
+  lectures/index
   notebooks/docs/index
   howdoi
   faq

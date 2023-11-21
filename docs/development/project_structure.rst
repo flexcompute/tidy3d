@@ -2,7 +2,7 @@
 Project Structure
 =================
 
-As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the development cycle. The project follows the following structure, which is derived from some recommended Python project architecture guides https://docs.python-guide.org/writing/structure/ . This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
+As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the development cycle. The project directories follow the following structure, which is derived from some recommended `Python project architecture guides <https://docs.python-guide.org/writing/structure/>`_. This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
 
 .. code::
 
@@ -30,6 +30,6 @@ It is important to note the new tools we are using to manage our development env
 Release Flow
 ^^^^^^^^^^^^^^^
 
-This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` are updated. Then these will be automatically updated on the ``readthedocs`` documentation through the Github actions.
+This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` are updated. The ``readthedocs`` documentation will be automatically updated through the ``sync-readthedocs-repo`` Github action.
 
 

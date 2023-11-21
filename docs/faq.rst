@@ -317,7 +317,7 @@ Tidy3D tries to provide an illusion of continuity as much as possible, but at th
 can have some implications that advanced users may want to be aware of.
 
 
-.. image:: img/yee_grid.png
+.. image:: _static/img/yee_grid.png
   :width: 600
   :alt: Field components on the Yee grid
 
@@ -444,7 +444,7 @@ most common causes of a diverged simulation is structures inserted into PML at a
 in simulations with photonic waveguides, where PML intersects a waveguide bend or a waveguide taper. To ensure 
 numerical stability, you need to make sure that structures are translationally invariant into the PML.
 
-.. image:: img/diverged-fdtd-simulation.png
+.. image:: _static/img/diverged-fdtd-simulation.png
   :width: 600
   :alt: Structures at PML
 
@@ -480,7 +480,7 @@ and PML in the last dimension only. In such simulations, there could be quasi-gu
 which have very long evanescent tails in the PML direction. If a simulation diverges and you suspect that evanescent 
 fields may be leaking into PML, simply increase the simulation domain size to avoid this issue.
 
-.. image:: img/diverged-fdtd-simulation1.png
+.. image:: _static/img/diverged-fdtd-simulation1.png
   :width: 600
   :alt: Distance from PML
 

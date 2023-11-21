@@ -40,7 +40,7 @@ Common Utilities
 There are a range of handy development functions that you might want to use to streamline your development experience.
 
 .. list-table:: Use Cases
-   :header-rows: 1
+    :header-rows: 1
 
     * - Description
       - Caveats

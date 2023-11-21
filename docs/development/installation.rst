@@ -6,12 +6,12 @@ The Fast Lane
 
 Maybe you already have ``tidy3d`` installed in some form. After TODOVERSION, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your installation, :code:`tidy3d develop` to get the latest list of commands.
 
-It does not matter how you have installed ``tidy3d`` before, this will set up the development environment you require to continue the development process.
+It does not matter how you have installed ``tidy3d`` before, this will set up the development environment you require to setup the reproducible development environment.
 
 Transitioning
 --------------
 
-If you are transitioning from the old development flow, to this new one, there are a list of commands you can run to make your life easier.
+If you are transitioning from the old development flow, to this new one, there are a list of commands you can run to make your life easier and set you up well without a hitch.
 
 .. code::
 
@@ -26,15 +26,13 @@ If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run 
 
     tidy3d develop verify-dev-environment
 
-You can also run the following on your terminal:
+You can also run the following on your terminal if you desire to run the terminal commands yourself, rather than have a Python ``subprocess`` implement the required tools installation.
 
 .. code::
 
     # /bin/bash
     cd tidy3d/
     source scripts/development.sh configure-dev-environment
-
-
 
 The Detailed Lane
 ^^^^^^^^^^^^^^^^^
@@ -82,3 +80,8 @@ This package installation process should be  approximately equivalent to the pre
     pip install tidy3d[jax]
 
 All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.
+
+Useful Tool Resources
+=======================
+
+.. TODO add links here about poetry etc.
