@@ -140,6 +140,7 @@ class Simulation(Box):
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
     )
+    "Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. "
 
     medium: MediumType3D = pydantic.Field(
         Medium(),

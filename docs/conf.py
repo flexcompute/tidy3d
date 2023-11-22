@@ -25,7 +25,7 @@ import sys
 import subprocess
 import tidy3d
 
-full_build = True
+full_build = False
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
@@ -70,8 +70,8 @@ autodoc_pydantic_settings_show_json = False
 # autodoc_pydantic_model_show_config_summary = False
 # autodoc_pydantic_model_show_validator_summary = False
 # autodoc_pydantic_model_show_validator_members = False
-# autodoc_pydantic_model_show_field_summary = False
-# autodoc_pydantic_model_members = False
+autodoc_pydantic_model_show_field_summary = True
+autodoc_pydantic_model_members = True
 # autodoc_pydantic_field_list_validators = False
 # autodoc_pydantic_settings_summary_list_order = 'bysource'
 # autodoc_pydantic_model_undoc_members = False
