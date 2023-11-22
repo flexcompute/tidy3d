@@ -11,6 +11,7 @@ As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the 
         ...
         notebooks/
             # Git submodule repository
+            # Checks out github.com/flexcompute/tidy3d-notebooks
     tests/
         # pytest source and docs
         # pytest notebooks
@@ -30,6 +31,6 @@ It is important to note the new tools we are using to manage our development env
 Release Flow
 ^^^^^^^^^^^^^^^
 
-This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` are updated. The ``readthedocs`` documentation will be automatically updated through the ``sync-readthedocs-repo`` Github action.
+This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` repositories within the ``./`` and ``./docs/notebooks/`` directories are updated. The ``readthedocs`` documentation will be automatically updated through the ``sync-readthedocs-repo`` Github action.
 
 

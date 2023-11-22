@@ -26,7 +26,7 @@ If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run 
 
     tidy3d develop verify-dev-environment
 
-You can also run the following on your terminal if you desire to run the terminal commands yourself, rather than have a Python ``subprocess`` implement the required tools installation.
+You can also run the following on your terminal if you desire to run or read the commands yourself, rather than have a Python ``subprocess`` implement the required tools installation.
 
 .. code::
 
@@ -65,6 +65,8 @@ After restarting the bash terminal, you should be able to find ``poetry`` in you
     poetry --version
     poetry # prints all commands
 
+.. TODO detail pandoc installation < 3
+
 Congratulations! Now you have all the required tools installed.
 
 Packaging Equivalent Functionality
@@ -83,6 +85,6 @@ This package installation process should be  approximately equivalent to the pre
 All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.
 
 Useful Tool Resources
-=======================
+^^^^^^^^^^^^^^^^^^^^^^
 
 .. TODO add links here about poetry etc.

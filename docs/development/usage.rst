@@ -51,3 +51,6 @@ There are a range of handy development functions that you might want to use to s
     * - Using ``tidy3d develop`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry``
       - ``poetry run tidy3d develop <your command>``
+    * - Running ``pytest`` commands inside the ``poetry`` environment.
+      - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
+      - ``poetry run pytest`

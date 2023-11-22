@@ -56,19 +56,21 @@ master_doc = "index"  # The master toctree document.s
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
-autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
-autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
+# autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
+# autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 ## TODO DEBATE KEEP
-autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
+autodoc_pydantic_model_show_json = True
+autodoc_pydantic_settings_show_json = False
+# autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
 # autodoc_pydantic_model_show_json = True
 # autodoc_pydantic_settings_show_json = False
-autodoc_pydantic_model_signature_prefix = "class"
-autodoc_pydantic_field_signature_prefix = "attribute"
-autodoc_pydantic_model_show_config_member = False
-autodoc_pydantic_model_show_config_summary = False
-autodoc_pydantic_model_show_validator_summary = False
-autodoc_pydantic_model_show_validator_members = False
-autodoc_pydantic_model_show_field_summary = False
+# autodoc_pydantic_model_signature_prefix = "class"
+# autodoc_pydantic_field_signature_prefix = "attribute"
+# autodoc_pydantic_model_show_config_member = False
+# autodoc_pydantic_model_show_config_summary = False
+# autodoc_pydantic_model_show_validator_summary = False
+# autodoc_pydantic_model_show_validator_members = False
+# autodoc_pydantic_model_show_field_summary = False
 # autodoc_pydantic_model_members = False
 # autodoc_pydantic_field_list_validators = False
 # autodoc_pydantic_settings_summary_list_order = 'bysource'
@@ -77,7 +79,7 @@ autodoc_pydantic_model_show_field_summary = False
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
-custom_sitemap_excludes = [r'/notebooks/']  # TODO FIX
+custom_sitemap_excludes = [r'/notebooks/']
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
     "IPython.sphinxext.ipython_directive",
@@ -94,10 +96,10 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
-    "sphinx_sitemap",  # TODO FIX
-    "custom-meta",  # TODO FIX
-    "custom-sitemap",  # TODO FIX
-    "custom-robots",  # TODO FIX
+    "sphinx_sitemap",
+    "custom-meta",  # In _ext, these need to be at the end of the extensions list
+    "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
+    "custom-robots",  # In _ext, these need to be at the end of the extensions list
 ]
 extlinks = {}
 # Grouping the document tree into LaTeX files. List of tuples
@@ -160,9 +162,9 @@ project = "tidy3d"
 pygments_style = "sphinx"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
-sitemap_url_scheme = "{lang}{version}{link}"  # TODO FIX
+sitemap_url_scheme = "{lang}{version}{link}"
 source_suffix = [".rst", ".md"]
-templates_path = ["_templates"]  # TODO evaluate
+templates_path = ["_templates"]
 texinfo_documents = [
     (
         master_doc,

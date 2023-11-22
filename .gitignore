@@ -99,9 +99,6 @@ pip-log.txt
 .scrapy
 
 # Sphinx documentation
-docs/_autosummary/
-docs/_build/
-docs/notebooks/tmp/*
 _docs
 
 # Spyder project settings
