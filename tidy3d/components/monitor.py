@@ -1,5 +1,5 @@
 """Objects that define how data is recorded from simulation."""
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Union, Tuple
 
 import pydantic.v1 as pydantic
@@ -44,6 +44,14 @@ class Monitor(AbstractMonitor):
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
     )
+
+    @abstractmethod
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        return self.storage_size(num_cells=num_cells, tmesh=tmesh)
 
 
 class FreqMonitor(Monitor, ABC):
@@ -303,6 +311,11 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             )
         return val
 
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        # Need to store all fields on the mode surface
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes * 6
+
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain.
@@ -453,6 +466,13 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
                 "valid for box monitors only."
             )
         return values
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        # Need to store all fields on the integration surface. Frequency-domain monitors store at
+        # all frequencies, time domain at the current time step only.
+        num_sample = len(getattr(self, "freqs", [0]))
+        return BYTES_COMPLEX * num_cells * num_sample * 6
 
 
 class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):

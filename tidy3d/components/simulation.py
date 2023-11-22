@@ -72,6 +72,7 @@ WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
 WARN_MONITOR_DATA_SIZE_GB = 10
+MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
 
@@ -992,7 +993,7 @@ class Simulation(AbstractSimulation):
         with log as consolidated_logger:
             datas = self.monitors_data_size
             for monitor_ind, (monitor_name, monitor_size) in enumerate(datas.items()):
-                monitor_size_gb = monitor_size / 2**30
+                monitor_size_gb = monitor_size / 1e9
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
                         f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
@@ -1008,6 +1009,21 @@ class Simulation(AbstractSimulation):
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
+
+        # Some monitors store much less data than what is needed internally. Make sure that the
+        # internal storage also does not exceed the limit.
+        for monitor in self.monitors:
+            num_cells = self._monitor_num_cells(monitor)
+            # intermediate storage needed, in GB
+            solver_data = monitor._storage_size_solver(num_cells=num_cells, tmesh=self.tmesh) / 1e9
+            if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
+                raise SetupError(
+                    f"Estimated internal storage of monitor '{monitor.name}' is "
+                    f"{solver_data:1.2f}GB, which is larger than the maximum allowed "
+                    f"{MAX_MONITOR_INTERNAL_DATA_SIZE_GB:.2f}GB. Consider making it smaller, "
+                    "using fewer frequencies, or spatial or temporal downsampling using "
+                    "'interval_space' and 'interval', respectively."
+                )
 
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
@@ -1049,18 +1065,19 @@ class Simulation(AbstractSimulation):
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
-        tmesh = self.tmesh
         data_size = {}
         for monitor in self.monitors:
-            name = monitor.name
-            num_cells = self.discretize_monitor(monitor).num_cells
-            # take monitor downsampling into account
-            num_cells = monitor.downsampled_num_cells(num_cells)
-            num_cells = np.prod(num_cells)
-            monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
-            data_size[name] = float(monitor_size)
-
+            num_cells = self._monitor_num_cells(monitor)
+            storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
+            data_size[monitor.name] = storage_size
         return data_size
+
+    def _monitor_num_cells(self, monitor: Monitor) -> int:
+        """Total number of cells included by monitor based on simulation grid."""
+        num_cells = self.discretize_monitor(monitor).num_cells
+        # take monitor downsampling into account
+        num_cells = monitor.downsampled_num_cells(num_cells)
+        return np.prod(num_cells)
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
