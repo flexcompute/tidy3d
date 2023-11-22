@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `_hash_self` to base model, uses `hashlib` to hash a Tidy3D component the same way every session.
 - `ComponentModeler.plot_sim_eps()` method to plot the simulation permittivity and ports.
 - Support for 2D PEC materials.
+- Ability to downsample recorded near fields to speed up server-side far field projections.
 
 ### Changed
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
