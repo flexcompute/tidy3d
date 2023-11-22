@@ -309,6 +309,107 @@
         },
         {
             "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    0.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "Medium2D",
+                "ss": {
+                    "name": "PEC",
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "heat_spec": null,
+                    "type": "PECMedium"
+                },
+                "tt": {
+                    "name": "PEC",
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "heat_spec": null,
+                    "type": "PECMedium"
+                }
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": null,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "AnisotropicMedium",
+                "xx": {
+                    "name": "PEC",
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "heat_spec": null,
+                    "type": "PECMedium"
+                },
+                "yy": {
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "heat_spec": null,
+                    "type": "Medium",
+                    "permittivity": 1.0,
+                    "conductivity": 0.0
+                },
+                "zz": {
+                    "name": null,
+                    "frequency_range": null,
+                    "allow_gain": false,
+                    "nonlinear_spec": null,
+                    "modulation_spec": null,
+                    "heat_spec": null,
+                    "type": "Medium",
+                    "permittivity": 1.0,
+                    "conductivity": 0.0
+                }
+            }
+        },
+        {
+            "geometry": {
                 "type": "GeometryGroup",
                 "geometries": [
                     {
@@ -910,14 +1011,14 @@
                 },
                 "transform": [
                     [
-                        0.9659258262890683,
-                        -0.25881904510252074,
+                        0.9659258262890684,
+                        -0.2588190451025208,
                         0.0,
                         0.0
                     ],
                     [
-                        0.25881904510252074,
-                        0.9659258262890683,
+                        0.2588190451025208,
+                        0.9659258262890684,
                         0.0,
                         0.0
                     ],
@@ -1405,7 +1506,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 200000000000000.0,
                 250000000000000.0
@@ -1437,7 +1538,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "start": 0.0,
             "stop": null,
             "interval": 1,
@@ -1586,7 +1687,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1731,7 +1832,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1783,7 +1884,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1832,7 +1933,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0

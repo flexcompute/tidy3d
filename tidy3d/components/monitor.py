@@ -30,16 +30,16 @@ class Monitor(AbstractMonitor):
 
     interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial interval",
+        title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
-        "point of the monitor grid is always included. "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last point of the monitor grid are always included. "
         "Not all monitors support values different from 1.",
     )
 
     colocate: Literal[True] = pydantic.Field(
         True,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
@@ -103,14 +103,14 @@ class TimeMonitor(Monitor, ABC):
 
     start: pydantic.NonNegativeFloat = pydantic.Field(
         0.0,
-        title="Start time",
+        title="Start Time",
         description="Time at which to start monitor recording.",
         units=SECOND,
     )
 
     stop: pydantic.NonNegativeFloat = pydantic.Field(
         None,
-        title="Stop time",
+        title="Stop Time",
         description="Time at which to stop monitor recording.  "
         "If not specified, record until end of simulation.",
         units=SECOND,
@@ -118,7 +118,7 @@ class TimeMonitor(Monitor, ABC):
 
     interval: pydantic.PositiveInt = pydantic.Field(
         None,
-        title="Time interval",
+        title="Time Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Set ``inverval`` to 1 for the highest possible resolution in time. "
         "Higher integer values downsample the data by measuring every ``interval`` time steps. "
@@ -208,15 +208,15 @@ class AbstractFieldMonitor(Monitor, ABC):
         pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
     ] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial interval",
+        title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
-        "point of the monitor grid is always included.",
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last point of the monitor grid are always included.",
     )
 
     colocate: bool = pydantic.Field(
         True,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
     )
@@ -369,7 +369,7 @@ class PermittivityMonitor(FreqMonitor):
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Colocation turned off, since colocated permittivity values do not have a "
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
@@ -378,10 +378,10 @@ class PermittivityMonitor(FreqMonitor):
         pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
     ] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial interval",
+        title="Spatial Interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
-        "point of the monitor grid is always included.",
+        "there will be no downsampling. If greater than 1, the step will be applied, but the "
+        "first and last point of the monitor grid are always included.",
     )
 
     apodization: ApodizationSpec = pydantic.Field(
@@ -402,7 +402,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
 
     normal_dir: Direction = pydantic.Field(
         None,
-        title="Normal vector orientation",
+        title="Normal Vector Orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
@@ -410,7 +410,7 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
 
     exclude_surfaces: Tuple[BoxSurface, ...] = pydantic.Field(
         None,
-        title="Excluded surfaces",
+        title="Excluded Surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
 
@@ -527,7 +527,7 @@ class ModeMonitor(AbstractModeMonitor):
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
@@ -556,14 +556,14 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
     direction: Direction = pydantic.Field(
         "+",
-        title="Propagation direction",
+        title="Propagation Direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
     colocate: bool = pydantic.Field(
         True,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
     )
@@ -579,13 +579,13 @@ class FieldProjectionSurface(Tidy3dBaseModel):
 
     monitor: FieldMonitor = pydantic.Field(
         ...,
-        title="Field monitor",
+        title="Field Monitor",
         description=":class:`.FieldMonitor` on which near fields will be sampled and integrated.",
     )
 
     normal_dir: Direction = pydantic.Field(
         ...,
-        title="Normal vector orientation",
+        title="Normal Vector Orientation",
         description=":class:`.Direction` of the surface monitor's normal vector w.r.t.\
  the positive x, y or z unit vectors. Must be one of '+' or '-'.",
     )
@@ -612,7 +612,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     custom_origin: Coordinate = pydantic.Field(
         None,
-        title="Local origin",
+        title="Local Origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
         units=MICROMETER,
@@ -620,12 +620,27 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     far_field_approx: bool = pydantic.Field(
         True,
-        title="Far field approximation",
+        title="Far Field Approximation",
         description="Whether to enable the far field approximation when projecting fields. "
         "If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components "
         "of fields. Typically, this should be set to ``True`` only when the projection distance "
         "is much larger than the size of the device being modeled, and the projected points are "
         "in the far field of the device.",
+    )
+
+    interval_space: Tuple[
+        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
+    ] = pydantic.Field(
+        (1, 1, 1),
+        title="Spatial Interval",
+        description="Number of grid step intervals at which near fields are recorded for "
+        "projection to the far field, along each direction. If equal to 1, there will be no "
+        "downsampling. If greater than 1, the step will be applied, but the first and last "
+        "point of the monitor grid are always included. Using values greater than 1 can "
+        "help speed up server-side far field projections with minimal accuracy loss, "
+        "especially in cases where it is necessary for the grid resolution to be high for "
+        "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
+        "projecting the recorded near fields to the far field.",
     )
 
     @property
@@ -685,14 +700,14 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection distance",
+        title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
         units=MICROMETER,
     )
 
     theta: ObsGridArray = pydantic.Field(
         ...,
-        title="Polar angles",
+        title="Polar Angles",
         description="Polar angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
         units=RADIAN,
@@ -700,7 +715,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
     phi: ObsGridArray = pydantic.Field(
         ...,
-        title="Azimuth angles",
+        title="Azimuth Angles",
         description="Azimuth angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
         units=RADIAN,
@@ -748,13 +763,13 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
     proj_axis: Axis = pydantic.Field(
         ...,
-        title="Projection plane axis",
+        title="Projection Plane Axis",
         description="Axis along which the observation plane is oriented.",
     )
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection distance",
+        title="Projection Distance",
         description="Signed distance of the projection plane along ``proj_axis``. "
         "from the plane containing ``local_origin``.",
         units=MICROMETER,
@@ -762,7 +777,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
     x: ObsGridArray = pydantic.Field(
         ...,
-        title="Local x observation coordinates",
+        title="Local x Observation Coordinates",
         description="Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
         "When ``proj_axis`` is 0, this corresponds to the global y axis. "
         "When ``proj_axis`` is 1, this corresponds to the global x axis. "
@@ -772,7 +787,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
     y: ObsGridArray = pydantic.Field(
         ...,
-        title="Local y observation coordinates",
+        title="Local y Observation Coordinates",
         description="Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
         "When ``proj_axis`` is 0, this corresponds to the global z axis. "
         "When ``proj_axis`` is 1, this corresponds to the global z axis. "
@@ -821,13 +836,13 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
 
     proj_axis: Axis = pydantic.Field(
         ...,
-        title="Projection plane axis",
+        title="Projection Plane Axis",
         description="Axis along which the observation plane is oriented.",
     )
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection distance",
+        title="Projection Distance",
         description="Radial distance of the projection points from ``local_origin``.",
         units=MICROMETER,
     )
@@ -886,7 +901,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     normal_dir: Direction = pydantic.Field(
         "+",
-        title="Normal vector orientation",
+        title="Normal Vector Orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Defaults to ``'+'`` if not provided.",
@@ -894,7 +909,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate fields",
+        title="Colocate Fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
