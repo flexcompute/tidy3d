@@ -119,7 +119,8 @@ def test_centers():
             _ = sim_data.at_centers(mon.name)
 
 
-def test_plot():
+@pytest.mark.parametrize("phase", [0, 1.0])
+def test_plot(phase):
     sim_data = make_sim_data()
 
     # plot regular field data
@@ -127,11 +128,13 @@ def test_plot():
         field_data = sim_data["field"].field_components[field_cmp]
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
-            _ = sim_data.plot_field("field", field_cmp, val="imag", f=1e14, **xyz_kwargs)
+            _ = sim_data.plot_field(
+                "field", field_cmp, val="imag", f=1e14, phase=phase, **xyz_kwargs
+            )
             plt.close()
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field", "int", f=1e14, **xyz_kwargs)
+        _ = sim_data.plot_field("field", "int", f=1e14, phase=phase, **xyz_kwargs)
         plt.close()
 
     # plot field time data
@@ -139,18 +142,22 @@ def test_plot():
         field_data = sim_data["field_time"].field_components[field_cmp]
         for axis_name in "xyz":
             xyz_kwargs = {axis_name: field_data.coords[axis_name][0]}
-            _ = sim_data.plot_field("field_time", field_cmp, val="real", t=0.0, **xyz_kwargs)
+            _ = sim_data.plot_field(
+                "field_time", field_cmp, val="real", phase=phase, t=0.0, **xyz_kwargs
+            )
             plt.close()
     for axis_name in "xyz":
         xyz_kwargs = {axis_name: 0}
-        _ = sim_data.plot_field("field_time", "int", t=0.0, **xyz_kwargs)
+        _ = sim_data.plot_field("field_time", "int", t=0.0, phase=phase, **xyz_kwargs)
         plt.close()
 
     # plot mode field data
     for field_cmp in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-        _ = sim_data.plot_field("mode_solver", field_cmp, val="real", f=1e14, mode_index=1)
+        _ = sim_data.plot_field(
+            "mode_solver", field_cmp, val="real", f=1e14, mode_index=1, phase=phase
+        )
         plt.close()
-    _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1)
+    _ = sim_data.plot_field("mode_solver", "int", f=1e14, mode_index=1, phase=phase)
     plt.close()
 
 
