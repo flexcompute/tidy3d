@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for an anisotropic medium containing PEC components.
 - `SimulationData.mnt_data_from_file()` method to load only a single monitor data object from a simulation data `.hdf5` file.
 - `_hash_self` to base model, uses `hashlib` to hash a Tidy3D component the same way every session.
+- `ComponentModeler.plot_sim_eps()` method to plot the simulation permittivity and ports.
 
 ### Changed
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix for detection of file extensions for file names with dots.
 - Restrict to `matplotlib` >= 3.5, avoiding bug in plotting `CustomMedium`.
 - Fixes `ComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
+- Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
 
 ## [2.5.0rc2] - 2023-10-30
 

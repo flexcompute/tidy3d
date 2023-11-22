@@ -298,7 +298,9 @@ class ComponentModeler(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot_sim(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
@@ -306,7 +308,21 @@ class ComponentModeler(Tidy3dBaseModel):
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_sim_eps(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
+
+        plot_sources = []
+        for port_source in self.ports:
+            mode_source_0 = self.to_source(port=port_source, mode_index=0)
+            plot_sources.append(mode_source_0)
+        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
+        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @cached_property
     def batch(self) -> Batch:
