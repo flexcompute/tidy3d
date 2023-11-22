@@ -32,6 +32,17 @@ class AbstractFieldDataset(Dataset, ABC):
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to thier associated data."""
 
+    def apply_phase(self, phase: float) -> AbstractFieldDataset:
+        """Create a copy where all elements are phase-shifted by a value (in radians)."""
+        if phase == 0.0:
+            return self
+        phasor = np.exp(1j * phase)
+        field_components_shifted = {}
+        for fld_name, fld_cmp in self.field_components.items():
+            fld_cmp_shifted = phasor * fld_cmp
+            field_components_shifted[fld_name] = fld_cmp_shifted
+        return self.updated_copy(**field_components_shifted)
+
     @property
     @abstractmethod
     def grid_locations(self) -> Dict[str, str]:
@@ -264,6 +275,14 @@ class FieldTimeDataset(ElectromagneticFieldDataset):
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
     )
+
+    def apply_phase(self, phase: float) -> AbstractFieldDataset:
+        """Create a copy where all elements are phase-shifted by a value (in radians)."""
+
+        if phase != 0.0:
+            raise ValueError("Can't apply phase to time-domain field data, which is real-valued.")
+
+        return self
 
 
 class ModeSolverDataset(ElectromagneticFieldDataset):

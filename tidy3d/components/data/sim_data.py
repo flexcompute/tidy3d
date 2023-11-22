@@ -1,6 +1,6 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Union
 
 import pathlib
 import xarray as xr
@@ -290,7 +290,9 @@ class SimulationData(AbstractSimulationData):
 
         return xr.Dataset(poynting_components)
 
-    def _get_scalar_field(self, field_monitor_name: str, field_name: str, val: FieldVal):
+    def _get_scalar_field(
+        self, field_monitor_name: str, field_name: str, val: FieldVal, phase: float = 0.0
+    ):
         """return ``xarray.DataArray`` of the scalar field of a given monitor at Yee cell centers.
 
         Parameters
@@ -301,6 +303,8 @@ class SimulationData(AbstractSimulationData):
             Name of the derived field component: one of `('E', 'H', 'S', 'Sx', 'Sy', 'Sz')`.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
+        phase : float = 0.0
+            Optional phase to apply to result
 
         Returns
         -------
@@ -319,6 +323,8 @@ class SimulationData(AbstractSimulationData):
                 raise Tidy3dKeyError(f"Poynting component {field_name} not available")
         else:
             dataset = self.at_boundaries(field_monitor_name)
+
+        dataset = self.apply_phase(data=dataset, phase=phase)
 
         if field_name in ("E", "H", "S"):
             # Gather vector components
@@ -435,6 +441,19 @@ class SimulationData(AbstractSimulationData):
 
         raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
 
+    @staticmethod
+    def apply_phase(data: Union[xr.DataArray, xr.Dataset], phase: float = 0.0) -> xr.DataArray:
+        """Apply a phase to xarray data."""
+        if phase != 0.0:
+            if np.any(np.iscomplex(data.values)):
+                data *= np.exp(1j * phase)
+            else:
+                log.warning(
+                    f"Non-zero phase of {phase} specified but the data being plotted is "
+                    "real-valued. The phase will be ignored in the plot."
+                )
+        return data
+
     def plot_field(
         self,
         field_monitor_name: str,
@@ -442,6 +461,7 @@ class SimulationData(AbstractSimulationData):
         val: FieldVal = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
+        phase: float = 0.0,
         robust: bool = True,
         vmin: float = None,
         vmax: float = None,
@@ -466,6 +486,9 @@ class SimulationData(AbstractSimulationData):
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
+        phase : float = 0.0
+            Optional phase (radians) to apply to the fields.
+            Only has an effect on frequency-domain fields.
         robust : bool = True
             If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
             to compute the color limits. This helps in visualizing the field patterns especially
@@ -492,7 +515,6 @@ class SimulationData(AbstractSimulationData):
         """
 
         # get the DataArray corresponding to the monitor_name and field_name
-
         # deprecated intensity
         if field_name == "int":
             log.warning(
@@ -504,7 +526,7 @@ class SimulationData(AbstractSimulationData):
 
         if field_name in ("E", "H") or field_name[0] == "S":
             # Derived fields
-            field_data = self._get_scalar_field(field_monitor_name, field_name, val)
+            field_data = self._get_scalar_field(field_monitor_name, field_name, val, phase=phase)
         else:
             # Direct field component (e.g. Ex)
             field_monitor_data = self.load_field_monitor(field_monitor_name)
@@ -512,6 +534,7 @@ class SimulationData(AbstractSimulationData):
                 raise DataError(f"field_name '{field_name}' not found in data.")
             field_component = field_monitor_data.field_components[field_name]
             field_component.name = field_name
+            field_component = self.apply_phase(data=field_component, phase=phase)
             field_data = self._field_component_value(field_component, val)
 
         if scale == "dB":

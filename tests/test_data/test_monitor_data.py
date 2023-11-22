@@ -529,3 +529,20 @@ def test_outer_dot():
     _ = field_data.outer_dot(mode_data)
     _ = mode_data.outer_dot(field_data)
     _ = field_data.outer_dot(field_data)
+
+
+@pytest.mark.parametrize("phase_shift", np.linspace(0, 2 * np.pi, 10))
+def test_field_data_phase(phase_shift):
+    def get_combined_phase(data):
+        field_sum = 0.0
+        for fld_cmp in data.field_components.values():
+            field_sum += np.sum(fld_cmp.values)
+        return np.angle(field_sum)
+
+    fld_data1 = make_field_data()
+    fld_data2 = fld_data1.apply_phase(phase_shift)
+
+    phase1 = get_combined_phase(fld_data1)
+    phase2 = get_combined_phase(fld_data2)
+
+    assert np.allclose(phase2, np.angle(np.exp(1j * (phase1 + phase_shift))))
