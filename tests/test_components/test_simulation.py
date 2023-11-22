@@ -1606,7 +1606,7 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
 
 @pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
 def test_warn_large_mode_monitor(log_capture, dl, log_level):
-    """Make sure we get a warning if the epsilon grid is too large."""
+    """Make sure we get a warning if the mode monitor grid is too large."""
 
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
@@ -1631,7 +1631,7 @@ def test_warn_large_mode_monitor(log_capture, dl, log_level):
 
 @pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
 def test_warn_large_mode_source(log_capture, dl, log_level):
-    """Make sure we get a warning if the epsilon grid is too large."""
+    """Make sure we get a warning if the mode source grid is too large."""
 
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
@@ -1647,6 +1647,31 @@ def test_warn_large_mode_source(log_capture, dl, log_level):
     )
     sim.validate_pre_upload()
     assert_log_level(log_capture, log_level)
+
+
+def test_error_large_monitors():
+    """Test if various large monitors cause pre-upload validation to error."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.005),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    mnt_size = (td.inf, 0, td.inf)
+    mnt_test = [
+        td.ModeMonitor(size=mnt_size, freqs=[1], name="test", mode_spec=td.ModeSpec()),
+        td.ModeSolverMonitor(size=mnt_size, freqs=[1], name="test", mode_spec=td.ModeSpec()),
+        td.FluxMonitor(size=mnt_size, freqs=[1], name="test"),
+        td.FluxTimeMonitor(size=mnt_size, name="test"),
+        td.DiffractionMonitor(size=mnt_size, freqs=[1], name="test"),
+        td.FieldProjectionAngleMonitor(size=mnt_size, freqs=[1], name="test", theta=[0], phi=[0]),
+    ]
+
+    for monitor in mnt_test:
+        with pytest.raises(SetupError):
+            s = sim.updated_copy(monitors=[monitor])
+            s.validate_pre_upload()
 
 
 def test_dt():

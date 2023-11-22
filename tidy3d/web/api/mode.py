@@ -183,6 +183,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         """
         folder = Folder.get(folder_name, create=True)
 
+        mode_solver.validate_pre_upload()
         mode_solver.simulation.validate_pre_upload(source_required=False)
         resp = http.post(
             MODESOLVER_API,

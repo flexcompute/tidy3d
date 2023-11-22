@@ -11,6 +11,7 @@ from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
+from tidy3d.exceptions import SetupError
 from ..utils import assert_log_level, log_capture
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
@@ -242,6 +243,17 @@ def test_mode_solver_validation():
         freqs=[1e12],
         direction="+",
     )
+
+    # mode data too large
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.uniform(dl=0.001),
+        run_time=1e-12,
+    )
+    ms = ms.updated_copy(simulation=simulation, freqs=np.linspace(1e12, 2e12, 50))
+
+    with pytest.raises(SetupError):
+        ms.validate_pre_upload()
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))

@@ -23,7 +23,7 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...exceptions import ValidationError
+from ...exceptions import ValidationError, SetupError
 from ...constants import C_0
 from .solver import compute_modes
 
@@ -35,6 +35,9 @@ MIN_FREQUENCY = 1e5
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
+
+# Maximum allowed size of the field data produced by the mode solver
+MAX_MODES_DATA_SIZE_GB = 20
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -845,5 +848,19 @@ class ModeSolver(Tidy3dBaseModel):
             **sel_kwargs,
         )
 
+    def _validate_modes_size(self):
+        """Make sure that the total size of the modes fields is not too large."""
+        monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        num_cells = self.simulation._monitor_num_cells(monitor)
+        # size in GB
+        total_size = monitor._storage_size_solver(num_cells=num_cells, tmesh=[]) / 1e9
+        if total_size > MAX_MODES_DATA_SIZE_GB:
+            raise SetupError(
+                f"Mode solver has {total_size:.2f}GB of estimated storage, "
+                f"a maximum of {MAX_MODES_DATA_SIZE_GB:.2f}GB is allowed. Consider making the "
+                "mode plane smaller, or decreasing the resolution or number of requested "
+                "frequencies or modes."
+            )
+
     def validate_pre_upload(self, source_required: bool = True):
-        pass
+        self._validate_modes_size()

@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - API for specifying one or more nonlinear models via `NonlinearSpec.models`.
 - `freqs` and `direction` are optional in `ModeSolver` methods converting to monitor and source, respectively. If not supplied, uses the values from the `ModeSolver` instance calling the method.
 - Removed spurious ``-1`` factor in field amplitudes injected by field sources in some cases. The injected ``E``-field should now exactly match the analytic, mode, or custom fields that the source is expected to inject, both in the forward and in the backward direction.
+- Restriction on the maximum memory that a monitor would need internally during the solver run, even if the final monitor data is smaller.
+- Restriction on the maximum size of mode solver data produced by a `ModeSolver` server call.
 
 ### Fixed
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
