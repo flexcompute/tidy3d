@@ -12,6 +12,7 @@ Simulation
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    Simulation
 
@@ -21,6 +22,7 @@ Boundary Conditions
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    BoundarySpec
    Boundary
@@ -32,6 +34,7 @@ Types of Boundaries
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    Periodic
    PECBoundary
@@ -48,6 +51,7 @@ Types of Absorbers
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    PML
    StablePML
@@ -58,6 +62,7 @@ Absorber Parameters
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    AbsorberParams
    PMLParams
@@ -67,6 +72,7 @@ Geometry
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    Box
    Sphere
@@ -81,6 +87,7 @@ Transformations
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    RotationAroundAxis
 
@@ -94,17 +101,19 @@ Spatially uniform
 ^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    Medium
    PECMedium
    FullyAnisotropicMedium
 
 Spatially varying
-^^^^^^^^^^^^^^^^^   
+^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
-   CustomMedium   
+   CustomMedium
 
 Dispersive Mediums
 ------------------
@@ -113,6 +122,7 @@ Spatially uniform
 ^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    PoleResidue
    Lorentz
@@ -121,15 +131,16 @@ Spatially uniform
    Debye
 
 Spatially varying
-^^^^^^^^^^^^^^^^^   
+^^^^^^^^^^^^^^^^^
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    CustomPoleResidue
    CustomLorentz
    CustomSellmeier
    CustomDrude
-   CustomDebye   
+   CustomDebye
 
 General Mediums (can be both dispersive and non-dispersive)
 -----------------------------------------------------------
@@ -139,16 +150,18 @@ Spatially uniform
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    AnisotropicMedium
    Medium2D
 
 Spatially varying
-^^^^^^^^^^^^^^^^^   
+^^^^^^^^^^^^^^^^^
 .. autosummary::
-   :toctree: _autosummary/   
+   :toctree: _autosummary/
+   :template: module.rst
 
-   CustomAnisotropicMedium   
+   CustomAnisotropicMedium
 
 Medium Specifications (add properties to existing Medium)
 ---------------------------------------------------------
@@ -158,7 +171,8 @@ Nonlinear
 
 .. autosummary::
    :toctree: _autosummary/
-    
+   :template: module.rst
+
     NonlinearSpec
     NonlinearSusceptibility
 
@@ -174,6 +188,7 @@ Structures
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    Structure
    MeshOverrideStructure
@@ -188,6 +203,7 @@ Types of Sources
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    PointDipole
    UniformCurrentSource
@@ -205,6 +221,7 @@ Source Time Dependence
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    GaussianPulse
    .. ContinuousWave
@@ -218,6 +235,7 @@ Monitor Types
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    FieldMonitor
    FieldTimeMonitor
@@ -236,6 +254,7 @@ Apodization Specification
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    ApodizationSpec
 
@@ -245,6 +264,7 @@ Mode Specifications
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    ModeSpec
 
@@ -253,6 +273,7 @@ Discretization
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    GridSpec
    AutoGrid
@@ -269,6 +290,7 @@ Field Projector
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    FieldProjectionSurface
    FieldProjector
@@ -282,6 +304,7 @@ All Data for a Simulation
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    SimulationData
 
@@ -290,6 +313,7 @@ Collections of Data from single monitor
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    FieldData
    FieldTimeData
@@ -308,6 +332,7 @@ Individual Datasets
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    SpatialDataArray
    PermittivityDataset
@@ -328,6 +353,7 @@ Logging
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    log
    set_logging_level
@@ -342,6 +368,7 @@ Through python API
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.web.run
    tidy3d.web.upload
@@ -363,6 +390,7 @@ Convenience for Single and Batch
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.web.Job
    tidy3d.web.Batch
@@ -373,6 +401,7 @@ Information Containers
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.web.task.TaskInfo
    tidy3d.web.task.TaskStatus
@@ -386,6 +415,7 @@ Mode Solver
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.mode.ModeSolver
    tidy3d.plugins.mode.ModeSolverData
@@ -395,6 +425,7 @@ Dispersive Model Fitting
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.dispersion.FastDispersionFitter
    tidy3d.plugins.dispersion.AdvancedFastFitterParam
@@ -408,6 +439,7 @@ Self-intersecting Polyslab
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.polyslab.ComplexPolySlab
 
@@ -416,6 +448,7 @@ Scattering Matrix Calculator
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.smatrix.ComponentModeler
    tidy3d.plugins.smatrix.Port
@@ -426,7 +459,8 @@ Resonance Finder
 
 .. autosummary::
    :toctree: _autosummary/
-        
+   :template: module.rst
+
    tidy3d.plugins.resonance.ResonanceFinder
 
 Adjoint
@@ -434,6 +468,7 @@ Adjoint
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.adjoint.web.run
    tidy3d.plugins.adjoint.web.run_async
@@ -457,6 +492,7 @@ Waveguide
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.plugins.waveguide.RectangularDielectric
 
@@ -468,6 +504,7 @@ Physical Constants
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.C_0
    tidy3d.HBAR
@@ -482,6 +519,7 @@ Tidy3D Special Constants
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.inf
    tidy3d.PEC
@@ -491,6 +529,7 @@ Tidy3D Configuration
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.config.Tidy3dConfig
 
@@ -499,6 +538,7 @@ Default Absorber Parameters
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.DefaultPMLParameters
    tidy3d.DefaultStablePMLParameters
@@ -512,6 +552,7 @@ These are some classes that are used to organize the tidy3d components, but aren
 
 .. autosummary::
    :toctree: _autosummary/
+   :template: module.rst
 
    tidy3d.components.base.Tidy3dBaseModel
    tidy3d.components.boundary.AbsorberSpec
