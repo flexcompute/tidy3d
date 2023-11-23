@@ -5,9 +5,7 @@ Material library
 
    {% block functions %}
    {% if functions %}
-
-   .. autosummary::
-      :toctree: {{ objname }}
+   {{ objname }}
    {% for item in functions %}
       {{ item }}
    {%- endfor %}
