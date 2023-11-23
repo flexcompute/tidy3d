@@ -6,3 +6,99 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        taskId
+      
+      
+        taskName
+      
+      
+        nodeSize
+      
+      
+        completedAt
+      
+      
+        status
+      
+      
+        realCost
+      
+      
+        timeSteps
+      
+      
+        solverVersion
+      
+      
+        createAt
+      
+      
+        estCostMin
+      
+      
+        estCostMax
+      
+      
+        realFlexUnit
+      
+      
+        estFlexUnit
+      
+      
+        s3Storage
+      
+      
+        startSolverTime
+      
+      
+        finishSolverTime
+      
+      
+        totalSolverTime
+      
+      
+        callbackUrl
+      
+      
+        taskType
+      
+      
+        metadataStatus
+      
+      
+        taskBlockInfo
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

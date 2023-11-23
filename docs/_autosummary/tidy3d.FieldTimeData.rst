@@ -6,3 +6,125 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+      
+      
+        flux
+      
+      
+      
+      
+      
+      
+        poynting
+      
+      
+      
+      
+      
+        time_reversed_copy
+      
+      
+        monitor
+      
+      
+        Ex
+      
+      
+        Ey
+      
+      
+        Ez
+      
+      
+        Hx
+      
+      
+        Hy
+      
+      
+        Hz
+      
+      
+        grid_primal_correction
+      
+      
+        grid_dual_correction
+      
+      
+        symmetry
+      
+      
+        symmetry_center
+      
+      
+        grid_expanded
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            dot
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

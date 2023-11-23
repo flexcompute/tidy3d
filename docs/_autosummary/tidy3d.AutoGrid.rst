@@ -6,3 +6,73 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        min_steps_per_wvl
+      
+      
+        max_scale
+      
+      
+        dl_min
+      
+      
+        mesher
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

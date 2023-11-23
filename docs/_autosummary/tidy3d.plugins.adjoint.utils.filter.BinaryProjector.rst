@@ -6,3 +6,78 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        vmin
+      
+      
+        vmax
+      
+      
+        beta
+      
+      
+        eta
+      
+      
+        strict_binarize
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            evaluate
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

@@ -6,3 +6,84 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        centers
+      
+      
+        num_cells
+      
+      
+        sizes
+      
+      
+        yee
+      
+      
+        boundaries
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            discretize_inds
+          
+          
+            extended_subspace
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            snap_to_box_zero_dim
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

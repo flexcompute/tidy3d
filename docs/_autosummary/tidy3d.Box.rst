@@ -6,3 +6,121 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+        bounds
+      
+      
+        geometry
+      
+      
+      
+        zero_dims
+      
+      
+        size
+      
+      
+        center
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            from_bounds
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            inside
+          
+          
+          
+          
+            intersections_plane
+          
+          
+            intersections_with
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            surfaces
+          
+          
+            surfaces_with_exclusion
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

@@ -6,3 +6,87 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+      
+      
+      
+        amps
+      
+      
+        monitor
+      
+      
+        n_complex
+      
+      
+        n_group
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            to_adjoint_sources
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

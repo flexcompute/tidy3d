@@ -6,3 +6,133 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+        bounds
+      
+      
+        center_axis
+      
+      
+      
+        length_axis
+      
+      
+      
+        radius_bottom
+      
+      
+        radius_max
+      
+      
+        radius_min
+      
+      
+        radius_top
+      
+      
+      
+        radius
+      
+      
+        length
+      
+      
+        center
+      
+      
+        axis
+      
+      
+        sidewall_angle
+      
+      
+        reference_plane
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            inside
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

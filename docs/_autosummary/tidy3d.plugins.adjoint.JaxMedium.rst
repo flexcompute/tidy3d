@@ -6,3 +6,104 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+        permittivity
+      
+      
+        conductivity
+      
+      
+        name
+      
+      
+        frequency_range
+      
+      
+        allow_gain
+      
+      
+        nonlinear_spec
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            store_vjp
+          
+          
+          
+          
+          
+          
+            to_medium
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

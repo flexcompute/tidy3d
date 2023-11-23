@@ -6,3 +6,78 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        freq_window
+      
+      
+        init_num_freqs
+      
+      
+        rcond
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            run
+          
+          
+            run_raw_signal
+          
+          
+            run_scalar_field_time
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

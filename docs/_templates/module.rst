@@ -12,20 +12,24 @@
 
    .. autosummary::
       :toctree:
-   {% for item in attributes %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {% endblock %}
+      {% for item in attributes %}
+      {% if item not in inherited_members %}
+        {{ item }}
+      {% endif %}
+      {%- endfor %}
+      {% endif %}
+      {% endblock %}
 
    {% block methods %}
    {% if methods %}
    .. rubric:: Methods
 
    .. autosummary::
-      :toctree:
-   {% for item in methods %}
-      {{ item }}
-   {%- endfor %}
-   {% endif %}
-   {% endblock %}
+       :toctree:
+       {% for item in methods %}
+          {% if item not in inherited_members %}
+            {{ item }}
+          {% endif %}
+       {%- endfor %}
+       {% endif %}
+       {% endblock %}

@@ -6,3 +6,112 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+      
+        bounds
+      
+      
+      
+      
+        operation
+      
+      
+        geometry_a
+      
+      
+        geometry_b
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            inside
+          
+          
+            inside_meshgrid
+          
+          
+          
+            intersections_plane
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            to_polygon_list
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       

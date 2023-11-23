@@ -6,3 +6,95 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        n_cfl
+      
+      
+        pole_residue
+      
+      
+        name
+      
+      
+        frequency_range
+      
+      
+        allow_gain
+      
+      
+        nonlinear_spec
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+            complex_to_tuple
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            tuple_to_complex
+          
+          
+          
+          
+          
+       
+       

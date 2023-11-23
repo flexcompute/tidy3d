@@ -6,3 +6,88 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
+
+   
+   
+   .. rubric:: Attribues
+
+   .. autosummary::
+      :toctree:
+      
+      
+        geometry
+      
+      
+        medium
+      
+      
+        name
+      
+      
+      
+
+   
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+       :toctree:
+       
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            from_structure
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+          
+            make_grad_monitors
+          
+          
+          
+          
+          
+          
+          
+          
+            store_vjp
+          
+          
+          
+          
+          
+          
+            to_structure
+          
+          
+          
+          
+          
+          
+          
+          
+       
+       
