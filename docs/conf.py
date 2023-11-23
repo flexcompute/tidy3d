@@ -60,20 +60,6 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
 ## TODO DEBATE KEEP
-autodoc_pydantic_field_signature_prefix = "attribute"
-autodoc_pydantic_field_list_validators = True
-autodoc_pydantic_field_show_constraints = True
-autodoc_pydantic_model_show_json = True
-autodoc_pydantic_model_show_config_member = True
-autodoc_pydantic_model_show_config_summary = True
-autodoc_pydantic_model_show_validator_summary = True
-autodoc_pydantic_model_show_validator_members = True
-autodoc_pydantic_model_show_field_summary = True
-autodoc_pydantic_model_members = True
-autodoc_pydantic_model_signature_prefix = "class"
-autodoc_pydantic_model_undoc_members = True
-autodoc_pydantic_settings_show_json = True
-autodoc_pydantic_settings_summary_list_order = 'bysource'
 # autoclass_content = "class"
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
@@ -84,7 +70,6 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
-    "sphinxcontrib.autodoc_pydantic",
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",
