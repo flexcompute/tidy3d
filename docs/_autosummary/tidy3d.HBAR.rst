@@ -1,6 +1,8 @@
 ﻿tidy3d.HBAR
 ===========
 
-.. currentmodule:: tidy3d
-
-.. autodata:: HBAR
+.. autoclass:: tidy3d.HBAR
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

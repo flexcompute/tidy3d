@@ -1,6 +1,8 @@
 ﻿tidy3d.web.run\_async
 =====================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: run_async
+.. autoclass:: tidy3d.web.run_async
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

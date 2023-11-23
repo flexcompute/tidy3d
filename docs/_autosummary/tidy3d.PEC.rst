@@ -1,6 +1,8 @@
 ﻿tidy3d.PEC
 ==========
 
-.. currentmodule:: tidy3d
-
-.. autodata:: PEC
+.. autoclass:: tidy3d.PEC
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

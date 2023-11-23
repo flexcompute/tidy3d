@@ -1,6 +1,8 @@
 ﻿tidy3d.web.real\_cost
 =====================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: real_cost
+.. autoclass:: tidy3d.web.real_cost
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

@@ -1,6 +1,8 @@
 ﻿tidy3d.web.download\_log
 ========================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: download_log
+.. autoclass:: tidy3d.web.download_log
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

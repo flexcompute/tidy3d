@@ -1,6 +1,8 @@
 ﻿tidy3d.DefaultStablePMLParameters
 =================================
 
-.. currentmodule:: tidy3d
-
-.. autodata:: DefaultStablePMLParameters
+.. autoclass:: tidy3d.DefaultStablePMLParameters
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

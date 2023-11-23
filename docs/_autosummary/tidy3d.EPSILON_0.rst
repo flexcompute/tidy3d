@@ -1,6 +1,8 @@
 ﻿tidy3d.EPSILON\_0
 =================
 
-.. currentmodule:: tidy3d
-
-.. autodata:: EPSILON_0
+.. autoclass:: tidy3d.EPSILON_0
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

@@ -1,6 +1,8 @@
 ﻿tidy3d.inf
 ==========
 
-.. currentmodule:: tidy3d
-
-.. autodata:: inf
+.. autoclass:: tidy3d.inf
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

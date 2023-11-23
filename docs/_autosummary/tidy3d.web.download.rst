@@ -1,6 +1,8 @@
 ﻿tidy3d.web.download
 ===================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: download
+.. autoclass:: tidy3d.web.download
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

@@ -1,6 +1,8 @@
 ﻿tidy3d.web.start
 ================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: start
+.. autoclass:: tidy3d.web.start
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

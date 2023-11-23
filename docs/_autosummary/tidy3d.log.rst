@@ -1,6 +1,8 @@
 ﻿tidy3d.log
 ==========
 
-.. currentmodule:: tidy3d
-
-.. autodata:: log
+.. autoclass:: tidy3d.log
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

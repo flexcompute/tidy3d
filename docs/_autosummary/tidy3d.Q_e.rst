@@ -1,6 +1,8 @@
 ﻿tidy3d.Q\_e
 ===========
 
-.. currentmodule:: tidy3d
-
-.. autodata:: Q_e
+.. autoclass:: tidy3d.Q_e
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

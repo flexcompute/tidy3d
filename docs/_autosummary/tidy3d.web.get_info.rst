@@ -1,6 +1,8 @@
 ﻿tidy3d.web.get\_info
 ====================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: get_info
+.. autoclass:: tidy3d.web.get_info
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

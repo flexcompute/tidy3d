@@ -1,6 +1,8 @@
 ﻿tidy3d.plugins.adjoint.web.run\_async
 =====================================
 
-.. currentmodule:: tidy3d.plugins.adjoint.web
-
-.. autodata:: run_async
+.. autoclass:: tidy3d.plugins.adjoint.web.run_async
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

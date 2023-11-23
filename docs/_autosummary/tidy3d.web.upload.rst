@@ -1,6 +1,8 @@
 ﻿tidy3d.web.upload
 =================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: upload
+.. autoclass:: tidy3d.web.upload
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

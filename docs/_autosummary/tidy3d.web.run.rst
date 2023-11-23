@@ -1,6 +1,8 @@
 ﻿tidy3d.web.run
 ==============
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: run
+.. autoclass:: tidy3d.web.run
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

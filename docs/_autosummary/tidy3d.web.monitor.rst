@@ -1,6 +1,8 @@
 ﻿tidy3d.web.monitor
 ==================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: monitor
+.. autoclass:: tidy3d.web.monitor
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

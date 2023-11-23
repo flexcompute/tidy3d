@@ -1,6 +1,8 @@
 ﻿tidy3d.DefaultAbsorberParameters
 ================================
 
-.. currentmodule:: tidy3d
-
-.. autodata:: DefaultAbsorberParameters
+.. autoclass:: tidy3d.DefaultAbsorberParameters
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

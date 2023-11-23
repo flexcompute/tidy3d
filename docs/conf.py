@@ -58,7 +58,14 @@ add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 # autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
-autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
+autodoc_class_signature = "separated"
+autodoc_default_options = {
+    'members': True,
+    'member-order': 'bysource',
+    'special-members': '__init__',
+    'undoc-members': True,
+}
+autodoc_typehints = "none"
 ## TODO DEBATE KEEP
 # autoclass_content = "class"
 ##

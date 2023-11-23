@@ -1,6 +1,8 @@
 ﻿tidy3d.plugins.dispersion.web.run
 =================================
 
-.. currentmodule:: tidy3d.plugins.dispersion.web
-
-.. autofunction:: run
+.. autoclass:: tidy3d.plugins.dispersion.web.run
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

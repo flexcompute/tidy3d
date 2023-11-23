@@ -1,6 +1,8 @@
 ﻿tidy3d.web.download\_json
 =========================
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: download_json
+.. autoclass:: tidy3d.web.download_json
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource

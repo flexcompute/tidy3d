@@ -1,6 +1,8 @@
 ﻿tidy3d.web.load
 ===============
 
-.. currentmodule:: tidy3d.web
-
-.. autofunction:: load
+.. autoclass:: tidy3d.web.load
+   :members:
+   :show-inheritance:
+   :undoc-members:
+   :member-order: bysource
