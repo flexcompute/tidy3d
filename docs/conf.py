@@ -24,6 +24,7 @@ import re
 import sys
 import subprocess
 import tidy3d
+import sphinxcontrib.divparams as divparams
 
 full_build = True
 
@@ -72,11 +73,13 @@ autodoc_typehints = "none"
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
 custom_sitemap_excludes = [r'/notebooks/']
+# divparams_enable_postprocessing = True # TODO FIX
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
+    # "sphinxcontrib.divparams", # TODO FIX
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",
@@ -110,7 +113,10 @@ html_js_files = ["js/custom-download.js"]
 htmlhelp_basename = "tidy3ddoc"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_sourcelink_suffix = ""
-html_static_path = ["_static"]
+html_static_path = [
+    "_static",
+    # divparams.get_static_path() # TODO FIX
+]
 html_theme = "sphinx_book_theme"
 html_title = "Tidy3D Electromagnetic Solver"
 html_theme_options = {
@@ -155,7 +161,10 @@ release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
 sitemap_url_scheme = "{lang}{version}{link}"
 source_suffix = [".rst", ".md"]
-templates_path = ["_templates"]
+templates_path = [
+    "_templates",
+    # divparams.get_templates_path() # TODO FIX
+]
 texinfo_documents = [
     (
         master_doc,

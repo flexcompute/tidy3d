@@ -8,7 +8,7 @@
 
    {% block attributes %}
    {% if attributes %}
-   .. rubric:: Attribues
+   .. rubric:: Attributes
 
    .. autosummary::
       :toctree:
