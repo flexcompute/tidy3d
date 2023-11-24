@@ -14,7 +14,7 @@ def generate_material_library_doc():
     unit = "um"
 
     # doc file path
-    fname = "./material_library.rst"
+    fname = "./api/material_library.rst"
 
     def num2str(num):
         if np.isinf(num):
