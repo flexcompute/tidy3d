@@ -24,7 +24,7 @@ import re
 import sys
 import subprocess
 import tidy3d
-import sphinxcontrib.divparams as divparams
+# import sphinxcontrib.divparams as divparams
 
 full_build = True
 
