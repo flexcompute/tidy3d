@@ -36,7 +36,8 @@ class ModeSpec(Tidy3dBaseModel):
 
     See Also
     --------
-    - `Injecting modes in bent and angled waveguides <https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/ModesBentAngled.html>`__
+
+    *  `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
     """
 
     num_modes: pd.PositiveInt = pd.Field(

@@ -404,6 +404,11 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='steady_state_monitor',
     ...     colocate=True)
+
+    See Also
+    --------
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

@@ -70,6 +70,11 @@ class Structure(AbstractStructure):
     >>> box = Box(center=(0,0,1), size=(2, 2, 2))
     >>> glass = Medium(permittivity=3.9)
     >>> struct = Structure(geometry=box, medium=glass, name='glass_box')
+
+    See Also
+    --------
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     """
 
     medium: MediumType = pydantic.Field(

@@ -130,6 +130,11 @@ class Simulation(Box):
     ...     courant=0.8,
     ...     subpixel=False,
     ... )
+
+    See Also
+    --------
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(

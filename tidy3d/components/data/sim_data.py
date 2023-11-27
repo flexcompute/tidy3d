@@ -60,6 +60,11 @@ class SimulationData(Tidy3dBaseModel):
     ... )
     >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field, grid_expanded=grid)
     >>> sim_data = td.SimulationData(simulation=sim, data=(field_data,))
+
+    See Also
+    --------
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     """
 
     simulation: Simulation = pd.Field(
