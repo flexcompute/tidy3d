@@ -1077,7 +1077,7 @@ class Simulation(AbstractSimulation):
         num_cells = self.discretize_monitor(monitor).num_cells
         # take monitor downsampling into account
         num_cells = monitor.downsampled_num_cells(num_cells)
-        return np.prod(num_cells)
+        return np.prod(np.array(num_cells, dtype=np.int64))
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
