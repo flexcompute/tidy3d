@@ -16,5 +16,6 @@ nbdime
 optax
 signac
 sax
+tkinter
 
 -r ../tidy3d/requirements/dev.txt

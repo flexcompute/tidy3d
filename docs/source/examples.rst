@@ -143,6 +143,14 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin11CircuitMZI
     notebooks/AdjointPlugin12LightExtractor
 
+Advance Applications
+~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/WaveguideBendSimulator
+
 Case Studies
 ------------
 
