@@ -405,6 +405,11 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor',
     ...     colocate=True)
 
+    Notes
+    -----
+
+    :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are useful for investigating the steady-state field distribution in 2D or even 3D regions of the simulation.
+
     See Also
     --------
 
@@ -431,6 +436,16 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     interval=2,
     ...     colocate=True,
     ...     name='movie_monitor')
+
+    Notes
+    -----
+
+    :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single point, but they can also be used to create “animations” of the field pattern evolution.
+
+    See Also
+    --------
+
+    * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
