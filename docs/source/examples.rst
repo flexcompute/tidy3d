@@ -177,6 +177,7 @@ Photonic Integrated Circuit Components
     notebooks/ParticleSwarmOptimizedPBS
     notebooks/BullseyeCavityPSO
     notebooks/PlasmonicWaveguideCO2Sensor
+    notebooks/BilayerSiNEdgeCoupler
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

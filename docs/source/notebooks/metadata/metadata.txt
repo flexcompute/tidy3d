@@ -119,6 +119,12 @@
     "keywords": "photonic crystal, band structure, Tidy3D, FDTD",
     "feature_image": "./img/band_structure.png"
   },
+  "BilayerSiNEdgeCoupler.ipynb": {
+    "title": "Visible Light Bi-layer SiN Edge Coupler | Flexcompute",
+    "description": "This notebook demonstrates a SiN bi-layer edge coupler design for efficient and broadband fiber-to-chip coupling in visible frequency.",
+    "keywords": "integrated photonics, silicon nitride, edge coupler, Tidy3D, FDTD",
+    "feature_image": "./img/bilayer_edge_coupler.png"
+  },
   "BilevelPSR.ipynb": {
     "title": "Broadband Polarization Rotator-splitter | Flexcompute",
     "description": "This notebook demonstrates how to model a broadband polarization rotator-splitter in Tidy3D FDTD.",
