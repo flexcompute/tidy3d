@@ -33,6 +33,10 @@ class ModeSpec(Tidy3dBaseModel):
     Example
     -------
     >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5)
+
+    See Also
+    --------
+    `Test random notebook link <https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/ModesBentAngled.html>`
     """
 
     num_modes: pd.PositiveInt = pd.Field(
