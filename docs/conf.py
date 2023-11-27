@@ -91,6 +91,7 @@ extensions = [
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
     "sphinx_sitemap",
+    "sphinx_tabs.tabs",
     "custom-meta",  # In _ext, these need to be at the end of the extensions list
     "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
     "custom-robots",  # In _ext, these need to be at the end of the extensions list
@@ -135,6 +136,8 @@ html_theme_options = {
     "use_issues_button": True,
     "use_repository_button": True,
     "use_download_button": True,
+    "pygment_light_style": "colorful",
+    "pygment_dark_style": "material"
 }
 latex_engine = "xelatex"
 language = "en"
@@ -156,7 +159,6 @@ mathjax3_config = {
 nbsphinx_allow_errors = True  # Continue through Jupyter errors
 nbsphinx_execute = "never"
 project = "tidy3d"
-pygments_style = "sphinx"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
 sitemap_url_scheme = "{lang}{version}{link}"

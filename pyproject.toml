@@ -91,14 +91,15 @@ pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
+sphinx-tabs = {version="*", optional = true}
 nbdime = {version="*", optional = true}
 optax = {version="*", optional = true}
 signac = {version="*", optional = true}
 sax = {version="*", optional = true}
 
 [tool.poetry.extras]
-dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "pydata-sphinx-theme"]
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack"]
+dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "pydata-sphinx-theme", "sphinx-tabs"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]

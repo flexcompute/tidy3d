@@ -20,8 +20,8 @@ class ModeSpec(Tidy3dBaseModel):
     Stores specifications for the mode solver to find an electromagntic mode. Note, the planar axes are found by popping the injection axis from {x,y,z}. For example, if injection axis is y, the planar axes are ordered {x,z}.
 
 
-    Note
-    ----
+    Notes
+    -----
         The ``angle_theta`` and ``angle_phi parameters`` define the injection axis as illustrated in the figure below, with respect to the axis normal to the mode plane (``x`` in the figure). Note that ``angle_theta`` must be smaller than pi/2. To inject in the backward direction, we can still use the ``direction`` parameter as also shown in the figure. Similarly, the mode amplitudes computed in mode monitors are defined w.r.t. the ``forward`` and ``backward`` directions as illustrated.
 
         .. image:: ../../_static/img/mode_injection_direction.png
