@@ -459,6 +459,45 @@ class FieldProjector(Tidy3dBaseModel):
 
         return Er, Etheta, Ephi, Hr, Htheta, Hphi
 
+    @staticmethod
+    def apply_window_to_currents(
+        proj_monitor: AbstractFieldProjectionMonitor, currents: xr.Dataset
+    ) -> xr.Dataset:
+        """Apply windowing function to the surface currents."""
+        if proj_monitor.size.count(0.0) == 0:
+            return currents
+        if proj_monitor.window_size == (0, 0):
+            return currents
+
+        pts = [currents[name].values for name in ["x", "y", "z"]]
+
+        custom_bounds = [
+            [pts[i][0] for i in range(3)],
+            [pts[i][-1] for i in range(3)],
+        ]
+
+        window_size, window_minus, window_plus = proj_monitor.window_parameters(
+            custom_bounds=custom_bounds
+        )
+
+        new_currents = currents.copy(deep=True)
+        for dim, (dim_name, points) in enumerate(zip("xyz", pts)):
+            window_fn = proj_monitor.window_function(
+                points=points,
+                window_size=window_size,
+                window_minus=window_minus,
+                window_plus=window_plus,
+                dim=dim,
+            )
+            window_data = xr.DataArray(
+                window_fn,
+                dims=[dim_name],
+                coords=[points],
+            )
+            new_currents *= window_data
+
+        return new_currents
+
     def project_fields(
         self, proj_monitor: AbstractFieldProjectionMonitor
     ) -> AbstractFieldProjectionData:
@@ -514,10 +553,17 @@ class FieldProjector(Tidy3dBaseModel):
 
         for surface in self.surfaces:
 
+            # apply windowing to currents
+            currents = self.apply_window_to_currents(monitor, self.currents[surface.monitor.name])
+
             if monitor.far_field_approx:
                 for idx_f, frequency in enumerate(freqs):
                     _fields = self._far_fields_for_surface(
-                        frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                        frequency=frequency,
+                        theta=theta,
+                        phi=phi,
+                        surface=surface,
+                        currents=currents,
                     )
                     for field, _field in zip(fields, _fields):
                         field[..., idx_f] += _field * phase[idx_f]
@@ -534,7 +580,7 @@ class FieldProjector(Tidy3dBaseModel):
                 ):
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
                     _fields = self._fields_for_surface_exact(
-                        _x, _y, _z, surface, self.currents[surface.monitor.name]
+                        x=_x, y=_y, z=_z, surface=surface, currents=currents
                     )
                     for field, _field in zip(fields, _fields):
                         field[0, i, j, :] += _field
@@ -596,16 +642,25 @@ class FieldProjector(Tidy3dBaseModel):
 
             for surface in self.surfaces:
 
+                # apply windowing to currents
+                currents = self.apply_window_to_currents(
+                    monitor, self.currents[surface.monitor.name]
+                )
+
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(
-                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                            frequency=frequency,
+                            theta=theta,
+                            phi=phi,
+                            surface=surface,
+                            currents=currents,
                         )
                         for field, _field in zip(fields, _fields):
                             field[i, j, k, idx_f] += _field * phase[idx_f]
                 else:
                     _fields = self._fields_for_surface_exact(
-                        _x, _y, _z, surface, self.currents[surface.monitor.name]
+                        x=_x, y=_y, z=_z, surface=surface, currents=currents
                     )
                     for field, _field in zip(fields, _fields):
                         field[i, j, k, :] += _field
@@ -658,10 +713,19 @@ class FieldProjector(Tidy3dBaseModel):
 
             for surface in self.surfaces:
 
+                # apply windowing to currents
+                currents = self.apply_window_to_currents(
+                    monitor, self.currents[surface.monitor.name]
+                )
+
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(
-                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
+                            frequency=frequency,
+                            theta=theta,
+                            phi=phi,
+                            surface=surface,
+                            currents=currents,
                         )
                         for field, _field in zip(fields, _fields):
                             field[i, j, 0, idx_f] += _field * phase[idx_f]
@@ -669,7 +733,7 @@ class FieldProjector(Tidy3dBaseModel):
                 else:
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, theta, phi)
                     _fields = self._fields_for_surface_exact(
-                        _x, _y, _z, surface, self.currents[surface.monitor.name]
+                        x=_x, y=_y, z=_z, surface=surface, currents=currents
                     )
                     for field, _field in zip(fields, _fields):
                         field[i, j, 0, :] += _field

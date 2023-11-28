@@ -1706,6 +1706,10 @@
                 3.0
             ],
             "far_field_approx": true,
+            "window_size": [
+                0.0,
+                0.0
+            ],
             "proj_distance": 1000000.0,
             "theta": [
                 -1.5707963267948966,
@@ -1851,6 +1855,10 @@
                 3.0
             ],
             "far_field_approx": true,
+            "window_size": [
+                0.0,
+                0.0
+            ],
             "proj_axis": 2,
             "proj_distance": 5.0,
             "x": [
@@ -1903,6 +1911,10 @@
                 3.0
             ],
             "far_field_approx": true,
+            "window_size": [
+                0.0,
+                0.0
+            ],
             "proj_axis": 2,
             "proj_distance": 1000000.0,
             "ux": [
@@ -1952,6 +1964,10 @@
                 3.0
             ],
             "far_field_approx": true,
+            "window_size": [
+                0.0,
+                0.0
+            ],
             "proj_distance": 1000000.0,
             "theta": [
                 -1.5707963267948966,
