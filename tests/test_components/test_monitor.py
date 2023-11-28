@@ -197,6 +197,26 @@ def test_fieldproj_local_origin():
     M.local_origin
 
 
+def test_fieldproj_window():
+    M = td.FieldProjectionAngleMonitor(
+        size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12], window_size=(0.2, 1)
+    )
+    window_size, window_minus, window_plus = M.window_parameters()
+    window_size, window_minus, window_plus = M.window_parameters(M.bounds)
+    points = np.linspace(0, 10, 100)
+    _ = M.window_function(points, window_size, window_minus, window_plus, 2)
+    # do not allow a window size larger than 1
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.FieldProjectionAngleMonitor(
+            size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12], window_size=(0.2, 1.1)
+        )
+    # do not allow non-zero windows for volume monitors
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.FieldProjectionAngleMonitor(
+            size=(2, 1, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12], window_size=(0.2, 0)
+        )
+
+
 PROJ_MNTS = [
     td.FieldProjectionAngleMonitor(size=(2, 0, 2), theta=[1, 2], phi=[0], name="f", freqs=[2e12]),
     td.FieldProjectionCartesianMonitor(

@@ -5,7 +5,7 @@ from typing import Union, Tuple
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound
+from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
 from .validators import assert_plane
 from .base import cached_property, Tidy3dBaseModel
@@ -23,6 +23,12 @@ BYTES_REAL = 4
 BYTES_COMPLEX = 8
 WARN_NUM_FREQS = 2000
 WARN_NUM_MODES = 100
+
+# Field projection windowing factor that determines field decay at the edges of surface field
+# projection monitors. A value of 15 leads to a decay of < 1e-3x in field amplitude.
+# This number relates directly to the standard deviation of the Gaussian function which is used
+# for windowing the monitor.
+WINDOW_FACTOR = 15
 
 
 class Monitor(AbstractMonitor):
@@ -666,6 +672,48 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "projecting the recorded near fields to the far field.",
     )
 
+    window_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(
+        (0, 0),
+        title="Spatial filtering window size",
+        description="Size of the transition region of the windowing function used to ensure that "
+        "the recorded near fields decay to zero near the edges of the monitor. "
+        "The two components refer to the two tangential directions associated with each surface. "
+        "For surfaces with the normal along ``x``, the two components are (``y``, ``z``). "
+        "For surfaces with the normal along ``y``, the two components are (``x``, ``z``). "
+        "For surfaces with the normal along ``z``, the two components are (``x``, ``y``). "
+        "Each value must be between 0 and 1, inclusive, and denotes the size of the transition "
+        "region over which fields are scaled to less than a thousandth of the original amplitude, "
+        "relative to half the size of the monitor in that direction. A value of 0 turns windowing "
+        "off in that direction, while a value of 1 indicates that the window will be applied to "
+        "the entire monitor in that direction. This field is applicable for surface monitors only, "
+        "and otherwise must remain (0, 0).",
+    )
+
+    @pydantic.validator("window_size", always=True)
+    def window_size_for_surface(cls, val, values):
+        """Ensures that windowing is applied for surface monitors only."""
+        size = values.get("size")
+        name = values.get("name")
+
+        if size.count(0.0) != 1:
+            if val != (0, 0):
+                raise ValidationError(
+                    f"A non-zero 'window_size' cannot be used for projection monitor '{name}'. "
+                    "Windowing can be applied only for surface projection monitors."
+                )
+        return val
+
+    @pydantic.validator("window_size", always=True)
+    def window_size_leq_one(cls, val, values):
+        """Ensures that each component of the window size is less than or equal to 1."""
+        name = values.get("name")
+        if val[0] > 1 or val[1] > 1:
+            raise ValidationError(
+                f"Each component of 'window_size' for monitor '{name}' "
+                "must be less than or equal to 1."
+            )
+        return val
+
     @property
     def projection_surfaces(self) -> Tuple[FieldProjectionSurface, ...]:
         """Surfaces of the monitor where near fields will be recorded for subsequent projection."""
@@ -690,6 +738,62 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         if self.custom_origin is None:
             return self.center
         return self.custom_origin
+
+    def window_parameters(self, custom_bounds: Bound = None) -> Tuple[Size, Coordinate, Coordinate]:
+        """Return the physical size of the window transition region based on the monitor's size
+        and optional custom bounds (useful in case the monitor has infinite dimensions). The window
+        size is returned in 3D. Also returns the coordinate where the transition region beings on
+        the minus and plus side of the monitor."""
+
+        window_size = [0, 0, 0]
+        window_minus = [0, 0, 0]
+        window_plus = [0, 0, 0]
+
+        # windowing is for surface monitors only
+        if self.size.count(0.0) != 1:
+            return window_size, window_minus, window_plus
+
+        _, plane_inds = self.pop_axis([0, 1, 2], axis=self.size.index(0.0))
+
+        for i, ind in enumerate(plane_inds):
+            if custom_bounds:
+                size = min(self.size[ind], custom_bounds[1][ind] - custom_bounds[0][ind])
+                bound_min = max(self.bounds[0][ind], custom_bounds[0][ind])
+                bound_max = min(self.bounds[1][ind], custom_bounds[1][ind])
+            else:
+                size = self.size[ind]
+                bound_min = self.bounds[0][ind]
+                bound_max = self.bounds[1][ind]
+
+            window_size[ind] = self.window_size[i] * size / 2
+            window_minus[ind] = bound_min + window_size[ind]
+            window_plus[ind] = bound_max - window_size[ind]
+
+        return window_size, window_minus, window_plus
+
+    @staticmethod
+    def window_function(
+        points: ArrayFloat1D,
+        window_size: Size,
+        window_minus: Coordinate,
+        window_plus: Coordinate,
+        dim: int,
+    ) -> ArrayFloat1D:
+        """Get the windowing function along a given direction for a given set of points."""
+        rising_window = np.exp(
+            -0.5
+            * WINDOW_FACTOR
+            * ((points[points < window_minus[dim]] - window_minus[dim]) / window_size[dim]) ** 2
+        )
+        falling_window = np.exp(
+            -0.5
+            * WINDOW_FACTOR
+            * ((points[points > window_plus[dim]] - window_plus[dim]) / window_size[dim]) ** 2
+        )
+        window_fn = np.ones_like(points)
+        window_fn[points < window_minus[dim]] = rising_window
+        window_fn[points > window_plus[dim]] = falling_window
+        return window_fn
 
 
 class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
