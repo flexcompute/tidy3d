@@ -20,7 +20,11 @@ from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_
 from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
-from tidy3d.plugins.adjoint.components.structure import JaxStructure
+from tidy3d.plugins.adjoint.components.structure import (
+    JaxStructure,
+    JaxStructureStaticMedium,
+    JaxStructureStaticGeometry,
+)
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
 from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
@@ -33,7 +37,7 @@ from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRES
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.api.container import BatchData
-
+import tidy3d.material_library as material_library
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 from ..test_components.test_custom import CUSTOM_MEDIUM
 
@@ -253,6 +257,14 @@ def make_sim(
 
     jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
     jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
+
+    jax_struct_static_med = JaxStructureStaticMedium(
+        geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
+    )
+    jax_struct_static_geo = JaxStructureStaticGeometry(
+        geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
+    )
+
     # TODO: Add new geometries as they are created.
 
     # NOTE: Any new output monitors should be added below as they are made
@@ -305,6 +317,8 @@ def make_sim(
             jax_struct3,
             jax_struct_group,
             jax_struct_custom_anis,
+            jax_struct_static_med,
+            jax_struct_static_geo,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         sources=[src],

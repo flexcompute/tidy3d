@@ -1,7 +1,7 @@
 """Defines a jax-compatible simulation."""
 from __future__ import annotations
 
-from typing import Tuple, Union, List, Dict
+from typing import Tuple, Union, List, Dict, Literal
 from multiprocessing import Pool
 
 import pydantic.v1 as pd
@@ -21,7 +21,12 @@ from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
 from .base import JaxObject
-from .structure import JaxStructure
+from .structure import (
+    JaxStructure,
+    JaxStructureType,
+    JaxStructureStaticMedium,
+    JaxStructureStaticGeometry,
+)
 from .geometry import JaxPolySlab, JaxGeometryGroup
 
 
@@ -82,12 +87,20 @@ class JaxInfo(Tidy3dBaseModel):
         units=SECOND,
     )
 
+    input_structure_types: Tuple[
+        Literal["JaxStructure", "JaxStructureStaticMedium", "JaxStructureStaticGeometry"], ...
+    ] = pd.Field(
+        (),
+        title="Input Structure Types",
+        description="Type of the original input_structures (as strings).",
+    )
+
 
 @register_pytree_node_class
 class JaxSimulation(Simulation, JaxObject):
     """A :class:`.Simulation` registered with jax."""
 
-    input_structures: Tuple[JaxStructure, ...] = pd.Field(
+    input_structures: Tuple[annotate_type(JaxStructureType), ...] = pd.Field(
         (),
         title="Input Structures",
         description="Tuple of jax-compatible structures"
@@ -171,7 +184,8 @@ class JaxSimulation(Simulation, JaxObject):
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
-        input_structures = list(val)
+        input_structures = [s for s in val if "geometry" in s._differentiable_fields]
+
         structures = list(values.get("structures"))
 
         # if the center and size of all structure geometries do not contain all numbers, skip check
@@ -349,6 +363,7 @@ class JaxSimulation(Simulation, JaxObject):
             num_grad_eps_monitors=len(self.grad_eps_monitors),
             fwidth_adjoint=self.fwidth_adjoint,
             run_time_adjoint=self.run_time_adjoint,
+            input_structure_types=[s.type for s in self.input_structures],
         )
 
         return sim, jax_info
@@ -556,7 +571,19 @@ class JaxSimulation(Simulation, JaxObject):
 
         # split the list based on these numbers
         structures = all_structures[:num_structs]
-        input_structures = [JaxStructure.from_structure(s) for s in all_structures[num_structs:]]
+        structure_type_map = dict(
+            JaxStructure=JaxStructure,
+            JaxStructureStaticMedium=JaxStructureStaticMedium,
+            JaxStructureStaticGeometry=JaxStructureStaticGeometry,
+        )
+
+        input_structures = []
+        for struct_type_str, struct in zip(
+            jax_info.input_structure_types, all_structures[num_structs:]
+        ):
+            struct_type = structure_type_map[struct_type_str]
+            new_structure = struct_type.from_structure(struct)
+            input_structures.append(new_structure)
 
         # return a dictionary containing these split structures
         return dict(structures=structures, input_structures=input_structures)

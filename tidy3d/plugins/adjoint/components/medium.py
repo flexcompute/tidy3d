@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable, Optional
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import pydantic.v1 as pd
 import numpy as np
@@ -33,6 +33,14 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
+
+    def to_tidy3d(self) -> AbstractJaxMedium:
+        """Convert self to tidy3d component."""
+        return self.to_medium()
+
+    @abstractmethod
+    def to_medium(self) -> AbstractJaxMedium:
+        """Convert self to medium."""
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
