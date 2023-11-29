@@ -52,8 +52,8 @@ Do I have to know Python programming to use Tidy3D?
 Tidy3D simulations can be defined in two ways: our web GUI or Python scripts. If you do not have Python programming 
 experience, you can use our feature-rich web GUI to define simulation, submit simulation, and visualize simulation 
 results.
-Since defining simulation and performing post-processing in Python offers additional flexibity, we do 
-recomment our users to learn to use Python, especially for more complex simulations. There are a lot of great free 
+Since defining simulation and performing post-processing in Python offers additional flexibility, we do 
+recommend our users to learn to use Python, especially for more complex simulations. There are a lot of great free 
 resources for learning Python online. You can also reference our Python API documentation as well as a variety of 
 examples in our `Learning Center <https://www.flexcompute.com/tidy3d/learning-center/>`_.
 

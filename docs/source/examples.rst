@@ -87,6 +87,7 @@ Data Visualization and Postprocessing
 
     notebooks/VizSimulation
     notebooks/VizData
+    notebooks/XarrayTutorial
     notebooks/AnimationTutorial  
     notebooks/FieldProjections  
 
@@ -141,6 +142,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin9WDM
     notebooks/AdjointPlugin10YBranchLevelSet
     notebooks/AdjointPlugin11CircuitMZI
+    notebooks/AdjointPlugin12LightExtractor
 
 Heat Solver
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -201,6 +203,7 @@ Metamaterials, Gratings, and Other Periodic Structures
     notebooks/GratingEfficiency
     notebooks/BiosensorGrating
     notebooks/DistributedBraggReflectorCavity
+    notebooks/CMOSRGBSensor
 
 Photonic Crystals
 ~~~~~~~~~~~~~~~~~

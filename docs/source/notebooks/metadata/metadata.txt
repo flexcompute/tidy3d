@@ -89,6 +89,12 @@
     "keywords": "inverse design, MZI, circuit, sax, design optimization, adjoint, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+    "AdjointPlugin12LightExtractor.ipynb": {
+    "title": "How to perform the inverse design of a quantum emitter light extractor in Tidy3D FDTD",
+    "description": "This notebook demonstrates how to set up and run a quantum emitter light extractor optimization.",
+    "keywords": "inverse design, adjointt optimization, quantum emitter, light extractor, single-photon source, nanocavity optimization, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },  
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
@@ -161,6 +167,12 @@
     "keywords": "cavity quality factor, cavity effective mode volume, cavity mode volume, Purcell factor, FDTD cavity, FDTD resonance, FDTD quality factor, FDTD mode volume, FDTD Purcell factor, Tidy3D, FDTD",
     "feature_image": ""
   },  
+  "CMOSRGBSensor.ipynb": {
+    "title": "How to perform the simulation of a RGB CMOS image sensor in Tidy3D FDTD",
+    "description": "This notebook demonstrates how to set up and run a FDTD simulation of a RGB CMOS image sensor.",
+    "keywords": "CMOS sensor, RBG CMOS sensor, RGB CMOS image sensor, image sensor, RGB image sensor, Bayer cell, Tidy3D, FDTD",
+    "feature_image": "./img/rgb_cmos_sensor.png"
+  },    
   "CreatingGeometryUsingTrimesh.ipynb": {
     "title": "Defining complex geometries using trimesh | Flexcompute",
     "description": "This notebook demonstrates how to define complex geometries using trimesh in Tidy3D FDTD.",
@@ -537,6 +549,12 @@
     "title": "Running Simulations Through the Cloud | Flexcompute",
     "description": "This notebook demonstrates how to run simulations through the cloud in Tidy3D FDTD.",
     "keywords": "web API, job, batch, Tidy3D, FDTD",
+    "feature_image": ""
+  },
+  "XarrayTutorial.ipynb": {
+    "title": "Advanced monitor data manipulation and visualization | Flexcompute",
+    "description": "This notebook demonstrates advanced xarray features for postprocessing and visualization.",
+    "keywords": "xarray, postprocessing, visualization, Tidy3D, FDTD",
     "feature_image": ""
   },
   "YJunction.ipynb": {
