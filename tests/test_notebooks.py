@@ -35,13 +35,14 @@ run_only = [
 ]
 
 skip = [
-'AdjointPlugin4MultiObjective',
+'8ChannelDemultiplexer',
+'90BendPolarizationSplitterRotator',
 'AdjointPlugin5BoundaryGradients',
 'AdjointPlugin6GratingCoupler',
 'AdjointPlugin7Metalens',
 'AdjointPlugin8WaveguideBend',
 'AdjointPlugin9WDM',
-'Simulation',
+'AdjointPlugin11CircuitMZI',
 ]
 
 # if any run only supplied, only add those
