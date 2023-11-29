@@ -263,6 +263,16 @@ class PML(AbsorberSpec):
     Example
     -------
     >>> pml = PML(num_layers=10)
+
+    .. TODO potentailly add 1D and discrtization equuations from the lecture onto the API and images
+
+    See Also
+    --------
+
+    Lectures:
+
+    * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`_
+
     """
 
     num_layers: pd.NonNegativeInt = pd.Field(

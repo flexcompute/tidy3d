@@ -43,3 +43,8 @@ img {
     margin: 0.1em;
 }
 
+
+.navbar-brand:hover .logo__image .only-light{
+    opacity: 1;
+    content: url("_static/img/demo_logo_active.gif");
+}
