@@ -82,6 +82,10 @@ class Structure(AbstractStructure):
 
     * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
+
+    GUI:
+
+    * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
     medium: MediumType = pydantic.Field(

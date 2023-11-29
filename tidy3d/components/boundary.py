@@ -260,6 +260,45 @@ class AbsorberSpec(BoundaryEdge):
 class PML(AbsorberSpec):
     """Specifies a standard PML along a single dimension.
 
+    Notes
+    ------
+
+        **1D Basic Model**
+
+        Test
+
+        .. math::
+
+            ab
+
+        where
+
+        .. math::
+
+            s(x) = ac
+
+        asdf
+
+        **Caveats**
+
+        A perfectly matched layer (PML) is the most commonly used boundary condition in FDTD simulations to truncate a simulation domain and absorb outgoing radiation. However, many divergence issues are associated with the use of PML. One of the most common causes of a diverged simulation is structures inserted into PML at an angle.
+
+        .. TODO links to absorber boundaries
+
+        .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
+
+        Incorporating a dispersive material into PML can also cause simulation divergence in certain scenarios. If your simulation lacks any structures inserted into PML at an angle but includes dispersive material in PML, it is advisable to substitute nondispersive material for the dispersive material. Alternatively, if dispersion is necessary, switching PML to absorber can effectively address the issue.
+
+        PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates into the free space. However, it’s important to keep in mind that PML only absorbs propagating fields. For evanescent fields, PML can act as an amplification medium and cause a simulation to diverge. In Tidy3D, a warning will appear if the distance between a structure is smaller than half of a wavelength to prevent evanescent fields from leaking into PML. In most cases, the evanescent field will naturally die off within half a wavelength, but in some instances, a larger distance may be required.
+
+        .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
+
+
+    **References**
+
+    .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599,1994; S. Johnson, arXiv 2108.05348, 2021
+    .. [2]  Antonios Giannopoulos, IEEE Transactions on Antennas and Propagation, 56(9), 2995, 2008
+
     Example
     -------
     >>> pml = PML(num_layers=10)
@@ -269,9 +308,12 @@ class PML(AbsorberSpec):
     See Also
     --------
 
-    Lectures:
+        Notebooks:
+            *   `How to troubleshoot a diverged FDTD simulation <./DivergedFDTDSimulation.html>`_
 
-    * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`_
+        Lectures:
+            *   `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+            *   `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
 
     """
 

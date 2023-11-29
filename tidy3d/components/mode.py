@@ -24,11 +24,11 @@ class ModeSpec(Tidy3dBaseModel):
     -----
         The ``angle_theta`` and ``angle_phi parameters`` define the injection axis as illustrated in the figure below, with respect to the axis normal to the mode plane (``x`` in the figure). Note that ``angle_theta`` must be smaller than pi/2. To inject in the backward direction, we can still use the ``direction`` parameter as also shown in the figure. Similarly, the mode amplitudes computed in mode monitors are defined w.r.t. the ``forward`` and ``backward`` directions as illustrated.
 
-        .. image:: ../../_static/img/mode_injection_direction.png
+        .. image:: ../../notebooks/img/ring_modes.png
 
         The ``bend_axis`` is the axis normal to the plane in which the bend lies, (``z`` in the diagram below). In the mode specification, it is defined locally for the mode plane as one of the two axes tangential to the plane. In the case of bends that lie in the ``xy``-plane, the mode plane would be either in ``xz`` or in ``yz``, so in both cases the correct setting is ``bend_axis=1``, selecting the global ``z``. The ``bend_radius`` is counted from the center of the mode plane to the center of the curvature, along the tangential axis perpendicular to the bend axis. This radius can also be negative, if the center of the mode plane is smaller than the center of the bend.
 
-        .. image:: ../../_static/img/mode_specification_bend_plane.png
+        .. image:: ../../notebooks/img/mode_angled.png
 
     Example
     -------
