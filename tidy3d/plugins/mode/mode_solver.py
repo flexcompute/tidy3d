@@ -26,7 +26,18 @@ from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import ValidationError, SetupError
 from ...constants import C_0
-from .solver import compute_modes, EigSolver
+
+# Importing the local solver may not work if e.g. scipy is not installed
+IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
+but will have to be run through the server.
+"""
+try:
+    from .solver import compute_modes
+
+    LOCAL_SOLVER_IMPORTED = True
+except ImportError:
+    log.warning(IMPORT_ERROR_MSG)
+    LOCAL_SOLVER_IMPORTED = False
 
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
@@ -453,6 +464,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         The fields are rotated from propagation coordinates back to global coordinates.
         """
+
+        if not LOCAL_SOLVER_IMPORTED:
+            raise ImportError(IMPORT_ERROR_MSG)
+
         solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
@@ -628,9 +643,10 @@ class ModeSolver(Tidy3dBaseModel):
         eps and mu and uses a tolerance to determine whether to use real or complex fields, so
         the actual behavior may differ from what's predicted by this property."""
         for int_mat in self._intersecting_media:
-            if EigSolver.isinstance_complex(int_mat.eps_model(np.array(self.freqs))):
-                return True
-        return False
+            max_imag_eps = np.amax(np.abs(np.imag(int_mat.eps_model(np.array(self.freqs)))))
+            if not np.isclose(max_imag_eps, 0):
+                return False
+        return True
 
     def to_source(
         self,
