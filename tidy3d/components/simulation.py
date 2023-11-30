@@ -131,10 +131,14 @@ class Simulation(Box):
     ...     subpixel=False,
     ... )
 
-    See Also
-    --------
+    Note
+    ----
 
-    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        **Lectures:**
+            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+
+        **Notebooks:**
+            * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(

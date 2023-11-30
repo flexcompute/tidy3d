@@ -84,10 +84,10 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 class NonlinearSpec(ABC, Tidy3dBaseModel):
     """Abstract specification for adding a nonlinearity to a medium.
 
-     Note
-    ----
-    The nonlinear constitutive relation is solved iteratively; it may not converge
-    for strong nonlinearities. Increasing `numiters` can help with convergence.
+    Notes
+    -----
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing `numiters` can help with convergence.
     """
 
     numiters: pd.PositiveInt = pd.Field(
@@ -589,9 +589,13 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 class PECMedium(AbstractMedium):
     """Perfect electrical conductor class.
 
-    Note
-    ----
-    To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
+    Notes
+    -----
+
+        To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
+
+
+
     """
 
     def eps_model(self, frequency: float) -> complex:
@@ -612,12 +616,20 @@ PEC = PECMedium(name="PEC")
 
 
 class Medium(AbstractMedium):
-    """Dispersionless medium.
+    """Dispersionless medium. Mediums define the optical properties of the materials within the simulation.
 
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
+
+    Note
+    ----
+
+        **Notebooks:**
+            * `Introduction on Tidy3D working principles <../notebooks/Primer.html#Mediums>`_
+            * `Index <../notebooks/docs/features/medium.html>`_
+
     """
 
     permittivity: float = pd.Field(
@@ -1345,7 +1357,14 @@ class CustomMedium(AbstractCustomMedium):
 
 
 class DispersiveMedium(AbstractMedium, ABC):
-    """A Medium with dispersion (propagation characteristics depend on frequency)"""
+    """
+    A Medium with dispersion (propagation characteristics depend on frequency)
+
+    See Also
+    --------
+
+    Notebook: `Fitting dispersive material models <../notebooks/Fitting.html>`_
+    """
 
     @abstractmethod
     def _pole_residue_dict(self) -> Dict:
@@ -2198,14 +2217,15 @@ class Lorentz(DispersiveMedium):
 
 class CustomLorentz(CustomDispersiveMedium, Lorentz):
     """A spatially varying dispersive medium described by the Lorentz model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
     Example
     -------
@@ -2327,8 +2347,8 @@ class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
+    Notes
+    -----
     .. math::
 
         \\epsilon(f) = \\epsilon_\\infty - \\sum_i
@@ -2480,14 +2500,16 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
 class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
     Example
     -------
@@ -2667,9 +2689,9 @@ IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumTyp
 class AnisotropicMedium(AbstractMedium):
     """Diagonally anisotropic medium.
 
-    Note
-    ----
-    Only diagonal anisotropy is currently supported.
+    Notes
+    -----
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -2677,6 +2699,13 @@ class AnisotropicMedium(AbstractMedium):
     >>> medium_yy = Medium(permittivity=4.1)
     >>> medium_zz = Medium(permittivity=3.9)
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+
+    Note
+    ----
+
+        **Notebooks:**
+            * `Broadband polarizer assisted by anisotropic metamaterial <../notebooks/SWGBroadbandPolarizer.html>`_
+
     """
 
     xx: IsotropicUniformMediumType = pd.Field(
@@ -2801,8 +2830,9 @@ class FullyAnisotropicMedium(AbstractMedium):
     magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
     supported for fully anisotropic materials.
 
-    Note
-    ----
+    Notes
+    ------
+
     Simulations involving fully anisotropic materials are computationally more intensive, thus,
     they take longer time to complete. This increase strongly depends on the filling fraction of
     the simulation domain by fully anisotropic materials, varying approximately in the range from
@@ -2813,6 +2843,12 @@ class FullyAnisotropicMedium(AbstractMedium):
     >>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
     >>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
     >>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+
+    Note
+    ----
+
+        **Notebooks:**
+            * `Defining fully anisotropic materials <../notebooks/FullyAnisotropic.html>`_
     """
 
     permittivity: TensorReal = pd.Field(

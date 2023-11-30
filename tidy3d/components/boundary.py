@@ -263,23 +263,9 @@ class PML(AbsorberSpec):
     Notes
     ------
 
-        **1D Basic Model**
+        .. TODO potentailly add 1D and discrtization equuations from the lecture onto the API and images
 
-        Test
-
-        .. math::
-
-            ab
-
-        where
-
-        .. math::
-
-            s(x) = ac
-
-        asdf
-
-        **Caveats**
+        **Usage Caveats**
 
         A perfectly matched layer (PML) is the most commonly used boundary condition in FDTD simulations to truncate a simulation domain and absorb outgoing radiation. However, many divergence issues are associated with the use of PML. One of the most common causes of a diverged simulation is structures inserted into PML at an angle.
 
@@ -303,17 +289,14 @@ class PML(AbsorberSpec):
     -------
     >>> pml = PML(num_layers=10)
 
-    .. TODO potentailly add 1D and discrtization equuations from the lecture onto the API and images
+    Note
+    ----
+        **Notebooks:**
+            * `How to troubleshoot a diverged FDTD simulation <../notebooks/DivergedFDTDSimulation.html>`_
 
-    See Also
-    --------
-
-        Notebooks:
-            *   `How to troubleshoot a diverged FDTD simulation <./DivergedFDTDSimulation.html>`_
-
-        Lectures:
-            *   `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
-            *   `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
+        **Lectures:**
+            * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+            * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
 
     """
 

@@ -162,6 +162,7 @@ project = "tidy3d"
 release = tidy3d.__version__
 set_type_checking_flag = True  # Enable 'expensive' imports for sphinx_autodoc_typehints
 sitemap_url_scheme = "{lang}{version}{link}"
+sphinx_tabs_disable_css_loading = True
 source_suffix = [".rst", ".md"]
 templates_path = [
     "_templates",
