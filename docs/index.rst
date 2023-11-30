@@ -28,27 +28,9 @@ If you’d rather skip installation and run an example in one of our web-hosted 
 
 Install the python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations with
 
+.. code:: bash
 
-.. tabs::
-
-    .. group-tab:: Windows
-
-        .. code:: bash
-
-            pip install tidy3d
-
-    .. group-tab:: MacOS
-
-        .. code:: bash
-
-            pip install tidy3d
-
-    .. group-tab:: Ubuntu
-
-        .. code:: bash
-
-            pip install tidy3d
-
+    pip install tidy3d
 
 Next, configure your ``tidy3d`` package with the API key from your account.
 

@@ -1,0 +1,104 @@
+name: build&sync
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: environment
+        default: dev
+        required: true
+jobs:
+  set_env:
+    outputs:
+      env: ${{ steps.setenv.outputs.env }}
+      dest-branch: ${{ steps.dest-branch.outputs.branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: setenv
+        run: |
+          if test -n "${{ github.event.inputs.env }}"
+          then
+            echo "::set-output name=env::${{ github.event.inputs.env }}"
+            echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
+          fi
+          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/develop'
+          then
+            echo "::set-output name=env::dev"
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/main'
+          then
+            echo "::set-output name=env::prod"
+            echo "ENV=prod" >> $GITHUB_ENV
+          fi
+      - id: dest-branch
+        run: |
+          case ${{ env.ENV }} in
+            dev)
+            echo "::set-output name=branch::develop"
+            ;;
+            prod)
+            echo "::set-output name=branch::main"
+            ;;
+          esac
+  build-and-deploy:
+    needs: set_env
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: echo environment
+        run: |
+          echo "::notice ::env:${{needs.set_env.outputs.env}}"
+          echo "::notice ::dest-branch:${{needs.set_env.outputs.dest-branch}}"
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+      - run: cd ${{ github.workspace }}/docs && pip install beautifulsoup4 nbformat nbconvert pyyaml
+      - run: cd ${{ github.workspace }}/docs/notebooks && mkdir html && python convert.py
+      - shell: bash
+        run: |
+          cd ${{ github.workspace }}
+          mkdir -p build && rsync -r ${{ github.workspace }}/docs/notebooks/html/ build
+          mkdir -p build/css && rsync -r build/css/ build-css
+          mkdir -p build/image && rsync -r build/image/ build-image
+          mkdir -p build-source && cp docs/source/notebooks/*.ipynb build-source
+          rm -rf build/css
+          rm -rf build/image
+          ls -la build
+
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build
+          token: ${{ secrets.GH_PAT }}
+          repository-name: cmsflexc/flexcompute.com
+          target-folder: tidy3d/examples/notebooks
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build-css
+          token: ${{ secrets.GH_PAT }}
+          repository-name: cmsflexc/flexcompute.com
+          target-folder: /assets/tidy3d/examples/css
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build-image
+          token: ${{ secrets.GH_PAT }}
+          repository-name: cmsflexc/flexcompute.com
+          target-folder: /assets/tidy3d/examples/image
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build-source
+          token: ${{ secrets.GH_PAT }}
+          repository-name: cmsflexc/flexcompute.com
+          target-folder: /assets/tidy3d/examples/notebooks
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: actions/upload-artifact@v3
+        with:
+            name: output
+            path: build/
+            retention-days: 7

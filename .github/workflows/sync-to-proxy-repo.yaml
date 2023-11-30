@@ -1,0 +1,70 @@
+name: sync-to-proxy-repo
+on:
+  push:
+    branches:
+      - main
+      - latest
+  workflow_dispatch:
+    inputs:
+      env:
+        description: environment
+        default: dev
+        required: true
+jobs:
+  set_env:
+    outputs:
+      env: ${{ steps.setenv.outputs.env }}
+      dest-branch: ${{ steps.dest-branch.outputs.branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: setenv
+        run: |
+          if test -n "${{ github.event.inputs.env }}"
+          then
+            echo "::set-output name=env::${{ github.event.inputs.env }}"
+            echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
+          fi
+          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/latest'
+          then
+            echo "::set-output name=env::dev"
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/main'
+          then
+            echo "::set-output name=env::prod"
+            echo "ENV=prod" >> $GITHUB_ENV
+          fi
+      - id: dest-branch
+        run: |
+          case ${{ env.ENV }} in
+            dev)
+            echo "::set-output name=branch::develop"
+            ;;
+            prod)
+            echo "::set-output name=branch::main"
+            ;;
+          esac
+  build-and-deploy:
+    needs: set_env
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: docs/notebooks/
+          token: ${{ secrets.GH_PAT }}
+          repository-name: flexcompute/tidy3d-example-library
+          target-folder: notebooks
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - run: |
+          mkdir -p build_toc
+          cp docs/examples.rst build_toc/examples.rst
+
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: build_toc
+          token: ${{ secrets.GH_PAT }}
+          repository-name: flexcompute/tidy3d-example-library
+          target-folder: toc
+          branch: ${{ needs.set_env.outputs.dest-branch }}
