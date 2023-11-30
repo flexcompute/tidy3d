@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0rc3] - 2023-11-30
+
 ### Added
 - Added support for two-photon absorption via `TwoPhotonAbsorption` class. Added `KerrNonlinearity` that implements Kerr effect without third-harmonic generation.
 - Can create `PoleResidue` from LO-TO form via `PoleResidue.from_lo_to`.
@@ -1039,7 +1041,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc2...pre/2.5
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc3...pre/2.5
+[2.5.0rc3]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc2...v2.5.0rc3
 [2.5.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...v2.5.0rc2
 [2.5.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.5.0rc1
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
