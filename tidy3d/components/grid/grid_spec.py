@@ -135,11 +135,17 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
 class UniformGrid(GridSpec1d):
 
-    """Uniform 1D grid.
+    """Uniform 1D grid. The most standard way to define a simulation is to use a constant grid size in each of the three directions.
 
     Example
     -------
     >>> grid_1d = UniformGrid(dl=0.1)
+
+    Note:
+    -----
+
+        **Notebooks:**
+            * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
     dl: pd.PositiveFloat = pd.Field(
@@ -284,6 +290,13 @@ class AutoGrid(GridSpec1d):
     Example
     -------
     >>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)
+
+    Note
+    -----
+
+        **Notebooks:**
+            * `Using automatic nonuniform meshing <../notebooks/AutoGrid.html>`_
+
     """
 
     min_steps_per_wvl: float = pd.Field(

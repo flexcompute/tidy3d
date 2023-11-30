@@ -34,10 +34,12 @@ class ModeSpec(Tidy3dBaseModel):
     -------
     >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5)
 
-    See Also
-    --------
+    Note
+    ----
 
-    *  `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
+        **Notebooks**:
+            * `Introduction on Tidy3D working principles <../_docs/notebooks/Primer.html#Modes>`_
+            * `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
     """
 
     num_modes: pd.PositiveInt = pd.Field(

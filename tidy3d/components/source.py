@@ -968,6 +968,14 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
+
+    Note
+    ----
+        **Notebooks:**
+            * `How to troubleshoot a diverged FDTD simulation <../notebooks/DivergedFDTDSimulation.html>`_
+
+        **Lectures:**
+            * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
 

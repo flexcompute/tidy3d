@@ -85,6 +85,13 @@ PML_HEIGHT_FOR_0_DIMS = 0.02
 class Simulation(Box):
     """Contains all information about Tidy3d simulation.
 
+    Notes
+    -----
+
+        Simulation accepts an optional ``medium parameter``, specifying the background medium (air by default).
+
+        Each simulation must define the discretization using a ``grid_spec``, which specifies how the grid is to be generated along each of the three directions. These are discussed in more detail here.
+
     Example
     -------
     >>> from tidy3d import Sphere, Cylinder, PolySlab
@@ -134,11 +141,16 @@ class Simulation(Box):
     Note
     ----
 
-        **Lectures:**
-            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
-
         **Notebooks:**
             * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+            * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+        **Lectures:**
+            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+            * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`
+
+        **GUI:**
+            * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(

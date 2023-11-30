@@ -410,10 +410,15 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are useful for investigating the steady-state field distribution in 2D or even 3D regions of the simulation.
 
-    See Also
-    --------
+    Note
+    ----
 
-    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        **Notebooks:**
+            * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+
+        **Lectures:**
+            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

@@ -315,7 +315,7 @@ class PML(AbsorberSpec):
 
 class StablePML(AbsorberSpec):
     """Specifies a 'stable' PML along a single dimension.
-    This PML deals handles possbly divergent simulations better, but at the expense of more layers.
+    This PML deals handles possibly divergent simulations better, but at the expense of more layers.
 
     Example
     -------
@@ -590,7 +590,17 @@ class Boundary(Tidy3dBaseModel):
 
 
 class BoundarySpec(Tidy3dBaseModel):
-    """Specifies boundary conditions on each side of the domain and along each dimension."""
+    """
+    Specifies boundary conditions on each side of the domain and along each dimension.
+
+    Note
+    ----
+        **Notebooks:**
+            * `How to troubleshoot a diverged FDTD simulation <../notebooks/DivergedFDTDSimulation.html>`_
+
+        **Lectures:**
+            * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+    """
 
     x: Boundary = pd.Field(
         Boundary(),
