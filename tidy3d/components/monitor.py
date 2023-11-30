@@ -410,14 +410,14 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are useful for investigating the steady-state field distribution in 2D or even 3D regions of the simulation.
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
 
-        **Lectures:**
-            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+    **Lectures:**
+        * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
 
     """
 
@@ -445,7 +445,7 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     Notes
     -----
 
-    :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single point, but they can also be used to create “animations” of the field pattern evolution.
+        :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single point, but they can also be used to create “animations” of the field pattern evolution.
 
     See Also
     --------
@@ -466,10 +466,11 @@ class PermittivityMonitor(FreqMonitor):
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
     Yee grid locations, and can be interpolated to any point inside the monitor.
 
-    Note
-    ----
-    If 2D materials are present, then the permittivity values correspond to the
-    volumetric equivalent of the 2D materials.
+    Notes
+    -----
+
+        If 2D materials are present, then the permittivity values correspond to the
+        volumetric equivalent of the 2D materials.
 
     Example
     -------

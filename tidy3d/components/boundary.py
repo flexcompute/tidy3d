@@ -289,14 +289,15 @@ class PML(AbsorberSpec):
     -------
     >>> pml = PML(num_layers=10)
 
-    Note
-    ----
-        **Notebooks:**
-            * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+    See Also
+    --------
 
-        **Lectures:**
-            * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
-            * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures:**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+        * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
 
     """
 
@@ -593,13 +594,14 @@ class BoundarySpec(Tidy3dBaseModel):
     """
     Specifies boundary conditions on each side of the domain and along each dimension.
 
-    Note
-    ----
-        **Notebooks:**
-            * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+    See Also
+    --------
 
-        **Lectures:**
-            * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures:**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
     x: Boundary = pd.Field(

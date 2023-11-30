@@ -138,19 +138,19 @@ class Simulation(Box):
     ...     subpixel=False,
     ... )
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
-            * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
 
-        **Lectures:**
-            * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
-            * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
+    **Lectures:**
+        * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
 
-        **GUI:**
-            * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_
+    **GUI:**
+        * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(

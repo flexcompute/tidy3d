@@ -111,31 +111,26 @@ class NonlinearSusceptibility(NonlinearSpec):
     """Specification adding an instantaneous nonlinear susceptibility to a medium.
     The expression for the instantaneous nonlinear polarization is given below.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
+        .. math::
 
-    Note
-    ----
-    The nonlinear constitutive relation is solved iteratively; it may not converge
-    for strong nonlinearities. Increasing `numiters` can help with convergence.
+            P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
 
-    Note
-    ----
-    For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
-    is applied separately to the real and imaginary parts, so that the above equation
-    holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
-    The nonlinearity is only applied to the real-valued fields since they are the
-    physical fields.
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing `numiters` can help with convergence.
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
+
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the E field is predominantly polarized along one
+        of the x, y, or z axes.
 
     Example
     -------
@@ -623,15 +618,15 @@ class Medium(AbstractMedium):
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
-            * `Index <../../notebooks/docs/features/medium.html>`_
+    **Notebooks:**
+        * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
+        * `Index <../../notebooks/docs/features/medium.html>`_
 
-        **GUI:**
-            * `Tutorial <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+    **GUI:**
+        * `Tutorial <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
 
     """
 
@@ -1185,8 +1180,8 @@ class CustomMedium(AbstractCustomMedium):
             Interpolation method to obtain permittivity values that are not supplied
             at the Yee grids.
 
-        Note
-        ----
+        Notes
+        -----
         For lossy medium that has a complex-valued ``eps``, if ``eps`` is supplied through
         :class:`.SpatialDataArray`, which doesn't contain frequency information,
         the ``freq`` kwarg will be used to evaluate the permittivity and conductivity.
@@ -1372,11 +1367,11 @@ class DispersiveMedium(AbstractMedium, ABC):
 
         .. TODO link to relevant functions above
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
     """
 
     @abstractmethod
@@ -1484,13 +1479,14 @@ class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
     Example
     -------
@@ -1744,13 +1740,14 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     """A spatially varying dispersive medium described by the pole-residue pair model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
     Example
     -------
@@ -1897,11 +1894,12 @@ class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
     The frequency-dependence of the refractive index is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+        .. math::
+
+            n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
     Example
     -------
@@ -1999,11 +1997,12 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     """A spatially varying dispersive medium described by the Sellmeier model.
     The frequency-dependence of the refractive index is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+        .. math::
+
+            n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
     Example
     -------
@@ -2133,12 +2132,13 @@ class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
     Example
     -------
@@ -2233,6 +2233,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     Notes
     -----
+
         The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
@@ -2362,10 +2363,11 @@ class Drude(DispersiveMedium):
 
     Notes
     -----
-    .. math::
 
-        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-        \\frac{ f_i^2}{f^2 + jf\\delta_i}
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+            \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
     Example
     -------
@@ -2428,12 +2430,13 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     """A spatially varying dispersive medium described by the Drude model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-        \\frac{ f_i^2}{f^2 + jf\\delta_i}
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+            \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
     Example
     -------
@@ -2590,12 +2593,13 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     """A spatially varying dispersive medium described by the Debye model.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
     Example
     -------
@@ -2713,11 +2717,11 @@ class AnisotropicMedium(AbstractMedium):
     >>> medium_zz = Medium(permittivity=3.9)
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+    **Notebooks:**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
 
     """
 
@@ -2857,11 +2861,11 @@ class FullyAnisotropicMedium(AbstractMedium):
     >>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
     >>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
 
-    Note
-    ----
+    See Also
+    --------
 
-        **Notebooks:**
-            * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
+    **Notebooks:**
+        * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
     permittivity: TensorReal = pd.Field(
@@ -3207,9 +3211,9 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     """Diagonally anisotropic medium with spatially varying permittivity in each component.
 
-    Note
-    ----
-    Only diagonal anisotropy is currently supported.
+    Notes
+    -----
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -3399,13 +3403,14 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """A dispersive medium described by the pole-residue pair model with perturbations.
     The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
     Example
     -------
@@ -3535,8 +3540,8 @@ MediumType3D = Union[
 class Medium2D(AbstractMedium):
     """2D diagonally anisotropic medium.
 
-    Note
-    ----
+    Notes
+    -----
     Only diagonal anisotropy is currently supported.
 
     Example
