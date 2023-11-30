@@ -90,7 +90,7 @@ class Simulation(Box):
 
         Simulation accepts an optional ``medium parameter``, specifying the background medium (air by default).
 
-        Each simulation must define the discretization using a ``grid_spec``, which specifies how the grid is to be generated along each of the three directions. These are discussed in more detail here.
+        Each simulation must define the discretization using a ``grid_spec``, which specifies how the grid is to be generated along each of the three directions.
 
     Example
     -------
@@ -147,7 +147,7 @@ class Simulation(Box):
 
         **Lectures:**
             * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
-            * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`
+            * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
 
         **GUI:**
             * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_

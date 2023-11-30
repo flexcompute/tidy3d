@@ -141,8 +141,8 @@ class UniformGrid(GridSpec1d):
     -------
     >>> grid_1d = UniformGrid(dl=0.1)
 
-    Note:
-    -----
+    Note
+    ----
 
         **Notebooks:**
             * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
@@ -295,7 +295,7 @@ class AutoGrid(GridSpec1d):
     -----
 
         **Notebooks:**
-            * `Using automatic nonuniform meshing <../notebooks/AutoGrid.html>`_
+            * `Using automatic nonuniform meshing <.../../notebooks/AutoGrid.html>`_
 
     """
 

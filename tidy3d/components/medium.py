@@ -627,8 +627,8 @@ class Medium(AbstractMedium):
     ----
 
         **Notebooks:**
-            * `Introduction on Tidy3D working principles <../notebooks/Primer.html#Mediums>`_
-            * `Index <../notebooks/docs/features/medium.html>`_
+            * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
+            * `Index <../../notebooks/docs/features/medium.html>`_
 
         **GUI:**
             * `Tutorial <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
@@ -1376,7 +1376,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     ----
 
         **Notebooks:**
-            * `Fitting dispersive material models <../notebooks/Fitting.html>`_
+            * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
     """
 
     @abstractmethod
@@ -2717,7 +2717,7 @@ class AnisotropicMedium(AbstractMedium):
     ----
 
         **Notebooks:**
-            * `Broadband polarizer assisted by anisotropic metamaterial <../notebooks/SWGBroadbandPolarizer.html>`_
+            * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
 
     """
 
@@ -2861,7 +2861,7 @@ class FullyAnisotropicMedium(AbstractMedium):
     ----
 
         **Notebooks:**
-            * `Defining fully anisotropic materials <../notebooks/FullyAnisotropic.html>`_
+            * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
     permittivity: TensorReal = pd.Field(

@@ -972,7 +972,7 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     Note
     ----
         **Notebooks:**
-            * `How to troubleshoot a diverged FDTD simulation <../notebooks/DivergedFDTDSimulation.html>`_
+            * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
 
         **Lectures:**
             * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
