@@ -584,8 +584,8 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 class PECMedium(AbstractMedium):
     """Perfect electrical conductor class.
 
-    Notes
-    -----
+    Note
+    ----
 
         To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
 
@@ -1182,12 +1182,13 @@ class CustomMedium(AbstractCustomMedium):
 
         Notes
         -----
-        For lossy medium that has a complex-valued ``eps``, if ``eps`` is supplied through
-        :class:`.SpatialDataArray`, which doesn't contain frequency information,
-        the ``freq`` kwarg will be used to evaluate the permittivity and conductivity.
-        Alternatively, ``eps`` can be supplied through :class:`.ScalarFieldDataArray`,
-        which contains a frequency coordinate.
-        In this case, leave ``freq`` kwarg as the default of ``None``.
+
+            For lossy medium that has a complex-valued ``eps``, if ``eps`` is supplied through
+            :class:`.SpatialDataArray`, which doesn't contain frequency information,
+            the ``freq`` kwarg will be used to evaluate the permittivity and conductivity.
+            Alternatively, ``eps`` can be supplied through :class:`.ScalarFieldDataArray`,
+            which contains a frequency coordinate.
+            In this case, leave ``freq`` kwarg as the default of ``None``.
 
         Returns
         -------
@@ -2842,18 +2843,23 @@ class AnisotropicMedium(AbstractMedium):
 
 class FullyAnisotropicMedium(AbstractMedium):
     """Fully anisotropic medium including all 9 components of the permittivity and conductivity
-    tensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must
-    have coinciding main directions. A non-symmetric conductivity tensor can be used to model
-    magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
-    supported for fully anisotropic materials.
+    tensors.
 
     Notes
-    ------
+    -----
 
-    Simulations involving fully anisotropic materials are computationally more intensive, thus,
-    they take longer time to complete. This increase strongly depends on the filling fraction of
-    the simulation domain by fully anisotropic materials, varying approximately in the range from
-    1.5 to 5. Cost of running a simulation is adjusted correspondingly.
+        Provided permittivity tensor and the symmetric part of the conductivity tensor must
+        have coinciding main directions. A non-symmetric conductivity tensor can be used to model
+        magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
+        supported for fully anisotropic materials.
+
+    Note
+    ----
+
+        Simulations involving fully anisotropic materials are computationally more intensive, thus,
+        they take longer time to complete. This increase strongly depends on the filling fraction of
+        the simulation domain by fully anisotropic materials, varying approximately in the range from
+        1.5 to 5. Cost of running a simulation is adjusted correspondingly.
 
     Example
     -------

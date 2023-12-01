@@ -18,7 +18,7 @@ API
     output_data
     logging
     submit_simulations
-    plugins
+    plugins/index
     constants
     abstract_models
 

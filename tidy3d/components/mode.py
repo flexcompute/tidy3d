@@ -38,7 +38,8 @@ class ModeSpec(Tidy3dBaseModel):
     --------
 
     **Notebooks**:
-        * `Introduction on Tidy3D working principles <../_docs/notebooks/Primer.html#Modes>`_
+        * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Modes>`_
+        * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
         * `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
 
     """

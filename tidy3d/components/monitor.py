@@ -447,10 +447,15 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
 
         :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single point, but they can also be used to create “animations” of the field pattern evolution.
 
+        To create an animation, we need to capture the frames at different time instances of the simulation. This can be done by using a :class:`FieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps and grid points. Recording the field at every time step and grid point will result in a large dataset. For the purpose of making animations, this is usually unnecessary. I
+
     See Also
     --------
 
-    * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
+    **Notebooks:**
+        * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
+        * `Creating FDTD animations <../../notebooks/AnimationTutorial.html>`_.
+
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -622,11 +627,23 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
 class ModeMonitor(AbstractModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
-    The amplitudes are defined as
-    ``mode_solver_data.dot(recorded_field) / mode_solver_data.dot(mode_solver_data)``, where
-    ``recorded_field`` is the field data recorded in the FDTD simulation at the monitor frequencies,
-    and ``mode_solver_data`` is the mode data from the mode solver at the monitor plane.
-    This gives the power amplitude of ``recorded_field`` carried by each mode.
+
+
+    Notes
+    ------
+
+        The amplitudes are defined as ``mode_solver_data.dot(recorded_field) / mode_solver_data.dot(mode_solver_data)``, where ``recorded_field`` is the field data recorded in the FDTD simulation at the monitor frequencies, and ``mode_solver_data`` is the mode data from the mode solver at the monitor plane.
+        This gives the power amplitude of ``recorded_field`` carried by each mode.
+
+        In ``tidy3d``, the fields recorded by frequency monitors (and thus also mode monitors) are automatically normalized by the power amplitude spectrum of the source (for multiple sources, the user can select which source to use for the normalization).
+
+        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition of the radiated power into forward- and backward-propagating modes, respectively. As we would expect, all of the power is injected into the fundamental waveguide mode, in the forward direction. More precisely, this is true up to some numerical error that decreases with increasing simulation resolution.
+
+        .. TODO add derivation in the notebook.
+
+        .. TODO add link to method
+
+        We can examine the frequency dependence of the results a bit more closely, and compare them to the total power flux, which can be computed for any frequency monitor. The flux is the area-integrated time-averaged Poynting vector and gives the (signed) total power flowing through the surface. The flux computation and the modal decomposition are done in separate monitors and in a completely different way, but because all the power is in the fundamental mode here, the flux matches really well the zero-mode power from the power decomposition.
 
     Example
     -------
@@ -637,6 +654,12 @@ class ModeMonitor(AbstractModeMonitor):
     ...     freqs=[200e12, 210e12],
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
     """
 
     colocate: Literal[False] = pydantic.Field(

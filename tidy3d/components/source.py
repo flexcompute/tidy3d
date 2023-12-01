@@ -908,7 +908,16 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
         Using this mode source, it is possible selectively excite one of the guided modes of a waveguide. This can be
         computed in our eigenmode solver :class:`tidy3d.plugins.mode.ModeSolver` and implement the mode simulation in FDTD.
 
-        One interesting aspect is that the modal source actually allows you to do directional excitation. You can see that the field is perfectly launched to the right of the source and there's zero field to the left of the source. Now you can contrast the behavior of the modal source with that of a dipole source. If you just put a dipole into the waveguide, well, you see quite a bit different in the field distribution. First of all, the dipole source is not directional launching. It launches waves in both directions. The second is that the polarization of the dipole is set to selectively excite a TE mode. But it takes some propagation distance before the mode settles into a perfect TE mode profile. During this process, there is radiation into the substrate.
+        Mode sources are normalized to inject exactly 1W of power at the central frequency.
+
+        One interesting aspect is that the modal source actually allows you to do directional excitation. You can see
+        that the field is perfectly launched to the right of the source and there's zero field to the left of the
+        source. Now you can contrast the behavior of the modal source with that of a dipole source. If you just put a
+        dipole into the waveguide, well, you see quite a bit different in the field distribution. First of all,
+        the dipole source is not directional launching. It launches waves in both directions. The second is that the
+        polarization of the dipole is set to selectively excite a TE mode. But it takes some propagation distance
+        before the mode settles into a perfect TE mode profile. During this process, there is radiation into the
+        substrate.
 
         .. TODO improve links to other APIs functionality here.
 
@@ -1080,10 +1089,27 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 class TFSF(AngledFieldSource, VolumeSource):
     """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
-    The TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the
-    case of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,
-    and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
-    scattering and absorption cross sections without the need for additional normalization.
+
+    Notes
+    -----
+
+        The TFSF source injects :math:`1 \frac{W}{\text{um}^2}` of power along the ``injection_axis``. Note that in the
+        case of angled incidence, :math:`1 \frac{W}{\text{um}^2}` is still injected along the source's ``injection_axis``,
+        and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
+        scattering and absorption cross-sections without the need for additional normalization.
+
+        The TFSF source allows specifying a box region into which a plane wave is injected. Fields inside this region
+        can be interpreted as the superposition of the incident field and the scattered field due to any scatterers
+        present in the simulation domain. The fields at the edges of the TFSF box are modified at each time step such
+        that the incident field is cancelled out, so that all fields outside the TFSF box are scattered fields only.
+        This is useful in scenarios where one is interested in computing scattered fields only, for example when
+        computing scattered cross-sections of various objects.
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
     """
 
     injection_axis: Axis = pydantic.Field(

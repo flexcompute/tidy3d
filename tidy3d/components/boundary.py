@@ -50,6 +50,12 @@ class BlochBoundary(BoundaryEdge):
     Example
     -------
     >>> bloch = BlochBoundary(bloch_vec=1)
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
     """
 
     bloch_vec: float = pd.Field(
@@ -381,11 +387,23 @@ BoundaryEdgeType = Union[
 
 
 class Boundary(Tidy3dBaseModel):
-    """Boundary conditions at the minus and plus extents along a dimension
+    """Boundary conditions at the minus and plus extents along a dimension.
+
+    Notes
+    -----
+
+         To specify individual boundary conditions along different dimensions, instead of :class:`BoundarySpec`, the class :class:`Boundary` is used, which defines the ``plus`` and ``minus`` boundaries along a single dimension.
 
     Example
     -------
     >>> boundary = Boundary(plus = PML(), minus = PECBoundary())
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_
+
     """
 
     plus: BoundaryEdgeType = pd.Field(
@@ -603,6 +621,19 @@ class Boundary(Tidy3dBaseModel):
 class BoundarySpec(Tidy3dBaseModel):
     """
     Specifies boundary conditions on each side of the domain and along each dimension.
+
+    Notes
+    -----
+
+        A :class:`BoundarySpec` object defines the boundary conditions applied on each of the 6 domain edges, and is provided as an input to the simulation. In the following sections, we’ll explore several different features within :class:`BoundarySpec` and different ways of defining it.
+
+        A :class:`BoundarySpec` consists of three :class:`Boundary` objects, each defining the boundaries on the plus and minus side of each dimension.
+
+        In most cases, one just wants to specify whether there are absorbing :class:`PML` layers along any of the ``x``, ``y``, ``z`` dimensions. By default, ``tidy3d`` simulations have PML boundaries on all sides.
+
+        If we want to explicitly set the boundaries, we can use the ``all_sides()`` method. This can be used to set any type of boundary condition on all sides of the simulation. We can also set :class:`PML` on specified sides only by calling the ``BoundarySpec.pml()`` method, e.g. ``BoundarySpec.pml(x=False, y=False, z=False)``. This will put :class:`PML`s along dimensions where the argument is ``True``, and set periodic boundaries along the other dimensions.
+
+
 
     See Also
     --------

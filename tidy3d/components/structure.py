@@ -74,16 +74,17 @@ class Structure(AbstractStructure):
     See Also
     --------
 
-    Lectures:
-
-    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
-
-    Notebooks:
+    **Notebooks:**
 
     * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
     * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
 
-    GUI:
+    **Lectures:**
+
+    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
+
+
+    **GUI:**
 
     * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
