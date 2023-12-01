@@ -11,8 +11,6 @@ import json
 
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
 from ..simulation import Simulation
-from ..boundary import BlochBoundary
-from ..source import TFSF
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
@@ -116,16 +114,10 @@ class SimulationData(AbstractSimulationData):
         times = self.simulation.tmesh
         dt = self.simulation.dt
 
-        # get boundary information to determine whether to use complex fields
-        boundaries = self.simulation.boundary_spec.to_list
-        boundaries_1d = [boundary_1d for dim_boundary in boundaries for boundary_1d in dim_boundary]
-        complex_fields = any(isinstance(boundary, BlochBoundary) for boundary in boundaries_1d)
-        complex_fields = complex_fields and not isinstance(source, TFSF)
-
         # plug in mornitor_data frequency domain information
         def source_spectrum_fn(freqs):
             """Source amplitude as function of frequency."""
-            spectrum = source_time.spectrum(times, freqs, dt, complex_fields)
+            spectrum = source_time.spectrum(times, freqs, dt)
 
             # Remove user defined amplitude and phase from the normalization
             # such that they would still have an effect on the output fields.

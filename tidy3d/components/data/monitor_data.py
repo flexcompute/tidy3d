@@ -843,8 +843,8 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
-        e_x_h = tan_fields["E" + dim1] * tan_fields["H" + dim2]
-        e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
+        e_x_h = np.real(tan_fields["E" + dim1]) * np.real(tan_fields["H" + dim2])
+        e_x_h -= np.real(tan_fields["E" + dim2]) * np.real(tan_fields["H" + dim1])
         return e_x_h
 
     @cached_property

@@ -16,8 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapsed runtime. On average, there should be little difference in the cost.
 - Mode solves that are part of an FDTD simulation (i.e. for mode sources and monitors) are now charged at the same flex credit cost as a corresponding standalone mode solver call.
 - Any `FreqMonitor.freqs` or `Source.source_time.freq0` smaller than `1e5` now raise an error as this must be incorrect setup that is outside the Tidy3D intended range (note default frequency is `Hz`).
+- When using complex fields (e.g. with Bloch boundaries), FluxTimeMonitor and frequency-domain fields (including derived quantities like flux) now only use the real part of the time-domain electric field.
 
 ### Fixed
+- Fixed energy leakage in TFSF when using complex fields.
 
 ## [2.5.0rc3] - 2023-11-30
 

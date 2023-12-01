@@ -2403,6 +2403,10 @@ class Simulation(AbstractSimulation):
         """
         if any(isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list):
             return True
+        for medium in self.scene.mediums:
+            if medium.nonlinear_spec is not None:
+                if any(model.complex_fields for model in medium._nonlinear_models):
+                    return True
         return False
 
     @cached_property

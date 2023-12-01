@@ -40,7 +40,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         Returns
         -------
         complex
-            Complex-valued amplitude at that time..
+            Complex-valued amplitude at that time.
         """
 
     def spectrum(
@@ -48,9 +48,9 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         times: ArrayFloat1D,
         freqs: ArrayFloat1D,
         dt: float,
-        complex_fields: bool = False,
     ) -> complex:
-        """Complex-valued spectrum as a function of frequency
+        """Complex-valued spectrum as a function of frequency.
+        Note: Only the real part of the time signal is used.
 
         Parameters
         ----------
@@ -62,8 +62,6 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         dt : float or np.ndarray
             Time step to weight FT integral with.
             If array, use to weigh each of the time intervals in ``times``.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
@@ -73,10 +71,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
 
         times = np.array(times)
         freqs = np.array(freqs)
-        time_amps = self.amp_time(times)
-
-        if not complex_fields:
-            time_amps = np.real(time_amps)
+        time_amps = np.real(self.amp_time(times))
 
         # if all time amplitudes are zero, just return (complex-valued) zeros for spectrum
         if np.all(np.equal(time_amps, 0.0)):
@@ -86,7 +81,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         relevant_time_inds = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
         # find first and last index where the filter is True
         start_ind = relevant_time_inds[0][0]
-        stop_ind = relevant_time_inds[0][-1]
+        stop_ind = relevant_time_inds[0][-1] + 1
         time_amps = time_amps[start_ind:stop_ind]
         times_cut = times[start_ind:stop_ind]
         if times_cut.size == 0:
@@ -118,9 +113,9 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         num_freqs: int = 101,
         val: PlotVal = "real",
         ax: Ax = None,
-        complex_fields: bool = False,
     ) -> Ax:
         """Plot the complex-valued amplitude of the time-dependence.
+        Note: Only the real part of the time signal is used.
 
         Parameters
         ----------
@@ -137,8 +132,6 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
             Number of frequencies to plot within the [fmin, fmax].
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
@@ -154,7 +147,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         dt = np.mean(dts)
         freqs = np.linspace(fmin, fmax, num_freqs)
 
-        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
+        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs)
 
         if val == "real":
             ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
