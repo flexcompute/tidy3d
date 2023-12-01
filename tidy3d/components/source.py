@@ -46,9 +46,9 @@ class SourceTime(AbstractTimeDependence):
         num_freqs: int = 101,
         val: PlotVal = "real",
         ax: Ax = None,
-        complex_fields: bool = False,
     ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
+        Note: Only the real part of the time signal is used.
 
         Parameters
         ----------
@@ -61,8 +61,6 @@ class SourceTime(AbstractTimeDependence):
             Number of frequencies to plot within the SourceTime.frequency_range.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
@@ -72,7 +70,7 @@ class SourceTime(AbstractTimeDependence):
 
         fmin, fmax = self.frequency_range()
         return self.plot_spectrum_in_frequency_range(
-            times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax, complex_fields=complex_fields
+            times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
         )
 
     @abstractmethod

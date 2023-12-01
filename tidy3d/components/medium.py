@@ -155,6 +155,11 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
             )
         return n0
 
+    @property
+    def complex_fields(self) -> bool:
+        """Whether the model uses complex fields."""
+        pass
+
 
 class NonlinearSusceptibility(NonlinearModel):
     """Model for an instantaneous nonlinear chi3 susceptibility.
@@ -214,6 +219,11 @@ class NonlinearSusceptibility(NonlinearModel):
                 f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
             )
         return val
+
+    @property
+    def complex_fields(self) -> bool:
+        """Whether the model uses complex fields."""
+        return False
 
 
 class TwoPhotonAbsorption(NonlinearModel):
@@ -287,6 +297,11 @@ class TwoPhotonAbsorption(NonlinearModel):
         if self.n0 is not None:
             self._validate_medium_freqs(medium, [])
 
+    @property
+    def complex_fields(self) -> bool:
+        """Whether the model uses complex fields."""
+        return True
+
 
 class KerrNonlinearity(NonlinearModel):
     """Model for Kerr nonlinearity which gives an intensity-dependent refractive index
@@ -357,6 +372,11 @@ class KerrNonlinearity(NonlinearModel):
         # if n0 is specified, we can go ahead and validate passivity
         if self.n0 is not None:
             self._validate_medium_freqs(medium, [])
+
+    @property
+    def complex_fields(self) -> bool:
+        """Whether the model uses complex fields."""
+        return True
 
 
 NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
