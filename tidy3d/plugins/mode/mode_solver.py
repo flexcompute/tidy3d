@@ -39,8 +39,21 @@ FIELD_DECAY_CUTOFF = 1e-2
 
 
 class ModeSolver(Tidy3dBaseModel):
-    """Interface for solving electromagnetic eigenmodes in a 2D plane with translational
+    """
+    Interface for solving electromagnetic eigenmodes in a 2D plane with translational
     invariance in the third dimension.
+
+    See Also
+    --------
+
+    :class:`ModeSource`:
+        Injects current source to excite modal profile on finite extent plane.
+
+    **Notebooks:**
+        * `Waveguide Y junction <../../notebooks/YJunction.html>`_
+
+    **Lectures:**
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
     simulation: Simulation = pydantic.Field(

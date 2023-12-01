@@ -11,7 +11,7 @@ import erdantic as erd
 
 def save_diagram(obj):
     name = obj.__name__
-    fname = f"img/diagram_{name}.png"
+    fname = f"_static/img/diagram_{name}.png"
     model = erd.create(obj)
     model.draw(fname)
 

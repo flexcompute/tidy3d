@@ -279,11 +279,15 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
 
+        **References**
 
-    **References**
+        .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599,1994; S. Johnson, arXiv 2108.05348, 2021
+        .. [2]  Antonios Giannopoulos, IEEE Transactions on Antennas and Propagation, 56(9), 2995, 2008
 
-    .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599,1994; S. Johnson, arXiv 2108.05348, 2021
-    .. [2]  Antonios Giannopoulos, IEEE Transactions on Antennas and Propagation, 56(9), 2995, 2008
+    Note
+    ----
+
+        For best results, structures that intersect with the PML or simulation edges should extend extend all the way through. In many such cases, an “infinite” size ``td.inf`` can be used to define the size along that dimension.
 
     Example
     -------
@@ -321,6 +325,12 @@ class StablePML(AbsorberSpec):
     Example
     -------
     >>> pml = StablePML(num_layers=40)
+
+    See Also
+    --------
+
+    :class:`PML`:
+         A standard PML along a single dimension.
     """
 
     num_layers: pd.NonNegativeInt = pd.Field(
