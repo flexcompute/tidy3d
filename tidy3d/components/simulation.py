@@ -88,11 +88,25 @@ class Simulation(Box):
     Notes
     -----
 
-        You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis. Each element can be 0 (no symmetry), 1 (even, i.e. ‘PMC’ symmetry) or -1 (odd, i.e. ‘PEC’ symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
+        **Dimensions**
 
-        The figure below illustrates how the electric and magnetic field components transform under PEC- and PMC-like symmetry planes. You can refer to this figure when considering whether a source field conforms to a PEC- or PMC-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
+        To make the simulation 2D, we can just set the simulation size in one of the dimensions to be 0. However,
+        note that we still have to define a grid size in that direction. Additionally, we lower the shutoff factor to
+        make sure the high-frequency response of this resonant system is accurately resolved.
+
+        **Symmetry**
+
+        You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+        defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
+        Each element can be 0 (no symmetry), 1 (even, i.e. ‘PMC’ symmetry) or -1 (odd, i.e. ‘PEC’ symmetry). Note
+        that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
+
+        The figure below illustrates how the electric and magnetic field components transform under PEC- and PMC-like
+        symmetry planes. You can refer to this figure when considering whether a source field conforms to a PEC- or
+        PMC-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
 
         .. image:: ../../notebooks/img/pec_pmc.png
+
 
     Example
     -------

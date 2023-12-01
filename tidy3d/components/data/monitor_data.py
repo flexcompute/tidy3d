@@ -740,7 +740,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        This dataset contains all electric and magnetic field components: ``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, and ``Hz``.
 
     Example
     -------
@@ -1358,7 +1364,19 @@ class PermittivityData(PermittivityDataset, AbstractFieldData):
 
 
 class ModeData(MonitorData):
-    """Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices.
+    """
+    Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices.
+
+    Notes
+    -----
+
+        The mode monitor data contains the complex effective indices and the complex mode amplitudes at the monitor
+        position calculated by mode decomposition. The data structure of the complex effective
+        indices ``n_complex`` contains two coordinates: ``f`` and ``mode_index``, both of which are specified when
+        defining the :class:``ModeMonitor`` in the simulation.
+
+        Besides the effective index, ModeMonitor is primarily used to calculate the transmission of certain modes in
+        certain directions. We can extract the complex amplitude and square it to compute the mode transmission power.
 
     Example
     -------
@@ -1418,7 +1436,16 @@ class ModeData(MonitorData):
 
 
 class FluxData(MonitorData):
-    """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
+    """
+    Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
+
+    Notes
+    -----
+
+        We can access the data for each monitor by indexing into the :class:`SimulationData` with the monitor
+        ``.name``. The monitor dataset contains one or more ``xarray.DataArray`` objects storing the actual raw data. For
+        the flux monitor data, we can access the raw flux data as a function of frequency with ``.flux``. As most data
+        are multidimensional, it’s often very helpful to print out the data and directly inspect its structure.
 
     Example
     -------
@@ -1428,6 +1455,12 @@ class FluxData(MonitorData):
     >>> flux_data = FluxDataArray(np.random.random(2), coords=coords)
     >>> monitor = FluxMonitor(size=(2,0,6), freqs=[2e14, 3e14], name='flux')
     >>> data = FluxData(monitor=monitor, flux=flux_data)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
     """
 
     monitor: FluxMonitor = pd.Field(

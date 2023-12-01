@@ -34,6 +34,6 @@ API
 .. include:: output_data.rst
 .. include:: logging.rst
 .. include:: submit_simulations.rst
-.. include:: plugins.rst
+.. include:: plugins/index.rst
 .. include:: constants.rst
 .. include:: abstract_models.rst

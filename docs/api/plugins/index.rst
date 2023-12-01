@@ -1,20 +1,22 @@
-***
-API
-***
+Plugins
+=======
 
 .. toctree::
     :hidden:
 
-    simulation
-    boundary_conditions
-    geometry
-    mediums
-    material_library
-    structures
+    mode_solver
+    dispersion
+    polyslab
+    smatrix
+    resonance
+    adjoint
+    waveguide
 
 
-.. include:: simulation.rst
-.. include:: boundary_conditions.rst
-.. include:: geometry.rst
-.. include:: mediums.rst
-.. include:: structures.rst
+.. include:: mode_solver.rst
+.. include:: dispersion.rst
+.. include:: polyslab.rst
+.. include:: smatrix.rst
+.. include:: resonance.rst
+.. include:: adjoint.rst
+.. include:: waveguide.rst

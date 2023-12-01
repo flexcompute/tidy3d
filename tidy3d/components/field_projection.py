@@ -33,7 +33,15 @@ ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayComplex4D]
 
 
 class FieldProjector(Tidy3dBaseModel):
-    """Projection of near fields to points on a given observation grid."""
+    """
+    Projection of near fields to points on a given observation grid.
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+    """
 
     sim_data: SimulationData = pydantic.Field(
         ...,
