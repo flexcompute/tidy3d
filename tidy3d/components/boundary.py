@@ -269,7 +269,44 @@ class PML(AbsorberSpec):
     Notes
     ------
 
-        .. TODO potentailly add 1D and discrtization equuations from the lecture onto the API and images
+        **1D Model Illustration**
+
+        Consider a transformed wave equation _`[1]`:
+
+        .. math::
+
+             \\left( \\left( \\frac{1}{s(x)} \\frac{\\delta}{\\delta x} \\right)^2 - \\frac{1}{c^2} \\frac{\\delta^2}{\\delta t^2} \\right) E = 0
+
+        where the wave stretch factor :math:`s(x)` depends on the PML boundary position in the :math:`x` dimension.
+
+        .. TODO what is x at 0?
+
+        .. math::
+
+             s(x) = \\left \\{
+                        \\begin{array}{lr}
+                            1, & \\text{for } 0 < x \\\\
+                            1 - \\frac{\\sigma}{i \\omega \\epsilon_0}, & \\text{for } x > 0
+                        \\end{array}
+                    \\right \\}
+
+        The wave equation can be solved and plotted accordingly as a function of the `x` dimension.
+
+        .. math::
+
+             E(x) = \\left \\{
+                        \\begin{array}{lr}
+                            e^{i(kx - \\omega t)}, & \\text{for } 0 < x \\\\
+                            e^{i(kx - \\omega t)} \\times e^{-\\frac{\\sigma x}{c \\epsilon_0}} & \\text{for } x > 0
+                        \\end{array}
+                    \\right \\}
+
+        Hence, we see how this PML stretch factor induces frequency-independent exponential attentation and no
+        reflection after the boundary at :math:`x=0`.
+
+        .. image:: ../../_static/img/pml_boundary.png
+
+        .. TODO make this image better
 
         **Usage Caveats**
 
