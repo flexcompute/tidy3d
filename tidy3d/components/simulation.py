@@ -2682,7 +2682,9 @@ class Simulation(AbstractSimulation):
             for other in neighbors:
                 polygons += geom.bounding_box.intersections_with(other)
             polygon_boundaries = [
-                shapely.LineString(list(polygon.exterior.coords)) for polygon in polygons
+                shapely.LineString(list(polygon.exterior.coords)) \
+                    if not isinstance(polygon, shapely.LineString) else polygon \
+                    for polygon in polygons
             ]
             union = shapely.ops.unary_union(polygon_boundaries)
             results = list(shapely.ops.polygonize(union))
@@ -2769,6 +2771,8 @@ class Simulation(AbstractSimulation):
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
                 new_structures.append(new_structure)
                 background_structures.append(new_structure)
+                print(neighbors)
+            print("---")
 
         return tuple(new_structures)
 
