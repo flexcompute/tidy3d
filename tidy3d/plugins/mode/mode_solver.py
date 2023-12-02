@@ -24,6 +24,8 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
+
+from ...components.validators import validate_freqs_min, validate_freqs_not_empty
 from ...exceptions import ValidationError, SetupError
 from ...constants import C_0
 
@@ -41,9 +43,6 @@ except ImportError:
 
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
-
-# Lowest frequency supported (Hz)
-MIN_FREQUENCY = 1e5
 
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
@@ -96,22 +95,8 @@ class ModeSolver(Tidy3dBaseModel):
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
         return val
 
-    @pydantic.validator("freqs", always=True)
-    def freqs_not_empty(cls, val):
-        """Raise validation error if ``freqs`` is an empty Tuple."""
-        if len(val) == 0:
-            raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
-        return val
-
-    @pydantic.validator("freqs", always=True)
-    def freqs_lower_bound(cls, val):
-        """Raise validation error if any of ``freqs`` is lower than ``MIN_FREQUENCY``."""
-        if min(val) < MIN_FREQUENCY:
-            raise ValidationError(
-                f"ModeSolver 'freqs' must be no lower than {MIN_FREQUENCY:.0e} Hz. "
-                "Note that the unit of frequency is 'Hz'."
-            )
-        return val
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
 
     @cached_property
     def normal_axis(self) -> Axis:

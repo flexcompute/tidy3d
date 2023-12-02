@@ -7,7 +7,7 @@ import numpy as np
 
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
-from .validators import assert_plane
+from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_min
 from .base import cached_property, Tidy3dBaseModel
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
@@ -80,12 +80,8 @@ class FreqMonitor(Monitor, ABC):
         "affects the normalization of the frequency-domain fields.",
     )
 
-    @pydantic.validator("freqs", always=True)
-    def _freqs_non_empty(cls, val):
-        """Assert one frequency present."""
-        if len(val) == 0:
-            raise ValidationError("'freqs' must not be empty.")
-        return val
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
 
     @pydantic.validator("freqs", always=True)
     def _warn_num_freqs(cls, val, values):

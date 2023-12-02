@@ -62,7 +62,7 @@ def test_sim_init():
             ),
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
             td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 1, -1),
@@ -146,7 +146,7 @@ def test_monitors_data_size():
             ),
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
             td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 1, -1),
@@ -282,11 +282,11 @@ def _test_monitor_size():
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
-    medium = td.Medium(frequency_range=(2, 3))
+    medium = td.Medium(frequency_range=(2e12, 3e12))
     box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium)
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq * 1e12])
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.5, fwidth=0.5),
+        source_time=td.GaussianPulse(freq0=2.5e12, fwidth=0.5e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
@@ -306,11 +306,11 @@ def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=fwidth),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=fwidth),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5e12])
     _ = td.Simulation(
         size=(1, 1, 1),
         monitors=[mnt],
@@ -338,12 +338,12 @@ def test_validate_bloch_with_symmetry():
 
 def test_validate_normalize_index():
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
     src0 = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0, amplitude=0),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12, amplitude=0),
         size=(0, 0, 0),
         polarization="Ex",
     )
@@ -530,14 +530,16 @@ def test_validate_mnt_size(monkeypatch, log_capture):
 
     # warning for monitor size
     monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
-    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)))
     s._validate_monitor_size()
     assert_log_level(log_capture, "WARNING")
 
     # error for simulation size
     monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
     with pytest.raises(SetupError):
-        s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+        s = SIM.copy(
+            update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),))
+        )
         s._validate_monitor_size()
 
 
@@ -738,8 +740,8 @@ def test_warn_sim_background_medium_freq_range(log_capture):
                     polarization="Ex", source_time=td.GaussianPulse(freq0=2e14, fwidth=1e11)
                 ),
             ),
-            monitors=(td.FluxMonitor(name="test", freqs=[2], size=(1, 1, 0)),),
-            medium=td.Medium(frequency_range=(0, 1)),
+            monitors=(td.FluxMonitor(name="test", freqs=[2e12], size=(1, 1, 0)),),
+            medium=td.Medium(frequency_range=(0, 1e12)),
         )
     )
     assert_log_level(log_capture, "WARNING")
@@ -1233,9 +1235,9 @@ def _test_names_default():
             ),
         ],
         monitors=[
-            td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
-            td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon2"),
-            td.FluxMonitor(size=(1, 0, 1), center=(0, -0.5, 0), freqs=[1], name="mon3"),
+            td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
+            td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon2"),
+            td.FluxMonitor(size=(1, 0, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon3"),
         ],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
@@ -1296,8 +1298,8 @@ def test_names_unique():
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
             monitors=[
-                td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
-                td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon1"),
+                td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
+                td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
             ],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1305,7 +1307,7 @@ def test_names_unique():
 
 def test_mode_object_syms():
     """Test that errors are raised if a mode object is not placed right in the presence of syms."""
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     # wrong mode source
     with pytest.raises(pydantic.ValidationError):
@@ -1328,7 +1330,7 @@ def test_mode_object_syms():
             run_time=1e-12,
             symmetry=(1, -1, 0),
             monitors=[
-                td.ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec())
+                td.ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2e12], mode_spec=td.ModeSpec())
             ],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1353,7 +1355,7 @@ def test_mode_object_syms():
         symmetry=(1, -1, 0),
         monitors=[
             td.ModeMonitor(
-                center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec()
+                center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2e12], mode_spec=td.ModeSpec()
             )
         ],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
@@ -1362,7 +1364,7 @@ def test_mode_object_syms():
 
 def test_tfsf_symmetry():
     """Test that a TFSF source cannot be set in the presence of symmetries."""
-    src_time = td.GaussianPulse(freq0=1, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1386,7 +1388,7 @@ def test_tfsf_symmetry():
 
 def test_tfsf_boundaries(log_capture):
     """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
-    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1469,7 +1471,7 @@ def test_tfsf_boundaries(log_capture):
 
 def test_tfsf_structures_grid(log_capture):
     """Test that a TFSF source is allowed to intersect structures only in particular cases."""
-    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1595,7 +1597,7 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
                 center=(0, 0, 0),
                 size=(td.inf, td.inf, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
         structures=structures,
@@ -1616,12 +1618,12 @@ def test_warn_large_mode_monitor(log_capture, dl, log_level):
             td.ModeSource(
                 size=(0.1, 0.1, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
         monitors=[
             td.ModeMonitor(
-                size=(td.inf, 0, td.inf), freqs=[1], name="test", mode_spec=td.ModeSpec()
+                size=(td.inf, 0, td.inf), freqs=[1e12], name="test", mode_spec=td.ModeSpec()
             )
         ],
     )
@@ -1641,7 +1643,7 @@ def test_warn_large_mode_source(log_capture, dl, log_level):
             td.ModeSource(
                 size=(td.inf, td.inf, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
     )
@@ -1660,12 +1662,14 @@ def test_error_large_monitors():
     )
     mnt_size = (td.inf, 0, td.inf)
     mnt_test = [
-        td.ModeMonitor(size=mnt_size, freqs=[1], name="test", mode_spec=td.ModeSpec()),
-        td.ModeSolverMonitor(size=mnt_size, freqs=[1], name="test", mode_spec=td.ModeSpec()),
-        td.FluxMonitor(size=mnt_size, freqs=[1], name="test"),
+        td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+        td.ModeSolverMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+        td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
         td.FluxTimeMonitor(size=mnt_size, name="test"),
-        td.DiffractionMonitor(size=mnt_size, freqs=[1], name="test"),
-        td.FieldProjectionAngleMonitor(size=mnt_size, freqs=[1], name="test", theta=[0], phi=[0]),
+        td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
+        td.FieldProjectionAngleMonitor(
+            size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]
+        ),
     ]
 
     for monitor in mnt_test:
@@ -2053,7 +2057,7 @@ def test_to_gds(tmp_path):
             )
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
         ],
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(num_layers=20),

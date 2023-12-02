@@ -14,19 +14,20 @@ from tidy3d.components.base import Tidy3dBaseModel
 np.random.seed(4)
 
 
+FREQS = np.array([1.90, 2.01, 2.2]) * 1e12
 SIM_MONITORS = td.Simulation(
     size=(10.0, 10.0, 10.0),
     grid_spec=td.GridSpec(wavelength=1.0),
     run_time=1e-13,
     monitors=[
-        td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
+        td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=FREQS, name="field_freq"),
         td.FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
-        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
+        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=FREQS, name="flux_freq"),
         td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
         td.ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
-            freqs=[1.90, 2.01, 2.2],
+            freqs=FREQS,
             mode_spec=td.ModeSpec(num_modes=3),
             name="mode",
         ),

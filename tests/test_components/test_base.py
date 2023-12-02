@@ -120,7 +120,7 @@ def test_updated_copy():
 def test_equality():
 
     # test freqs / arraylike
-    mnt1 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]), name="1")
-    mnt2 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]), name="1")
+    mnt1 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
+    mnt2 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
 
     assert mnt1 == mnt2
