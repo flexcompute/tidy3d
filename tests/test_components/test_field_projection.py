@@ -274,7 +274,7 @@ def test_proj_clientside():
 
     center = (0, 0, 0)
     size = (2, 2, 0)
-    f0 = 1
+    f0 = 1e13
     monitor = td.FieldMonitor(size=size, center=center, freqs=[f0], name="near_field")
 
     sim_size = (5, 5, 5)

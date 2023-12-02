@@ -43,6 +43,9 @@ from ..log import log
     For more details: `Pydantic Validators <https://pydantic-docs.helpmanual.io/usage/validators/>`_
 """
 
+# Lowest frequency supported (Hz)
+MIN_FREQUENCY = 1e5
+
 
 def get_value(key: str, values: dict) -> Any:
     """Grab value from values dictionary. If not present, raise an error before continuing."""
@@ -330,3 +333,37 @@ def validate_parameter_perturbation(
         return val
 
     return _warn_perturbed_val_range
+
+
+def _assert_min_freq(freqs, msg_start: str):
+    """Check if all ``freqs`` are above the minimum frequency."""
+    if np.min(freqs) < MIN_FREQUENCY:
+        raise ValidationError(
+            f"{msg_start} must be no lower than {MIN_FREQUENCY:.0e} Hz. "
+            "Note that the unit of frequency is 'Hz'."
+        )
+
+
+def validate_freqs_min():
+    """Validate lower bound for monitor, and mode solver frequencies."""
+
+    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    def freqs_lower_bound(cls, val):
+        """Raise validation error if any of ``freqs`` is lower than ``MIN_FREQUENCY``."""
+        _assert_min_freq(val, msg_start=f"All of '{cls.__name__}.freqs'")
+        return val
+
+    return freqs_lower_bound
+
+
+def validate_freqs_not_empty():
+    """Validate that the array of frequencies is not empty."""
+
+    @pydantic.validator("freqs", always=True, allow_reuse=True)
+    def freqs_not_empty(cls, val):
+        """Raise validation error if ``freqs`` is an empty Tuple."""
+        if len(val) == 0:
+            raise ValidationError(f"'{cls.__name__}.freqs' cannot be empty (size 0).")
+        return val
+
+    return freqs_not_empty

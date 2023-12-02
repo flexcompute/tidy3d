@@ -230,7 +230,7 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 1001),
+        freqs=np.linspace(1e12, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
     )
@@ -239,7 +239,7 @@ def test_monitor_colocate(log_capture):
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=np.linspace(0, 200e12, 1001),
+        freqs=np.linspace(1e12, 200e12, 1001),
         name="test",
         interval_space=(1, 2, 3),
         colocate=False,
@@ -247,13 +247,15 @@ def test_monitor_colocate(log_capture):
     assert monitor.colocate is False
 
 
-@pytest.mark.parametrize("freqs, log_level", [(np.arange(2500), "WARNING"), (np.arange(100), None)])
+@pytest.mark.parametrize(
+    "freqs, log_level", [(np.arange(1, 2500), "WARNING"), (np.arange(1, 100), None)]
+)
 def test_monitor_num_freqs(log_capture, freqs, log_level):
     """test default colocate value, and warning if not set"""
 
     monitor = td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
-        freqs=freqs,
+        freqs=freqs * 1e12,
         name="test",
         colocate=True,
     )
@@ -296,28 +298,31 @@ def test_diffraction_validators():
         _ = td.DiffractionMonitor(size=[td.inf, 4, 0], freqs=[1e12], name="de")
 
 
+FREQS = np.array([1, 2, 3]) * 1e12
+
+
 def test_monitor():
 
     size = (1, 2, 3)
     center = (1, 2, 3)
 
-    m1 = td.FieldMonitor(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
-    _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=[1, 2, 3], name="test_monitor")
+    m1 = td.FieldMonitor(size=size, center=center, freqs=FREQS, name="test_monitor")
+    _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=FREQS, name="test_monitor")
     m2 = td.FieldTimeMonitor(size=size, center=center, name="test_mon")
-    m3 = td.FluxMonitor(size=(1, 1, 0), center=center, freqs=[1, 2, 3], name="test_mon")
+    m3 = td.FluxMonitor(size=(1, 1, 0), center=center, freqs=FREQS, name="test_mon")
     m4 = td.FluxTimeMonitor(size=(1, 1, 0), center=center, name="test_mon")
     m5 = td.ModeMonitor(
-        size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=[1, 2, 3], name="test_mon"
+        size=(1, 1, 0), center=center, mode_spec=td.ModeSpec(), freqs=FREQS, name="test_mon"
     )
     m6 = td.ModeSolverMonitor(
         size=(1, 1, 0),
         center=center,
         mode_spec=td.ModeSpec(),
-        freqs=[1, 2, 3],
+        freqs=FREQS,
         name="test_mon",
         direction="-",
     )
-    m7 = td.PermittivityMonitor(size=size, center=center, freqs=[1, 2, 3], name="perm")
+    m7 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
 
     tmesh = np.linspace(0, 1, 10)
 
@@ -333,16 +338,14 @@ def test_monitor():
 
 def test_monitor_plane():
 
-    freqs = [1, 2, 3]
-
     # make sure flux, mode and diffraction monitors fail with non planar geometries
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 1)):
         with pytest.raises(pydantic.ValidationError):
-            td.ModeMonitor(size=size, freqs=freqs, modes=[])
+            td.ModeMonitor(size=size, freqs=FREQS, modes=[])
         with pytest.raises(pydantic.ValidationError):
-            td.ModeSolverMonitor(size=size, freqs=freqs, modes=[])
+            td.ModeSolverMonitor(size=size, freqs=FREQS, modes=[])
         with pytest.raises(pydantic.ValidationError):
-            td.DiffractionMonitor(size=size, freqs=freqs, name="de")
+            td.DiffractionMonitor(size=size, freqs=FREQS, name="de")
 
 
 def _test_freqs_nonempty():
@@ -357,14 +360,12 @@ def test_monitor_surfaces_from_volume():
     # make sure that monitors with zero volume raise an error (adapted from test_monitor_plane())
     for size in ((0, 0, 0), (1, 0, 0), (1, 1, 0)):
         with pytest.raises(SetupError):
-            _ = td.FieldMonitor.surfaces(
-                size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
-            )
+            _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=FREQS, name="test_monitor")
 
     # test that the surface monitors can be extracted from a volume monitor
     size = (1, 2, 3)
     monitor_surfaces = td.FieldMonitor.surfaces(
-        size=size, center=center, freqs=[1, 2, 3], name="test_monitor"
+        size=size, center=center, freqs=FREQS, name="test_monitor"
     )
 
     # x- surface

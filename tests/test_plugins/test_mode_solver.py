@@ -489,9 +489,9 @@ def test_mode_solver_angle_bend():
     plt.close()
 
     # Create source and monitor
-    st = td.GaussianPulse(freq0=1.0, fwidth=1.0)
+    st = td.GaussianPulse(freq0=1.0e12, fwidth=1.0e12)
     _ = ms.to_source(source_time=st, direction="-")
-    _ = ms.to_monitor(freqs=[1.0, 2.0], name="mode_mnt")
+    _ = ms.to_monitor(freqs=np.array([1.0, 2.0]) * 1e12, name="mode_mnt")
 
 
 def test_mode_solver_2D():
@@ -711,7 +711,7 @@ def test_mode_solver_method_defaults():
     )
 
     # test defaults
-    st = td.GaussianPulse(freq0=1.0, fwidth=1.0)
+    st = td.GaussianPulse(freq0=1.0e12, fwidth=1.0e12)
 
     src = ms.to_source(source_time=st)
     assert src.direction == ms.direction

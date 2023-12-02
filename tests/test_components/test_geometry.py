@@ -291,7 +291,7 @@ def test_surfaces():
         td.Box.surfaces(size=(1, 0, 1), center=(0, 0, 0))
 
     td.FluxMonitor.surfaces(
-        size=(1, 1, 1), center=(0, 0, 0), normal_dir="+", name="test", freqs=[1]
+        size=(1, 1, 1), center=(0, 0, 0), normal_dir="+", name="test", freqs=[1e12]
     )
     td.Box.surfaces(size=(1, 1, 1), center=(0, 0, 0), normal_dir="+")
 

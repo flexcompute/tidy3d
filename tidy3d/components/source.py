@@ -15,7 +15,7 @@ from .time import AbstractTimeDependence
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
 from .validators import assert_plane, assert_volumetric, get_value
-from .validators import warn_if_dataset_none, assert_single_freq_in_range
+from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
 from .geometry.base import Box
@@ -371,6 +371,12 @@ class Source(Box, AbstractSource, ABC):
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
+
+    @pydantic.validator("source_time", always=True)
+    def _freqs_lower_bound(cls, val):
+        """Raise validation error if central frequency is too low."""
+        _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
+        return val
 
     def plot(  #  pylint:disable=too-many-arguments
         self,
