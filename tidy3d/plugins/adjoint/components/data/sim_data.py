@@ -19,7 +19,6 @@ from ..simulation import JaxSimulation, JaxInfo
 from .monitor_data import JaxMonitorDataType, JAX_MONITOR_DATA_MAP
 
 
-@register_pytree_node_class
 class JaxSimulationData(SimulationData, JaxObject):
     """A :class:`.SimulationData` registered with jax."""
 

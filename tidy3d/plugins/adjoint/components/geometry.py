@@ -34,7 +34,7 @@ GRAD_MONITOR_EXPANSION = fp_eps
 MAX_NUM_VERTICES = 1000
 
 
-class JaxGeometry(Geometry, ABC):
+class JaxGeometry(Geometry, JaxObject, ABC):
     """Abstract :class:`.Geometry` with methods useful for all Jax subclasses."""
 
     @property
@@ -128,39 +128,39 @@ class JaxGeometry(Geometry, ABC):
 
 
 @register_pytree_node_class
-class JaxBox(JaxGeometry, Box, JaxObject):
+class JaxBox(Box, JaxGeometry):
     """A :class:`.Box` registered with jax."""
 
-    size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
-        ...,
-        title="Size",
-        description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-        jax_field=True,
-    )
+    # size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    #     ...,
+    #     title="Size",
+    #     description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
+    #     jax_field=True,
+    # )
 
-    center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
-        ...,
-        title="Center",
-        description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-        jax_field=True,
-    )
+    # center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    #     ...,
+    #     title="Center",
+    #     description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
+    #     jax_field=True,
+    # )
 
-    _sanitize_size = validate_jax_tuple("size")
-    _sanitize_center = validate_jax_tuple("center")
+    # _sanitize_size = validate_jax_tuple("size")
+    # _sanitize_center = validate_jax_tuple("center")
 
-    @cached_property
-    def bounds(self):
-        """Bounds of this box."""
-        size = jax.lax.stop_gradient(self.size)
-        center = jax.lax.stop_gradient(self.center)
-        coord_min = tuple(c - s / 2 for (s, c) in zip(size, center))
-        coord_max = tuple(c + s / 2 for (s, c) in zip(size, center))
-        return (coord_min, coord_max)
+    # @cached_property
+    # def bounds(self):
+    #     """Bounds of this box."""
+    #     size = jax.lax.stop_gradient(self.size)
+    #     center = jax.lax.stop_gradient(self.center)
+    #     coord_min = tuple(c - s / 2 for (s, c) in zip(size, center))
+    #     coord_max = tuple(c + s / 2 for (s, c) in zip(size, center))
+    #     return (coord_min, coord_max)
 
-    @pd.validator("center", always=True)
-    def _center_not_inf(cls, val):
-        """Overrides validator enforing that val is not inf."""
-        return val
+    # @pd.validator("center", always=True)
+    # def _center_not_inf(cls, val):
+    #     """Overrides validator enforing that val is not inf."""
+    #     return val
 
     def store_vjp(
         self,

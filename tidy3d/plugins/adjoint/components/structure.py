@@ -16,7 +16,7 @@ from ....components.medium import MediumType
 from ....components.geometry.utils import GeometryType
 
 from .base import JaxObject
-from .medium import JaxMediumType, JAX_MEDIUM_MAP
+from .medium import JaxMediumType, JAX_MEDIUM_MAP, JaxMedium
 from .geometry import JaxGeometryType, JAX_GEOMETRY_MAP, JaxBox
 
 GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
@@ -25,54 +25,54 @@ GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
 class AbstractJaxStructure(Structure, JaxObject):
     """A :class:`.Structure` registered with jax."""
 
-    geometry: Union[JaxGeometryType, GeometryType]
-    medium: Union[JaxMediumType, MediumType]
+    geometry: Union[JaxBox, GeometryType]
+    medium: Union[JaxMedium, MediumType]
 
-    # which of "geometry" or "medium" is differentiable for this class
-    _differentiable_fields = ()
+    # # which of "geometry" or "medium" is differentiable for this class
+    # _differentiable_fields = ()
 
-    @pd.validator("medium", always=True)
-    def _check_2d_geometry(cls, val, values):
-        """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
-        return val
+    # @pd.validator("medium", always=True)
+    # def _check_2d_geometry(cls, val, values):
+    #     """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
+    #     return val
 
-    @property
-    def jax_fields(self):
-        """The fields that are jax-traced for this class."""
-        return dict(geometry=self.geometry, medium=self.medium)
+    # @property
+    # def jax_fields(self):
+    #     """The fields that are jax-traced for this class."""
+    #     return dict(geometry=self.geometry, medium=self.medium)
 
-    @property
-    def exclude_fields(self):
-        """Fields to exclude from the self dict."""
-        return set(["type"] + list(self.jax_fields.keys()))
+    # @property
+    # def exclude_fields(self):
+    #     """Fields to exclude from the self dict."""
+    #     return set(["type"] + list(self.jax_fields.keys()))
 
-    def to_structure(self) -> Structure:
-        """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
-        self_dict = self.dict(exclude=self.exclude_fields)
-        for key, component in self.jax_fields.items():
-            if key in self._differentiable_fields:
-                self_dict[key] = component.to_tidy3d()
-            else:
-                self_dict[key] = component
-        return Structure.parse_obj(self_dict)
+    # def to_structure(self) -> Structure:
+    #     """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
+    #     self_dict = self.dict(exclude=self.exclude_fields)
+    #     for key, component in self.jax_fields.items():
+    #         if key in self._differentiable_fields:
+    #             self_dict[key] = component.to_tidy3d()
+    #         else:
+    #             self_dict[key] = component
+    #     return Structure.parse_obj(self_dict)
 
-    @classmethod
-    def from_structure(cls, structure: Structure) -> JaxStructure:
-        """Convert :class:`.Structure` to :class:`.JaxStructure`."""
+    # @classmethod
+    # def from_structure(cls, structure: Structure) -> JaxStructure:
+    #     """Convert :class:`.Structure` to :class:`.JaxStructure`."""
 
-        struct_dict = structure.dict(exclude={"type"})
+    #     struct_dict = structure.dict(exclude={"type"})
 
-        jax_fields = dict(geometry=structure.geometry, medium=structure.medium)
+    #     jax_fields = dict(geometry=structure.geometry, medium=structure.medium)
 
-        for key, component in jax_fields.items():
-            if key in cls._differentiable_fields:
-                type_map = GEO_MED_MAPPINGS[key]
-                jax_type = type_map[type(component)]
-                struct_dict[key] = jax_type.from_tidy3d(component)
-            else:
-                struct_dict[key] = component
+    #     for key, component in jax_fields.items():
+    #         if key in cls._differentiable_fields:
+    #             type_map = GEO_MED_MAPPINGS[key]
+    #             jax_type = type_map[type(component)]
+    #             struct_dict[key] = jax_type.from_tidy3d(component)
+    #         else:
+    #             struct_dict[key] = component
 
-        return cls.parse_obj(struct_dict)
+    #     return cls.parse_obj(struct_dict)
 
     def make_grad_monitors(self, freqs: List[float], name: str) -> FieldMonitor:
         """Return gradient monitor associated with this object."""

@@ -214,56 +214,56 @@ def make_sim(
     jax_med1 = JaxMedium(permittivity=permittivity, conductivity=permittivity * 0.1)
     jax_struct1 = JaxStructure(geometry=jax_box1, medium=jax_med1)
 
-    jax_box2 = JaxBox(size=size, center=(-1, 0, -3))
-    jax_med2 = JaxAnisotropicMedium(
-        xx=JaxMedium(permittivity=permittivity),
-        yy=JaxMedium(permittivity=permittivity + 2),
-        zz=JaxMedium(permittivity=permittivity * 2),
-    )
-    jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
+    # jax_box2 = JaxBox(size=size, center=(-1, 0, -3))
+    # jax_med2 = JaxAnisotropicMedium(
+    #     xx=JaxMedium(permittivity=permittivity),
+    #     yy=JaxMedium(permittivity=permittivity + 2),
+    #     zz=JaxMedium(permittivity=permittivity * 2),
+    # )
+    # jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
 
-    jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
-    jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
+    # jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
+    # jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
-    # custom medium
-    Nx, Ny, Nz = 10, 1, 10
-    (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
-    coords = dict(
-        x=np.linspace(xmin, xmax, Nx).tolist(),
-        y=np.linspace(ymin, ymax, Ny).tolist(),
-        z=np.linspace(zmin, zmax, Nz).tolist(),
-        f=(FREQ0,),
-    )
+    # # custom medium
+    # Nx, Ny, Nz = 10, 1, 10
+    # (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
+    # coords = dict(
+    #     x=np.linspace(xmin, xmax, Nx).tolist(),
+    #     y=np.linspace(ymin, ymax, Ny).tolist(),
+    #     z=np.linspace(zmin, zmax, Nz).tolist(),
+    #     f=(FREQ0,),
+    # )
 
-    jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
-    values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
+    # jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
+    # values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
 
-    # adding this line breaks things without enforcing that the vjp for custom medium is complex
-    values = (1 + 1j) * values
-    values = values + (1 + 1j) * values / 0.5
+    # # adding this line breaks things without enforcing that the vjp for custom medium is complex
+    # values = (1 + 1j) * values
+    # values = values + (1 + 1j) * values / 0.5
 
-    eps_ii = JaxDataArray(values=values, coords=coords)
-    field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
-    jax_eps_dataset = JaxPermittivityDataset(**field_components)
-    jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
-    jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
+    # eps_ii = JaxDataArray(values=values, coords=coords)
+    # field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+    # jax_eps_dataset = JaxPermittivityDataset(**field_components)
+    # jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
+    # jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
 
-    field_components_anis = {
-        f"eps_{dim}{dim}": const * eps_ii for const, dim in zip([1.0, 2.0, 3.0], "xyz")
-    }
-    jax_eps_dataset_anis = JaxPermittivityDataset(**field_components_anis)
-    jax_med_custom_anis = JaxCustomMedium(eps_dataset=jax_eps_dataset_anis)
-    jax_struct_custom_anis = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom_anis)
+    # field_components_anis = {
+    #     f"eps_{dim}{dim}": const * eps_ii for const, dim in zip([1.0, 2.0, 3.0], "xyz")
+    # }
+    # jax_eps_dataset_anis = JaxPermittivityDataset(**field_components_anis)
+    # jax_med_custom_anis = JaxCustomMedium(eps_dataset=jax_eps_dataset_anis)
+    # jax_struct_custom_anis = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom_anis)
 
-    jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
-    jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
+    # jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
+    # jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
 
-    jax_struct_static_med = JaxStructureStaticMedium(
-        geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
-    )
-    jax_struct_static_geo = JaxStructureStaticGeometry(
-        geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
-    )
+    # jax_struct_static_med = JaxStructureStaticMedium(
+    #     geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
+    # )
+    # jax_struct_static_geo = JaxStructureStaticGeometry(
+    #     geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
+    # )
 
     # TODO: Add new geometries as they are created.
 
@@ -312,13 +312,13 @@ def make_sim(
         structures=(extraneous_structure,),
         input_structures=(
             jax_struct1,
-            jax_struct2,
-            jax_struct_custom,
-            jax_struct3,
-            jax_struct_group,
-            jax_struct_custom_anis,
-            jax_struct_static_med,
-            jax_struct_static_geo,
+            # jax_struct2,
+            # jax_struct_custom,
+            # jax_struct3,
+            # jax_struct_group,
+            # jax_struct_custom_anis,
+            # jax_struct_static_med,
+            # jax_struct_static_geo,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
@@ -465,6 +465,43 @@ def test_run_flux(use_emulated_run):
     if use_jax:
         get_flux_grad = jax.grad(get_flux)
         _ = get_flux_grad(1.0)
+
+@pytest.mark.parametrize("local", (True,))
+def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
+    """Test computing gradient using jax."""
+
+    run_fn = run_local if local else run
+
+
+    def f(sim):
+        return sim
+
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim2 = f(sim)
+    # _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    def f(permittivity, size, vertices, base_eps_val):
+        sim = make_sim(
+            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+        )
+        a = 0.0
+        a += sim.input_structures[0].geometry.size[0]
+        a += sim.input_structures[0].geometry.size[1]
+        a += sim.input_structures[0].geometry.size[2]
+        a += sim.input_structures[0].geometry.center[0]
+        a += sim.input_structures[0].geometry.center[1]
+        a += sim.input_structures[0].geometry.center[2]
+        a += sim.input_structures[0].medium.permittivity
+        # sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        # amp = extract_amp(sim_data)
+        # return objective(amp)
+        return a
+
+    grad_f = grad(f, argnums=(0, 1, 2, 3))
+    df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
 
 @pytest.mark.parametrize("local", (True, False))

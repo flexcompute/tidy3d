@@ -111,17 +111,18 @@ def run(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
-    sim, jax_info = simulation.to_simulation()
+    # sim, jax_info = simulation.to_simulation()
 
     sim_data = tidy3d_run_fn(
-        simulation=sim,
+        simulation=simulation,
         task_name=str(task_name),
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
-    return JaxSimulationData.from_sim_data(sim_data, jax_info)
+    return JaxSimulationData.parse_obj(sim_data.dict(exclude={"type"}))
+    # return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
 def run_fwd(
@@ -621,11 +622,11 @@ def run_local(
     """
 
     # convert to regular tidy3d (and accounting info)
-    sim_tidy3d, jax_info = simulation.to_simulation()
+    # sim_tidy3d, jax_info = simulation.to_simulation()
 
     # run using regular tidy3d simulation running fn
     sim_data_tidy3d = tidy3d_run_fn(
-        simulation=sim_tidy3d,
+        simulation=simulation,
         task_name=str(task_name),
         folder_name=folder_name,
         path=path,
@@ -634,7 +635,8 @@ def run_local(
     )
 
     # convert back to jax type and return
-    return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
+    return JaxSimulationData.parse_obj(sim_data_tidy3d.dict())
+    # return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
 
 def run_local_fwd(
