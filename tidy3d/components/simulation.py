@@ -294,7 +294,7 @@ class Simulation(Box):
     --------
 
     :class:`GridSpec`:
-        A perfectly matched layer model.
+        Collective grid specification for all three dimensions.
     """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -326,8 +326,7 @@ class Simulation(Box):
     --------
 
     **Lectures:**
-
-    *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+        *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
     """
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
@@ -385,8 +384,7 @@ class Simulation(Box):
     --------
 
     **Lectures:**
-
-    *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
     """
 
     version: str = pydantic.Field(

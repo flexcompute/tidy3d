@@ -28,7 +28,32 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the running of a :class:`.Simulation` on server."""
+    """
+    Interface for managing the running of a :class:`.Simulation` on server.
+
+    Notes
+    -----
+
+        This class provides a more convenient way to manage single simulations, mainly because it eliminates the need
+        for keeping track of the ``task_id`` and original :class:`Simulation`.
+
+        We can get the cost estimate of running the task before actually running it. This prevents us from
+        accidentally running large jobs that we set up by mistake. The estimated cost is the maximum cost
+        corresponding to running all the time steps.
+
+        Another convenient thing about ``Job`` objects is that they can be saved and loaded just like other
+        ``tidy3d`` components.
+
+    See Also
+    --------
+
+    :class:`Batch`:
+         Interface for submitting several :class:`Simulation` objects to sever.
+
+    **Notebooks**
+        *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
+    """
 
     simulation: Simulation = pd.Field(
         ..., title="Simulation", description="Simulation to run as a 'task'."
@@ -224,7 +249,32 @@ class Job(WebContainer):
 
 
 class BatchData(Tidy3dBaseModel):
-    """Holds a collection of :class:`.SimulationData` returned by :class:`.Batch`."""
+    """
+    Holds a collection of :class:`.SimulationData` returned by :class:`Batch`.
+
+    Notes
+    -----
+
+        When the batch is completed, the output is not a :class:`.SimulationData` but rather a :class:`BatchData`. The
+        data within this :class:`BatchData` object can either be indexed directly ``batch_results[task_name]`` or can be looped
+        through ``batch_results.items()`` to get the :class:`.SimulationData` for each task.
+
+        This was chosen to reduce the memory strain from loading all :class:`.SimulationData` objects at once.
+
+        Alternatively, the batch can be looped through (several times) using the ``.items()`` method, similar to a dictionary.
+
+    See Also
+    --------
+
+    :class:`Batch`:
+         Interface for submitting several :class:`.Simulation` objects to sever.
+
+    :class:`.SimulationData`:
+         Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
+
+    **Notebooks:**
+        * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+    """
 
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
@@ -283,7 +333,25 @@ class BatchData(Tidy3dBaseModel):
 
 
 class Batch(WebContainer):
-    """Interface for submitting several :class:`.Simulation` objects to sever."""
+    """
+    Interface for submitting several :class:`Simulation` objects to sever.
+
+    Notes
+    -----
+
+        Commonly one needs to submit a batch of :class:`Simulation`. The built-in :class:`Batch` object is the best way to upload,
+        start, monitor, and load a series of tasks. The batch object is like a :class:`Job`, but stores task metadata
+        for a series of simulations.
+
+    See Also
+    --------
+
+    :class:`Job`:
+        Interface for managing the running of a Simulation on server.
+
+    **Notebooks**
+        *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+    """
 
     simulations: Dict[TaskName, Simulation] = pd.Field(
         ...,
@@ -426,7 +494,7 @@ class Batch(WebContainer):
         for _, job in self.jobs.items():
             job.start()
 
-    def get_run_info(self) -> Dict[TaskName, RunInfo]:
+    def get_run_info(self) -> BatchDataDict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
 
         Returns

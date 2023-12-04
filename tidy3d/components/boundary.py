@@ -56,6 +56,7 @@ class BlochBoundary(BoundaryEdge):
 
     **Notebooks**:
         * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
     bloch_vec: float = pd.Field(
@@ -332,6 +333,12 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
 
+        When the simulation domain is small, and the PML boundary condition is used, sometimes it is possible to
+        receive warnings about structures being too close to the boundary. To avoid this warning, use the :class:`Absorber`
+        boundary condition, which will work perfectly fine in this case. :class:`PML` should be placed sufficiently far from
+        any structures since evanescent field leaking into :class:`PML` could cause the simulation to diverge. The :class:`Absorber`,
+        on the other hand, does not have this concern.
+
         **References**
 
         .. [1]  W.C. Chew and W.H. Weedon, Microwave and Optical Tech. Lett., 7 (13), 599,1994; S. Johnson, arXiv 2108.05348, 2021
@@ -469,6 +476,7 @@ class Boundary(Tidy3dBaseModel):
 
     **Notebooks:**
         * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
 
     """
 

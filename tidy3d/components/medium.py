@@ -2841,6 +2841,7 @@ class AnisotropicMedium(AbstractMedium):
 
     **Notebooks:**
         * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
 
     """
 

@@ -1053,6 +1053,12 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     ...     name='diffraction_monitor',
     ...     normal_dir='+',
     ...     )
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
     normal_dir: Direction = pydantic.Field(

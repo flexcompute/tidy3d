@@ -626,12 +626,13 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
 
 class CustomCurrentSource(ReverseInterpolatedSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
-    current distributions in the FDTD solver.
 
-    Note
-    ----
-        The coordinates of all provided fields are assumed to be relative to the source center.
+    Notes
+    -----
+
+        Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current
+        distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
+        source center.
 
     Example
     -------
@@ -761,14 +762,31 @@ class BroadbandSource(Source, ABC):
 
 class CustomFieldSource(FieldSource, PlanarSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,
-    using the equivalence principle to define the actual injected currents. For the injection to
-    work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
+    using the equivalence principle to define the actual injected currents.
+
+     Notes
+     -----
+     For the injection to work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
     decay by the edges of the source plane, or the source plane must span the entire simulation
     domain and the fields must match the simulation boundary conditions.
+
     The equivalent source currents are fully defined by the field components tangential to the
     source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
     can be provided but will have no effect on the results, and at least one of the tangential
     components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+
+    ..
+        TODO is this generic? Only the field components tangential to the custom source plane are needed and used in
+        the simulation. Due to the equivalence principle, these fully define the currents that need to be injected. This
+        is not to say that the normal components of the data (:math:`E_x`, :math:`H_x` in our example) is lost or not
+        injected. It is merely not needed as it can be uniquely obtained using the tangential components.
+
+    Source data can be imported from file just as shown here, after the data is imported as a numpy array using
+    standard numpy functions like loadtxt.
+
+    If the data is not coming from a ``tidy3d`` simulation, the normalization is likely going to be arbitrary and the
+    directionality of the source will likely not be perfect, even if both the E and H fields are provided. An empty
+    normalizing run may be needed to accurately normalize results.
 
     Note
     ----
@@ -796,6 +814,11 @@ class CustomFieldSource(FieldSource, PlanarSource):
     ...     source_time=pulse,
     ...     field_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     field_dataset: Optional[FieldDataset] = pydantic.Field(
@@ -1028,6 +1051,12 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     pol_angle=np.pi / 2,
     ...     direction='+',
     ...     waist_radius=1.0)
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
     waist_radius: pydantic.PositiveFloat = pydantic.Field(
@@ -1113,6 +1142,15 @@ class TFSF(AngledFieldSource, VolumeSource):
         that the incident field is cancelled out, so that all fields outside the TFSF box are scattered fields only.
         This is useful in scenarios where one is interested in computing scattered fields only, for example when
         computing scattered cross-sections of various objects.
+
+        It is important to note that when a non-uniform grid is used in the directions transverse to the
+        ``injection_axis`` of the TFSF source, the suppression of the incident field outside the TFSF box may not be as
+        close to zero as in the case of a uniform grid. Because of this, a warning may be issued when nonuniform grid
+        TFSF setup is detected. In some cases, however, the accuracy may be only weakly affected, and the warnings
+        can be ignored. In this example, the presence of scatterers does cause the auto-generated FDTD grid to be
+        non-uniform in the end directions, but as we’ll see, the results are still in excellent agreement with the
+        reference simulation. To force a uniform grid in the TFSF region and avoid the warnings, a mesh override
+        structure can be used, as illustrated in our `nanoparticle scattering example <../../notebooks/PlasmonicNanoparticle.html>`_ .
 
     See Also
     --------

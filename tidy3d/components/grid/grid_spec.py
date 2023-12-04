@@ -303,7 +303,6 @@ class AutoGrid(GridSpec1d):
 
     **Notebooks:**
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
-
     """
 
     min_steps_per_wvl: float = pd.Field(
@@ -432,6 +431,18 @@ class GridSpec(Tidy3dBaseModel):
     >>> custom = CustomGrid(dl=[0.2, 0.2, 0.1, 0.1, 0.1, 0.2, 0.2])
     >>> auto = AutoGrid(min_steps_per_wvl=12)
     >>> grid_spec = GridSpec(grid_x=uniform, grid_y=custom, grid_z=auto, wavelength=1.5)
+
+    See Also
+    --------
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
     grid_x: GridType = pd.Field(
