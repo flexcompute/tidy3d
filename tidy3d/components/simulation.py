@@ -48,7 +48,6 @@ from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dErro
 from ..log import log
 from ..updater import Updater
 
-
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
@@ -93,19 +92,7 @@ class Simulation(Box):
         To make the simulation 2D, we can just set the simulation size in one of the dimensions to be 0. However,
         note that we still have to define a grid size in that direction.
 
-        **Symmetry**
-
-        You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
-        defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
-        Each element can be 0 (no symmetry), 1 (even, i.e. ‘PMC’ symmetry) or -1 (odd, i.e. ‘PEC’ symmetry). Note
-        that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
-
-        The figure below illustrates how the electric and magnetic field components transform under PEC- and PMC-like
-        symmetry planes. You can refer to this figure when considering whether a source field conforms to a PEC- or
-        PMC-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
-
-        .. image:: ../../notebooks/img/pec_pmc.png
-
+        See further parameter explanations below.
 
     Example
     -------
@@ -159,6 +146,7 @@ class Simulation(Box):
     **Notebooks:**
         * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+        * See nearly all notebooks for :class:`Simulation` applications.
 
     **Lectures:**
         * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
@@ -176,7 +164,10 @@ class Simulation(Box):
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
     )
-    "Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. "
+    """
+    Total electromagnetic evolution time in seconds. If simulation 'shutoff' is specified, simulation will
+    terminate early when shutoff condition met.
+    """
 
     medium: MediumType3D = pydantic.Field(
         Medium(),
@@ -184,6 +175,18 @@ class Simulation(Box):
         description="Background medium of simulation, defaults to vacuum if not specified.",
         discriminator=TYPE_TAG_STR,
     )
+    """
+    Background medium of simulation, defaults to vacuum if not specified.
+
+    See Also
+    --------
+
+    `Material Library <../material_library.html>`_:
+        The material library is a dictionary containing various dispersive models from real world materials.
+
+    `Medium classes <../mediums.html>`_:
+        Dispersive and dispersionless Mediums models.
+    """
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
         (0, 0, 0),
@@ -196,6 +199,18 @@ class Simulation(Box):
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
+    """
+    You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+    defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
+    Each element can be 0 (no symmetry), 1 (even, i.e. ‘PMC’ symmetry) or -1 (odd, i.e. ‘PEC’ symmetry). Note
+    that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
+
+    The figure below illustrates how the electric and magnetic field components transform under PEC- and PMC-like
+    symmetry planes. You can refer to this figure when considering whether a source field conforms to a PEC- or
+    PMC-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
+
+    .. image:: ../../notebooks/img/pec_pmc.png
+    """
 
     structures: Tuple[Structure, ...] = pydantic.Field(
         (),
@@ -204,12 +219,18 @@ class Simulation(Box):
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
+    """
+    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.
+    """
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
         (),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
     )
+    """
+    Tuple of electric current sources injecting fields into the simulation.
+    """
 
     boundary_spec: BoundarySpec = pydantic.Field(
         BoundarySpec(),
@@ -217,6 +238,9 @@ class Simulation(Box):
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "PML boundary conditions are applied on all sides.",
     )
+    """
+    "Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are applied on all sides."
+    """
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
@@ -224,12 +248,18 @@ class Simulation(Box):
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
+    """
+    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.
+    """
 
     grid_spec: GridSpec = pydantic.Field(
         GridSpec(),
         title="Grid Specification",
         description="Specifications for the simulation grid along each of the three directions.",
     )
+    """
+    Specifications for the simulation grid along each of the three directions.
+    """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
         1e-5,
@@ -246,6 +276,17 @@ class Simulation(Box):
         description="If ``True``, uses subpixel averaging of the permittivity "
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
+    """
+    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
+    higher accuracy for a given grid size.,
+
+    See Also
+    --------
+
+    **Lectures:**
+
+    *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+    """
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
         0,
@@ -254,6 +295,10 @@ class Simulation(Box):
         "normalize the frequency-dependent data. If ``None``, the raw field data is returned "
         "unnormalized.",
     )
+    """
+    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent
+    data. If ``None``, the raw field data is returned. If ``None``, the raw field data is returned unnormalized.
+    """
 
     courant: float = pydantic.Field(
         0.99,
@@ -265,6 +310,30 @@ class Simulation(Box):
         gt=0.0,
         le=1.0,
     )
+    """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio. A
+    physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
+    because in this spatially-discrete grid, information propagates over a distance :math:`\\delta x`
+    over a time step :math:`\\delta t`. This constraint enables the correct physics to be captured by the simulation.
+    In a 1D model:
+
+    .. image:: ../../_static/img/courant_instability.png
+
+    Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This
+    factor is normalized to no larger than 1 when CFL stability condition is met in 3D.
+
+    .. TODO finish this section for 1D, 2D and 3D references.
+
+    .. math::
+
+        C = \\frac{c \\delta t}{\\delta x} \\leq 1
+
+    See Also
+    --------
+
+    **Lectures:**
+
+    *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+    """
 
     version: str = pydantic.Field(
         __version__,
@@ -588,7 +657,6 @@ class Simulation(Box):
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -668,7 +736,9 @@ class Simulation(Box):
                             medium_str = "The simulation background medium"
                             custom_loc = ["medium", "frequency_range"]
                         else:
-                            medium_str = f"The medium associated with structures[{medium_index-1}]"
+                            medium_str = (
+                                f"The medium associated with structures[{medium_index - 1}]"
+                            )
                             custom_loc = [
                                 "structures",
                                 medium_index - 1,
@@ -883,7 +953,7 @@ class Simulation(Box):
                                 medium_str = "the simulation background medium"
                             else:
                                 medium_str = (
-                                    f"the medium associated with structures[{medium_index-1}]"
+                                    f"the medium associated with structures[{medium_index - 1}]"
                                 )
 
                             consolidated_logger.warning(
