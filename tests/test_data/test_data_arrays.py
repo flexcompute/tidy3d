@@ -1,8 +1,10 @@
 """Tests tidy3d/components/data/data_array.py"""
+import pytest
 import numpy as np
 from typing import Tuple, List
 
 import tidy3d as td
+from tidy3d.exceptions import DataError
 
 np.random.seed(4)
 
@@ -277,3 +279,52 @@ def test_charge_data_array():
     n = [0, 1e-12, 2e-12]
     p = [0, 3e-12, 4e-12]
     _ = td.ChargeDataArray((1 + 1j) * np.random.random((3, 3)), coords=dict(n=n, p=p))
+
+
+def test_point_data_array():
+    _ = td.PointDataArray(
+        np.random.rand(2, 3),
+        coords=dict(index=np.arange(2), axis=np.arange(3)),
+    )
+
+
+def test_cell_data_array():
+    _ = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+    )
+
+
+def test_indexed_data_array():
+    _ = td.IndexedDataArray(
+        np.random.rand(10),
+        coords=dict(index=np.arange(10)),
+    )
+
+
+def test_spatial_data_array():
+    arr = td.SpatialDataArray(
+        [[[0, 1], [2, 3]], [[4, 5], [6, 7]]],
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+
+    reflected = arr.reflect(axis=0, center=-0.5)
+
+    reflected_expected = td.SpatialDataArray(
+        [[[4, 5], [6, 7]], [[0, 1], [2, 3]], [[0, 1], [2, 3]], [[4, 5], [6, 7]]],
+        coords=dict(x=[-2, -1, 0, 1], y=[1, 2], z=[2, 3]),
+    )
+
+    assert reflected == reflected_expected
+
+    reflected = arr.reflect(axis=1, center=1)
+
+    reflected_expected = td.SpatialDataArray(
+        [[[2, 3], [0, 1], [2, 3]], [[6, 7], [4, 5], [6, 7]]],
+        coords=dict(x=[0, 1], y=[0, 1, 2], z=[2, 3]),
+    )
+
+    assert reflected == reflected_expected
+
+    with pytest.raises(DataError):
+        reflected = arr.reflect(axis=2, center=2.5)

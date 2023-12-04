@@ -78,6 +78,8 @@ from .components.data.monitor_data import FieldProjectionKSpaceData
 from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP
+from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
+from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
@@ -319,4 +321,9 @@ __all__ = [
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
     "ModulationSpec",
+    "PointDataArray",
+    "CellDataArray",
+    "IndexedDataArray",
+    "TriangularGridDataset",
+    "TetrahedralGridDataset",
 ]
