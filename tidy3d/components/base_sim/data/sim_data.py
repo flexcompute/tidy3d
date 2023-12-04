@@ -1,6 +1,6 @@
 """Abstract base for simulation data structures."""
 from __future__ import annotations
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 
 from abc import ABC
 
@@ -10,6 +10,7 @@ import numpy as np
 
 from .monitor_data import AbstractMonitorData
 from ..simulation import AbstractSimulation
+from ...data.dataset import UnstructuredGridDatasetType
 from ...base import Tidy3dBaseModel
 from ...types import FieldVal
 from ....exceptions import DataError, Tidy3dKeyError, ValidationError
@@ -85,12 +86,14 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return val
 
     @staticmethod
-    def _field_component_value(field_component: xr.DataArray, val: FieldVal) -> xr.DataArray:
+    def _field_component_value(
+        field_component: Union[xr.DataArray, UnstructuredGridDatasetType], val: FieldVal
+    ) -> xr.DataArray:
         """return the desired value of a field component.
 
         Parameter
         ----------
-        field_component : xarray.DataArray
+        field_component : Union[xarray.DataArray, UnstructuredGridDatasetType]
             Field component from which to calculate the value.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase']
             Which part of the field to return.
@@ -102,22 +105,22 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         """
         if val == "real":
             field_value = field_component.real
-            field_value.name = f"Re{{{field_component.name}}}"
+            field_value = field_value.rename(f"Re{{{field_component.name}}}")
 
         elif val == "imag":
             field_value = field_component.imag
-            field_value.name = f"Im{{{field_component.name}}}"
+            field_value = field_value.rename(f"Im{{{field_component.name}}}")
 
         elif val == "abs":
             field_value = np.abs(field_component)
-            field_value.name = f"|{field_component.name}|"
+            field_value = field_value.rename(f"|{field_component.name}|")
 
         elif val == "abs^2":
             field_value = np.abs(field_component) ** 2
-            field_value.name = f"|{field_component.name}|²"
+            field_value = field_value.rename(f"|{field_component.name}|²")
 
         elif val == "phase":
             field_value = np.arctan2(field_component.imag, field_component.real)
-            field_value.name = f"∠{field_component.name}"
+            field_value = field_value.rename(f"∠{field_component.name}")
 
         return field_value

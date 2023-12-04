@@ -402,6 +402,7 @@ class Batch(WebContainer):
         parent_tasks = values.get("parent_tasks")
 
         verbose = bool(values.get("verbose"))
+        solver_version = values.get("solver_version")
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
 
@@ -409,6 +410,7 @@ class Batch(WebContainer):
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation
             upload_kwargs["verbose"] = verbose
+            upload_kwargs["solver_version"] = solver_version
             if parent_tasks and task_name in parent_tasks:
                 upload_kwargs["parent_tasks"] = parent_tasks[task_name]
             job = JobType(**upload_kwargs)

@@ -15,10 +15,23 @@ from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
 from ..exceptions import ValidationError
 
+
 try:
     import trimesh
 except ImportError:
     trimesh = None
+
+try:
+    import vtk
+    from vtkmodules.vtkCommonCore import vtkLogger
+
+    vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
+
+    vtk_id_type = np.int32 if vtk.vtkIdTypeArray().GetDataTypeSize() == 4 else np.int64
+
+except ImportError:
+    vtk = None
+    vtk_id_type = np.int64
 
 
 # type tag default name
@@ -246,3 +259,7 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
+
+""" VTK """
+
+VtkCellType = Any if vtk is None else Literal[vtk.VTK_TRIANGLE, vtk.VTK_TETRA]

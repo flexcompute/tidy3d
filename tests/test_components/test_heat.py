@@ -25,6 +25,7 @@ from tidy3d import HeatSimulation
 from tidy3d import HeatSimulationData
 from tidy3d import TemperatureMonitor
 from tidy3d import TemperatureData
+from tidy3d.exceptions import DataError
 
 from ..utils import STL_GEO, assert_log_level, log_capture
 
@@ -103,12 +104,17 @@ def test_heat_bcs():
         _ = ConvectionBC(ambient_temperature=400, transfer_coeff=-0.2)
 
 
-def make_heat_mnt():
-    return TemperatureMonitor(size=(1, 2, 3), name="test")
+def make_heat_mnts():
+    temp_mnt1 = TemperatureMonitor(size=(1, 2, 3), name="test")
+    temp_mnt2 = TemperatureMonitor(size=(1, 2, 3), name="tet", unstructured=True)
+    temp_mnt3 = TemperatureMonitor(size=(1, 0, 3), name="tri", unstructured=True, conformal=True)
+    temp_mnt4 = TemperatureMonitor(size=(1, 0, 3), name="empty", unstructured=True, conformal=False)
+
+    return (temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4)
 
 
 def test_heat_mnt():
-    temp_mnt = make_heat_mnt()
+    temp_mnt, _, _, _ = make_heat_mnts()
 
     with pytest.raises(pd.ValidationError):
         _ = temp_mnt.updated_copy(name=None)
@@ -118,21 +124,75 @@ def test_heat_mnt():
 
 
 def make_heat_mnt_data():
-    temp_mnt = make_heat_mnt()
+    temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4 = make_heat_mnts()
 
     nx, ny, nz = 9, 6, 5
-    x = np.linspace(-1, 1, nx)
-    y = np.linspace(-2, 2, ny)
-    z = np.linspace(-3, 3, nz)
+    x = np.linspace(0, 1, nx)
+    y = np.linspace(0, 2, ny)
+    z = np.linspace(0, 3, nz)
     T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
     coords = dict(x=x, y=y, z=z)
     temperature_field = td.SpatialDataArray(T, coords=coords)
 
-    return TemperatureData(monitor=temp_mnt, temperature=temperature_field)
+    mnt_data1 = TemperatureData(monitor=temp_mnt1, temperature=temperature_field)
+
+    tet_grid_points = td.PointDataArray(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tet_grid_cells = td.CellDataArray(
+        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tet_grid_values = td.IndexedDataArray(
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        dims=("index"),
+        name="T",
+    )
+
+    tet_grid = td.TetrahedralGridDataset(
+        points=tet_grid_points,
+        cells=tet_grid_cells,
+        values=tet_grid_values,
+    )
+
+    mnt_data2 = TemperatureData(monitor=temp_mnt2, temperature=tet_grid)
+
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values = td.IndexedDataArray(
+        [1.0, 2.0, 3.0, 4.0],
+        dims=("index"),
+        name="T",
+    )
+
+    tri_grid = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values,
+    )
+
+    mnt_data3 = TemperatureData(monitor=temp_mnt3, temperature=tri_grid)
+
+    mnt_data4 = TemperatureData(monitor=temp_mnt4, temperature=None)
+
+    return (mnt_data1, mnt_data2, mnt_data3, mnt_data4)
 
 
 def test_heat_mnt_data():
-    _ = make_heat_mnt_data
+    _ = make_heat_mnt_data()
 
 
 def make_uniform_grid_spec():
@@ -192,7 +252,7 @@ def make_heat_sim():
 
     grid_spec = make_uniform_grid_spec()
 
-    temp_mnt = make_heat_mnt()
+    temp_mnts = make_heat_mnts()
 
     heat_sim = HeatSimulation(
         medium=fluid_medium,
@@ -202,7 +262,7 @@ def make_heat_sim():
         boundary_spec=[pl1, pl2, pl3, pl4, pl5],
         grid_spec=grid_spec,
         sources=[heat_source],
-        monitors=[temp_mnt],
+        monitors=temp_mnts,
     )
 
     return heat_sim
@@ -253,7 +313,7 @@ def test_heat_sim():
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(center=(0, 0, 0), size=(1, 0, 0))
 
-    temp_mnt = make_heat_mnt()
+    temp_mnt = heat_sim.monitors[0]
 
     with pytest.raises(pd.ValidationError):
         heat_sim.updated_copy(monitors=[temp_mnt, temp_mnt])
@@ -337,7 +397,7 @@ def make_heat_sim_data():
 
     heat_sim_data = HeatSimulationData(
         simulation=heat_sim,
-        data=[temp_data],
+        data=temp_data,
     )
 
     return heat_sim_data
@@ -346,7 +406,15 @@ def make_heat_sim_data():
 def test_sim_data():
     heat_sim_data = make_heat_sim_data()
     _ = heat_sim_data.plot_field("test", z=0)
+    _ = heat_sim_data.plot_field("tri")
+    _ = heat_sim_data.plot_field("tet", y=0.5)
     plt.close()
+
+    with pytest.raises(DataError):
+        _ = heat_sim_data.plot_field("empty")
+
+    with pytest.raises(DataError):
+        _ = heat_sim_data.plot_field("test")
 
     with pytest.raises(KeyError):
         _ = heat_sim_data.plot_field("test3", x=0)
@@ -354,7 +422,7 @@ def test_sim_data():
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(data=[heat_sim_data.data[0]] * 2)
 
-    temp_mnt = make_heat_mnt()
+    temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="test")
     temp_mnt = temp_mnt.updated_copy(name="test2")
 
     sim = heat_sim_data.simulation.updated_copy(monitors=[temp_mnt])

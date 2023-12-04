@@ -8,6 +8,8 @@ import pydantic.v1 as pd
 from .monitor_data import HeatMonitorDataType, TemperatureData
 from ..simulation import HeatSimulation
 
+from ...data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
+from ...data.data_array import SpatialDataArray
 from ...base_sim.data.sim_data import AbstractSimulationData
 from ...types import Ax, RealFieldVal, Literal
 from ...viz import equal_aspect, add_ax_if_none
@@ -95,8 +97,8 @@ class HeatSimulationData(AbstractSimulationData):
             Name of :class:`.TemperatureMonitorData` to plot.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
             Which part of the field to plot.
-        scale : Literal['lin', 'dB']
-            Plot in linear or logarithmic (dB) scale.
+        scale : Literal['lin', 'log']
+            Plot in linear or logarithmic scale.
         structures_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
@@ -133,88 +135,127 @@ class HeatSimulationData(AbstractSimulationData):
                 f"'TemperatureMonitor'."
             )
 
+        if monitor_data.temperature is None:
+            raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+
         field_data = self._field_component_value(monitor_data.temperature, val)
+
+        if val == "abs^2":
+            field_name = "|T|², K²"
+        else:
+            field_name = "T, K"
 
         if scale == "log":
             field_data = np.log10(np.abs(field_data))
-            cmap_type = "sequential"
-        elif val == "real":
-            cmap_type = "divergent"
-        else:
-            cmap_type = "sequential"
 
-        # interp out any monitor.size==0 dimensions
-        monitor = self.simulation.get_monitor_by_name(monitor_name)
-        thin_dims = {
-            "xyz"[dim]: monitor.center[dim]
-            for dim in range(3)
-            if monitor.size[dim] == 0 and "xyz"[dim] not in sel_kwargs
-        }
-        for axis, pos in thin_dims.items():
-            if field_data.coords[axis].size <= 1:
-                field_data = field_data.sel(**{axis: pos}, method="nearest")
-            else:
-                field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+        cmap = "coolwarm"
 
-        # select the extra coordinates out of the data from user-specified kwargs
-        for coord_name, coord_val in sel_kwargs.items():
-            if field_data.coords[coord_name].size <= 1:
-                field_data = field_data.sel(**{coord_name: coord_val}, method=None)
-            else:
-                field_data = field_data.interp(
-                    **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+        # do sel on unstructured data
+        # it could produce either SpatialDataArray or UnstructuredGridDatasetType
+        if isinstance(field_data, UnstructuredGridDataset) and len(sel_kwargs) > 0:
+            field_data = field_data.sel(**sel_kwargs)
+
+        if isinstance(field_data, TetrahedralGridDataset):
+            raise DataError(
+                "Must select a two-dimensional slice of unstructured dataset for plotting"
+                " on a plane."
+            )
+
+        if isinstance(field_data, TriangularGridDataset):
+
+            field_data.plot(
+                ax=ax,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                cbar_kwargs={"label": field_name},
+                grid=False,
+            )
+
+            # compute parameters for structures overlay plot
+            axis = field_data.normal_axis
+            position = field_data.normal_pos
+
+            # compute plot bounds
+            field_data_bounds = field_data.bounds
+            min_bounds = list(field_data_bounds[0])
+            max_bounds = list(field_data_bounds[1])
+            min_bounds.pop(axis)
+            max_bounds.pop(axis)
+
+        if isinstance(field_data, SpatialDataArray):
+
+            # interp out any monitor.size==0 dimensions
+            monitor = self.simulation.get_monitor_by_name(monitor_name)
+            thin_dims = {
+                "xyz"[dim]: monitor.center[dim]
+                for dim in range(3)
+                if monitor.size[dim] == 0 and "xyz"[dim] not in sel_kwargs
+            }
+            for axis, pos in thin_dims.items():
+                if field_data.coords[axis].size <= 1:
+                    field_data = field_data.sel(**{axis: pos}, method="nearest")
+                else:
+                    field_data = field_data.interp(**{axis: pos}, kwargs=dict(bounds_error=True))
+
+            # select the extra coordinates out of the data from user-specified kwargs
+            for coord_name, coord_val in sel_kwargs.items():
+                if field_data.coords[coord_name].size <= 1:
+                    field_data = field_data.sel(**{coord_name: coord_val}, method=None)
+                else:
+                    field_data = field_data.interp(
+                        **{coord_name: coord_val}, kwargs=dict(bounds_error=True)
+                    )
+
+            field_data = field_data.squeeze(drop=True)
+            non_scalar_coords = {name: c for name, c in field_data.coords.items() if c.size > 1}
+
+            # assert the data is valid for plotting
+            if len(non_scalar_coords) != 2:
+                raise DataError(
+                    f"Data after selection has {len(non_scalar_coords)} coordinates "
+                    f"({list(non_scalar_coords.keys())}), "
+                    "must be 2 spatial coordinates for plotting on plane. "
+                    "Please add keyword arguments to `plot_monitor_data()` to select out the other coords."
                 )
 
-        field_data = field_data.squeeze(drop=True)
-        non_scalar_coords = {name: c for name, c in field_data.coords.items() if c.size > 1}
+            spatial_coords_in_data = {
+                coord_name: (coord_name in non_scalar_coords) for coord_name in "xyz"
+            }
 
-        # assert the data is valid for plotting
-        if len(non_scalar_coords) != 2:
-            raise DataError(
-                f"Data after selection has {len(non_scalar_coords)} coordinates "
-                f"({list(non_scalar_coords.keys())}), "
-                "must be 2 spatial coordinates for plotting on plane. "
-                "Please add keyword arguments to `plot_monitor_data()` to select out the other coords."
+            if sum(spatial_coords_in_data.values()) != 2:
+                raise DataError(
+                    "All coordinates in the data after selection must be spatial (x, y, z), "
+                    f" given {non_scalar_coords.keys()}."
+                )
+
+            # get the spatial coordinate corresponding to the plane
+            planar_coord = [name for name, c in spatial_coords_in_data.items() if c is False][0]
+            axis = "xyz".index(planar_coord)
+            position = float(field_data.coords[planar_coord])
+
+            xy_coord_labels = list("xyz")
+            xy_coord_labels.pop(axis)
+            x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
+            field_data.plot(
+                ax=ax,
+                x=x_coord_label,
+                y=y_coord_label,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                robust=robust,
+                cbar_kwargs={"label": field_name},
             )
 
-        spatial_coords_in_data = {
-            coord_name: (coord_name in non_scalar_coords) for coord_name in "xyz"
-        }
-
-        if sum(spatial_coords_in_data.values()) != 2:
-            raise DataError(
-                "All coordinates in the data after selection must be spatial (x, y, z), "
-                f" given {non_scalar_coords.keys()}."
-            )
-
-        # get the spatial coordinate corresponding to the plane
-        planar_coord = [name for name, c in spatial_coords_in_data.items() if c is False][0]
-        axis = "xyz".index(planar_coord)
-        position = float(field_data.coords[planar_coord])
+            # compute plot bounds
+            x_coord_values = field_data.coords[x_coord_label]
+            y_coord_values = field_data.coords[y_coord_label]
+            min_bounds = (min(x_coord_values), min(y_coord_values))
+            max_bounds = (max(x_coord_values), max(y_coord_values))
 
         # select the cross section data
         interp_kwarg = {"xyz"[axis]: position}
-
-        if cmap_type == "divergent":
-            cmap = "RdBu_r"
-        elif cmap_type == "sequential":
-            cmap = "magma"
-
-        # plot the field
-        xy_coord_labels = list("xyz")
-        xy_coord_labels.pop(axis)
-        x_coord_label, y_coord_label = xy_coord_labels[0], xy_coord_labels[1]
-        field_data.plot(
-            ax=ax,
-            x=x_coord_label,
-            y=y_coord_label,
-            cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
-            robust=robust,
-            cbar_kwargs={"label": "temperature"},
-        )
-
         # plot the simulation heat conductivity
         ax = self.simulation.scene.plot_structures_heat_conductivity(
             cbar=False,
@@ -224,9 +265,7 @@ class HeatSimulationData(AbstractSimulationData):
         )
 
         # set the limits based on the xarray coordinates min and max
-        x_coord_values = field_data.coords[x_coord_label]
-        y_coord_values = field_data.coords[y_coord_label]
-        ax.set_xlim(min(x_coord_values), max(x_coord_values))
-        ax.set_ylim(min(y_coord_values), max(y_coord_values))
+        ax.set_xlim(min_bounds[0], max_bounds[0])
+        ax.set_ylim(min_bounds[1], max_bounds[1])
 
         return ax
