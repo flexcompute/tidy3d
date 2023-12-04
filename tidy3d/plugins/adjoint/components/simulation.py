@@ -45,6 +45,14 @@ NUM_PROC_LOCAL = 1
 # number of input structures before it errors
 MAX_NUM_INPUT_STRUCTURES = 400
 
+# generic warning for nonlinearity
+NL_WARNING = (
+    "The 'adjoint' plugin does not currently support nonlinear materials. "
+    "While the gradients might be calculated, they will be inaccurate and the "
+    "error will increase as the strength of the nonlinearity is increased. "
+    "We strongly recommend using linear simulations only with the adjoint plugin."
+)
+
 
 class JaxInfo(Tidy3dBaseModel):
     """Class to store information when converting between jax and tidy3d."""
@@ -236,6 +244,39 @@ class JaxSimulation(Simulation, JaxObject):
                         "this may lead to decreased accuracy in adjoint gradient."
                     )
                     return val
+        return val
+
+    @pd.validator("medium", always=True)
+    def _warn_nonlinear_medium(cls, val):
+        """warn if the jax simulation medium is nonlinear."""
+        # hasattr is just an additional check to avoid unnecessary bugs
+        # if a medium is encountered that doesnt support nonlinear spec, or things change.
+        if hasattr(val, "nonlinear_spec") and val.nonlinear_spec:
+            log.warning(
+                "Nonlinear background medium detected in the 'JaxSimulation'. " + NL_WARNING
+            )
+        return val
+
+    @pd.validator("structures", always=True)
+    def _warn_nonlinear_structure(cls, val):
+        """warn if a jax simulation structure.medium is nonlinear."""
+        for i, struct in enumerate(val):
+            medium = struct.medium
+            # hasattr is just an additional check to avoid unnecessary bugs
+            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
+                log.warning(f"Nonlinear medium detected in structures[{i}]. " + NL_WARNING)
+        return val
+
+    @pd.validator("input_structures", always=True)
+    def _warn_nonlinear_input_structure(cls, val):
+        """warn if a jax simulation input_structure.medium is nonlinear."""
+        for i, struct in enumerate(val):
+            medium = struct.medium
+            # hasattr is just an additional check to avoid unnecessary bugs
+            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
+                log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val
 
     @staticmethod

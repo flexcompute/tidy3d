@@ -1648,3 +1648,55 @@ def test_no_adjoint_sources(
     grad_J = grad(J)
     grad_J(2.0)
     assert_log_level(log_capture, log_level_expected)
+
+
+def test_nonlinear_warn(log_capture):
+    """Test that simulations warn if nonlinearity is used."""
+
+    struct = JaxStructure(
+        geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=JaxMedium(permittivity=2.0),
+    )
+
+    struct_static = td.Structure(
+        geometry=td.Box(center=(0, 3, 0), size=(1, 1, 1)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    sim_base = JaxSimulation(
+        size=(10, 10, 0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        monitors=(),
+        structures=(struct_static,),
+        output_monitors=(),
+        input_structures=(struct,),
+        sources=[src],
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
+    )
+
+    # make the nonlinear objects to add to the JaxSimulation one by one
+    nl_model = td.KerrNonlinearity(n2=1)
+    nl_medium = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[nl_model]))
+    struct_static_nl = struct_static.updated_copy(medium=nl_medium)
+    input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)
+
+    def test_log_level(desired_level):
+        """Convenience function to test the log level and clear it."""
+        assert_log_level(log_capture, desired_level)
+        log_capture.clear()
+
+    # no nonlinearity (no warning)
+    test_log_level(None)
+
+    # nonlinear simulation.medium (error)
+    sim = sim_base.updated_copy(medium=nl_medium)
+    test_log_level("WARNING")
+
+    # nonlinear structure (warn)
+    sim = sim_base.updated_copy(structures=[struct_static_nl])
+    test_log_level("WARNING")
+
+    # nonlinear input_structure (warn)
+    sim = sim_base.updated_copy(input_structures=[input_struct_nl])
+    test_log_level("WARNING")
