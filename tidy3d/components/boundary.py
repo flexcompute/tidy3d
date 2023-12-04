@@ -310,15 +310,25 @@ class PML(AbsorberSpec):
 
         **Usage Caveats**
 
-        A perfectly matched layer (PML) is the most commonly used boundary condition in FDTD simulations to truncate a simulation domain and absorb outgoing radiation. However, many divergence issues are associated with the use of PML. One of the most common causes of a diverged simulation is structures inserted into PML at an angle.
+        A perfectly matched layer (PML) is the most commonly used boundary condition in FDTD simulations to truncate
+        a simulation domain and absorb outgoing radiation. However, many divergence issues are associated with the
+        use of PML. One of the most common causes of a diverged simulation is structures inserted into PML at an angle.
 
         .. TODO links to absorber boundaries
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
 
-        Incorporating a dispersive material into PML can also cause simulation divergence in certain scenarios. If your simulation lacks any structures inserted into PML at an angle but includes dispersive material in PML, it is advisable to substitute nondispersive material for the dispersive material. Alternatively, if dispersion is necessary, switching PML to absorber can effectively address the issue.
+        Incorporating a dispersive material into PML can also cause simulation divergence in certain scenarios. If
+        your simulation lacks any structures inserted into PML at an angle but includes dispersive material in PML,
+        it is advisable to substitute nondispersive material for the dispersive material. Alternatively,
+        if dispersion is necessary, switching PML to absorber can effectively address the issue.
 
-        PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates into the free space. However, it’s important to keep in mind that PML only absorbs propagating fields. For evanescent fields, PML can act as an amplification medium and cause a simulation to diverge. In Tidy3D, a warning will appear if the distance between a structure is smaller than half of a wavelength to prevent evanescent fields from leaking into PML. In most cases, the evanescent field will naturally die off within half a wavelength, but in some instances, a larger distance may be required.
+        PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates
+        into the free space. However, it’s important to keep in mind that PML only absorbs propagating fields. For
+        evanescent fields, PML can act as an amplification medium and cause a simulation to diverge. In Tidy3D,
+        a warning will appear if the distance between a structure is smaller than half of a wavelength to prevent
+        evanescent fields from leaking into PML. In most cases, the evanescent field will naturally die off within
+        half a wavelength, but in some instances, a larger distance may be required.
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
 
@@ -389,8 +399,27 @@ class StablePML(AbsorberSpec):
 
 class Absorber(AbsorberSpec):
     """Specifies an adiabatic absorber along a single dimension.
-    This absorber is well-suited for dispersive materials
-    intersecting with absorbing edges of the simulation at the expense of more layers.
+
+    Notes
+    -----
+        This absorber is well-suited for dispersive materials
+        intersecting with absorbing edges of the simulation at the expense of more layers.
+
+        **Divergence Caveats**
+
+        Using absorber boundary is often a good remedy to resolve divergence issues related to PML. The adiabatic
+        absorber is a multilayer system with gradually increasing conductivity. As briefly discussed above,
+        the absorber usually has a larger undesired reflection compared to :class`PML`. In practice, this small difference
+        rarely matters, but is important to understand for simulations that require high accuracy. There are two
+        possible sources for the reflection from absorbers. The first, and more common one, is that the ramping up of
+        the conductivity is not sufficiently slow, which can be remedied by increasing the number of absorber layers
+        (40 by default). The second one is that the absorption is not high enough, such that the light reaches the
+        :class:`PEC` boundary at the end of the Absorber, travels back through it, and is still not fully attenuated before
+        re-entering the simulation region. If this is the case, increasing the maximum conductivity (see the API
+        reference) can help. In both cases, changing the order of the scaling of the conductivity (sigma_order) can
+        also have an effect, but this is a more advanced setting that we typically do not recommend modifying.
+
+        .. TODO add better api references here
 
     Example
     -------

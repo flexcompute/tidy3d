@@ -51,6 +51,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     **Notebooks:**
         * `Waveguide Y junction <../../notebooks/YJunction.html>`_
+        * `Photonic crystal waveguide polarization filter <../../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
 
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_

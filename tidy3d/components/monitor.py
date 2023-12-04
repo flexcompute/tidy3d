@@ -580,10 +580,14 @@ class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """:class:`Monitor` that records power flux in the frequency domain.
-    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
-    positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
-    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
+
+    Notes
+    -----
+
+        If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+        positive sign corresponding to power flow in the positive direction along the axis normal to
+        the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+        integrating the flux over all box surfaces (except the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -592,6 +596,13 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
     ...     name='flux_monitor')
+
+    See Also
+    --------
+
+    **Notebooks**
+
+        * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:

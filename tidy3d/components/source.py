@@ -944,6 +944,7 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 
     **Notebooks:**
         * `Waveguide Y junction <../../notebooks/YJunction.html>`_
+        * `90 degree optical hybrid <../../notebooks/90OpticalHybrid.html>`_
 
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
@@ -1049,11 +1050,19 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
-    """This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,
-    Applied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows
+    """The simple astigmatic Guassian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
     directions, this source becomes equivalent to :class:`GaussianBeam`.
+
+    Notes
+    -----
+
+        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+
+        **References**:
+
+            .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
 
     Example
     -------
@@ -1093,8 +1102,8 @@ class TFSF(AngledFieldSource, VolumeSource):
     Notes
     -----
 
-        The TFSF source injects :math:`1 \frac{W}{\text{um}^2}` of power along the ``injection_axis``. Note that in the
-        case of angled incidence, :math:`1 \frac{W}{\text{um}^2}` is still injected along the source's ``injection_axis``,
+        The TFSF source injects :math:`1 \\frac{W}{\\text{um}^2}` of power along the ``injection_axis``. Note that in the
+        case of angled incidence, :math:`1 \\frac{W}{\\text{um}^2}` is still injected along the source's ``injection_axis``,
         and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
         scattering and absorption cross-sections without the need for additional normalization.
 

@@ -184,7 +184,7 @@ class Simulation(Box):
     `Material Library <../material_library.html>`_:
         The material library is a dictionary containing various dispersive models from real world materials.
 
-    `Medium classes <../mediums.html>`_:
+    `Index <../mediums.html>`_:
         Dispersive and dispersionless Mediums models.
     """
 
@@ -194,20 +194,20 @@ class Simulation(Box):
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
         "at the simulation center of each axis, respectively. "
-        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
-        "``-1`` (odd, i.e. 'PEC' symmetry). "
+        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. :class:`PMC` symmetry) or "
+        "``-1`` (odd, i.e. :class:`PEC` symmetry). "
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
     """
     You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
-    Each element can be 0 (no symmetry), 1 (even, i.e. ‘PMC’ symmetry) or -1 (odd, i.e. ‘PEC’ symmetry). Note
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class`PEC` symmetry). Note
     that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
 
-    The figure below illustrates how the electric and magnetic field components transform under PEC- and PMC-like
-    symmetry planes. You can refer to this figure when considering whether a source field conforms to a PEC- or
-    PMC-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
+    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and :class:`PMC`-like
+    symmetry planes. You can refer to this figure when considering whether a source field conforms to a :class:`PEC`- or
+    :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
 
     .. image:: ../../notebooks/img/pec_pmc.png
     """
@@ -220,7 +220,13 @@ class Simulation(Box):
         "simulation material properties in regions of spatial overlap.",
     )
     """
-    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.
+    Tuple of structures present in simulation. Structures defined later in this list override the simulation material properties in regions of spatial overlap.
+
+    See Also
+    --------
+
+    :class:`Structure`:
+        Defines a physical object that interacts with the electromagnetic fields.
     """
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
@@ -230,6 +236,12 @@ class Simulation(Box):
     )
     """
     Tuple of electric current sources injecting fields into the simulation.
+
+    See Also
+    --------
+
+    `Index <../sources.html>`_:
+        Frequency and time domain source models.
     """
 
     boundary_spec: BoundarySpec = pydantic.Field(
@@ -239,7 +251,19 @@ class Simulation(Box):
         "PML boundary conditions are applied on all sides.",
     )
     """
-    "Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are applied on all sides."
+    Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are applied on all sides.
+
+    See Also
+    --------
+
+    :class:`PML`:
+        A perfectly matched layer model.
+
+    :class:`BoundarySpec`:
+        Specifies boundary conditions on each side of the domain and along each dimension
+
+    `Index <../boundary_conditions.html>`_
+        All boundary condition models.
     """
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
@@ -249,7 +273,13 @@ class Simulation(Box):
         "Note: monitor names are used to access data after simulation is run.",
     )
     """
-    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.
+    Tuple of monitors in the simulation. Monitor names are used to access data after simulation is run.
+
+    See Also
+    --------
+
+    `Index <../monitors.html>`_
+        All the monitor implementations.
     """
 
     grid_spec: GridSpec = pydantic.Field(
@@ -259,6 +289,12 @@ class Simulation(Box):
     )
     """
     Specifications for the simulation grid along each of the three directions.
+
+    See Also
+    --------
+
+    :class:`GridSpec`:
+        A perfectly matched layer model.
     """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -269,6 +305,12 @@ class Simulation(Box):
         "Used to prevent extraneous run time of simulations with fully decayed fields. "
         "Set to ``0`` to disable this feature.",
     )
+    """
+    Ratio of the instantaneous integrated E-field intensity to the maximum value
+    at which the simulation will automatically terminate time stepping.
+    Used to prevent extraneous run time of simulations with fully decayed fields.
+    Set to ``0`` to disable this feature.
+    """
 
     subpixel: bool = pydantic.Field(
         True,
@@ -310,9 +352,9 @@ class Simulation(Box):
         gt=0.0,
         le=1.0,
     )
-    """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio. A
+    """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
-    because in this spatially-discrete grid, information propagates over a distance :math:`\\delta x`
+    because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\delta x`
     over a time step :math:`\\delta t`. This constraint enables the correct physics to be captured by the simulation.
     In a 1D model:
 
@@ -326,6 +368,18 @@ class Simulation(Box):
     .. math::
 
         C = \\frac{c \\delta t}{\\delta x} \\leq 1
+
+
+    Notes
+    -----
+
+        **Divergence Caveats**
+
+        ``tidy3d`` uses a default Courant factor of 0.99. When a dispersive material with ``eps_inf < 1`` is used,
+        the Courant factor will be automatically adjusted to be smaller than ``sqrt(eps_inf)`` to ensure stability. If
+        your simulation still diverges despite addressing any other issues discussed above, reducing the Courant
+        factor may help.
+
 
     See Also
     --------
