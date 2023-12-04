@@ -91,8 +91,7 @@ class Simulation(Box):
         **Dimensions**
 
         To make the simulation 2D, we can just set the simulation size in one of the dimensions to be 0. However,
-        note that we still have to define a grid size in that direction. Additionally, we lower the shutoff factor to
-        make sure the high-frequency response of this resonant system is accurately resolved.
+        note that we still have to define a grid size in that direction.
 
         **Symmetry**
 

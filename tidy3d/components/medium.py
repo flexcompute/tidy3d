@@ -613,6 +613,15 @@ PEC = PECMedium(name="PEC")
 class Medium(AbstractMedium):
     """Dispersionless medium. Mediums define the optical properties of the materials within the simulation.
 
+    Notes
+    -----
+
+        In a dispersion-less medium, the displacement field :math:`D(t)` reacts instantaneously to the applied electric field :math:`E(t)`.
+
+        .. math::
+
+            D(t) = \\epsilon E(t)
+
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
@@ -624,6 +633,9 @@ class Medium(AbstractMedium):
     **Notebooks:**
         * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
         * `Index <../../notebooks/docs/features/medium.html>`_
+
+    **Lectures:**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
 
     **GUI:**
         * `Tutorial <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
@@ -1361,6 +1373,13 @@ class DispersiveMedium(AbstractMedium, ABC):
 
     Notes
     -----
+
+        In dispersive mediums, the displacement field :math:`D(t)` depends on the previous electric field :math:`E(t')`.
+
+        .. math::
+
+            D(t) = \\int \\epsilon(t - t') E(t') \\delta t'
+
         Dispersive mediums can be defined in three ways:
         - Imported from our material_library.
         - Defined directly by specifying the parameters in the various supplied dispersive models.
@@ -1371,8 +1390,14 @@ class DispersiveMedium(AbstractMedium, ABC):
     See Also
     --------
 
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
     **Notebooks:**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     @abstractmethod
@@ -1478,10 +1503,10 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
 
 class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -1493,6 +1518,18 @@ class PoleResidue(DispersiveMedium):
     -------
     >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((-1+2j), (3+4j)), ((-5+6j), (7+8j))])
     >>> eps = pole_res.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -1744,11 +1781,27 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     Notes
     -----
 
+        In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of resonant material poles _`[1]`.
+
         .. math::
 
             \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
             \\left[\\frac{c_i}{j \\omega + a_i} +
             \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+
+        For each of these resonant poles identified by the index :math:`m`, an auxiliary differential equation is
+        used to relate the auxiliary current :math:`J_m(t)` to the applied electric field :math:`E(t)` .
+        The sum of all these auxiliary current contributions describes the total dielectric response of the material.
+
+        .. math::
+
+            \\frac{d}{dt} J_m (t) - a_m J_m (t) = \\epsilon_0 c_m \\frac{d}{dt} E (t)
+
+        Hence, the computational cost increases with the number of poles.
+
+        **References**
+
+        .. [1]   M. Han, R.W. Dutton and S. Fan, IEEE Microwave and Wireless Component Letters, 16, 119 (2006).
 
     Example
     -------
@@ -1893,10 +1946,11 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
-    The frequency-dependence of the refractive index is described by:
+
 
     Notes
     -----
+        The frequency-dependence of the refractive index is described by:
 
         .. math::
 
@@ -1906,6 +1960,8 @@ class Sellmeier(DispersiveMedium):
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
     >>> eps = sellmeier_medium.eps_model(200e12)
+
+
     """
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
@@ -2254,6 +2310,18 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     >>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])
     >>> eps = lorentz_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -2360,10 +2428,11 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
 class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
+
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -2374,6 +2443,18 @@ class Drude(DispersiveMedium):
     -------
     >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
     >>> eps = drude_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2429,10 +2510,11 @@ class Drude(DispersiveMedium):
 
 class CustomDrude(CustomDispersiveMedium, Drude):
     """A spatially varying dispersive medium described by the Drude model.
-    The frequency-dependence of the complex-valued permittivity is described by:
+
 
     Notes
     -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -2450,6 +2532,18 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     >>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])
     >>> eps = drude_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -2532,6 +2626,18 @@ class Debye(DispersiveMedium):
     -------
     >>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])
     >>> eps = debye_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2592,10 +2698,10 @@ class Debye(DispersiveMedium):
 
 class CustomDebye(CustomDispersiveMedium, Debye):
     """A spatially varying dispersive medium described by the Debye model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
+         The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -2613,6 +2719,18 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     >>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])
     >>> eps = debye_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(

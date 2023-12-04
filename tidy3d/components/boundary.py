@@ -290,7 +290,7 @@ class PML(AbsorberSpec):
                         \\end{array}
                     \\right \\}
 
-        The wave equation can be solved and plotted accordingly as a function of the `x` dimension.
+        The wave equation can be solved and plotted accordingly as a function of the :math:`x` dimension.
 
         .. math::
 
