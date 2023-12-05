@@ -92,7 +92,7 @@ class Simulation(Box):
         A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
         to be solved using `the Finite-Difference Time-Domain (FDTD) method
         <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
-        are run very quickly in the cloud through GPU parallelization.
+        run very quickly in the cloud through GPU parallelization.
 
         **Simplified 1D Illustration**
 
@@ -321,6 +321,80 @@ class Simulation(Box):
     """
     Specifications for the simulation grid along each of the three directions.
 
+    **Numerical Dispersion - 1D Illustration**
+
+    Numerical dispersion is a form of numerical error dependent on the spatial and temporal discretization of the
+    fields. In order to reduce it, it is necessary to improve the discretization of the simulation for particular
+    frequencies and spatial features. This is an important aspect of defining the grid size.
+
+    Consider a 1D wave equation in vacuum:
+
+    .. math::
+
+        \\left( \\frac{\\delta ^2 }{\\delta x^2} - \\frac{1}{c^2} \\frac{\\delta^2}{\\delta t^2} \\right) E = 0
+
+    which is ideally solved into a monochromatic travelling wave:
+
+    .. math::
+
+        E(x) = e^{j (kx - \\omega t)}
+
+    This physical wave is described with a wavevector :math:`k` for the spatial field variations and the angular
+    frequency :math:`\\omega` for temporal field variations. The spatial and temporal field variations are related by
+    a dispersion relation.
+
+    .. TODO explain the above more
+
+    The ideal dispersion relation is:
+
+    .. math::
+
+        \\left( \\frac{\\omega}{c} \\right)^2 = k^2
+
+    However, in the FDTD simulation, the spatial and temporal fields are discrete.
+
+    .. TODO improve the ways figures are represented.
+
+    .. image:: ../../_static/img/numerical_dispersion_grid_1d.png
+        :width: 30%
+        :align: right
+
+    The same monochromatic wave can be solved using the FDTD method where :math:`m` is the index in the 1D grid:
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta x^2} E(x_m) \\approx \\frac{1}{\\Delta x^2} \\left[ E(x_m + \\Delta x) + E(x_m -
+        \\Delta x) - 2 E(x_m) \\right]
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta t^2} E(t_{\\alpha}) \\approx \\frac{1}{\\Delta t^2} \\left[ E(t_{\\alpha} + \\Delta
+        t) + E(_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
+
+    Hence, these discrete fields have this dispersion relation:
+
+    .. math::
+
+        \\left( \\frac{1}{c \\Delta t} \\text{sin} \\left( \\frac{\\omega \\Delta t}{2} \\right)^2 \\right) = \\left(
+        \\frac{1}{\\Delta x} \\text{sin} \\left( \\frac{k \\Delta x}{2} \\right) \\right)^2
+
+    The ideal wave solution and the discrete solution have a mismatch illustrated below as a result of the numerical
+    error introduced by numerical dispersion. This plot illustrates the angular frequency as a function of wavevector
+    for both the physical ideal wave and the numerical discrete wave implemented in FDTD.
+
+    .. image:: ../../_static/img/numerical_dispersion_discretization_1d.png
+
+    .. TODO improve these images positions
+
+    At lower frequencies, when the discretization of :math:`\\Delta x` is small compared to the wavelength the error
+    between the solutions is very low. When this proportionality increases between the spatial step size and the
+    angular wavelength, this introduces numerical dispersion errors.
+
+    .. math::
+
+        k \\Delta x = \\frac{2 \\pi}{\\lamdba_k} \\Delta x
+
+
     **Usage Recommendations**
 
     *   It is important to understand the relationship between the time-step :math:`\\Delta t` defined by the
@@ -333,14 +407,24 @@ class Simulation(Box):
     See Also
     --------
 
-    :class:`GridSpec`
-        Collective grid specification for all three dimensions.
-
     :attr:`courant`
         The Courant-Friedrichs-Lewy (CFL) stability factor
 
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
     **Lectures:**
         *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -401,6 +485,9 @@ class Simulation(Box):
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
     because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
     over a time step :math:`\\Delta t`. This constraint enables the correct physics to be captured by the simulation.
+
+    **1D Illustration**
+
     In a 1D model:
 
     .. image:: ../../_static/img/courant_instability.png
@@ -409,8 +496,6 @@ class Simulation(Box):
     factor is normalized to no larger than 1 when CFL stability condition is met in 3D.
 
     .. TODO finish this section for 1D, 2D and 3D references.
-
-    **1D Illustration**
 
     For a 1D grid:
 
@@ -463,6 +548,7 @@ class Simulation(Box):
 
     **Lectures:**
         *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     version: str = pydantic.Field(

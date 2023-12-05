@@ -301,8 +301,15 @@ class AutoGrid(GridSpec1d):
     :class:`UniformGrid`
         Uniform 1D grid.
 
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
     **Notebooks:**
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     min_steps_per_wvl: float = pd.Field(
@@ -443,6 +450,10 @@ class GridSpec(Tidy3dBaseModel):
 
     **Notebooks:**
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
     """
 
     grid_x: GridType = pd.Field(
