@@ -23,7 +23,6 @@ from ..geometry.base import Box, GeometryGroup
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
 from ..scene import Scene
-from ..heat_spec import SolidSpec
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
 from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
@@ -205,37 +204,6 @@ class HeatSimulation(AbstractSimulation):
                         "is not found among simulation structures."
                     )
         return val
-
-    """ Post-init validators """
-
-    def _post_init_validators(self) -> None:
-        """Call validators taking z`self` that get run after init."""
-        self._warn_multiple_zones()
-
-    def _warn_multiple_zones(self):
-        """Warn about current restriction on number of adjacent zones."""
-
-        struc_src_map = {}
-        for source in self.sources:
-            for name in source.structures:
-                struc_src_map[name] = source
-
-        unique_solid_zones = {
-            (struc.medium.heat_spec, struc_src_map.get(struc.name, None))
-            for struc in self.structures
-            if isinstance(struc.medium.heat_spec, SolidSpec)
-        }
-
-        if isinstance(self.medium.heat_spec, SolidSpec):
-            unique_solid_zones.add((self.medium.heat_spec, None))
-
-        if len(unique_solid_zones) > 2:
-            log.warning(
-                "More than 2 different solid zones (zone = medium + source) are detected in the heat "
-                "simulation. Make sure no more than 2 solid zones are adjacent to each other anywhere "
-                "in the simulation domain. The simulation results may be inaccurate otherwise. "
-                "This restriction will be removed in the upcoming Tidy3D versions."
-            )
 
     @equal_aspect
     @add_ax_if_none
