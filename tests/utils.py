@@ -594,8 +594,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
     data = [MONITOR_MAKER_MAP[type(mnt)](mnt) for mnt in simulation.monitors]
     sim_data = td.SimulationData(simulation=simulation, data=data)
 
-    if path is not None:
-        sim_data.to_file(str(path))
+    # if path is not None:
+        # sim_data.to_file(str(path))
 
     return sim_data
 

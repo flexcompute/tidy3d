@@ -622,7 +622,7 @@ def run_local(
     """
 
     # convert to regular tidy3d (and accounting info)
-    # sim_tidy3d, jax_info = simulation.to_simulation()
+    sim_tidy3d, jax_info = simulation.to_simulation()
 
     # run using regular tidy3d simulation running fn
     sim_data_tidy3d = tidy3d_run_fn(
@@ -635,8 +635,8 @@ def run_local(
     )
 
     # convert back to jax type and return
-    return JaxSimulationData.parse_obj(sim_data_tidy3d.dict())
-    # return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
+    # return JaxSimulationData.parse_obj(sim_data_tidy3d.dict())
+    return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
 
 def run_local_fwd(

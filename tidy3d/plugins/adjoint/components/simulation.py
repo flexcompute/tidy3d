@@ -326,48 +326,48 @@ class JaxSimulation(Simulation, JaxObject):
 
         return run_time_adjoint
 
-    # def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
-    #     """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
+    def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
+        """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
 
-    #     sim_dict = self.dict(
-    #         exclude={
-    #             "type",
-    #             "structures",
-    #             "monitors",
-    #             "output_monitors",
-    #             "grad_monitors",
-    #             "grad_eps_monitors",
-    #             "input_structures",
-    #             "fwidth_adjoint",
-    #             "run_time_adjoint",
-    #             "jax_info",
-    #         }
-    #     )
-    #     sim = Simulation.parse_obj(sim_dict)
+        sim_dict = self.dict(
+            exclude={
+                "type",
+                "structures",
+                "monitors",
+                "output_monitors",
+                "grad_monitors",
+                "grad_eps_monitors",
+                "input_structures",
+                "fwidth_adjoint",
+                "run_time_adjoint",
+                "jax_info",
+            }
+        )
+        sim = Simulation.parse_obj(sim_dict)
 
-    #     # put all structures and monitors in one list
-    #     all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
-    #     all_monitors = (
-    #         list(self.monitors)
-    #         + list(self.output_monitors)
-    #         + list(self.grad_monitors)
-    #         + list(self.grad_eps_monitors)
-    #     )
+        # put all structures and monitors in one list
+        all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
+        all_monitors = (
+            list(self.monitors)
+            + list(self.output_monitors)
+            + list(self.grad_monitors)
+            + list(self.grad_eps_monitors)
+        )
 
-    #     sim = sim.updated_copy(structures=all_structures, monitors=all_monitors)
+        sim = sim.updated_copy(structures=all_structures, monitors=all_monitors)
 
-    #     # information about the state of the original JaxSimulation to stash for reconstruction
-    #     jax_info = JaxInfo(
-    #         num_input_structures=len(self.input_structures),
-    #         num_output_monitors=len(self.output_monitors),
-    #         num_grad_monitors=len(self.grad_monitors),
-    #         num_grad_eps_monitors=len(self.grad_eps_monitors),
-    #         fwidth_adjoint=self.fwidth_adjoint,
-    #         run_time_adjoint=self.run_time_adjoint,
-    #         input_structure_types=[s.type for s in self.input_structures],
-    #     )
+        # information about the state of the original JaxSimulation to stash for reconstruction
+        jax_info = JaxInfo(
+            num_input_structures=len(self.input_structures),
+            num_output_monitors=len(self.output_monitors),
+            num_grad_monitors=len(self.grad_monitors),
+            num_grad_eps_monitors=len(self.grad_eps_monitors),
+            fwidth_adjoint=self.fwidth_adjoint,
+            run_time_adjoint=self.run_time_adjoint,
+            input_structure_types=[s.type for s in self.input_structures],
+        )
 
-    #     return sim, jax_info
+        return sim, jax_info
 
     # def plot(
     #     self,

@@ -24,11 +24,21 @@ class JaxObject(Tidy3dBaseModel):
 
     def tree_flatten(self) -> tuple[list, dict]:
         aux_data = self.dict(exclude={"jax_info"})
-        return self.jax_info, aux_data
+
+
+        values = tuple(self.jax_info.values())
+        keys = tuple(self.jax_info.keys())
+
+        aux_data["jax_keys"] = keys
+
+        return values, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data: dict, children: list) -> 'JaxObj':
-        return cls(**aux_data, jax_info=children)
+        keys = aux_data.pop("jax_keys")
+        values = children
+        jax_info = dict(zip(keys, values))
+        return cls(**aux_data, jax_info=jax_info)
 
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):

@@ -477,8 +477,8 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
         return sim
 
 
-    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-    sim2 = f(sim)
+    # sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    # sim2 = f(sim)
     # _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
     def f(permittivity, size, vertices, base_eps_val):
@@ -493,10 +493,10 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
         a += sim.input_structures[0].geometry.center[1]
         a += sim.input_structures[0].geometry.center[2]
         a += sim.input_structures[0].medium.permittivity
-        # sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
-        # amp = extract_amp(sim_data)
-        # return objective(amp)
-        return a
+        sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        amp = extract_amp(sim_data)
+        return a + objective(amp)
+        # return a
 
     grad_f = grad(f, argnums=(0, 1, 2, 3))
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
