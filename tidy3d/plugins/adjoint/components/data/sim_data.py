@@ -27,7 +27,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         (),
         title="Jax Data",
         description="Tuple of Jax-compatible data associated with output monitors.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     grad_data: Tuple[FieldData, ...] = pd.Field(
@@ -107,7 +107,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         """Construct a :class:`.JaxSimulationData` instance from a :class:`.SimulationData`."""
 
         self_dict = sim_data.dict(exclude={"type", "simulation", "data"})
-        
+
         # convert the simulation to JaxSimulation
         jax_sim = JaxSimulation.from_simulation(simulation=sim_data.simulation, jax_info=jax_info)
 
@@ -160,7 +160,6 @@ class JaxSimulationData(SimulationData, JaxObject):
         adjoint_sim_data = sim_data.updated_copy(data=adjoint_data, simulation=adjoint_sim)
 
         return user_sim_data, adjoint_sim_data
-
 
     def make_adjoint_simulation(self, fwidth: float, run_time: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""

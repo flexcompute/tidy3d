@@ -1,140 +1,175 @@
 """Base model for Tidy3D components that are compatible with jax."""
 from __future__ import annotations
 
-from typing import Tuple, List, Any, Callable
+from typing import List, Any, Callable
 import json
 
-import numpy as np
 import pydantic.v1 as pd
 
 import jax
-from jax.tree_util import tree_flatten as jax_tree_flatten
-from jax.tree_util import tree_unflatten as jax_tree_unflatten
 from jax.tree_util import register_pytree_node_class
 
 from ....components.base import Tidy3dBaseModel
 from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 
+
 @register_pytree_node_class
 class JaxObject(Tidy3dBaseModel):
     """Abstract class that makes a :class:`.Tidy3dBaseModel` jax-compatible through inheritance."""
 
-
-    jax_info : dict
+    jax_info: dict  # stores traced arrays and other fields that jax needs to know
+    _tidy3d_class = Tidy3dBaseModel  # corresponding class type in tidy3d.components
+    _jax_fields = ()  # fields that contain JaxObject objects
+    _type_mappings = {}  # mapping from all possible tidy3d fields to the correponding jax fields
 
     def tree_flatten(self) -> tuple[list, dict]:
+        """Split ``JaxObject`` into jax-traced children and auxiliary data."""
         aux_data = self.dict(exclude={"jax_info"})
-
-
         values = tuple(self.jax_info.values())
         keys = tuple(self.jax_info.keys())
-
         aux_data["jax_keys"] = keys
-
         return values, aux_data
 
     @classmethod
-    def tree_unflatten(cls, aux_data: dict, children: list) -> 'JaxObj':
+    def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+        """Create the ``JaxObject`` from the auxiliary data and children."""
         keys = aux_data.pop("jax_keys")
-        values = children
-        jax_info = dict(zip(keys, values))
+        jax_info = dict(zip(keys, children))
         return cls(**aux_data, jax_info=jax_info)
 
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
+        """Pre-process the init kwargs and sort jax-traced types into ``jax_info``."""
 
         jax_info = {}
         _kwargs = {}
-    
+
         for key, val in values.items():
 
+            # value can be traced by jax
             try:
+
+                # pass the untracked version to the regular tidy3d fields
                 _val = jax.lax.stop_gradient(val)
                 _kwargs[key] = _val
+
+                # store the tracked value in the jax_info field
                 jax_info[key] = val
-            except:
+
+            # value can't be traced by jax
+            except TypeError:
+
+                # handle like a regular kwarg
                 _kwargs[key] = val
 
+        # include the jax_info in the set of kwargs
         _kwargs["jax_info"] = jax_info
-        return _kwargs    
+        return _kwargs
 
-# class JaxObject(Tidy3dBaseModel):
-#     """Abstract class that makes a :class:`.Tidy3dBaseModel` jax-compatible through inheritance."""
+    @property
+    def excluded_dict(self) -> dict:
+        """Self.dict() with exclude_fields excluded."""
+        return self.dict(exclude=self.exclude_fields)
 
-#     """Shortcut to get names of all fields that have jax components."""
+    @property
+    def exclude_fields(self) -> set:
+        """Fields to exclude from self.dict()."""
+        return set(["type", "jax_info"] + list(self._jax_fields))
 
-    @classmethod
-    def get_jax_field_names(cls) -> List[str]:
-        """Returns list of field names that have a ``jax_field_type``."""
-        adjoint_fields = []
-        for field_name, model_field in cls.__fields__.items():
-            jax_field_type = model_field.field_info.extra.get("jax_field")
-            if jax_field_type:
-                adjoint_fields.append(field_name)
-        return adjoint_fields
+    @property
+    def jax_fields(self) -> dict:
+        """The fields that are jax-traced for this class."""
+        return {key: getattr(self, key) for key in self._jax_fields}
 
-#     """Methods needed for jax to register arbitary classes."""
-
-#     def tree_flatten(self) -> Tuple[list, dict]:
-#         """How to flatten a :class:`.JaxObject` instance into a pytree."""
-#         children = []
-#         aux_data = self.dict()
-#         for field_name in self.get_jax_field_names():
-#             field = getattr(self, field_name)
-#             sub_children, sub_aux_data = jax_tree_flatten(field)
-#             children.append(sub_children)
-#             aux_data[field_name] = sub_aux_data
-
-#         def fix_polyslab(geo_dict: dict) -> None:
-#             """Recursively Fix a dictionary possibly containing a polyslab geometry."""
-#             if geo_dict["type"] == "PolySlab":
-#                 vertices = geo_dict["vertices"]
-#                 geo_dict["vertices"] = vertices.tolist()
-#             elif geo_dict["type"] == "GeometryGroup":
-#                 for sub_geo_dict in geo_dict["geometries"]:
-#                     fix_polyslab(sub_geo_dict)
-#             elif geo_dict["type"] == "ClipOperation":
-#                 fix_polyslab(geo_dict["geometry_a"])
-#                 fix_polyslab(geo_dict["geometry_b"])
-
-#         def fix_monitor(mnt_dict: dict) -> None:
-#             """Fix a frequency containing monitor."""
-#             if "freqs" in mnt_dict:
-#                 freqs = mnt_dict["freqs"]
-#                 if isinstance(freqs, np.ndarray):
-#                     mnt_dict["freqs"] = freqs.tolist()
-
-#         # fixes bug with jax handling 2D numpy array in polyslab vertices
-#         if aux_data.get("type", "") == "JaxSimulation":
-#             structures = aux_data["structures"]
-#             for _i, structure in enumerate(structures):
-#                 geometry = structure["geometry"]
-#                 fix_polyslab(geometry)
-#             for monitor in aux_data["monitors"]:
-#                 fix_monitor(monitor)
-#             for monitor in aux_data["output_monitors"]:
-#                 fix_monitor(monitor)
-
-#         return children, aux_data
-
-#     @classmethod
-#     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
-#         """How to unflatten a pytree into a :class:`.JaxObject` instance."""
-#         self_dict = aux_data.copy()
-#         for field_name, sub_children in zip(cls.get_jax_field_names(), children):
-#             sub_aux_data = aux_data[field_name]
-#             field = jax_tree_unflatten(sub_aux_data, sub_children)
-#             self_dict[field_name] = field
-
-#         return cls.parse_obj(self_dict)
-
-#     """Type conversion helpers."""
+    def to_tidy3d(self) -> Tidy3dBaseModel:
+        """Convert a ``JaxObject`` to a tidy3d component (without ``jax_info``)."""
+        self_dict = self.excluded_dict
+        for key, val in self.jax_fields.items():
+            if isinstance(val, JaxObject):
+                self_dict[key] = val.to_tidy3d()
+            elif isinstance(val, (list, tuple)):
+                self_dict[key] = [sub_val.to_tidy3d for sub_val in val]
+            else:
+                raise ValueError
+        return self._tidy3d_class.parse_obj(self_dict)
 
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: Tidy3dBaseModel) -> JaxObject:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
         obj_dict = tidy3d_obj.dict(exclude={"type"})
+        # for key in cls._jax_fields:
+        #     obj_type = type(tidy3d_obj)
+        #     sub_type = cls._type_mappings[obj_type]
+        #     obj_dict[key] = sub_type.from_tidy3d(obj_dict[key])
         return cls.parse_obj(obj_dict)
+
+    # ALTERNATIVE TO _jax_fields
+    # @classmethod
+    # def get_jax_field_names(cls) -> List[str]:
+    #     """Returns list of field names that have a ``jax_field_type``."""
+    #     adjoint_fields = []
+    #     for field_name, model_field in cls.__fields__.items():
+    #         jax_field_type = model_field.field_info.extra.get("jax_field")
+    #         if jax_field_type:
+    #             adjoint_fields.append(field_name)
+    #     return adjoint_fields
+
+    #     """Methods needed for jax to register arbitary classes."""
+
+    #     def tree_flatten(self) -> Tuple[list, dict]:
+    #         """How to flatten a :class:`.JaxObject` instance into a pytree."""
+    #         children = []
+    #         aux_data = self.dict()
+    #         for field_name in self.get_jax_field_names():
+    #             field = getattr(self, field_name)
+    #             sub_children, sub_aux_data = jax_tree_flatten(field)
+    #             children.append(sub_children)
+    #             aux_data[field_name] = sub_aux_data
+
+    #         def fix_polyslab(geo_dict: dict) -> None:
+    #             """Recursively Fix a dictionary possibly containing a polyslab geometry."""
+    #             if geo_dict["type"] == "PolySlab":
+    #                 vertices = geo_dict["vertices"]
+    #                 geo_dict["vertices"] = vertices.tolist()
+    #             elif geo_dict["type"] == "GeometryGroup":
+    #                 for sub_geo_dict in geo_dict["geometries"]:
+    #                     fix_polyslab(sub_geo_dict)
+    #             elif geo_dict["type"] == "ClipOperation":
+    #                 fix_polyslab(geo_dict["geometry_a"])
+    #                 fix_polyslab(geo_dict["geometry_b"])
+
+    #         def fix_monitor(mnt_dict: dict) -> None:
+    #             """Fix a frequency containing monitor."""
+    #             if "freqs" in mnt_dict:
+    #                 freqs = mnt_dict["freqs"]
+    #                 if isinstance(freqs, np.ndarray):
+    #                     mnt_dict["freqs"] = freqs.tolist()
+
+    #         # fixes bug with jax handling 2D numpy array in polyslab vertices
+    #         if aux_data.get("type", "") == "JaxSimulation":
+    #             structures = aux_data["structures"]
+    #             for _i, structure in enumerate(structures):
+    #                 geometry = structure["geometry"]
+    #                 fix_polyslab(geometry)
+    #             for monitor in aux_data["monitors"]:
+    #                 fix_monitor(monitor)
+    #             for monitor in aux_data["output_monitors"]:
+    #                 fix_monitor(monitor)
+
+    #         return children, aux_data
+
+    #     @classmethod
+    #     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+    #         """How to unflatten a pytree into a :class:`.JaxObject` instance."""
+    #         self_dict = aux_data.copy()
+    #         for field_name, sub_children in zip(cls.get_jax_field_names(), children):
+    #             sub_aux_data = aux_data[field_name]
+    #             field = jax_tree_unflatten(sub_aux_data, sub_children)
+    #             self_dict[field_name] = field
+
+    #         return cls.parse_obj(self_dict)
+
+    #     """Type conversion helpers."""
 
     """ IO """
 

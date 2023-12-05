@@ -32,7 +32,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:
         """Construct a :class:`.JaxMonitorData` instance from a :class:`.MonitorData`."""
         self_dict = mnt_data.dict(exclude={"type"}).copy()
-        for field_name in cls.get_jax_field_names():
+        for field_name in cls._jax_fields:
             data_array = self_dict[field_name]
             if data_array is not None:
                 coords = {
@@ -73,8 +73,10 @@ class JaxModeData(JaxMonitorData, ModeData):
         ...,
         title="Amplitudes",
         description="Jax-compatible modal amplitude data associated with an output monitor.",
-        jax_field=True,
+        # # jax_field=True,
     )
+
+    _jax_fields = ("amps",)
 
     def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
@@ -115,38 +117,40 @@ class JaxFieldData(JaxMonitorData, FieldData):
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Ey: JaxDataArray = pd.Field(
         None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Ez: JaxDataArray = pd.Field(
         None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Hx: JaxDataArray = pd.Field(
         None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Hy: JaxDataArray = pd.Field(
         None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Hz: JaxDataArray = pd.Field(
         None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field.",
-        jax_field=True,
+        # # jax_field=True,
     )
+
+    _jax_fields = ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")
 
     def __contains__(self, item: str) -> bool:
         """Whether this data array contains a field name."""
@@ -327,38 +331,40 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
         ...,
         title="Er",
         description="Spatial distribution of r-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Etheta: JaxDataArray = pd.Field(
         ...,
         title="Etheta",
         description="Spatial distribution of the theta-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Ephi: JaxDataArray = pd.Field(
         ...,
         title="Ephi",
         description="Spatial distribution of phi-component of the electric field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Hr: JaxDataArray = pd.Field(
         ...,
         title="Hr",
         description="Spatial distribution of r-component of the magnetic field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Htheta: JaxDataArray = pd.Field(
         ...,
         title="Htheta",
         description="Spatial distribution of theta-component of the magnetic field.",
-        jax_field=True,
+        # # jax_field=True,
     )
     Hphi: JaxDataArray = pd.Field(
         ...,
         title="Hphi",
         description="Spatial distribution of phi-component of the magnetic field.",
-        jax_field=True,
+        # # # jax_field=True,
     )
+
+    _jax_fields = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
 
     """Note: these two properties need to be overwritten to be compatible with this subclass."""
 

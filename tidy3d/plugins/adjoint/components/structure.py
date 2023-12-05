@@ -12,8 +12,9 @@ from ....components.structure import Structure
 from ....components.monitor import FieldMonitor
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.types import Bound, TYPE_TAG_STR
-from ....components.medium import MediumType
+from ....components.medium import MediumType, Medium
 from ....components.geometry.utils import GeometryType
+from ....components.geometry.base import Box
 
 from .base import JaxObject
 from .medium import JaxMediumType, JAX_MEDIUM_MAP, JaxMedium
@@ -28,36 +29,53 @@ class AbstractJaxStructure(Structure, JaxObject):
     geometry: Union[JaxBox, GeometryType]
     medium: Union[JaxMedium, MediumType]
 
+    _tidy3d_class = Structure
+    _jax_fields = ()
+    _type_mappings = {
+        Box: JaxBox,
+        Medium: JaxMedium,
+    }
+
+    # def to_tidy3d(self) -> Structure:
+    #     self_dict = self.excluded_dict
+    #     for key, val in self.jax_fields:
+    #         self_dict[key] = val.to_tidy3d()
+    #     return self._tidy3d_class.parse_obj(self_dict)
+
+    # @classmethod
+    # def from_tidy3d(cls, obj) -> AbstractJaxStructure:
+    #     return cls.parse_obj(obj.dict(exclude={"type"}))
+
     # # which of "geometry" or "medium" is differentiable for this class
-    # _differentiable_fields = ()
+    # _jax_fields = ()
 
     # @pd.validator("medium", always=True)
     # def _check_2d_geometry(cls, val, values):
     #     """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
     #     return val
 
-    @property
-    def jax_fields(self):
-        """The fields that are jax-traced for this class."""
-        return dict(geometry=self.geometry, medium=self.medium)
+    # @property
+    # def excluded_dict(self) -> dict:
+    #     """Self.dict() with exclude_fields excluded."""
+    #     return self.dict(exclude=self.exclude_fields)
+
+    # @property
+    # def exclude_fields(self) -> set:
+    #     """Fields to exclude from self.dict()."""
+    #     return set(["type", "jax_info"] + list(self._jax_fields))
+
+    # @property
+    # def jax_fields(self) -> dict:
+    #     """The fields that are jax-traced for this class."""
+    #     return dict(geometry=self.geometry, medium=self.medium)
 
     @property
     def exclude_fields(self):
         """Fields to exclude from the self dict."""
         return set(["type", "jax_info"] + list(self.jax_fields.keys()))
 
-    def to_structure(self) -> Structure:
-        """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
-        self_dict = self.dict(exclude=self.exclude_fields)
-        for key, component in self.jax_fields.items():
-            if key in self._differentiable_fields:
-                self_dict[key] = component.to_tidy3d()
-            else:
-                self_dict[key] = component
-        return Structure.parse_obj(self_dict)
-
     @classmethod
-    def from_structure(cls, structure: Structure) -> JaxStructure:
+    def from_tidy3d(cls, structure: Structure) -> JaxStructure:
         """Convert :class:`.Structure` to :class:`.JaxStructure`."""
 
         struct_dict = structure.dict(exclude={"type"})
@@ -65,7 +83,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         jax_fields = dict(geometry=structure.geometry, medium=structure.medium)
 
         for key, component in jax_fields.items():
-            if key in cls._differentiable_fields:
+            if key in cls._jax_fields:
                 type_map = GEO_MED_MAPPINGS[key]
                 jax_type = type_map[type(component)]
                 struct_dict[key] = jax_type.from_tidy3d(component)
@@ -76,7 +94,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
     def make_grad_monitors(self, freqs: List[float], name: str) -> FieldMonitor:
         """Return gradient monitor associated with this object."""
-        if "geometry" not in self._differentiable_fields:
+        if "geometry" not in self._jax_fields:
             # make a fake JaxBox to be able to call .make_grad_monitors
             rmin, rmax = self.geometry.bounds
             geometry = JaxBox.from_bounds(rmin=rmin, rmax=rmax)
@@ -152,13 +170,13 @@ class AbstractJaxStructure(Structure, JaxObject):
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
         # return right away if field_keys are not present for some reason
-        if not self._differentiable_fields:
+        if not self._jax_fields:
             return self
 
         vjp_dict = {}
 
         # compute minimum wavelength in material (to use for determining integration points)
-        if "geometry" in self._differentiable_fields:
+        if "geometry" in self._jax_fields:
             vjp_dict["geometry"] = self.geometry_vjp(
                 grad_data_fwd=grad_data_fwd,
                 grad_data_adj=grad_data_adj,
@@ -168,7 +186,7 @@ class AbstractJaxStructure(Structure, JaxObject):
                 num_proc=num_proc,
             )
 
-        if "medium" in self._differentiable_fields:
+        if "medium" in self._jax_fields:
             vjp_dict["medium"] = self.medium_vjp(
                 grad_data_fwd=grad_data_fwd,
                 grad_data_adj=grad_data_adj,
@@ -187,7 +205,7 @@ class JaxStructure(AbstractJaxStructure, JaxObject):
         ...,
         title="Geometry",
         description="Geometry of the structure, which is jax-compatible.",
-        jax_field=True,
+        # jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
@@ -195,11 +213,11 @@ class JaxStructure(AbstractJaxStructure, JaxObject):
         ...,
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
-        jax_field=True,
+        # jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
-    _differentiable_fields = ("medium", "geometry")
+    _jax_fields = ("medium", "geometry")
 
 
 @register_pytree_node_class
@@ -210,7 +228,7 @@ class JaxStructureStaticMedium(AbstractJaxStructure, JaxObject):
         ...,
         title="Geometry",
         description="Geometry of the structure, which is jax-compatible.",
-        jax_field=True,
+        # jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
@@ -223,7 +241,7 @@ class JaxStructureStaticMedium(AbstractJaxStructure, JaxObject):
         discriminator=TYPE_TAG_STR,
     )
 
-    _differentiable_fields = ("geometry",)
+    _jax_fields = ("geometry",)
 
 
 @register_pytree_node_class
@@ -243,11 +261,11 @@ class JaxStructureStaticGeometry(AbstractJaxStructure, JaxObject):
         ...,
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
-        jax_field=True,
+        # jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
-    _differentiable_fields = ("medium",)
+    _jax_fields = ("medium",)
 
 
 JaxStructureType = Union[JaxStructure, JaxStructureStaticMedium, JaxStructureStaticGeometry]

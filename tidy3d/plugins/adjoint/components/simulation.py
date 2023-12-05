@@ -16,7 +16,7 @@ from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
-from ....components.types import Ax, annotate_type
+from ....components.types import annotate_type
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
@@ -46,8 +46,11 @@ NUM_PROC_LOCAL = 1
 MAX_NUM_INPUT_STRUCTURES = 400
 
 
+OutputMonitorType = Union[DiffractionMonitor, FieldMonitor, ModeMonitor]
+
+
 class JaxInfo(Tidy3dBaseModel):
-    """Class to store information when converting between jax and tidy3d."""
+    """Class to store information when converting simulations between jax and tidy3d."""
 
     num_input_structures: pd.NonNegativeInt = pd.Field(
         ...,
@@ -105,12 +108,10 @@ class JaxSimulation(Simulation, JaxObject):
         title="Input Structures",
         description="Tuple of jax-compatible structures"
         " that may depend on differentiable parameters.",
-        jax_field=True,
+        # jax_field=True,
     )
 
-    output_monitors: Tuple[
-        annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...
-    ] = pd.Field(
+    output_monitors: Tuple[annotate_type(OutputMonitorType), ...] = pd.Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
@@ -143,6 +144,12 @@ class JaxSimulation(Simulation, JaxObject):
         "If not supplied or ``None``, uses a factor times the adjoint source ``fwidth``.",
         units=SECOND,
     )
+
+    _jax_fields = ("input_structures",)
+    _tidy3d_class = Simulation
+    _type_mappings = {
+        Structure: JaxStructure,
+    }
 
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
@@ -184,7 +191,7 @@ class JaxSimulation(Simulation, JaxObject):
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
-        input_structures = [s for s in val if "geometry" in s._differentiable_fields]
+        input_structures = [s for s in val if "geometry" in s._jax_fields]
 
         structures = list(values.get("structures"))
 
@@ -346,7 +353,7 @@ class JaxSimulation(Simulation, JaxObject):
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
+        all_structures = list(self.structures) + [js.to_tidy3d() for js in self.input_structures]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)
@@ -583,7 +590,7 @@ class JaxSimulation(Simulation, JaxObject):
             jax_info.input_structure_types, all_structures[num_structs:]
         ):
             struct_type = structure_type_map[struct_type_str]
-            new_structure = struct_type.from_structure(struct)
+            new_structure = struct_type.from_tidy3d(struct)
             input_structures.append(new_structure)
 
         # return a dictionary containing these split structures

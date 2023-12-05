@@ -16,17 +16,17 @@ class JaxPermittivityDataset(PermittivityDataset, JaxObject):
         ...,
         title="Epsilon xx",
         description="Spatial distribution of the xx-component of the relative permittivity.",
-        jax_field=True,
+        # jax_field=True,
     )
     eps_yy: JaxDataArray = pd.Field(
         ...,
         title="Epsilon yy",
         description="Spatial distribution of the yy-component of the relative permittivity.",
-        jax_field=True,
+        # jax_field=True,
     )
     eps_zz: JaxDataArray = pd.Field(
         ...,
         title="Epsilon zz",
         description="Spatial distribution of the zz-component of the relative permittivity.",
-        jax_field=True,
+        # jax_field=True,
     )

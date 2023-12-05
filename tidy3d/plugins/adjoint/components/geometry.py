@@ -22,7 +22,7 @@ from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
 
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_tuple, validate_jax_tuple_tuple
+from .types import JaxFloat, validate_jax_tuple_tuple
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 50
@@ -40,6 +40,7 @@ class JaxGeometry(Geometry, JaxObject, ABC):
     @property
     def bound_size(self) -> Tuple[float, float, float]:
         """Size of the bounding box of this geometry."""
+        return self.geometry.size
         rmin, rmax = self.bounds
         return tuple(abs(pt_max - pt_min) for (pt_min, pt_max) in zip(rmin, rmax))
 
@@ -131,18 +132,27 @@ class JaxGeometry(Geometry, JaxObject, ABC):
 class JaxBox(Box, JaxGeometry):
     """A :class:`.Box` registered with jax."""
 
+    _tidy3d_class = Box
+
+    # def to_tidy3d(self) -> Box:
+    #     return self._tidy3d_class.parse_obj(self.dict(exclude={"type", "jax_info"}))
+
+    # @classmethod
+    # def from_tidy3d(cls, obj) -> JaxBox:
+    #     return cls.parse_obj(obj.dict(exclude={"type"}))
+
     # size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
     #     ...,
     #     title="Size",
     #     description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-    #     jax_field=True,
+    #     # jax_field=True,
     # )
 
     # center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
     #     ...,
     #     title="Center",
     #     description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-    #     jax_field=True,
+    #     # jax_field=True,
     # )
 
     # _sanitize_size = validate_jax_tuple("size")
@@ -300,7 +310,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
-        jax_field=True,
+        # jax_field=True,
     )
 
     @pd.validator("vertices", pre=True, always=True)
@@ -662,7 +672,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         "Can provide significant performance enhancement in ``JaxStructure`` when all geometries "
         "are assigned the same ``JaxMedium``. Note: at this moment, only ``JaxPolySlab`` "
         "is supported.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     def to_tidy3d(self) -> GeometryGroup:

@@ -31,7 +31,7 @@ class JaxDataArray(Tidy3dBaseModel):
         ...,
         title="Values",
         description="Nested list containing the raw values, which can be tracked by jax.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     coords: Dict[str, list] = pd.Field(

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable, Optional
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import pydantic.v1 as pd
 import numpy as np
@@ -16,10 +16,8 @@ from ....components.data.monitor_data import FieldData
 from ....components.data.dataset import PermittivityDataset
 from ....components.data.data_array import ScalarFieldDataArray
 from ....exceptions import SetupError
-from ....constants import CONDUCTIVITY
 
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_float
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
 
@@ -33,14 +31,6 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
-
-    def to_tidy3d(self) -> AbstractJaxMedium:
-        """Convert self to tidy3d component."""
-        return self.to_medium()
-
-    @abstractmethod
-    def to_medium(self) -> AbstractJaxMedium:
-        """Convert self to medium."""
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
@@ -155,7 +145,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
     #     1.0,
     #     title="Permittivity",
     #     description="Relative permittivity of the medium. May be a ``jax`` ``Array``.",
-    #     jax_field=True,
+    #     # jax_field=True,
     # )
 
     # conductivity: JaxFloat = pd.Field(
@@ -164,7 +154,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
     #     description="Electric conductivity. Defined such that the imaginary part of the complex "
     #     "permittivity at angular frequency omega is given by conductivity/omega.",
     #     units=CONDUCTIVITY,
-    #     jax_field=True,
+    #     # jax_field=True,
     # )
 
     # @pd.validator("conductivity", always=True)
@@ -175,10 +165,14 @@ class JaxMedium(Medium, AbstractJaxMedium):
     # _sanitize_permittivity = validate_jax_float("permittivity")
     # _sanitize_conductivity = validate_jax_float("conductivity")
 
-    def to_medium(self) -> Medium:
-        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type", "jax_info"})
-        return Medium.parse_obj(self_dict)
+    _tidy3d_class = Medium
+
+    # def to_tidy3d(self) -> Medium:
+    #     return self._tidy3d_class.parse_obj(self.dict(exclude={"type", "jax_info"}))
+
+    # @classmethod
+    # def from_tidy3d(cls, obj) -> JaxMedium:
+    #     return cls.parse_obj(obj.dict(exclude={"type"}))
 
     def store_vjp(
         self,
@@ -226,30 +220,30 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
         ...,
         title="XX Component",
         description="Medium describing the xx-component of the diagonal permittivity tensor.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     yy: JaxMedium = pd.Field(
         ...,
         title="YY Component",
         description="Medium describing the yy-component of the diagonal permittivity tensor.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     zz: JaxMedium = pd.Field(
         ...,
         title="ZZ Component",
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
-        jax_field=True,
+        # jax_field=True,
     )
 
-    def to_medium(self) -> AnisotropicMedium:
+    def to_tidy3d(self) -> AnisotropicMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
         self_dict = self.dict(exclude={"type", "xx", "yy", "zz"})
         for component in "xyz":
             field_name = component + component
             jax_medium = self.components[field_name]
-            self_dict[field_name] = jax_medium.to_medium()
+            self_dict[field_name] = jax_medium.to_tidy3d()
         return AnisotropicMedium.parse_obj(self_dict)
 
     @classmethod
@@ -338,7 +332,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         description="User-supplied dataset containing complex-valued permittivity "
         "as a function of space. Permittivity distribution over the Yee-grid will be "
         "interpolated based on the data nearest to the grid location.",
-        jax_field=True,
+        # jax_field=True,
     )
 
     @pd.root_validator(pre=True)
@@ -414,10 +408,10 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
     def eps_dataarray_freq(self, frequency: float):
         """ "Permittivity array at ``frequency``"""
-        as_custom_medium = self.to_medium()
+        as_custom_medium = self.to_tidy3d()
         return as_custom_medium.eps_dataarray_freq(frequency)
 
-    def to_medium(self) -> CustomMedium:
+    def to_tidy3d(self) -> CustomMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
         self_dict = self.dict(exclude={"type"})
         eps_field_components = {}

@@ -466,16 +466,15 @@ def test_run_flux(use_emulated_run):
         get_flux_grad = jax.grad(get_flux)
         _ = get_flux_grad(1.0)
 
+
 @pytest.mark.parametrize("local", (True,))
 def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
 
     run_fn = run_local if local else run
 
-
     def f(sim):
         return sim
-
 
     # sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     # sim2 = f(sim)
