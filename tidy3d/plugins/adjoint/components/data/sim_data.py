@@ -107,7 +107,7 @@ class JaxSimulationData(SimulationData, JaxObject):
         """Construct a :class:`.JaxSimulationData` instance from a :class:`.SimulationData`."""
 
         self_dict = sim_data.dict(exclude={"type", "simulation", "data"})
-
+        
         # convert the simulation to JaxSimulation
         jax_sim = JaxSimulation.from_simulation(simulation=sim_data.simulation, jax_info=jax_info)
 

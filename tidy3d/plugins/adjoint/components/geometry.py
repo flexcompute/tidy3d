@@ -162,10 +162,6 @@ class JaxBox(Box, JaxGeometry):
     #     """Overrides validator enforing that val is not inf."""
     #     return val
 
-    @classmethod
-    def from_tidy3d(cls, obj):
-        return cls(obj.dict())
-
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
