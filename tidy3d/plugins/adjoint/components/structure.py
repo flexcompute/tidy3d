@@ -31,10 +31,6 @@ class AbstractJaxStructure(Structure, JaxObject):
 
     _tidy3d_class = Structure
     _jax_fields = ()
-    _type_mappings = {
-        Box: JaxBox,
-        Medium: JaxMedium,
-    }
 
     # def to_tidy3d(self) -> Structure:
     #     self_dict = self.excluded_dict
@@ -69,10 +65,10 @@ class AbstractJaxStructure(Structure, JaxObject):
     #     """The fields that are jax-traced for this class."""
     #     return dict(geometry=self.geometry, medium=self.medium)
 
-    @property
-    def exclude_fields(self):
-        """Fields to exclude from the self dict."""
-        return set(["type", "jax_info"] + list(self.jax_fields.keys()))
+    # @property
+    # def exclude_fields(self):
+    #     """Fields to exclude from the self dict."""
+    #     return set(["type", "jax_info"] + list(self.jax_fields.keys()))
 
     @classmethod
     def from_tidy3d(cls, structure: Structure) -> JaxStructure:
@@ -237,7 +233,6 @@ class JaxStructureStaticMedium(AbstractJaxStructure, JaxObject):
         title="Medium",
         description="Regular ``tidy3d`` medium of the structure, non differentiable. "
         "Supports dispersive materials.",
-        jax_field=False,
         discriminator=TYPE_TAG_STR,
     )
 
@@ -253,7 +248,6 @@ class JaxStructureStaticGeometry(AbstractJaxStructure, JaxObject):
         title="Geometry",
         description="Regular ``tidy3d`` geometry of the structure, non differentiable. "
         "Supports angled sidewalls and other complex geometries.",
-        jax_field=False,
         discriminator=TYPE_TAG_STR,
     )
 
@@ -261,7 +255,6 @@ class JaxStructureStaticGeometry(AbstractJaxStructure, JaxObject):
         ...,
         title="Medium",
         description="Medium of the structure, which is jax-compatible.",
-        # jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
 
