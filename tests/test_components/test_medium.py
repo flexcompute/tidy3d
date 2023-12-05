@@ -450,6 +450,9 @@ def test_fully_anisotropic_media():
         rotation=rot,
     )
 
+    # check eps_model can be called with an array of frequencies
+    eps = m.eps_model(np.linspace(1e12, 2e12, 10))
+
     assert np.allclose(m.permittivity, perm)
     assert np.allclose(m.conductivity, cond)
 
