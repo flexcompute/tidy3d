@@ -477,7 +477,6 @@ class Boundary(Tidy3dBaseModel):
     **Notebooks:**
         * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_
         * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
-
     """
 
     plus: BoundaryEdgeType = pd.Field(

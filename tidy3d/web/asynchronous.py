@@ -19,6 +19,8 @@ def run_async(
     """Submits a set of :class:`.Simulation` objects to server, starts running,
     monitors progress, downloads, and loads results as a :class:`.BatchData` object.
 
+    .. TODO add example and see also reference.
+
     Parameters
     ----------
     simulations : Dict[str, :class:`.Simulation`]
@@ -39,6 +41,15 @@ def run_async(
     ------
     :class:`BatchData`
         Contains the :class:`.SimulationData` of each :class:`.Simulation` in :class:`Batch`.
+
+    See Also
+    --------
+
+    :class:`Job`:
+        Interface for managing the running of a Simulation on server.
+
+    :class:`Batch`
+        Interface for submitting several :class:`Simulation` objects to sever.
     """
 
     if simulation_type is None:

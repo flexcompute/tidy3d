@@ -1601,6 +1601,12 @@ class Simulation(Box):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -1674,6 +1680,12 @@ class Simulation(Box):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
@@ -3064,12 +3076,19 @@ class Simulation(Box):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+
         Returns
         -------
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
         """
 
         sub_grid = self.discretize(box)

@@ -634,6 +634,13 @@ class CustomCurrentSource(ReverseInterpolatedSource):
         distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
         source center.
 
+        The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source
+        accepts a ``current_dataset``. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,
+        z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also
+        fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar
+        without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source
+        center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.
+
     Example
     -------
     >>> from tidy3d import ScalarFieldDataArray
@@ -651,6 +658,11 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     ...     source_time=pulse,
     ...     current_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     current_dataset: Optional[FieldDataset] = pydantic.Field(

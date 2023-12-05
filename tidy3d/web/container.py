@@ -35,23 +35,29 @@ class Job(WebContainer):
     -----
 
         This class provides a more convenient way to manage single simulations, mainly because it eliminates the need
-        for keeping track of the ``task_id`` and original :class:`Simulation`.
+        for keeping track of the ``task_id`` and original :class:`.Simulation`.
 
         We can get the cost estimate of running the task before actually running it. This prevents us from
         accidentally running large jobs that we set up by mistake. The estimated cost is the maximum cost
         corresponding to running all the time steps.
 
-        Another convenient thing about ``Job`` objects is that they can be saved and loaded just like other
+        Another convenient thing about :class`Job` objects is that they can be saved and loaded just like other
         ``tidy3d`` components.
 
     See Also
     --------
 
-    :class:`Batch`:
+    :meth:`tidy3d.web.run_async`
+        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        downloads, and loads results as a :class:`.BatchData` object.
+
+    :class:`Batch`
          Interface for submitting several :class:`Simulation` objects to sever.
 
     **Notebooks**
         *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
+        * `Parameter Scan using signac <../../notebooks/ParameterScan.html#Parameter-Scan-using-Signac>`_
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
@@ -272,8 +278,9 @@ class BatchData(Tidy3dBaseModel):
     :class:`.SimulationData`:
          Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
-    **Notebooks:**
+    **Notebooks**
         * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
     """
 
     task_paths: Dict[TaskName, str] = pd.Field(
@@ -346,11 +353,18 @@ class Batch(WebContainer):
     See Also
     --------
 
+    :meth:`tidy3d.web.run_async`
+        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        downloads, and loads results as a :class:`.BatchData` object.
+
     :class:`Job`:
         Interface for managing the running of a Simulation on server.
 
     **Notebooks**
-        *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
+        * `Parameter Scan using signac <../../notebooks/ParameterScan.html#Parameter-Scan-using-Signac>`_
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
     simulations: Dict[TaskName, Simulation] = pd.Field(
@@ -494,7 +508,7 @@ class Batch(WebContainer):
         for _, job in self.jobs.items():
             job.start()
 
-    def get_run_info(self) -> BatchDataDict[TaskName, RunInfo]:
+    def get_run_info(self) -> Dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
 
         Returns
