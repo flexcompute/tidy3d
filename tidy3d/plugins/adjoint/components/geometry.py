@@ -91,7 +91,7 @@ class JaxGeometry(Geometry, JaxObject, ABC):
 
     def to_tidy3d(self) -> Geometry:
         """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "jax_info"})
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]
         return tidy3d_type.parse_obj(self_dict)
@@ -161,6 +161,10 @@ class JaxBox(Box, JaxGeometry):
     # def _center_not_inf(cls, val):
     #     """Overrides validator enforing that val is not inf."""
     #     return val
+
+    @classmethod
+    def from_tidy3d(cls, obj):
+        return cls(obj.dict())
 
     def store_vjp(
         self,
@@ -667,7 +671,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
 
     def to_tidy3d(self) -> GeometryGroup:
         """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "jax_info"})
         self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]

@@ -111,7 +111,7 @@ def run(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
-    # sim, jax_info = simulation.to_simulation()
+    sim, jax_info = simulation.to_simulation()
 
     sim_data = tidy3d_run_fn(
         simulation=simulation,
@@ -121,8 +121,8 @@ def run(
         callback_url=callback_url,
         verbose=verbose,
     )
-    return JaxSimulationData.parse_obj(sim_data.dict(exclude={"type"}))
-    # return JaxSimulationData.from_sim_data(sim_data, jax_info)
+    # return JaxSimulationData.parse_obj(sim_data.dict(exclude={"type"}))
+    return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
 def run_fwd(
@@ -626,7 +626,7 @@ def run_local(
 
     # run using regular tidy3d simulation running fn
     sim_data_tidy3d = tidy3d_run_fn(
-        simulation=simulation,
+        simulation=sim_tidy3d,
         task_name=str(task_name),
         folder_name=folder_name,
         path=path,
@@ -662,6 +662,8 @@ def run_local_fwd(
         callback_url=callback_url,
         verbose=verbose,
     )
+
+    import pdb; pdb.set_trace()
 
     # remove the gradient data from the returned version (not needed)
     sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))

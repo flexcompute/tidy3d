@@ -161,6 +161,7 @@ class JaxSimulationData(SimulationData, JaxObject):
 
         return user_sim_data, adjoint_sim_data
 
+
     def make_adjoint_simulation(self, fwidth: float, run_time: float) -> JaxSimulation:
         """Make an adjoint simulation out of the data provided (generally, the vjp sim data)."""
 

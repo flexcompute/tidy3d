@@ -34,13 +34,13 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
 
-    # def to_tidy3d(self) -> AbstractJaxMedium:
-    #     """Convert self to tidy3d component."""
-    #     return self.to_medium()
+    def to_tidy3d(self) -> AbstractJaxMedium:
+        """Convert self to tidy3d component."""
+        return self.to_medium()
 
-    # @abstractmethod
-    # def to_medium(self) -> AbstractJaxMedium:
-    #     """Convert self to medium."""
+    @abstractmethod
+    def to_medium(self) -> AbstractJaxMedium:
+        """Convert self to medium."""
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
@@ -175,10 +175,10 @@ class JaxMedium(Medium, AbstractJaxMedium):
     # _sanitize_permittivity = validate_jax_float("permittivity")
     # _sanitize_conductivity = validate_jax_float("conductivity")
 
-    # def to_medium(self) -> Medium:
-    #     """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-    #     self_dict = self.dict(exclude={"type"})
-    #     return Medium.parse_obj(self_dict)
+    def to_medium(self) -> Medium:
+        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
+        self_dict = self.dict(exclude={"type", "jax_info"})
+        return Medium.parse_obj(self_dict)
 
     def store_vjp(
         self,

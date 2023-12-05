@@ -493,7 +493,7 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
         a += sim.input_structures[0].geometry.center[1]
         a += sim.input_structures[0].geometry.center[2]
         a += sim.input_structures[0].medium.permittivity
-        sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        sim_data = run_fn(sim, task_name="test")
         amp = extract_amp(sim_data)
         return a + objective(amp)
         # return a

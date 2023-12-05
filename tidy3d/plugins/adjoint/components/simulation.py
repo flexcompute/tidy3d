@@ -589,28 +589,28 @@ class JaxSimulation(Simulation, JaxObject):
         # return a dictionary containing these split structures
         return dict(structures=structures, input_structures=input_structures)
 
-    # @classmethod
-    # def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
-    #     """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""
+    @classmethod
+    def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
+        """Convert :class:`.Simulation` to :class:`.JaxSimulation` with extra info."""
 
-    #     sim_dict = simulation.dict(exclude={"type", "structures", "monitors"})
+        sim_dict = simulation.dict(exclude={"type", "structures", "monitors"})
 
-    #     # split structures and monitors into their respective fields for JaxSimulation
-    #     structures = cls.split_structures(structures=simulation.structures, jax_info=jax_info)
-    #     monitors = cls.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
+        # split structures and monitors into their respective fields for JaxSimulation
+        structures = cls.split_structures(structures=simulation.structures, jax_info=jax_info)
+        monitors = cls.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
 
-    #     # update the dictionary with these and the adjoint fwidth
-    #     sim_dict.update(**structures)
-    #     sim_dict.update(**monitors)
-    #     sim_dict.update(
-    #         dict(
-    #             fwidth_adjoint=jax_info.fwidth_adjoint,
-    #             run_time_adjoint=jax_info.run_time_adjoint,
-    #         )
-    #     )
+        # update the dictionary with these and the adjoint fwidth
+        sim_dict.update(**structures)
+        sim_dict.update(**monitors)
+        sim_dict.update(
+            dict(
+                fwidth_adjoint=jax_info.fwidth_adjoint,
+                run_time_adjoint=jax_info.run_time_adjoint,
+            )
+        )
 
-    #     # load JaxSimulation from the dictionary
-    #     return cls.parse_obj(sim_dict)
+        # load JaxSimulation from the dictionary
+        return cls.parse_obj(sim_dict)
 
     @classmethod
     def make_sim_fwd(cls, simulation: Simulation, jax_info: JaxInfo) -> Tuple[Simulation, JaxInfo]:

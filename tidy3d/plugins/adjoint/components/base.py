@@ -58,8 +58,6 @@ class JaxObject(Tidy3dBaseModel):
         _kwargs["jax_info"] = jax_info
         return _kwargs    
 
-
-
 # class JaxObject(Tidy3dBaseModel):
 #     """Abstract class that makes a :class:`.Tidy3dBaseModel` jax-compatible through inheritance."""
 
