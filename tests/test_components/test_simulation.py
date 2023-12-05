@@ -1033,6 +1033,167 @@ def test_proj_monitor_distance(log_capture):
     )
 
 
+def test_proj_monitor_warnings(log_capture):
+    """Test the validator that warns if projecting backwards."""
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, -0.5),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    # Cartesian monitor projecting backwards
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=-1e5,
+        proj_axis=2,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor with custom origin projecting backwards
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=39,
+        proj_axis=2,
+        custom_origin=(1, 2, -40),
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor with custom origin projecting backwards with normal_dir '-'
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=41,
+        proj_axis=2,
+        custom_origin=(1, 2, -40),
+        normal_dir="-",
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 + 1e-2],
+        phi=[0],
+        proj_distance=1e3,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards with custom origin
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 - 0.02],
+        phi=[0],
+        proj_distance=10,
+        custom_origin=(0, 0, -0.5),
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards with custom origin and normal_dir '-'
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 + 0.02],
+        phi=[0],
+        proj_distance=10,
+        custom_origin=(0, 0, 0.5),
+        normal_dir="-",
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor using approximations but too short proj_distance
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=9,
+        proj_axis=2,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+
+
 def test_diffraction_medium():
     """Make sure we error if a diffraction monitor is in a lossy medium."""
 

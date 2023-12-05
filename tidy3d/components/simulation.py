@@ -31,6 +31,7 @@ from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
+from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
@@ -636,6 +637,97 @@ class Simulation(AbstractSimulation):
                         f"intersecting a {monitor.type}. Plane must be homogeneous."
                     )
 
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def _projection_direction(cls, val, values):
+        """Warn if field projection observation points are behind surface projection monitors."""
+        # This validator is in simulation.py rather than monitor.py because volume monitors are
+        # eventually converted to their bounding surface projection monitors, in which case we
+        # do not want this validator to be triggered.
+
+        if val is None:
+            return val
+
+        with log as consolidated_logger:
+            for monitor_ind, monitor in enumerate(val):
+                if isinstance(monitor, AbstractFieldProjectionMonitor):
+                    if monitor.size.count(0.0) != 1:
+                        continue
+
+                    normal_dir = monitor.projection_surfaces[0].normal_dir
+                    normal_ind = monitor.size.index(0.0)
+
+                    projecting_backwards = False
+                    if isinstance(monitor, FieldProjectionAngleMonitor):
+                        r, theta, phi = np.meshgrid(
+                            monitor.proj_distance,
+                            monitor.theta,
+                            monitor.phi,
+                            indexing="ij",
+                        )
+                        x, y, z = Geometry.sph_2_car(r=r, theta=theta, phi=phi)
+                    elif isinstance(monitor, FieldProjectionKSpaceMonitor):
+                        uxs, uys, _ = np.meshgrid(
+                            monitor.ux,
+                            monitor.uy,
+                            monitor.proj_distance,
+                            indexing="ij",
+                        )
+                        theta, phi = monitor.kspace_2_sph(uxs, uys, monitor.proj_axis)
+                        x, y, z = Geometry.sph_2_car(r=monitor.proj_distance, theta=theta, phi=phi)
+                    else:
+                        pts = monitor.unpop_axis(
+                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind
+                        )
+                        x, y, z = pts
+
+                    center = np.array(monitor.center) - np.array(monitor.local_origin)
+                    pts = [np.array(i) for i in [x, y, z]]
+                    normal_displacement = pts[normal_ind] - center[normal_ind]
+                    if np.any(normal_displacement < 0) and normal_dir == "+":
+                        projecting_backwards = True
+                    elif np.any(normal_displacement > 0) and normal_dir == "-":
+                        projecting_backwards = True
+
+                    if projecting_backwards:
+                        consolidated_logger.warning(
+                            f"Field projection monitor '{monitor.name}' has observation points set "
+                            "up such that the monitor is projecting backwards with respect to its "
+                            "'normal_dir'. If this was not intentional, please take a look at the "
+                            "documentation associated with this type of projection monitor to "
+                            "check how the observation point coordinate system is defined.",
+                            custom_loc=["monitors", monitor_ind],
+                        )
+
+        return val
+
+    @pydantic.validator("monitors", always=True)
+    def proj_distance_for_approx(cls, val, values):
+        """Warn if projection distance for projection monitors is not large compared to monitor or,
+        simulation size, yet far_field_approx is True."""
+        if val is None:
+            return val
+
+        sim_size = values.get("size")
+
+        with log as consolidated_logger:
+            for monitor_ind, monitor in enumerate(val):
+                if not isinstance(monitor, AbstractFieldProjectionMonitor):
+                    continue
+
+                name = monitor.name
+                max_size = min(np.max(monitor.size), np.max(sim_size))
+
+                if monitor.far_field_approx and np.abs(monitor.proj_distance) < 10 * max_size:
+                    consolidated_logger.warning(
+                        f"Monitor {name} projects to a distance comparable to the size of the "
+                        "monitor; we recommend setting ``far_field_approx=False`` to disable "
+                        "far-field approximations for this monitor, because the approximations "
+                        "are valid only when the observation points are very far compared to the "
+                        "size of the monitor that records near fields.",
+                        custom_loc=["monitors", monitor_ind],
+                    )
         return val
 
     @pydantic.validator("monitors", always=True)

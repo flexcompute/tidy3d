@@ -436,8 +436,8 @@ SIM_FULL = td.Simulation(
             freqs=[250e12, 300e12],
             name="proj_angle",
             custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 2],
-            theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
+            phi=[0, np.pi / 6],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
         ),
         td.FieldProjectionCartesianMonitor(
             center=(0, 0, 0),
@@ -457,8 +457,8 @@ SIM_FULL = td.Simulation(
             name="proj_kspace",
             custom_origin=(1, 2, 3),
             proj_axis=2,
-            ux=[0.1, 0.2],
-            uy=[0.3, 0.4, 0.5],
+            ux=[0.02, 0.04],
+            uy=[0.03, 0.04, 0.05],
         ),
         td.FieldProjectionAngleMonitor(
             center=(0, 0, 0),
@@ -466,8 +466,8 @@ SIM_FULL = td.Simulation(
             freqs=[250e12, 300e12],
             name="proj_angle_exact",
             custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 2],
-            theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
+            phi=[0, np.pi / 8],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
             far_field_approx=False,
         ),
         td.DiffractionMonitor(
