@@ -23,6 +23,15 @@ DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataT
 class SimulationData(Tidy3dBaseModel):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
+    Notes
+    -----
+
+        The ``SimulationData`` objects store a copy of the original class:`.Simulation`:, so it can be recovered if the
+        ``SimulationData`` is loaded in a new session and the :class:`.Simulation` is no longer in memory.
+
+        More importantly, the ``SimulationData`` contains a reference to the data for each of the monitors within the
+        original ``Simulation``. This data can be accessed directly using the name given to the monitors initially.
+
     Example
     -------
     >>> import tidy3d as td
@@ -61,11 +70,14 @@ class SimulationData(Tidy3dBaseModel):
     >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field, grid_expanded=grid)
     >>> sim_data = td.SimulationData(simulation=sim, data=(field_data,))
 
-     See Also
+    .. TODO implement from_file method based on inheritance
+
+    See Also
     --------
 
     **Notebooks:**
         * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Performing visualization of simulation data <../../notebooks/VizData.html>`_
         * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
 
     """

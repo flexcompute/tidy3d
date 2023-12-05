@@ -64,8 +64,6 @@ class Structure(AbstractStructure):
     A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
     and a :class:`Geometry`.
 
-    .. TODO think about how to represent the inherited plot method important
-
     Example
     -------
     >>> from tidy3d import Box, Medium

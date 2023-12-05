@@ -40,7 +40,9 @@ Coords1D = ArrayFloat1D
 
 
 class MonitorData(Dataset, ABC):
-    """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
+    """
+    Abstract base class of objects that store data pertaining to a single :class:`.monitor`.
+    """
 
     monitor: MonitorType = pd.Field(
         ...,
@@ -746,7 +748,11 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
     Notes
     -----
 
-        This dataset contains all electric and magnetic field components: ``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``, and ``Hz``.
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        This dataset can contain all electric and magnetic field components: ``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``,
+        and ``Hz``.
 
     Example
     -------
@@ -762,6 +768,16 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
     ...     size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex', 'Hz'], colocate=True
     ... )
     >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field, grid_expanded=grid)
+
+    .. TODO sort out standalone data example.
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Performing visualization of simulation data <../../notebooks/VizData.html>`_
+        * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
     """
 
     monitor: FieldMonitor = pd.Field(
@@ -820,7 +836,14 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------
@@ -887,7 +910,14 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
 
 
 class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------
@@ -1342,6 +1372,12 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 class PermittivityData(PermittivityDataset, AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
 
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
     Example
     -------
     >>> from tidy3d import ScalarFieldDataArray
@@ -1369,6 +1405,9 @@ class ModeData(MonitorData):
 
     Notes
     -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
         The mode monitor data contains the complex effective indices and the complex mode amplitudes at the monitor
         position calculated by mode decomposition. The data structure of the complex effective
@@ -1442,10 +1481,13 @@ class FluxData(MonitorData):
     Notes
     -----
 
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
         We can access the data for each monitor by indexing into the :class:`SimulationData` with the monitor
-        ``.name``. The monitor dataset contains one or more ``xarray.DataArray`` objects storing the actual raw data. For
-        the flux monitor data, we can access the raw flux data as a function of frequency with ``.flux``. As most data
-        are multidimensional, it’s often very helpful to print out the data and directly inspect its structure.
+        ``.name``. For the flux monitor data, we can access the raw flux data as a function of frequency with
+        ``.flux``. As most data are multidimensional, it’s often very helpful to print out the data and directly
+        inspect its structure.
 
     Example
     -------
@@ -1480,7 +1522,14 @@ class FluxData(MonitorData):
 
 
 class FluxTimeData(MonitorData):
-    """Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain.
+    """
+    Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------

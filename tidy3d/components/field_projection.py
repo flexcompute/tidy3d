@@ -39,6 +39,10 @@ class FieldProjector(Tidy3dBaseModel):
     See Also
     --------
 
+    :class:`FieldProjectionAngleMonitor
+        :class:`Monitor` that samples electromagnetic near fields in the frequency domain
+        and projects them at given observation angles.`
+
     **Notebooks**:
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
     """

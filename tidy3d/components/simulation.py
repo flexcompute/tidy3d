@@ -82,15 +82,46 @@ PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
 class Simulation(Box):
-    """Contains all information about Tidy3d simulation.
+    """
+    Custom implementation of Maxwell’s equations which represents the physical model to be solved using the FDTD
+    method.
 
     Notes
     -----
 
-        **Dimensions**
+        A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
+        to be solved using `the Finite-Difference Time-Domain (FDTD) method
+        <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
+        are run very quickly in the cloud through GPU parallelization.
 
-        To make the simulation 2D, we can just set the simulation size in one of the dimensions to be 0. However,
-        note that we still have to define a grid size in that direction.
+        **Simplified 1D Illustration**
+
+        .. TODO if we don't want so much information here we can add this to the little FDTD primer.
+
+        In 1D, the Maxwell's equations differential operators become difference operators in a defined discretized
+        electromagentic system:
+
+        .. math::
+
+            \\epsilon \\frac{\\delta E_z}{\\delta t} = \\frac{\\delta H_y}{\\delta x}
+
+        .. math::
+
+            \\mu \\frac{\\delta H_y}{\\delta t} = \\frac{\\delta E_z}{\\delta x}
+
+        where
+
+        .. math::
+
+             \\frac{\\delta E_z}{\\delta t} \\to \\frac{E_z^{(\\alpha + 1) \\Delta t} - E_z^{\\alpha \\Delta t}}{\\Delta t}
+
+        If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series
+        <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_
+
+        **Dimensions Selection**
+
+        By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation size in one of the
+        dimensions to be 0. However, note that we still have to define a grid size in that direction.
 
         See further parameter explanations below.
 
@@ -290,11 +321,26 @@ class Simulation(Box):
     """
     Specifications for the simulation grid along each of the three directions.
 
+    **Usage Recommendations**
+
+    *   It is important to understand the relationship between the time-step :math:`\\Delta t` defined by the
+        :attr:`courant` factor, and the spatial grid distribution to guarantee simulation stability.
+
+    *   If your structure has small features, consider using a spatially nonuniform grid. This guarantees finer
+        spatial resolution near the features, but away from it you use have a larger (and computationally faster) grid.
+        In this case, the time step :math:`\\Delta t` is defined by the smallest spatial grid size.
+
     See Also
     --------
 
-    :class:`GridSpec`:
+    :class:`GridSpec`
         Collective grid specification for all three dimensions.
+
+    :attr:`courant`
+        The Courant-Friedrichs-Lewy (CFL) stability factor
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
     """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
@@ -353,8 +399,8 @@ class Simulation(Box):
     )
     """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
     physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
-    because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\delta x`
-    over a time step :math:`\\delta t`. This constraint enables the correct physics to be captured by the simulation.
+    because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
+    over a time step :math:`\\Delta t`. This constraint enables the correct physics to be captured by the simulation.
     In a 1D model:
 
     .. image:: ../../_static/img/courant_instability.png
@@ -364,24 +410,56 @@ class Simulation(Box):
 
     .. TODO finish this section for 1D, 2D and 3D references.
 
+    **1D Illustration**
+
+    For a 1D grid:
+
     .. math::
 
-        C = \\frac{c \\delta t}{\\delta x} \\leq 1
+        C_{\\text{1D}} = \\frac{\\Delta x}{c \\Delta t} \\leq 1
 
+    **2D Illustration**
 
-    Notes
-    -----
+    In a 2D grid, where the :math:`E_z` field is at the red dot center surrounded by four green magnetic edge components
+    in a square Yee cell grid:
 
-        **Divergence Caveats**
+    .. image:: ../../_static/img/courant_instability_2d.png
 
-        ``tidy3d`` uses a default Courant factor of 0.99. When a dispersive material with ``eps_inf < 1`` is used,
-        the Courant factor will be automatically adjusted to be smaller than ``sqrt(eps_inf)`` to ensure stability. If
-        your simulation still diverges despite addressing any other issues discussed above, reducing the Courant
-        factor may help.
+    .. math::
 
+        C_{\\text{2D}} = \\frac{\\Delta x}{c \\Delta t} \\leq \\frac{1}{\\sqrt{2}}
+
+    Hence, for the same spatial grid, the time step in 2D grid needs to be smaller than the time step in a 1D grid.
+
+    **3D Illustration**
+
+    For an isotropic medium with refractive index :math:`n`, the 3D time step condition can be derived to be:
+
+    .. math::
+
+        \\Delta t \\le \\frac{n}{c \\sqrt{\\frac{1}{\\Delta x^2} + \\frac{1}{\\Delta y^2} + \\frac{1}{\\Delta z^2}}}
+
+    In this case, the number of spatial grid points scale by :math:`\\sim \\frac{1}{\\Delta x^3}` where :math:`\\Delta x`
+    is the spatial discretization in the :math:`x` dimension. If the total simulation time is kept the same whilst
+    mantaining the CFL condition, then the number of time steps required scale by :math:`\\sim \\frac{1}{\\Delta x}`.
+    Hence, the spatial grid discretization influences the total time-steps required. The total simulation scaling per
+    spatial grid size in this case is by :math:`\\sim \\frac{1}{\\Delta x^4}.`
+
+    As an example, in this case, refining the mesh by a factor or 2 (reducing the spatial step size by half)
+    :math:`\\Delta x \\to \\frac{\\Delta x}{2}` will increase the total simulation computational cost by 16.
+
+    **Divergence Caveats**
+
+    ``tidy3d`` uses a default Courant factor of 0.99. When a dispersive material with ``eps_inf < 1`` is used,
+    the Courant factor will be automatically adjusted to be smaller than ``sqrt(eps_inf)`` to ensure stability. If
+    your simulation still diverges despite addressing any other issues discussed above, reducing the Courant
+    factor may help.
 
     See Also
     --------
+
+    :attr:`grid_spec`
+        Specifications for the simulation grid along each of the three directions.
 
     **Lectures:**
         *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
@@ -1607,6 +1685,7 @@ class Simulation(Box):
 
         **Notebooks**
             * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
+
         """
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
