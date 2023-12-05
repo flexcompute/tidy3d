@@ -3606,6 +3606,9 @@ class FullyAnisotropicMedium(AbstractMedium):
         """Complex-valued permittivity as a function of frequency."""
         perm_diag, cond_diag, _ = self.eps_sigma_diag
 
+        if not np.isscalar(frequency):
+            perm_diag = perm_diag[:, None]
+            cond_diag = cond_diag[:, None]
         eps_diag = AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
         return np.mean(eps_diag)
 
