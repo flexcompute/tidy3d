@@ -24,7 +24,7 @@ def test_triangular_dataset_no_vtk(tmp_path):
     # double check that vtk was not imported
     from tidy3d.components.types import vtk
 
-    assert vtk is None
+    assert vtk["mod"] is None
 
 
 @pytest.mark.usefixtures("hide_vtk")
@@ -34,4 +34,4 @@ def test_tetrahedral_dataset_no_vtk(tmp_path):
     # double check that vtk was not imported
     from tidy3d.components.types import vtk
 
-    assert vtk is None
+    assert vtk["mod"] is None
