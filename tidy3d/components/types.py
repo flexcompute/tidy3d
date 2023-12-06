@@ -1,6 +1,7 @@
 """ Defines 'types' that various fields can be """
 
 from typing import Tuple, Union, Any
+import functools
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
@@ -13,7 +14,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
-from ..exceptions import ValidationError
+from ..exceptions import ValidationError, Tidy3dImportError
 
 
 try:
@@ -21,17 +22,47 @@ try:
 except ImportError:
     trimesh = None
 
-try:
-    import vtk
-    from vtkmodules.vtkCommonCore import vtkLogger
+vtk = {
+    "mod": None,
+    "id_type": np.int64,
+    "vtk_to_numpy": None,
+    "numpy_to_vtkIdTypeArray": None,
+    "numpy_to_vtk": None,
+}
 
-    vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
 
-    vtk_id_type = np.int32 if vtk.vtkIdTypeArray().GetDataTypeSize() == 4 else np.int64
+def requires_vtk(fn):
+    """When decorating a method, requires that vtk is available."""
 
-except ImportError:
-    vtk = None
-    vtk_id_type = np.int64
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        if vtk["mod"] is None:
+            try:
+                import vtk as vtk_mod
+                from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+                from vtk.util.numpy_support import numpy_to_vtkIdTypeArray
+                from vtkmodules.vtkCommonCore import vtkLogger
+
+                vtk["mod"] = vtk_mod
+                vtk["vtk_to_numpy"] = vtk_to_numpy
+                vtk["numpy_to_vtkIdTypeArray"] = numpy_to_vtkIdTypeArray
+                vtk["numpy_to_vtk"] = numpy_to_vtk
+
+                vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
+
+                if vtk["mod"].vtkIdTypeArray().GetDataTypeSize() == 4:
+                    vtk["id_type"] = np.int32
+
+            except ImportError:
+                raise Tidy3dImportError(
+                    "The package 'vtk' is required for this operation, but it was not found. "
+                    "Please install the 'vtk' dependencies using, for example, "
+                    "'pip install -r requirements/vtk.txt'."
+                )
+
+        return fn(*args, **kwargs)
+
+    return _fn
 
 
 # type tag default name
@@ -259,7 +290,3 @@ EpsSpecType = Literal["diagonal", "tensorial_real", "tensorial_complex"]
 """ mode tracking """
 
 TrackFreq = Literal["central", "lowest", "highest"]
-
-""" VTK """
-
-VtkCellType = Any if vtk is None else Literal[vtk.VTK_TRIANGLE, vtk.VTK_TETRA]
