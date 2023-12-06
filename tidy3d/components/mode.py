@@ -77,7 +77,7 @@ class ModeSpec(Tidy3dBaseModel):
         "single precision, but more accurate under double precision.",
     )
 
-    bend_radius: float = pd.Field(
+    bend_radius: pd.PositiveFloat = pd.Field(
         None,
         title="Bend radius",
         description="A curvature radius for simulation of waveguide bends. Can be negative, in "
