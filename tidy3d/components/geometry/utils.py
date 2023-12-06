@@ -1,6 +1,7 @@
 """Utilities for geometry manipulation."""
 from __future__ import annotations
 from typing import Union, Tuple
+from math import isclose
 
 import numpy as np
 
@@ -192,7 +193,7 @@ def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixR
         transform = np.eye(4)
     if isinstance(geometry, polyslab.PolySlab):
         if not (
-            np.isclose(geometry.sidewall_angle, 0)
+            isclose(geometry.sidewall_angle, 0)
             or base.Transformed.preserves_axis(transform, geometry.axis)
         ):
             raise Tidy3dError(
