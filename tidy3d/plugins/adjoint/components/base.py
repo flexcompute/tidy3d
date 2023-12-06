@@ -40,32 +40,63 @@ class JaxObject(Tidy3dBaseModel):
 
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
-        """Pre-process the init kwargs and sort jax-traced types into ``jax_info``."""
 
         jax_info = {}
         _kwargs = {}
 
-        for key, val in values.items():
-
-            # value can be traced by jax
-            if key in cls._jax_fields2:
-
-                # pass the untracked version to the regular tidy3d fields
-                _val = jax.lax.stop_gradient(val)
-                _kwargs[key] = _val
-
-                # store the tracked value in the jax_info field
-                jax_info[key] = val
-
-            # value can't be traced by jax
+        def handle_jax_field(val):
+            
+            if isinstance(val, JaxObj):
+                return val, val.jax_info
+            elif isinstance(val, (list, tuple)):
+                vals = []
+                jax_infos = []
+                for item in val:
+                    subval, sub_jax_info = handle_jax_field(item)
+                    vals.append(subval)
+                    jax_infos.append(sub_jax_info)
+                return vals, jax_infos
             else:
-
-                # handle like a regular kwarg
+                return jax.lax.stop_gradient(val), val
+    
+        for key, val in values.items():
+            if key in cls._jax_fields:
+                val1, val2 = handle_jax_field(val)
+                _kwargs[key] = val1
+                jax_info[key] = val2
+            else:
                 _kwargs[key] = val
-
-        # include the jax_info in the set of kwargs
         _kwargs["jax_info"] = jax_info
         return _kwargs
+        
+    # @pd.root_validator(pre=True)
+    # def _handle_jax_kwargs(cls, values):
+    #     """Pre-process the init kwargs and sort jax-traced types into ``jax_info``."""
+
+    #     jax_info = {}
+    #     _kwargs = {}
+
+    #     for key, val in values.items():
+
+    #         # value can be traced by jax
+    #         if key in cls._jax_fields2:
+
+    #             # pass the untracked version to the regular tidy3d fields
+    #             _val = jax.lax.stop_gradient(val)
+    #             _kwargs[key] = _val
+
+    #             # store the tracked value in the jax_info field
+    #             jax_info[key] = val
+
+    #         # value can't be traced by jax
+    #         else:
+
+    #             # handle like a regular kwarg
+    #             _kwargs[key] = val
+
+    #     # include the jax_info in the set of kwargs
+    #     _kwargs["jax_info"] = jax_info
+    #     return _kwargs
 
     @property
     def excluded_dict(self) -> dict:
