@@ -796,9 +796,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             # make first line: name : type = default
             default_str = "" if field.required else f" = {default_val}"
-            doc += f"\n\t\t``{field_name}``: Description: :attr:`{field_name}`\n"
-            doc += f"\n\t\t\t-    ``Type`` *{data_type}*"
-            doc += f"\n\t\t\t-    ``Default`` {default_str}"
+            doc += f"\n\t\t``{field_name}``: More: :attr:`{field_name}` \n"
+            doc += "\n\t\t\t .. list-table:: \n"
+            doc += "\n\t\t\t\t* -    ``Type``"
+            doc += f"\n\t\t\t\t  -    *{data_type}*"
+            doc += "\n\t\t\t\t* -    ``Default``"
+            doc += f"\n\t\t\t\t  -     {default_str}"
 
             # get field metadata
             field_info = field.field_info
@@ -816,12 +819,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     unitstr += ")"
                 else:
                     unitstr = units
-                doc += f"\n\t\t\t-    ``Units`` `{unitstr}`"
+                doc += "\n\t\t\t\t* -    ``Units``"
+                doc += f"\n\t\t\t\t  -    `{unitstr}`"
 
             # add description
             description_str = field_info.description
             if description_str is not None:
-                doc += f"\n\t\t\t-    ``Short Description`` {description_str}\n"
+                doc += "\n\t\t\t\t* -    ``Description``"
+                doc += f"\n\t\t\t\t  -    {description_str}\n"
 
         # add in remaining things in the docs
         if original_docstrings:
