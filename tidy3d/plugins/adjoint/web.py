@@ -110,7 +110,6 @@ def run(
     :class:`.JaxSimulationData`
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
-
     sim, jax_info = simulation.to_simulation()
 
     sim_data = tidy3d_run_fn(
@@ -622,7 +621,7 @@ def run_local(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
 
     # convert to regular tidy3d (and accounting info)
     sim_tidy3d, jax_info = simulation.to_simulation()
@@ -653,18 +652,9 @@ def run_local_fwd(
     """Run forward pass and stash extra objects for the backwards pass."""
 
     # add the gradient monitors and run the forward simulation
-    grad_mnts = simulation.get_grad_monitors(
-        input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
-    )
+    grad_mnts = simulation.get_grad_monitors(input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint)
     sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_data_fwd = run(
-        simulation=sim_fwd,
-        task_name=_task_name_fwd(task_name),
-        folder_name=folder_name,
-        path=path,
-        callback_url=callback_url,
-        verbose=verbose,
-    )
+    sim_data_fwd = run(simulation=sim_fwd,task_name=_task_name_fwd(task_name),folder_name=folder_name,path=path,callback_url=callback_url,verbose=verbose)
 
     # remove the gradient data from the returned version (not needed)
     sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
@@ -681,6 +671,8 @@ def run_local_bwd(
     sim_data_vjp: JaxSimulationData,
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
+
+    import pdb; pdb.set_trace()
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res

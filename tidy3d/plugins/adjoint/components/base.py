@@ -7,7 +7,12 @@ import json
 import pydantic.v1 as pd
 
 import jax
-from jax.tree_util import register_pytree_node_class
+import jax.numpy as jnp
+from jax.tree_util import register_pytree_node_class, tree_flatten 
+from jax.flatten_util import ravel_pytree
+
+from jax.tree_util import tree_flatten as jax_tree_flatten
+from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel
 from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
@@ -23,52 +28,117 @@ class JaxObject(Tidy3dBaseModel):
     _jax_fields2 = ()
     _type_mappings = {}  # mapping from all possible tidy3d fields to the correponding jax fields
 
+    def split(self) -> tuple:
+        """split self into component without jax_info and jax_info."""
+        return self.updated_copy(jax_info={}), self.jax_info
+
+    def combine(self, jax_info):
+        """Combine self with jax info to add it to self."""
+        return self.updated_copy(jax_info=jax_info)
+
+    # def tree_flatten(self) -> tuple[list, dict]:
+    #     """Split ``JaxObject`` into jax-traced children and auxiliary data."""
+    #     self_no_jax, jax_info = self.split()
+    #     return jax_tree_flatten(jax_info), self_no_jax
+
+    # @classmethod
+    # def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+    #     """Create the ``JaxObject`` from the auxiliary data and children."""
+    #     return aux_data.combine(children)
+
     def tree_flatten(self) -> tuple[list, dict]:
         """Split ``JaxObject`` into jax-traced children and auxiliary data."""
-        aux_data = self.dict(exclude={"jax_info"})
-        # values = tuple(self.jax_info.values())
-        # keys = tuple(self.jax_info.keys())
-        # aux_data["jax_keys"] = keys
-        return self.jax_info, aux_data
+        return self.jax_info.values(), self
 
     @classmethod
     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
         """Create the ``JaxObject`` from the auxiliary data and children."""
-        # keys = aux_data.pop("jax_keys")
-        # jax_info = dict(zip(keys, children))
-        return cls(**aux_data, jax_info=children)
+        return aux_data
+
+
+    # def tree_flatten(self) -> Tuple[list, dict]:
+    #     """How to flatten a :class:`.JaxObject` instance into a pytree."""
+    #     children = []
+    #     aux_data = self.dict()
+    #     for field_name in self._jax_fields2:
+    #         field = getattr(self, field_name)
+    #         sub_children, sub_aux_data = jax_tree_flatten(field)
+    #         children.append(sub_children)
+    #         aux_data[field_name] = sub_aux_data
+    #     children.append(aux_data.pop("jax_info"))
+
+    #     return children, aux_data
+
+    # @classmethod
+    # def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+    #     """How to unflatten a pytree into a :class:`.JaxObject` instance."""
+
+    #     self_dict = aux_data.copy()
+    #     children = list(children)
+    #     self_dict["jax_info"] = children.pop(-1)
+    #     for field_name, sub_children in zip(cls._jax_fields2, children):
+    #         sub_aux_data = aux_data[field_name]
+    #         field = jax_tree_unflatten(sub_aux_data, sub_children)
+    #         self_dict[field_name] = field
+
+    #     return cls.parse_obj(self_dict)
+
 
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
+        """How to parse passed values."""
+
+        def process_val(val):
+            """Process a supplied value into its init kwarg and it's jax_info."""
+
+            if isinstance(val, dict):
+                kwargs = {}
+                jax_info = {}
+                for _key, _val in val.items():
+                    _kwargs, _jax_info = process_val(_val)
+                    kwargs[_key] = _kwargs
+                    jax_info[_key] = _jax_info
+                return kwargs, jax_info
+
+            elif isinstance(val, (list, tuple)):
+                kwargs = []
+                jax_info = []
+                for _val in val:
+                    _kwargs, _jax_info = process_val(_val)
+                    kwargs.append(_kwargs)
+                    jax_info.append(_jax_info)
+                return kwargs, jax_info
+
+            elif isinstance(val, JaxObject):
+                return val.updated_copy(jax_info={}), val.jax_info
+
+            else:
+                try:
+                    return jax.lax.stop_gradient(val), val
+                except TypeError:
+                    return val, {}
 
         jax_info = {}
-        _kwargs = {}
+        kwargs = {}
 
-        def handle_jax_field(val):
-            
-            if isinstance(val, JaxObj):
-                return val, val.jax_info
-            elif isinstance(val, (list, tuple)):
-                vals = []
-                jax_infos = []
-                for item in val:
-                    subval, sub_jax_info = handle_jax_field(item)
-                    vals.append(subval)
-                    jax_infos.append(sub_jax_info)
-                return vals, jax_infos
-            else:
-                return jax.lax.stop_gradient(val), val
-    
         for key, val in values.items():
-            if key in cls._jax_fields:
-                val1, val2 = handle_jax_field(val)
-                _kwargs[key] = val1
-                jax_info[key] = val2
+            if key in cls._jax_fields2:
+                _kwargs, _jax_info = process_val(val)
+                kwargs[key] = _kwargs
+                jax_info[key] = _jax_info
+                # if _kwargs:
+                #     kwargs[key] = _kwargs
+                # if _jax_info:
+                #     jax_info[key] = _jax_info
             else:
-                _kwargs[key] = val
-        _kwargs["jax_info"] = jax_info
-        return _kwargs
-        
+                kwargs[key] = val
+
+        kwargs["jax_info"] = jax_info
+
+        # if jax_info == {'input_structures': []}:
+        #     import pdb; pdb.set_trace()
+        return kwargs
+
     # @pd.root_validator(pre=True)
     # def _handle_jax_kwargs(cls, values):
     #     """Pre-process the init kwargs and sort jax-traced types into ``jax_info``."""

@@ -54,6 +54,8 @@ class JaxSimulationData(SimulationData, JaxObject):
         description="Optional field storing the task_id for the original JaxSimulation.",
     )
 
+    # _jax_fields2 = ("simulation",)
+
     @property
     def grad_data_symmetry(self) -> Tuple[FieldData, ...]:
         """``self.grad_data`` but with ``symmetry_expanded_copy`` applied."""

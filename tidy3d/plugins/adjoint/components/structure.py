@@ -30,6 +30,7 @@ class AbstractJaxStructure(Structure, JaxObject):
     medium: Union[JaxMedium, MediumType]
 
     _tidy3d_class = Structure
+    _jax_fields2 = ("medium", "geometry")
     _jax_fields = ()
 
     # def to_tidy3d(self) -> Structure:
@@ -165,15 +166,13 @@ class AbstractJaxStructure(Structure, JaxObject):
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
-        # return right away if field_keys are not present for some reason
-        if not self._jax_fields:
-            return self
-
         vjp_dict = {}
+
+        jax_info_vjp = self.jax_info.copy()
 
         # compute minimum wavelength in material (to use for determining integration points)
         if "geometry" in self._jax_fields:
-            vjp_dict["geometry"] = self.geometry_vjp(
+            jax_info_vjp["geometry"] = self.geometry_vjp(
                 grad_data_fwd=grad_data_fwd,
                 grad_data_adj=grad_data_adj,
                 grad_data_eps=grad_data_eps,
@@ -183,14 +182,14 @@ class AbstractJaxStructure(Structure, JaxObject):
             )
 
         if "medium" in self._jax_fields:
-            vjp_dict["medium"] = self.medium_vjp(
+            jax_info_vjp["medium"] = self.medium_vjp(
                 grad_data_fwd=grad_data_fwd,
                 grad_data_adj=grad_data_adj,
                 grad_data_eps=grad_data_eps,
                 sim_bounds=sim_bounds,
             )
 
-        return self.updated_copy(**vjp_dict)
+        return self.updated_copy(jax_info=jax_info_vjp)
 
 
 @register_pytree_node_class

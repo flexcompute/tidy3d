@@ -145,7 +145,8 @@ class JaxSimulation(Simulation, JaxObject):
         units=SECOND,
     )
 
-    _jax_fields = ("input_structures",)
+    # _jax_fields = ("GEGEGE",)
+    _jax_fields2 = ("input_structures",)
     _tidy3d_class = Simulation
     _type_mappings = {
         Structure: JaxStructure,
