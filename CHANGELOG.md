@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warning if nonlinear mediums are used in an `adjoint` simulation. In this case, the gradients will not be accurate, but may be approximately correct if the nonlinearity is weak.
 - Validator for surface field projection monitors that warns if projecting backwards relative to the monitor's normal direction.
 - Validator for field projection monitors when far field approximation is enabled but the projection distance is small relative to the near field domain.
+- Ability to manually specify a medium through which to project fields, when using field projection monitors.
 
 ### Changed
 - Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapsed runtime. On average, there should be little difference in the cost.
