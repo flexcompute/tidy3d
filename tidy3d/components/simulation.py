@@ -92,28 +92,13 @@ class Simulation(Box):
         A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
         to be solved using `the Finite-Difference Time-Domain (FDTD) method
         <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
-        run very quickly in the cloud through GPU parallelization.
+        run very quickly in the cloud through GPU parallelization
 
-        **Simplified 1D Illustration**
+        The Maxwell's equations implemented in the Simulation are solved per time-step in this order:
 
-        .. TODO if we don't want so much information here we can add this to the little FDTD primer.
-
-        In 1D, the Maxwell's equations differential operators become difference operators in a defined discretized
-        electromagentic system:
-
-        .. math::
-
-            \\epsilon \\frac{\\delta E_z}{\\delta t} = \\frac{\\delta H_y}{\\delta x}
-
-        .. math::
-
-            \\mu \\frac{\\delta H_y}{\\delta t} = \\frac{\\delta E_z}{\\delta x}
-
-        where
-
-        .. math::
-
-             \\frac{\\delta E_z}{\\delta t} \\to \\frac{E_z^{(\\alpha + 1) \\Delta t} - E_z^{\\alpha \\Delta t}}{\\Delta t}
+        .. image:: ../../_static/img/field_update_fdtd.png
+            :width: 50%
+            :align: left
 
         If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series
         <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_
@@ -217,6 +202,12 @@ class Simulation(Box):
 
     `Index <../mediums.html>`_:
         Dispersive and dispersionless Mediums models.
+
+    **Lectures:**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    **GUI:**
+        * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
     """
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
@@ -233,7 +224,7 @@ class Simulation(Box):
     """
     You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
-    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class`PEC` symmetry). Note
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC` symmetry). Note
     that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
 
     The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and :class:`PMC`-like
@@ -250,14 +241,44 @@ class Simulation(Box):
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
-    """
-    Tuple of structures present in simulation. Structures defined later in this list override the simulation material properties in regions of spatial overlap.
+    """Tuple of structures present in simulation. Structures defined later in this list override the simulation
+    material properties in regions of spatial overlap.
+
+    **Usage Caveats**
+
+    It is very important to understand the way the dielectric permittivity of the :class:`Structure` list is resolved
+    by the simulation grid. Without :attr:`subpixel` averaging, the structure geometry in relation to the
+    grid points can lead to its features permittivity not being fully resolved by the
+    simulation.
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` will compute equivalently because the grid does
+    not resolve the feature permittivity in between grid points without :attr:`subpixel` averaging.
+
+    .. image:: ../../_static/img/permittivity_on_yee_grid.png
 
     See Also
     --------
 
     :class:`Structure`:
         Defines a physical object that interacts with the electromagnetic fields.
+
+    :attr:`subpixel`
+        Subpixel averaging of the permittivity based on structure definition, resulting in much higher
+        accuracy for a given grid size.
+
+    **Notebooks:**
+
+    * `Visualizing geometries in Tidy3D <../../notebooks/VizSimulation.html>`_
+
+    **Lectures:**
+
+    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
+    *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+
+    **GUI:**
+
+    * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
@@ -325,7 +346,7 @@ class Simulation(Box):
 
     Numerical dispersion is a form of numerical error dependent on the spatial and temporal discretization of the
     fields. In order to reduce it, it is necessary to improve the discretization of the simulation for particular
-    frequencies and spatial features. This is an important aspect of defining the grid size.
+    frequencies and spatial features. This is an important aspect of defining the grid.
 
     Consider a 1D wave equation in vacuum:
 
@@ -359,7 +380,7 @@ class Simulation(Box):
         :width: 30%
         :align: right
 
-    The same monochromatic wave can be solved using the FDTD method where :math:`m` is the index in the 1D grid:
+    The same 1D monochromatic wave can be solved using the FDTD method where :math:`m` is the index in the grid:
 
     .. math::
 
@@ -371,7 +392,7 @@ class Simulation(Box):
         \\frac{\\delta^2}{\\delta t^2} E(t_{\\alpha}) \\approx \\frac{1}{\\Delta t^2} \\left[ E(t_{\\alpha} + \\Delta
         t) + E(_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
 
-    Hence, these discrete fields have this dispersion relation:
+    Hence, these discrete fields have this new dispersion relation:
 
     .. math::
 
@@ -392,7 +413,7 @@ class Simulation(Box):
 
     .. math::
 
-        k \\Delta x = \\frac{2 \\pi}{\\lamdba_k} \\Delta x
+        k \\Delta x = \\frac{2 \\pi}{\\lambda_k} \\Delta x
 
 
     **Usage Recommendations**
@@ -452,11 +473,43 @@ class Simulation(Box):
     If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
     higher accuracy for a given grid size.,
 
+    **1D Illustration**
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` compute the effective permittivity of each grid point as the
+    average permittivity between the grid points. A simplified equation based on the ratio :math:`\\eta` between the
+    permittivity of the two materials at the interface in this case:
+
+    .. math::
+
+        \\epsilon_{eff} = \\eta \\epsilon_{si} + (1 - \\eta) \\epsilon_{air}
+
+    .. TODO check the actual implementation to be accurate here.
+
+    .. image:: ../../_static/img/subpixel_permittivity_1d.png
+
+    However, in this 1D case, this averaging is accurate because the dominant electric field is paralell to the
+    dielectric grid points.
+
+    You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
+    `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel
+    -averaging/>`_.
+
+    **2D & 3D Usage Caveats**
+
+    *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
+    incident electric field on the interface.
+
+    *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
+    spatial orientations.
+
+
     See Also
     --------
 
     **Lectures:**
         *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+        *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
     """
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
