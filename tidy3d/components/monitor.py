@@ -11,6 +11,7 @@ from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_m
 from .base import cached_property, Tidy3dBaseModel
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
+from .medium import MediumType
 from .viz import ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
 from ..exceptions import SetupError, ValidationError
@@ -683,6 +684,16 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "off in that direction, while a value of 1 indicates that the window will be applied to "
         "the entire monitor in that direction. This field is applicable for surface monitors only, "
         "and otherwise must remain (0, 0).",
+    )
+
+    medium: MediumType = pydantic.Field(
+        None,
+        title="Projection medium",
+        description="Medium through which to project fields. Generally, the fields should be "
+        "projected through the same medium as the one in which this monitor is placed, and "
+        "this is the default behavior when ``medium=None``. A custom ``medium`` can be useful "
+        "in some situations for advanced users, but we recommend trying to avoid using a "
+        "non-default ``medium``.",
     )
 
     @pydantic.validator("window_size", always=True)
