@@ -485,13 +485,20 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
             permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
         )
         a = 0.0
-        a += sim.input_structures[0].geometry.size[0]
-        a += sim.input_structures[0].geometry.size[1]
-        a += sim.input_structures[0].geometry.size[2]
-        a += sim.input_structures[0].geometry.center[0]
-        a += sim.input_structures[0].geometry.center[1]
-        a += sim.input_structures[0].geometry.center[2]
-        a += sim.input_structures[0].medium.permittivity
+        a += sim.input_structures[0].geometry.jax_info["size"][0]
+        a += sim.input_structures[0].geometry.jax_info["size"][1]
+        a += sim.input_structures[0].geometry.jax_info["size"][2]
+        a += sim.input_structures[0].geometry.jax_info["center"][0]
+        a += sim.input_structures[0].geometry.jax_info["center"][1]
+        a += sim.input_structures[0].geometry.jax_info["center"][2]
+        a += sim.input_structures[0].medium.jax_info["permittivity"]
+
+        # remove maybe problematic stuff
+        # sim_jax_info = sim.jax_info.copy()
+        # sim_jax_info["input_structures"] = []#[0].geometry
+        # sim = sim.updated_copy(jax_info={})#sim_jax_info)
+        # import pdb; pdb.set_trace()
+
         sim_data = run_fn(sim, task_name="test")
         amp = extract_amp(sim_data)
         return a + objective(amp)
@@ -502,6 +509,38 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
+def test_adjoint_refactor2(use_emulated_run, tmp_path):
+
+    sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    def f(x):
+        geo = JaxBox(
+            size=(x,1,2*x),
+            center=(x**2, x, 0),
+        )
+        med = JaxMedium(
+            permittivity=1 + x**2
+        )
+
+        struct = JaxStructure(geometry=geo, medium=med)
+        sim = JaxSimulation(
+            size=(10,10,10),
+            run_time=1e-12,
+            input_structures=[struct],
+            grid_spec=td.GridSpec.auto(wavelength=1),
+        )
+
+        sim = sim.updated_copy(output_monitors=sim0.output_monitors, boundary_spec=sim0.boundary_spec)
+        
+        sim_data = run_local(sim, task_name="test")
+        amp = extract_amp(sim_data)
+        return objective(amp)
+
+    grad_f = jax.value_and_grad(f)
+    val, grad = grad_f(1.0)
+
+    assert grad != 0.0
+    print("val, gradient: ", val, grad)
 
 @pytest.mark.parametrize("local", (True, False))
 def test_adjoint_pipeline(local, use_emulated_run, tmp_path):

@@ -166,6 +166,7 @@ class JaxMedium(Medium, AbstractJaxMedium):
     # _sanitize_conductivity = validate_jax_float("conductivity")
 
     _tidy3d_class = Medium
+    _jax_fields2 = ("permittivity", "conductivity")
 
     # def to_tidy3d(self) -> Medium:
     #     return self._tidy3d_class.parse_obj(self.dict(exclude={"type", "jax_info"}))

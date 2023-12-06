@@ -133,7 +133,7 @@ class JaxBox(Box, JaxGeometry):
     """A :class:`.Box` registered with jax."""
 
     _tidy3d_class = Box
-
+    _jax_fields2 = ("size", "center")
     # def to_tidy3d(self) -> Box:
     #     return self._tidy3d_class.parse_obj(self.dict(exclude={"type", "jax_info"}))
 
@@ -295,8 +295,12 @@ class JaxBox(Box, JaxGeometry):
         # convert surface vjps to center, size vjps. Note, convert these to jax types w/ np.sum()
         vjp_center = tuple(np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
         vjp_size = tuple(np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
-        return self.copy(update=dict(center=vjp_center, size=vjp_size))
+        # return self.copy(update=dict(center=vjp_center, size=vjp_size))
 
+        jax_info_vjp = self.jax_info.copy()
+        jax_info_vjp["center"] = vjp_center
+        jax_info_vjp["size"] = vjp_size
+        return self.updated_copy(jax_info=jax_info_vjp)
 
 @register_pytree_node_class
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):

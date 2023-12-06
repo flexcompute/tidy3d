@@ -622,6 +622,8 @@ def run_local(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
+    import pdb; pdb.set_trace()
+
     # convert to regular tidy3d (and accounting info)
     sim_tidy3d, jax_info = simulation.to_simulation()
 

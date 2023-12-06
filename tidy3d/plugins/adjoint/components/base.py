@@ -20,22 +20,23 @@ class JaxObject(Tidy3dBaseModel):
     jax_info: dict  # stores traced arrays and other fields that jax needs to know
     _tidy3d_class = Tidy3dBaseModel  # corresponding class type in tidy3d.components
     _jax_fields = ()  # fields that contain JaxObject objects
+    _jax_fields2 = ()
     _type_mappings = {}  # mapping from all possible tidy3d fields to the correponding jax fields
 
     def tree_flatten(self) -> tuple[list, dict]:
         """Split ``JaxObject`` into jax-traced children and auxiliary data."""
         aux_data = self.dict(exclude={"jax_info"})
-        values = tuple(self.jax_info.values())
-        keys = tuple(self.jax_info.keys())
-        aux_data["jax_keys"] = keys
-        return values, aux_data
+        # values = tuple(self.jax_info.values())
+        # keys = tuple(self.jax_info.keys())
+        # aux_data["jax_keys"] = keys
+        return self.jax_info, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
         """Create the ``JaxObject`` from the auxiliary data and children."""
-        keys = aux_data.pop("jax_keys")
-        jax_info = dict(zip(keys, children))
-        return cls(**aux_data, jax_info=jax_info)
+        # keys = aux_data.pop("jax_keys")
+        # jax_info = dict(zip(keys, children))
+        return cls(**aux_data, jax_info=children)
 
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
@@ -47,7 +48,7 @@ class JaxObject(Tidy3dBaseModel):
         for key, val in values.items():
 
             # value can be traced by jax
-            try:
+            if key in cls._jax_fields2:
 
                 # pass the untracked version to the regular tidy3d fields
                 _val = jax.lax.stop_gradient(val)
@@ -57,7 +58,7 @@ class JaxObject(Tidy3dBaseModel):
                 jax_info[key] = val
 
             # value can't be traced by jax
-            except TypeError:
+            else:
 
                 # handle like a regular kwarg
                 _kwargs[key] = val
