@@ -350,8 +350,8 @@ class Simulation(Box):
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "PML boundary conditions are applied on all sides.",
     )
-    """
-    Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are applied on all sides.
+    """Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are
+    applied on all sides.
 
     Example
     -------
@@ -421,6 +421,17 @@ class Simulation(Box):
             ),
             ...
          )
+
+    **Usage Recommendations**
+
+    In the *finite-difference* time domain method, the computational domain is discretized by a little cubes called
+    the Yee cell. A discrete lattice formed by this Yee cell is used to describe the fields. In 3D, the electric
+    fields are distributed on the edge of the Yee cell and the magnetic fields are distributed on the surface of the
+    Yee cell.
+
+    .. image:: ../../_static/img/permittivity_on_yee_grid.png
+
+    *  A typical rule of thumb is to choose the discretization to be about wavelengths :math:`\\frac{\\lambda_m}{20}`.
 
     **Numerical Dispersion - 1D Illustration**
 
