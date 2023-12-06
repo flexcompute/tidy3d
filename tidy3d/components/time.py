@@ -79,7 +79,7 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
             time_amps = np.real(time_amps)
 
         # if all time amplitudes are zero, just return (complex-valued) zeros for spectrum
-        if np.allclose(time_amps, 0.0):
+        if np.all(np.equal(time_amps, 0.0)):
             return (0.0 + 0.0j) * np.zeros_like(freqs)
 
         # Cut to only relevant times
@@ -89,6 +89,8 @@ class AbstractTimeDependence(ABC, Tidy3dBaseModel):
         stop_ind = relevant_time_inds[0][-1]
         time_amps = time_amps[start_ind:stop_ind]
         times_cut = times[start_ind:stop_ind]
+        if times_cut.size == 0:
+            return (0.0 + 0.0j) * np.zeros_like(freqs)
 
         # only need to compute DTFT kernel for distinct dts
         # usually, there is only one dt, if times is simulation time mesh
