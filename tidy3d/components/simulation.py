@@ -99,7 +99,7 @@ class Simulation(Box):
             :align: left
 
         FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is
-        the most widely used method in photonics, and can also be used for microwave and RF design. The Maxwell's
+        the most widely used method in photonics design. The Maxwell's
         equations implemented in the ``Simulation`` are solved per time-step in this order.
 
         The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
@@ -253,6 +253,23 @@ class Simulation(Box):
     """Tuple of structures present in simulation. Structures defined later in this list override the simulation
     material properties in regions of spatial overlap.
 
+    Example
+    -------
+    Simple application reference:
+
+    .. code:: python
+
+        Simulation(
+            ...
+            structures=[
+                 Structure(
+                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                 medium=Medium(permittivity=2.0),
+                 ),
+            ],
+            ...
+        )
+
     **Usage Caveats**
 
     It is very important to understand the way the dielectric permittivity of the :class:`Structure` list is resolved
@@ -298,6 +315,28 @@ class Simulation(Box):
     """
     Tuple of electric current sources injecting fields into the simulation.
 
+    Example
+    -------
+    Simple application reference:
+
+    .. code:: python
+
+         Simulation(
+            ...
+            sources=[
+                UniformCurrentSource(
+                    size=(0, 0, 0),
+                    center=(0, 0.5, 0),
+                    polarization="Hx",
+                    source_time=GaussianPulse(
+                        freq0=2e14,
+                        fwidth=4e13,
+                    ),
+                )
+            ],
+            ...
+         )
+
     See Also
     --------
 
@@ -313,6 +352,22 @@ class Simulation(Box):
     )
     """
     Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are applied on all sides.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code:: python
+
+         Simulation(
+            ...
+             boundary_spec=BoundarySpec(
+                x = Boundary.pml(num_layers=20),
+                y = Boundary.pml(num_layers=30),
+                z = Boundary.periodic(),
+            ),
+            ...
+         )
 
     See Also
     --------
@@ -350,6 +405,22 @@ class Simulation(Box):
     )
     """
     Specifications for the simulation grid along each of the three directions.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code:: python
+
+         Simulation(
+            ...
+             grid_spec=GridSpec(
+                grid_x = AutoGrid(min_steps_per_wvl = 20),
+                grid_y = AutoGrid(min_steps_per_wvl = 20),
+                grid_z = AutoGrid(min_steps_per_wvl = 20)
+            ),
+            ...
+         )
 
     **Numerical Dispersion - 1D Illustration**
 

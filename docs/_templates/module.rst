@@ -1,3 +1,4 @@
+:html_theme.sidebar_secondary.remove:
 {{ fullname | escape | underline}}
 
 .. autoclass:: {{ fullname }}
