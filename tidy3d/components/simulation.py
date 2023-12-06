@@ -92,21 +92,30 @@ class Simulation(Box):
         A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
         to be solved using `the Finite-Difference Time-Domain (FDTD) method
         <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
-        run very quickly in the cloud through GPU parallelization
-
-        The Maxwell's equations implemented in the Simulation are solved per time-step in this order:
+        run very quickly in the cloud through GPU parallelization.
 
         .. image:: ../../_static/img/field_update_fdtd.png
             :width: 50%
             :align: left
+
+        FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is
+        the most widely used method in photonics, and can also be used for microwave and RF design. The Maxwell's
+        equations implemented in the ``Simulation`` are solved per time-step in this order.
+
+        The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
+        which describe the device and :attr:`sources` of electromagentic excitation. This information is used to
+        computate the time dynamics of the electric and magnetic fields in this system. From these time-domain
+        results, frequency-domain information of the simulation can also be extracted, and used for device design and
+        optimization.
 
         If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series
         <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_
 
         **Dimensions Selection**
 
-        By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation size in one of the
-        dimensions to be 0. However, note that we still have to define a grid size in that direction.
+        By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation
+        :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size in that
+        direction.
 
         See further parameter explanations below.
 
@@ -498,10 +507,10 @@ class Simulation(Box):
     **2D & 3D Usage Caveats**
 
     *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
-    incident electric field on the interface.
+        incident electric field on the interface.
 
     *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
-    spatial orientations.
+        spatial orientations.
 
 
     See Also
