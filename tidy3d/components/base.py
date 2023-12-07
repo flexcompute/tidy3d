@@ -795,11 +795,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 default_val = (", ").join(default_val.split(" "))
 
             # make first line: name : type = default
-            default_str = "" if field.required else f"{default_val}"
+            default_str = "" if field.required else f" = {default_val}"
             doc += f"\n\t\t``{field_name}``: More: :attr:`{field_name}` \n"
             doc += "\n\t\t\t .. list-table:: \n"
             doc += "\n\t\t\t\t* -    ``Type``"
-            doc += f"\n\t\t\t\t  -    :class:`{data_type}`"
+            doc += f"\n\t\t\t\t  -    *{data_type}*"
             doc += "\n\t\t\t\t* -    ``Default``"
             doc += f"\n\t\t\t\t  -     {default_str}"
 
