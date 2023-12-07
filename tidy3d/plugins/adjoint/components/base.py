@@ -36,137 +36,60 @@ class JaxObject(Tidy3dBaseModel):
         """Combine self with jax info to add it to self."""
         return self.updated_copy(jax_info=jax_info)
 
-    # def tree_flatten(self) -> tuple[list, dict]:
-    #     """Split ``JaxObject`` into jax-traced children and auxiliary data."""
-    #     self_no_jax, jax_info = self.split()
-    #     return jax_tree_flatten(jax_info), self_no_jax
-
-    # @classmethod
-    # def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
-    #     """Create the ``JaxObject`` from the auxiliary data and children."""
-    #     return aux_data.combine(children)
-
     def tree_flatten(self) -> tuple[list, dict]:
         """Split ``JaxObject`` into jax-traced children and auxiliary data."""
-        return self.jax_info.values(), self
+        leaves, treedef = jax_tree_flatten(self.jax_info)
+        aux_data = dict(
+            self_no_jax=self.updated_copy(jax_info={}),
+            treedef=treedef
+        )
+        
+        return leaves, aux_data
 
     @classmethod
-    def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+    def tree_unflatten(cls, aux_data: dict, children: list) -> 'JaxObj':
         """Create the ``JaxObject`` from the auxiliary data and children."""
-        return aux_data
-
-
-    # def tree_flatten(self) -> Tuple[list, dict]:
-    #     """How to flatten a :class:`.JaxObject` instance into a pytree."""
-    #     children = []
-    #     aux_data = self.dict()
-    #     for field_name in self._jax_fields2:
-    #         field = getattr(self, field_name)
-    #         sub_children, sub_aux_data = jax_tree_flatten(field)
-    #         children.append(sub_children)
-    #         aux_data[field_name] = sub_aux_data
-    #     children.append(aux_data.pop("jax_info"))
-
-    #     return children, aux_data
-
-    # @classmethod
-    # def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
-    #     """How to unflatten a pytree into a :class:`.JaxObject` instance."""
-
-    #     self_dict = aux_data.copy()
-    #     children = list(children)
-    #     self_dict["jax_info"] = children.pop(-1)
-    #     for field_name, sub_children in zip(cls._jax_fields2, children):
-    #         sub_aux_data = aux_data[field_name]
-    #         field = jax_tree_unflatten(sub_aux_data, sub_children)
-    #         self_dict[field_name] = field
-
-    #     return cls.parse_obj(self_dict)
-
-
+        self_no_jax = aux_data['self_no_jax']
+        treedef = aux_data['treedef']
+        leaves = children
+        jax_info = jax_tree_unflatten(treedef, leaves)
+        return self_no_jax.updated_copy(jax_info=jax_info)
+        
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
         """How to parse passed values."""
 
-        def process_val(val):
-            """Process a supplied value into its init kwarg and it's jax_info."""
-
-            if isinstance(val, dict):
-                kwargs = {}
-                jax_info = {}
-                for _key, _val in val.items():
-                    _kwargs, _jax_info = process_val(_val)
-                    kwargs[_key] = _kwargs
-                    jax_info[_key] = _jax_info
-                return kwargs, jax_info
-
+        def get_jax_info(val) -> dict:
+            """grab the jax info from a value."""
+            if isinstance(val, JaxObject):
+                return val.jax_info
             elif isinstance(val, (list, tuple)):
-                kwargs = []
-                jax_info = []
-                for _val in val:
-                    _kwargs, _jax_info = process_val(_val)
-                    kwargs.append(_kwargs)
-                    jax_info.append(_jax_info)
-                return kwargs, jax_info
-
-            elif isinstance(val, JaxObject):
-                return val.updated_copy(jax_info={}), val.jax_info
-
+                return [get_jax_info(v) for v in val]
+            elif isinstance(val, dict):
+                return val.get("jax_info") if "jax_info" in val else {}
             else:
-                try:
-                    return jax.lax.stop_gradient(val), val
-                except TypeError:
-                    return val, {}
+                return val        
 
-        jax_info = {}
-        kwargs = {}
+        # parse out the jax info from the input kwargs
+        if not values.get("jax_info"):
+            jax_info = {}
+            for key in cls._jax_fields2:
+                val = values.get(key)
+                jax_info[key] = get_jax_info(val)
 
-        for key, val in values.items():
-            if key in cls._jax_fields2:
-                _kwargs, _jax_info = process_val(val)
-                kwargs[key] = _kwargs
-                jax_info[key] = _jax_info
-                # if _kwargs:
-                #     kwargs[key] = _kwargs
-                # if _jax_info:
-                #     jax_info[key] = _jax_info
-            else:
-                kwargs[key] = val
+            # save the jax_info in a separate kwarg
+            values["jax_info"] = jax_info
+        return values
 
-        kwargs["jax_info"] = jax_info
-
-        # if jax_info == {'input_structures': []}:
-        #     import pdb; pdb.set_trace()
-        return kwargs
-
-    # @pd.root_validator(pre=True)
-    # def _handle_jax_kwargs(cls, values):
-    #     """Pre-process the init kwargs and sort jax-traced types into ``jax_info``."""
-
-    #     jax_info = {}
-    #     _kwargs = {}
-
-    #     for key, val in values.items():
-
-    #         # value can be traced by jax
-    #         if key in cls._jax_fields2:
-
-    #             # pass the untracked version to the regular tidy3d fields
-    #             _val = jax.lax.stop_gradient(val)
-    #             _kwargs[key] = _val
-
-    #             # store the tracked value in the jax_info field
-    #             jax_info[key] = val
-
-    #         # value can't be traced by jax
-    #         else:
-
-    #             # handle like a regular kwarg
-    #             _kwargs[key] = val
-
-    #     # include the jax_info in the set of kwargs
-    #     _kwargs["jax_info"] = jax_info
-    #     return _kwargs
+    @pd.root_validator(pre=True)
+    def _sanitize_jax_kwargs(cls, values):
+        """How to parse passed values."""
+        for key in cls._jax_fields2:
+            try:
+                values[key] = jax.lax.stop_gradient(values[key])
+            except:
+                pass
+        return values
 
     @property
     def excluded_dict(self) -> dict:
@@ -199,79 +122,7 @@ class JaxObject(Tidy3dBaseModel):
     def from_tidy3d(cls, tidy3d_obj: Tidy3dBaseModel) -> JaxObject:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
         obj_dict = tidy3d_obj.dict(exclude={"type"})
-        # for key in cls._jax_fields:
-        #     obj_type = type(tidy3d_obj)
-        #     sub_type = cls._type_mappings[obj_type]
-        #     obj_dict[key] = sub_type.from_tidy3d(obj_dict[key])
         return cls.parse_obj(obj_dict)
-
-    # ALTERNATIVE TO _jax_fields
-    # @classmethod
-    # def get_jax_field_names(cls) -> List[str]:
-    #     """Returns list of field names that have a ``jax_field_type``."""
-    #     adjoint_fields = []
-    #     for field_name, model_field in cls.__fields__.items():
-    #         jax_field_type = model_field.field_info.extra.get("jax_field")
-    #         if jax_field_type:
-    #             adjoint_fields.append(field_name)
-    #     return adjoint_fields
-
-    #     """Methods needed for jax to register arbitary classes."""
-
-    #     def tree_flatten(self) -> Tuple[list, dict]:
-    #         """How to flatten a :class:`.JaxObject` instance into a pytree."""
-    #         children = []
-    #         aux_data = self.dict()
-    #         for field_name in self.get_jax_field_names():
-    #             field = getattr(self, field_name)
-    #             sub_children, sub_aux_data = jax_tree_flatten(field)
-    #             children.append(sub_children)
-    #             aux_data[field_name] = sub_aux_data
-
-    #         def fix_polyslab(geo_dict: dict) -> None:
-    #             """Recursively Fix a dictionary possibly containing a polyslab geometry."""
-    #             if geo_dict["type"] == "PolySlab":
-    #                 vertices = geo_dict["vertices"]
-    #                 geo_dict["vertices"] = vertices.tolist()
-    #             elif geo_dict["type"] == "GeometryGroup":
-    #                 for sub_geo_dict in geo_dict["geometries"]:
-    #                     fix_polyslab(sub_geo_dict)
-    #             elif geo_dict["type"] == "ClipOperation":
-    #                 fix_polyslab(geo_dict["geometry_a"])
-    #                 fix_polyslab(geo_dict["geometry_b"])
-
-    #         def fix_monitor(mnt_dict: dict) -> None:
-    #             """Fix a frequency containing monitor."""
-    #             if "freqs" in mnt_dict:
-    #                 freqs = mnt_dict["freqs"]
-    #                 if isinstance(freqs, np.ndarray):
-    #                     mnt_dict["freqs"] = freqs.tolist()
-
-    #         # fixes bug with jax handling 2D numpy array in polyslab vertices
-    #         if aux_data.get("type", "") == "JaxSimulation":
-    #             structures = aux_data["structures"]
-    #             for _i, structure in enumerate(structures):
-    #                 geometry = structure["geometry"]
-    #                 fix_polyslab(geometry)
-    #             for monitor in aux_data["monitors"]:
-    #                 fix_monitor(monitor)
-    #             for monitor in aux_data["output_monitors"]:
-    #                 fix_monitor(monitor)
-
-    #         return children, aux_data
-
-    #     @classmethod
-    #     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
-    #         """How to unflatten a pytree into a :class:`.JaxObject` instance."""
-    #         self_dict = aux_data.copy()
-    #         for field_name, sub_children in zip(cls.get_jax_field_names(), children):
-    #             sub_aux_data = aux_data[field_name]
-    #             field = jax_tree_unflatten(sub_aux_data, sub_children)
-    #             self_dict[field_name] = field
-
-    #         return cls.parse_obj(self_dict)
-
-    #     """Type conversion helpers."""
 
     """ IO """
 

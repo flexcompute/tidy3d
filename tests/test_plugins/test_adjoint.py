@@ -570,26 +570,18 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
 
-        sim = sim.updated_copy(output_monitors=sim0.output_monitors, boundary_spec=sim0.boundary_spec, sources=sim0.sources)
+        sim2 = sim.updated_copy(output_monitors=sim0.output_monitors, boundary_spec=sim0.boundary_spec, sources=sim0.sources)
 
-        # sim_data = run_emulated(
-        #     simulation=sim,
-        #     task_name="egege",
-        # )
-
-        # sim = sim.updated_copy(jax_info={})
-        # sim = sim.updated_copy(input_structures=[])
-
-        # import pdb; pdb.set_trace()
-
-        sim_data = run_local(sim, task_name="test")
-
+        sim_data = run_local(sim2, task_name="test")
         amp = extract_amp(sim_data)
-        return objective(amp)
+
+        extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
+
+        return objective(amp) + extra
 
 
-    print(f(0.0))
-    print(jax.grad(f)(0.0))
+    print(f(1.0))
+    print(jax.grad(f)(1.0))
 
 
 @pytest.mark.parametrize("local", (True, False))

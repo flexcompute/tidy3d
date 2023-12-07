@@ -732,9 +732,12 @@ class JaxSimulation(Simulation, JaxObject):
         map_args = [self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data]
         input_structures_vjp = list(map(self._store_vjp_structure, *map_args))
 
+        jax_info_vjp = self.jax_info.copy()
+        jax_info_vjp["input_structures"] = input_structures_vjp
+
         return self.copy(
             update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
+                jax_info=jax_info_vjp, grad_monitors=(), grad_eps_monitors=()
             )
         )
 
