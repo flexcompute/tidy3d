@@ -1,3 +1,5 @@
 # gdstk
 
-gdstk
+gdstk<=0.9.37; platform_system != "Darwin"
+gdstk; platform_system != "Darwin"
+
