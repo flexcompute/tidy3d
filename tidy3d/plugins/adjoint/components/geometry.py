@@ -302,6 +302,7 @@ class JaxBox(Box, JaxGeometry):
         jax_info_vjp["size"] = vjp_size
         return self.updated_copy(jax_info=jax_info_vjp)
 
+
 @register_pytree_node_class
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     """A :class:`.PolySlab` registered with jax."""

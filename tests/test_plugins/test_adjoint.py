@@ -509,38 +509,41 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
+
 def test_adjoint_refactor2(use_emulated_run, tmp_path):
 
     sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
     def f(x):
         geo = JaxBox(
-            size=(x,1,2*x),
+            size=(x, 1, 2 * x),
             center=(x**2, x, 0),
         )
-        med = JaxMedium(
-            permittivity=1 + x**2
-        )
+        med = JaxMedium(permittivity=1 + x**2)
 
         struct = JaxStructure(geometry=geo, medium=med)
         sim = JaxSimulation(
-            size=(10,10,10),
+            size=(10, 10, 10),
             run_time=1e-12,
             input_structures=[struct],
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
 
-        sim = sim.updated_copy(output_monitors=sim0.output_monitors, boundary_spec=sim0.boundary_spec, sources=sim0.sources)
+        sim = sim.updated_copy(
+            output_monitors=sim0.output_monitors,
+            boundary_spec=sim0.boundary_spec,
+            sources=sim0.sources,
+        )
 
         sim_data = run_local(sim, task_name="test")
 
         amp = extract_amp(sim_data)
         return objective(amp)
 
-    # import pdb; pdb.set_trace()   
+    # import pdb; pdb.set_trace()
 
     # f(0.0)
-    # import pdb; pdb.set_trace()   
+    # import pdb; pdb.set_trace()
 
     grad_f = jax.value_and_grad(f)
     val, grad = grad_f(1.0)
@@ -555,22 +558,24 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
 
     def f(x):
         geo = JaxBox(
-            size=(x,1,2*x),
+            size=(x, 1, 2 * x),
             center=(x**2, x, 0),
         )
-        med = JaxMedium(
-            permittivity=1 + x**2
-        )
+        med = JaxMedium(permittivity=1 + x**2)
 
         struct = JaxStructure(geometry=geo, medium=med)
         sim = JaxSimulation(
-            size=(10,10,10),
+            size=(10, 10, 10),
             run_time=1e-12,
             input_structures=[struct],
             grid_spec=td.GridSpec.auto(wavelength=1),
         )
 
-        sim2 = sim.updated_copy(output_monitors=sim0.output_monitors, boundary_spec=sim0.boundary_spec, sources=sim0.sources)
+        sim2 = sim.updated_copy(
+            output_monitors=sim0.output_monitors,
+            boundary_spec=sim0.boundary_spec,
+            sources=sim0.sources,
+        )
 
         sim_data = run_local(sim2, task_name="test")
         amp = extract_amp(sim_data)
@@ -578,7 +583,6 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
 
         return objective(amp) + extra
-
 
     print(f(1.0))
     print(jax.grad(f)(1.0))

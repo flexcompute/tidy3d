@@ -16,7 +16,7 @@ from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
-from ....components.types import annotate_type
+from ....components.types import annotate_type, Ax
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
@@ -735,11 +735,7 @@ class JaxSimulation(Simulation, JaxObject):
         jax_info_vjp = self.jax_info.copy()
         jax_info_vjp["input_structures"] = input_structures_vjp
 
-        return self.copy(
-            update=dict(
-                jax_info=jax_info_vjp, grad_monitors=(), grad_eps_monitors=()
-            )
-        )
+        return self.copy(update=dict(jax_info=jax_info_vjp, grad_monitors=(), grad_eps_monitors=()))
 
     def store_vjp_parallel(
         self,

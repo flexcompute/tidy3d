@@ -643,7 +643,6 @@ def run_local(
     return jax_sim_data.updated_copy(jax_info=dict(simulation=simulation.jax_info))
 
 
-
 def run_local_fwd(
     simulation: JaxSimulation,
     task_name: str,
@@ -655,9 +654,18 @@ def run_local_fwd(
     """Run forward pass and stash extra objects for the backwards pass."""
 
     # add the gradient monitors and run the forward simulation
-    grad_mnts = simulation.get_grad_monitors(input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint)
+    grad_mnts = simulation.get_grad_monitors(
+        input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
+    )
     sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_data_fwd = run(simulation=sim_fwd,task_name=_task_name_fwd(task_name),folder_name=folder_name,path=path,callback_url=callback_url,verbose=verbose)
+    sim_data_fwd = run(
+        simulation=sim_fwd,
+        task_name=_task_name_fwd(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
 
     # remove the gradient data from the returned version (not needed)
     sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
@@ -675,7 +683,9 @@ def run_local_bwd(
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
-    import pdb; pdb.set_trace()
+    import pdb
+
+    pdb.set_trace()
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res

@@ -7,9 +7,7 @@ import json
 import pydantic.v1 as pd
 
 import jax
-import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class, tree_flatten 
-from jax.flatten_util import ravel_pytree
+from jax.tree_util import register_pytree_node_class
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
@@ -39,22 +37,19 @@ class JaxObject(Tidy3dBaseModel):
     def tree_flatten(self) -> tuple[list, dict]:
         """Split ``JaxObject`` into jax-traced children and auxiliary data."""
         leaves, treedef = jax_tree_flatten(self.jax_info)
-        aux_data = dict(
-            self_no_jax=self.updated_copy(jax_info={}),
-            treedef=treedef
-        )
-        
+        aux_data = dict(self_no_jax=self.updated_copy(jax_info={}), treedef=treedef)
+
         return leaves, aux_data
 
     @classmethod
-    def tree_unflatten(cls, aux_data: dict, children: list) -> 'JaxObj':
+    def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
         """Create the ``JaxObject`` from the auxiliary data and children."""
-        self_no_jax = aux_data['self_no_jax']
-        treedef = aux_data['treedef']
+        self_no_jax = aux_data["self_no_jax"]
+        treedef = aux_data["treedef"]
         leaves = children
         jax_info = jax_tree_unflatten(treedef, leaves)
         return self_no_jax.updated_copy(jax_info=jax_info)
-        
+
     @pd.root_validator(pre=True)
     def _handle_jax_kwargs(cls, values):
         """How to parse passed values."""
@@ -68,7 +63,7 @@ class JaxObject(Tidy3dBaseModel):
             elif isinstance(val, dict):
                 return val.get("jax_info") if "jax_info" in val else {}
             else:
-                return val        
+                return val
 
         # parse out the jax info from the input kwargs
         if not values.get("jax_info"):
@@ -87,7 +82,7 @@ class JaxObject(Tidy3dBaseModel):
         for key in cls._jax_fields2:
             try:
                 values[key] = jax.lax.stop_gradient(values[key])
-            except:
+            except Exception:
                 pass
         return values
 

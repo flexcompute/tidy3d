@@ -12,9 +12,8 @@ from ....components.structure import Structure
 from ....components.monitor import FieldMonitor
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.types import Bound, TYPE_TAG_STR
-from ....components.medium import MediumType, Medium
+from ....components.medium import MediumType
 from ....components.geometry.utils import GeometryType
-from ....components.geometry.base import Box
 
 from .base import JaxObject
 from .medium import JaxMediumType, JAX_MEDIUM_MAP, JaxMedium
@@ -165,8 +164,6 @@ class AbstractJaxStructure(Structure, JaxObject):
         num_proc: int = 1,
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
-
-        vjp_dict = {}
 
         jax_info_vjp = self.jax_info.copy()
 
