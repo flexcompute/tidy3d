@@ -205,12 +205,9 @@ class JaxMedium(Medium, AbstractJaxMedium):
             vjp_eps += _vjp_eps
             vjp_sigma += _vjp_sigma
 
-        return self.copy(
-            update=dict(
-                permittivity=vjp_eps,
-                conductivity=vjp_sigma,
-            )
-        )
+        jax_info_vjp = dict(permittivity=float(vjp_eps), conductivity=float(vjp_sigma))
+
+        return self.updated_copy(jax_info=jax_info_vjp)
 
 
 @register_pytree_node_class

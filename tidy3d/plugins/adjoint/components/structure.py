@@ -176,7 +176,7 @@ class AbstractJaxStructure(Structure, JaxObject):
                 sim_bounds=sim_bounds,
                 eps_out=eps_out,
                 num_proc=num_proc,
-            )
+            ).jax_info
 
         if "medium" in self._jax_fields:
             jax_info_vjp["medium"] = self.medium_vjp(
@@ -184,7 +184,7 @@ class AbstractJaxStructure(Structure, JaxObject):
                 grad_data_adj=grad_data_adj,
                 grad_data_eps=grad_data_eps,
                 sim_bounds=sim_bounds,
-            )
+            ).jax_info
 
         return self.updated_copy(jax_info=jax_info_vjp)
 

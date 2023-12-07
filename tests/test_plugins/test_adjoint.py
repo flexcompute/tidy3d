@@ -561,7 +561,7 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
             size=(x, 1, 2 * x),
             center=(x**2, x, 0),
         )
-        med = JaxMedium(permittivity=1 + x**2)
+        med = JaxMedium(permittivity=1 + x**2, conductivity=2.0 * x)
 
         struct = JaxStructure(geometry=geo, medium=med)
         sim = JaxSimulation(
@@ -580,7 +580,8 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         sim_data = run_local(sim2, task_name="test")
         amp = extract_amp(sim_data)
 
-        extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
+        # extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
+        extra = sim_data.jax_info["simulation"]["input_structures"][0]["geometry"]["center"][0]
 
         return objective(amp) + extra
 
