@@ -113,9 +113,13 @@ class Simulation(Box):
 
         **Dimensions Selection**
 
+
         By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation
         :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size in that
-        direction.
+        direction (eg. `` tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in
+        that direction.
+
+        .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/
 
         See further parameter explanations below.
 
@@ -192,6 +196,48 @@ class Simulation(Box):
     """
     Total electromagnetic evolution time in seconds. If simulation 'shutoff' is specified, simulation will
     terminate early when shutoff condition met.
+
+    **How long to run a simulation?**
+
+    The frequency-domain response obtained in the FDTD simulation only accurately represents the continuous-wave
+    response of the system if the fields at the beginning and at the end of the time stepping are (very close to)
+    zero. So, you should run the simulation for a time enough to allow the electromagnetic fields decay to negligible
+    values within the simulation domain.
+
+    When dealing with light propagation in a NON-RESONANT device, like a simple optical waveguide, a good initial
+    guess to simulation run_time would be the a few times the largest domain dimension (:math:`L`) multiplied by the
+    waveguide mode group index (:math:`n_g`), divided by the speed of light in a vacuum (:math:`c_0`),
+    plus the ``source_time``:
+
+    .. math::
+
+        t_{sim} \\approx \\frac{n_g L}{c_0} + t_{source}
+
+    By default, ``tidy3d`` checks periodically the total field intensity left in the simulation, and compares that to
+    the maximum total field intensity recorded at previous times. If it is found that the ratio of these two values
+    is smaller than the default :attr:`shutoff` value :math:`10^{-5}`, the simulation is terminated as the fields remaining
+    in the simulation are deemed negligible. The shutoff value can be controlled using the :attr:`shutoff`
+    parameter, or completely turned off by setting it to zero. In most cases, the default behavior ensures that
+    results are correct, while avoiding unnecessarily long run times. The Flex Unit cost of the simulation is also
+    proportionally scaled down when early termination is encountered.
+
+    **Resonant Caveats**
+
+    Should I make sure that fields have fully decayed by the end of the simulation?
+
+    The main use case in which you may want to ignore the field decay warning is when you have high-Q modes in your
+    simulation that would require an extremely long run time to decay. In that case, you can use the the
+    :class:`tidy3d.plugins.resonance.ResonanceFinder` plugin to analyze the modes, as well as field monitors with
+    vaporization to capture the modal profiles. The only thing to note is that the normalization of these modal
+    profiles would be arbitrary, and would depend on the exact run time and apodization definition. An example of
+    such a use case is presented in our case study.
+
+    See Also
+    --------
+
+    **Notebooks**
+        `High-Q photonic crystal cavity TODO <>`_
+
     """
 
     medium: MediumType3D = pydantic.Field(

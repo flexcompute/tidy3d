@@ -44,6 +44,50 @@ class Job(WebContainer):
         Another convenient thing about :class`Job` objects is that they can be saved and loaded just like other
         ``tidy3d`` components.
 
+    Examples
+    --------
+
+        Once you've created a ``job`` object using :class:`tidy3d.web.Job`, you can upload it to our servers with:
+
+        .. code:: py
+
+            tidy3d.web.upload(simulation, task_name="task_name", verbose=verbose)`
+
+        It will not run until you explicitly tell it to do so with:
+
+         .. code:: py
+
+            tidy3d.web.start(job.task_id)
+
+        To monitor the simulation's progress and wait for its completion, use
+
+        .. code:: py
+
+            tidy3d.web.monitor(job.task_id, verbose=verbose)
+
+        After running the simulation, you can load the results using for example:
+
+         .. code:: py
+
+            sim_data = tidy3d.web.load(job.task_id, path="out/simulation.hdf5", verbose=verbose)
+
+        The job container has a convenient method to save and load the results of a job that has already finished,
+        without needing to know the task_id, as below:
+
+        .. code:: py
+
+            # Saves the job metadata to a single file.
+            job.to_file("data/job.json")
+
+            # You can exit the session, break here, or continue in new session.
+
+            # Load the job metadata from file.
+            job_loaded = tidy3d.web.Job.from_file("data/job.json")
+
+            # Download the data from the server and load it into a SimulationData object.
+            sim_data = job_loaded.load(path="data/sim.hdf5")
+
+
     See Also
     --------
 

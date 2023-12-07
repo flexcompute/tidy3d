@@ -27,7 +27,6 @@ from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
 
-
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
 
@@ -1084,7 +1083,6 @@ class CustomMedium(AbstractCustomMedium):
 
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
-
             eps_complex = self.eps_dataset.eps_xx
             eps_real, sigma = get_eps_sigma(eps_complex, freq=self.freqs[0])
 
@@ -1384,6 +1382,13 @@ class DispersiveMedium(AbstractMedium, ABC):
         - Imported from our material_library.
         - Defined directly by specifying the parameters in the various supplied dispersive models.
         - Fitted to optical n-k data using the dispersion fitting tool plugin (more info later).
+
+        It is important to keep in mind that dispersive materials are inevitably slower to simulate than their
+        dispersion-less counterparts, with complexity increasing with the number of poles included in the dispersion
+        model. For simulations with a narrow range of frequencies of interest, it may sometimes be faster to define
+        the material through its real and imaginary refractive index at the center frequency.
+
+
 
         .. TODO link to relevant functions above
 
@@ -1955,6 +1960,12 @@ class Sellmeier(DispersiveMedium):
         .. math::
 
             n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+
+
+        For lossless, weakly dispersive materials, the best way to incorporate the dispersion without doing
+        complicated fits and without slowing the simulation down significantly is to provide the value of the
+        refractive index dispersion :math:`\frac{dn}{d\\lambda}` in :class:`Sellmeier.from_dispersion()`. The value is assumed to be at the
+        central frequency or wavelength (whichever is provided), and a one-pole model for the material is generated.
 
     Example
     -------

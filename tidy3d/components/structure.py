@@ -64,6 +64,14 @@ class Structure(AbstractStructure):
     A :class:`Structure` is a combination of a material property (:class:`AbstractMedium`)
     and a :class:`Geometry`.
 
+    Notes
+    ------
+
+        Structures can indeed be larger than the simulation domain in ``tidy3d``. In such cases, `tidy3d`` will
+        automatically truncate the geometry that goes beyond the domain boundaries. For best results, structures that
+        intersect with absorbing boundaries or simulation edges should extend all the way through. In many such
+        cases, an “infinite” size :class:`td.inf` can be used to define the size along that dimension.
+
     Example
     -------
     >>> from tidy3d import Box, Medium
