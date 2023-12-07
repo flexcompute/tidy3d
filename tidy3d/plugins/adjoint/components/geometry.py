@@ -293,9 +293,8 @@ class JaxBox(Box, JaxGeometry):
                     vjp_surfs[dim_normal][min_max_index] += grad_contrib
 
         # convert surface vjps to center, size vjps. Note, convert these to jax types w/ np.sum()
-        vjp_center = tuple(np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
-        vjp_size = tuple(np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
-        # return self.copy(update=dict(center=vjp_center, size=vjp_size))
+        vjp_center = [np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz"]
+        vjp_size = [np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz"]
 
         jax_info_vjp = self.jax_info.copy()
         jax_info_vjp["center"] = vjp_center
