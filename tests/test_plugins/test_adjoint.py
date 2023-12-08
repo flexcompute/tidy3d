@@ -278,37 +278,37 @@ def make_sim(
     )
 
     # DiffractionMonitor
-    output_mnt2 = td.DiffractionMonitor(
-        center=(0, 0, 4),
-        size=(td.inf, td.inf, 0),
-        normal_dir="+",
-        freqs=[FREQ0],
-        name=MNT_NAME + "2",
-    )
+    # output_mnt2 = td.DiffractionMonitor(
+    #     center=(0, 0, 4),
+    #     size=(td.inf, td.inf, 0),
+    #     normal_dir="+",
+    #     freqs=[FREQ0],
+    #     name=MNT_NAME + "2",
+    # )
 
-    output_mnt3 = td.FieldMonitor(
-        size=(2, 0, 2),
-        freqs=[FREQ0],
-        name=MNT_NAME + "3",
-    )
+    # output_mnt3 = td.FieldMonitor(
+    #     size=(2, 0, 2),
+    #     freqs=[FREQ0],
+    #     name=MNT_NAME + "3",
+    # )
 
-    output_mnt4 = td.FieldMonitor(
-        size=(0, 0, 0),
-        freqs=np.array([FREQ0, FREQ0 * 1.1]),
-        name=MNT_NAME + "4",
-    )
+    # output_mnt4 = td.FieldMonitor(
+    #     size=(0, 0, 0),
+    #     freqs=np.array([FREQ0, FREQ0 * 1.1]),
+    #     name=MNT_NAME + "4",
+    # )
 
-    extraneous_field_monitor = td.FieldMonitor(
-        size=(10, 10, 0),
-        freqs=np.array([1e14, 2e14]),
-        name="field",
-    )
+    # extraneous_field_monitor = td.FieldMonitor(
+    #     size=(10, 10, 0),
+    #     freqs=np.array([1e14, 2e14]),
+    #     name="field",
+    # )
 
     sim = JaxSimulation(
         size=(10, 10, 10),
         run_time=1e-12,
         grid_spec=td.GridSpec(wavelength=4.0),
-        monitors=(extraneous_field_monitor,),
+        # monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
         input_structures=(
             jax_struct1,
@@ -320,7 +320,7 @@ def make_sim(
             # jax_struct_static_med,
             # jax_struct_static_geo,
         ),
-        output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
+        output_monitors=(output_mnt1,),# output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         symmetry=(0, 1, -1),
@@ -339,9 +339,16 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     ret_value = 0.0
 
+    def get_mnt_data(name):
+        # import pdb; pdb.set_trace()
+        return sim_data.jax_info["output_data"][mnt_name]
+
+    # import pdb; pdb.set_trace()
+
     # ModeData
     mnt_name = MNT_NAME + "1"
     mnt_data = sim_data[mnt_name]
+
     amps = mnt_data.amps
     ret_value += amps.sel(direction="+", f=2e14, mode_index=0)
     ret_value += amps.isel(direction=0, f=0, mode_index=0)
@@ -350,28 +357,28 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     ret_value += amps.sel(direction="-", f=2e14).isel(mode_index=1)
 
     # DiffractionData
-    mnt_name = MNT_NAME + "2"
-    mnt_data = sim_data[mnt_name]
-    ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
-    ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
-    ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
-    ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
-    ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
+    # mnt_name = MNT_NAME + "2"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
+    # ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
+    # ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
+    # ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
+    # ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
 
-    # FieldData
-    mnt_name = MNT_NAME + "3"
-    mnt_data = sim_data[mnt_name]
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.interp(z=0).values))
+    # # FieldData
+    # mnt_name = MNT_NAME + "3"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.interp(z=0).values))
 
-    # this should work when we figure out a jax version of xr.DataArray
-    sim_data.get_intensity(mnt_name)
-    # ret_value += jnp.sum(jnp.array(mnt_data.flux().values))
+    # # this should work when we figure out a jax version of xr.DataArray
+    # sim_data.get_intensity(mnt_name)
+    # # ret_value += jnp.sum(jnp.array(mnt_data.flux().values))
 
-    # FieldData (dipole)
-    mnt_name = MNT_NAME + "4"
-    mnt_data = sim_data[mnt_name]
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
+    # # FieldData (dipole)
+    # mnt_name = MNT_NAME + "4"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
 
     return ret_value
 

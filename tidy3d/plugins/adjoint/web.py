@@ -640,7 +640,7 @@ def run_local(
 
     jax_sim_data.jax_info["simulation"] = simulation.jax_info
 
-    return jax_sim_data.updated_copy(jax_info=dict(simulation=simulation.jax_info))
+    return jax_sim_data.updated_copy(simulation=simulation)
 
 
 def run_local_fwd(
@@ -683,9 +683,7 @@ def run_local_bwd(
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
-    # import pdb
-
-    # pdb.set_trace()
+    import pdb; pdb.set_trace()
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res

@@ -32,7 +32,8 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:
         """Construct a :class:`.JaxMonitorData` instance from a :class:`.MonitorData`."""
         self_dict = mnt_data.dict(exclude={"type"}).copy()
-        for field_name in cls._jax_fields:
+        # for field_name in cls._jax_fields:
+        for field_name in cls._jax_fields2:
             data_array = self_dict[field_name]
             if data_array is not None:
                 coords = {
@@ -76,7 +77,7 @@ class JaxModeData(JaxMonitorData, ModeData):
         # # jax_field=True,
     )
 
-    _jax_fields = ("amps",)
+    _jax_fields2 = ("amps",)
 
     def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""

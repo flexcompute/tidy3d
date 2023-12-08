@@ -40,6 +40,8 @@ class JaxDataArray(Tidy3dBaseModel):
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
 
+    _jax_fields2 = ("values",)
+
     @pd.validator("values", always=True)
     def _convert_values_to_np(cls, val):
         """Convert supplied values to numpy if they are list (from file)."""
