@@ -153,6 +153,14 @@ class ModeSolver(Tidy3dBaseModel):
 
         return self.simulation._subgrid(span_inds=span_inds)
 
+    @cached_property
+    def _num_cells_freqs_modes(self) -> Tuple[int, int, int]:
+        """Get the number of spatial points, number of freqs, and number of modes requested."""
+        num_cells = np.prod(self._solver_grid.num_cells)
+        num_modes = self.mode_spec.num_modes
+        num_freqs = len(self.freqs)
+        return num_cells, num_freqs, num_modes
+
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
 
