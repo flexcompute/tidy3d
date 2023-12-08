@@ -556,7 +556,7 @@ def test_mode_solver_2D():
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
 def test_group_index(mock_remote_api, log_capture, local):
-    """Test group index calculation"""
+    """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
         size=(5, 5, 1),
@@ -595,10 +595,15 @@ def test_group_index(mock_remote_api, log_capture, local):
     if local:
         assert modes.n_group is None
         assert len(log_capture) == 1
-        assert log_capture[0][0] == 30
-        assert "ModeSpec" in log_capture[0][1]
+        assert modes.dispersion is None
+        assert len(log_capture) == 2
+        for log_msg in log_capture:
+            assert log_msg[0] == 30
+            assert "ModeSpec" in log_msg[1]
         _ = modes.n_group
-        assert len(log_capture) == 1
+        assert len(log_capture) == 2
+        _ = modes.dispersion
+        assert len(log_capture) == 2
 
     # Group index calculated
     ms = ModeSolver(
@@ -613,6 +618,10 @@ def test_group_index(mock_remote_api, log_capture, local):
         assert (modes.n_group.sel(mode_index=0).values < 4.2).all()
         assert (modes.n_group.sel(mode_index=1).values > 3.7).all()
         assert (modes.n_group.sel(mode_index=1).values < 4.0).all()
+        assert (modes.dispersion.sel(mode_index=0).values > 1400).all()
+        assert (modes.dispersion.sel(mode_index=0).values < 1500).all()
+        assert (modes.dispersion.sel(mode_index=1).values > -16500).all()
+        assert (modes.dispersion.sel(mode_index=1).values < -15000).all()
 
 
 def test_pml_params():

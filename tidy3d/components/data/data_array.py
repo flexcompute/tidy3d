@@ -7,7 +7,14 @@ import numpy as np
 import dask
 import h5py
 
-from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
+from ...constants import (
+    HERTZ,
+    MICROMETER,
+    PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+    RADIAN,
+    SECOND,
+    WATT,
+)
 from ...exceptions import DataError, FileError
 from ..types import Bound, Axis
 
@@ -440,7 +447,7 @@ class FluxDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("f",)
-    _data_attrs = {"units": "W", "long_name": "flux"}
+    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
 class FluxTimeDataArray(DataArray):
@@ -455,7 +462,7 @@ class FluxTimeDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("t",)
-    _data_attrs = {"units": "W", "long_name": "flux"}
+    _data_attrs = {"units": WATT, "long_name": "flux"}
 
 
 class ModeAmpsDataArray(DataArray):
@@ -489,6 +496,41 @@ class ModeIndexDataArray(DataArray):
     __slots__ = ()
     _dims = ("f", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
+
+
+class GroupIndexDataArray(DataArray):
+    """Group index of a mode.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(4)
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> data = GroupIndexDataArray((1+1j) * np.random.random((2,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "mode_index")
+    _data_attrs = {"long_name": "Group index"}
+
+
+class ModeDispersionDataArray(DataArray):
+    """Dispersion parameter of a mode.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(4)
+    >>> coords = dict(f=f, mode_index=mode_index)
+    >>> data = ModeDispersionDataArray((1+1j) * np.random.random((2,4)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "mode_index")
+    _data_attrs = {
+        "long_name": "Dispersion parameter",
+        "units": PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+    }
 
 
 class FieldProjectionAngleDataArray(DataArray):
@@ -654,6 +696,8 @@ DATA_ARRAY_TYPES = [
     FluxTimeDataArray,
     ModeAmpsDataArray,
     ModeIndexDataArray,
+    GroupIndexDataArray,
+    ModeDispersionDataArray,
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
     FieldProjectionKSpaceDataArray,

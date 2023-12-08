@@ -13,7 +13,7 @@ import numbers
 
 from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
-from .data_array import ModeIndexDataArray
+from .data_array import ModeIndexDataArray, GroupIndexDataArray, ModeDispersionDataArray
 from .data_array import TriangleMeshDataArray
 from .data_array import TimeDataArray
 from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
@@ -23,6 +23,7 @@ from ..base import Tidy3dBaseModel, cached_property
 from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
 from ..types import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
+from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
 from ...log import log
 
 
@@ -354,11 +355,18 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group_raw: ModeIndexDataArray = pd.Field(
+    n_group_raw: GroupIndexDataArray = pd.Field(
         None,
-        alias="n_group",
+        alias="n_group",  # This is for backwards compatibility only when loading old data
         title="Group Index",
         description="Index associated with group velocity of the mode.",
+    )
+
+    dispersion_raw: ModeDispersionDataArray = pd.Field(
+        None,
+        title="Dispersion",
+        description="Dispersion parameter for the mode.",
+        units=PICOSECOND_PER_NANOMETER_PER_KILOMETER,
     )
 
     @property
@@ -368,17 +376,17 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
 
     @property
-    def n_eff(self):
+    def n_eff(self) -> ModeIndexDataArray:
         """Real part of the propagation index."""
         return self.n_complex.real
 
     @property
-    def k_eff(self):
+    def k_eff(self) -> ModeIndexDataArray:
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
     @property
-    def n_group(self):
+    def n_group(self) -> GroupIndexDataArray:
         """Group index."""
         if self.n_group_raw is None:
             log.warning(
@@ -387,6 +395,22 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
                 log_once=True,
             )
         return self.n_group_raw
+
+    @property
+    def dispersion(self) -> ModeDispersionDataArray:
+        r"""Dispersion parameter.
+
+        .. math::
+
+           D = -\frac{\lambda}{c_0} \frac{{\rm d}^2 n_{\text{eff}}}{{\rm d}\lambda^2}
+        """
+        if self.dispersion_raw is None:
+            log.warning(
+                "The dispersion was not computed. To calculate dispersion, pass "
+                "'group_index_step = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.dispersion_raw
 
     def plot_field(self, *args, **kwargs):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
