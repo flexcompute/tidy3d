@@ -187,6 +187,7 @@ Metamaterials, Gratings, and Other Periodic Structures
     notebooks/DielectricMetasurfaceAbsorber
     notebooks/GradientMetasurfaceReflector
     notebooks/GrapheneMetamaterial
+    notebooks/TunableChiralMetasurface
     notebooks/MicrowaveFrequencySelectiveSurface
     notebooks/HighQSi
     notebooks/HighQGe

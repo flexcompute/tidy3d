@@ -515,6 +515,12 @@
     "keywords": "THz, demultiplexer, filter, ring resonator, add-drop filter, Tidy3D, FDTD",
     "feature_image": "./img/thz_ring_resonator.png"
   },
+  "TunableChiralMetasurface.ipynb": {
+    "title": "Tunable Chiral Metasurface Based on Phase Change Material | Flexcompute",
+    "description": "This notebook demonstrates how to model a chiral metasurface based on phase change material in Tidy3D FDTD.",
+    "keywords": "chiral, metasurface, circular dichroism, GST, phase change, Tidy3D, FDTD",
+    "feature_image": "./img/tunable_chiral_metasurface.png"
+  },
   "VizData.ipynb": {
     "title": "Visualization of Simulation Data in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to perform visualization of simulation data in Tidy3D FDTD.",
