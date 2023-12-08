@@ -11,7 +11,8 @@ import pydantic.v1 as pd
 from pandas import DataFrame
 
 from .data_array import FluxTimeDataArray, FluxDataArray
-from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
+from .data_array import MixedModeDataArray, ModeAmpsDataArray
+from .data_array import ModeIndexDataArray, GroupIndexDataArray, ModeDispersionDataArray
 from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
 from .data_array import FieldProjectionKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
@@ -32,7 +33,7 @@ from ..monitor import DiffractionMonitor
 from ..source import SourceTimeType, CustomFieldSource
 from ..medium import Medium, MediumType
 from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, ValidationError
-from ...constants import ETA_0, C_0, MICROMETER
+from ...constants import ETA_0, C_0, MICROMETER, PICOSECOND_PER_NANOMETER_PER_KILOMETER
 from ...log import log
 
 from ..base_sim.data.monitor_data import AbstractMonitorData
@@ -1160,24 +1161,44 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         back = slice(0, num_freqs, 3)
         center = slice(1, num_freqs, 3)
         fwd = slice(2, num_freqs, 3)
+        freqs = freqs[center]
 
         # calculate group index
         n_center = self.n_eff.isel(f=center).values
         n_backward = self.n_eff.isel(f=back).values
         n_forward = self.n_eff.isel(f=fwd).values
 
-        n_group_data = n_center + (n_forward - n_backward) / (2 * frequency_step)
-        n_group = ModeIndexDataArray(
+        inv_step = 1 / frequency_step
+        # n_g = n + f * df/dn
+        # dn/df = (n+ - n-) / (2 f df)
+        n_group_data = n_center + (n_forward - n_backward) * inv_step * 0.5
+        # D = -2 * pi * c / lda^2 * d(v_g^-1)/dw = -(f / c)^2 * (2 * dn/df + f * d2n/df2)
+        # d2n/df2 = (n+ - 2n + n-) / (f df)^2
+        # The '1e18' factor converts from s/um^2 to ps/(nm km)
+        dispersion_data = (
+            (n_forward * (inv_step + 1) + n_backward * (inv_step - 1) - n_center * inv_step * 2)
+            * freqs.reshape((-1, 1))
+            * (-1e18 * inv_step / C_0**2)
+        )
+
+        mode_index = list(self.n_complex.coords["mode_index"].values)
+        f = list(freqs)
+        n_group = GroupIndexDataArray(
             n_group_data,
-            coords={
-                "f": list(freqs[center]),
-                "mode_index": list(self.n_complex.coords["mode_index"].values),
-            },
-            attrs={"long name": "Group index"},
+            coords={"f": f, "mode_index": mode_index},
+        )
+
+        dispersion = ModeDispersionDataArray(
+            dispersion_data,
+            coords={"f": f, "mode_index": mode_index},
         )
 
         # remove data corresponding to frequencies used only for group index calculation
-        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group_raw": n_group}
+        update_dict = {
+            "n_complex": self.n_complex.isel(f=center),
+            "n_group_raw": n_group,
+            "dispersion_raw": dispersion,
+        }
 
         for key, field in self.field_components.items():
             update_dict[key] = field.isel(f=center)
@@ -1188,7 +1209,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         if self.eps_spec:
             update_dict["eps_spec"] = self.eps_spec[center]
 
-        update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs[center])
+        update_dict["monitor"] = self.monitor.updated_copy(freqs=freqs)
 
         return self.copy(update=update_dict)
 
@@ -1392,25 +1413,32 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group_raw: ModeIndexDataArray = pd.Field(
+    n_group_raw: GroupIndexDataArray = pd.Field(
         None,
-        alias="n_group",
+        alias="n_group",  # This is for backwards compatibility only when loading old data
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
 
+    dispersion_raw: ModeDispersionDataArray = pd.Field(
+        None,
+        title="Dispersion",
+        description="Dispersion parameter for the mode.",
+        units=PICOSECOND_PER_NANOMETER_PER_KILOMETER,
+    )
+
     @property
-    def n_eff(self):
+    def n_eff(self) -> ModeIndexDataArray:
         """Real part of the propagation index."""
         return self.n_complex.real
 
     @property
-    def k_eff(self):
+    def k_eff(self) -> ModeIndexDataArray:
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
     @property
-    def n_group(self):
+    def n_group(self) -> GroupIndexDataArray:
         """Group index."""
         if self.n_group_raw is None:
             log.warning(
@@ -1419,6 +1447,22 @@ class ModeData(MonitorData):
                 log_once=True,
             )
         return self.n_group_raw
+
+    @property
+    def dispersion(self) -> ModeDispersionDataArray:
+        r"""Dispersion parameter.
+
+        .. math::
+
+           D = -\frac{\lambda}{c_0} \frac{{\rm d}^2 n_{\text{eff}}}{{\rm d}\lambda^2}
+        """
+        if self.dispersion_raw is None:
+            log.warning(
+                "The dispersion was not computed. To calculate dispersion, pass "
+                "'group_index_step = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.dispersion_raw
 
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
