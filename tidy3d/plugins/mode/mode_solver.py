@@ -98,6 +98,17 @@ class ModeSolver(Tidy3dBaseModel):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
 
+    @pydantic.validator("plane", always=True)
+    def plane_in_sim_bounds(cls, val, values):
+        """Check that the plane is at least partially inside the simulation bounds."""
+        sim_center = values.get("simulation").center
+        sim_size = values.get("simulation").size
+        sim_box = Box(size=sim_size, center=sim_center)
+
+        if not sim_box.intersects(val):
+            raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
+        return val
+
     @cached_property
     def normal_axis(self) -> Axis:
         """Axis normal to the mode plane."""
