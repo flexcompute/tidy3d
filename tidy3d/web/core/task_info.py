@@ -62,6 +62,9 @@ class TaskInfo(TaskBase):
     realFlexUnit: float = None
     oriRealFlexUnit: float = None
     estFlexUnit: float = None
+    estFlexCreditTimeStepping: float = None
+    estFlexCreditPostProcess: float = None
+    estFlexCreditMode: float = None
     s3Storage: float = None
     startSolverTime: Optional[datetime] = None
     finishSolverTime: Optional[datetime] = None
