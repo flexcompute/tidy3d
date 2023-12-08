@@ -760,6 +760,12 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
                 "task execution details. Use 'web.real_cost(task_id)' to get the billed FlexCredit "
                 "cost after a simulation run."
             )
+            fc_mode = task_info.estFlexCreditMode
+            fc_post = task_info.estFlexCreditPostProcess
+            if fc_mode:
+                console.log(f"  {fc_mode:1.3f} FlexCredit of the total cost from mode solves.")
+            if fc_post:
+                console.log(f"  {fc_post:1.3f} FlexCredit of the total cost from post-processing.")
         return task_info.estFlexUnit
 
     log.warning(
