@@ -17,13 +17,13 @@
 # relative to the documentation root, use os.path.abspath to make it
 # absolute, like shown here.
 #
-import codecs
 import datetime
 import os
 import re
 import sys
 import subprocess
 import tidy3d
+
 # import sphinxcontrib.divparams as divparams
 
 full_build = True
@@ -61,10 +61,10 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 autodoc_class_signature = "separated"
 autodoc_default_options = {
-    'members': True,
-    'member-order': 'bysource',
-    'special-members': '__init__',
-    'undoc-members': True,
+    "members": True,
+    "member-order": "bysource",
+    "special-members": "__init__",
+    "undoc-members": True,
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
@@ -72,7 +72,7 @@ autodoc_typehints = "none"
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
 copybutton_prompt_is_regexp = True
-custom_sitemap_excludes = [r'/notebooks/']
+custom_sitemap_excludes = [r"/notebooks/"]
 # divparams_enable_postprocessing = True # TODO FIX
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints"]
 extensions = [
@@ -100,9 +100,9 @@ extlinks = {}
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
-language = 'en'
+language = "en"
 latex_documents = [
-    (master_doc, "tidy3d.tex", "tidy3d Documentation", "Dario Quintero", "manual"),
+    (master_doc, "main.tex", "tidy3d Documentation", "Flexcompute", "manual"),
 ]
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"  # for sphinx-sitemap
 html_css_files = [
@@ -137,9 +137,9 @@ html_theme_options = {
     "use_repository_button": True,
     "use_download_button": True,
     "pygment_light_style": "colorful",
-    "pygment_dark_style": "material"
+    "pygment_dark_style": "material",
 }
-latex_engine = "xelatex"
+latex_engine = "pdflatex"
 language = "en"
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -189,7 +189,7 @@ print(current_tag, current_branch)
 if not current_tag and current_branch:
     if current_branch == "develop":
         version = "stable"
-    elif current_branch == 'latest':
+    elif current_branch == "latest":
         version = "latest"
     else:
         version = "latest"
@@ -201,7 +201,7 @@ elif current_tag:
 # version = tidy3d.__version__
 
 latex_elements: dict = {
-    "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
+    # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
     # The paper size ('letterpaper' or 'a4paper').
     #
     # 'papersize': 'letterpaper',

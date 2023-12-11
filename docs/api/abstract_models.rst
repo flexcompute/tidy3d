@@ -21,3 +21,4 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.source.Source
    tidy3d.components.source.FieldSource
    tidy3d.components.monitor.Monitor
+   tidy3d.components.monitor.AbstractFieldProjectionMonitor

@@ -973,7 +973,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
         **Parameters Caveats**
 
-        The :param:`center` and :param:`size` fields define
+        The :param center: and :param:`size` fields define
         where the monitor will be placed in order to record near fields, typically very close
         to the structure of interest. The near fields are then projected
         to far-field locations defined by :param:`x`, :param:`y`, and :param:`proj_distance`, relative

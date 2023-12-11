@@ -61,6 +61,11 @@ img {
     background-color: var(--pst-color-on-background);
 }
 
-table, th, td {
-  border: 1px solid;
-}
+/* TODO make sure this is only for the API tables */
+/*table {*/
+/*  border: solid;*/
+/*}*/
+
+/*th {*/
+/*  border: thin;*/
+/*}*/

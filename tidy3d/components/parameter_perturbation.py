@@ -178,21 +178,24 @@ class HeatPerturbation(AbstractPerturbation):
 
 class LinearHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a linear function of
-    temperature:
+    temperature.
 
-    Note
+    Notes
     ----
-    .. math::
 
-        \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+        .. math::
 
-    where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
-    ``temperature_ref`` is the reference temperature point. A temperature range in which such
-    a model is deemed accurate may be provided as a field ``temperature_range``
-    (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+            \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+
+        where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
+        ``temperature_ref`` is the reference temperature point. A temperature range in which such
+        a model is deemed accurate may be provided as a field ``temperature_range``
+        (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
@@ -252,16 +255,23 @@ class LinearHeatPerturbation(HeatPerturbation):
 
 class CustomHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a custom function of
-    temperature defined as an array of perturbation values at sample temperature points. The linear
-    interpolation is used to calculate perturbation values between sample temperature points. For
-    temperature values outside of the provided sample region the perturbation value is extrapolated
-    as a constant.
-    The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
-    accurate is calculated automatically as the minimal and maximal sample temperature points.
-    Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+    temperature defined as an array of perturbation values at sample temperature points.
+
+     Notes
+     -----
+
+         The linear
+        interpolation is used to calculate perturbation values between sample temperature points. For
+        temperature values outside of the provided sample region the perturbation value is extrapolated
+        as a constant.
+        The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
+        accurate is calculated automatically as the minimal and maximal sample temperature points.
+        Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
