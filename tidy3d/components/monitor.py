@@ -395,6 +395,13 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain.
 
+    Notes
+    -----
+
+        :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
+        frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are
+        useful for investigating the steady-state field distribution in 2D and 3D regions of the simulation.
+
     Example
     -------
     >>> monitor = FieldMonitor(
@@ -405,18 +412,16 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     name='steady_state_monitor',
     ...     colocate=True)
 
-    Notes
-    -----
-
-    :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are useful for investigating the steady-state field distribution in 2D or even 3D regions of the simulation.
 
     See Also
     --------
 
-    **Notebooks:**
+    **Notebooks**
+
         * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
 
-    **Lectures:**
+    **Lectures**
+
         * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
 
     """
@@ -430,6 +435,18 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain.
 
+    Notes
+    -----
+
+        :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single
+        point, but they can also be used to create “animations” of the field pattern evolution.
+
+        To create an animation, we need to capture the frames at different time instances of the simulation. This can
+        be done by using a :class:`FieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
+        and grid points. Recording the field at every time step and grid point will result in a large dataset. For
+        the purpose of making animations, this is usually unnecessary.
+
+
     Example
     -------
     >>> monitor = FieldTimeMonitor(
@@ -442,21 +459,11 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     colocate=True,
     ...     name='movie_monitor')
 
-    Notes
-    -----
-
-        :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single
-        point, but they can also be used to create “animations” of the field pattern evolution.
-
-        To create an animation, we need to capture the frames at different time instances of the simulation. This can
-        be done by using a :class:`FieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
-        and grid points. Recording the field at every time step and grid point will result in a large dataset. For
-        the purpose of making animations, this is usually unnecessary. I
 
     See Also
     --------
 
-    **Notebooks:**
+    **Notebooks**
         * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
         * `Creating FDTD animations <../../notebooks/AnimationTutorial.html>`_.
 
@@ -480,6 +487,8 @@ class PermittivityMonitor(FreqMonitor):
 
         If 2D materials are present, then the permittivity values correspond to the
         volumetric equivalent of the 2D materials.
+
+        .. TODO add links to relevant areas
 
     Example
     -------
@@ -617,10 +626,14 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """:class:`Monitor` that records power flux in the time domain.
-    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
-    positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
-    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
+
+    Notes
+    -----
+
+        If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+        positive sign corresponding to power flow in the positive direction along the axis normal to
+        the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+        integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -643,22 +656,23 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 class ModeMonitor(AbstractModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
 
-
     Notes
     ------
 
-        The amplitudes are defined as ``mode_solver_data.dot(recorded_field) / mode_solver_data.dot(mode_solver_data)``, where ``recorded_field`` is the field data recorded in the FDTD simulation at the monitor frequencies, and ``mode_solver_data`` is the mode data from the mode solver at the monitor plane.
-        This gives the power amplitude of ``recorded_field`` carried by each mode.
+        The fields recorded by frequency monitors (and hence also mode monitors) are automatically
+        normalized by the power amplitude spectrum of the source. For multiple sources, the user can select which
+        source to use for the normalization too.
 
-        In ``tidy3d``, the fields recorded by frequency monitors (and thus also mode monitors) are automatically normalized by the power amplitude spectrum of the source (for multiple sources, the user can select which source to use for the normalization).
+        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition of the radiated
+        power into forward- and backward-propagating modes, respectively.
 
-        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition of the radiated power into forward- and backward-propagating modes, respectively. As we would expect, all of the power is injected into the fundamental waveguide mode, in the forward direction. More precisely, this is true up to some numerical error that decreases with increasing simulation resolution.
+        .. TODO give an example of how to extract the data from this mode.
 
         .. TODO add derivation in the notebook.
 
         .. TODO add link to method
 
-        We can examine the frequency dependence of the results a bit more closely, and compare them to the total power flux, which can be computed for any frequency monitor. The flux is the area-integrated time-averaged Poynting vector and gives the (signed) total power flowing through the surface. The flux computation and the modal decomposition are done in separate monitors and in a completely different way, but because all the power is in the fundamental mode here, the flux matches really well the zero-mode power from the power decomposition.
+        .. TODO add links to notebooks correspondingly
 
     Example
     -------
@@ -729,6 +743,8 @@ class FieldProjectionSurface(Tidy3dBaseModel):
     """
     Data structure to store surface monitors where near fields are recorded for
     field projections.
+
+    .. TODO add example and derivation, and more relevant links.
 
     See Also
     --------
@@ -823,46 +839,36 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
         .. TODO this needs an illustration
 
-        The ``center`` and ``size`` fields define
+        **Parameters Caveats**
+
+        The :param:`center` and :param:`size` parameters define
         where the monitor will be placed in order to record near fields, typically very close
         to the structure of interest. The near fields are then projected
-        to far-field locations defined by ``phi``, ``theta``, and ``proj_distance``, relative
-        to the ``custom_origin``. If the distance between the near and far field locations is
-        much larger than the size of the device, one can typically set ``far_field_approx`` to
-        ``True``, which will make use of the far-field approximation to speed up calculations.
-        If the projection distance is comparable to the size of the device, we recommend setting
-        ``far_field_approx`` to ``False``, s**Usage Caveats**
+        to far-field locations defined by :param:`phi`, :param:`theta`, and :param:`proj_distance`, relative
+        to the :param:`custom_origin`.
 
-        .. TODO I belive a little illustration here would be handy.
+        **Usage Caveats**
 
-        Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
-        fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.
-        However, this requires that the field strength decays nearly to zero near the edges of the near-field
-        monitor, which may not always be the case. For example, if we had used a larger aperture compared to the full
-        simulation size in the transverse direction, we may expect a degradation in accuracy of the field
-        projections. Despite this limitation, the field projections are still remarkably accurate in realistic
-        scenarios. For realistic case studies further demonstrating the accuracy of the field projections,
-        see our metalens and zone plate case studies.
+        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the
+        fields are propagating in a homogeneous medium. Therefore, one should use :class:`PML` / :class:`Absorber` as
+        boundary conditions in the part of the domain where fields are projected.
 
-        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the fields
-        are propagating in a homogeneous medium. Therefore, one should use PMLs / absorbers as boundary conditions in the
-        part of the domain where fields are projected. For far field projections in the context of perdiodic boundary
-        conditions, see the diffraction efficiency example which demonstrates the use of a DiffractionMonitor.
+        .. TODO why not add equation here
 
         Server-side field projections will add to the monetary cost of the simulation. However, typically the far field
         projections have a very small computation cost compared to the FDTD simulation itself, so the increase in monetary
-        cost should be negligibly small in most cases.o that the approximations are not used, and the
-        projection is accurate even just a few wavelengths away from the near field locations.
-        For applications where the monitor is an open surface rather than a box that
+        cost should be negligibly small in most cases. For applications where the monitor is an open surface rather than a box that
         encloses the device, it is advisable to pick the size of the monitor such that the
         recorded near fields decay to negligible values near the edges of the monitor.
 
-        Note that by default, if no ``proj_distance`` was provided in the :class:`FieldProjectionAngleMonitor`,
-        the fields are projected to a distance of 1m.
+        o that the approximations are not used, and the
+        projection is accurate even just a few wavelengths away from the near field locations.
 
-        **Server-side field projection**
+        By default, if no :param:`proj_distance`` was provided, the fields are projected to a distance of 1m.
 
-        Provide the ``FieldProjectionAngleMonitor`` monitor as an input to the
+        **Server-side field projection Application**
+
+        Provide the :class:`FieldProjectionAngleMonitor` monitor as an input to the
         :class:`Simulation` object as one of its monitors. Now, we no longer need to provide a separate near-field
         :class:`FieldMonitor` - the near fields will automatically be recorded based on the size and location of the
         ``FieldProjectionAngleMonitor``. Note also that in some cases, the server-side computations may be slightly
@@ -873,7 +879,15 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
         **Far-Field Approximation Selection**
 
-        The user has the option to use the far-field geometrical approximation or not.
+        .. TODO unsure if add on params?
+
+        If the distance between the near and far field locations is
+        much larger than the size of the device, one can typically set :param:`far_field_approx` to
+        ``True``, which will make use of the far-field approximation to speed up calculations.
+        If the projection distance is comparable to the size of the device, we recommend setting
+        :param:`far_field_approx` to ``False``.
+
+        .. image:: ../../notebooks/img/n2f_diagram.png
 
         When selected, it is assumed that:
 
@@ -884,39 +898,17 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
         The advantages of these approximations are:
 
-        *   The projections are computed relatively fast
-        *   The projections are cast in a simple mathematical form
+        *   The projections are computed relatively fast.
+        *   The projections are cast in a simple mathematical form.
             which allows re-projecting the fields to different distance without the need to re-run a simulation or to
             re-run the :class:`FieldProjector`.
 
         In cases where we may want to project to intermediate distances where the far field approximation is no
-        longer valid, simply include the class definition parameter ``far_field_approx=False`` in the
+        longer valid, simply include the class definition parameter :param:`far_field_approx` to ``False`` in the
         ``FieldProjectionAngleMonitor`` instantiation. The resulting computations will be a bit slower,
         but the results will be significantly more accurate.
 
         .. TODO include here inherited methods.
-
-        **Usage Caveats**
-
-        .. TODO I belive a little illustration here would be handy.
-
-        Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
-        fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.
-        However, this requires that the field strength decays nearly to zero near the edges of the near-field
-        monitor, which may not always be the case. For example, if we had used a larger aperture compared to the full
-        simulation size in the transverse direction, we may expect a degradation in accuracy of the field
-        projections. Despite this limitation, the field projections are still remarkably accurate in realistic
-        scenarios. For realistic case studies further demonstrating the accuracy of the field projections,
-        see our metalens and zone plate case studies.
-
-        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the fields
-        are propagating in a homogeneous medium. Therefore, one should use PMLs / absorbers as boundary conditions in the
-        part of the domain where fields are projected. For far field projections in the context of perdiodic boundary
-        conditions, see the diffraction efficiency example which demonstrates the use of a DiffractionMonitor.
-
-        Server-side field projections will add to the monetary cost of the simulation. However, typically the far field
-        projections have a very small computation cost compared to the FDTD simulation itself, so the increase in monetary
-        cost should be negligibly small in most cases.
 
     Example
     -------
@@ -935,10 +927,11 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     --------
 
     **Notebooks**:
+
         * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
-        * `Field projection for a zone plate <../../notebooks/ZonePlateFieldProjection.html>`_
-        * `Metalens in the visible frequency range <../../notebooks/Metalens.html>`_
-        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
+        * `Field projection for a zone plate <../../notebooks/ZonePlateFieldProjection.html>`_: Realistic case study further demonstrating the accuracy of the field projections.
+        * `Metalens in the visible frequency range <../../notebooks/Metalens.html>`_: Realistic case study further demonstrating the accuracy of the field projections.
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_: For far field projections in the context of perdiodic boundary conditions.
     """
 
     proj_distance: float = pydantic.Field(
@@ -978,25 +971,33 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     Notes
     -----
 
-        The ``center`` and ``size`` fields define
+        **Parameters Caveats**
+
+        The :param:`center` and :param:`size` fields define
         where the monitor will be placed in order to record near fields, typically very close
         to the structure of interest. The near fields are then projected
-        to far-field locations defined by ``x``, ``y``, and ``proj_distance``, relative
-        to the ``custom_origin``. Here, ``x`` and ``y`` correspond to a local coordinate system
-        where the local z axis is defined by ``proj_axis``: which is the axis normal to this monitor.
+        to far-field locations defined by :param:`x`, :param:`y`, and :param:`proj_distance`, relative
+        to the :param:`custom_origin`.
+
+        Here, :param:`x` and :param:`y`, correspond to a local coordinate system
+        where the local ``z`` axis is defined by :param:`proj_axis`: which is the axis normal to this monitor.
+
+        **Far-Field Approximation Selection**
+
         If the distance between the near and far field locations is much larger than the size of the
-        device, one can typically set ``far_field_approx`` to ``True``, which will make use of the
+        device, one can typically set :param:`far_field_approx` to ``True``, which will make use of the
         far-field approximation to speed up calculations. If the projection distance is comparable
-        to the size of the device, we recommend setting ``far_field_approx`` to ``False``,
+        to the size of the device, we recommend setting :param:`far_field_approx` to ``False``,
         so that the approximations are not used, and the projection is accurate even just a few
         wavelengths away from the near field locations.
+
         For applications where the monitor is an open surface rather than a box that
         encloses the device, it is advisable to pick the size of the monitor such that the
         recorded near fields decay to negligible values near the edges of the monitor.
 
-         **Far-Field Approximation Selection**
+        .. image:: ../../notebooks/img/n2f_diagram.png
 
-        The user has the option to use the far-field geometrical approximation or not.
+        .. TODO unsure if add on params?
 
         When selected, it is assumed that:
 
@@ -1007,10 +1008,11 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
         The advantages of these approximations are:
 
-        *   The projections are computed relatively fast
-        *   The projections are cast in a simple mathematical form
+        *   The projections are computed relatively fast.
+        *   The projections are cast in a simple mathematical form.
             which allows re-projecting the fields to different distance without the need to re-run a simulation or to
             re-run the :class:`FieldProjector`.
+
 
         In cases where we may want to project to intermediate distances where the far field approximation is no
         longer valid, simply include the class definition parameter ``far_field_approx=False`` in the

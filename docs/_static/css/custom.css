@@ -60,3 +60,7 @@ img {
 .sphinx-tabs-tab[aria-selected="true"] {
     background-color: var(--pst-color-on-background);
 }
+
+table, th, td {
+  border: 1px solid;
+}
