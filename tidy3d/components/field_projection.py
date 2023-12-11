@@ -36,6 +36,8 @@ class FieldProjector(Tidy3dBaseModel):
     """
     Projection of near fields to points on a given observation grid.
 
+    .. TODO make images to illustrate this
+
     See Also
     --------
 

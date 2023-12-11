@@ -86,7 +86,7 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
     Notes
     -----
         The nonlinear constitutive relation is solved iteratively; it may not converge
-        for strong nonlinearities. Increasing `numiters` can help with convergence.
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.numiters` can help with convergence.
     """
 
     numiters: pd.PositiveInt = pd.Field(
@@ -107,7 +107,8 @@ class NonlinearSpec(ABC, Tidy3dBaseModel):
 
 
 class NonlinearSusceptibility(NonlinearSpec):
-    """Specification adding an instantaneous nonlinear susceptibility to a medium.
+    """
+    Specification adding an instantaneous nonlinear susceptibility to a medium.
     The expression for the instantaneous nonlinear polarization is given below.
 
     Notes
@@ -118,18 +119,20 @@ class NonlinearSusceptibility(NonlinearSpec):
             P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
 
         The nonlinear constitutive relation is solved iteratively; it may not converge
-        for strong nonlinearities. Increasing `numiters` can help with convergence.
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.numiters` can help with convergence.
 
         For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
         is applied separately to the real and imaginary parts, so that the above equation
-        holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
         The nonlinearity is only applied to the real-valued fields since they are the
         physical fields.
 
         Different field components do not interact nonlinearly. For example,
         when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-        This approximation is valid when the E field is predominantly polarized along one
-        of the x, y, or z axes.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
+
+        .. TODO add links to notebooks here.
 
     Example
     -------
@@ -615,7 +618,8 @@ class Medium(AbstractMedium):
     Notes
     -----
 
-        In a dispersion-less medium, the displacement field :math:`D(t)` reacts instantaneously to the applied electric field :math:`E(t)`.
+        In a dispersion-less medium, the displacement field :math:`D(t)` reacts instantaneously to the applied
+        electric field :math:`E(t)`.
 
         .. math::
 
@@ -1367,30 +1371,29 @@ class CustomMedium(AbstractCustomMedium):
 
 class DispersiveMedium(AbstractMedium, ABC):
     """
-    A Medium with dispersion (propagation characteristics depend on frequency).\
+    A Medium with dispersion: field propagation characteristics depend on frequency.
 
     Notes
     -----
 
-        In dispersive mediums, the displacement field :math:`D(t)` depends on the previous electric field :math:`E(t')`.
+        In dispersive mediums, the displacement field :math:`D(t)` depends on the previous electric field :math:`E(
+        t')` and time-dependent permittivity :math:`\\epsilon` changes.
 
         .. math::
 
             D(t) = \\int \\epsilon(t - t') E(t') \\delta t'
 
         Dispersive mediums can be defined in three ways:
-        - Imported from our material_library.
-        - Defined directly by specifying the parameters in the various supplied dispersive models.
-        - Fitted to optical n-k data using the dispersion fitting tool plugin (more info later).
+
+        - Imported from our `material library <../material_library.html>`_.
+        - Defined directly by specifying the parameters in the `various supplied dispersive models <../mediums.html>`_.
+        - Fitted to optical n-k data using the `dispersion fitting tool plugin <../plugins/dispersion.html>`_.
 
         It is important to keep in mind that dispersive materials are inevitably slower to simulate than their
         dispersion-less counterparts, with complexity increasing with the number of poles included in the dispersion
         model. For simulations with a narrow range of frequencies of interest, it may sometimes be faster to define
         the material through its real and imaginary refractive index at the center frequency.
 
-
-
-        .. TODO link to relevant functions above
 
     See Also
     --------
@@ -1781,12 +1784,12 @@ class PoleResidue(DispersiveMedium):
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     """A spatially varying dispersive medium described by the pole-residue pair model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
 
-        In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of resonant material poles _`[1]`.
+        In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of
+        resonant material poles _`[1]`.
 
         .. math::
 
@@ -1794,19 +1797,21 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             \\left[\\frac{c_i}{j \\omega + a_i} +
             \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
-        For each of these resonant poles identified by the index :math:`m`, an auxiliary differential equation is
-        used to relate the auxiliary current :math:`J_m(t)` to the applied electric field :math:`E(t)` .
+        For each of these resonant poles identified by the index :math:`i`, an auxiliary differential equation is
+        used to relate the auxiliary current :math:`J_i(t)` to the applied electric field :math:`E(t)`.
         The sum of all these auxiliary current contributions describes the total dielectric response of the material.
 
         .. math::
 
-            \\frac{d}{dt} J_m (t) - a_m J_m (t) = \\epsilon_0 c_m \\frac{d}{dt} E (t)
+            \\frac{d}{dt} J_i (t) - a_i J_i (t) = \\epsilon_0 c_i \\frac{d}{dt} E (t)
 
         Hence, the computational cost increases with the number of poles.
 
         **References**
 
         .. [1]   M. Han, R.W. Dutton and S. Fan, IEEE Microwave and Wireless Component Letters, 16, 119 (2006).
+
+        .. TODO add links to notebooks using this.
 
     Example
     -------
@@ -1821,6 +1826,15 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
     >>> eps = pole_res.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -1964,15 +1978,23 @@ class Sellmeier(DispersiveMedium):
 
         For lossless, weakly dispersive materials, the best way to incorporate the dispersion without doing
         complicated fits and without slowing the simulation down significantly is to provide the value of the
-        refractive index dispersion :math:`\frac{dn}{d\\lambda}` in :class:`Sellmeier.from_dispersion()`. The value is assumed to be at the
-        central frequency or wavelength (whichever is provided), and a one-pole model for the material is generated.
+        refractive index dispersion :math:`\frac{dn}{d\\lambda}` in :meth:`tidy3d.Sellmeier.from_dispersion`. The
+        value is assumed to be at the central frequency or wavelength (whichever is provided), and a one-pole model
+        for the material is generated.
 
     Example
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
     >>> eps = sellmeier_medium.eps_model(200e12)
 
+    See Also
+    --------
 
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
@@ -2063,10 +2085,11 @@ class Sellmeier(DispersiveMedium):
 
 class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     """A spatially varying dispersive medium described by the Sellmeier model.
-    The frequency-dependence of the refractive index is described by:
 
     Notes
     -----
+
+        The frequency-dependence of the refractive index is described by:
 
         .. math::
 
@@ -2082,6 +2105,15 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
     >>> eps = sellmeier_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
@@ -2198,10 +2230,11 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
 class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
+
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -2212,6 +2245,15 @@ class Lorentz(DispersiveMedium):
     -------
     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
     >>> eps = lorentz_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2850,10 +2892,15 @@ class AnisotropicMedium(AbstractMedium):
     See Also
     --------
 
+    :class:`CustomAnisotropicMedium`
+        Diagonally anisotropic medium with spatially varying permittivity in each component.
+
+    :class:`FullyAnisotropicMedium`
+        Fully anisotropic medium including all 9 components of the permittivity and conductivity tensors.
+
     **Notebooks:**
         * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
         * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
-
     """
 
     xx: IsotropicUniformMediumType = pd.Field(
@@ -2989,7 +3036,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         Simulations involving fully anisotropic materials are computationally more intensive, thus,
         they take longer time to complete. This increase strongly depends on the filling fraction of
         the simulation domain by fully anisotropic materials, varying approximately in the range from
-        1.5 to 5. Cost of running a simulation is adjusted correspondingly.
+        1.5 to 5. The cost of running a simulation is adjusted correspondingly.
 
     Example
     -------
@@ -3000,7 +3047,15 @@ class FullyAnisotropicMedium(AbstractMedium):
     See Also
     --------
 
+    :class:`CustomAnisotropicMedium`
+        Diagonally anisotropic medium with spatially varying permittivity in each component.
+
+    :class:`AnisotropicMedium`
+        Diagonally anisotropic medium.
+
     **Notebooks:**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
@@ -3203,7 +3258,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     Note
     ----
-    Only diagonal anisotropy is currently supported.
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -3221,6 +3276,17 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
     >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+
+    See Also
+    --------
+
+    :class:`AnisotropicMedium`
+        Diagonally anisotropic medium.
+
+    **Notebooks:**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
+        * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
     xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
@@ -3537,10 +3603,10 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
 class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """A dispersive medium described by the pole-residue pair model with perturbations.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
     Notes
     -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 

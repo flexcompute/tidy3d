@@ -272,7 +272,7 @@ class PML(AbsorberSpec):
 
         **1D Model Illustration**
 
-        Consider a transformed wave equation _`[1]`:
+        Consider a transformed wave equation in the :math:`x` dimension below _`[1]`:
 
         .. math::
 
@@ -286,7 +286,7 @@ class PML(AbsorberSpec):
 
              s(x) = \\left \\{
                         \\begin{array}{lr}
-                            1, & \\text{for } 0 < x \\\\
+                            1, & \\text{for } x < 0 \\\\
                             1 - \\frac{\\sigma}{i \\omega \\epsilon_0}, & \\text{for } x > 0
                         \\end{array}
                     \\right \\}
@@ -297,7 +297,7 @@ class PML(AbsorberSpec):
 
              E(x) = \\left \\{
                         \\begin{array}{lr}
-                            e^{i(kx - \\omega t)}, & \\text{for } 0 < x \\\\
+                            e^{i(kx - \\omega t)}, & \\text{for } x < 0 \\\\
                             e^{i(kx - \\omega t)} \\times e^{-\\frac{\\sigma x}{c \\epsilon_0}} & \\text{for } x > 0
                         \\end{array}
                     \\right \\}
@@ -319,25 +319,20 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
 
-        Incorporating a dispersive material into PML can also cause simulation divergence in certain scenarios. If
-        your simulation lacks any structures inserted into PML at an angle but includes dispersive material in PML,
-        it is advisable to substitute nondispersive material for the dispersive material. Alternatively,
-        if dispersion is necessary, switching PML to absorber can effectively address the issue.
+        Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios. If
+        your simulation lacks any structures inserted into the PML at an angle, but includes dispersive material in PML,
+        it is advisable to substitute a nondispersive material for the dispersive material. Alternatively,
+        if dispersion is necessary, switching from the :class:`PML` to class:`Absorber` can effectively address the issue.
 
-        PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates
-        into the free space. However, it’s important to keep in mind that PML only absorbs propagating fields. For
-        evanescent fields, PML can act as an amplification medium and cause a simulation to diverge. In Tidy3D,
+        The PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates
+        into the free space. However, it’s important to keep in mind that the PML only absorbs propagating fields. For
+        evanescent fields, the PML can act as an amplification medium and cause a simulation to diverge. In Tidy3D,
         a warning will appear if the distance between a structure is smaller than half of a wavelength to prevent
         evanescent fields from leaking into PML. In most cases, the evanescent field will naturally die off within
         half a wavelength, but in some instances, a larger distance may be required.
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation1.png
 
-        When the simulation domain is small, and the PML boundary condition is used, sometimes it is possible to
-        receive warnings about structures being too close to the boundary. To avoid this warning, use the :class:`Absorber`
-        boundary condition, which will work perfectly fine in this case. :class:`PML` should be placed sufficiently far from
-        any structures since evanescent field leaking into :class:`PML` could cause the simulation to diverge. The :class:`Absorber`,
-        on the other hand, does not have this concern.
 
         **References**
 
@@ -355,6 +350,12 @@ class PML(AbsorberSpec):
 
     See Also
     --------
+
+    :class:`StablePML`:
+         This PML deals handles possibly divergent simulations better, but at the expense of more layers.
+
+    :class:`Absorber`:
+         Specifies an adiabatic absorber along a single dimension.
 
     **Notebooks:**
         * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
@@ -391,6 +392,15 @@ class StablePML(AbsorberSpec):
 
     :class:`PML`:
          A standard PML along a single dimension.
+
+    :class:`Absorber`:
+         Specifies an adiabatic absorber along a single dimension.
+
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures:**
+        * `Introduction to perfectly matched layer (PML) tutorial <https://www.flexcompute.com/fdtd101/Lecture-6-Introduction-to-perfectly-matched-layer/>`__
     """
 
     num_layers: pd.NonNegativeInt = pd.Field(
@@ -409,28 +419,37 @@ class Absorber(AbsorberSpec):
 
     Notes
     -----
-        This absorber is well-suited for dispersive materials
-        intersecting with absorbing edges of the simulation at the expense of more layers.
+        This absorber is well-suited for dispersive materials intersecting with absorbing edges of the simulation at the
+         expense of more layers.
 
-        **Divergence Caveats**
+        **Usage Caveats**
 
-        Using absorber boundary is often a good remedy to resolve divergence issues related to PML. The adiabatic
-        absorber is a multilayer system with gradually increasing conductivity. As briefly discussed above,
-        the absorber usually has a larger undesired reflection compared to :class`PML`. In practice, this small difference
-        rarely matters, but is important to understand for simulations that require high accuracy. There are two
-        possible sources for the reflection from absorbers. The first, and more common one, is that the ramping up of
-        the conductivity is not sufficiently slow, which can be remedied by increasing the number of absorber layers
-        (40 by default). The second one is that the absorption is not high enough, such that the light reaches the
-        :class:`PEC` boundary at the end of the Absorber, travels back through it, and is still not fully attenuated before
-        re-entering the simulation region. If this is the case, increasing the maximum conductivity (see the API
-        reference) can help. In both cases, changing the order of the scaling of the conductivity (sigma_order) can
-        also have an effect, but this is a more advanced setting that we typically do not recommend modifying.
+        Using absorber boundary is often a good remedy to resolve divergence issues related to :class:`PML`. The
+        adiabatic absorber is a multilayer system with gradually increasing conductivity. The absorber usually has a
+        larger undesired reflection compared to :class`PML`. In practice, this small difference rarely matters,
+        but is important to understand for simulations that require high accuracy.
 
-        .. TODO add better api references here
+        There are two possible sources for the reflection from absorbers. The first, and more common one, is that the
+        ramping up of the conductivity is not sufficiently slow, which can be remedied by increasing the number of
+        absorber layers (40 by default). The second one is that the absorption is not high enough, such that the
+        light reaches the :class:`PEC` boundary at the end of the :class:`Absorber`, travels back through it,
+        and is still not fully attenuated before re-entering the simulation region. If this is the case, increasing
+        the maximum conductivity :class:`AbsorberParams` can help. In both cases, changing the order of the scaling
+        of the conductivity (:attr:`tidy3d.AbsorberParams.sigma_order`) can also have an effect, but this is a more
+        advanced setting that we typically do not recommend modifying.
 
     Example
     -------
     >>> pml = Absorber(num_layers=40)
+
+    See Also
+    --------
+
+    :class:`PML`:
+         A standard PML along a single dimension.
+
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
     """
 
     num_layers: pd.NonNegativeInt = pd.Field(
@@ -465,7 +484,9 @@ class Boundary(Tidy3dBaseModel):
     Notes
     -----
 
-         To specify individual boundary conditions along different dimensions, instead of :class:`BoundarySpec`, the class :class:`Boundary` is used, which defines the ``plus`` and ``minus`` boundaries along a single dimension.
+         To specify individual boundary conditions along different dimensions, instead of :class:`BoundarySpec`,
+         this class is used, which defines the ``plus`` and ``minus`` boundaries along a single
+         dimension.
 
     Example
     -------
@@ -473,6 +494,9 @@ class Boundary(Tidy3dBaseModel):
 
     See Also
     --------
+
+    :class:`PML`:
+        A standard PML along a single dimension.
 
     **Notebooks:**
         * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_
@@ -698,14 +722,19 @@ class BoundarySpec(Tidy3dBaseModel):
     Notes
     -----
 
-        A :class:`BoundarySpec` object defines the boundary conditions applied on each of the 6 domain edges, and is provided as an input to the simulation. In the following sections, we’ll explore several different features within :class:`BoundarySpec` and different ways of defining it.
+        This :class:`BoundarySpec` object defines the boundary conditions applied on each of the 6 domain edges,
+        and is provided as an input to the simulation.
 
-        A :class:`BoundarySpec` consists of three :class:`Boundary` objects, each defining the boundaries on the plus and minus side of each dimension.
+        A :class:`BoundarySpec` consists of three :class:`Boundary` objects, each defining the boundaries on the plus
+        and minus side of each dimension. In most cases, one just wants to specify whether there are absorbing
+        :class:`PML` layers along any of the ``x``, ``y``, ``z`` dimensions. By default, ``tidy3d`` simulations have
+        :class:`PML` boundaries on all sides.
 
-        In most cases, one just wants to specify whether there are absorbing :class:`PML` layers along any of the ``x``, ``y``, ``z`` dimensions. By default, ``tidy3d`` simulations have PML boundaries on all sides.
-
-        If we want to explicitly set the boundaries, we can use the ``all_sides()`` method. This can be used to set any type of boundary condition on all sides of the simulation. We can also set :class:`PML` on specified sides only by calling the ``BoundarySpec.pml()`` method, e.g. ``BoundarySpec.pml(x=False, y=False, z=False)``. This will put :class:`PML`s along dimensions where the argument is ``True``, and set periodic boundaries along the other dimensions.
-
+        If we want to explicitly set the boundaries, we can use the :attr:`tidy3d.BoundarySpec.all_sides` method.
+        This can be used to set any type of boundary condition on all sides of the simulation. We can also set
+        :class:`PML` on specified sides only by calling the :attr:`tidy3d.BoundarySpec.pml` method, e.g. ``BoundarySpec.pml(
+        x=False, y=False, z=False)``. This will put :class:`PML` along the dimensions defined as ``True``,
+        and set periodic boundaries along the other dimensions.
 
 
     See Also
