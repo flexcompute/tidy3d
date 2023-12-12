@@ -1411,11 +1411,12 @@ class ModeData(MonitorData):
 
         The mode monitor data contains the complex effective indices and the complex mode amplitudes at the monitor
         position calculated by mode decomposition. The data structure of the complex effective
-        indices ``n_complex`` contains two coordinates: ``f`` and ``mode_index``, both of which are specified when
+        indices :attr`n_complex` contains two coordinates: ``f`` and ``mode_index``, both of which are specified when
         defining the :class:``ModeMonitor`` in the simulation.
 
-        Besides the effective index, ModeMonitor is primarily used to calculate the transmission of certain modes in
-        certain directions. We can extract the complex amplitude and square it to compute the mode transmission power.
+        Besides the effective index, :class:``ModeMonitor`` is primarily used to calculate the transmission of
+        certain modes in certain directions. We can extract the complex amplitude and square it to compute the mode
+        transmission power.
 
     Example
     -------

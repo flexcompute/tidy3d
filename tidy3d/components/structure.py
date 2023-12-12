@@ -166,9 +166,13 @@ class Structure(AbstractStructure):
 
 class MeshOverrideStructure(AbstractStructure):
     """Defines an object that is only used in the process of generating the mesh.
-    A :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
-    grid size along x,y,z directions, and a boolean on whether the override
-    will be enforced.
+
+    Notes
+    -----
+
+        A :class:`MeshOverrideStructure` is a combination of geometry :class:`Geometry`,
+        grid size along ``x``,``y``,``z`` directions, and a boolean on whether the override
+        will be enforced.
 
     Example
     -------

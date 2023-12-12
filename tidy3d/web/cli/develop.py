@@ -203,3 +203,13 @@ def build_documentation(args=None):
     # TODO update generic path management.
     subprocess.run(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0
+
+
+@develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
+def build_documentation_pdf(args=None):
+    """Verifies and builds the documentation."""
+    # Runs the documentation build from the poetry environment
+    # TODO cd to local path
+    # TODO update generic path management.
+    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"])
+    return 0

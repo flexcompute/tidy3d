@@ -793,6 +793,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 # handle cases where default values are pydantic models
                 default_val = f"{default_val.__class__.__name__}({default_val})"
                 default_val = (", ").join(default_val.split(" "))
+                default_val = default_val.replace("=", "")
 
             # make first line: name : type = default
             default_str = "" if field.required else f" = {default_val}"

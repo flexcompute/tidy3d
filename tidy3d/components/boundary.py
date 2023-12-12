@@ -419,6 +419,7 @@ class Absorber(AbsorberSpec):
 
     Notes
     -----
+
         This absorber is well-suited for dispersive materials intersecting with absorbing edges of the simulation at the
          expense of more layers.
 

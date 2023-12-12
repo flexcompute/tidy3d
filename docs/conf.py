@@ -85,6 +85,7 @@ extensions = [
     "sphinx.ext.coverage",
     "sphinx.ext.extlinks",
     "sphinx.ext.intersphinx",  # Link to other project's documentation (see mapping below)
+    "sphinx.ext.imgconverter",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
@@ -139,7 +140,7 @@ html_theme_options = {
     "pygment_light_style": "colorful",
     "pygment_dark_style": "material",
 }
-latex_engine = "pdflatex"
+latex_engine = "xelatex"
 language = "en"
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
@@ -200,18 +201,26 @@ elif current_tag:
         version = "latest"
 # version = tidy3d.__version__
 
-latex_elements: dict = {
-    # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
-    # The paper size ('letterpaper' or 'a4paper').
-    #
-    # 'papersize': 'letterpaper',
-    # The font size ('10pt', '11pt' or '12pt').
-    #
-    # 'pointsize': '10pt',
-    # Additional stuff for the LaTeX preamble.
-    #
-    # 'preamble': '',
-    # Latex figure (float) alignment
-    #
-    # 'figure_align': 'htbp',
+latex_elements = {
+    "preamble": r"""
+    \usepackage[utf8]{inputenc}
+    \usepackage[T1]{fontenc}
+    \usepackage[pdfa=true]{hyperref}
+    \usepackage{cmap}
+    """
 }
+# latex_elements: dict = {
+#     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
+#     # The paper size ('letterpaper' or 'a4paper').
+#     #
+#     # 'papersize': 'letterpaper',
+#     # The font size ('10pt', '11pt' or '12pt').
+#     #
+#     # 'pointsize': '10pt',
+#     # Additional stuff for the LaTeX preamble.
+#     #
+#     # 'preamble': '',
+#     # Latex figure (float) alignment
+#     #
+#     # 'figure_align': 'htbp',
+# }

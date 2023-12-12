@@ -83,7 +83,7 @@ PML_HEIGHT_FOR_0_DIMS = 0.02
 
 class Simulation(Box):
     """
-    Custom implementation of Maxwell’s equations which represents the physical model to be solved using the FDTD
+    Custom implementation of Maxwell’s equations which represent the physical model to be solved using the FDTD
     method.
 
     Notes
@@ -100,7 +100,7 @@ class Simulation(Box):
 
         FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is
         the most widely used method in photonics design. The Maxwell's
-        equations implemented in the ``Simulation`` are solved per time-step in this order.
+        equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.
 
         The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
         which describe the device and :attr:`sources` of electromagentic excitation. This information is used to
@@ -113,11 +113,9 @@ class Simulation(Box):
 
         **Dimensions Selection**
 
-
         By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation
-        :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size in that
-        direction (eg. `` tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in
-        that direction.
+        :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.
+        ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.
 
         .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/
 
@@ -215,8 +213,8 @@ class Simulation(Box):
 
     By default, ``tidy3d`` checks periodically the total field intensity left in the simulation, and compares that to
     the maximum total field intensity recorded at previous times. If it is found that the ratio of these two values
-    is smaller than the default :attr:`shutoff` value :math:`10^{-5}`, the simulation is terminated as the fields remaining
-    in the simulation are deemed negligible. The shutoff value can be controlled using the :attr:`shutoff`
+    is smaller than the default :attr:`shutoff` value :math:`10^{-5}`, the simulation is terminated as the fields
+    remaining in the simulation are deemed negligible. The shutoff value can be controlled using the :attr:`shutoff`
     parameter, or completely turned off by setting it to zero. In most cases, the default behavior ensures that
     results are correct, while avoiding unnecessarily long run times. The Flex Unit cost of the simulation is also
     proportionally scaled down when early termination is encountered.
@@ -232,12 +230,14 @@ class Simulation(Box):
     profiles would be arbitrary, and would depend on the exact run time and apodization definition. An example of
     such a use case is presented in our case study.
 
+    .. TODO add links to resonant plugins.
+
     See Also
     --------
 
-    **Notebooks**
-        `High-Q photonic crystal cavity TODO <>`_
+    **Notebooks:**
 
+        * `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
     """
 
     medium: MediumType3D = pydantic.Field(
@@ -258,10 +258,16 @@ class Simulation(Box):
     `Index <../mediums.html>`_:
         Dispersive and dispersionless Mediums models.
 
+    **Notebooks:**
+
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
     **Lectures:**
+
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
 
     **GUI:**
+
         * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
     """
 
@@ -276,17 +282,21 @@ class Simulation(Box):
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
-    """
-    You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+    """You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
-    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC` symmetry). Note
-    that the vectorial nature of the fields must be considered to determine the symmetry value correctly.
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC`
+    symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value
+    correctly.
 
-    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and :class:`PMC`-like
-    symmetry planes. You can refer to this figure when considering whether a source field conforms to a :class:`PEC`- or
-    :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with optical waveguide modes.
+    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and
+    :class:`PMC`-like symmetry planes. You can refer to this figure when considering whether a source field conforms
+    to a :class:`PEC`- or :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with
+    optical waveguide modes.
 
     .. image:: ../../notebooks/img/pec_pmc.png
+
+
+    .. TODO maybe resize?
     """
 
     structures: Tuple[Structure, ...] = pydantic.Field(
@@ -303,7 +313,7 @@ class Simulation(Box):
     -------
     Simple application reference:
 
-    .. code:: python
+    .. code-block:: python
 
         Simulation(
             ...
@@ -324,7 +334,7 @@ class Simulation(Box):
     simulation.
 
     For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
-    spatial discretization :math:`\\Delta z = 25\\text{nm}` will compute equivalently because the grid does
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` will compute equivalently because that grid does
     not resolve the feature permittivity in between grid points without :attr:`subpixel` averaging.
 
     .. image:: ../../_static/img/permittivity_on_yee_grid.png
@@ -365,7 +375,7 @@ class Simulation(Box):
     -------
     Simple application reference:
 
-    .. code:: python
+    .. code-block:: python
 
          Simulation(
             ...
@@ -403,7 +413,7 @@ class Simulation(Box):
     -------
     Simple application reference:
 
-    .. code:: python
+    .. code-block:: python
 
          Simulation(
             ...
@@ -422,10 +432,16 @@ class Simulation(Box):
         A perfectly matched layer model.
 
     :class:`BoundarySpec`:
-        Specifies boundary conditions on each side of the domain and along each dimension
+        Specifies boundary conditions on each side of the domain and along each dimension.
 
     `Index <../boundary_conditions.html>`_
         All boundary condition models.
+
+    **Notebooks**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
@@ -456,7 +472,7 @@ class Simulation(Box):
     -------
     Simple application reference:
 
-    .. code:: python
+    .. code-block:: python
 
          Simulation(
             ...
@@ -475,9 +491,9 @@ class Simulation(Box):
     fields are distributed on the edge of the Yee cell and the magnetic fields are distributed on the surface of the
     Yee cell.
 
-    .. image:: ../../_static/img/permittivity_on_yee_grid.png
+    .. image:: ../../_static/img/yee_grid_illustration.png
 
-    *  A typical rule of thumb is to choose the discretization to be about wavelengths :math:`\\frac{\\lambda_m}{20}`.
+    A typical rule of thumb is to choose the discretization to be about wavelengths :math:`\\frac{\\lambda_m}{20}`.
 
     **Numerical Dispersion - 1D Illustration**
 
@@ -521,13 +537,15 @@ class Simulation(Box):
 
     .. math::
 
-        \\frac{\\delta^2}{\\delta x^2} E(x_m) \\approx \\frac{1}{\\Delta x^2} \\left[ E(x_m + \\Delta x) + E(x_m -
-        \\Delta x) - 2 E(x_m) \\right]
+        \\frac{\\delta^2}{\\delta x^2} E(x_i) \\approx \\frac{1}{\\Delta x^2} \\left[ E(x_i + \\Delta x) + E(x_i -
+        \\Delta x) - 2 E(x_i) \\right]
 
     .. math::
 
         \\frac{\\delta^2}{\\delta t^2} E(t_{\\alpha}) \\approx \\frac{1}{\\Delta t^2} \\left[ E(t_{\\alpha} + \\Delta
-        t) + E(_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
+        t) + E(t_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
+
+    .. TODO define the alpha
 
     Hence, these discrete fields have this new dispersion relation:
 

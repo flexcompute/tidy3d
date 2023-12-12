@@ -841,11 +841,11 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
         **Parameters Caveats**
 
-        The :param:`center` and :param:`size` parameters define
+        The :attr:`center` and :attr:`size` parameters define
         where the monitor will be placed in order to record near fields, typically very close
         to the structure of interest. The near fields are then projected
-        to far-field locations defined by :param:`phi`, :param:`theta`, and :param:`proj_distance`, relative
-        to the :param:`custom_origin`.
+        to far-field locations defined by :attr:`phi`, :attr:`theta`, and :attr:`proj_distance`, relative
+        to the :attr:`custom_origin`.
 
         **Usage Caveats**
 
@@ -861,10 +861,9 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         encloses the device, it is advisable to pick the size of the monitor such that the
         recorded near fields decay to negligible values near the edges of the monitor.
 
-        o that the approximations are not used, and the
-        projection is accurate even just a few wavelengths away from the near field locations.
+        .. TODO TYPO FIX o that the approximations are not used, and the projection is accurate even just a few wavelengths away from the near field locations.
 
-        By default, if no :param:`proj_distance`` was provided, the fields are projected to a distance of 1m.
+        By default, if no :attr:`proj_distance`` was provided, the fields are projected to a distance of 1m.
 
         **Server-side field projection Application**
 
@@ -882,10 +881,10 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         .. TODO unsure if add on params?
 
         If the distance between the near and far field locations is
-        much larger than the size of the device, one can typically set :param:`far_field_approx` to
+        much larger than the size of the device, one can typically set :attr:`far_field_approx` to
         ``True``, which will make use of the far-field approximation to speed up calculations.
         If the projection distance is comparable to the size of the device, we recommend setting
-        :param:`far_field_approx` to ``False``.
+        :attr:`far_field_approx` to ``False``.
 
         .. image:: ../../notebooks/img/n2f_diagram.png
 
@@ -904,7 +903,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
             re-run the :class:`FieldProjector`.
 
         In cases where we may want to project to intermediate distances where the far field approximation is no
-        longer valid, simply include the class definition parameter :param:`far_field_approx` to ``False`` in the
+        longer valid, simply include the class definition parameter :attr:`far_field_approx` to ``False`` in the
         ``FieldProjectionAngleMonitor`` instantiation. The resulting computations will be a bit slower,
         but the results will be significantly more accurate.
 
@@ -973,21 +972,21 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
         **Parameters Caveats**
 
-        The :param center: and :param:`size` fields define
+        The :attr:`center` and :attr:`size` fields define
         where the monitor will be placed in order to record near fields, typically very close
         to the structure of interest. The near fields are then projected
-        to far-field locations defined by :param:`x`, :param:`y`, and :param:`proj_distance`, relative
-        to the :param:`custom_origin`.
+        to far-field locations defined by :attr:`x`, :attr:`y`, and :attr:`proj_distance`, relative
+        to the :attr:`custom_origin`.
 
-        Here, :param:`x` and :param:`y`, correspond to a local coordinate system
-        where the local ``z`` axis is defined by :param:`proj_axis`: which is the axis normal to this monitor.
+        Here, :attr:`x` and :attr:`y`, correspond to a local coordinate system
+        where the local ``z`` axis is defined by :attr:`proj_axis`: which is the axis normal to this monitor.
 
         **Far-Field Approximation Selection**
 
         If the distance between the near and far field locations is much larger than the size of the
-        device, one can typically set :param:`far_field_approx` to ``True``, which will make use of the
+        device, one can typically set :attr:`far_field_approx` to ``True``, which will make use of the
         far-field approximation to speed up calculations. If the projection distance is comparable
-        to the size of the device, we recommend setting :param:`far_field_approx` to ``False``,
+        to the size of the device, we recommend setting :attr:`far_field_approx` to ``False``,
         so that the approximations are not used, and the projection is accurate even just a few
         wavelengths away from the near field locations.
 

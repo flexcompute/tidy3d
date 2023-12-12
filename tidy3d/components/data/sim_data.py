@@ -30,7 +30,7 @@ class SimulationData(Tidy3dBaseModel):
         ``SimulationData`` is loaded in a new session and the :class:`.Simulation` is no longer in memory.
 
         More importantly, the ``SimulationData`` contains a reference to the data for each of the monitors within the
-        original :class:`Simulation`. This data can be accessed directly using the name given to the monitors initially.
+        original :class:`.Simulation`. This data can be accessed directly using the name given to the monitors initially.
 
     Examples
     --------
