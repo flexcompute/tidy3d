@@ -4,6 +4,7 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 from typing import List, Tuple, Dict
+from math import isclose
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -642,14 +643,16 @@ class ModeSolver(Tidy3dBaseModel):
 
     @cached_property
     def _has_complex_eps(self) -> bool:
-        """Check if there are media with a complex-valued epsilon in the plane of the mode at the
-        mode solver freqs. A separate check is done inside the solver, which looks at the actual
+        """Check if there are media with a complex-valued epsilon in the plane of the mode.
+        A separate check is done inside the solver, which looks at the actual
         eps and mu and uses a tolerance to determine whether to use real or complex fields, so
         the actual behavior may differ from what's predicted by this property."""
+        check_freqs = np.unique([np.amin(self.freqs), np.amax(self.freqs), np.mean(self.freqs)])
         for int_mat in self._intersecting_media:
-            max_imag_eps = np.amax(np.abs(np.imag(int_mat.eps_model(np.array(self.freqs)))))
-            if not np.isclose(max_imag_eps, 0):
-                return False
+            for freq in check_freqs:
+                max_imag_eps = np.amax(np.abs(np.imag(int_mat.eps_model(freq))))
+                if not isclose(max_imag_eps, 0):
+                    return False
         return True
 
     def to_source(
