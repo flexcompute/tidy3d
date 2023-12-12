@@ -145,7 +145,7 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin12LightExtractor
 
 Heat Solver
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -153,6 +153,14 @@ Heat Solver
     notebooks/HeatSolver
     notebooks/MetalHeaterPhaseShifter
     notebooks/ThermallyTunedRingResonator
+
+Advance Applications
+~~~~~~~~~~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/WaveguideBendSimulator
 
 Case Studies
 ------------
@@ -188,6 +196,7 @@ Photonic Integrated Circuit Components
     notebooks/ParticleSwarmOptimizedPBS
     notebooks/BullseyeCavityPSO
     notebooks/PlasmonicWaveguideCO2Sensor
+    notebooks/BilayerSiNEdgeCoupler
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -197,6 +206,7 @@ Metamaterials, Gratings, and Other Periodic Structures
     notebooks/DielectricMetasurfaceAbsorber
     notebooks/GradientMetasurfaceReflector
     notebooks/GrapheneMetamaterial
+    notebooks/TunableChiralMetasurface
     notebooks/MicrowaveFrequencySelectiveSurface
     notebooks/HighQSi
     notebooks/HighQGe
