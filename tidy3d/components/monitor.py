@@ -317,7 +317,10 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
     def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
         """Size of intermediate data recorded by the monitor during a solver run."""
         # Need to store all fields on the mode surface
-        return BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes * 6
+        bytes_single = BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes * 6
+        if self.mode_spec.precision == "double":
+            return 2 * bytes_single
+        return bytes_single
 
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
