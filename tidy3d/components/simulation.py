@@ -2661,26 +2661,38 @@ class Simulation(AbstractSimulation):
             """Subdivide Medium2D into pieces with homogeneous substrate / superstrate."""
             dl = get_dls(geom, axis, 1)[0]
             center = get_bounds(geom, axis)[0]
-            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
-            thickened_geom = set_bounds(
-                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
+
+            _, neighbors, _ = get_neighbors(
+                geom=geom, axis=axis, structures=structures, homogeneous_only=False
             )
-            grid_sizes = get_dls(thickened_geom, axis, 2)
-            dls_signed = [-grid_sizes[0], grid_sizes[1]]
-            neighbors = []
-            for _, dl_signed in enumerate(dls_signed):
-                geom_shifted = set_bounds(
-                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
-                )
-                structures_side = Scene.intersecting_structures(
-                    Box.from_bounds(*geom_shifted.bounds), structures
-                )
-                neighbors = neighbors + [struct.geometry for struct in structures_side]
+
+            # get intersecting polygons after shifting a bit upwards and downwards to catch
+            # cases that would be missed due to numerical precision issues
+            shift = dl * DIST_NEIGHBOR_REL_2D_MED
+            geom_shifted_up = set_bounds(geom, (center + shift, center + shift), axis)
+            geom_shifted_down = set_bounds(geom, (center - shift, center - shift), axis)
 
             subdivided = []
             polygons = []
             for other in neighbors:
                 polygons += geom.bounding_box.intersections_with(other)
+                polygons += geom_shifted_up.bounding_box.intersections_with(other)
+                polygons += geom_shifted_down.bounding_box.intersections_with(other)
+
+            # all_geoms = [
+            #     geom.bounding_box,
+            #     geom_shifted_up.bounding_box,
+            #     geom_shifted_down.bounding_box
+            # ] + neighbors
+
+            polygons = list(set(polygons))
+            polygons += [shapely.symmetric_difference_all(polygons)]
+
+            # if len(polygons) > 1:
+            #     polygons = shapely.difference(polygons,)
+            # print(polygons)
+            # print([polygon for polygon in polygons])
+
             polygon_boundaries = [
                 shapely.LineString(list(polygon.exterior.coords)) \
                     if not isinstance(polygon, shapely.LineString) else polygon \
@@ -2694,22 +2706,35 @@ class Simulation(AbstractSimulation):
                 vertices = list(zip(xx, yy))
                 piece = PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
                 subdivided.append(piece)
+                # print(piece)
+            #     print(vertices)
+            #     print("---")
+            # print("===")
 
             return subdivided
 
-        def get_neighboring_media(
-            geom: Geometry, axis: Axis, structures: List[Structure]
-        ) -> Tuple[List[MediumType3D], List[float]]:
-            """Find the neighboring material properties and grid sizes."""
+        def get_thickened_geom(geom: Geometry, axis: Axis):
+            """Helper to return a slightly thickened version of a planar geometry."""
             dl = get_dls(geom, axis, 1)[0]
             center = get_bounds(geom, axis)[0]
             thickness = dl * DIST_NEIGHBOR_REL_2D_MED
-            thickened_geom = set_bounds(
+            return set_bounds(
                 geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
-            )
+            )            
+
+        def get_neighbors(
+            geom: Geometry,
+            axis: Axis,
+            structures: List[Structure],
+            homogeneous_only: bool = True,
+        ):
+            """Find the neighboring material properties and grid sizes."""
+            center = get_bounds(geom, axis)[0]
+            thickened_geom = get_thickened_geom(geom=geom, axis=axis)
             grid_sizes = get_dls(thickened_geom, axis, 2)
             dls_signed = [-grid_sizes[0], grid_sizes[1]]
-            neighbors = []
+            neighboring_media = []
+            neighboring_geoms = []
             for _, dl_signed in enumerate(dls_signed):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
@@ -2720,19 +2745,35 @@ class Simulation(AbstractSimulation):
                 # a tiny bit before checking for intersections
                 bounds = [list(i) for i in geom_shifted.bounds]
                 _, tan_dirs = self.pop_axis([0, 1, 2], axis=axis)
+                bounds_center = (np.array(bounds[0]) + np.array(bounds[1])) / 2
+
+                # if homogeneous_only:
+                #     for dim in tan_dirs:
+                #         bounds[0][dim] += fp_eps
+                #         bounds[1][dim] -= fp_eps
+
                 for dim in tan_dirs:
-                    bounds[0][dim] += fp_eps
-                    bounds[1][dim] -= fp_eps
+                    bounds[0][dim] = bounds_center[dim] - fp_eps
+                    bounds[1][dim] = bounds_center[dim] + fp_eps
+
                 media = Scene.intersecting_media(Box.from_bounds(*bounds), structures)
-                if len(media) > 1:
+                structures_side = Scene.intersecting_structures(
+                    Box.from_bounds(*bounds), structures
+                )
+
+                if len(media) > 1 and homogeneous_only:
                     raise SetupError(
                         "2D materials do not support multiple neighboring media on a side. "
                         "Please split the 2D material into multiple smaller 2D materials, one "
                         "for each background medium."
                     )
-                medium_side = Medium() if len(media) == 0 else list(media)[0]
-                neighbors.append(medium_side)
-            return (neighbors, grid_sizes)
+
+                medium_side = [Medium()] if len(media) == 0 else list(media)
+
+                neighboring_media += medium_side
+                neighboring_geoms += [struct.geometry for struct in structures_side]
+
+            return neighboring_media, neighboring_geoms, grid_sizes
 
         simulation_background = Structure(geometry=self.geometry, medium=self.medium)
         background_structures = [simulation_background]
@@ -2746,33 +2787,59 @@ class Simulation(AbstractSimulation):
             # otherwise, found a 2D material; replace it with volumetric equivalent
             axis = structure.geometry._normal_2dmaterial
 
-            old_center = get_bounds(structure.geometry, axis)[0]
+            # old_center = get_bounds(structure.geometry, axis)[0]
             # snap monolayer to grid
-            geometry = snap_to_grid(structure.geometry, axis)
-            center = get_bounds(geometry, axis)[0]
+            # print(structure.geometry.center[axis])
+            # geometry = snap_to_grid(structure.geometry, axis)
+            # print(geometry.center[axis])
+            geometry = structure.geometry
+            # center = get_bounds(geometry, axis)[0]
 
             # subdivide
             subdivided_geometries = subdivide(geometry, axis, background_structures)
+            background_structures_temp = []
 
             for subdivided_geometry in subdivided_geometries:
-                geometry = set_bounds(
-                    subdivided_geometry, bounds=(old_center, old_center), axis=axis
-                )
+                # subdivided_geometry = set_bounds(
+                #     subdivided_geometry, bounds=(old_center, old_center), axis=axis
+                # )
+                # print(subdivided_geometry)
+                # print("---")
+
+                subdivided_geometry = snap_to_grid(subdivided_geometry, axis)
+                center = get_bounds(subdivided_geometry, axis)[0]
 
                 # get neighboring media and grid sizes
-                (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
-
-                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
-                new_geometry = set_bounds(geometry, bounds=new_bounds, axis=axis)
+                neighbors, _, dls = get_neighbors(
+                    subdivided_geometry, axis, background_structures, True
+                )
 
                 new_medium = structure.medium.volumetric_equivalent(
                     axis=axis, adjacent_media=neighbors, adjacent_dls=dls
                 )
+
+                # print(subdivided_geometry)
+                # print("--")
+
+                subdivided_geometry = snap_to_grid(subdivided_geometry, axis)
+                center = get_bounds(subdivided_geometry, axis)[0]
+
+                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
+                temp_geometry = set_bounds(subdivided_geometry, bounds=new_bounds, axis=axis)
+                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
+
+                if structure.medium.is_pec:
+                    new_bounds = (center - fp_eps, center + fp_eps)
+                new_geometry = set_bounds(subdivided_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+
                 new_structures.append(new_structure)
-                background_structures.append(new_structure)
-                print(neighbors)
-            print("---")
+                background_structures_temp.append(temp_structure)
+                # print(neighbors)
+            #     print(new_medium)
+            #     print("---")
+            # print("===")
+            background_structures += background_structures_temp
 
         return tuple(new_structures)
 
