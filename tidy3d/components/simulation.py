@@ -103,7 +103,7 @@ class Simulation(Box):
         equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.
 
         The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
-        which describe the device and :attr:`sources` of electromagentic excitation. This information is used to
+        which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to
         computate the time dynamics of the electric and magnetic fields in this system. From these time-domain
         results, frequency-domain information of the simulation can also be extracted, and used for device design and
         optimization.
@@ -235,9 +235,10 @@ class Simulation(Box):
     See Also
     --------
 
-    **Notebooks:**
+    **Notebooks**
 
-        * `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
+    *   `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
+
     """
 
     medium: MediumType3D = pydantic.Field(
@@ -260,15 +261,16 @@ class Simulation(Box):
 
     **Notebooks:**
 
-        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures:**
 
-        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
 
     **GUI:**
 
-        * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+    * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+
     """
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
@@ -493,7 +495,11 @@ class Simulation(Box):
 
     .. image:: ../../_static/img/yee_grid_illustration.png
 
-    A typical rule of thumb is to choose the discretization to be about wavelengths :math:`\\frac{\\lambda_m}{20}`.
+    Note
+    ----
+
+        A typical rule of thumb is to choose the discretization to be about :math:`\\frac{\\lambda_m}{20}` where
+        :math:`\\lambda_m` is the field wavelength.
 
     **Numerical Dispersion - 1D Illustration**
 
@@ -501,7 +507,7 @@ class Simulation(Box):
     fields. In order to reduce it, it is necessary to improve the discretization of the simulation for particular
     frequencies and spatial features. This is an important aspect of defining the grid.
 
-    Consider a 1D wave equation in vacuum:
+    Consider a standard 1D wave equation in vacuum:
 
     .. math::
 

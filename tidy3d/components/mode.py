@@ -22,9 +22,9 @@ class ModeSpec(Tidy3dBaseModel):
     Notes
     -----
 
-        The ``angle_theta`` and ``angle_phi parameters`` define the injection axis as illustrated in the figure
-        below, with respect to the axis normal to the mode plane (``x`` in the figure). Note that ``angle_theta``
-        must be smaller than :math:`\frac{pi}{2}`. To inject in the backward direction, we can still use the
+        The :attr:`angle_theta` and :attr:`angle_phi` parameters define the injection axis as illustrated in the figure
+        below, with respect to the axis normal to the mode plane (``x`` in the figure). Note that :attr:`angle_theta`
+        must be smaller than :math:`\\frac{pi}{2}`. To inject in the backward direction, we can still use the
         ``direction`` parameter as also shown in the figure. Similarly, the mode amplitudes computed in mode monitors
         are defined w.r.t. the ``forward`` and ``backward`` directions as illustrated. Note, the planar axes are
         found by popping the injection axis from ``{x,y,z}``. For example, if injection axis is ``y``, the planar
@@ -32,7 +32,7 @@ class ModeSpec(Tidy3dBaseModel):
 
         .. image:: ../../notebooks/img/ring_modes.png
 
-        The ``bend_axis`` is the axis normal to the plane in which the bend lies, (``z`` in the diagram below). In
+        The :attr:`bend_axis` is the axis normal to the plane in which the bend lies, (``z`` in the diagram below). In
         the mode specification, it is defined locally for the mode plane as one of the two axes tangential to the
         plane. In the case of bends that lie in the ``xy``-plane, the mode plane would be either in ``xz`` or in
         ``yz``, so in both cases the correct setting is ``bend_axis=1``, selecting the global ``z``. The
@@ -50,7 +50,7 @@ class ModeSpec(Tidy3dBaseModel):
     --------
 
     **Notebooks**:
-        * `Introduction on ``tidy3d`` working principles <../../notebooks/Primer.html#Modes>`_
+        * `Introduction on tidy3d working principles <../../notebooks/Primer.html#Modes>`_
         * `Defining mode sources and monitors <../../notebooks/ModalSourcesMonitors.html>`_
         * `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
         * `Waveguide to ring coupling <../../notebooks/WaveguideToRingCoupling.html>`_

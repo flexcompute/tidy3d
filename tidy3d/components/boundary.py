@@ -319,10 +319,11 @@ class PML(AbsorberSpec):
 
         .. image:: ../../notebooks/img/diverged-fdtd-simulation.png
 
-        Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios. If
-        your simulation lacks any structures inserted into the PML at an angle, but includes dispersive material in PML,
-        it is advisable to substitute a nondispersive material for the dispersive material. Alternatively,
-        if dispersion is necessary, switching from the :class:`PML` to class:`Absorber` can effectively address the issue.
+        Incorporating a dispersive material into the PML can also cause simulation divergence in certain scenarios.
+        If your simulation lacks any structures inserted into the PML at an angle, but includes dispersive material
+        in PML, it is advisable to substitute a nondispersive material for the dispersive material. Alternatively,
+        if dispersion is necessary, switching from the :class:`PML` to :class:`Absorber` can effectively address the
+        issue.
 
         The PML can effectively absorb outgoing radiation with minimum reflection as if the radiation just propagates
         into the free space. However, it’s important to keep in mind that the PML only absorbs propagating fields. For
@@ -342,7 +343,8 @@ class PML(AbsorberSpec):
     Note
     ----
 
-        For best results, structures that intersect with the PML or simulation edges should extend extend all the way through. In many such cases, an “infinite” size ``td.inf`` can be used to define the size along that dimension.
+        For best results, structures that intersect with the PML or simulation edges should extend extend all the way
+        through. In many such cases, an “infinite” size ``td.inf`` can be used to define the size along that dimension.
 
     Example
     -------
@@ -421,13 +423,13 @@ class Absorber(AbsorberSpec):
     -----
 
         This absorber is well-suited for dispersive materials intersecting with absorbing edges of the simulation at the
-         expense of more layers.
+        expense of more layers.
 
         **Usage Caveats**
 
         Using absorber boundary is often a good remedy to resolve divergence issues related to :class:`PML`. The
         adiabatic absorber is a multilayer system with gradually increasing conductivity. The absorber usually has a
-        larger undesired reflection compared to :class`PML`. In practice, this small difference rarely matters,
+        larger undesired reflection compared to :class:`PML`. In practice, this small difference rarely matters,
         but is important to understand for simulations that require high accuracy.
 
         There are two possible sources for the reflection from absorbers. The first, and more common one, is that the
@@ -496,10 +498,13 @@ class Boundary(Tidy3dBaseModel):
     See Also
     --------
 
-    :class:`PML`:
+    :class:`BoundarySpec`
+        Specifies boundary conditions on each side of the domain and along each dimension.
+
+    :class:`PML`
         A standard PML along a single dimension.
 
-    **Notebooks:**
+    **Notebooks**
         * `Setting up boundary conditions <../../notebooks/BoundaryConditions.html>`_
         * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
@@ -741,10 +746,13 @@ class BoundarySpec(Tidy3dBaseModel):
     See Also
     --------
 
-    **Notebooks:**
+    :class:`Boundary`
+        Boundary conditions at the minus and plus extents along a dimension.
+
+    **Notebooks**
         * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
 
-    **Lectures:**
+    **Lectures**
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 

@@ -418,11 +418,11 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
     **Notebooks**
 
-        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
 
     **Lectures**
 
-        * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
 
     """
 
@@ -615,7 +615,7 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
     **Notebooks**
 
-        * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
+    * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -863,7 +863,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
         .. TODO TYPO FIX o that the approximations are not used, and the projection is accurate even just a few wavelengths away from the near field locations.
 
-        By default, if no :attr:`proj_distance`` was provided, the fields are projected to a distance of 1m.
+        By default, if no :attr:`proj_distance` was provided, the fields are projected to a distance of 1m.
 
         **Server-side field projection Application**
 
@@ -887,6 +887,8 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         :attr:`far_field_approx` to ``False``.
 
         .. image:: ../../notebooks/img/n2f_diagram.png
+
+        .. TODO Fix that image so remove right irrelevant side
 
         When selected, it is assumed that:
 

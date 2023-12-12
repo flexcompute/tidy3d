@@ -598,7 +598,12 @@ class ReverseInterpolatedSource(Source):
 
 
 class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
-    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
+    """Source in a rectangular volume with uniform time dependence.
+
+    Notes
+    -----
+
+        Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.
 
     Example
     -------
@@ -1119,7 +1124,7 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
         **References**:
 
-            .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
+        .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
 
     Example
     -------
@@ -1159,8 +1164,8 @@ class TFSF(AngledFieldSource, VolumeSource):
     Notes
     -----
 
-        The TFSF source injects :math:` \\frac{1 W}{\\text{\\mu m}^2}` of power along the :attr:`injection_axis`. Note that in the
-        case of angled incidence, :math:`\\frac{1 W}{\\text{\\mu m}^2}` is still injected along the source's :attr:`injection_axis`,
+        The TFSF source injects :math:`\\frac{1 W}{\\mu m^2}` of power along the :attr:`injection_axis`. Note that in the
+        case of angled incidence, :math:`\\frac{1 W}{\\mu m^2}` is still injected along the source's :attr:`injection_axis`,
         and not the propagation direction, unlike a :class:`PlaneWave` source. This allows computing
         scattering and absorption cross-sections without the need for additional normalization.
 
@@ -1175,16 +1180,14 @@ class TFSF(AngledFieldSource, VolumeSource):
         :attr:`injection_axis` of the TFSF source, the suppression of the incident field outside the TFSF box may not be as
         close to zero as in the case of a uniform grid. Because of this, a warning may be issued when nonuniform grid
         TFSF setup is detected. In some cases, however, the accuracy may be only weakly affected, and the warnings
-        can be ignored. In this example, the presence of scatterers does cause the auto-generated FDTD grid to be
-        non-uniform in the end directions, but as we’ll see, the results are still in excellent agreement with the
-        reference simulation. To force a uniform grid in the TFSF region and avoid the warnings, a mesh override
-        structure can be used, as illustrated in our `nanoparticle scattering example <../../notebooks/PlasmonicNanoparticle.html>`_ .
+        can be ignored.
 
     See Also
     --------
 
     **Notebooks**:
         * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
+        * `Nanoparticle Scattering <../../notebooks/PlasmonicNanoparticle.html>`_: To force a uniform grid in the TFSF region and avoid the warnings, a mesh override structure can be used as illustrated here.
     """
 
     injection_axis: Axis = pydantic.Field(

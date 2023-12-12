@@ -633,14 +633,14 @@ class Medium(AbstractMedium):
     See Also
     --------
 
-    **Notebooks:**
+    **Notebooks**
         * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
         * `Index <../../notebooks/docs/features/medium.html>`_
 
-    **Lectures:**
+    **Lectures**
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
 
-    **GUI:**
+    **GUI**
         * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
 
     """
@@ -1401,7 +1401,7 @@ class DispersiveMedium(AbstractMedium, ABC):
     :class:`CustomPoleResidue`:
         A spatially varying dispersive medium described by the pole-residue pair model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -1533,7 +1533,7 @@ class PoleResidue(DispersiveMedium):
     :class:`CustomPoleResidue`:
         A spatially varying dispersive medium described by the pole-residue pair model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -1830,11 +1830,13 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     See Also
     --------
 
-    **Notebooks:**
-        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+    **Notebooks**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
-        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -1966,19 +1968,18 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
 
-
     Notes
     -----
+
         The frequency-dependence of the refractive index is described by:
 
         .. math::
 
             n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
-
         For lossless, weakly dispersive materials, the best way to incorporate the dispersion without doing
         complicated fits and without slowing the simulation down significantly is to provide the value of the
-        refractive index dispersion :math:`\frac{dn}{d\\lambda}` in :meth:`tidy3d.Sellmeier.from_dispersion`. The
+        refractive index dispersion :math:`\\frac{dn}{d\\lambda}` in :meth:`tidy3d.Sellmeier.from_dispersion`. The
         value is assumed to be at the central frequency or wavelength (whichever is provided), and a one-pole model
         for the material is generated.
 
@@ -1990,11 +1991,16 @@ class Sellmeier(DispersiveMedium):
     See Also
     --------
 
-    **Notebooks:**
-        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+    :class:`CustomSellmeier`
+        A spatially varying dispersive medium described by the Sellmeier model.
+
+    **Notebooks**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
-        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
@@ -2109,7 +2115,10 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     See Also
     --------
 
-    **Notebooks:**
+    :class:`Sellmeier`
+        A dispersive medium described by the Sellmeier model.
+
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2249,7 +2258,7 @@ class Lorentz(DispersiveMedium):
     See Also
     --------
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2370,7 +2379,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     :class:`CustomPoleResidue`:
         A spatially varying dispersive medium described by the pole-residue pair model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2500,10 +2509,10 @@ class Drude(DispersiveMedium):
     See Also
     --------
 
-    :class:`CustomPoleResidue`:
-        A spatially varying dispersive medium described by the pole-residue pair model.
+    :class:`CustomDrude`:
+        A spatially varying dispersive medium described by the Drude model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2589,10 +2598,10 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     See Also
     --------
 
-    :class:`CustomPoleResidue`:
-        A spatially varying dispersive medium described by the pole-residue pair model.
+    :class:`Drude`:
+        A dispersive medium described by the Drude model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2683,10 +2692,10 @@ class Debye(DispersiveMedium):
     See Also
     --------
 
-    :class:`CustomPoleResidue`:
-        A spatially varying dispersive medium described by the pole-residue pair model.
+    :class:`CustomDebye`
+        A spatially varying dispersive medium described by the Debye model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2754,7 +2763,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
     Notes
     -----
-         The frequency-dependence of the complex-valued permittivity is described by:
+
+        The frequency-dependence of the complex-valued permittivity is described by:
 
         .. math::
 
@@ -2776,10 +2786,10 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     See Also
     --------
 
-    :class:`CustomPoleResidue`:
-        A spatially varying dispersive medium described by the pole-residue pair model.
+    :class:`Debye`
+        A dispersive medium described by the Debye model.
 
-    **Notebooks:**
+    **Notebooks**
         * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
 
     **Lectures**
@@ -2898,7 +2908,7 @@ class AnisotropicMedium(AbstractMedium):
     :class:`FullyAnisotropicMedium`
         Fully anisotropic medium including all 9 components of the permittivity and conductivity tensors.
 
-    **Notebooks:**
+    **Notebooks**
         * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
         * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
     """
@@ -3053,7 +3063,7 @@ class FullyAnisotropicMedium(AbstractMedium):
     :class:`AnisotropicMedium`
         Diagonally anisotropic medium.
 
-    **Notebooks:**
+    **Notebooks**
         * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
         * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
@@ -3283,7 +3293,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     :class:`AnisotropicMedium`
         Diagonally anisotropic medium.
 
-    **Notebooks:**
+    **Notebooks**
         * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
         * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
         * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_

@@ -26,7 +26,7 @@ class SimulationData(Tidy3dBaseModel):
     Notes
     -----
 
-        The ``SimulationData`` objects store a copy of the original class:`.Simulation`:, so it can be recovered if the
+        The ``SimulationData`` objects store a copy of the original :class:`.Simulation`:, so it can be recovered if the
         ``SimulationData`` is loaded in a new session and the :class:`.Simulation` is no longer in memory.
 
         More importantly, the ``SimulationData`` contains a reference to the data for each of the monitors within the

@@ -809,7 +809,7 @@ def estimate_cost(task_id: str) -> float:
     Returns
     -------
     float
-        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``..
+        Estimated maximum cost for :class:`.Simulation` associated with given ``task_id``.
 
     Note
     ----
