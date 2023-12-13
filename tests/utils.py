@@ -232,7 +232,9 @@ SIM_FULL = td.Simulation(
                     num_iters=10,
                     models=[
                         td.NonlinearSusceptibility(chi3=0.1),
-                        td.TwoPhotonAbsorption(beta=1),
+                        td.TwoPhotonAbsorption(
+                            beta=1, sigma=1, tau=1, e_e=1, e_h=0.8, c_e=1, c_h=1
+                        ),
                         td.KerrNonlinearity(n2=1),
                     ],
                 )
