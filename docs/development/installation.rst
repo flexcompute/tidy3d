@@ -13,12 +13,18 @@ Beta instructions for verification (REMOVE pre 2.6 release)
 
 Instructions for anyone who wants to test the new development flow before it gets included as part of the pre-release:
 
+For ubuntu:
+
 .. code-block:: bash
 
     git clone https://github.com/flexcompute/tidy3d.git
-    git branch -rA
+    cd tidy3d
+    git fetch origin repo_merge_no_history
     git checkout repo_merge_no_history
+    # Create and activate a virtual environment here based on your python installation
     python3 -m pip install -e . # Follow standard pip development install
+    python3 -m tidy3d develop # list all new development commands
+    python3 -m tidy3d develop configure-dev-environment
 
 Now you can run the following ``tidy3d`` cli commands to test them.
 
