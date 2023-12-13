@@ -1,14 +1,24 @@
 """Console script for tidy3d."""
+import platform
+
 import click
 import subprocess
 import re
+
+
+def echo_and_run_subprocess(command: list):
+    concatenated_command = " ".join(command)
+    print("Running: " + concatenated_command)
+    subprocess.run(command)
 
 
 def verify_pandoc_is_installed_and_version_less_than_3():
     # TODO ADD DOCSTRINGS AND DOCUMENTATION
     try:
         # Running 'pandoc --version' command
-        result = subprocess.run(["pandoc", "--version"], capture_output=True, text=True, check=True)
+        result = echo_and_run_subprocess(
+            ["pandoc", "--version"], capture_output=True, text=True, check=True
+        )
 
         # Extracting the version number from the output
         version_match = re.search(r"pandoc\s+(\d+\.\d+.\d+)", result.stdout)
@@ -35,7 +45,9 @@ def verify_pandoc_is_installed_and_version_less_than_3():
 def verify_pipx_is_installed():
     try:
         # Running 'pipx --version' command
-        result = subprocess.run(["pipx", "--version"], capture_output=True, text=True, check=True)
+        result = echo_and_run_subprocess(
+            ["pipx", "--version"], capture_output=True, text=True, check=True
+        )
 
         # If the command was successful, it means pipx is installed
         if result.returncode == 0:
@@ -50,7 +62,9 @@ def verify_pipx_is_installed():
 def verify_poetry_is_installed():
     try:
         # Running 'poetry --version' command
-        result = subprocess.run(["poetry", "--version"], capture_output=True, text=True, check=True)
+        result = echo_and_run_subprocess(
+            ["poetry", "--version"], capture_output=True, text=True, check=True
+        )
         # If the command was successful, we'll get the version info
         if result.returncode == 0:
             print("Poetry is installed: " + result.stdout)
@@ -64,8 +78,8 @@ def verify_sphinx_is_installed():
     # TODO: Not working don't know why?
     try:
         # Running 'poetry --version' command
-        subprocess.run(["poetry", "env", "use", "python"])
-        result = subprocess.run(
+        echo_and_run_subprocess(["poetry", "env", "use", "python"])
+        result = echo_and_run_subprocess(
             ["poetry", "run", "python -m", "sphinx --version"],
             capture_output=True,
             text=True,
@@ -98,8 +112,8 @@ def verify_development_environment(args=None):
     # Verify pandoc is installed
     verify_pandoc_is_installed_and_version_less_than_3()
     # Dry run the poetry install to understand the configuration
-    subprocess.run(["poetry", "env", "use", "python"])
-    subprocess.run(["poetry", "install", "-E", "dev", "--dry-run"])
+    echo_and_run_subprocess(["poetry", "env", "use", "python"])
+    echo_and_run_subprocess(["poetry", "install", "-E", "dev", "--dry-run"])
     print(
         "`poetry install -E dev` dry run on the `poetry.lock` complete.\nManually verify packages are properly installed."
     )
@@ -108,8 +122,8 @@ def verify_development_environment(args=None):
 
 def configure_notebook_submodule(args=None):
     # TODO cd to local installation environment
-    subprocess.run(["git", "submodule", "init"])
-    subprocess.run(["git", "submodule", "update", "--remote"])
+    echo_and_run_subprocess(["git", "submodule", "init"])
+    echo_and_run_subprocess(["git", "submodule", "update", "--remote"])
     print("Notebook submodule updated from remote.")
     return 0
 
@@ -119,36 +133,72 @@ def configure_notebook_submodule(args=None):
     help="Installs and configures the full required development environment.",
 )
 def configure_development_environment(args=None):
-    """Configure development environment."""
+    """Configure development environment.
+
+    Notes
+    -----
+
+        Note that this is just a automatic script implementation of the `The Detailed Lane
+        <../../development/index.html#the-detailed-lane>`_ instructions. It is intended to help you and raise warnings
+        with suggestions of how to fix an environment setup issue. You do not have to use this helper function and can
+        just follow the instructions in `The Detailed Lane
+        <../../development/index.html#the-detailed-lane>`_.
+
+        The way this command works is dependent on the operating system you are running. There are some prerequisites for
+        each platform, but the command line tool will help you identify and install the tools it requires. You should rerun
+        the command after you have installed any prerequisite as it will just progress with the rest of the tools
+        installation. If you already have the tool installed, it will verify that it conforms to the supported versions.
+
+        This command will first check if you already have installed the development requirements, and if not, it will run the
+        installation scripts for pipx, poetry, and ask you to install the required version of pandoc. It will also install
+        the development requirements and tidy3d package in a specific poetry environment.
+    """
     # Verify and install pipx if required
     try:
         verify_pipx_is_installed()
     except:  # NOQA: E722
-        subprocess.run(["python", "-m", "pip", "install", "--user", "pipx"])
-        subprocess.run(["python", "-m", "pipx", "ensurepath"])
+        if platform.system() == "Windows":
+            echo_and_run_subprocess(["scoop", "install", "pipx"])
+            echo_and_run_subprocess(["pipx", "ensurepath"])
+        elif platform.system() == "Darwin":
+            echo_and_run_subprocess(["brew", "install", "pipx"])
+            echo_and_run_subprocess(["pipx", "ensurepath"])
+        elif platform.system() == "Linux":
+            echo_and_run_subprocess(["python3", "-m", "pip", "install", "--user", "pipx"])
+            echo_and_run_subprocess(["python3", "-m", "pipx", "ensurepath"])
+        else:
+            raise OSError(
+                "Unsupported operating system installation flow. Verify the subprocess commands in "
+                "tidy3d develop are compatible with your operating system."
+            )
 
     # Verify and install poetry if required
     try:
         verify_poetry_is_installed()
     except:  # NOQA: E722
-        subprocess.run(["pipx", "install", "poetry"])
+        if platform.system() == "Windows":
+            echo_and_run_subprocess(["pipx", "install", "poetry"])
+        elif platform.system() == "Darwin":
+            echo_and_run_subprocess(["pipx", "install", "poetry"])
+        elif platform.system() == "Linux":
+            echo_and_run_subprocess(["python3", "-m", "pipx", "install", "poetry"])
+        else:
+            raise OSError(
+                "Unsupported operating system installation flow. Verify the subprocess commands in "
+                "tidy3d develop are compatible with your operating system."
+            )
 
     # Verify pandoc is installed
     try:
         verify_pandoc_is_installed_and_version_less_than_3()
     except:  # NOQA: E722
         raise OSError(
-            "Please install pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this command again."
+            "Please install pandoc < 3 depending on your platform: https://pandoc.org/installing.html . Then run this "
+            "command again. You can also follow our detailed instructions under the development guide."
         )
 
     # Makes sure the package has installed all the development dependencies.
-    subprocess.run(["poetry", "install", "-E", "dev"])
-
-    # # Verify the sphinx installation.
-    # try:
-    #     verify_sphinx_is_installed()
-    # except:
-    #     print("There has been an error on your poetry sphinx installation.\nManually run `poetry run python -m sphinx --version` to verify.")
+    echo_and_run_subprocess(["poetry", "install", "-E", "dev"])
 
     # Configure notebook submodule
     try:
@@ -201,7 +251,7 @@ def build_documentation(args=None):
     # Runs the documentation build from the poetry environment
     # TODO cd to local path
     # TODO update generic path management.
-    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
+    echo_and_run_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0
 
 
@@ -211,5 +261,7 @@ def build_documentation_pdf(args=None):
     # Runs the documentation build from the poetry environment
     # TODO cd to local path
     # TODO update generic path management.
-    subprocess.run(["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"])
+    echo_and_run_subprocess(
+        ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
+    )
     return 0

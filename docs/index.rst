@@ -42,7 +42,7 @@ Next, configure your ``tidy3d`` package with the API key from your account.
 
 And enter your API key when prompted.
 
-For more detailed installation instructions, see `this page <https://docs.flexcompute.com/projects/tidy3d/en/latest/quickstart.html>`_.
+For more detailed installation instructions, see `this page <https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html>`_.
 
 2. Run a Simulation
 ~~~~~~~~~~~~~~~~~~~
@@ -117,7 +117,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
 .. toctree::
   :maxdepth: 2
 
-  quickstart
+  install
   lectures/index
   notebooks/docs/index
   howdoi

@@ -2,7 +2,7 @@
 Project Structure
 =================
 
-As of TODOVERSION, the ``tidy3d`` frontend has been restructured to improve the development cycle. The project directories follow the following structure, which is derived from some recommended `Python project architecture guides <https://docs.python-guide.org/writing/structure/>`_. This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
+As of ``tidy3d>=2.6``, the frontend has been restructured to improve the development cycle. The project directories follow the following structure, which is derived from some recommended `Python project architecture guides <https://docs.python-guide.org/writing/structure/>`_. This is a handy structure because many tools, such as ``sphinx``, integrate quite well with this type of project layout.
 
 .. code::
 

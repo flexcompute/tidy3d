@@ -9,7 +9,7 @@ Tidy3D is Flexcompute's ultrafast electromagnetic (EM) solver. The solver is bas
 How can I install the Python client of Tidy3d?
 ----------------------------------------------
 
-We recommend using the Conda package management system to manage your Python virtual environment as well as installing Tidy3D. To avoid package version incapability issues, we recommend creating a new Conda environment and install Tidy3D via pip. Please follow the detailed installation instructions `here <https://docs.flexcompute.com/projects/tidy3d/en/stable/quickstart.html/>`_. If you encounter any issues during installation, please reach out to us and we will provide the necessary help to you in a timely manner.
+We recommend using the Conda package management system to manage your Python virtual environment as well as installing Tidy3D. To avoid package version incapability issues, we recommend creating a new Conda environment and install Tidy3D via pip. Please follow the detailed installation instructions `here <https://docs.flexcompute.com/projects/tidy3d/en/stable/install.html/>`_. If you encounter any issues during installation, please reach out to us and we will provide the necessary help to you in a timely manner.
 
 Can I do a free trial to evaluate the capabilities of Tidy3D before purchasing it?
 ----------------------------------------------------------------------------------

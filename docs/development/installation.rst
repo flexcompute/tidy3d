@@ -4,59 +4,111 @@ Installation
 The Fast Lane
 ^^^^^^^^^^^^^
 
-Maybe you already have ``tidy3d`` installed in some form. After installing version TODOVERSION, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your terminal, :code:`tidy3d develop` to get the latest list of commands.
+Maybe you already have ``tidy3d`` installed in some form. After installing version ``tidy3d>=2.6``, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your terminal, :code:`tidy3d develop` to get the latest list of commands.
 
 It does not matter how you have installed ``tidy3d`` before, this will set up the environment you require to reproducibly develop.
 
 Transitioning
 --------------
 
-If you are transitioning from the old development flow, to this new one, there are a list of commands you can run to make your life easier and set you up well without a hitch.
+
+Automatic Environment Installation (Beta)
+'''''''''''''''''''''''''''''''''''''''''''''
+
+If you are transitioning from the old development flow, to this new one, there are a list of commands you can run to make your life easier and set you up well:
 
 .. code::
 
-    # Check and install requirements like pipx, poetry, pandoc
+    # Automatically check and install requirements like pipx, poetry, pandoc
     tidy3d develop configure-dev-environment
 
-This command should run successfully. It will first check if you already have installed the development requirements, and if not, it will run the installation scripts for ``pipx``, ``poetry``, and ask you to install the required version of ``pandoc``. It will also install the development requirements and ``tidy3d`` package in a specific ``poetry`` environment.
+Note that this is just a automatic script implementation of the `The Detailed Lane`_ instructions. It is intended to help you and raise warnings with suggestions of how to fix an environment setup issue. You do not have to use this helper function and can just follow the instructions in  `The Detailed Lane`_. All commands are echo-ed in the terminal so you will be able to observe and reproduce what is failing if you desire.
 
-If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run the following command to verify that your environment conforms to the reproducible development environment:
+The way this command works is dependent on the operating system you are running. There are some prerequisites for each platform, but the command line tool will help you identify and install the tools it requires. You should rerun the command after you have installed any prerequisite as it will just progress with the rest of the tools installation. If you already have the tool installed, it will verify that it conforms to the supported versions.
+
+This command will first check if you already have installed the development requirements, and if not, it will run the installation scripts for ``pipx``, ``poetry``, and ask you to install the required version of ``pandoc``. It will also install the development requirements and ``tidy3d`` package in a specific ``poetry`` environment.
+
+Environment Verification
+''''''''''''''''''''''''
+
+If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run the following command to verify that your environment conforms to the reproducible development environment which would be equivalent to the one installed automatically above and described in `The Detailed Lane`_.
 
 .. code::
 
     tidy3d develop verify-dev-environment
 
-You can also run the following on your terminal if you desire to run or read the commands yourself, rather than have a Python ``subprocess`` implement the required tools installation.
 
-.. code::
-
-    # /bin/bash
-    cd tidy3d/
-    source scripts/development.sh configure-dev-environment
+.. _detailed_lane:
 
 The Detailed Lane
 ^^^^^^^^^^^^^^^^^
 
-If you do not have any of the above tools already installed, let's go through the process of setting things up from scatch.
+If you do not have any of the above tools already installed and want to install them manually, let's go through the process of setting things up from scatch:
 
 
 Environment Requirements
 ------------------------
 
-TODO implement platform specific stuff and add links.
-Make sure you have installed ``pipx``:
+Make sure you have installed ``pipx``. We provide common installation flows below:
 
-.. code::
+.. tabs::
 
-    python3 -m pip install --user pipx
-    python3 -m pipx ensurepath
+   .. group-tab:: Ubuntu 22.04
+
+        This installation flow requires a ``python3`` installation. Depending how you have installed ``python3``, you may have to edit this command to run on your target installation. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-linux>`_
+
+        .. code-block:: bash
+
+            python3 -m pip install --user pipx
+            python3 -m pipx ensurepath
+
+   .. group-tab:: macOS
+
+        This installation flow uses `homebrew <https://brew.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-macos>`_
+
+        .. code-block:: bash
+
+            brew install pipx
+            pipx ensurepath
+
+   .. group-tab:: Windows
+
+        This installation flow uses `scoop <https://scoop.sh/>`_. Further instructions by ``pipx`` `here <https://github.com/pypa/pipx?tab=readme-ov-file#on-windows>`_
+
+        .. code-block:: bash
+
+            scoop install pipx
+            pipx ensurepath
 
 
-Then install `poetry`:
+Then install ``poetry``:
 
-.. code::
+.. tabs::
 
-    python3 -m pipx install poetry
+   .. group-tab:: Ubuntu 22.04
+
+        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+
+        .. code-block:: bash
+
+            python3 -m pipx install poetry
+
+   .. group-tab:: macOS
+
+        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+
+        .. code-block:: bash
+
+            pipx install poetry
+
+   .. group-tab:: Windows
+
+        Further instructions in the `poetry installation instructions <https://python-poetry.org/docs/#installation>`_
+
+        .. code-block:: bash
+
+            pipx install poetry
+
 
 After restarting the bash terminal, you should be able to find ``poetry`` in your ``PATH`` if it has been installed correctly:
 
@@ -65,9 +117,38 @@ After restarting the bash terminal, you should be able to find ``poetry`` in you
     poetry --version
     poetry # prints all commands
 
-.. TODO detail pandoc installation < 3
 
-Congratulations! Now you have all the required tools installed.
+If you want to locally build documentation, then it is required to install ``pandoc<3``.
+
+.. tabs::
+
+   .. group-tab:: Ubuntu 22.04
+
+        Further instructions in the `pandoc installation instructions <https://pandoc.org/installing.html#linux>`_. Note you will need permissions to do this.
+
+        .. code-block:: bash
+
+            sudo apt-get update
+            sudo apt-get install pandoc="2.9"
+
+   .. group-tab:: macOS
+
+        Further instructions in the `poetry installation instructions <https://pandoc.org/installing.html#macos>`_
+
+        .. code-block:: bash
+
+            brew install pandoc@2.9
+
+   .. group-tab:: Windows
+
+        This installation flow uses `Chocolatey <https://chocolatey.org/>`_. Further instructions in the `poetry installation instructions <https://pandoc.org/installing.html#windows>`_
+
+        .. code-block:: bash
+
+           choco install pandoc --version="2.9"
+
+Congratulations! Now you have all the required tools installed, you can now use all the `poetry run tidy3d develop` commands reproducibly.
+
 
 Packaging Equivalent Functionality
 -----------------------------------
@@ -83,8 +164,3 @@ This package installation process should be  approximately equivalent to the pre
     pip install tidy3d[jax]
 
 All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.
-
-Useful Tool Resources
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. TODO add links here about poetry etc.
