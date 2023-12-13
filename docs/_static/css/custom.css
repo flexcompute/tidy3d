@@ -37,6 +37,7 @@ html[data-theme="dark"] {
     --pst-color-primary: #4772ae;
     --pst-color-secondary: #b5445b;
     --pst-color-link: var(--pst-color-muted);
+    --sd-color-info-bg:  var(--pst-color-primary);
 }
 
 img {
@@ -50,15 +51,28 @@ img {
 }
 
 .sphinx-tabs-panel {
-    background: var(--sd-color-primary-bg);
+    background: var(--sd-color-info-bg);
+    padding: 1em;
+    border-radius: 0.25rem;
+    margin-bottom: 0.5em;
+    border-top-left-radius: 0;
 }
 
 .sphinx-tabs-tab {
-    color: var(--pst-color-muted);
+    background: var(--pst-color-secondary);
+    padding: 0.5em;
+    padding-right: 2em;
+    padding-left: 2em;
+    margin-top: 0.5em;
+    margin-right: 0.5em;
+    border-top-left-radius: 1em;
+    border-top-right-radius: 0.1em;
+    border: 0;
+    font-weight: bold;
 }
 
 .sphinx-tabs-tab[aria-selected="true"] {
-    background-color: var(--pst-color-on-background);
+    background-color: var(--sd-color-info-bg);
 }
 
 /* TODO make sure this is only for the API tables */

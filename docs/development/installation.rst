@@ -6,7 +6,22 @@ The Fast Lane
 
 Maybe you already have ``tidy3d`` installed in some form. After installing version ``tidy3d>=2.6``, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your terminal, :code:`tidy3d develop` to get the latest list of commands.
 
-It does not matter how you have installed ``tidy3d`` before, this will set up the environment you require to reproducibly develop.
+It does not matter how you have installed ``tidy3d`` before as long as you have any form of `tidy3d>=2.6`` in your environment. This can help you transition from a standard user installation to a development environment installation.
+
+Beta instructions for verification (REMOVE pre 2.6 release)
+'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+Instructions for anyone who wants to test the new development flow before it gets included as part of the pre-release:
+
+.. code-block:: bash
+
+    git clone https://github.com/flexcompute/tidy3d.git
+    git branch -rA
+    git checkout repo_merge_no_history
+    python3 -m pip install -e . # Follow standard pip development install
+
+Now you can run the following ``tidy3d`` cli commands to test them.
+
 
 Transitioning
 --------------
