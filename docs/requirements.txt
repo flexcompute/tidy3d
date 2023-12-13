@@ -16,5 +16,6 @@ nbdime
 optax
 signac
 sax
+pyswarms
 
 -r ../tidy3d/requirements/dev.txt

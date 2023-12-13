@@ -4,7 +4,8 @@ docs/source/notebooks/tmp/*
 *.hdf5.gz
 data/
 output/
-batch-*.json
+batch*.json
+*.vtu
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -36,6 +36,7 @@ Mediums
     notebooks/FullyAnisotropic
     notebooks/Gyrotropic
     notebooks/CustomMediumTutorial
+    notebooks/TimeModulationTutorial.ipynb
 
 Structures
 ~~~~~~~~~~
@@ -142,6 +143,16 @@ FDTD Adjoint Optimization
     notebooks/AdjointPlugin10YBranchLevelSet
     notebooks/AdjointPlugin11CircuitMZI
     notebooks/AdjointPlugin12LightExtractor
+
+Heat Solver
+~~~~~~~~~~~
+
+.. toctree::
+    :maxdepth: 1
+
+    notebooks/HeatSolver
+    notebooks/MetalHeaterPhaseShifter
+    notebooks/ThermallyTunedRingResonator
 
 Advance Applications
 ~~~~~~~~~~~~~~~~~~~~

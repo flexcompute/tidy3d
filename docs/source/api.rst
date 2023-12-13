@@ -160,8 +160,21 @@ Nonlinear
 .. autosummary::
    :toctree: _autosummary/
     
-    NonlinearSpec
-    NonlinearSusceptibility
+   NonlinearSpec
+   NonlinearSusceptibility
+   KerrNonlinearity
+   TwoPhotonAbsorption
+
+Time Modulation
+^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ModulationSpec
+   SpaceTimeModulation   
+   ContinuousWaveTimeModulation
+   SpaceModulation
 
 Material Library
 ----------------
@@ -208,7 +221,8 @@ Source Time Dependence
    :toctree: _autosummary/
 
    GaussianPulse
-   .. ContinuousWave
+   ContinuousWave
+   CustomSourceTime
 
 
 Monitors
@@ -324,6 +338,109 @@ Individual Datasets
    FieldProjectionKSpaceDataArray
    DiffractionDataArray
 
+Scene
+=====
+
+Scene
+-----
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   Scene
+
+
+Heat Solver
+===========
+
+Heat Simulation
+---------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatSimulation
+
+Material Thermal Specification
+------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   FluidSpec
+   SolidSpec
+
+Boundary Conditions Specification
+---------------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatBoundarySpec
+
+Boundary Conditions Types
+-------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureBC
+   ConvectionBC
+   HeatFluxBC
+
+Boundary Conditions Placement
+-----------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   StructureStructureInterface
+   StructureBoundary
+   MediumMediumInterface
+   StructureSimulationBoundary
+   SimulationBoundary
+
+Sources
+-------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   UniformHeatSource
+
+Grid Specification
+------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   UniformUnstructuredGrid
+   DistanceUnstructuredGrid
+
+Monitors
+--------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureMonitor
+
+Monitor Data
+------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   TemperatureData
+
+Heat Simulation Data
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   HeatSimulationData
+
 Logging
 =======
 
@@ -375,8 +492,8 @@ Information Containers
 .. autosummary::
    :toctree: _autosummary/
 
-   tidy3d.web.task.TaskInfo
-   tidy3d.web.task.TaskStatus
+   tidy3d.web.core.task_info.TaskInfo
+   tidy3d.web.core.task_info.TaskStatus
 
 
 Plugins
@@ -518,6 +635,7 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.boundary.AbsorberSpec
    tidy3d.components.medium.AbstractMedium
    tidy3d.components.medium.DispersiveMedium
+   tidy3d.NonlinearModel
    tidy3d.Geometry
    tidy3d.components.geometry.base.Planar
    tidy3d.components.geometry.base.Circular

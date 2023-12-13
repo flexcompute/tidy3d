@@ -43,16 +43,8 @@ From the :class:`.SimulationData` object, one can grab and plot the data for eac
 How is using Tidy3D billed?
 ---------------------------
 
-The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing 
-simulations and analyzing the results is free and 
-open source. We only bill the run time of the solver on our server, taking only the compute 
-time into account (as opposed to overhead e.g. during uploading).
-When a task is uploaded to our servers, we will print the maximum incurred cost in FlexCredit.
-This cost is also displayed in the online interface for that task.
-This value is determined by the cost associated with simulating the entire time stepping specified.
-If early shutoff is detected and the simulation completes before the full time stepping period, this
-cost will be pro-rated.
-For more questions or to purchase FlexCredit, please contact us at ``support@flexcompute.com``.
+The `Tidy3D client <https://pypi.org/project/tidy3d/>`_ that is used for designing simulations and analyzing the results is free and open source. We only bill runs on our server, with a cost that is defined entirely by the simulation details. The maximum cost that a simulation can incur can be verified in advance, and is also displayed at the start of a run. This value is determined by the estimated "computational weight" of the simulation, which is the expected amount of compute time and resources that will be needed to complete the task. For FDTD simulations, if early shutoff is detected, then the part of the cost that is due to the time stepping will be pro-rated. However, the pro-rated charge cannot be smaller than 10% of the original Flex Credit estimate, due to the overhead incurred in allocating resources. 
+For more questions or to purchase Flex Credits, please contact us at ``support@flexcompute.com``.
 
 Do I have to know Python programming to use Tidy3D?
 ---------------------------------------------------
@@ -60,8 +52,8 @@ Do I have to know Python programming to use Tidy3D?
 Tidy3D simulations can be defined in two ways: our web GUI or Python scripts. If you do not have Python programming 
 experience, you can use our feature-rich web GUI to define simulation, submit simulation, and visualize simulation 
 results.
-Since defining simulation and performing post-processing in Python offers additional flexibity, we do 
-recomment our users to learn to use Python, especially for more complex simulations. There are a lot of great free 
+Since defining simulation and performing post-processing in Python offers additional flexibility, we do 
+recommend our users to learn to use Python, especially for more complex simulations. There are a lot of great free 
 resources for learning Python online. You can also reference our Python API documentation as well as a variety of 
 examples in our `Learning Center <https://www.flexcompute.com/tidy3d/learning-center/>`_.
 
@@ -81,7 +73,6 @@ Then submit the job by using the :meth:`.run` method as
   sim_data = job.run(path)
 
 After the simulation is complete, result data will be automatically returned to ``sim_data``.
-
 
 What are the units used in the simulation?
 ------------------------------------------
