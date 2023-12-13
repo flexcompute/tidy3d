@@ -5,25 +5,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2023-12-13
+
 ### Added
 - Ability to mix regular mediums and geometries with differentiable analogues in `JaxStructure`. Enables support for shape optimization with dispersive mediums. New classes `JaxStructureStaticGeometry` and `JaxStructureStaticMedium` accept regular `Tidy3D` geometry and medium classes, respectively.
 - Warning if nonlinear mediums are used in an `adjoint` simulation. In this case, the gradients will not be accurate, but may be approximately correct if the nonlinearity is weak.
 - Validator for surface field projection monitors that warns if projecting backwards relative to the monitor's normal direction.
 - Validator for field projection monitors when far field approximation is enabled but the projection distance is small relative to the near field domain.
 - Ability to manually specify a medium through which to project fields, when using field projection monitors.
-
-### Changed
-- Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapsed runtime. On average, there should be little difference in the cost.
-- Mode solves that are part of an FDTD simulation (i.e. for mode sources and monitors) are now charged at the same flex credit cost as a corresponding standalone mode solver call.
-- Any `FreqMonitor.freqs` or `Source.source_time.freq0` smaller than `1e5` now raise an error as this must be incorrect setup that is outside the Tidy3D intended range (note default frequency is `Hz`).
-- When using complex fields (e.g. with Bloch boundaries), FluxTimeMonitor and frequency-domain fields (including derived quantities like flux) now only use the real part of the time-domain electric field.
-
-### Fixed
-- Fixed energy leakage in TFSF when using complex fields.
-
-## [2.5.0rc3] - 2023-11-30
-
-### Added
 - Added support for two-photon absorption via `TwoPhotonAbsorption` class. Added `KerrNonlinearity` that implements Kerr effect without third-harmonic generation.
 - Can create `PoleResidue` from LO-TO form via `PoleResidue.from_lo_to`.
 - Added `TriangularGridDataset` and `TehrahedralGridDataset` for storing and manipulating unstructured data.
@@ -36,16 +25,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FieldData.apply_phase(phase)` to multiply field data by a phase.
 - Optional `phase` argument to `SimulationData.plot_field` that applies a phase to complex-valued fields.
 - Ability to window near fields for spatial filtering of far fields for both client- and server-side field projections.
+- Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
+- GDSII export functions `to_gds_file`, `to_gds`, `to_gdspy`, and `to_gdstk` to `Simulation`, `Structure`, and `Geometry`.
+- `verbose` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
+- Support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
+- `Geometry.intersections_tilted_plane` calculates intersections with any plane, not only axis-aligned ones.
+- `Transformed` class to support geometry transformations.
+- Methods `Geometry.translated`, `Geometry.scaled`, and `Geometry.rotated` can be used to create transformed copies of any geometry.
+- Time zone in webAPI logging output.
+- Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
+- Solver for thermal simulation (see `HeatSimulation` and related classes).
+- Specification of material thermal properties in medium classes through an optional field `.heat_spec`.
 
 ### Changed
+- Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapsed runtime. On average, there should be little difference in the cost.
+- Mode solves that are part of an FDTD simulation (i.e. for mode sources and monitors) are now charged at the same flex credit cost as a corresponding standalone mode solver call.
+- Any `FreqMonitor.freqs` or `Source.source_time.freq0` smaller than `1e5` now raise an error as this must be incorrect setup that is outside the Tidy3D intended range (note default frequency is `Hz`).
+- When using complex fields (e.g. with Bloch boundaries), FluxTimeMonitor and frequency-domain fields (including derived quantities like flux) now only use the real part of the time-domain electric field.
 - Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
 - API for specifying one or more nonlinear models via `NonlinearSpec.models`.
 - `freqs` and `direction` are optional in `ModeSolver` methods converting to monitor and source, respectively. If not supplied, uses the values from the `ModeSolver` instance calling the method.
 - Removed spurious ``-1`` factor in field amplitudes injected by field sources in some cases. The injected ``E``-field should now exactly match the analytic, mode, or custom fields that the source is expected to inject, both in the forward and in the backward direction.
 - Restriction on the maximum memory that a monitor would need internally during the solver run, even if the final monitor data is smaller.
 - Restriction on the maximum size of mode solver data produced by a `ModeSolver` server call.
+- Updated versions of `boto3`, `requests`, and `click`.
+- python 3.7 no longer tested nor supported.
+- Removed warning that monitors now have `colocate=True` by default.
+- If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
+- Remove warning that monitors now have `colocate=True` by default.
+- Internal refactor of Web API functionality.
+- `Geometry.from_gds` doesn't create unnecessary groups of single elements.
 
 ### Fixed
+- Fixed energy leakage in TFSF when using complex fields.
 - Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
 - If input to circular filters in adjoint have size smaller than the diameter, instead of erroring, warn user and truncate the filter kernel accordingly.
 - When writing the json string of a model to an `hdf5` file, the string is split into chunks if it has more than a set (very large) number of characters. This fixes potential error if the string size is more than 4GB.
@@ -57,39 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixes `ComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
 - Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
 - Ensure that mode solver fields are returned in single precision if `ModeSolver.ModeSpec.precision == "single"`.
-
-## [2.5.0rc2] - 2023-10-30
-
-### Added
-- Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
-- GDSII export functions `to_gds_file`, `to_gds`, `to_gdspy`, and `to_gdstk` to `Simulation`, `Structure`, and `Geometry`.
-- `verbose` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
-- Support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
-- `Geometry.intersections_tilted_plane` calculates intersections with any plane, not only axis-aligned ones.
-- `Transformed` class to support geometry transformations.
-- Methods `Geometry.translated`, `Geometry.scaled`, and `Geometry.rotated` can be used to create transformed copies of any geometry.
-
-### Changed
-- Updated versions of `boto3`, `requests`, and `click`.
-- python 3.7 no longer tested nor supported.
-- Removed warning that monitors now have `colocate=True` by default.
-- If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
-- Remove warning that monitors now have `colocate=True` by default.
-
-### Fixed
 - If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.
-
-## [2.5.0rc1] - 2023-10-10
-
-### Added
-- Time zone in webAPI logging output.
-- Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
-- Solver for thermal simulation (see `HeatSimulation` and related classes).
-- Specification of material thermal properties in medium classes through an optional field `.heat_spec`.
-
-### Changed
-- Internal refactor of Web API functionality.
-- `Geometry.from_gds` doesn't create unnecessary groups of single elements.
 
 ## [2.4.3] - 2023-10-16
 
@@ -1059,11 +1039,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc3...pre/2.5
-[2.5.0rc3]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc2...v2.5.0rc3
-[2.5.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.5.0rc1...v2.5.0rc2
-[2.5.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.5.0rc1
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...develop
+[2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1
