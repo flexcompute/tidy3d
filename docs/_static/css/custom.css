@@ -40,6 +40,10 @@ html[data-theme="dark"] {
     --sd-color-info-bg:  var(--pst-color-primary);
 }
 
+html[data-theme=dark] .bd-content .nboutput .output_area.rendered_html {
+    background-color: var(--pst-color-background);
+}
+
 img {
     margin: 0.1em;
 }

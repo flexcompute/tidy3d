@@ -129,10 +129,10 @@ html_theme_options = {
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
     "repository_branch": "main",
-    "launch_buttons": {
-        "binderhub_url": "https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks",
-        "notebook_interface": "jupyterlab",
-    },
+    # "launch_buttons": {
+    #     "binderhub_url": "https://tidy3d.simulation.cloud/notebook/",
+    #     "notebook_interface": "jupyterlab",
+    # },
     "use_edit_page_button": False,
     "use_issues_button": True,
     "use_repository_button": True,
