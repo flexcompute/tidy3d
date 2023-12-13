@@ -115,6 +115,39 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         """Any additional validation that depends on the central frequencies of the sources."""
         pass
 
+    def _get_freq0(self, freq0, freqs: List[pd.PositiveFloat]) -> float:
+        """Get a single value for freq0."""
+
+        # freq0 is not specified; need to calculate it
+        if freq0 is None:
+            if not len(freqs):
+                raise SetupError(
+                    f"Class '{type(self).__name__}' cannot determine 'freq0' in the absence of "
+                    f"sources. Please either specify 'freq0' in '{type(self).__name__}' "
+                    "or add sources to the simulation."
+                )
+            if not all(np.isclose(freq, freqs[0]) for freq in freqs):
+                raise SetupError(
+                    f"Class '{type(self).__name__}' cannot determine 'freq0' because the source "
+                    f"frequencies '{freqs}' are not all equal. "
+                    f"Please specify 'freq0' in '{type(self).__name__}' "
+                    "to match the desired source central frequency."
+                )
+            return freqs[0]
+
+        # now, freq0 is specified; we use it, but warn if it might be inconsistent
+        if not all(np.isclose(freq, freq0) for freq in freqs):
+            log.warning(
+                f"Class '{type(self).__name__}' given 'freq0={freq0}' which is different from "
+                f"the source central frequencies '{freqs}'. In order "
+                "to obtain correct nonlinearity parameters, the provided frequency "
+                "should agree with the source central frequencies. The provided value of 'freq0' "
+                "is being used; the resulting nonlinearity parameters "
+                "may be incorrect for those sources whose central frequency "
+                "is different from this value."
+            )
+        return freq0
+
     def _get_n0(
         self,
         n0: complex,
@@ -131,7 +164,8 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
             if not len(nks):
                 raise SetupError(
                     f"Class '{type(self).__name__}' cannot determine 'n0' in the absence of "
-                    "sources. Please either specify 'n0' or add sources to the simulation."
+                    f"sources. Please either specify 'n0' in '{type(self).__name__}' "
+                    "or add sources to the simulation."
                 )
             if not all(np.isclose(nk, nks[0]) for nk in nks):
                 raise SetupError(
@@ -176,7 +210,8 @@ class NonlinearSusceptibility(NonlinearModel):
             P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E
 
         The nonlinear constitutive relation is solved iteratively; it may not converge
-        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.numiters` can help with convergence.
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.num_iters` can
+        help with convergence.
 
         For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
         is applied separately to the real and imaginary parts, so that the above equation
@@ -233,13 +268,20 @@ class NonlinearSusceptibility(NonlinearModel):
 class TwoPhotonAbsorption(NonlinearModel):
     """Model for two-photon absorption (TPA) nonlinearity which gives an intensity-dependent
     absorption of the form :math:`\\alpha = \\alpha_0 + \\beta I`.
+    Also includes free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) effects.
     The expression for the nonlinear polarization is given below.
 
     Note
     ----
     .. math::
 
-        P_{NL} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E
+        P_{NL} = P_{TPA} + P_{FCA} + P_{FCPD} \\\\
+        P_{TPA} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E \\\\
+        P_{FCA} = -\\frac{c_0 \\varepsilon_0 n_0 \\sigma N_f}{i \\omega} E \\\\
+        \\frac{dN_f}{dt} = \\frac{c_0^2 \\varepsilon_0^2 n_0^2 \\beta}{8 q_e \\hbar \\omega} |E|^4 - \\frac{N_f}{\\tau} \\\\
+        N_e = N_h = N_f \\\\
+        P_{FCPD} = \\varepsilon_0 2 n_0 \\Delta n (N_f) E \\\\
+        \\Delta n (N_f) = (c_e N_e^{e_e} + c_h N_h^{e_h})
 
     Note
     ----
@@ -264,11 +306,48 @@ class TwoPhotonAbsorption(NonlinearModel):
     >>> tpa_model = TwoPhotonAbsorption(beta=1)
     """
 
-    beta: Complex = pd.Field(
+    beta: Union[float, Complex] = pd.Field(
         0,
         title="TPA coefficient",
         description="Coefficient for two-photon absorption (TPA).",
         units=f"{MICROMETER} / {WATT}",
+    )
+
+    tau: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="Carrier lifetime",
+        description="Lifetime for the free carriers created by two-photon absorption (TPA).",
+        units=f"{SECOND}",
+    )
+
+    sigma: pd.NonNegativeFloat = pd.Field(
+        0,
+        title="FCA cross section",
+        description="Total cross section for free-carrier absorption (FCA). "
+        "Contains contributions from electrons and from holes.",
+        units=f"{MICROMETER}^2",
+    )
+    e_e: pd.NonNegativeFloat = pd.Field(
+        1,
+        title="Electron exponent",
+        description="Exponent for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
+    )
+    e_h: pd.NonNegativeFloat = pd.Field(
+        1,
+        title="Hole exponent",
+        description="Exponent for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
+    )
+    c_e: float = pd.Field(
+        0,
+        title="Electron coefficient",
+        description="Coefficient for the free electron refractive index shift in the free-carrier plasma dispersion (FCPD).",
+        units=f"{MICROMETER}^(3 e_e)",
+    )
+    c_h: float = pd.Field(
+        0,
+        title="Hole coefficient",
+        description="Coefficient for the free hole refractive index shift in the free-carrier plasma dispersion (FCPD).",
+        units=f"{MICROMETER}^(3 e_h)",
     )
 
     n0: Optional[Complex] = pd.Field(
@@ -277,6 +356,14 @@ class TwoPhotonAbsorption(NonlinearModel):
         description="Complex linear refractive index of the medium, computed for instance using "
         "'medium.nk_model'. If not provided, it is calculated automatically using the central "
         "frequencies of the simulation sources (as long as these are all equal).",
+    )
+
+    freq0: Optional[pd.PositiveFloat] = pd.Field(
+        None,
+        title="Central frequency",
+        description="Central frequency, used to calculate the energy of the free-carriers "
+        "excited by two-photon absorption. If not provided, it is obtained automatically "
+        "from the simulation sources (as long as these are all equal).",
     )
 
     def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
@@ -305,6 +392,19 @@ class TwoPhotonAbsorption(NonlinearModel):
     def complex_fields(self) -> bool:
         """Whether the model uses complex fields."""
         return True
+
+    @pd.validator("beta", always=True)
+    def _warn_for_complex_beta(cls, val):
+        if val is None:
+            return val
+        if np.iscomplex(val):
+            log.warning(
+                "Complex values of 'beta' in 'TwoPhotonAbsorption' are deprecated "
+                "and may be removed in a future version. The implementation with "
+                "complex 'beta' is as described in the 'TwoPhotonAbsorption' docstring, "
+                "but the physical interpretation of 'beta' may not be correct if it is complex."
+            )
+        return val
 
 
 class KerrNonlinearity(NonlinearModel):

@@ -610,7 +610,7 @@ def test_nonlinear_medium(log_capture):
         nonlinear_spec=td.NonlinearSpec(
             models=[
                 td.NonlinearSusceptibility(chi3=1.5),
-                td.TwoPhotonAbsorption(beta=1),
+                td.TwoPhotonAbsorption(beta=1, sigma=1, tau=1, e_e=1, e_h=0.8, c_e=1, c_h=1),
                 td.KerrNonlinearity(n2=1),
             ],
             num_iters=20,
@@ -622,7 +622,6 @@ def test_nonlinear_medium(log_capture):
         nonlinear_spec=td.NonlinearSpec(
             models=[
                 td.KerrNonlinearity(n2=-1 + 1j, n0=1),
-                td.TwoPhotonAbsorption(beta=1 + 1j, n0=1),
             ],
             num_iters=20,
         )
@@ -672,7 +671,7 @@ def test_nonlinear_medium(log_capture):
     # active materials
     with pytest.raises(ValidationError):
         med = td.Medium(
-            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1 + 1j, n0=1)])
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)])
         )
 
     with pytest.raises(ValidationError):
@@ -683,7 +682,7 @@ def test_nonlinear_medium(log_capture):
         allow_gain=True,
     )
 
-    # automatic detection of n0
+    # automatic detection of n0 and freq0
     n0 = 2
     freq0 = td.C_0 / 1
     nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
@@ -703,6 +702,7 @@ def test_nonlinear_medium(log_capture):
         structures=[structure],
     )
     assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
+    assert freq0 == nonlinear_spec.models[0]._get_freq0(freq0=None, freqs=[freq0])
 
     # can't detect n0 with different source freqs
     source_time2 = source_time.updated_copy(freq0=2 * freq0)
