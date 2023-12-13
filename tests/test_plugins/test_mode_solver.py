@@ -6,16 +6,15 @@ import pydantic.v1 as pydantic
 
 import tidy3d as td
 
-from tidy3d.version import __version__
 import tidy3d.plugins.mode.web as msweb
 from tidy3d.plugins.mode import ModeSolver
 from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
+from tidy3d.exceptions import SetupError
 from ..utils import assert_log_level, log_capture
 from tidy3d import ScalarFieldDataArray
-from tidy3d.web.environment import Env
-from tidy3d.version import __version__
+from tidy3d.web.core.environment import Env
 
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
@@ -64,9 +63,12 @@ def mock_remote_api(monkeypatch):
         )
         ms.data_raw.to_file(to_file)
 
-    monkeypatch.setattr(td.web.http_management, "api_key", lambda: "api_key")
-    monkeypatch.setattr("tidy3d.plugins.mode.web.upload_file", void)
-    monkeypatch.setattr("tidy3d.plugins.mode.web.download_file", mock_download)
+    from tidy3d.web.core import http_util as httputil
+
+    monkeypatch.setattr(httputil, "api_key", lambda: "api_key")
+    monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
+    monkeypatch.setattr("tidy3d.web.api.mode.upload_file", void)
+    monkeypatch.setattr("tidy3d.web.api.mode.download_file", mock_download)
 
     responses.add(
         responses.GET,
@@ -87,7 +89,7 @@ def mock_remote_api(monkeypatch):
                     "modeSolverName": MODESOLVER_NAME,
                     "fileType": "Gz",
                     "source": "Python",
-                    "protocolVersion": __version__,
+                    "protocolVersion": td.version.__version__,
                 }
             )
         ],
@@ -161,7 +163,7 @@ def compare_colocation(ms):
     for key, field in data_col.field_components.items():
 
         # Check the colocated data is the same
-        assert np.allclose(data_at_boundaries[key], field)
+        assert np.allclose(data_at_boundaries[key], field, atol=1e-7)
 
         # Also check coordinates
         for dim, coords1 in field.coords.items():
@@ -202,6 +204,15 @@ def verify_pol_fraction(ms):
         )
 
 
+def verify_dtype(ms):
+    """Verify that the returned fields have the correct dtype w.r.t. the specified precision."""
+
+    dtype = np.complex64 if ms.mode_spec.precision == "single" else np.complex128
+    for field in ms.data.field_components.values():
+        print(dtype, field.dtype, type(field.dtype))
+        assert dtype == field.dtype
+
+
 def test_mode_solver_validation():
     """Test invalidate mode solver setups."""
 
@@ -232,6 +243,17 @@ def test_mode_solver_validation():
         freqs=[1e12],
         direction="+",
     )
+
+    # mode data too large
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.uniform(dl=0.001),
+        run_time=1e-12,
+    )
+    ms = ms.updated_copy(simulation=simulation, freqs=np.linspace(1e12, 2e12, 50))
+
+    with pytest.raises(SetupError):
+        ms.validate_pre_upload()
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
@@ -294,6 +316,7 @@ def test_mode_solver_simple(mock_remote_api, local):
     if local:
         compare_colocation(ms)
         verify_pol_fraction(ms)
+        verify_dtype(ms)
         dataframe = ms.data.to_dataframe()
 
     else:
@@ -457,6 +480,7 @@ def test_mode_solver_angle_bend():
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
 
     # Plot field
@@ -465,9 +489,9 @@ def test_mode_solver_angle_bend():
     plt.close()
 
     # Create source and monitor
-    st = td.GaussianPulse(freq0=1.0, fwidth=1.0)
+    st = td.GaussianPulse(freq0=1.0e12, fwidth=1.0e12)
     _ = ms.to_source(source_time=st, direction="-")
-    _ = ms.to_monitor(freqs=[1.0, 2.0], name="mode_mnt")
+    _ = ms.to_monitor(freqs=np.array([1.0, 2.0]) * 1e12, name="mode_mnt")
 
 
 def test_mode_solver_2D():
@@ -492,6 +516,7 @@ def test_mode_solver_2D():
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
 
     mode_spec = td.ModeSpec(
@@ -530,7 +555,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, local):
+def test_group_index(mock_remote_api, log_capture, local):
     """Test group index calculation"""
 
     simulation = td.Simulation(
@@ -569,6 +594,11 @@ def test_group_index(mock_remote_api, local):
     modes = ms.solve() if local else msweb.run(ms)
     if local:
         assert modes.n_group is None
+        assert len(log_capture) == 1
+        assert log_capture[0][0] == 30
+        assert "ModeSpec" in log_capture[0][1]
+        _ = modes.n_group
+        assert len(log_capture) == 1
 
     # Group index calculated
     ms = ModeSolver(
@@ -609,3 +639,94 @@ def test_pml_params():
     sf_f = create_sfactor_f(omega, dls, N, n_pml, dmin_pml=True)
     assert np.allclose(sf_f[:n_pml] / sf_f[n_pml - 1], target_profile[::-1])
     assert np.allclose(sf_f[N - n_pml :] / sf_f[N - n_pml], target_profile)
+
+
+def test_mode_solver_nan_pol_fraction():
+    """Test mode solver when eigensolver returns 0 for some modes."""
+    wg = td.Structure(geometry=td.Box(size=(0.5, 100, 0.22)), medium=td.Medium(permittivity=12))
+
+    simulation = td.Simulation(
+        medium=td.Medium(permittivity=2),
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=15),
+        structures=[wg],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+
+    mode_spec = td.ModeSpec(
+        num_modes=10,
+        target_neff=3.48,
+        filter_pol="tm",
+        precision="single",
+        track_freq="central",
+    )
+
+    freqs = [td.C_0 / 1.55]
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(center=(0, 0, 0), size=(2, 0, 1.1)),
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+    )
+
+    md = ms.solve()
+
+    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]
+
+
+def test_mode_solver_method_defaults():
+    """Test that changes to mode solver default values in methods work."""
+
+    simulation = td.Simulation(
+        medium=td.Medium(permittivity=2),
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec.auto(wavelength=1.55, min_steps_per_wvl=15),
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+
+    mode_spec = td.ModeSpec(
+        num_modes=10,
+        target_neff=3.48,
+        filter_pol="tm",
+        precision="single",
+        track_freq="central",
+    )
+
+    freqs = [td.C_0 / 1.55]
+
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=td.Box(center=(0, 0, 0), size=(2, 0, 1.1)),
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+    )
+
+    # test defaults
+    st = td.GaussianPulse(freq0=1.0e12, fwidth=1.0e12)
+
+    src = ms.to_source(source_time=st)
+    assert src.direction == ms.direction
+
+    src = ms.to_source(source_time=st, direction="+")
+    assert src.direction != ms.direction
+
+    mnt = ms.to_monitor(name="mode_mnt")
+    assert np.allclose(mnt.freqs, ms.freqs)
+
+    mnt = ms.to_monitor(name="mode_mnt", freqs=[2e14])
+    assert not np.allclose(mnt.freqs, ms.freqs)
+
+    sim = ms.sim_with_source(source_time=st)
+    assert sim.sources[-1].direction == ms.direction
+
+    sim = ms.sim_with_monitor(name="test")
+    assert np.allclose(sim.monitors[-1].freqs, ms.freqs)

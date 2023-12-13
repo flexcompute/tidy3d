@@ -2,26 +2,42 @@
 
 import pytest
 import responses
+import numpy as np
 from _pytest import monkeypatch
+
 import tidy3d as td
 from responses import matchers
 from tidy3d import Simulation
 from tidy3d.exceptions import SetupError
-from tidy3d.web.environment import Env
-from tidy3d.web.webapi import delete, delete_old, download, download_json, run, abort
-from tidy3d.web.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
-from tidy3d.web.webapi import load, load_simulation, start, upload, monitor, real_cost
-from tidy3d.web.container import Job, Batch
-from tidy3d.web.asynchronous import run_async
+from tidy3d.web.core.environment import Env
+from tidy3d.web.api.webapi import delete, delete_old, download, download_json, run, abort
+from tidy3d.web.api.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
+from tidy3d.web.api.webapi import load, load_simulation, start, upload, monitor, real_cost
+from tidy3d.web.api.container import Job, Batch
+from tidy3d.web.api.asynchronous import run_async
 
 from tidy3d.__main__ import main
+from tidy3d.web.core.types import TaskType
+from tidy3d.components.source import PointDipole, GaussianPulse
+from tidy3d.components.grid.grid_spec import GridSpec
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.monitor import FieldMonitor
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
+FOLDER_ID = "1234"
 CREATED_AT = "2022-01-01T00:00:00.000Z"
 PROJECT_NAME = "default"
 FLEX_UNIT = 1.0
 EST_FLEX_UNIT = 11.11
+FILE_SIZE_GB = 4.0
+
+task_core_path = "tidy3d.web.core.task_core"
+api_path = "tidy3d.web.api.webapi"
+
+Env.dev.active()
 
 
 def make_sim():
@@ -36,32 +52,66 @@ def make_sim():
     )
 
 
+def make_sim_data(file_size_gb=FILE_SIZE_GB):
+    """Makes a simulation."""
+    # approximate # of points in the scalar field data
+
+    N = int(2.528e8 / 4 * file_size_gb)
+
+    n = int(N ** (0.25))
+
+    data = (1 + 1j) * np.random.random((n, n, n, n))
+    x = np.linspace(-1, 1, n)
+    y = np.linspace(-1, 1, n)
+    z = np.linspace(-1, 1, n)
+    f = np.linspace(2e14, 4e14, n)
+    src = PointDipole(
+        center=(0, 0, 0), source_time=GaussianPulse(freq0=3e14, fwidth=1e14), polarization="Ex"
+    )
+    coords = dict(x=x, y=y, z=z, f=f)
+    Ex = ScalarFieldDataArray(data, coords=coords)
+    monitor = FieldMonitor(size=(2, 2, 2), freqs=f, name="test", fields=["Ex"])
+    field_data = FieldData(monitor=monitor, Ex=Ex)
+    sim = Simulation(
+        size=(2, 2, 2),
+        grid_spec=GridSpec(wavelength=1),
+        monitors=(monitor,),
+        sources=(src,),
+        run_time=1e-12,
+    )
+    return SimulationData(
+        simulation=sim,
+        data=(field_data,),
+    )
+
+
 @pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
-    import tidy3d.web.http_management as http_module
+    import tidy3d.web.core.http_util as http_module
 
     monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
+    monkeypatch.setattr(http_module, "get_version", lambda: td.version.__version__)
 
 
 @pytest.fixture
 def mock_upload(monkeypatch, set_api_key):
     """Mocks webapi.upload."""
-
     responses.add(
         responses.GET,
         f"{Env.current.web_api_endpoint}/tidy3d/project",
         match=[matchers.query_param_matcher({"projectName": PROJECT_NAME})],
-        json={"data": {"projectId": TASK_ID, "projectName": PROJECT_NAME}},
+        json={"data": {"projectId": FOLDER_ID, "projectName": PROJECT_NAME}},
         status=200,
     )
 
     responses.add(
         responses.POST,
-        f"{Env.current.web_api_endpoint}/tidy3d/projects/{TASK_ID}/tasks",
+        f"{Env.current.web_api_endpoint}/tidy3d/projects/{FOLDER_ID}/tasks",
         match=[
             matchers.json_params_matcher(
                 {
+                    "taskType": TaskType.FDTD.name,
                     "taskName": TASK_NAME,
                     "callbackUrl": None,
                     "simulationType": "tidy3d",
@@ -83,7 +133,7 @@ def mock_upload(monkeypatch, set_api_key):
     def mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.upload_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.upload_file", mock_download)
 
 
 @pytest.fixture
@@ -100,6 +150,7 @@ def mock_get_info(monkeypatch, set_api_key):
                 "createdAt": CREATED_AT,
                 "realFlexUnit": FLEX_UNIT,
                 "estFlexUnit": EST_FLEX_UNIT,
+                "taskType": TaskType.FDTD.name,
                 "metadataStatus": "processed",
                 "status": "success",
                 "s3Storage": 1.0,
@@ -159,10 +210,10 @@ def mock_monitor(monkeypatch):
         run_count[0] += 1
         return perc_done, 1
 
-    monkeypatch.setattr("tidy3d.web.webapi.REFRESH_TIME", 0.00001)
-    monkeypatch.setattr("tidy3d.web.webapi.RUN_REFRESH_TIME", 0.00001)
-    monkeypatch.setattr("tidy3d.web.webapi.get_status", mock_get_status)
-    monkeypatch.setattr("tidy3d.web.webapi.get_run_info", mock_get_run_info)
+    monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
+    monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
 
 
 @pytest.fixture
@@ -174,7 +225,7 @@ def mock_download(monkeypatch, set_api_key, mock_get_info, tmp_path):
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
+    monkeypatch.setattr(f"{task_core_path}.download_file", _mock_download)
     download(TASK_ID, str(tmp_path / "web_test_tmp.json"))
     with open(str(tmp_path / "web_test_tmp.json")) as f:
         assert f.read() == "0.3,5.7"
@@ -187,7 +238,7 @@ def mock_load(monkeypatch, set_api_key, mock_get_info):
     def _mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", _mock_download)
+    monkeypatch.setattr(f"{task_core_path}.download_file", _mock_download)
 
 
 @pytest.fixture
@@ -269,7 +320,7 @@ def _test_load(mock_load, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
         pass
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
+    monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
     load(TASK_ID, str(tmp_path / "monitor_data.hdf5"))
 
 
@@ -305,8 +356,8 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
     def get_str(*args, **kwargs):
         return sim.json().encode("utf-8")
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock_download)
-    monkeypatch.setattr("tidy3d.web.simulation_task._read_simulation_from_hdf5", get_str)
+    monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
+    monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")
     download_json(TASK_ID, fname_tmp)
@@ -318,9 +369,7 @@ def test_load_simulation(monkeypatch, mock_get_info, tmp_path):
     def mock_download(*args, **kwargs):
         make_sim().to_file(args[1])
 
-    monkeypatch.setattr(
-        "tidy3d.web.simulation_task.SimulationTask.get_simulation_json", mock_download
-    )
+    monkeypatch.setattr(f"{task_core_path}.SimulationTask.get_simulation_json", mock_download)
 
     assert load_simulation(TASK_ID, str(tmp_path / "web_test_tmp.json"))
 
@@ -332,7 +381,7 @@ def test_download_log(monkeypatch, mock_get_info, tmp_path):
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
-    monkeypatch.setattr("tidy3d.web.simulation_task.download_file", mock)
+    monkeypatch.setattr(f"{task_core_path}.download_file", mock)
 
     download_log(TASK_ID, str(tmp_path / "web_test_tmp.json"))
     with open(str(tmp_path / "web_test_tmp.json")) as f:
@@ -392,9 +441,12 @@ def test_get_tasks(set_api_key):
 @responses.activate
 def test_run(mock_webapi, monkeypatch, tmp_path):
     sim = make_sim()
-    monkeypatch.setattr("tidy3d.web.webapi.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr(f"{api_path}.load", lambda *args, **kwargs: True)
     assert run(
-        sim, task_name=TASK_NAME, folder_name=PROJECT_NAME, path=str(tmp_path / "web_test_tmp.json")
+        sim,
+        task_name=TASK_NAME,
+        folder_name=PROJECT_NAME,
+        path=str(tmp_path / "web_test_tmp.json"),
     )
 
 
@@ -418,13 +470,32 @@ def test_abort_task(set_api_key):
             matchers.json_params_matcher(
                 {
                     "taskId": TASK_ID,
-                    "taskType": "FDTD",
+                    "taskType": TaskType.FDTD.name,
                 }
             )
         ],
         json={"result": True},
         status=200,
     )
+    responses.add(
+        responses.GET,
+        f"{Env.current.web_api_endpoint}/tidy3d/tasks/{TASK_ID}/detail",
+        json={
+            "taskId": TASK_ID,
+            "taskName": TASK_NAME,
+            "createdAt": "2022-01-01T00:00:00.000Z",
+            "status": "running",
+            "taskType": TaskType.FDTD.name,
+            "taskBlockInfo": {
+                "chargeType": "free",
+                "maxFreeCount": 20,
+                "maxGridPoints": 1000,
+                "maxTimeSteps": 1000,
+            },
+        },
+        status=200,
+    )
+
     abort(TASK_ID)
 
 
@@ -433,7 +504,7 @@ def test_abort_task(set_api_key):
 
 @responses.activate
 def test_job(mock_webapi, monkeypatch, tmp_path):
-    monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
     sim = make_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
@@ -447,14 +518,14 @@ def test_job(mock_webapi, monkeypatch, tmp_path):
 
 @pytest.fixture
 def mock_job_status(monkeypatch):
-    monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
-    monkeypatch.setattr("tidy3d.web.container.Job.load", lambda *args, **kwargs: True)
+    monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
+    monkeypatch.setattr("tidy3d.web.api.container.Job.load", lambda *args, **kwargs: True)
 
 
 @responses.activate
 def test_batch(mock_webapi, mock_job_status, tmp_path):
-    # monkeypatch.setattr("tidy3d.web.container.Batch.monitor", lambda self: time.sleep(0.1))
-    # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+    # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
+    # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
     sims = {TASK_NAME: make_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
@@ -468,7 +539,7 @@ def test_batch(mock_webapi, mock_job_status, tmp_path):
 
 @responses.activate
 def test_async(mock_webapi, mock_job_status):
-    # monkeypatch.setattr("tidy3d.web.container.Job.status", property(lambda self: "success"))
+    # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
     sims = {TASK_NAME: make_sim()}
     _ = run_async(sims, folder_name=PROJECT_NAME)
 

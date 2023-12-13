@@ -1,6 +1,8 @@
 """ imports interfaces for interacting with server """
+from .api.container import Job, Batch, BatchData
 from .cli.migrate import migrate
-from .webapi import (
+from .cli.app import configure_fn as configure
+from .api.webapi import (
     run,
     upload,
     get_info,
@@ -11,15 +13,23 @@ from .webapi import (
     load,
     estimate_cost,
     abort,
+    get_tasks,
+    delete_old,
+    download_log,
+    download_json,
+    load_simulation,
+    real_cost,
+    test,
 )
-from .webapi import get_tasks, delete_old, download_log, download_json, load_simulation, real_cost
-from .container import Job, Batch, BatchData
 from .cli import tidy3d_cli
-from .cli.app import configure_fn as configure
-from .asynchronous import run_async
-from .webapi import test
+from .api.asynchronous import run_async
+from .core import core_config
+from ..log import log, get_logging_console
+from ..version import __version__
 
 migrate()
+
+core_config.set_config(log, get_logging_console(), __version__)
 
 __all__ = [
     "run",

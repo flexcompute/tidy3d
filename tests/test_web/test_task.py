@@ -1,4 +1,4 @@
-from tidy3d.web.task import RunInfo
+from tidy3d.web.core.task_info import RunInfo
 
 
 def test_run_info_display():

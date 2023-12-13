@@ -20,8 +20,12 @@ from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_
 from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
 from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
-from tidy3d.plugins.adjoint.components.structure import JaxStructure
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo
+from tidy3d.plugins.adjoint.components.structure import (
+    JaxStructure,
+    JaxStructureStaticMedium,
+    JaxStructureStaticGeometry,
+)
+from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
 from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
@@ -32,8 +36,8 @@ from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
-from tidy3d.web.container import BatchData
-
+from tidy3d.web.api.container import BatchData
+import tidy3d.material_library as material_library
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
 from ..test_components.test_custom import CUSTOM_MEDIUM
 
@@ -53,6 +57,12 @@ BASE_EPS_VAL = 2.0
 
 # name of the output monitor used in tests
 MNT_NAME = "mode"
+
+src = td.PointDipole(
+    center=(0, 0, 0),
+    source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+    polarization="Ex",
+)
 
 # Emulated forward and backward run functions
 def run_emulated_fwd(
@@ -247,6 +257,14 @@ def make_sim(
 
     jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
     jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
+
+    jax_struct_static_med = JaxStructureStaticMedium(
+        geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
+    )
+    jax_struct_static_geo = JaxStructureStaticGeometry(
+        geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
+    )
+
     # TODO: Add new geometries as they are created.
 
     # NOTE: Any new output monitors should be added below as they are made
@@ -255,7 +273,7 @@ def make_sim(
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[FREQ0],
+        freqs=[FREQ0, FREQ0 * 1.1],
         name=MNT_NAME + "1",
     )
 
@@ -276,13 +294,13 @@ def make_sim(
 
     output_mnt4 = td.FieldMonitor(
         size=(0, 0, 0),
-        freqs=[FREQ0],
+        freqs=np.array([FREQ0, FREQ0 * 1.1]),
         name=MNT_NAME + "4",
     )
 
     extraneous_field_monitor = td.FieldMonitor(
         size=(10, 10, 0),
-        freqs=[1e14, 2e14],
+        freqs=np.array([1e14, 2e14]),
         name="field",
     )
 
@@ -299,8 +317,11 @@ def make_sim(
             jax_struct3,
             jax_struct_group,
             jax_struct_custom_anis,
+            jax_struct_static_med,
+            jax_struct_static_geo,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
+        sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         symmetry=(0, 1, -1),
     )
@@ -550,23 +571,8 @@ def _test_adjoint_setup_adj(use_emulated_run):
     assert len(sim_vjp.input_structures) == len(sim_orig.input_structures)
 
 
-# @pytest.mark.parametrize("add_grad_monitors", (True, False))
-# def test_convert_tidy3d_to_jax(add_grad_monitors):
-#     """test conversion of JaxSimulation to Simulation and SimulationData to JaxSimulationData."""
-#     jax_sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
-#     if add_grad_monitors:
-#         jax_sim = jax_sim.add_grad_monitors()
-#     sim, jax_info = jax_sim.to_simulation()
-#     assert type(sim) == td.Simulation
-#     assert sim.type == "Simulation"
-#     sim_data = run_emulated(sim)
-#     jax_sim_data = JaxSimulationData.from_sim_data(sim_data, jax_info)
-#     jax_sim2 = jax_sim_data.simulation
-#     assert jax_sim_data.simulation == jax_sim
-
-
 def test_multiple_freqs():
-    """Test that sim validation fails when output monitors have multiple frequencies."""
+    """Test that sim validation doesnt fail when output monitors have multiple frequencies."""
 
     output_mnt = td.ModeMonitor(
         size=(10, 10, 0),
@@ -575,20 +581,19 @@ def test_multiple_freqs():
         name=MNT_NAME,
     )
 
-    with pytest.raises(pydantic.ValidationError):
-        _ = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt,),
-            input_structures=(),
-        )
+    _ = JaxSimulation(
+        size=(10, 10, 10),
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        monitors=(),
+        structures=(),
+        output_monitors=(output_mnt,),
+        input_structures=(),
+    )
 
 
 def test_different_freqs():
-    """Test that sim validation fails when output monitors have different frequencies."""
+    """Test that sim validation doesnt fail when output monitors have different frequencies."""
 
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
@@ -602,16 +607,15 @@ def test_different_freqs():
         freqs=[2e14],
         name=MNT_NAME + "2",
     )
-    with pytest.raises(pydantic.ValidationError):
-        _ = JaxSimulation(
-            size=(10, 10, 10),
-            run_time=1e-12,
-            grid_spec=td.GridSpec(wavelength=1.0),
-            monitors=(),
-            structures=(),
-            output_monitors=(output_mnt1, output_mnt2),
-            input_structures=(),
-        )
+    _ = JaxSimulation(
+        size=(10, 10, 10),
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        monitors=(),
+        structures=(),
+        output_monitors=(output_mnt1, output_mnt2),
+        input_structures=(),
+    )
 
 
 def test_get_freq_adjoint():
@@ -628,9 +632,11 @@ def test_get_freq_adjoint():
     )
 
     with pytest.raises(AdjointError):
-        _ = sim.freq_adjoint
+        _ = sim.freqs_adjoint
 
     freq0 = 2e14
+    freq1 = 3e14
+    freq2 = 1e14
     output_mnt1 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
@@ -640,7 +646,7 @@ def test_get_freq_adjoint():
     output_mnt2 = td.ModeMonitor(
         size=(10, 10, 0),
         mode_spec=td.ModeSpec(num_modes=3),
-        freqs=[freq0],
+        freqs=[freq1, freq2, freq0],
         name=MNT_NAME + "2",
     )
     sim = JaxSimulation(
@@ -652,7 +658,11 @@ def test_get_freq_adjoint():
         output_monitors=(output_mnt1, output_mnt2),
         input_structures=(),
     )
-    assert sim.freq_adjoint == freq0
+
+    freqs = [freq0, freq1, freq2]
+    freqs.sort()
+
+    assert sim.freqs_adjoint == freqs
 
 
 def test_get_fwidth_adjoint():
@@ -691,7 +701,7 @@ def test_get_fwidth_adjoint():
     src_times = [td.GaussianPulse(freq0=freq0, fwidth=fwidth) for fwidth in fwidths]
     srcs = [td.PointDipole(source_time=src_time, polarization="Ex") for src_time in src_times]
     sim = make_sim(sources=srcs, fwidth_adjoint=None)
-    assert np.isclose(sim._fwidth_adjoint, np.mean(fwidths))
+    assert np.isclose(sim._fwidth_adjoint, np.max(fwidths))
 
     # a few sources, with custom fwidth specified
     fwidth_custom = 3e13
@@ -853,6 +863,11 @@ def test_structure_overlaps():
         grid_spec=td.GridSpec(wavelength=1.0),
         run_time=1e-12,
         sources=(src,),
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(),
+            y=td.Boundary.periodic(),
+            z=td.Boundary.pml(),
+        ),
     )
 
 
@@ -1472,6 +1487,20 @@ def test_adjoint_utils(strict_binarize):
     _ = radius_penalty.evaluate(polyslab.vertices)
 
 
+@pytest.mark.parametrize(
+    "input_size_y, log_level_expected", [(13, None), (12, "WARNING"), (11, "WARNING"), (14, None)]
+)
+def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):
+    """Warn if filter size along a dim is smaller than radius."""
+
+    signal_in = np.ones((266, input_size_y))
+
+    _filter = ConicFilter(radius=0.08, design_region_dl=0.015)
+    _filter.evaluate(signal_in)
+
+    assert_log_level(log_capture, log_level_expected)
+
+
 def test_sim_data_plot_field(use_emulated_run):
     """Test splitting of regular simulation data into user and server data."""
 
@@ -1548,3 +1577,126 @@ def test_pytreedef_errors(use_emulated_run):
         return jnp.sum(jnp.abs(jnp.array(sd["test"].amps.values)))
 
     jax.grad(f)(0.5)
+
+
+fwidth_run_time_expected = [
+    (FREQ0 / 10, 1e-11, 1e-11),  # run time supplied explicitly, use that
+    (FREQ0 / 10, None, RUN_TIME_FACTOR / (FREQ0 / 10)),  # no run_time, use fwidth supplied
+    (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)),  # no run_time, use fwidth supplied
+]
+
+
+@pytest.mark.parametrize("fwidth, run_time, run_time_expected", fwidth_run_time_expected)
+def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time_expected):
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    sim = sim.updated_copy(run_time_adjoint=run_time, fwidth_adjoint=fwidth)
+
+    sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    run_time_adj = sim._run_time_adjoint
+    fwidth_adj = sim._fwidth_adjoint
+
+    sim_adj = sim_data.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
+
+    assert sim_adj.run_time == run_time_expected
+
+
+@pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
+def test_no_adjoint_sources(
+    monkeypatch, use_emulated_run, tmp_path, log_capture, has_adj_src, log_level_expected
+):
+    """Make sure warning (not error) if no adjoint sources."""
+
+    def make_sim(eps):
+        """Make a sim with given sources and fwidth_adjoint specified."""
+        struct = JaxStructure(
+            geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
+            medium=JaxMedium(permittivity=eps),
+        )
+
+        freq0 = 2e14
+        mnt = td.ModeMonitor(
+            size=(10, 10, 0),
+            mode_spec=td.ModeSpec(num_modes=3),
+            freqs=[freq0],
+            name="mnt",
+        )
+
+        return JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            monitors=(),
+            structures=(),
+            output_monitors=(mnt,),
+            input_structures=(),
+            sources=[src],
+        )
+
+    if not has_adj_src:
+        monkeypatch.setattr(JaxModeData, "to_adjoint_sources", lambda *args, **kwargs: [])
+
+    def J(x):
+        sim = make_sim(eps=x)
+        data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+        power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
+        return power
+
+    grad_J = grad(J)
+    grad_J(2.0)
+    assert_log_level(log_capture, log_level_expected)
+
+
+def test_nonlinear_warn(log_capture):
+    """Test that simulations warn if nonlinearity is used."""
+
+    struct = JaxStructure(
+        geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
+        medium=JaxMedium(permittivity=2.0),
+    )
+
+    struct_static = td.Structure(
+        geometry=td.Box(center=(0, 3, 0), size=(1, 1, 1)),
+        medium=td.Medium(permittivity=2.0),
+    )
+
+    sim_base = JaxSimulation(
+        size=(10, 10, 0),
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        monitors=(),
+        structures=(struct_static,),
+        output_monitors=(),
+        input_structures=(struct,),
+        sources=[src],
+        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
+    )
+
+    # make the nonlinear objects to add to the JaxSimulation one by one
+    nl_model = td.KerrNonlinearity(n2=1)
+    nl_medium = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[nl_model]))
+    struct_static_nl = struct_static.updated_copy(medium=nl_medium)
+    input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)
+
+    def test_log_level(desired_level):
+        """Convenience function to test the log level and clear it."""
+        assert_log_level(log_capture, desired_level)
+        log_capture.clear()
+
+    # no nonlinearity (no warning)
+    test_log_level(None)
+
+    # nonlinear simulation.medium (error)
+    sim = sim_base.updated_copy(medium=nl_medium)
+    test_log_level("WARNING")
+
+    # nonlinear structure (warn)
+    sim = sim_base.updated_copy(structures=[struct_static_nl])
+    test_log_level("WARNING")
+
+    # nonlinear input_structure (warn)
+    sim = sim_base.updated_copy(input_structures=[input_struct_nl])
+    test_log_level("WARNING")

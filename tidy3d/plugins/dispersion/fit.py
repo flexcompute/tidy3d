@@ -18,7 +18,7 @@ from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayFloat1D
 from ...constants import C_0, HBAR, MICROMETER
 from ...exceptions import ValidationError, WebError, SetupError
-from ...web.environment import Env
+from tidy3d.web.core.environment import Env
 
 
 class DispersionFitter(Tidy3dBaseModel):

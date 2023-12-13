@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable, Optional
-from abc import ABC
+from abc import ABC, abstractmethod
 
 import pydantic.v1 as pd
 import numpy as np
@@ -33,6 +33,14 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
+
+    def to_tidy3d(self) -> AbstractJaxMedium:
+        """Convert self to tidy3d component."""
+        return self.to_medium()
+
+    @abstractmethod
+    def to_medium(self) -> AbstractJaxMedium:
+        """Convert self to medium."""
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
@@ -191,10 +199,16 @@ class JaxMedium(Medium, AbstractJaxMedium):
             inside_fn=inside_fn,
         )
 
-        vjp_eps_complex = np.sum(d_eps_map.values)
+        vjp_eps_complex = d_eps_map.sum(dim=("x", "y", "z"))
 
-        freq = d_eps_map.coords["f"][0]
-        vjp_eps, vjp_sigma = self.eps_complex_to_eps_sigma(vjp_eps_complex, freq)
+        vjp_eps = 0.0
+        vjp_sigma = 0.0
+
+        for freq in d_eps_map.coords["f"]:
+            vjp_eps_complex_f = vjp_eps_complex.sel(f=freq)
+            _vjp_eps, _vjp_sigma = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
+            vjp_eps += _vjp_eps
+            vjp_sigma += _vjp_sigma
 
         return self.copy(
             update=dict(
@@ -274,9 +288,19 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
                 inside_fn=inside_fn,
             )
 
-            vjp_eps_complex_ii = np.sum(e_mult_dim.values)
+            vjp_eps_complex_ii = e_mult_dim.sum(dim=("x", "y", "z"))
             freq = e_mult_dim.coords["f"][0]
-            vjp_eps_ii, vjp_sigma_ii = self.eps_complex_to_eps_sigma(vjp_eps_complex_ii, freq)
+
+            vjp_eps_ii = 0.0
+            vjp_sigma_ii = 0.0
+
+            for freq in e_mult_dim.coords["f"]:
+                vjp_eps_complex_ii_f = vjp_eps_complex_ii.sel(f=freq)
+                _vjp_eps_ii, _vjp_sigma_ii = self.eps_complex_to_eps_sigma(
+                    vjp_eps_complex_ii_f, freq
+                )
+                vjp_eps_ii += _vjp_eps_ii
+                vjp_sigma_ii += _vjp_sigma_ii
 
             vjp_fields[component_name] = JaxMedium(
                 permittivity=vjp_eps_ii,
@@ -511,14 +535,18 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
             # grab the correpsonding dotted fields at these interp_coords and sum over len-1 pixels
             field_name = "E" + dim
-            e_dotted = self.e_mult_volume(
-                field=field_name,
-                grad_data_fwd=grad_data_fwd,
-                grad_data_adj=grad_data_adj,
-                vol_coords=interp_coords,
-                d_vol=d_vols,
-                inside_fn=inside_fn,
-            ).sum(sum_axes)
+            e_dotted = (
+                self.e_mult_volume(
+                    field=field_name,
+                    grad_data_fwd=grad_data_fwd,
+                    grad_data_adj=grad_data_adj,
+                    vol_coords=interp_coords,
+                    d_vol=d_vols,
+                    inside_fn=inside_fn,
+                )
+                .sum(sum_axes)
+                .sum(dim="f")
+            )
 
             # reshape values to the expected vjp shape to be more safe
             vjp_shape = tuple(len(coord) for _, coord in coords.items())

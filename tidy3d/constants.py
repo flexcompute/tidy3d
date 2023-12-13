@@ -47,6 +47,14 @@ ELECTRON_VOLT = "eV"
 KELVIN = "K"
 CMCUBE = "cm^3"
 PERCMCUBE = "1/cm^3"
+WATT = "W"
+VOLT = "V"
+
+THERMAL_CONDUCTIVITY = "W/(um*K)"
+SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"
+HEAT_FLUX = "W/um^2"
+VOLUMETRIC_HEAT_RATE = "W/um^3"
+HEAT_TRANSFER_COEFF = "W/(um^2*K)"
 
 # large number used for comparing infinity
 LARGE_NUMBER = 1e10

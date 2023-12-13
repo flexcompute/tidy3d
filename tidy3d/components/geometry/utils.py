@@ -1,8 +1,11 @@
 """Utilities for geometry manipulation."""
 from __future__ import annotations
 from typing import Union, Tuple
+from math import isclose
 
-from ..types import Axis, PlanePosition, Shapely
+import numpy as np
+
+from ..types import Axis, PlanePosition, Shapely, ArrayFloat2D, MatrixReal4x4
 from ...exceptions import Tidy3dError
 
 from . import base
@@ -12,6 +15,7 @@ from . import mesh
 
 GeometryType = Union[
     base.Box,
+    base.Transformed,
     base.ClipOperation,
     base.GeometryGroup,
     primitives.Sphere,
@@ -80,7 +84,6 @@ def traverse_geometries(geometry: GeometryType) -> GeometryType:
     yield geometry
 
 
-# pylint:disable=too-many-arguments
 def from_shapely(
     shape: Shapely,
     axis: Axis,
@@ -158,3 +161,50 @@ def from_shapely(
         )
 
     raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
+
+
+def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
+    """Iterate over the polygons of a shapely geometry returning the vertices.
+
+    Parameters
+    ----------
+    shape : shapely.geometry.base.BaseGeometry
+        Shapely primitive to have its vertices extracted. It must be a linear ring, a polygon or a
+        collection of any of those.
+
+    Returns
+    -------
+    List[Tuple[ArrayFloat2D]]
+        List of tuples `(exterior, *interiors)`.
+    """
+    if shape.geom_type == "LinearRing":
+        return [(shape.coords[:-1],)]
+    if shape.geom_type == "Polygon":
+        return [(shape.exterior.coords[:-1],) + tuple(hole.coords[:-1] for hole in shape.interiors)]
+    if shape.geom_type in {"MultiPolygon", "GeometryCollection"}:
+        return sum(vertices_from_shapely(geo) for geo in shape.geoms)
+
+    raise Tidy3dError(f"Shape {shape} cannot be converted to Geometry.")
+
+
+def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixReal4x4 = None):
+    """Prevents the creation of slanted polyslabs rotated out of plane."""
+    if transform is None:
+        transform = np.eye(4)
+    if isinstance(geometry, polyslab.PolySlab):
+        if not (
+            isclose(geometry.sidewall_angle, 0)
+            or base.Transformed.preserves_axis(transform, geometry.axis)
+        ):
+            raise Tidy3dError(
+                "Slanted PolySlabs are not allowed to be rotated out of the slab plane."
+            )
+    elif isinstance(geometry, base.Transformed):
+        transform = np.dot(transform, geometry.transform)
+        validate_no_transformed_polyslabs(geometry.geometry, transform)
+    elif isinstance(geometry, base.GeometryGroup):
+        for geo in geometry.geometries:
+            validate_no_transformed_polyslabs(geo, transform)
+    elif isinstance(geometry, base.ClipOperation):
+        validate_no_transformed_polyslabs(geometry.geometry_a, transform)
+        validate_no_transformed_polyslabs(geometry.geometry_b, transform)

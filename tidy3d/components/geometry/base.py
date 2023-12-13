@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import List, Tuple, Any
+from typing import List, Tuple, Any, Union, Callable
 from math import isclose
 import functools
 
@@ -15,15 +15,61 @@ from matplotlib import patches
 
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
-from ..types import Bound, Size, Coordinate, Coordinate2D, ArrayFloat2D, ArrayFloat3D
+from ..types import Bound, Size, Coordinate, Coordinate2D
+from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4, trimesh
 from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
 from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
 from ..transformation import RotationAroundAxis
 from ...log import log
-from ...exceptions import SetupError, ValidationError, Tidy3dKeyError, Tidy3dError
+from ...exceptions import SetupError, ValidationError
+from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
 
+try:
+    gdstk_available = True
+    import gdstk
+except ImportError:
+    gdstk_available = False
+
+try:
+    gdspy_available = True
+    import gdspy
+except ImportError:
+    gdspy_available = False
+
+
 POLY_GRID_SIZE = 1e-12
+
+
+def requires_trimesh(fn):
+    """When decorating a method, requires that trimesh is available."""
+
+    @functools.wraps(fn)
+    def _fn(*args, **kwargs):
+        if trimesh is None:
+            raise Tidy3dImportError(
+                "The package 'trimesh' is required for this operation, but it was not found. "
+                "Please install the 'trimesh' dependencies using, for example, "
+                "'pip install -r requirements/trimesh.txt'."
+            )
+        return fn(*args, **kwargs)
+
+    return _fn
+
+
+_shapely_operations = {
+    "union": shapely.union,
+    "intersection": shapely.intersection,
+    "difference": shapely.difference,
+    "symmetric_difference": shapely.symmetric_difference,
+}
+
+_bit_operations = {
+    "union": lambda a, b: a | b,
+    "intersection": lambda a, b: a & b,
+    "difference": lambda a, b: a & ~b,
+    "symmetric_difference": lambda a, b: a != b,
+}
 
 
 class Geometry(Tidy3dBaseModel, ABC):
@@ -139,10 +185,32 @@ class Geometry(Tidy3dBaseModel, ABC):
         return is_inside
 
     @abstractmethod
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
@@ -160,9 +228,17 @@ class Geometry(Tidy3dBaseModel, ABC):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        origin = self.unpop_axis(position, (0, 0), axis=axis)
+        normal = self.unpop_axis(1, (0, 0), axis=axis)
+        to_2D = np.eye(4)
+        if axis != 2:
+            last, indices = self.pop_axis((0, 1, 2), axis)
+            to_2D = to_2D[list(indices) + [last, 3]]
+        return self.intersections_tilted_plane(normal, origin, to_2D)
 
     def intersections_2dbox(self, plane: Box) -> List[Shapely]:
-        """Returns list of shapely geomtries representing the intersections of the geometry with
+        """Returns list of shapely geometries representing the intersections of the geometry with
         a 2D box.
 
         Returns
@@ -367,16 +443,47 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def plot_shape(self, shape: Shapely, plot_params: PlotParams, ax: Ax) -> Ax:
         """Defines how a shape is plotted on a matplotlib axes."""
+        if shape.geom_type in (
+            "MultiPoint",
+            "MultiLineString",
+            "MultiPolygon",
+            "GeometryCollection",
+        ):
+            for sub_shape in shape.geoms:
+                ax = self.plot_shape(shape=sub_shape, plot_params=plot_params, ax=ax)
+
+            return ax
+
         _shape = Geometry.evaluate_inf_shape(shape)
+
         if _shape.geom_type == "LineString":
             xs, ys = zip(*_shape.coords)
-            ax.plot(xs, ys, color=plot_params.facecolor)
+            ax.plot(xs, ys, color=plot_params.facecolor, linewidth=plot_params.linewidth)
         elif _shape.geom_type == "Point":
             ax.scatter(shape.x, shape.y, color=plot_params.facecolor)
         else:
             patch = polygon_patch(_shape, **plot_params.to_kwargs())
             ax.add_artist(patch)
         return ax
+
+    @staticmethod
+    def _do_not_intersect(bounds_a, bounds_b, shape_a, shape_b):
+        """Check whether two shapes intersect."""
+
+        # do a bounding box check to see if any intersection to do anything about
+        if (
+            bounds_a[0] > bounds_b[2]
+            or bounds_b[0] > bounds_a[2]
+            or bounds_a[1] > bounds_b[3]
+            or bounds_b[1] > bounds_a[3]
+        ):
+            return True
+
+        # look more closely to see if intersected.
+        if shape_b.is_empty or not shape_a.intersects(shape_b):
+            return True
+
+        return False
 
     def _get_plot_labels(self, axis: Axis) -> Tuple[str, str]:
         """Returns planar coordinate x and y axis labels for cross section plots.
@@ -641,6 +748,61 @@ class Geometry(Tidy3dBaseModel, ABC):
     def _surface_area(self, bounds: Bound) -> float:
         """Returns object's surface area within given bounds."""
 
+    def translated(self, x: float, y: float, z: float) -> Geometry:
+        """Return a translated copy of this geometry.
+
+        Parameters
+        ----------
+        x : float
+            Translation along x.
+        y : float
+            Translation along y.
+        z : float
+            Translation along z.
+
+        Returns
+        -------
+        :class:`Geometry`
+            Translated copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.translation(x, y, z))
+
+    def scaled(self, x: float = 1.0, y: float = 1.0, z: float = 1.0) -> Geometry:
+        """Return a scaled copy of this geometry.
+
+        Parameters
+        ----------
+        x : float = 1.0
+            Scaling factor along x.
+        y : float = 1.0
+            Scaling factor along y.
+        z : float = 1.0
+            Scaling factor along z.
+
+        Returns
+        -------
+        :class:`Geometry`
+            Scaled copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.scaling(x, y, z))
+
+    def rotated(self, angle: float, axis: Union[Axis, Coordinate]) -> Geometry:
+        """Return a rotated copy of this geometry.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle (in radians).
+        axis : Union[int, Tuple[float, float, float]]
+            Axis of rotation: 0, 1, or 2 for x, y, and z, respectively, or a 3D vector.
+
+        Returns
+        -------
+        :class:`Geometry`
+            Rotated copy of this geometry.
+        """
+        return Transformed(geometry=self, transform=Transformed.rotation(angle, axis))
+
     """ Field and coordinate transformations """
 
     @staticmethod
@@ -894,7 +1056,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         dilation: float = 0.0,
         sidewall_angle: float = 0,
         reference_plane: PlanePosition = "middle",
-    ) -> GeometryGroup:
+    ) -> Geometry:
         """Import a ``gdstk.Cell`` or a ``gdspy.Cell`` and extrude it into a GeometryGroup.
 
         Parameters
@@ -926,23 +1088,25 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         Returns
         -------
-        :class:`GeometryGroup`
-            Geometry group with geometries created from the 2D data.
+        :class:`Geometry`
+            Geometries created from the 2D data.
         """
 
-        # switch the GDS cell loader function based on the class name string
-        # TODO: make this more robust in future releases
-        gds_cell_class_name = str(gds_cell.__class__)
-
-        if "gdstk" in gds_cell_class_name:
+        if gdstk_available and isinstance(gds_cell, gdstk.Cell):
             gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif "gdspy" in gds_cell_class_name:
+        elif gdspy_available and isinstance(gds_cell, gdspy.Cell):
             gds_loader_fn = Geometry.load_gds_vertices_gdspy
+        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to import gdstk cells."
+            )
+        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to import to gdspy cells."
+            )
         else:
-            raise ValueError(
-                f"Argument 'gds_cell' of type '{gds_cell_class_name}' does not seem to be "
-                "a 'Cell' instance from 'gdstk' or 'gdspy' modules and, therefore, cannot be "
-                "loaded by Tidy3D."
+            raise Tidy3dError(
+                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
             )
 
         geometries = []
@@ -960,7 +1124,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     consolidated_logger.warning(str(error))
                 except Tidy3dError as error:
                     consolidated_logger.warning(str(error))
-        return GeometryGroup(geometries=geometries)
+        return geometries[0] if len(geometries) == 1 else GeometryGroup(geometries=geometries)
 
     @staticmethod
     def from_shapely(
@@ -1000,6 +1164,201 @@ class Geometry(Tidy3dBaseModel, ABC):
             Geometry extruded from the 2D data.
         """
         return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> List:
+        """Convert a Geometry object's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`.
+        """
+        if not gdstk_available:
+            raise Tidy3dImportError(
+                "Python module 'gdstk' not found. Install the module to be able to export shapes "
+                "using it."
+            )
+
+        shapes = self.intersections_plane(x=x, y=y, z=z)
+        polygons = []
+        for shape in shapes:
+            for vertices in vertices_from_shapely(shape):
+                if len(vertices) == 1:
+                    polygons.append(gdstk.Polygon(vertices[0], gds_layer, gds_dtype))
+                else:
+                    polygons.extend(
+                        gdstk.boolean(
+                            vertices[:1],
+                            vertices[1:],
+                            "not",
+                            layer=gds_layer,
+                            datatype=gds_dtype,
+                        )
+                    )
+        return polygons
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> List:
+        """Convert a Geometry object's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+        if not gdspy_available:
+            raise Tidy3dImportError(
+                "Python module 'gdspy' not found. Install the module to be able to export shapes "
+                "using it."
+            )
+
+        shapes = self.intersections_plane(x=x, y=y, z=z)
+        polygons = []
+        for shape in shapes:
+            for vertices in vertices_from_shapely(shape):
+                if len(vertices) == 1:
+                    polygons.append(gdspy.Polygon(vertices[0], gds_layer, gds_dtype))
+                else:
+                    polygons.append(
+                        gdspy.boolean(
+                            vertices[:1],
+                            vertices[1:],
+                            "not",
+                            layer=gds_layer,
+                            datatype=gds_dtype,
+                        )
+                    )
+        return polygons
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> None:
+        """Append a Geometry object's planar slice to a .gds cell.
+
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        """
+        if gdstk_available and isinstance(cell, gdstk.Cell):
+            polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+            if len(polygons) > 0:
+                cell.add(*polygons)
+
+        elif gdspy_available and isinstance(cell, gdspy.Cell):
+            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+            if len(polygons) > 0:
+                cell.add(polygons)
+
+        elif "gdstk" in cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+            )
+        elif "gdspy" in cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
+
+    def to_gds_file(
+        self,
+        fname: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_cell_name: str = "MAIN",
+    ) -> None:
+        """Export a Geometry object's planar slice to a .gds file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .gds file to save the :class:`Geometry` slice to.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        gds_cell_name : str = 'MAIN'
+            Name of the cell created in the .gds file to store the geometry.
+        """
+        if gdstk_available:
+            library = gdstk.Library()
+        elif gdspy_available:
+            library = gdspy.GdsLibrary()
+        else:
+            raise Tidy3dImportError(
+                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                "files, please install one of those those modules."
+            )
+        cell = library.new_cell(gds_cell_name)
+        self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        library.write_gds(fname)
 
     def _as_union(self) -> List[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
@@ -1452,6 +1811,55 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
+    @requires_trimesh
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        (x0, y0, z0), (x1, y1, z1) = self.bounds
+        vertices = [
+            (x0, y0, z0),  # 0
+            (x0, y0, z1),  # 1
+            (x0, y1, z0),  # 2
+            (x0, y1, z1),  # 3
+            (x1, y0, z0),  # 4
+            (x1, y0, z1),  # 5
+            (x1, y1, z0),  # 6
+            (x1, y1, z1),  # 7
+        ]
+        faces = [
+            (0, 1, 3, 2),  # -x
+            (4, 6, 7, 5),  # +x
+            (0, 4, 5, 1),  # -y
+            (2, 3, 7, 6),  # +y
+            (0, 2, 6, 4),  # -z
+            (1, 5, 7, 3),  # +z
+        ]
+        mesh = trimesh.Trimesh(vertices, faces)
+
+        section = mesh.section(plane_origin=origin, plane_normal=normal)
+        if section is None:
+            return []
+        path, _ = section.to_planar(to_2D=to_2D)
+        return path.polygons_full.tolist()
+
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
 
@@ -1521,7 +1929,7 @@ class Box(Centered):
         return (dist_x <= Lx / 2) * (dist_y <= Ly / 2) * (dist_z <= Lz / 2)
 
     def intersections_with(self, other):
-        """Returns list of shapely geomtries representing the intersections of the geometry with
+        """Returns list of shapely geometries representing the intersections of the geometry with
         this 2D box.
 
         Returns
@@ -1773,6 +2181,245 @@ class Box(Centered):
 """Compound subclasses"""
 
 
+class Transformed(Geometry):
+    """Class representing a transformed geometry."""
+
+    geometry: annotate_type(GeometryType) = pydantic.Field(
+        ..., title="Geometry", description="Base geometry to be transformed."
+    )
+
+    transform: MatrixReal4x4 = pydantic.Field(
+        np.eye(4).tolist(),
+        title="Transform",
+        description="Transform matrix applied to the base geometry.",
+    )
+
+    @pydantic.validator("transform")
+    def _transform_is_invertible(cls, val):
+        # If the transform is not invertible, this will raise an error
+        _ = np.linalg.inv(val)
+        return val
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def _apply_transforms(cls, values):
+        while isinstance(values["geometry"], Transformed):
+            inner = values["geometry"]
+            values["geometry"] = inner.geometry
+            values["transform"] = np.dot(values["transform"], inner.transform)
+        return values
+
+    @cached_property
+    def inverse(self) -> MatrixReal4x4:
+        """Inverse of this transform."""
+        return np.linalg.inv(self.transform)
+
+    @staticmethod
+    def _vertices_from_bounds(bounds: Bound) -> ArrayFloat2D:
+        """Return the 8 vertices derived from bounds.
+
+        The vertices are returned as homogeneous coordinates (with 4 components).
+
+        Parameters
+        ----------
+        bounds : Bound
+            Bounds from which to derive the vertices.
+
+        Returns
+        -------
+        ArrayFloat2D
+            Array with shape (4, 8) with all vertices from ``bounds``.
+        """
+        (x0, y0, z0), (x1, y1, z1) = bounds
+        return np.array(
+            (
+                (x0, x0, x0, x0, x1, x1, x1, x1),
+                (y0, y0, y1, y1, y0, y0, y1, y1),
+                (z0, z1, z0, z1, z0, z1, z0, z1),
+                (1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0),
+            )
+        )
+
+    @cached_property
+    def bounds(self) -> Bound:
+        """Returns bounding box min and max coordinates.
+
+        Returns
+        -------
+        Tuple[float, float, float], Tuple[float, float, float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+        """
+        # NOTE (Lucas): The bounds are overestimated because we don't want to calculate
+        # precise TriangleMesh representations for GeometryGroup or ClipOperation.
+        vertices = np.dot(self.transform, self._vertices_from_bounds(self.geometry.bounds))[:3]
+        return (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
+
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        return self.geometry.intersections_tilted_plane(
+            tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
+            tuple(np.dot(self.inverse, (origin[0], origin[1], origin[2], 1.0))[:3]),
+            np.dot(to_2D, self.transform),
+        )
+
+    def inside(
+        self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
+    ) -> np.ndarray[bool]:
+        """For input arrays ``x``, ``y``, ``z`` of arbitrary but identical shape, return an array
+        with the same shape which is ``True`` for every point in zip(x, y, z) that is inside the
+        volume of the :class:`Geometry`, and ``False`` otherwise.
+
+        Parameters
+        ----------
+        x : np.ndarray[float]
+            Array of point positions in x direction.
+        y : np.ndarray[float]
+            Array of point positions in y direction.
+        z : np.ndarray[float]
+            Array of point positions in z direction.
+
+        Returns
+        -------
+        np.ndarray[bool]
+            ``True`` for every point that is inside the geometry.
+        """
+        x = np.array(x)
+        y = np.array(y)
+        z = np.array(z)
+        xyz = np.dot(self.inverse, np.vstack((x.flat, y.flat, z.flat, np.ones(x.size))))
+        if xyz.shape[1] == 1:
+            # TODO: This "fix" is required because of a bug in PolySlab.inside (with non-zero sidewall angle)
+            return self.geometry.inside(xyz[0][0], xyz[1][0], xyz[2][0]).reshape(x.shape)
+        return self.geometry.inside(xyz[0], xyz[1], xyz[2]).reshape(x.shape)
+
+    def _volume(self, bounds: Bound) -> float:
+        """Returns object's volume within given bounds."""
+        # NOTE (Lucas): Bounds are overestimated.
+        vertices = np.dot(self.inverse, self._vertices_from_bounds(bounds))[:3]
+        inverse_bounds = (tuple(vertices.min(axis=1)), tuple(vertices.max(axis=1)))
+        return abs(np.linalg.det(self.transform)) * self.geometry.volume(inverse_bounds)
+
+    def _surface_area(self, bounds: Bound) -> float:
+        """Returns object's surface area within given bounds."""
+        log.warning("Surface area of transformed elements cannot be calculated.")
+        return None
+
+    @staticmethod
+    def translation(x: float, y: float, z: float) -> MatrixReal4x4:
+        """Return a translation matrix.
+
+        Parameters
+        ----------
+        x : float
+            Translation along x.
+        y : float
+            Translation along y.
+        z : float
+            Translation along z.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+        return np.array(
+            [
+                (1.0, 0.0, 0.0, x),
+                (0.0, 1.0, 0.0, y),
+                (0.0, 0.0, 1.0, z),
+                (0.0, 0.0, 0.0, 1.0),
+            ],
+            dtype=float,
+        )
+
+    @staticmethod
+    def scaling(x: float = 1.0, y: float = 1.0, z: float = 1.0) -> MatrixReal4x4:
+        """Return a scaling matrix.
+
+        Parameters
+        ----------
+        x : float = 1.0
+            Scaling factor along x.
+        y : float = 1.0
+            Scaling factor along y.
+        z : float = 1.0
+            Scaling factor along z.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+        if np.isclose((x, y, z), 0.0).any():
+            raise Tidy3dError("Scaling factors cannot be zero in any dimensions.")
+        return np.array(
+            [
+                (x, 0.0, 0.0, 0.0),
+                (0.0, y, 0.0, 0.0),
+                (0.0, 0.0, z, 0.0),
+                (0.0, 0.0, 0.0, 1.0),
+            ],
+            dtype=float,
+        )
+
+    @staticmethod
+    def rotation(angle: float, axis: Union[Axis, Coordinate]) -> MatrixReal4x4:
+        """Return a rotation matrix.
+
+        Parameters
+        ----------
+        angle : float
+            Rotation angle (in radians).
+        axis : Union[int, Tuple[float, float, float]]
+            Axis of rotation: 0, 1, or 2 for x, y, and z, respectively, or a 3D vector.
+
+        Returns
+        -------
+        numpy.ndarray
+            Transform matrix with shape (4, 4).
+        """
+        transform = np.eye(4)
+        transform[:3, :3] = RotationAroundAxis(angle=angle, axis=axis).matrix
+        return transform
+
+    @staticmethod
+    def preserves_axis(transform: MatrixReal4x4, axis: Axis) -> bool:
+        """Indicate if the transform preserves the orientation of a given axis.
+
+        Parameters:
+        transform: MatrixReal4x4
+            Transform matrix to check.
+        axis : int
+            Axis to check. Values 0, 1, or 2, to check x, y, or z, respectively.
+
+        Returns
+        -------
+        bool
+            ``True`` if the transformation preserves the axis orientation, ``False`` otherwise.
+        """
+        i = (axis + 1) % 3
+        j = (axis + 2) % 3
+        return np.isclose(transform[i, axis], 0) and np.isclose(transform[j, axis], 0)
+
+
 class ClipOperation(Geometry):
     """Class representing the result of a set operation between geometries."""
 
@@ -1818,10 +2465,61 @@ class ClipOperation(Geometry):
             return [base_geometry]
         return []
 
+    @property
+    def _shapely_operation(self) -> Callable[[Shapely, Shapely], Shapely]:
+        """Return a Shapely function equivalent to this operation."""
+        result = _shapely_operations.get(self.operation, None)
+        if not result:
+            raise ValueError(
+                "'operation' must be one of 'union', 'intersection', 'difference', or "
+                "'symmetric_difference'."
+            )
+        return result
+
+    @property
+    def _bit_operation(self) -> Callable[[Any, Any], Any]:
+        """Return a function equivalent to this operation using bit operators."""
+        result = _bit_operations.get(self.operation, None)
+        if not result:
+            raise ValueError(
+                "'operation' must be one of 'union', 'intersection', 'difference', or "
+                "'symmetric_difference'."
+            )
+        return result
+
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        geom_a = Geometry.evaluate_inf_shape(
+            shapely.unary_union(self.geometry_a.intersections_tilted_plane(normal, origin, to_2D))
+        )
+        geom_b = Geometry.evaluate_inf_shape(
+            shapely.unary_union(self.geometry_b.intersections_tilted_plane(normal, origin, to_2D))
+        )
+        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
+
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
@@ -1845,20 +2543,7 @@ class ClipOperation(Geometry):
         geom_b = Geometry.evaluate_inf_shape(
             shapely.unary_union(self.geometry_b.intersections_plane(x, y, z))
         )
-        if self.operation == "union":
-            result = ClipOperation.to_polygon_list(shapely.union(geom_a, geom_b))
-        elif self.operation == "intersection":
-            result = ClipOperation.to_polygon_list(shapely.intersection(geom_a, geom_b))
-        elif self.operation == "difference":
-            result = ClipOperation.to_polygon_list(shapely.difference(geom_a, geom_b))
-        elif self.operation == "symmetric_difference":
-            result = ClipOperation.to_polygon_list(shapely.symmetric_difference(geom_a, geom_b))
-        else:
-            raise ValueError(
-                "'operation' must be one of 'union', 'intersection', 'difference', or "
-                "'symmetric_difference'."
-            )
-        return result
+        return ClipOperation.to_polygon_list(self._shapely_operation(geom_a, geom_b))
 
     @cached_property
     def bounds(self) -> Bound:
@@ -1911,20 +2596,7 @@ class ClipOperation(Geometry):
         """
         inside_a = self.geometry_a.inside(x, y, z)
         inside_b = self.geometry_b.inside(x, y, z)
-        if self.operation == "union":
-            result = inside_a | inside_b
-        elif self.operation == "intersection":
-            result = inside_a & inside_b
-        elif self.operation == "difference":
-            result = inside_a & ~inside_b
-        elif self.operation == "symmetric_difference":
-            result = inside_a != inside_b
-        else:
-            raise ValueError(
-                "'operation' must be one of 'union', 'intersection', 'difference', or "
-                "'symmetric_difference'."
-            )
-        return result
+        return self._bit_operation(inside_a, inside_b)
 
     def inside_meshgrid(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -1948,24 +2620,16 @@ class ClipOperation(Geometry):
         """
         inside_a = self.geometry_a.inside_meshgrid(x, y, z)
         inside_b = self.geometry_b.inside_meshgrid(x, y, z)
-        if self.operation == "union":
-            result = inside_a | inside_b
-        elif self.operation == "intersection":
-            result = inside_a & inside_b
-        elif self.operation == "difference":
-            result = inside_a & ~inside_b
-        else:
-            result = inside_a != inside_b
-        return result
+        return self._bit_operation(inside_a, inside_b)
 
     def _volume(self, bounds: Bound) -> float:
         """Returns object's volume within given bounds."""
         # Overestimates
         if self.operation == "intersection":
-            return min(self.geometry_a.surface_area(bounds), self.geometry_b.surface_area(bounds))
+            return min(self.geometry_a.volume(bounds), self.geometry_b.volume(bounds))
         if self.operation == "difference":
-            return self.geometry_a.surface_area(bounds)
-        return self.geometry_a.surface_area(bounds) + self.geometry_b.surface_area(bounds)
+            return self.geometry_a.volume(bounds)
+        return self.geometry_a.volume(bounds) + self.geometry_b.volume(bounds)
 
     def _surface_area(self, bounds: Bound) -> float:
         """Returns object's surface area within given bounds."""
@@ -2007,10 +2671,37 @@ class GeometryGroup(Geometry):
             tuple(max(b[i] for _, b in bounds) for i in range(3)),
         )
 
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        return [
+            intersection
+            for geometry in self.geometries
+            for intersection in geometry.intersections_tilted_plane(normal, origin, to_2D)
+        ]
+
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------
@@ -2028,7 +2719,6 @@ class GeometryGroup(Geometry):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
-
         if not self.intersects_plane(x, y, z):
             return []
         return [
@@ -2112,4 +2802,4 @@ class GeometryGroup(Geometry):
         return np.sum(individual_areas)
 
 
-from .utils import GeometryType, from_shapely  # noqa: E402
+from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

@@ -9,11 +9,11 @@ from jax.tree_util import register_pytree_node_class
 
 from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
-from ...web.webapi import run as web_run
-from ...web.webapi import wait_for_connection
-from ...web.s3utils import download_file, upload_file
-from ...web.asynchronous import run_async as web_run_async
-from ...web.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
+from tidy3d.web.api.webapi import run as web_run
+from tidy3d.web.api.webapi import wait_for_connection
+from tidy3d.web.core.s3utils import download_file, upload_file
+from tidy3d.web.api.asynchronous import run_async as web_run_async
+from ...web.api.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
 from ...components.types import Literal
 
 from .components.base import JaxObject
@@ -165,7 +165,8 @@ def run_bwd(
 
     fwd_task_id = res[0].fwd_task_id
     fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
-    jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    run_time_adj = sim_data_vjp.simulation._run_time_adjoint
+    jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
     sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
 
     sim_vjp = webapi_run_adjoint_bwd(
@@ -484,7 +485,8 @@ def run_async_bwd(
     for sim_data_vjp, fwd_task_id in zip(batch_data_vjp, fwd_task_ids):
         parent_tasks_adj.append([str(fwd_task_id)])
         fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
-        jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+        run_time_adj = sim_data_vjp.simulation._run_time_adjoint
+        jax_sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
         sim_adj, jax_info_adj = jax_sim_adj.to_simulation()
         sims_adj.append(sim_adj)
         jax_infos_adj.append(jax_info_adj)
@@ -647,7 +649,7 @@ def run_local_fwd(
 
     # add the gradient monitors and run the forward simulation
     grad_mnts = simulation.get_grad_monitors(
-        input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
+        input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
     sim_fwd = simulation.updated_copy(**grad_mnts)
     sim_data_fwd = run(
@@ -682,7 +684,8 @@ def run_local_bwd(
 
     # make and run adjoint simulation
     fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
-    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+    run_time_adj = sim_data_fwd.simulation._run_time_adjoint
+    sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
     sim_data_adj = run(
         simulation=sim_adj,
         task_name=_task_name_adj(task_name),
@@ -691,6 +694,9 @@ def run_local_bwd(
         callback_url=callback_url,
         verbose=verbose,
     )
+
+    sim_data_adj = sim_data_adj.normalize_adjoint_fields()
+
     grad_data_adj = sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
@@ -804,7 +810,7 @@ def run_async_local_fwd(
     for simulation in simulations:
 
         grad_mnts = simulation.get_grad_monitors(
-            input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
+            input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
         )
         sim_fwd = simulation.updated_copy(**grad_mnts)
         sims_fwd.append(sim_fwd)
@@ -857,8 +863,9 @@ def run_async_local_bwd(
     sims_adj = []
     for i, sim_data_fwd in enumerate(batch_data_fwd):
         fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
+        run_time_adj = sim_data_fwd.simulation._run_time_adjoint
         sim_data_vjp = batch_data_vjp[i]
-        sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj)
+        sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
         sims_adj.append(sim_adj)
 
     batch_data_adj = run_async_local(
@@ -873,6 +880,8 @@ def run_async_local_bwd(
 
     sims_vjp = []
     for i, (sim_data_fwd, sim_data_adj) in enumerate(zip(batch_data_fwd, batch_data_adj)):
+
+        sim_data_adj = sim_data_adj.normalize_adjoint_fields()
 
         grad_data_fwd = sim_data_fwd.grad_data_symmetry
         grad_data_adj = sim_data_adj.grad_data_symmetry

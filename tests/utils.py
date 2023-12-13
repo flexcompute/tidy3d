@@ -14,19 +14,20 @@ from tidy3d.components.base import Tidy3dBaseModel
 np.random.seed(4)
 
 
+FREQS = np.array([1.90, 2.01, 2.2]) * 1e12
 SIM_MONITORS = td.Simulation(
     size=(10.0, 10.0, 10.0),
     grid_spec=td.GridSpec(wavelength=1.0),
     run_time=1e-13,
     monitors=[
-        td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=[1, 2, 5, 7, 8], name="field_freq"),
+        td.FieldMonitor(size=(1, 1, 1), center=(0, 1, 0), freqs=FREQS, name="field_freq"),
         td.FieldTimeMonitor(size=(1, 1, 0), center=(1, 0, 0), interval=10, name="field_time"),
-        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[1, 2, 5, 9], name="flux_freq"),
+        td.FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=FREQS, name="flux_freq"),
         td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), start=1e-12, name="flux_time"),
         td.ModeMonitor(
             size=(1, 1, 0),
             center=(0, 0, 0),
-            freqs=[1.90, 2.01, 2.2],
+            freqs=FREQS,
             mode_spec=td.ModeSpec(num_modes=3),
             name="mode",
         ),
@@ -102,19 +103,25 @@ SIM_FULL = td.Simulation(
     structures=[
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=td.Medium(permittivity=2.0),
+            medium=td.Medium(permittivity=2.0, name="dieletric"),
+            name="dieletric_box",
         ),
         td.Structure(
             geometry=td.Box(size=(1, td.inf, 1), center=(-1, 0, 0)),
-            medium=td.Medium(permittivity=1.0, conductivity=3.0),
+            medium=td.Medium(permittivity=1.0, conductivity=3.0, name="lossy_dieletric"),
+            name="lossy_box",
         ),
         td.Structure(
             geometry=td.Sphere(radius=1.0, center=(1.0, 0.0, 1.0)),
-            medium=td.Sellmeier(coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)]),
+            medium=td.Sellmeier(
+                coeffs=[(1.03961212, 0.00600069867), (0.231792344, 0.0200179144)], name="sellmeier"
+            ),
+            name="sellmeier_sphere",
         ),
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=td.Lorentz(eps_inf=2.0, coeffs=[(1, 2, 3)]),
+            medium=td.Lorentz(eps_inf=2.0, coeffs=[(1, 2, 3)], name="lorentz"),
+            name="lorentz_box",
         ),
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
@@ -126,15 +133,25 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
-            medium=td.Drude(eps_inf=2.0, coeffs=[(1, 3)]),
+            medium=td.Drude(eps_inf=2.0, coeffs=[(1, 3)], name="drude"),
+            name="drude_box",
         ),
         td.Structure(
             geometry=td.Box(size=(1, 0, 1), center=(-1, 0, 0)),
             medium=td.Medium2D.from_medium(td.Medium(conductivity=0.45), thickness=0.01),
         ),
         td.Structure(
+            geometry=td.Box(size=(1, 0, 1), center=(-1, 0, 0)),
+            medium=td.PEC2D,
+        ),
+        td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+            medium=td.AnisotropicMedium(xx=td.PEC, yy=td.Medium(), zz=td.Medium()),
+        ),
+        td.Structure(
             geometry=td.GeometryGroup(geometries=[td.Box(size=(1, 1, 1), center=(-1, 0, 0))]),
             medium=td.PEC,
+            name="pec_group",
         ),
         td.Structure(
             geometry=td.Cylinder(radius=1.0, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
@@ -143,6 +160,7 @@ SIM_FULL = td.Simulation(
                 yy=td.Medium(permittivity=2),
                 zz=td.Medium(permittivity=3),
             ),
+            name="anisotopic_cylinder",
         ),
         td.Structure(
             geometry=td.PolySlab(
@@ -151,6 +169,7 @@ SIM_FULL = td.Simulation(
             medium=td.PoleResidue(
                 eps_inf=1.0, poles=((6206417594288582j, (-3.311074436985222e16j)),)
             ),
+            name="pole_slab",
         ),
         td.Structure(
             geometry=td.Box(
@@ -204,6 +223,22 @@ SIM_FULL = td.Simulation(
             ),
         ),
         td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=td.Medium(
+                nonlinear_spec=td.NonlinearSpec(
+                    num_iters=10,
+                    models=[
+                        td.NonlinearSusceptibility(chi3=0.1),
+                        td.TwoPhotonAbsorption(beta=1),
+                        td.KerrNonlinearity(n2=1),
+                    ],
+                )
+            ),
+        ),
+        td.Structure(
             geometry=td.PolySlab(
                 vertices=[(-1.5, -1.5), (-0.5, -1.5), (-0.5, -0.5)], slab_bounds=[-1, 1]
             ),
@@ -231,12 +266,30 @@ SIM_FULL = td.Simulation(
                 )
             ),
             medium=td.Medium(permittivity=5),
+            name="dieletric_mesh",
         ),
         td.Structure(
             geometry=td.TriangleMesh.from_stl(
                 "tests/data/two_boxes_separate.stl", scale=0.1, origin=(0.5, 0.5, 0.5)
             ),
             medium=td.Medium(permittivity=5),
+        ),
+        td.Structure(
+            geometry=td.ClipOperation(
+                geometry_a=td.Box(size=(1, 1, 1), center=(0.9, 0.9, 0.9)),
+                geometry_b=td.Box(size=(1, 1, 1), center=(1.1, 1.1, 1.1)),
+                operation="symmetric_difference",
+            ),
+            medium=td.Medium(permittivity=3),
+            name="clip_operation",
+        ),
+        td.Structure(
+            geometry=td.Transformed(
+                geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)),
+                transform=td.Transformed.rotation(np.pi / 12, 2),
+            ),
+            medium=td.Medium(permittivity=1.5),
+            name="transformed_box",
         ),
     ],
     sources=[
@@ -384,8 +437,8 @@ SIM_FULL = td.Simulation(
             freqs=[250e12, 300e12],
             name="proj_angle",
             custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 2],
-            theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
+            phi=[0, np.pi / 6],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
         ),
         td.FieldProjectionCartesianMonitor(
             center=(0, 0, 0),
@@ -405,8 +458,8 @@ SIM_FULL = td.Simulation(
             name="proj_kspace",
             custom_origin=(1, 2, 3),
             proj_axis=2,
-            ux=[0.1, 0.2],
-            uy=[0.3, 0.4, 0.5],
+            ux=[0.02, 0.04],
+            uy=[0.03, 0.04, 0.05],
         ),
         td.FieldProjectionAngleMonitor(
             center=(0, 0, 0),
@@ -414,8 +467,8 @@ SIM_FULL = td.Simulation(
             freqs=[250e12, 300e12],
             name="proj_angle_exact",
             custom_origin=(1, 2, 3),
-            phi=[0, np.pi / 2],
-            theta=np.linspace(-np.pi / 2, np.pi / 2, 100),
+            phi=[0, np.pi / 8],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
             far_field_approx=False,
         ),
         td.DiffractionMonitor(

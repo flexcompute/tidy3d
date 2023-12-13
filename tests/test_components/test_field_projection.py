@@ -92,7 +92,28 @@ def make_proj_monitors(center, size, freqs):
         far_field_approx=False,
     )
 
-    return n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor, exact_cart_monitor
+    downsampled_cart_monitor = td.FieldProjectionCartesianMonitor(
+        center=center,
+        size=size,
+        freqs=freqs,
+        name="downsampled_cart",
+        custom_origin=center,
+        x=list(xs),
+        y=list(ys),
+        proj_axis=proj_axis,
+        proj_distance=z,
+        normal_dir="+",
+        exclude_surfaces=exclude_surfaces,
+        interval_space=(1, 2, 3),
+    )
+
+    return (
+        n2f_angle_monitor,
+        n2f_cart_monitor,
+        n2f_ksp_monitor,
+        exact_cart_monitor,
+        downsampled_cart_monitor,
+    )
 
 
 def test_proj_monitors():
@@ -253,7 +274,7 @@ def test_proj_clientside():
 
     center = (0, 0, 0)
     size = (2, 2, 0)
-    f0 = 1
+    f0 = 1e13
     monitor = td.FieldMonitor(size=size, center=center, freqs=[f0], name="near_field")
 
     sim_size = (5, 5, 5)
@@ -292,9 +313,13 @@ def test_proj_clientside():
     )
 
     # make near-to-far monitors
-    n2f_angle_monitor, n2f_cart_monitor, n2f_ksp_monitor, exact_cart_monitor = make_proj_monitors(
-        center, size, [f0]
-    )
+    (
+        n2f_angle_monitor,
+        n2f_cart_monitor,
+        n2f_ksp_monitor,
+        exact_cart_monitor,
+        _,
+    ) = make_proj_monitors(center, size, [f0])
 
     far_fields_angular = proj.project_fields(n2f_angle_monitor)
     far_fields_cartesian = proj.project_fields(n2f_cart_monitor)

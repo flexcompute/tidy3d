@@ -3,8 +3,73 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
 ## [Unreleased]
+
+## [2.5.0] - 2023-12-13
+
+### Added
+- Ability to mix regular mediums and geometries with differentiable analogues in `JaxStructure`. Enables support for shape optimization with dispersive mediums. New classes `JaxStructureStaticGeometry` and `JaxStructureStaticMedium` accept regular `Tidy3D` geometry and medium classes, respectively.
+- Warning if nonlinear mediums are used in an `adjoint` simulation. In this case, the gradients will not be accurate, but may be approximately correct if the nonlinearity is weak.
+- Validator for surface field projection monitors that warns if projecting backwards relative to the monitor's normal direction.
+- Validator for field projection monitors when far field approximation is enabled but the projection distance is small relative to the near field domain.
+- Ability to manually specify a medium through which to project fields, when using field projection monitors.
+- Added support for two-photon absorption via `TwoPhotonAbsorption` class. Added `KerrNonlinearity` that implements Kerr effect without third-harmonic generation.
+- Can create `PoleResidue` from LO-TO form via `PoleResidue.from_lo_to`.
+- Added `TriangularGridDataset` and `TehrahedralGridDataset` for storing and manipulating unstructured data.
+- Support for an anisotropic medium containing PEC components.
+- `SimulationData.mnt_data_from_file()` method to load only a single monitor data object from a simulation data `.hdf5` file.
+- `_hash_self` to base model, uses `hashlib` to hash a Tidy3D component the same way every session.
+- `ComponentModeler.plot_sim_eps()` method to plot the simulation permittivity and ports.
+- Support for 2D PEC materials.
+- Ability to downsample recorded near fields to speed up server-side far field projections.
+- `FieldData.apply_phase(phase)` to multiply field data by a phase.
+- Optional `phase` argument to `SimulationData.plot_field` that applies a phase to complex-valued fields.
+- Ability to window near fields for spatial filtering of far fields for both client- and server-side field projections.
+- Support for multiple frequencies in `output_monitors` in `adjoint` plugin.
+- GDSII export functions `to_gds_file`, `to_gds`, `to_gdspy`, and `to_gdstk` to `Simulation`, `Structure`, and `Geometry`.
+- `verbose` argument to `estimate_cost` and `real_cost` functions such that the cost is logged if `verbose==True` (default). Additional helpful messages may also be logged.
+- Support for space-time modulation of permittivity and electric conductivity via `ModulationSpec` class. The modulation function must be separable in space and time. Modulations with user-supplied distributions in space and harmonic modulation in time are supported.
+- `Geometry.intersections_tilted_plane` calculates intersections with any plane, not only axis-aligned ones.
+- `Transformed` class to support geometry transformations.
+- Methods `Geometry.translated`, `Geometry.scaled`, and `Geometry.rotated` can be used to create transformed copies of any geometry.
+- Time zone in webAPI logging output.
+- Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
+- Solver for thermal simulation (see `HeatSimulation` and related classes).
+- Specification of material thermal properties in medium classes through an optional field `.heat_spec`.
+
+### Changed
+- Credit cost for remote mode solver has been modified to be defined in advance based on the mode solver details. Previously, the cost was based on elapsed runtime. On average, there should be little difference in the cost.
+- Mode solves that are part of an FDTD simulation (i.e. for mode sources and monitors) are now charged at the same flex credit cost as a corresponding standalone mode solver call.
+- Any `FreqMonitor.freqs` or `Source.source_time.freq0` smaller than `1e5` now raise an error as this must be incorrect setup that is outside the Tidy3D intended range (note default frequency is `Hz`).
+- When using complex fields (e.g. with Bloch boundaries), FluxTimeMonitor and frequency-domain fields (including derived quantities like flux) now only use the real part of the time-domain electric field.
+- Indent for the json string of Tidy3D models has been changed to `None` when used internally; kept as `indent=4` for writing to `json` and `yaml` files.
+- API for specifying one or more nonlinear models via `NonlinearSpec.models`.
+- `freqs` and `direction` are optional in `ModeSolver` methods converting to monitor and source, respectively. If not supplied, uses the values from the `ModeSolver` instance calling the method.
+- Removed spurious ``-1`` factor in field amplitudes injected by field sources in some cases. The injected ``E``-field should now exactly match the analytic, mode, or custom fields that the source is expected to inject, both in the forward and in the backward direction.
+- Restriction on the maximum memory that a monitor would need internally during the solver run, even if the final monitor data is smaller.
+- Restriction on the maximum size of mode solver data produced by a `ModeSolver` server call.
+- Updated versions of `boto3`, `requests`, and `click`.
+- python 3.7 no longer tested nor supported.
+- Removed warning that monitors now have `colocate=True` by default.
+- If `PML` or any absorbing boundary condition is used along a direction where the `Simulation` size is zero, an error will be raised, rather than just a warning.
+- Remove warning that monitors now have `colocate=True` by default.
+- Internal refactor of Web API functionality.
+- `Geometry.from_gds` doesn't create unnecessary groups of single elements.
+
+### Fixed
+- Fixed energy leakage in TFSF when using complex fields.
+- Fixed the duplication of log messages in Jupyter when `set_logging_file` is used.
+- If input to circular filters in adjoint have size smaller than the diameter, instead of erroring, warn user and truncate the filter kernel accordingly.
+- When writing the json string of a model to an `hdf5` file, the string is split into chunks if it has more than a set (very large) number of characters. This fixes potential error if the string size is more than 4GB.
+- Proper equality checking between `Tidy3dBaseModel` instances, which takes `DataArray` values and coords into account and handles `np.ndarray` types.
+- Correctly set the contour length scale when exporting 2D (or 1D) structures with custom medium to GDSII.
+- Improved error handling if file can not be downloaded from server.
+- Fix for detection of file extensions for file names with dots.
+- Restrict to `matplotlib` >= 3.5, avoiding bug in plotting `CustomMedium`.
+- Fixes `ComponentModeler` batch file being different in different sessions by use of deterministic hash function for computing batch filename.
+- Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
+- Ensure that mode solver fields are returned in single precision if `ModeSolver.ModeSpec.precision == "single"`.
+- If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.
 
 ## [2.4.3] - 2023-10-16
 
@@ -58,7 +123,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in adjoint plugin when `JaxBox` is less than 1 grid cell thick.
 - Bug in `adjoint` plugin where `JaxSimulation.structures` did not accept structures containing `td.PolySlab`.
 
-
 ## [2.4.0] - 2023-9-11
 
 ### Added
@@ -71,7 +135,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Specifically, non-dispersive and dispersive mediums with heat and/or charge perturbation models can be defined through classes `PerturbationMedium` and `PerturbationPoleResidue`, 
 where perturbations to each parameter is specified using class `ParameterPerturbation`.
 A convenience function `Simulation.perturbed_mediums_copy` is added to class `Simulation` which applies heat and/or charge fields to mediums containing perturbation models.
-- Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and veritcal plot limits.
+- Added `hlim` and `vlim` kwargs to `Simulation.plot()` and `Simulation.plot_eps()` for setting horizontal and vertical plot limits.
 - Added support for chi3 nonlinearity via `NonlinearSusceptibility` class.
 - Spatial downsampling allowed in ``PermittivityMonitor`` through the ``interval_space`` argument.
 - `ClipOperation` geometry type allows the construction of complex geometries through boolean operations.
@@ -268,7 +332,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - `JaxCustomMedium` accepts a maximum of 250,000 grid cells to avoid slow server-side processing.
 - `PolySlab.inside` now uses `matplotlib.path.contains_points`.
 - `JaxCustomMedium` accepts a maximum of 250,000 grid cells.
-- Logging messages are supressed and summarized to avoid repetitions.
+- Logging messages are suppressed and summarized to avoid repetitions.
 
 ### Fixed
 - Log messages provide the correct caller origin (file name and line number).
@@ -367,7 +431,7 @@ that the fields match exactly except for a ``pi`` phase shift. This interpretati
 - Validate `slab_bounds` for `PolySlab`.
 
 ### Changed
-- Tidy3D account authentication done solely through API key. Migration option offered for useres with old username / password authentication.
+- Tidy3D account authentication done solely through API key. Migration option offered for users with old username / password authentication.
 - `export_matlib_to_file` in `material_library` exports material's full name in addition to abbreviation.
 - Simpler progress bars for `run_async`.
 - Medium property `n_cfl` added to adjust time step size according to CFL condition.
@@ -509,7 +573,7 @@ method for computing the overlap integral over two sets of frequency-domain fiel
 
 ### Changed
 - Minimum flex unit charge reduced from `0.1` to `0.025`.
-- Default courant factor was changed from `0.9` to `0.99`.
+- Default Courant factor was changed from `0.9` to `0.99`.
 - A point dipole source placed on a symmetry plane now always has twice the amplitude of the same source in a simulation without the 
  symmetry plane, as expected by continuity with the case when the dipole is slightly off the symmetry plane, in which case 
  there are effectively two dipoles, the original one and its mirror image. Previously, the amplitude was only doubled for dipoles polarized normal 
@@ -597,7 +661,7 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Added
 - New classes of near-to-far monitors for server-side computation of the near field to far field projection.
-- Option to exlude `DataArray` Fields from a `Tidy3dBaseModel` json.
+- Option to exclude `DataArray` Fields from a `Tidy3dBaseModel` json.
 - Option to save/load all models to/from `hdf5` format.
 - Option to load base models without validation.
 - Support negative sidewall angle for slanted `PolySlab`-s.
@@ -607,7 +671,7 @@ which fields are to be projected is now determined automatically based on the me
 ### Fixed
 - Raise a more meaningful error if login failed after `MAX_ATTEMPTS`.
 - Environment login credentials set to `""` are now ignored and credentials stored to file are still looked for.
-- Improved subpixel coefficients computation around sharp edges, cornes, and three-structure intersections.
+- Improved subpixel coefficients computation around sharp edges, corners, and three-structure intersections.
 
 ### Changed
 - Major refactor of the way data structures are used internally.
@@ -649,7 +713,7 @@ which fields are to be projected is now determined automatically based on the me
 ## [1.4.1] - 2022-6-13
 
 ### Fixed
-- Bug in plotting polarization of a nomral incidence source for some `angle_phi`.
+- Bug in plotting polarization of a normal incidence source for some `angle_phi`.
 - Bloch vector values required to be real rather than complex.
 - Web security mitigation.
 
@@ -664,9 +728,9 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Added
 - Bloch periodic boundary conditions, enabling modeling of angled plane wave.
-- `GeometryGroup` object to associate several `Geometry` intances in a single `Structure` leading to improved performance for many objects.
+- `GeometryGroup` object to associate several `Geometry` instances in a single `Structure` leading to improved performance for many objects.
 - Ability to uniquely specify boundary conditions on all 6 `Simulation` boundaries.
-- Options in field montitors for spatial downsampling and evaluation at yee grid centers.
+- Options in field monitors for spatial downsampling and evaluation at Yee grid centers.
 - `BatchData.load()` can load the data for a batch directly from a directory.
 - Utility for updating `Simulation` objects from old versions of `Tidy3d` to current version.
 - Explicit `web.` functions for downloading only `simulation.json` and `tidy3d.log` files.
@@ -676,7 +740,7 @@ which fields are to be projected is now determined automatically based on the me
 - Uses `shapely` instead of `gdspy` to merge polygons from a gds cell.
 - `ComponentModeler` (S matrix tool) stores the `Batch` rather than the `BatchData`.
 - Custom caching of properties to speed up subsequent calculations.
-- Tidy3d configuration now done through setting attributes of `tidy3d.config` object.
+- Tidy3D configuration now done through setting attributes of `tidy3d.config` object.
 
 ## [1.3.3] - 2022-5-18
 
@@ -711,7 +775,7 @@ which fields are to be projected is now determined automatically based on the me
 
 ### Changed
 
- - The `copy()` method of Tidy3d components is deep by default.
+ - The `copy()` method of Tidy3D components is deep by default.
  - Maximum allowed number of distinct materials is now 65530.
 
 ### Fixed
@@ -771,7 +835,7 @@ which fields are to be projected is now determined automatically based on the me
 
 - `webapi` functions now only authenticate when needed.
 - Credentials storing folder only created when needed.
-- Added maximum number of attemtps in authentication.
+- Added maximum number of attempts in authentication.
 - Made plotly plotting faster.
 - Cached Simulation.medium and Simulation.medium_map computation.
 
@@ -975,7 +1039,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...develop
+[2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
 [2.4.1]: https://github.com/flexcompute/tidy3d/compare/v2.4.0...v2.4.1

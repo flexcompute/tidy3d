@@ -2116,14 +2116,14 @@ material_library = dict(
         default="Horiba",
     ),
     aSi=MaterialItem(
-        name="Amorphous Silicon",
+        name="Silicon (Amorphous)",
         variants=dict(
             Horiba=aSi_Horiba,
         ),
         default="Horiba",
     ),
     cSi=MaterialItem(
-        name="Crystalline Silicon",
+        name="Silicon (Crystalline)",
         variants=dict(
             Palik_Lossless=cSi_PalikLossless,
             Palik_Lossy=cSi_PalikLossy,

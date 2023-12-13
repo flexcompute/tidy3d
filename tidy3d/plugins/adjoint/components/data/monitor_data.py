@@ -91,8 +91,6 @@ class JaxModeData(JaxMonitorData, ModeData):
             k0 = 2 * np.pi * freq / C_0
             grad_const = k0 / 4 / ETA_0
             src_amp = grad_const * amp
-            if direction == "-":
-                src_amp *= -1
 
             src_direction = self.flip_direction(str(direction))
 
@@ -232,90 +230,93 @@ class JaxFieldData(JaxMonitorData, FieldData):
     def to_adjoint_sources(self, fwidth: float) -> List[CustomFieldSource]:
         """Converts a :class:`.JaxFieldData` to a list of adjoint :class:`.CustomFieldSource."""
 
-        # parse the frequency from the scalar field data
-        freqs = [scalar_fld.coords["f"] for _, scalar_fld in self.field_components.items()]
-        if any(len(fs) != 1 for fs in freqs):
-            raise AdjointError("FieldData must have only one frequency.")
-        freqs = [fs[0] for fs in freqs]
-        if len(set(freqs)) != 1:
-            raise AdjointError("FieldData must all contain the same frequency.")
-        freq0 = freqs[0]
-
-        omega0 = 2 * np.pi * freq0
-        scaling_factor = 1 / (MU_0 * omega0)
-
         interpolate_source = True
+        sources = []
 
-        # dipole case
         if np.allclose(np.array(self.monitor.size), np.zeros(3)):
-            dipoles = []
             for polarization, field_component in self.field_components.items():
+
                 if field_component is None:
                     continue
 
-                forward_amp = complex(field_component.as_ndarray)
-                adj_phase = 3 * np.pi / 2 + np.angle(forward_amp)
+                for freq0 in field_component.coords["f"]:
 
-                adj_amp = scaling_factor * forward_amp
+                    omega0 = 2 * np.pi * freq0
+                    scaling_factor = 1 / (MU_0 * omega0)
 
-                src_adj = PointDipole(
-                    center=self.monitor.center,
-                    polarization=polarization,
+                    forward_amp = complex(field_component.sel(f=freq0).values)
+
+                    adj_phase = 3 * np.pi / 2 + np.angle(forward_amp)
+
+                    adj_amp = scaling_factor * forward_amp
+
+                    src_adj = PointDipole(
+                        center=self.monitor.center,
+                        polarization=polarization,
+                        source_time=GaussianPulse(
+                            freq0=freq0, fwidth=fwidth, amplitude=abs(adj_amp), phase=adj_phase
+                        ),
+                        interpolate=interpolate_source,
+                    )
+
+                    sources.append(src_adj)
+        else:
+
+            # Define source geometry based on coordinates in the data
+            data_mins = []
+            data_maxs = []
+
+            def shift_value(coords) -> float:
+                """How much to shift the geometry by along a dimension (only if > 1D)."""
+                return 1e-5 if len(coords) > 1 else 0
+
+            for _, field_component in self.field_components.items():
+                coords = field_component.coords
+                data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
+                data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
+
+            rmin = []
+            rmax = []
+            for dim in "xyz":
+                rmin.append(max(val[dim] for val in data_mins))
+                rmax.append(min(val[dim] for val in data_maxs))
+
+            source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
+
+            # Define source dataset
+            # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
+
+            for freq0 in tuple(self.field_components.values())[0].coords["f"]:
+
+                src_field_components = {}
+                for name, field_component in self.field_components.items():
+                    field_component = field_component.sel(f=freq0)
+                    forward_amps = field_component.as_ndarray
+                    values = -1j * forward_amps
+                    coords = field_component.coords
+                    for dim, key in enumerate("xyz"):
+                        coords[key] = np.array(coords[key]) - source_geo.center[dim]
+                    coords["f"] = np.array([freq0])
+                    values = np.expand_dims(values, axis=-1)
+                    if not np.all(values == 0):
+                        src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+
+                dataset = FieldDataset(**src_field_components)
+
+                custom_source = CustomCurrentSource(
+                    center=source_geo.center,
+                    size=source_geo.size,
                     source_time=GaussianPulse(
-                        freq0=freq0, fwidth=fwidth, amplitude=abs(adj_amp), phase=adj_phase
+                        freq0=freq0,
+                        fwidth=fwidth,
                     ),
+                    current_dataset=dataset,
                     interpolate=interpolate_source,
                 )
 
-                dipoles.append(src_adj)
-            return dipoles
+                sources.append(custom_source)
 
-        # Define source geometry based on coordinates in the data
-        data_mins = []
-        data_maxs = []
-
-        def shift_value(coords) -> float:
-            """How much to shift the geometry by along a dimension (only if > 1D)."""
-            return 1e-5 if len(coords) > 1 else 0
-
-        for _, field_component in self.field_components.items():
-            coords = field_component.coords
-            data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
-            data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
-
-        rmin = []
-        rmax = []
-        for dim in "xyz":
-            rmin.append(max(val[dim] for val in data_mins))
-            rmax.append(min(val[dim] for val in data_maxs))
-
-        source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
-
-        # Define source dataset
-        # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
-        src_field_components = {}
-        for name, field_component in self.field_components.items():
-            forward_amps = field_component.as_ndarray
-            values = -1j * forward_amps
-            coords = field_component.coords
-            for dim, key in enumerate("xyz"):
-                coords[key] = np.array(coords[key]) - source_geo.center[dim]
-            if not np.all(values == 0):
-                src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
-
-        dataset = FieldDataset(**src_field_components)
-        custom_source = CustomCurrentSource(
-            center=source_geo.center,
-            size=source_geo.size,
-            source_time=GaussianPulse(
-                freq0=freq0,
-                fwidth=fwidth,
-            ),
-            current_dataset=dataset,
-            interpolate=interpolate_source,
-        )
-
-        return [custom_source]
+        return sources
 
 
 @register_pytree_node_class

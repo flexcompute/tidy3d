@@ -198,6 +198,10 @@ class EigSolver(Tidy3dBaseModel):
 
         fields = np.stack((E, H), axis=0)
 
+        if mode_spec.precision == "single":
+            # Recast to single precision which may have changed due to earlier manipulations
+            fields = fields.astype(np.complex64)
+
         return fields, neff + 1j * keff, eps_spec
 
     @classmethod

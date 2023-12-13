@@ -9,12 +9,13 @@ from typing_extensions import Literal
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property
-
+from .base import cached_property
+from .base_sim.source import AbstractSource
+from .time import AbstractTimeDependence
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
-from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
-from .validators import warn_if_dataset_none, assert_single_freq_in_range
+from .validators import assert_plane, assert_volumetric, get_value
+from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
 from .geometry.base import Box
@@ -26,8 +27,6 @@ from ..constants import inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 
-# in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
-DFT_CUTOFF = 1e-8
 # when checking if custom data spans the source plane, allow for a small tolerance
 # due to numerical precision
 DATA_SPAN_TOL = 1e-8
@@ -37,128 +36,8 @@ CHEB_GRID_WIDTH = 1.5
 WARN_NUM_FREQS = 20
 
 
-class SourceTime(ABC, Tidy3dBaseModel):
+class SourceTime(AbstractTimeDependence):
     """Base class describing the time dependence of a source."""
-
-    amplitude: pydantic.NonNegativeFloat = pydantic.Field(
-        1.0, title="Amplitude", description="Real-valued maximum amplitude of the time dependence."
-    )
-
-    phase: float = pydantic.Field(
-        0.0, title="Phase", description="Phase shift of the time dependence.", units=RADIAN
-    )
-
-    @abstractmethod
-    def amp_time(self, time: float) -> complex:
-        """Complex-valued source amplitude as a function of time.
-
-        Parameters
-        ----------
-        time : float
-            Time in seconds.
-
-        Returns
-        -------
-        complex
-            Complex-valued source amplitude at that time..
-        """
-
-    def spectrum(
-        self,
-        times: ArrayFloat1D,
-        freqs: ArrayFloat1D,
-        dt: float,
-        complex_fields: bool = False,
-    ) -> complex:
-        """Complex-valued source spectrum as a function of frequency
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Times to use to evaluate spectrum Fourier transform.
-            (Typically the simulation time mesh).
-        freqs : np.ndarray
-            Frequencies in Hz to evaluate spectrum at.
-        dt : float or np.ndarray
-            Time step to weight FT integral with.
-            If array, use to weigh each of the time intervals in ``times``.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
-
-        Returns
-        -------
-        np.ndarray
-            Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
-        """
-
-        times = np.array(times)
-        freqs = np.array(freqs)
-        time_amps = self.amp_time(times)
-
-        if not complex_fields:
-            time_amps = np.real(time_amps)
-
-        # Cut to only relevant times
-        relevant_time_inds = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
-        # find first and last index where the filter is True
-        start_ind = relevant_time_inds[0][0]
-        stop_ind = relevant_time_inds[0][-1]
-        time_amps = time_amps[start_ind:stop_ind]
-        times_cut = times[start_ind:stop_ind]
-
-        # only need to compute DTFT kernel for distinct dts
-        # usually, there is only one dt, if times is simulation time mesh
-        dts = np.diff(times_cut)
-        dts_unique, kernel_indices = np.unique(dts, return_inverse=True)
-
-        dft_kernels = [np.exp(2j * np.pi * freqs * curr_dt) for curr_dt in dts_unique]
-        running_kernel = np.exp(2j * np.pi * freqs * times_cut[0])
-        dft = np.zeros(len(freqs), dtype=complex)
-        for amp, kernel_index in zip(time_amps, kernel_indices):
-            dft += running_kernel * amp
-            running_kernel *= dft_kernels[kernel_index]
-
-        # kernel_indices was one index shorter than time_amps
-        dft += running_kernel * time_amps[-1]
-
-        return dt * dft / np.sqrt(2 * np.pi)
-
-    @add_ax_if_none
-    def plot(self, times: ArrayFloat1D, val: PlotVal = "real", ax: Ax = None) -> Ax:
-        """Plot the complex-valued amplitude of the source time-dependence.
-
-        Parameters
-        ----------
-        times : np.ndarray
-            Array of times (seconds) to plot source at.
-            To see source time amplitude for a specific :class:`Simulation`,
-            pass ``simulation.tmesh``.
-        val : Literal['real', 'imag', 'abs'] = 'real'
-            Which part of the spectrum to plot.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        times = np.array(times)
-        amp_complex = self.amp_time(times)
-
-        if val == "real":
-            ax.plot(times, amp_complex.real, color="blueviolet", label="real")
-        elif val == "imag":
-            ax.plot(times, amp_complex.imag, color="crimson", label="imag")
-        elif val == "abs":
-            ax.plot(times, np.abs(amp_complex), color="k", label="abs")
-        else:
-            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
-        ax.set_xlabel("time (s)")
-        ax.set_title("source amplitude")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
 
     @add_ax_if_none
     def plot_spectrum(
@@ -167,9 +46,9 @@ class SourceTime(ABC, Tidy3dBaseModel):
         num_freqs: int = 101,
         val: PlotVal = "real",
         ax: Ax = None,
-        complex_fields: bool = False,
     ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
+        Note: Only the real part of the time signal is used.
 
         Parameters
         ----------
@@ -182,40 +61,17 @@ class SourceTime(ABC, Tidy3dBaseModel):
             Number of frequencies to plot within the SourceTime.frequency_range.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
-        complex_fields : bool
-            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
-        times = np.array(times)
-
-        dts = np.diff(times)
-        if not np.allclose(dts, dts[0] * np.ones_like(dts), atol=1e-17):
-            raise SetupError("Supplied times not evenly spaced.")
-
-        dt = np.mean(dts)
 
         fmin, fmax = self.frequency_range()
-        freqs = np.linspace(fmin, fmax, num_freqs)
-
-        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
-
-        if val == "real":
-            ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
-        elif val == "imag":
-            ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
-        elif val == "abs":
-            ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
-        else:
-            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
-        ax.set_xlabel("frequency (Hz)")
-        ax.set_title("source spectrum")
-        ax.legend()
-        ax.set_aspect("auto")
-        return ax
+        return self.plot_spectrum_in_frequency_range(
+            times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
+        )
 
     @abstractmethod
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
@@ -310,6 +166,11 @@ class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation
     and holds until end of simulation.
 
+    Note
+    ----
+    Field decay will not occur, so the simulation will run for the full ``run_time``.
+    Also, source normalization of frequency-domain monitors is not meaningful.
+
     Example
     -------
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
@@ -341,6 +202,13 @@ class CustomSourceTime(Pulse):
         amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
+
+    Note
+    ----
+    Depending on the envelope, field decay may not occur.
+    If field decay does not occur, then the simulation will run for the full ``run_time``.
+    Also, if field decay does not occur, then source normalization of frequency-domain
+    monitors is not meaningful.
 
     Note
     ----
@@ -466,7 +334,7 @@ SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
 """ Source objects """
 
 
-class Source(Box, ABC):
+class Source(Box, AbstractSource, ABC):
     """Abstract base class for all sources."""
 
     source_time: SourceTimeType = pydantic.Field(
@@ -476,14 +344,10 @@ class Source(Box, ABC):
         discriminator=TYPE_TAG_STR,
     )
 
-    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
-
     @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Source object."""
         return plot_params_source
-
-    _name_validator = validate_name_str()
 
     @cached_property
     def geometry(self) -> Box:
@@ -505,6 +369,12 @@ class Source(Box, ABC):
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
+
+    @pydantic.validator("source_time", always=True)
+    def _freqs_lower_bound(cls, val):
+        """Raise validation error if central frequency is too low."""
+        _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
+        return val
 
     def plot(  #  pylint:disable=too-many-arguments
         self,
