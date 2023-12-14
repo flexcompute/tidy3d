@@ -49,4 +49,3 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.data.dataset.FieldDataset
    tidy3d.components.data.dataset.FieldTimeDataset
    tidy3d.components.data.dataset.ModeSolverDataset
-   tidy3d.web.container.WebContainer
