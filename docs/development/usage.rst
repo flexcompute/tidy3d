@@ -51,6 +51,12 @@ There are a range of handy development functions that you might want to use to s
     * - Using ``tidy3d develop`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry``
       - ``poetry run tidy3d develop <your command>``
+    * - Standard testing of the ``tidy3d`` frontend
+      - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
+      - ``poetry run tidy3d develop test-base``
+    * - Complete notebooks + base testing of the ``tidy3d``
+      - Make sure you have the notebooks downloaded.
+      - ``poetry run tidy3d develop test-all``
     * - Running ``pytest`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run pytest``

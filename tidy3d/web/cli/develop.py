@@ -265,3 +265,13 @@ def build_documentation_pdf(args=None):
         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
     )
     return 0
+
+
+@develop.command(name="test-base", help="Tests the tidy3d base package.")
+def test_base_tidy3d(args=None):
+    """Verifies and builds the documentation."""
+    # Runs the documentation build from the poetry environment
+    # TODO cd to local path
+    # TODO update generic path management.
+    echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests"])
+    return 0
