@@ -13,7 +13,7 @@ import xarray as xr
 
 from .....components.base import Tidy3dBaseModel, cached_property
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
-
+from ..base import JaxObject
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -24,7 +24,7 @@ JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 
 @register_pytree_node_class
-class JaxDataArray(Tidy3dBaseModel):
+class JaxDataArray(JaxObject):
     """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
 
     values: Any = pd.Field(
@@ -39,6 +39,8 @@ class JaxDataArray(Tidy3dBaseModel):
         title="Coords",
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
+
+    _jax_leafs = ("values",)
 
     @pd.validator("values", always=True)
     def _convert_values_to_np(cls, val):

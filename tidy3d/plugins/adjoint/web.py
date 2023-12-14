@@ -656,17 +656,24 @@ def run_local_fwd(
         input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
     sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_data_fwd = run(
-        simulation=sim_fwd,
-        task_name=_task_name_fwd(task_name),
+
+    """ stand in for run(), since the fwd vjp was getting called."""
+    sim, jax_info = sim_fwd.to_simulation()
+
+    sim_data = tidy3d_run_fn(
+        simulation=sim,
+        task_name=str(task_name),
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
+    sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)
+    """ end stand in for run()"""
 
     # remove the gradient data from the returned version (not needed)
     sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
+    import pdb; pdb.set_trace()
     return sim_data_orig, (sim_data_fwd,)
 
 

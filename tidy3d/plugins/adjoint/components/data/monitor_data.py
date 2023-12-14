@@ -76,6 +76,8 @@ class JaxModeData(JaxMonitorData, ModeData):
         jax_field=True,
     )
 
+    _jax_objs = ("amps",)
+
     def to_adjoint_sources(self, fwidth: float) -> List[ModeSource]:
         """Converts a :class:`.ModeData` to a list of adjoint :class:`.ModeSource`."""
 

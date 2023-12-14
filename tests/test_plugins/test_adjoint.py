@@ -349,12 +349,20 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     mnt_name = MNT_NAME + "1"
     mnt_data = sim_data[mnt_name]
 
-    amps = mnt_data.amps
-    ret_value += amps.sel(direction="+", f=2e14, mode_index=0)
-    ret_value += amps.isel(direction=0, f=0, mode_index=0)
-    ret_value += amps.sel(direction="-", f=2e14, mode_index=1)
-    ret_value += amps.sel(mode_index=1, f=2e14, direction="-")
-    ret_value += amps.sel(direction="-", f=2e14).isel(mode_index=1)
+    amps = sim_data.output_data[0].amps
+    ret_value += jnp.sum(amps.jax_dict["values"])
+
+    tree = sim_data.tree_flatten()[0]
+
+    ret_value += jnp.sum(jnp.array([jnp.sum(jnp.array(t)) for t in tree]))
+
+    import pdb; pdb.set_trace()
+
+    # ret_value += amps.sel(direction="+", f=2e14, mode_index=0).jax_dict["values"]
+    # ret_value += amps.isel(direction=0, f=0, mode_index=0).jax_dict["values"]
+    # ret_value += amps.sel(direction="-", f=2e14, mode_index=1).jax_dict["values"]
+    # ret_value += amps.sel(mode_index=1, f=2e14, direction="-").jax_dict["values"]
+    # ret_value += amps.sel(direction="-", f=2e14).isel(mode_index=1).jax_dict["values"]
 
     # DiffractionData
     # mnt_name = MNT_NAME + "2"
