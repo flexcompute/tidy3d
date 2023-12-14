@@ -16,7 +16,7 @@ from shapely.errors import ShapelyDeprecationWarning
 from ..base import Tidy3dBaseModel
 from ..types import Axis, ArrayFloat1D
 from ..structure import Structure, MeshOverrideStructure, StructureType
-from ..medium import PECMedium, Medium2D
+from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ...exceptions import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 
@@ -373,7 +373,13 @@ class GradedMesher(Mesher):
         min_steps = []
         for structure in structures:
             if isinstance(structure, Structure):
-                if isinstance(structure.medium, (PECMedium, Medium2D)):
+                if isinstance(structure.medium, (PECMedium, Medium2D)) or (
+                    isinstance(structure.medium, AnisotropicMedium)
+                    and structure.medium.is_comp_pec(axis)
+                ):
+                    # for 2d medium, will always ignore even if not PEC;
+                    # later, this will be handled by _grid_corrections_2dmaterials
+                    # in simulation.py
                     index = 1.0
                 else:
                     n, k = structure.medium.eps_complex_to_nk(

@@ -1,7 +1,7 @@
 """Defines a jax-compatible simulation."""
 from __future__ import annotations
 
-from typing import Tuple, Union, List, Dict
+from typing import Tuple, Union, List, Dict, Literal
 from multiprocessing import Pool
 
 import pydantic.v1 as pd
@@ -17,22 +17,41 @@ from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
 from ....components.types import Ax, annotate_type
-from ....constants import HERTZ
+from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
 from .base import JaxObject
-from .structure import JaxStructure
+from .structure import (
+    JaxStructure,
+    JaxStructureType,
+    JaxStructureStaticMedium,
+    JaxStructureStaticGeometry,
+)
 from .geometry import JaxPolySlab, JaxGeometryGroup
 
 
-# bandwidth of adjoint source in units of freq0 if no sources and no `fwidth_adjoint` specified
+# bandwidth of adjoint source in units of freq0 if no `fwidth_adjoint`, and one output freq
 FWIDTH_FACTOR = 1.0 / 10
+
+# bandwidth of adjoint sources in units of the minimum difference between output frequencies
+FWIDTH_FACTOR_MULTIFREQ = 0.1
+
+# the adjoint run time is RUN_TIME_FACTOR / fwidth
+RUN_TIME_FACTOR = 100
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1
 
 # number of input structures before it errors
 MAX_NUM_INPUT_STRUCTURES = 400
+
+# generic warning for nonlinearity
+NL_WARNING = (
+    "The 'adjoint' plugin does not currently support nonlinear materials. "
+    "While the gradients might be calculated, they will be inaccurate and the "
+    "error will increase as the strength of the nonlinearity is increased. "
+    "We strongly recommend using linear simulations only with the adjoint plugin."
+)
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -69,12 +88,27 @@ class JaxInfo(Tidy3dBaseModel):
         units=HERTZ,
     )
 
+    run_time_adjoint: float = pd.Field(
+        None,
+        title="Adjoint Run Time",
+        description="Custom run time of the original JaxSimulation.",
+        units=SECOND,
+    )
+
+    input_structure_types: Tuple[
+        Literal["JaxStructure", "JaxStructureStaticMedium", "JaxStructureStaticGeometry"], ...
+    ] = pd.Field(
+        (),
+        title="Input Structure Types",
+        description="Type of the original input_structures (as strings).",
+    )
+
 
 @register_pytree_node_class
 class JaxSimulation(Simulation, JaxObject):
     """A :class:`.Simulation` registered with jax."""
 
-    input_structures: Tuple[JaxStructure, ...] = pd.Field(
+    input_structures: Tuple[annotate_type(JaxStructureType), ...] = pd.Field(
         (),
         title="Input Structures",
         description="Tuple of jax-compatible structures"
@@ -105,33 +139,18 @@ class JaxSimulation(Simulation, JaxObject):
     fwidth_adjoint: pd.PositiveFloat = pd.Field(
         None,
         title="Adjoint Frequency Width",
-        description="Custom frequency width to use for 'source_time' of adjoint sources. "
-        "If not supplied or 'None', uses the average fwidth of the original simulation's sources.",
+        description="Custom frequency width to use for ``source_time`` of adjoint sources. "
+        "If not supplied or ``None``, uses the average fwidth of the original simulation's sources.",
         units=HERTZ,
     )
 
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_single_freq(cls, val):
-        """Assert all output monitors have just one frequency."""
-        for mnt in val:
-            if len(mnt.freqs) != 1:
-                raise AdjointError(
-                    "All output monitors must have single frequency for adjoint feature. "
-                    f"Monitor '{mnt.name}' had {len(mnt.freqs)} frequencies."
-                )
-        return val
-
-    @pd.validator("output_monitors", always=True)
-    def _output_monitors_same_freq(cls, val):
-        """Assert all output monitors have the same frequency."""
-        freqs = [mnt.freqs[0] for mnt in val]
-        if len(set(freqs)) > 1:
-            raise AdjointError(
-                "All output monitors must have the same frequency, "
-                f"given frequencies of {[f'{f:.2e}' for f in freqs]} (Hz) "
-                f"for monitors named '{[mnt.name for mnt in val]}', respectively."
-            )
-        return val
+    run_time_adjoint: pd.PositiveFloat = pd.Field(
+        None,
+        title="Adjoint Run Time",
+        description="Custom ``run_time`` to use for adjoint simulation. "
+        "If not supplied or ``None``, uses a factor times the adjoint source ``fwidth``.",
+        units=SECOND,
+    )
 
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
@@ -173,7 +192,8 @@ class JaxSimulation(Simulation, JaxObject):
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
-        input_structures = list(val)
+        input_structures = [s for s in val if "geometry" in s._differentiable_fields]
+
         structures = list(values.get("structures"))
 
         # if the center and size of all structure geometries do not contain all numbers, skip check
@@ -226,19 +246,72 @@ class JaxSimulation(Simulation, JaxObject):
                     return val
         return val
 
+    @pd.validator("medium", always=True)
+    def _warn_nonlinear_medium(cls, val):
+        """warn if the jax simulation medium is nonlinear."""
+        # hasattr is just an additional check to avoid unnecessary bugs
+        # if a medium is encountered that doesnt support nonlinear spec, or things change.
+        if hasattr(val, "nonlinear_spec") and val.nonlinear_spec:
+            log.warning(
+                "Nonlinear background medium detected in the 'JaxSimulation'. " + NL_WARNING
+            )
+        return val
+
+    @pd.validator("structures", always=True)
+    def _warn_nonlinear_structure(cls, val):
+        """warn if a jax simulation structure.medium is nonlinear."""
+        for i, struct in enumerate(val):
+            medium = struct.medium
+            # hasattr is just an additional check to avoid unnecessary bugs
+            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
+                log.warning(f"Nonlinear medium detected in structures[{i}]. " + NL_WARNING)
+        return val
+
+    @pd.validator("input_structures", always=True)
+    def _warn_nonlinear_input_structure(cls, val):
+        """warn if a jax simulation input_structure.medium is nonlinear."""
+        for i, struct in enumerate(val):
+            medium = struct.medium
+            # hasattr is just an additional check to avoid unnecessary bugs
+            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
+                log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
+        return val
+
     @staticmethod
-    def get_freq_adjoint(output_monitors: List[Monitor]) -> float:
-        """Return the single adjoint frequency stripped from the output monitors."""
+    def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
+        """Return sorted list of unique frequencies stripped from a collection of monitors."""
 
         if len(output_monitors) == 0:
             raise AdjointError("Can't get adjoint frequency as no output monitors present.")
 
-        return output_monitors[0].freqs[0]
+        output_freqs = []
+        for mnt in output_monitors:
+            for freq in mnt.freqs:
+                output_freqs.append(freq)
+
+        return np.unique(output_freqs).tolist()
 
     @cached_property
-    def freq_adjoint(self) -> float:
-        """Return the single adjoint frequency stripped from the output monitors."""
-        return self.get_freq_adjoint(output_monitors=self.output_monitors)
+    def freqs_adjoint(self) -> List[float]:
+        """Return sorted list of frequencies stripped from the output monitors."""
+        return self.get_freqs_adjoint(output_monitors=self.output_monitors)
+
+    @cached_property
+    def _is_multi_freq(self) -> bool:
+        """Does this simulation have a multi-frequency output?"""
+        return len(self.freqs_adjoint) > 1
+
+    @cached_property
+    def _min_delta_freq(self) -> float:
+        """Minimum spacing between output_frequencies (Hz)."""
+
+        if not self._is_multi_freq:
+            return None
+
+        delta_freqs = np.abs(np.diff(np.sort(np.array(self.freqs_adjoint))))
+        return np.min(delta_freqs)
 
     @cached_property
     def _fwidth_adjoint(self) -> float:
@@ -248,19 +321,51 @@ class JaxSimulation(Simulation, JaxObject):
         if self.fwidth_adjoint is not None:
             return self.fwidth_adjoint
 
-        # otherwise, grab from sources
-        num_sources = len(self.sources)
+        freqs_adjoint = self.freqs_adjoint
 
-        # if no sources, just use a constant factor times the adjoint frequency
+        # multiple output frequency case
+        if self._is_multi_freq:
+            return FWIDTH_FACTOR_MULTIFREQ * self._min_delta_freq
+
+        # otherwise, grab from sources and output monitors
+        num_sources = len(self.sources)  # should be 0 for adjoint already but worth checking
+
+        # if no sources, just use a constant factor times the mean adjoint frequency
         if num_sources == 0:
-            return FWIDTH_FACTOR * self.freq_adjoint
+            return FWIDTH_FACTOR * np.mean(freqs_adjoint)
 
-        # if more than one forward source, use their average
+        # if more than one forward source, use their maximum
         if num_sources > 1:
-            log.warning(f"{num_sources} sources, using their average 'fwidth' for adjoint source.")
+            log.warning(f"{num_sources} sources, using their maximum 'fwidth' for adjoint source.")
 
         fwidths = [src.source_time.fwidth for src in self.sources]
-        return np.mean(fwidths)
+        return np.max(fwidths)
+
+    @cached_property
+    def _run_time_adjoint(self: float) -> float:
+        """Return the run time of the adjoint simulation as a function of its fwidth."""
+
+        if self.run_time_adjoint is not None:
+            return self.run_time_adjoint
+
+        run_time_adjoint = RUN_TIME_FACTOR / self._fwidth_adjoint
+
+        if self._is_multi_freq:
+
+            log.warning(
+                f"{len(self.freqs_adjoint)} unique frequencies detected in the output monitors "
+                f"with a minimum spacing of {self._min_delta_freq:.3e} (Hz). "
+                f"Setting the 'fwidth' of the adjoint sources to {FWIDTH_FACTOR_MULTIFREQ} times "
+                f"this value = {self._fwidth_adjoint:.3e} (Hz) to avoid spectral overlap. "
+                "To account for this, the corresponding 'run_time' in the adjoint simulation is "
+                f"will be set to {run_time_adjoint:3e} "
+                f"compared to {self.run_time:3e} in the forward simulation. "
+                "If the adjoint 'run_time' is large due to small frequency spacing, "
+                "it could be better to instead run one simulation per frequency, "
+                "which can be done in parallel using 'tidy3d.plugins.adjoint.web.run_async'."
+            )
+
+        return run_time_adjoint
 
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
@@ -275,8 +380,9 @@ class JaxSimulation(Simulation, JaxObject):
                 "grad_eps_monitors",
                 "input_structures",
                 "fwidth_adjoint",
+                "run_time_adjoint",
             }
-        )  # .copy()
+        )
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
@@ -288,7 +394,7 @@ class JaxSimulation(Simulation, JaxObject):
             + list(self.grad_eps_monitors)
         )
 
-        sim = sim.copy(update=dict(structures=all_structures, monitors=all_monitors))
+        sim = sim.updated_copy(structures=all_structures, monitors=all_monitors)
 
         # information about the state of the original JaxSimulation to stash for reconstruction
         jax_info = JaxInfo(
@@ -297,6 +403,8 @@ class JaxSimulation(Simulation, JaxObject):
             num_grad_monitors=len(self.grad_monitors),
             num_grad_eps_monitors=len(self.grad_eps_monitors),
             fwidth_adjoint=self.fwidth_adjoint,
+            run_time_adjoint=self.run_time_adjoint,
+            input_structure_types=[s.type for s in self.input_structures],
         )
 
         return sim, jax_info
@@ -504,7 +612,19 @@ class JaxSimulation(Simulation, JaxObject):
 
         # split the list based on these numbers
         structures = all_structures[:num_structs]
-        input_structures = [JaxStructure.from_structure(s) for s in all_structures[num_structs:]]
+        structure_type_map = dict(
+            JaxStructure=JaxStructure,
+            JaxStructureStaticMedium=JaxStructureStaticMedium,
+            JaxStructureStaticGeometry=JaxStructureStaticGeometry,
+        )
+
+        input_structures = []
+        for struct_type_str, struct in zip(
+            jax_info.input_structure_types, all_structures[num_structs:]
+        ):
+            struct_type = structure_type_map[struct_type_str]
+            new_structure = struct_type.from_structure(struct)
+            input_structures.append(new_structure)
 
         # return a dictionary containing these split structures
         return dict(structures=structures, input_structures=input_structures)
@@ -522,7 +642,12 @@ class JaxSimulation(Simulation, JaxObject):
         # update the dictionary with these and the adjoint fwidth
         sim_dict.update(**structures)
         sim_dict.update(**monitors)
-        sim_dict.update(dict(fwidth_adjoint=jax_info.fwidth_adjoint))
+        sim_dict.update(
+            dict(
+                fwidth_adjoint=jax_info.fwidth_adjoint,
+                run_time_adjoint=jax_info.run_time_adjoint,
+            )
+        )
 
         # load JaxSimulation from the dictionary
         return cls.parse_obj(sim_dict)
@@ -539,7 +664,7 @@ class JaxSimulation(Simulation, JaxObject):
         input_structures = structure_dict["input_structures"]
         grad_mnt_dict = cls.get_grad_monitors(
             input_structures=input_structures,
-            freq_adjoint=cls.get_freq_adjoint(output_monitors=output_monitors),
+            freqs_adjoint=cls.get_freqs_adjoint(output_monitors=output_monitors),
         )
 
         grad_mnts = grad_mnt_dict["grad_monitors"]
@@ -569,14 +694,14 @@ class JaxSimulation(Simulation, JaxObject):
 
     @staticmethod
     def get_grad_monitors(
-        input_structures: List[Structure], freq_adjoint: float, include_eps_mnts: bool = True
+        input_structures: List[Structure], freqs_adjoint: List[float], include_eps_mnts: bool = True
     ) -> dict:
         """Return dictionary of gradient monitors for simulation."""
         grad_mnts = []
         grad_eps_mnts = []
         for index, structure in enumerate(input_structures):
             grad_mnt, grad_eps_mnt = structure.make_grad_monitors(
-                freq=freq_adjoint, name=f"grad_mnt_{index}"
+                freqs=freqs_adjoint, name=f"grad_mnt_{index}"
             )
             grad_mnts.append(grad_mnt)
             if include_eps_mnts:
@@ -593,8 +718,8 @@ class JaxSimulation(Simulation, JaxObject):
     ) -> JaxStructure:
         """Store the vjp for a single structure."""
 
-        freq = float(eps_data.eps_xx.coords["f"])
-        eps_out = self.medium.eps_model(frequency=freq)
+        freq_max = float(max(eps_data.eps_xx.coords["f"]))
+        eps_out = self.medium.eps_model(frequency=freq_max)
         return structure.store_vjp(
             grad_data_fwd=fld_fwd,
             grad_data_adj=fld_adj,

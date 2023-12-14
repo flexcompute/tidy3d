@@ -4,6 +4,7 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 from typing import List, Tuple, Dict
+from math import isclose
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -16,6 +17,7 @@ from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
 from ...components.mode import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
+from ...components.medium import FullyAnisotropicMedium
 from ...components.source import ModeSource, SourceTime
 from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
 from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D, EpsSpecType
@@ -23,19 +25,31 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ...exceptions import ValidationError
-from ...constants import C_0
-from .solver import compute_modes
 
+from ...components.validators import validate_freqs_min, validate_freqs_not_empty
+from ...exceptions import ValidationError, SetupError
+from ...constants import C_0
+
+# Importing the local solver may not work if e.g. scipy is not installed
+IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
+but will have to be run through the server.
+"""
+try:
+    from .solver import compute_modes
+
+    LOCAL_SOLVER_IMPORTED = True
+except ImportError:
+    log.warning(IMPORT_ERROR_MSG)
+    LOCAL_SOLVER_IMPORTED = False
 
 FIELD = Tuple[ArrayComplex3D, ArrayComplex3D, ArrayComplex3D]
 MODE_MONITOR_NAME = "<<<MODE_SOLVER_MONITOR>>>"
 
-# Lowest frequency supported (Hz)
-MIN_FREQUENCY = 1e5
-
 # Warning for field intensity at edges over total field intensity larger than this value
 FIELD_DECAY_CUTOFF = 1e-2
+
+# Maximum allowed size of the field data produced by the mode solver
+MAX_MODES_DATA_SIZE_GB = 20
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -96,21 +110,18 @@ class ModeSolver(Tidy3dBaseModel):
             raise ValidationError(f"ModeSolver plane must be planar, given size={val}")
         return val
 
-    @pydantic.validator("freqs", always=True)
-    def freqs_not_empty(cls, val):
-        """Raise validation error if ``freqs`` is an empty Tuple."""
-        if len(val) == 0:
-            raise ValidationError("ModeSolver 'freqs' must be a non-empty tuple.")
-        return val
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
 
-    @pydantic.validator("freqs", always=True)
-    def freqs_lower_bound(cls, val):
-        """Raise validation error if any of ``freqs`` is lower than ``MIN_FREQUENCY``."""
-        if min(val) < MIN_FREQUENCY:
-            raise ValidationError(
-                f"ModeSolver 'freqs' must be no lower than {MIN_FREQUENCY:.0e} Hz. "
-                "Note that the unit of frequency is 'Hz'."
-            )
+    @pydantic.validator("plane", always=True)
+    def plane_in_sim_bounds(cls, val, values):
+        """Check that the plane is at least partially inside the simulation bounds."""
+        sim_center = values.get("simulation").center
+        sim_size = values.get("simulation").size
+        sim_box = Box(size=sim_size, center=sim_center)
+
+        if not sim_box.intersects(val):
+            raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
         return val
 
     @cached_property
@@ -156,6 +167,14 @@ class ModeSolver(Tidy3dBaseModel):
                 span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
 
         return self.simulation._subgrid(span_inds=span_inds)
+
+    @cached_property
+    def _num_cells_freqs_modes(self) -> Tuple[int, int, int]:
+        """Get the number of spatial points, number of freqs, and number of modes requested."""
+        num_cells = np.prod(self._solver_grid.num_cells)
+        num_modes = self.mode_spec.num_modes
+        num_freqs = len(self.freqs)
+        return num_cells, num_freqs, num_modes
 
     def solve(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index data.
@@ -207,6 +226,12 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver.data_raw._group_index_post_process(self.mode_spec.group_index_step)
 
     @cached_property
+    def grid_snapped(self) -> Grid:
+        """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
+        grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
+        return self.simulation._snap_zero_dim(grid_snapped)
+
+    @cached_property
     def data_raw(self) -> ModeSolverData:
         """:class:`.ModeSolverData` containing the field and effective index on unexpanded grid.
 
@@ -219,6 +244,30 @@ class ModeSolver(Tidy3dBaseModel):
         if self.mode_spec.group_index_step > 0:
             return self._get_data_with_group_index()
 
+        # Compute data on the Yee grid
+        mode_solver_data = self._data_on_yee_grid()
+
+        # Colocate to grid boundaries if requested
+        if self.colocate:
+            mode_solver_data = self._colocate_data(mode_solver_data=mode_solver_data)
+
+        # normalize modes
+        self._normalize_modes(mode_solver_data=mode_solver_data)
+
+        # filter polarization if requested
+        if self.mode_spec.filter_pol is not None:
+            self._filter_polarization(mode_solver_data=mode_solver_data)
+
+        # sort modes if requested
+        if self.mode_spec.track_freq and len(self.freqs) > 1:
+            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+
+        self._field_decay_warning(mode_solver_data.symmetry_expanded)
+
+        return mode_solver_data
+
+    def _data_on_yee_grid(self) -> ModeSolverData:
+        """Solve for all modes, and construct data with fields on the Yee grid."""
         _, _solver_coords = self.plane.pop_axis(
             self._solver_grid.boundaries.to_list, axis=self.normal_axis
         )
@@ -238,15 +287,9 @@ class ModeSolver(Tidy3dBaseModel):
         )
         data_dict = {"n_complex": index_data}
 
-        # Construct and add all the data for the fields
-        # Snap the solver grid to plane normal and simulation 0-sized dims if any
-        grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
-
-        grid_snapped = self.simulation._snap_zero_dim(grid_snapped)
-
         # Construct the field data on Yee grid
         for field_name in ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz"):
-            xyz_coords = grid_snapped[field_name].to_list
+            xyz_coords = self.grid_snapped[field_name].to_list
             scalar_field_data = ScalarModeFieldDataArray(
                 np.stack([field_freq[field_name] for field_freq in fields], axis=-2),
                 coords=dict(
@@ -268,7 +311,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=self.direction,
         )
 
-        # make mode solver data on the Yee grid for now
+        # make mode solver data on the Yee grid
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
         grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
@@ -282,64 +325,68 @@ class ModeSolver(Tidy3dBaseModel):
             **data_dict,
         )
 
-        # Colocate to grid boundaries if requested
-        if self.colocate:
-            # Get colocation coordinates in the solver plane
-            _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
-            colocate_coords = {}
-            for dim, sym in zip(plane_dims, self.solver_symmetry):
-                coords = grid_snapped.boundaries.to_dict[dim]
-                if len(coords) > 2:
-                    if sym == 0:
-                        colocate_coords[dim] = coords[1:-1]
-                    else:
-                        colocate_coords[dim] = coords[:-1]
-            # Colocate to new coordinates using the previously created data
-            data_dict_colocated = {}
-            for key, field in mode_solver_data.symmetry_expanded_copy.field_components.items():
-                data_dict_colocated[key] = field.interp(**colocate_coords)
-            # Update data
-            mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-            grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
-            mode_solver_data = mode_solver_data.updated_copy(
-                monitor=mode_solver_monitor, grid_expanded=grid_expanded, **data_dict_colocated
-            )
+        return mode_solver_data
 
-        # normalize modes
-        scaling = np.sqrt(np.abs(mode_solver_data.flux))
-        mode_solver_data = mode_solver_data.copy(
-            update={
-                key: field / scaling for key, field in mode_solver_data.field_components.items()
-            }
-        )
+    def _colocate_data(self, mode_solver_data: ModeSolverData) -> ModeSolverData:
+        """Colocate data to Yee grid boundaries."""
 
-        # filter polarization if requested
-        if self.mode_spec.filter_pol is not None:
-            pol_frac = mode_solver_data.pol_fraction
-            for ifreq in range(len(self.freqs)):
-                te_frac = pol_frac.te.isel(f=ifreq)
-                if self.mode_spec.filter_pol == "te":
-                    sort_inds = np.concatenate(
-                        (np.where(te_frac >= 0.5)[0], np.where(te_frac < 0.5)[0])
-                    )
-                elif self.mode_spec.filter_pol == "tm":
-                    sort_inds = np.concatenate(
-                        (np.where(te_frac <= 0.5)[0], np.where(te_frac > 0.5)[0])
-                    )
-                for data in list(mode_solver_data.field_components.values()) + [
-                    mode_solver_data.n_complex,
-                    mode_solver_data.grid_primal_correction,
-                    mode_solver_data.grid_dual_correction,
-                ]:
-                    data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
+        # Get colocation coordinates in the solver plane
+        _, plane_dims = self.plane.pop_axis("xyz", self.normal_axis)
+        colocate_coords = {}
+        for dim, sym in zip(plane_dims, self.solver_symmetry):
+            coords = self.grid_snapped.boundaries.to_dict[dim]
+            if len(coords) > 2:
+                if sym == 0:
+                    colocate_coords[dim] = coords[1:-1]
+                else:
+                    colocate_coords[dim] = coords[:-1]
 
-        # sort modes if requested
-        if self.mode_spec.track_freq and len(self.freqs) > 1:
-            mode_solver_data = mode_solver_data.overlap_sort(self.mode_spec.track_freq)
+        # Colocate input data to new coordinates
+        data_dict_colocated = {}
+        for key, field in mode_solver_data.symmetry_expanded.field_components.items():
+            data_dict_colocated[key] = field.interp(**colocate_coords).astype(field.dtype)
 
-        self._field_decay_warning(mode_solver_data.symmetry_expanded_copy)
+        # Update data
+        mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+        data_dict_colocated.update({"monitor": mode_solver_monitor, "grid_expanded": grid_expanded})
+        mode_solver_data = mode_solver_data._updated(update=data_dict_colocated)
 
         return mode_solver_data
+
+    def _normalize_modes(self, mode_solver_data: ModeSolverData):
+        """Normalize modes. Note: this modifies ``mode_solver_data`` in-place."""
+        scaling = np.sqrt(np.abs(mode_solver_data.flux))
+        for field in mode_solver_data.field_components.values():
+            field /= scaling
+
+    def _filter_polarization(self, mode_solver_data: ModeSolverData):
+        """Filter polarization. Note: this modifies ``mode_solver_data`` in-place."""
+        pol_frac = mode_solver_data.pol_fraction
+        for ifreq in range(len(self.freqs)):
+            te_frac = pol_frac.te.isel(f=ifreq)
+            if self.mode_spec.filter_pol == "te":
+                sort_inds = np.concatenate(
+                    (
+                        np.where(te_frac >= 0.5)[0],
+                        np.where(te_frac < 0.5)[0],
+                        np.where(np.isnan(te_frac))[0],
+                    )
+                )
+            elif self.mode_spec.filter_pol == "tm":
+                sort_inds = np.concatenate(
+                    (
+                        np.where(te_frac <= 0.5)[0],
+                        np.where(te_frac > 0.5)[0],
+                        np.where(np.isnan(te_frac))[0],
+                    )
+                )
+            for data in list(mode_solver_data.field_components.values()) + [
+                mode_solver_data.n_complex,
+                mode_solver_data.grid_primal_correction,
+                mode_solver_data.grid_dual_correction,
+            ]:
+                data.values[..., ifreq, :] = data.values[..., ifreq, sort_inds]
 
     @cached_property
     def data(self) -> ModeSolverData:
@@ -417,7 +464,6 @@ class ModeSolver(Tidy3dBaseModel):
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
-
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )
@@ -437,6 +483,10 @@ class ModeSolver(Tidy3dBaseModel):
 
         The fields are rotated from propagation coordinates back to global coordinates.
         """
+
+        if not LOCAL_SOLVER_IMPORTED:
+            raise ImportError(IMPORT_ERROR_MSG)
+
         solver_fields, n_complex, eps_spec = compute_modes(
             eps_cross=self._solver_eps(freq),
             coords=coords,
@@ -578,10 +628,51 @@ class ModeSolver(Tidy3dBaseModel):
 
         return FreqModeDataArray(phase_primal), FreqModeDataArray(phase_dual)
 
+    @property
+    def _is_tensorial(self) -> bool:
+        """Whether the mode computation should be fully tensorial. This is either due to fully
+        anisotropic media, or due to an angled waveguide, in which case the transformed eps and mu
+        become tensorial. A separate check is done inside the solver, which looks at the actual
+        eps and mu and uses a tolerance to determine whether to invoke the tensorial solver, so
+        the actual behavior may differ from what's predicted by this property."""
+        return abs(self.mode_spec.angle_theta) > 0 or self._has_fully_anisotropic_media
+
+    @cached_property
+    def _intersecting_media(self) -> List:
+        """List of media (including simulation background) intersecting the mode plane."""
+        total_structures = [self.simulation.scene.background_structure]
+        total_structures += list(self.simulation.structures)
+        return self.simulation.scene.intersecting_media(self.plane, total_structures)
+
+    @cached_property
+    def _has_fully_anisotropic_media(self) -> bool:
+        """Check if there are any fully anisotropic media in the plane of the mode."""
+        if np.any(
+            [isinstance(mat, FullyAnisotropicMedium) for mat in self.simulation.scene.mediums]
+        ):
+            for int_mat in self._intersecting_media:
+                if isinstance(int_mat, FullyAnisotropicMedium):
+                    return True
+        return False
+
+    @cached_property
+    def _has_complex_eps(self) -> bool:
+        """Check if there are media with a complex-valued epsilon in the plane of the mode.
+        A separate check is done inside the solver, which looks at the actual
+        eps and mu and uses a tolerance to determine whether to use real or complex fields, so
+        the actual behavior may differ from what's predicted by this property."""
+        check_freqs = np.unique([np.amin(self.freqs), np.amax(self.freqs), np.mean(self.freqs)])
+        for int_mat in self._intersecting_media:
+            for freq in check_freqs:
+                max_imag_eps = np.amax(np.abs(np.imag(int_mat.eps_model(freq))))
+                if not isclose(max_imag_eps, 0):
+                    return False
+        return True
+
     def to_source(
         self,
         source_time: SourceTime,
-        direction: Direction,
+        direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> ModeSource:
         """Creates :class:`.ModeSource` from a :class:`ModeSolver` instance plus additional
@@ -591,8 +682,9 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
-        direction : Direction
+        direction : Direction = None
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+            If not specified, uses the direction from the mode solver.
         mode_index : int = 0
             Index into the list of modes returned by mode solver to use in source.
 
@@ -603,6 +695,9 @@ class ModeSolver(Tidy3dBaseModel):
             inputs.
         """
 
+        if direction is None:
+            direction = self.direction
+
         return ModeSource(
             center=self.plane.center,
             size=self.plane.size,
@@ -612,7 +707,7 @@ class ModeSolver(Tidy3dBaseModel):
             direction=direction,
         )
 
-    def to_monitor(self, freqs: List[float], name: str) -> ModeMonitor:
+    def to_monitor(self, freqs: List[float] = None, name: str = None) -> ModeMonitor:
         """Creates :class:`ModeMonitor` from a :class:`ModeSolver` instance plus additional
         specifications.
 
@@ -620,6 +715,7 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         freqs : List[float]
             Frequencies to include in Monitor (Hz).
+            If not specified, passes ``self.freqs``.
         name : str
             Required name of monitor.
 
@@ -629,6 +725,15 @@ class ModeSolver(Tidy3dBaseModel):
             Mode monitor with specifications taken from the ModeSolver instance and the method
             inputs.
         """
+
+        if freqs is None:
+            freqs = self.freqs
+
+        if name is None:
+            raise ValueError(
+                "A 'name' must be passed to 'ModeSolver.to_monitor'. "
+                "The default value of 'None' is for backwards compatibility and is not accepted."
+            )
 
         return ModeMonitor(
             center=self.plane.center,
@@ -671,7 +776,7 @@ class ModeSolver(Tidy3dBaseModel):
     def sim_with_source(
         self,
         source_time: SourceTime,
-        direction: Direction,
+        direction: Direction = None,
         mode_index: pydantic.NonNegativeInt = 0,
     ) -> Simulation:
         """Creates :class:`Simulation` from a :class:`ModeSolver`. Creates a copy of
@@ -682,8 +787,9 @@ class ModeSolver(Tidy3dBaseModel):
         ----------
         source_time: :class:`.SourceTime`
             Specification of the source time-dependence.
-        direction : Direction
+        direction : Direction = None
             Whether source will inject in ``"+"`` or ``"-"`` direction relative to plane normal.
+            If not specified, uses the direction from the mode solver.
         mode_index : int = 0
             Index into the list of modes returned by mode solver to use in source.
 
@@ -693,6 +799,7 @@ class ModeSolver(Tidy3dBaseModel):
             Copy of the simulation with a :class:`.ModeSource` with specifications taken
             from the ModeSolver instance and the method inputs.
         """
+
         mode_source = self.to_source(
             mode_index=mode_index, direction=direction, source_time=source_time
         )
@@ -702,8 +809,8 @@ class ModeSolver(Tidy3dBaseModel):
 
     def sim_with_monitor(
         self,
-        freqs: List[float],
-        name: str,
+        freqs: List[float] = None,
+        name: str = None,
     ) -> Simulation:
         """Creates :class:`.Simulation` from a :class:`ModeSolver`. Creates a copy of
         the ModeSolver's original simulation with a mode monitor added corresponding to
@@ -711,8 +818,9 @@ class ModeSolver(Tidy3dBaseModel):
 
         Parameters
         ----------
-        freqs : List[float]
+        freqs : List[float] = None
             Frequencies to include in Monitor (Hz).
+            If not specified, uses the frequencies from the mode solver.
         name : str
             Required name of monitor.
 
@@ -722,6 +830,7 @@ class ModeSolver(Tidy3dBaseModel):
             Copy of the simulation with a :class:`.ModeMonitor` with specifications taken
             from the ModeSolver instance and the method inputs.
         """
+
         mode_monitor = self.to_monitor(freqs=freqs, name=name)
         new_monitors = list(self.simulation.monitors) + [mode_monitor]
         new_sim = self.simulation.updated_copy(monitors=new_monitors)
@@ -814,3 +923,20 @@ class ModeSolver(Tidy3dBaseModel):
             ax=ax,
             **sel_kwargs,
         )
+
+    def _validate_modes_size(self):
+        """Make sure that the total size of the modes fields is not too large."""
+        monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
+        num_cells = self.simulation._monitor_num_cells(monitor)
+        # size in GB
+        total_size = monitor._storage_size_solver(num_cells=num_cells, tmesh=[]) / 1e9
+        if total_size > MAX_MODES_DATA_SIZE_GB:
+            raise SetupError(
+                f"Mode solver has {total_size:.2f}GB of estimated storage, "
+                f"a maximum of {MAX_MODES_DATA_SIZE_GB:.2f}GB is allowed. Consider making the "
+                "mode plane smaller, or decreasing the resolution or number of requested "
+                "frequencies or modes."
+            )
+
+    def validate_pre_upload(self, source_required: bool = True):
+        self._validate_modes_size()

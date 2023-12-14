@@ -68,4 +68,5 @@ jobs:
         source $VENV
         black . --check --diff
         ruff check tidy3d --fix --exit-non-zero-on-fix
-        pytest
+        pytest -rA tests
+        pytest -rA tests/test_data/_test_datasets_no_vtk.py

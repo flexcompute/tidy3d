@@ -1,6 +1,7 @@
 """Defines specification for mode solver."""
 
 from typing import Tuple, Union
+from math import isclose
 
 import pydantic.v1 as pd
 import numpy as np
@@ -147,9 +148,16 @@ class ModeSpec(Tidy3dBaseModel):
 
     @pd.validator("bend_axis", always=True)
     def bend_axis_given(cls, val, values):
-        """check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
+        """Check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
         if val is None and values.get("bend_radius") is not None:
-            raise SetupError("bend_axis must also be defined if bend_radius is defined.")
+            raise SetupError("'bend_axis' must also be defined if 'bend_radius' is defined.")
+        return val
+
+    @pd.validator("bend_radius", always=True)
+    def bend_radius_not_zero(cls, val, values):
+        """Check that ``bend_raidus`` magnitude is not close to zero.`"""
+        if val and isclose(val, 0):
+            raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
         return val
 
     @pd.validator("angle_theta", allow_reuse=True, always=True)

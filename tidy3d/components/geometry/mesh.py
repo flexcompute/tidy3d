@@ -8,7 +8,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 
 from ..base import cached_property
-from ..types import Ax, Bound, Shapely
+from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh, TrimeshType
 from ..viz import add_ax_if_none, equal_aspect
 from ...log import log
 from ...exceptions import ValidationError, DataError
@@ -17,19 +17,6 @@ from ..data.dataset import TriangleMeshDataset
 from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
 
 from . import base
-
-try:
-    import trimesh
-
-    TRIMESH_AVAILABLE = True
-except Exception:
-    TRIMESH_AVAILABLE = False
-
-try:
-
-    NETWORKX_RTREE_AVAILABLE = True
-except Exception:
-    NETWORKX_RTREE_AVAILABLE = False
 
 
 class TriangleMesh(base.Geometry, ABC):
@@ -48,20 +35,10 @@ class TriangleMesh(base.Geometry, ABC):
         description="Surface mesh data.",
     )
 
-    @classmethod
-    def _check_trimesh_library(cls):
-        """Check if the trimesh package is imported."""
-        if not TRIMESH_AVAILABLE:
-            raise ImportError(
-                "The package 'trimesh' was not found. Please install the 'trimesh' "
-                "dependencies to use 'TriangleMesh'. For example: "
-                "pip install -r requirements/trimesh.txt."
-            )
-
     @pydantic.root_validator(pre=True)
+    @base.requires_trimesh
     def _validate_trimesh_library(cls, values):
         """Check if the trimesh package is imported as a validator."""
-        cls._check_trimesh_library()
         return values
 
     @pydantic.validator("mesh_dataset", pre=True, always=True)
@@ -103,6 +80,7 @@ class TriangleMesh(base.Geometry, ABC):
         return val
 
     @classmethod
+    @base.requires_trimesh
     def from_stl(
         cls,
         filename: str,
@@ -137,13 +115,11 @@ class TriangleMesh(base.Geometry, ABC):
             The geometry or geometry group from the file.
         """
 
-        def process_single(mesh: trimesh.Trimesh) -> TriangleMesh:
+        def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""
             mesh.apply_scale(scale)
             mesh.apply_translation(origin)
             return cls.from_trimesh(mesh)
-
-        cls._check_trimesh_library()
 
         scene = trimesh.load(filename, **kwargs)
         meshes = []
@@ -169,7 +145,7 @@ class TriangleMesh(base.Geometry, ABC):
         raise ValidationError("No solid found at 'solid_index' in the stl file.")
 
     @classmethod
-    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
+    def from_trimesh(cls, mesh: TrimeshType) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters
@@ -218,6 +194,7 @@ class TriangleMesh(base.Geometry, ABC):
         return TriangleMesh(mesh_dataset=mesh_dataset)
 
     @classmethod
+    @base.requires_trimesh
     def from_vertices_faces(cls, vertices: np.ndarray, faces: np.ndarray) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from numpy arrays containing the data
         of a surface mesh. The first array contains the vertices, and the second array contains
@@ -240,9 +217,6 @@ class TriangleMesh(base.Geometry, ABC):
             The custom surface mesh geometry given by the vertices and faces provided.
 
         """
-
-        cls._check_trimesh_library()
-
         vertices = np.array(vertices)
         faces = np.array(faces)
         if len(vertices.shape) != 2 or vertices.shape[1] != 3:
@@ -254,14 +228,13 @@ class TriangleMesh(base.Geometry, ABC):
         return cls.from_triangles(trimesh.Trimesh(vertices, faces).triangles)
 
     @classmethod
-    def _triangles_to_trimesh(cls, triangles: np.ndarray) -> trimesh.Trimesh:
+    @base.requires_trimesh
+    def _triangles_to_trimesh(cls, triangles: np.ndarray) -> TrimeshType:
         """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
-
-        cls._check_trimesh_library()
         return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
 
     @cached_property
-    def trimesh(self) -> trimesh.Trimesh:
+    def trimesh(self) -> TrimeshType:
         """A ``trimesh.Trimesh`` object representing the custom surface mesh geometry."""
         return self._triangles_to_trimesh(self.triangles)
 
@@ -295,6 +268,33 @@ class TriangleMesh(base.Geometry, ABC):
             return ((-inf, -inf, -inf), (inf, inf, inf))
         return self.trimesh.bounds
 
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
+        if section is None:
+            return []
+        path, _ = section.to_planar(to_2D=to_2D)
+        return path.polygons_full.tolist()
+
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
@@ -326,13 +326,6 @@ class TriangleMesh(base.Geometry, ABC):
         normal = self.unpop_axis(1, (0, 0), axis=axis)
 
         mesh = self.trimesh
-
-        if not NETWORKX_RTREE_AVAILABLE:
-            raise ImportError(
-                "'TriangleMesh.intersections_plane' requires 'networkx' and 'rtree'. "
-                "Please install the 'trimesh' dependencies. For example: "
-                "pip install -r requirements/trimesh.txt."
-            )
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)
 

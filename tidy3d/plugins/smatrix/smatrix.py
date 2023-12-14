@@ -20,7 +20,7 @@ from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
 from ...log import log
-from ...web.container import BatchData, Batch
+from ...web.api.container import BatchData, Batch
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -312,7 +312,9 @@ class ComponentModeler(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
+    def plot_sim(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
@@ -320,7 +322,21 @@ class ComponentModeler(Tidy3dBaseModel):
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_sim_eps(
+        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
+    ) -> Ax:
+        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
+
+        plot_sources = []
+        for port_source in self.ports:
+            mode_source_0 = self.to_source(port=port_source, mode_index=0)
+            plot_sources.append(mode_source_0)
+        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
+        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @cached_property
     def batch(self) -> Batch:
@@ -363,7 +379,8 @@ class ComponentModeler(Tidy3dBaseModel):
     @cached_property
     def _batch_path(self) -> str:
         """Where we store the batch for this ComponentModeler instance after the run."""
-        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".json")
+        hash_str = self._hash_self()
+        return os.path.join(self.path_dir, "batch" + hash_str + ".json")
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""

@@ -14,29 +14,30 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+include = ["tidy3d/web/cacert.pem"] # Replacement directive for MANIFEST.in
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
-pyroots = "^0.5.0"
+pyroots = ">=0.5.0"
 xarray = ">=0.16.2"
-importlib-metadata = "^6.0.0"
+importlib-metadata = ">=6.0.0"
 h5netcdf = "1.0.2"
-h5py = "^3.0.0"
+h5py = ">=3.0.0"
 rich = "<12.6.0"
 matplotlib = "*"
-shapely = "^2.0"
-pydantic = "^2.0"
+shapely = ">=2.0"
+pydantic = ">=2.0"
 PyYAML = "*"
 dask = "*"
 toml = "*"
 scipy = "*"
-boto3 = "1.23.1"
-requests = "*"
+boto3 = "1.28.*"
+requests = "2.31.*"
 pyjwt = "*"
-click = "8.0.3"
+click = "8.1.*"
 responses = "*"
 
 ### Optional dependencies ### 
@@ -87,7 +88,7 @@ sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-book-theme = {version = ">=1.0.1", optional = true}
 pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
-# m2r2 = {version="*", optional = true}
+# m2r2 = {version="*", optional = true} # TODO urgent fix
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
@@ -96,6 +97,7 @@ nbdime = {version="*", optional = true}
 optax = {version="*", optional = true}
 signac = {version="*", optional = true}
 sax = {version="*", optional = true}
+vtk = {version="<=9.2.6", optional = true}
 
 [tool.poetry.extras]
 dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "pydata-sphinx-theme", "sphinx-tabs"]
@@ -104,6 +106,7 @@ gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]
 trimesh = ["trimesh", "networkx", "rtree"]
+vtk = ["vtk"]
 
 [tool.poetry.scripts]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"

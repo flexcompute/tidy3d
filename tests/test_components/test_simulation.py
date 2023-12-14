@@ -2,12 +2,14 @@
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
+import gdstk
 
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
-from tidy3d.components.simulation import MAX_NUM_MEDIUMS, MAX_NUM_SOURCES
+from tidy3d.components.simulation import MAX_NUM_SOURCES
+from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
 from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated
 from tidy3d.constants import LARGE_NUMBER
 
@@ -60,7 +62,7 @@ def test_sim_init():
             ),
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
             td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 1, -1),
@@ -77,20 +79,25 @@ def test_sim_init():
     _ = sim.dt
     _ = sim.tmesh
     sim.validate_pre_upload()
+    m = sim.get_monitor_by_name("point")
+    # will not work in 3.0
     _ = sim.mediums
     _ = sim.medium_map
-    m = sim.get_monitor_by_name("point")
     _ = sim.background_structure
+    # will continue working in 3.0
+    _ = sim.scene.mediums
+    _ = sim.scene.medium_map
+    _ = sim.scene.background_structure
     # sim.plot(x=0)
     # plt.close()
     # sim.plot_eps(x=0)
     # plt.close()
-    sim.num_pml_layers
+    _ = sim.num_pml_layers
     # sim.plot_grid(x=0)
     # plt.close()
-    sim.frequency_range
-    sim.grid
-    sim.num_cells
+    _ = sim.frequency_range
+    _ = sim.grid
+    _ = sim.num_cells
     sim.discretize(m)
     sim.epsilon(m)
 
@@ -139,7 +146,7 @@ def test_monitors_data_size():
             ),
         ],
         monitors=[
-            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1, 2], name="point"),
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
             td.FluxTimeMonitor(size=(1, 1, 0), center=(0, 0, 0), interval=10, name="plane"),
         ],
         symmetry=(0, 1, -1),
@@ -275,11 +282,11 @@ def _test_monitor_size():
 def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     # monitor frequency above or below a given medium's range should throw a warning
 
-    medium = td.Medium(frequency_range=(2, 3))
+    medium = td.Medium(frequency_range=(2e12, 3e12))
     box = td.Structure(geometry=td.Box(size=(0.1, 0.1, 0.1)), medium=medium)
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[freq * 1e12])
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.5, fwidth=0.5),
+        source_time=td.GaussianPulse(freq0=2.5e12, fwidth=0.5e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
@@ -299,11 +306,11 @@ def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=fwidth),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=fwidth),
         size=(0, 0, 0),
         polarization="Ex",
     )
-    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5])
+    mnt = td.FieldMonitor(size=(0, 0, 0), name="freq", freqs=[1.5e12])
     _ = td.Simulation(
         size=(1, 1, 1),
         monitors=[mnt],
@@ -331,12 +338,12 @@ def test_validate_bloch_with_symmetry():
 
 def test_validate_normalize_index():
     src = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12),
         size=(0, 0, 0),
         polarization="Ex",
     )
     src0 = td.UniformCurrentSource(
-        source_time=td.GaussianPulse(freq0=2.0, fwidth=1.0, amplitude=0),
+        source_time=td.GaussianPulse(freq0=2.0e12, fwidth=1.0e12, amplitude=0),
         size=(0, 0, 0),
         polarization="Ex",
     )
@@ -454,7 +461,7 @@ def test_validate_plane_wave_boundaries(log_capture):
 
 def test_validate_zero_dim_boundaries(log_capture):
 
-    # zero-dim simulation with an absorbing boundary in that direction should warn
+    # zero-dim simulation with an absorbing boundary in that direction should error
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
         center=(0, 0, 0),
@@ -463,19 +470,19 @@ def test_validate_zero_dim_boundaries(log_capture):
         pol_angle=0.0,
     )
 
-    td.Simulation(
-        size=(1, 1, 0),
-        run_time=1e-12,
-        sources=[src],
-        boundary_spec=td.BoundarySpec(
-            x=td.Boundary.periodic(),
-            y=td.Boundary.periodic(),
-            z=td.Boundary.pml(),
-        ),
-    )
-    assert_log_level(log_capture, "WARNING")
+    with pytest.raises(pydantic.ValidationError):
+        td.Simulation(
+            size=(1, 1, 0),
+            run_time=1e-12,
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.periodic(),
+                y=td.Boundary.periodic(),
+                z=td.Boundary.pml(),
+            ),
+        )
 
-    # zero-dim simulation with an absorbing boundary any other direction should not warn
+    # zero-dim simulation with an absorbing boundary any other direction should not error
     td.Simulation(
         size=(1, 1, 0),
         run_time=1e-12,
@@ -483,7 +490,7 @@ def test_validate_zero_dim_boundaries(log_capture):
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(),
             y=td.Boundary.stable_pml(),
-            z=td.Boundary.pec(),
+            z=td.Boundary.periodic(),
         ),
     )
 
@@ -491,7 +498,6 @@ def test_validate_zero_dim_boundaries(log_capture):
 def test_validate_components_none():
 
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
-    assert SIM._validate_num_mediums(val=None) is None
     assert SIM._validate_num_sources(val=None) is None
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
     assert SIM._warn_monitor_simulation_frequency_range(val=None, values=SIM.dict()) is None
@@ -524,20 +530,22 @@ def test_validate_mnt_size(monkeypatch, log_capture):
 
     # warning for monitor size
     monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
-    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+    s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),)))
     s._validate_monitor_size()
     assert_log_level(log_capture, "WARNING")
 
     # error for simulation size
     monkeypatch.setattr(simulation, "MAX_SIMULATION_DATA_SIZE_GB", 1 / 2**30)
     with pytest.raises(SetupError):
-        s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
+        s = SIM.copy(
+            update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1e12], size=(1, 1, 1)),))
+        )
         s._validate_monitor_size()
 
 
 def test_max_geometry_validation():
     gs = td.GridSpec(wavelength=1.0)
-    too_many = [td.Box(size=(1, 1, 1)) for _ in range(simulation.MAX_GEOMETRY_COUNT + 1)]
+    too_many = [td.Box(size=(1, 1, 1)) for _ in range(MAX_GEOMETRY_COUNT + 1)]
 
     fine = [
         td.Structure(
@@ -565,7 +573,7 @@ def test_max_geometry_validation():
             medium=td.Medium(permittivity=2.0),
         ),
     ]
-    with pytest.raises(pydantic.ValidationError, match=f" {simulation.MAX_GEOMETRY_COUNT + 2} "):
+    with pytest.raises(pydantic.ValidationError, match=f" {MAX_GEOMETRY_COUNT + 2} "):
         _ = td.Simulation(size=(1, 1, 1), run_time=1, grid_spec=gs, structures=not_fine)
 
 
@@ -575,13 +583,12 @@ def test_no_monitor():
 
 
 def test_plot_structure():
-    ax = SIM_FULL.structures[0].plot(x=0)
+    _ = SIM_FULL.structures[0].plot(x=0)
     plt.close()
 
 
 def test_plot_eps():
     ax = SIM_FULL.plot_eps(x=0)
-    SIM_FULL._add_cbar(eps_min=1, eps_max=2, ax=ax)
     plt.close()
 
 
@@ -606,6 +613,7 @@ def test_plot_1d_sim():
         size=(0, 0, 1),
         grid_spec=grid_spec,
         run_time=1e-13,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
     _ = s.plot(y=0)
     plt.close()
@@ -724,26 +732,6 @@ def test_discretize_non_intersect(log_capture):
     assert_log_level(log_capture, "ERROR")
 
 
-def test_filter_structures():
-    s1 = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=SIM.medium)
-    s2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(1, 1, 1)), medium=SIM.medium)
-    plane = td.Box(center=(0, 0, 1.5), size=(td.inf, td.inf, 0))
-    SIM._filter_structures_plane(structures=[s1, s2], plane=plane)
-
-
-def test_get_structure_plot_params():
-    pp = SIM_FULL._get_structure_plot_params(mat_index=0, medium=SIM_FULL.medium)
-    assert pp.facecolor == "white"
-    pp = SIM_FULL._get_structure_plot_params(mat_index=1, medium=td.PEC)
-    assert pp.facecolor == "gold"
-    pp = SIM_FULL._get_structure_eps_plot_params(
-        medium=SIM_FULL.medium, freq=1, eps_min=1, eps_max=2
-    )
-    assert float(pp.facecolor) == 1.0
-    pp = SIM_FULL._get_structure_eps_plot_params(medium=td.PEC, freq=1, eps_min=1, eps_max=2)
-    assert pp.facecolor == "gold"
-
-
 def test_warn_sim_background_medium_freq_range(log_capture):
     _ = SIM.copy(
         update=dict(
@@ -752,8 +740,8 @@ def test_warn_sim_background_medium_freq_range(log_capture):
                     polarization="Ex", source_time=td.GaussianPulse(freq0=2e14, fwidth=1e11)
                 ),
             ),
-            monitors=(td.FluxMonitor(name="test", freqs=[2], size=(1, 1, 0)),),
-            medium=td.Medium(frequency_range=(0, 1)),
+            monitors=(td.FluxMonitor(name="test", freqs=[2e12], size=(1, 1, 0)),),
+            medium=td.Medium(frequency_range=(0, 1e12)),
         )
     )
     assert_log_level(log_capture, "WARNING")
@@ -935,9 +923,16 @@ def test_sim_monitor_homogeneous():
                 boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             )
 
+    # will be removed in 3.0
     mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box])
     assert len(mediums) == 1
     mediums = td.Simulation.intersecting_media(monitor_n2f_vol, [box_transparent])
+    assert len(mediums) == 1
+
+    # continue in 3.0
+    mediums = td.Scene.intersecting_media(monitor_n2f_vol, [box])
+    assert len(mediums) == 1
+    mediums = td.Scene.intersecting_media(monitor_n2f_vol, [box_transparent])
     assert len(mediums) == 1
 
     # when another medium intersects an excluded surface, no errors should be raised
@@ -1038,6 +1033,167 @@ def test_proj_monitor_distance(log_capture):
         monitors=[monitor_n2f_approx],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
+
+
+def test_proj_monitor_warnings(log_capture):
+    """Test the validator that warns if projecting backwards."""
+
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, -0.5),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+        pol_angle=-1.0,
+    )
+
+    # Cartesian monitor projecting backwards
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=-1e5,
+        proj_axis=2,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor with custom origin projecting backwards
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=39,
+        proj_axis=2,
+        custom_origin=(1, 2, -40),
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor with custom origin projecting backwards with normal_dir '-'
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=41,
+        proj_axis=2,
+        custom_origin=(1, 2, -40),
+        normal_dir="-",
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 + 1e-2],
+        phi=[0],
+        proj_distance=1e3,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards with custom origin
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 - 0.02],
+        phi=[0],
+        proj_distance=10,
+        custom_origin=(0, 0, -0.5),
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Angle monitor projecting backwards with custom origin and normal_dir '-'
+    monitor_n2f = td.FieldProjectionAngleMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        theta=[np.pi / 2 + 0.02],
+        phi=[0],
+        proj_distance=10,
+        custom_origin=(0, 0, 0.5),
+        normal_dir="-",
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+
+    # Cartesian monitor using approximations but too short proj_distance
+    monitor_n2f = td.FieldProjectionCartesianMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[2.5e14],
+        name="monitor_n2f",
+        x=[4],
+        y=[5],
+        proj_distance=9,
+        proj_axis=2,
+    )
+    _ = td.Simulation(
+        size=(1, 1, 1),
+        structures=[],
+        sources=[src],
+        run_time=1e-12,
+        monitors=[monitor_n2f],
+    )
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_diffraction_medium():
@@ -1240,9 +1396,9 @@ def _test_names_default():
             ),
         ],
         monitors=[
-            td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
-            td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon2"),
-            td.FluxMonitor(size=(1, 0, 1), center=(0, -0.5, 0), freqs=[1], name="mon3"),
+            td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
+            td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon2"),
+            td.FluxMonitor(size=(1, 0, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon3"),
         ],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
@@ -1303,8 +1459,8 @@ def test_names_unique():
             size=(2.0, 2.0, 2.0),
             run_time=1e-12,
             monitors=[
-                td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1], name="mon1"),
-                td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1], name="mon1"),
+                td.FluxMonitor(size=(1, 1, 0), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
+                td.FluxMonitor(size=(0, 1, 1), center=(0, -0.5, 0), freqs=[1e12], name="mon1"),
             ],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1312,7 +1468,7 @@ def test_names_unique():
 
 def test_mode_object_syms():
     """Test that errors are raised if a mode object is not placed right in the presence of syms."""
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     # wrong mode source
     with pytest.raises(pydantic.ValidationError):
@@ -1335,7 +1491,7 @@ def test_mode_object_syms():
             run_time=1e-12,
             symmetry=(1, -1, 0),
             monitors=[
-                td.ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec())
+                td.ModeMonitor(size=(2, 2, 0), name="mnt", freqs=[2e12], mode_spec=td.ModeSpec())
             ],
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         )
@@ -1360,7 +1516,7 @@ def test_mode_object_syms():
         symmetry=(1, -1, 0),
         monitors=[
             td.ModeMonitor(
-                center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2], mode_spec=td.ModeSpec()
+                center=(2, 0, 1), size=(2, 2, 0), name="mnt", freqs=[2e12], mode_spec=td.ModeSpec()
             )
         ],
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
@@ -1369,7 +1525,7 @@ def test_mode_object_syms():
 
 def test_tfsf_symmetry():
     """Test that a TFSF source cannot be set in the presence of symmetries."""
-    src_time = td.GaussianPulse(freq0=1, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1393,7 +1549,7 @@ def test_tfsf_symmetry():
 
 def test_tfsf_boundaries(log_capture):
     """Test that a TFSF source is allowed to cross boundaries only in particular cases."""
-    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1476,7 +1632,7 @@ def test_tfsf_boundaries(log_capture):
 
 def test_tfsf_structures_grid(log_capture):
     """Test that a TFSF source is allowed to intersect structures only in particular cases."""
-    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1)
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
 
     source = td.TFSF(
         size=[1, 1, 1],
@@ -1602,7 +1758,7 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
                 center=(0, 0, 0),
                 size=(td.inf, td.inf, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
         structures=structures,
@@ -1613,7 +1769,7 @@ def test_warn_large_epsilon(log_capture, size, num_struct, log_level):
 
 @pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
 def test_warn_large_mode_monitor(log_capture, dl, log_level):
-    """Make sure we get a warning if the epsilon grid is too large."""
+    """Make sure we get a warning if the mode monitor grid is too large."""
 
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
@@ -1623,12 +1779,12 @@ def test_warn_large_mode_monitor(log_capture, dl, log_level):
             td.ModeSource(
                 size=(0.1, 0.1, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
         monitors=[
             td.ModeMonitor(
-                size=(td.inf, 0, td.inf), freqs=[1], name="test", mode_spec=td.ModeSpec()
+                size=(td.inf, 0, td.inf), freqs=[1e12], name="test", mode_spec=td.ModeSpec()
             )
         ],
     )
@@ -1638,7 +1794,7 @@ def test_warn_large_mode_monitor(log_capture, dl, log_level):
 
 @pytest.mark.parametrize("dl, log_level", [(0.1, None), (0.005, "WARNING")])
 def test_warn_large_mode_source(log_capture, dl, log_level):
-    """Make sure we get a warning if the epsilon grid is too large."""
+    """Make sure we get a warning if the mode source grid is too large."""
 
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
@@ -1648,12 +1804,39 @@ def test_warn_large_mode_source(log_capture, dl, log_level):
             td.ModeSource(
                 size=(td.inf, td.inf, 0),
                 direction="+",
-                source_time=td.GaussianPulse(freq0=1, fwidth=0.1),
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
         ],
     )
     sim.validate_pre_upload()
     assert_log_level(log_capture, log_level)
+
+
+def test_error_large_monitors():
+    """Test if various large monitors cause pre-upload validation to error."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.005),
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    mnt_size = (td.inf, 0, td.inf)
+    mnt_test = [
+        td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+        td.ModeSolverMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+        td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
+        td.FluxTimeMonitor(size=mnt_size, name="test"),
+        td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
+        td.FieldProjectionAngleMonitor(
+            size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]
+        ),
+    ]
+
+    for monitor in mnt_test:
+        with pytest.raises(SetupError):
+            s = sim.updated_copy(monitors=[monitor])
+            s.validate_pre_upload()
 
 
 def test_dt():
@@ -1719,7 +1902,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     )
     box = td.Structure(
         geometry=td.Box(size=(td.inf, td.inf, 0)),
-        medium=td.Medium2D.from_medium(td.PEC, thickness=thickness),
+        medium=td.Medium2D.from_medium(td.Medium(permittivity=1), thickness=thickness),
     )
     below = td.Structure(
         geometry=td.Box.from_bounds([-td.inf, -td.inf, -1000], [td.inf, td.inf, 0]),
@@ -1750,11 +1933,26 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
         rtol=RTOL,
     )
     assert np.isclose(sim.volumetric_structures[1].medium.yy.to_medium().permittivity, 1, rtol=RTOL)
-    assert np.isclose(
-        sim.volumetric_structures[1].medium.xx.to_medium().conductivity,
-        LARGE_NUMBER * thickness / grid_dl,
-        rtol=RTOL,
+
+    # PEC
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 0)),
+        medium=td.PEC2D,
     )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        structures=[below, box],
+        sources=[src],
+        monitors=[monitor],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pml(num_layers=5),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+        grid_spec=td.GridSpec.uniform(dl=grid_dl),
+        run_time=1e-12,
+    )
+    assert isinstance(sim.volumetric_structures[1].medium.xx, td.PECMedium)
 
     log_capture.clear()
 
@@ -1979,3 +2177,83 @@ def test_perturbed_mediums_copy():
 
     assert isinstance(new_sim.medium, td.CustomMedium)
     assert isinstance(new_sim.structures[0].medium, td.CustomPoleResidue)
+
+
+def test_scene_from_scene():
+    """Test .scene and .from_scene functionality."""
+
+    scene = SIM_FULL.scene
+
+    sim = td.Simulation.from_scene(
+        scene=scene,
+        **SIM_FULL.dict(exclude={"structures", "medium"}),
+    )
+
+    assert sim == SIM_FULL
+
+
+def test_to_gds(tmp_path):
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        run_time=1e-12,
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
+                medium=td.Medium(permittivity=2.0),
+            ),
+            td.Structure(
+                geometry=td.Sphere(radius=1.4, center=(1.0, 0.0, 1.0)),
+                medium=td.Medium(permittivity=1.5),
+            ),
+            td.Structure(
+                geometry=td.Cylinder(radius=1.4, length=2.0, center=(1.0, 0.0, -1.0), axis=1),
+                medium=td.Medium(),
+            ),
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=1e14, fwidth=1e12),
+            )
+        ],
+        monitors=[
+            td.FieldMonitor(size=(0, 0, 0), center=(0, 0, 0), freqs=[1e12, 2e12], name="point"),
+        ],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=20),
+            y=td.Boundary.stable_pml(num_layers=30),
+            z=td.Boundary.absorber(num_layers=100),
+        ),
+        shutoff=1e-6,
+    )
+
+    fname = str(tmp_path / "simulation_z.gds")
+    sim.to_gds_file(
+        fname, z=0, gds_layer_dtype_map={td.Medium(permittivity=2.0): (2, 1), td.Medium(): (1, 0)}
+    )
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == "MAIN"
+    assert len(cell.polygons) >= 3
+    areas = cell.area(True)
+    assert (2, 1) in areas
+    assert (1, 0) in areas
+    assert (0, 0) in areas
+    assert np.allclose(areas[(2, 1)], 0.5)
+    assert np.allclose(areas[(1, 0)], 2.0 * (1.4**2 - 1) ** 0.5, atol=1e-2)
+    assert np.allclose(areas[(0, 0)], 0.5 * np.pi * (1.4**2 - 1), atol=1e-2)
+
+    fname = str(tmp_path / "simulation_y.gds")
+    sim.to_gds_file(
+        fname, y=0, gds_layer_dtype_map={td.Medium(permittivity=2.0): (2, 1), td.Medium(): (1, 0)}
+    )
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == "MAIN"
+    assert len(cell.polygons) >= 3
+    areas = cell.area(True)
+    assert (2, 1) in areas
+    assert (1, 0) in areas
+    assert (0, 0) in areas
+    assert np.allclose(areas[(2, 1)], 0.5)
+    assert np.allclose(areas[(1, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
+    assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)

@@ -1,16 +1,29 @@
 """Defines Geometric objects with Medium properties."""
 from typing import Union, Tuple, Optional
 import pydantic.v1 as pydantic
+import numpy as np
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str
-from .geometry.utils import GeometryType
+from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
 from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
-from ..exceptions import SetupError
+from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
+
+try:
+    gdstk_available = True
+    import gdstk
+except ImportError:
+    gdstk_available = False
+
+try:
+    gdspy_available = True
+    import gdspy
+except ImportError:
+    gdspy_available = False
 
 
 class AbstractStructure(Tidy3dBaseModel):
@@ -28,6 +41,12 @@ class AbstractStructure(Tidy3dBaseModel):
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
 
     _name_validator = validate_name_str()
+
+    @pydantic.validator("geometry")
+    def _transformed_slanted_polyslabs_not_allowed(cls, val):
+        """Prevents the creation of slanted polyslabs rotated out of plane."""
+        validate_no_transformed_polyslabs(val)
+        return val
 
     @equal_aspect
     @add_ax_if_none
@@ -162,6 +181,233 @@ class Structure(AbstractStructure):
                 row=row, col=col, frequency=frequency, coords=coords
             )
         return self.medium.eps_comp(row=row, col=col, frequency=frequency)
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> None:
+        """Convert a structure's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.1
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`
+        """
+
+        polygons = self.geometry.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+
+        if isinstance(self.medium, AbstractCustomMedium):
+            axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
+            bb_min, bb_max = self.geometry.bounds
+
+            # Set the contour scale to be the minimal cooridante step size w.r.t. the 3 main axes,
+            # skipping those with a single coordniate. In case all axes have only a single coordinate,
+            # use the largest bounding box dimension.
+            eps, _, _ = self.medium.eps_dataarray_freq(frequency=frequency)
+            scale = max(b - a for a, b in zip(bb_min, bb_max))
+            for coord in (eps.x, eps.y, eps.z):
+                if len(coord) > 1:
+                    scale = min(scale, np.diff(coord).min())
+
+            coords = Coords(
+                x=np.arange(bb_min[0], bb_max[0] + scale * 0.9, scale) if x is None else x,
+                y=np.arange(bb_min[1], bb_max[1] + scale * 0.9, scale) if y is None else y,
+                z=np.arange(bb_min[2], bb_max[2] + scale * 0.9, scale) if z is None else z,
+            )
+            eps = self.medium.eps_diagonal_on_grid(frequency=frequency, coords=coords)
+            eps = np.stack((eps[0].real, eps[1].real, eps[2].real), axis=3).max(axis=3).squeeze()
+            contours = gdstk.contour(eps.T, permittivity_threshold, scale, precision=scale * 1e-3)
+
+            _, (dx, dy) = self.geometry.pop_axis(bb_min, axis)
+            for polygon in contours:
+                polygon.translate(dx, dy)
+
+            polygons = gdstk.boolean(polygons, contours, "and", layer=gds_layer, datatype=gds_dtype)
+
+        return polygons
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> None:
+        """Convert a structure's planar slice to a .gds type polygon.
+
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+
+        if isinstance(self.medium, AbstractCustomMedium):
+            raise Tidy3dError(
+                "Structures with custom medium are not supported by 'gdspy'. They can only be "
+                "exported using 'to_gdstk'."
+            )
+
+        return self.geometry.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+    ) -> None:
+        """Append a structure's planar slice to a .gds cell.
+
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.1
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        """
+        if gdstk_available and isinstance(cell, gdstk.Cell):
+            polygons = self.to_gdstk(
+                x=x,
+                y=y,
+                z=z,
+                permittivity_threshold=permittivity_threshold,
+                frequency=frequency,
+                gds_layer=gds_layer,
+                gds_dtype=gds_dtype,
+            )
+            if len(polygons) > 0:
+                cell.add(*polygons)
+
+        elif gdspy_available and isinstance(cell, gdspy.Cell):
+            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+            if len(polygons) > 0:
+                cell.add(polygons)
+
+        elif "gdstk" in cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+            )
+        elif "gdspy" in cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
+
+    def to_gds_file(
+        self,
+        fname: str,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pydantic.NonNegativeFloat = 1,
+        frequency: pydantic.PositiveFloat = 0,
+        gds_layer: pydantic.NonNegativeInt = 0,
+        gds_dtype: pydantic.NonNegativeInt = 0,
+        gds_cell_name: str = "MAIN",
+    ) -> None:
+        """Export a structure's planar slice to a .gds file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .gds file to save the :class:`Structure` slice to.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1.1
+            Permitivitty value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+        gds_layer : int = 0
+            Layer index to use for the shapes stored in the .gds file.
+        gds_dtype : int = 0
+            Data-type index to use for the shapes stored in the .gds file.
+        gds_cell_name : str = 'MAIN'
+            Name of the cell created in the .gds file to store the geometry.
+        """
+        if gdstk_available:
+            library = gdstk.Library()
+        elif gdspy_available:
+            library = gdspy.GdsLibrary()
+        else:
+            raise Tidy3dImportError(
+                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                "files, please install one of those those modules."
+            )
+        cell = library.new_cell(gds_cell_name)
+        self.to_gds(
+            cell,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer=gds_layer,
+            gds_dtype=gds_dtype,
+        )
+        library.write_gds(fname)
 
 
 class MeshOverrideStructure(AbstractStructure):

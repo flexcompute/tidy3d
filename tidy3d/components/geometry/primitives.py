@@ -9,7 +9,7 @@ import numpy as np
 import shapely
 
 from ..base import cached_property
-from ..types import Axis, Bound
+from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, LARGE_NUMBER
 
@@ -57,6 +57,47 @@ class Sphere(base.Centered, base.Circular):
         dist_y = np.abs(y - y0)
         dist_z = np.abs(z - z0)
         return (dist_x**2 + dist_y**2 + dist_z**2) <= (self.radius**2)
+
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        normal = np.array(normal)
+        unit_normal = normal / (np.sum(normal**2) ** 0.5)
+        projection = np.dot(np.array(origin) - np.array(self.center), unit_normal)
+        if abs(projection) >= self.radius:
+            return []
+
+        radius = (self.radius**2 - projection**2) ** 0.5
+        center = np.array(self.center) + projection * unit_normal
+
+        v = np.zeros(3)
+        v[np.argmin(np.abs(unit_normal))] = 1
+        u = np.cross(unit_normal, v)
+        u /= np.sum(u**2) ** 0.5
+        v = np.cross(unit_normal, u)
+
+        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
+        circ = center + np.outer(np.cos(angles), radius * u) + np.outer(np.sin(angles), radius * v)
+        vertices = np.dot(np.hstack((circ, np.ones((angles.size, 1)))), to_2D.T)
+        return [shapely.Polygon(vertices[:, :2])]
 
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -189,6 +230,54 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if self.length != 0:
             raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
         return self.axis
+
+    @base.requires_trimesh
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+        z0, (x0, y0) = self.pop_axis(self.center, self.axis)
+
+        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
+        x = (x0 + self.radius * np.cos(angles)).tolist()
+        y = (y0 + self.radius * np.sin(angles)).tolist()
+        n = len(x)
+        x.append(x0)
+        y.append(y0)
+        x = np.array(x * 2)
+        y = np.array(y * 2)
+        z = np.hstack((np.full(n + 1, z0 - self.length / 2), np.full(n + 1, z0 + self.length / 2)))
+        vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
+        faces = (
+            [(n, (i + 1) % n, i) for i in range(n)]
+            + [(1 + 2 * n, 1 + n + i, 1 + n + ((i + 1) % n)) for i in range(n)]
+            + [(i, (i + 1) % n, 1 + n + i) for i in range(n)]
+            + [((i + 1) % n, 1 + n + ((i + 1) % n), 1 + n + i) for i in range(n)]
+        )
+        mesh = trimesh.Trimesh(vertices, faces)
+
+        section = mesh.section(plane_origin=origin, plane_normal=normal)
+        if section is None:
+            return []
+        path, _ = section.to_planar(to_2D=to_2D)
+        return path.polygons_full.tolist()
 
     def _intersections_normal(self, z: float):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.

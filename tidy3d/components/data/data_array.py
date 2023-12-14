@@ -9,7 +9,7 @@ import h5py
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN
 from ...exceptions import DataError, FileError
-from ..types import Bound
+from ..types import Bound, Axis
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -115,6 +115,10 @@ class DataArray(xr.DataArray):
 
     def __eq__(self, other) -> bool:
         """Whether two data array objects are equal."""
+
+        if not isinstance(other, xr.DataArray):
+            return False
+
         if not self.data.shape == other.data.shape or not np.all(self.data == other.data):
             return False
         for key, val in self.coords.items():
@@ -296,7 +300,9 @@ class SpatialDataArray(DataArray):
         return self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
     def does_cover(self, bounds: Bound) -> bool:
-        """Check whether data fully covers specified by ``bounds`` spatial region.
+        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
+        only one point along a given direction, then it is assumed the data is constant along that
+        direction and coverage is not checked.
 
 
         Parameters
@@ -311,9 +317,60 @@ class SpatialDataArray(DataArray):
         """
 
         return all(
-            coord[0] <= smin and coord[-1] >= smax
+            (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
             for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1])
         )
+
+    def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
+        """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
+        left.
+
+        Parameters
+        ----------
+        axis : Literal[0, 1, 2]
+            Normal direction of the reflection plane.
+        center : float
+            Location of the reflection plane along its normal direction.
+
+        Returns
+        -------
+        SpatialDataArray
+            Data after reflection is performed.
+        """
+
+        coords = list(self.coords.values())
+        data = np.array(self.data)
+
+        if np.isclose(center, coords[axis].data[0]):
+            num_duplicates = 1
+        elif center > coords[axis].data[0]:
+            raise DataError("Reflection center must be outside and on the left of the data region.")
+        else:
+            num_duplicates = 0
+
+        shape = np.array(np.shape(data))
+        old_len = shape[axis]
+        shape[axis] = 2 * old_len - num_duplicates
+
+        ind_left = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+        ind_right = [slice(shape[0]), slice(shape[1]), slice(shape[2])]
+
+        ind_left[axis] = slice(old_len - 1, None, -1)
+        ind_right[axis] = slice(old_len - num_duplicates, None)
+
+        new_data = np.zeros(shape)
+
+        new_data[ind_left[0], ind_left[1], ind_left[2]] = data
+        new_data[ind_right[0], ind_right[1], ind_right[2]] = data
+
+        new_coords = np.zeros(shape[axis])
+        new_coords[old_len - num_duplicates :] = coords[axis]
+        new_coords[old_len - 1 :: -1] = 2 * center - coords[axis]
+
+        coords[axis] = new_coords
+        coords_dict = dict(zip("xyz", coords))
+
+        return SpatialDataArray(new_data, coords=coords_dict)
 
 
 class ScalarFieldDataArray(DataArray):
@@ -545,6 +602,49 @@ class ChargeDataArray(DataArray):
     _dims = ("n", "p")
 
 
+class PointDataArray(DataArray):
+    """Indexed data array.
+
+    Example
+    -------
+    >>> point_array = PointDataArray(
+    ...     (1+1j) * np.random.random((5, 3)), coords=dict(index=np.arange(5), axis=np.arange(3)),
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index", "axis")
+
+
+class CellDataArray(DataArray):
+    """Cell connection data array.
+
+    Example
+    -------
+    >>> cell_array = CellDataArray(
+    ...     (1+1j) * np.random.random((4, 3)),
+    ...     coords=dict(cell_index=np.arange(4), vertex_index=np.arange(3)),
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("cell_index", "vertex_index")
+
+
+class IndexedDataArray(DataArray):
+    """Indexed data array.
+
+    Example
+    -------
+    >>> indexed_array = IndexedDataArray(
+    ...     (1+1j) * np.random.random((3,)), coords=dict(index=np.arange(3))
+    ... )
+    """
+
+    __slots__ = ()
+    _dims = ("index",)
+
+
 DATA_ARRAY_TYPES = [
     SpatialDataArray,
     ScalarFieldDataArray,
@@ -565,5 +665,8 @@ DATA_ARRAY_TYPES = [
     TriangleMeshDataArray,
     HeatDataArray,
     ChargeDataArray,
+    PointDataArray,
+    CellDataArray,
+    IndexedDataArray,
 ]
 DATA_ARRAY_MAP = {data_array.__name__: data_array for data_array in DATA_ARRAY_TYPES}

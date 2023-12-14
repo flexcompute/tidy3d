@@ -1,26 +1,32 @@
 """ Simulation Level Data """
 from __future__ import annotations
-from typing import Dict, Callable, Tuple
+from typing import Callable, Tuple, Union
 
+import pathlib
 import xarray as xr
 import pydantic.v1 as pd
 import numpy as np
+import h5py
+import json
 
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
-from ..base import Tidy3dBaseModel
 from ..simulation import Simulation
-from ..boundary import BlochBoundary
-from ..source import TFSF
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
-from ...exceptions import DataError, Tidy3dKeyError, ValidationError
+from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
+from ..base import JSON_TAG
+
+from ..base_sim.data.sim_data import AbstractSimulationData
 
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
+# maps monitor type (string) to the class of the corresponding data
+DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
-class SimulationData(Tidy3dBaseModel):
+
+class SimulationData(AbstractSimulationData):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
     Notes
@@ -103,44 +109,11 @@ class SimulationData(Tidy3dBaseModel):
         "associated with the monitors of the original :class:`.Simulation`.",
     )
 
-    log: str = pd.Field(
-        None,
-        title="Solver Log",
-        description="A string containing the log information from the simulation run.",
-    )
-
     diverged: bool = pd.Field(
         False,
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
     )
-
-    def __getitem__(self, monitor_name: str) -> MonitorDataType:
-        """Get a :class:`.MonitorData` by name. Apply symmetry if applicable."""
-        monitor_data = self.monitor_data[monitor_name]
-        return monitor_data.symmetry_expanded_copy
-
-    @property
-    def monitor_data(self) -> Dict[str, MonitorDataType]:
-        """Dictionary mapping monitor name to its associated :class:`.MonitorData`."""
-        return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
-
-    @pd.validator("data", always=True)
-    def data_monitors_match_sim(cls, val, values):
-        """Ensure each MonitorData in ``.data`` corresponds to a monitor in ``.simulation``."""
-        sim = values.get("simulation")
-        if sim is None:
-            raise ValidationError("Simulation.simulation failed validation, can't validate data.")
-        for mnt_data in val:
-            try:
-                monitor_name = mnt_data.monitor.name
-                sim.get_monitor_by_name(monitor_name)
-            except Tidy3dKeyError as exc:
-                raise DataError(
-                    f"Data with monitor name {monitor_name} supplied "
-                    "but not found in the Simulation"
-                ) from exc
-        return val
 
     @property
     def final_decay_value(self) -> float:
@@ -169,16 +142,10 @@ class SimulationData(Tidy3dBaseModel):
         times = self.simulation.tmesh
         dt = self.simulation.dt
 
-        # get boundary information to determine whether to use complex fields
-        boundaries = self.simulation.boundary_spec.to_list
-        boundaries_1d = [boundary_1d for dim_boundary in boundaries for boundary_1d in dim_boundary]
-        complex_fields = any(isinstance(boundary, BlochBoundary) for boundary in boundaries_1d)
-        complex_fields = complex_fields and not isinstance(source, TFSF)
-
         # plug in mornitor_data frequency domain information
         def source_spectrum_fn(freqs):
             """Source amplitude as function of frequency."""
-            spectrum = source_time.spectrum(times, freqs, dt, complex_fields)
+            spectrum = source_time.spectrum(times, freqs, dt)
 
             # Remove user defined amplitude and phase from the normalization
             # such that they would still have an effect on the output fields.
@@ -223,7 +190,7 @@ class SimulationData(Tidy3dBaseModel):
         if not isinstance(mon_data, AbstractFieldData):
             raise DataError(
                 f"data for monitor '{monitor_name}' does not contain field data "
-                f"as it is a `{type(mon_data)}`."
+                f"as it is a '{type(mon_data)}'."
             )
         return mon_data
 
@@ -343,45 +310,9 @@ class SimulationData(Tidy3dBaseModel):
 
         return xr.Dataset(poynting_components)
 
-    @staticmethod
-    def _field_component_value(field_component: xr.DataArray, val: FieldVal) -> xr.DataArray:
-        """return the desired value of a field component.
-
-        Parameter
-        ----------
-        field_component : xarray.DataArray
-            Field component from which to calculate the value.
-        val : Literal['real', 'imag', 'abs', 'abs^2', 'phase']
-            Which part of the field to return.
-
-        Returns
-        -------
-        xarray.DataArray
-            Value extracted from the field component.
-        """
-        if val == "real":
-            field_value = field_component.real
-            field_value.name = f"Re{{{field_component.name}}}"
-
-        elif val == "imag":
-            field_value = field_component.imag
-            field_value.name = f"Im{{{field_component.name}}}"
-
-        elif val == "abs":
-            field_value = np.abs(field_component)
-            field_value.name = f"|{field_component.name}|"
-
-        elif val == "abs^2":
-            field_value = np.abs(field_component) ** 2
-            field_value.name = f"|{field_component.name}|²"
-
-        elif val == "phase":
-            field_value = np.arctan2(field_component.imag, field_component.real)
-            field_value.name = f"∠{field_component.name}"
-
-        return field_value
-
-    def _get_scalar_field(self, field_monitor_name: str, field_name: str, val: FieldVal):
+    def _get_scalar_field(
+        self, field_monitor_name: str, field_name: str, val: FieldVal, phase: float = 0.0
+    ):
         """return ``xarray.DataArray`` of the scalar field of a given monitor at Yee cell centers.
 
         Parameters
@@ -392,6 +323,8 @@ class SimulationData(Tidy3dBaseModel):
             Name of the derived field component: one of `('E', 'H', 'S', 'Sx', 'Sy', 'Sz')`.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
+        phase : float = 0.0
+            Optional phase to apply to result
 
         Returns
         -------
@@ -410,6 +343,8 @@ class SimulationData(Tidy3dBaseModel):
                 raise Tidy3dKeyError(f"Poynting component {field_name} not available")
         else:
             dataset = self.at_boundaries(field_monitor_name)
+
+        dataset = self.apply_phase(data=dataset, phase=phase)
 
         if field_name in ("E", "H", "S"):
             # Gather vector components
@@ -467,6 +402,78 @@ class SimulationData(Tidy3dBaseModel):
             field_monitor_name=field_monitor_name, field_name="E", val="abs^2"
         )
 
+    @classmethod
+    def mnt_data_from_file(cls, fname: str, mnt_name: str, **parse_obj_kwargs) -> MonitorDataType:
+        """Loads data for a specific monitor from a .hdf5 file with data for a ``SimulationData``.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to an hdf5 file containing :class:`.SimulationData` data.
+        mnt_name : str, optional
+            `.name` of the monitor to load the data from.
+        **parse_obj_kwargs
+            Keyword arguments passed to either pydantic's ``parse_obj`` function when loading model.
+
+        Returns
+        -------
+        :class:`MonitorData`
+            Monitor data corresponding to the `mnt_name` type.
+
+        Example
+        -------
+        >>> field_data = SimulationData.from_file(fname='folder/data.hdf5', mnt_name="field") # doctest: +SKIP
+        """
+
+        if pathlib.Path(fname).suffix != ".hdf5":
+            raise ValueError("'mnt_data_from_file' only works with '.hdf5' files.")
+
+        # open file and ensure it has data
+        with h5py.File(fname) as f_handle:
+            if "data" not in f_handle:
+                raise ValueError(f"could not find data in the supplied file {fname}")
+
+            # get the monitor list from the json string
+            json_string = f_handle[JSON_TAG][()]
+            json_dict = json.loads(json_string)
+            monitor_list = json_dict["simulation"]["monitors"]
+
+            # loop through data
+            for monitor_index_str, _mnt_data in f_handle["data"].items():
+
+                # grab the monitor data for this data element
+                monitor_dict = monitor_list[int(monitor_index_str)]
+
+                # if a match on the monitor name
+                if monitor_dict["name"] == mnt_name:
+
+                    # try to grab the monitor data type
+                    monitor_type_str = monitor_dict["type"]
+                    if monitor_type_str not in DATA_TYPE_NAME_MAP:
+                        raise ValueError(f"Could not find data type '{monitor_type_str}'.")
+                    monitor_data_type = DATA_TYPE_NAME_MAP[monitor_type_str]
+
+                    # load the monitor data from the file using the group_path
+                    group_path = f"data/{monitor_index_str}"
+                    return monitor_data_type.from_file(
+                        fname, group_path=group_path, **parse_obj_kwargs
+                    )
+
+        raise ValueError(f"No monitor with name '{mnt_name}' found in data file.")
+
+    @staticmethod
+    def apply_phase(data: Union[xr.DataArray, xr.Dataset], phase: float = 0.0) -> xr.DataArray:
+        """Apply a phase to xarray data."""
+        if phase != 0.0:
+            if np.any(np.iscomplex(data.values)):
+                data *= np.exp(1j * phase)
+            else:
+                log.warning(
+                    f"Non-zero phase of {phase} specified but the data being plotted is "
+                    "real-valued. The phase will be ignored in the plot."
+                )
+        return data
+
     def plot_field(
         self,
         field_monitor_name: str,
@@ -474,6 +481,7 @@ class SimulationData(Tidy3dBaseModel):
         val: FieldVal = "real",
         scale: PlotScale = "lin",
         eps_alpha: float = 0.2,
+        phase: float = 0.0,
         robust: bool = True,
         vmin: float = None,
         vmax: float = None,
@@ -498,6 +506,9 @@ class SimulationData(Tidy3dBaseModel):
         eps_alpha : float = 0.2
             Opacity of the structure permittivity.
             Must be between 0 and 1 (inclusive).
+        phase : float = 0.0
+            Optional phase (radians) to apply to the fields.
+            Only has an effect on frequency-domain fields.
         robust : bool = True
             If True and vmin or vmax are absent, uses the 2nd and 98th percentiles of the data
             to compute the color limits. This helps in visualizing the field patterns especially
@@ -524,7 +535,6 @@ class SimulationData(Tidy3dBaseModel):
         """
 
         # get the DataArray corresponding to the monitor_name and field_name
-
         # deprecated intensity
         if field_name == "int":
             log.warning(
@@ -536,7 +546,7 @@ class SimulationData(Tidy3dBaseModel):
 
         if field_name in ("E", "H") or field_name[0] == "S":
             # Derived fields
-            field_data = self._get_scalar_field(field_monitor_name, field_name, val)
+            field_data = self._get_scalar_field(field_monitor_name, field_name, val, phase=phase)
         else:
             # Direct field component (e.g. Ex)
             field_monitor_data = self.load_field_monitor(field_monitor_name)
@@ -544,6 +554,7 @@ class SimulationData(Tidy3dBaseModel):
                 raise DataError(f"field_name '{field_name}' not found in data.")
             field_component = field_monitor_data.field_components[field_name]
             field_component.name = field_name
+            field_component = self.apply_phase(data=field_component, phase=phase)
             field_data = self._field_component_value(field_component, val)
 
         if scale == "dB":

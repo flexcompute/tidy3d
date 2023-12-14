@@ -74,7 +74,7 @@ def test_logging_warning_capture():
     mode_mnt = td.ModeMonitor(
         center=(0, 0, 0),
         size=(domain_size, 0, domain_size),
-        freqs=list(freqs) + [0.1],
+        freqs=list(freqs) + [0.1e6],
         mode_spec=td.ModeSpec(num_modes=3),
         name="mode",
     )

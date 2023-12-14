@@ -35,11 +35,13 @@ from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, Vali
 from ...constants import ETA_0, C_0, MICROMETER
 from ...log import log
 
+from ..base_sim.data.monitor_data import AbstractMonitorData
+
 
 Coords1D = ArrayFloat1D
 
 
-class MonitorData(Dataset, ABC):
+class MonitorData(AbstractMonitorData, ABC):
     """
     Abstract base class of objects that store data pertaining to a single :class:`.monitor`.
     """
@@ -55,11 +57,6 @@ class MonitorData(Dataset, ABC):
     def symmetry_expanded(self) -> MonitorData:
         """Return self with symmetry applied."""
         return self
-
-    @property
-    def symmetry_expanded_copy(self) -> MonitorData:
-        """Return copy of self with symmetry applied."""
-        return self.copy()
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -875,8 +872,8 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
-        e_x_h = tan_fields["E" + dim1] * tan_fields["H" + dim2]
-        e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
+        e_x_h = np.real(tan_fields["E" + dim1]) * np.real(tan_fields["H" + dim2])
+        e_x_h -= np.real(tan_fields["E" + dim2]) * np.real(tan_fields["H" + dim1])
         return e_x_h
 
     @cached_property
@@ -1160,7 +1157,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 ]
 
             # Apply phase shift
-            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
+            phase_fact = np.exp(-1j * phase[None, None, None, :, :]).astype(field_sorted.data.dtype)
+            field_sorted.data = field_sorted.data * phase_fact
 
             update_dict[field_name] = field_sorted
 
@@ -1215,7 +1213,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         # remove data corresponding to frequencies used only for group index calculation
-        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group": n_group}
+        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group_raw": n_group}
 
         for key, field in self.field_components.items():
             update_dict[key] = field.isel(f=center)
@@ -1349,7 +1347,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             "wg TE fraction": self.pol_fraction_waveguide["te"],
             "wg TM fraction": self.pol_fraction_waveguide["tm"],
             "mode area": self.mode_area,
-            "group index": self.n_group,
+            "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
         }
 
         return xr.Dataset(data_vars=info)
@@ -1452,8 +1450,9 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group: ModeIndexDataArray = pd.Field(
+    n_group_raw: ModeIndexDataArray = pd.Field(
         None,
+        alias="n_group",
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
@@ -1467,6 +1466,17 @@ class ModeData(MonitorData):
     def k_eff(self):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
+
+    @property
+    def n_group(self):
+        """Group index."""
+        if self.n_group_raw is None:
+            log.warning(
+                "The group index was not computed. To calculate group index, pass "
+                "'group_index_step = True' in the 'ModeSpec'.",
+                log_once=True,
+            )
+        return self.n_group_raw
 
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""

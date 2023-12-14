@@ -6,6 +6,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
+from ..utils import assert_log_level, log_capture
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -46,7 +47,7 @@ def test_dir_vector():
 
 def test_UniformCurrentSource():
 
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     # test we can make generic UniformCurrentSource
     _ = td.UniformCurrentSource(size=(1, 1, 1), source_time=g, polarization="Ez", interpolate=False)
@@ -56,8 +57,8 @@ def test_UniformCurrentSource():
 def test_source_times():
 
     # test we can make gaussian pulse
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
-    ts = np.linspace(0, 30, 1001)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
+    ts = np.linspace(0, 30, 1001) * 1e-12
     g.amp_time(ts)
     # g.plot(ts)
     # plt.close()
@@ -65,23 +66,21 @@ def test_source_times():
     # test we can make cw pulse
     from tidy3d.components.source import ContinuousWave
 
-    c = ContinuousWave(freq0=1, fwidth=0.1)
-    ts = np.linspace(0, 30, 1001)
+    c = ContinuousWave(freq0=1e12, fwidth=0.1e12)
     c.amp_time(ts)
 
     # test gaussian pulse with and without DC component
-    g = td.GaussianPulse(freq0=0.1, fwidth=1)
-    ts = np.linspace(0, 30, 1001)
+    g = td.GaussianPulse(freq0=0.1e12, fwidth=1e12)
     dc_comp = g.spectrum(ts, [0], ts[1] - ts[0])
-    assert abs(dc_comp) ** 2 < ATOL
-    g = td.GaussianPulse(freq0=0.1, fwidth=1, remove_dc_component=False)
+    assert abs(dc_comp) ** 2 < 1e-32
+    g = td.GaussianPulse(freq0=0.1e12, fwidth=1e12, remove_dc_component=False)
     dc_comp = g.spectrum(ts, [0], ts[1] - ts[0])
-    assert abs(dc_comp) ** 2 > ATOL
+    assert abs(dc_comp) ** 2 > 1e-32
 
 
 def test_dipole():
 
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=True)
     _ = td.PointDipole(center=(1, 2, 3), source_time=g, polarization="Ex", interpolate=False)
     # p.plot(y=2)
@@ -92,7 +91,7 @@ def test_dipole():
 
 
 def test_FieldSource():
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
 
     # test we can make planewave
@@ -152,7 +151,7 @@ def test_FieldSource():
 
 def test_pol_arrow():
 
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
 
     def get_pol_dir(axis, pol_angle=0, angle_theta=0, angle_phi=0):
 
@@ -191,7 +190,7 @@ def test_pol_arrow():
 
 
 def test_broadband_source():
-    g = td.GaussianPulse(freq0=1, fwidth=0.1)
+    g = td.GaussianPulse(freq0=1e12, fwidth=0.1e12)
     mode_spec = td.ModeSpec(num_modes=2)
     fmin, fmax = g.frequency_range(num_fwidth=CHEB_GRID_WIDTH)
     fdiff = (fmax - fmin) / 2
@@ -268,43 +267,64 @@ def test_broadband_source():
         )
 
 
-def test_custom_source_time():
-    ts = np.linspace(0, 30, 1001)
+def test_custom_source_time(log_capture):
+    ts = np.linspace(0, 30e-12, 1001)
     amp_time = ts / max(ts)
+    freq0 = 1e12
 
     # basic test
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=amp_time, dt=ts[1] - ts[0])
-    assert np.allclose(cst.amp_time(ts), amp_time * np.exp(-1j * 2 * np.pi * ts), rtol=0, atol=ATOL)
-
-    # test single value validation error
-    with pytest.raises(pydantic.ValidationError):
-        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
-        dataset = td.components.data.dataset.TimeDataset(values=vals)
-        cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=1, fwidth=0.1)
-        assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
-
-    # test interpolation
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
+    cst = td.CustomSourceTime.from_values(
+        freq0=freq0, fwidth=0.1e12, values=amp_time, dt=ts[1] - ts[0]
+    )
     assert np.allclose(
-        cst.amp_time(0.09), [0.9 * np.exp(-1j * 2 * np.pi * 0.09)], rtol=0, atol=ATOL
+        cst.amp_time(ts), amp_time * np.exp(-1j * 2 * np.pi * ts * freq0), rtol=0, atol=ATOL
     )
 
-    # test sampling warning
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=np.linspace(0, 9, 10), dt=0.1)
+    # test interpolation
+    cst = td.CustomSourceTime.from_values(
+        freq0=freq0, fwidth=0.1e12, values=np.linspace(0, 9, 10), dt=0.1e-12
+    )
+    assert np.allclose(
+        cst.amp_time(0.09e-12),
+        [0.9 * np.exp(-1j * 2 * np.pi * 0.09e-12 * freq0)],
+        rtol=0,
+        atol=ATOL,
+    )
+
+    # test out of range handling
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
+    monitor = td.FieldMonitor(size=(td.inf, td.inf, 0), freqs=[1e12], name="field")
     sim = td.Simulation(
         size=(10, 10, 10),
         run_time=1e-12,
         grid_spec=td.GridSpec.uniform(dl=0.1),
         sources=[source],
+        normalize_index=None,
     )
-
-    # test out of range handling
-    vals = [1]
-    cst = td.CustomSourceTime.from_values(freq0=1, fwidth=0.1, values=[0, 1], dt=sim.dt)
+    cst = td.CustomSourceTime.from_values(freq0=freq0, fwidth=0.1e12, values=[0, 1], dt=sim.dt)
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
     sim = sim.updated_copy(sources=[source])
     assert np.allclose(cst.amp_time(sim.tmesh[0]), [0], rtol=0, atol=ATOL)
     assert np.allclose(
-        cst.amp_time(sim.tmesh[1:]), np.exp(-1j * 2 * np.pi * sim.tmesh[1:]), rtol=0, atol=ATOL
+        cst.amp_time(sim.tmesh[1:]),
+        np.exp(-1j * 2 * np.pi * sim.tmesh[1:] * freq0),
+        rtol=0,
+        atol=ATOL,
     )
+
+    assert_log_level(log_capture, None)
+
+    # test normalization warning
+    sim = sim.updated_copy(normalize_index=0)
+    assert_log_level(log_capture, "WARNING")
+    log_capture.clear()
+    source = source.updated_copy(source_time=td.ContinuousWave(freq0=freq0, fwidth=0.1e12))
+    sim = sim.updated_copy(sources=[source])
+    assert_log_level(log_capture, "WARNING")
+
+    # test single value validation error
+    with pytest.raises(pydantic.ValidationError):
+        vals = td.components.data.data_array.TimeDataArray([1], coords=dict(t=[0]))
+        dataset = td.components.data.dataset.TimeDataset(values=vals)
+        cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
+        assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)

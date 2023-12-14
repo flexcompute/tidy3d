@@ -4,7 +4,7 @@ import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 import tidy3d as td
-from tidy3d.exceptions import ValidationError
+from tidy3d.exceptions import ValidationError, SetupError
 from ..utils import assert_log_level, log_capture
 from typing import Dict
 
@@ -112,6 +112,17 @@ def test_medium_dispersion():
     for medium in [m_SM, m_LZ, m_LZ2, m_DR, m_DB]:
         eps_c = medium.eps_model(freqs)
         assert np.all(eps_c.imag >= 0)
+
+    # test eps_model for int arguments
+    m_SM.eps_model(np.array([1, 2]))
+
+    # test LO-TO form
+    poles = [(1, 0.1, 2, 5), (3, 0.4, 1, 0.4)]
+    m_LO_TO = td.PoleResidue.from_lo_to(poles=poles, eps_inf=2)
+    assert np.allclose(
+        m_LO_TO.eps_model(freqs),
+        td.PoleResidue.lo_to_eps_model(poles=poles, eps_inf=2, frequency=freqs),
+    )
 
 
 def test_medium_dispersion_conversion():
@@ -439,6 +450,9 @@ def test_fully_anisotropic_media():
         rotation=rot,
     )
 
+    # check eps_model can be called with an array of frequencies
+    eps = m.eps_model(np.linspace(1e12, 2e12, 10))
+
     assert np.allclose(m.permittivity, perm)
     assert np.allclose(m.conductivity, cond)
 
@@ -543,13 +557,120 @@ def test_perturbation_medium():
         )
 
 
-def test_nonlinear_medium():
-    med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=20))
+def test_nonlinear_medium(log_capture):
+    med = td.Medium(
+        nonlinear_spec=td.NonlinearSpec(
+            models=[
+                td.NonlinearSusceptibility(chi3=1.5),
+                td.TwoPhotonAbsorption(beta=1),
+                td.KerrNonlinearity(n2=1),
+            ],
+            num_iters=20,
+        )
+    )
 
-    with pytest.raises(pydantic.ValidationError):
-        med = td.PoleResidue(
-            poles=[(-1, 1)], nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=20)
+    # complex parameters
+    med = td.Medium(
+        nonlinear_spec=td.NonlinearSpec(
+            models=[
+                td.KerrNonlinearity(n2=-1 + 1j, n0=1),
+                td.TwoPhotonAbsorption(beta=1 + 1j, n0=1),
+            ],
+            num_iters=20,
+        )
+    )
+    assert_log_level(log_capture, None)
+
+    # warn about deprecated api
+    med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
+    assert_log_level(log_capture, "WARNING")
+
+    # don't use deprecated numiters
+    with pytest.raises(ValidationError):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.NonlinearSusceptibility(chi3=1, numiters=2)])
         )
 
+    # dispersive support
+    med = td.PoleResidue(poles=[(-1, 1)], nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5))
+
+    # unsupported material types
+    with pytest.raises(ValidationError):
+        med = td.AnisotropicMedium(
+            xx=med, yy=med, zz=med, nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5)
+        )
+
+    # numiters too large
     with pytest.raises(pydantic.ValidationError):
         med = td.Medium(nonlinear_spec=td.NonlinearSusceptibility(chi3=1.5, numiters=200))
+    with pytest.raises(pydantic.ValidationError):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                num_iters=200, models=[td.NonlinearSusceptibility(chi3=1.5)]
+            )
+        )
+
+    # duplicate models
+    with pytest.raises(pydantic.ValidationError):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(
+                models=[
+                    td.NonlinearSusceptibility(chi3=1.5),
+                    td.NonlinearSusceptibility(chi3=1),
+                ]
+            )
+        )
+
+    # active materials
+    with pytest.raises(ValidationError):
+        med = td.Medium(
+            nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1 + 1j, n0=1)])
+        )
+
+    with pytest.raises(ValidationError):
+        med = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=-1j, n0=1)]))
+
+    med = td.Medium(
+        nonlinear_spec=td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1, n0=1)]),
+        allow_gain=True,
+    )
+
+    # automatic detection of n0
+    n0 = 2
+    freq0 = td.C_0 / 1
+    nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
+    medium = td.Sellmeier.from_dispersion(n=n0, freq=freq0, dn_dwvl=-0.2).updated_copy(
+        nonlinear_spec=nonlinear_spec
+    )
+    source_time = td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10)
+    source = td.PointDipole(center=(0, 0, 0), source_time=source_time, polarization="Ex")
+    monitor = td.FieldMonitor(size=(td.inf, td.inf, 0), freqs=[freq0], name="field")
+    structure = td.Structure(geometry=td.Box(size=(5, 5, 5)), medium=medium)
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        sources=[source],
+        monitors=[monitor],
+        structures=[structure],
+    )
+    assert n0 == nonlinear_spec.models[0]._get_n0(n0=None, medium=medium, freqs=[freq0])
+
+    # can't detect n0 with different source freqs
+    source_time2 = source_time.updated_copy(freq0=2 * freq0)
+    source2 = source.updated_copy(source_time=source_time2)
+    with pytest.raises(SetupError):
+        sim.updated_copy(sources=[source, source2])
+
+    # but if we provided it, it's ok
+    nonlinear_spec = td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1, n0=1)])
+    structure = structure.updated_copy(medium=medium.updated_copy(nonlinear_spec=nonlinear_spec))
+    sim = sim.updated_copy(structures=[structure])
+    assert 1 == nonlinear_spec.models[0]._get_n0(n0=1, medium=medium, freqs=[1, 2])
+
+    # active materials with automatic detection of n0
+    nonlinear_spec_active = td.NonlinearSpec(models=[td.TwoPhotonAbsorption(beta=-1)])
+    medium_active = medium.updated_copy(nonlinear_spec=nonlinear_spec_active)
+    with pytest.raises(ValidationError):
+        structure = structure.updated_copy(medium=medium_active)
+        sim.updated_copy(structures=[structure])

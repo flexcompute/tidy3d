@@ -9,7 +9,7 @@ import numpy as np
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
-from ....components.base import Tidy3dBaseModel, cached_property
+from ....components.base import Tidy3dBaseModel
 from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 
 
@@ -93,11 +93,10 @@ class JaxObject(Tidy3dBaseModel):
 
     """ IO """
 
-    @cached_property
-    def _json_string(self) -> str:
+    def _json(self, *args, **kwargs) -> str:
         """Overwritten method to get the json string to store in the files."""
 
-        json_string_og = super()._json_string
+        json_string_og = super()._json(*args, **kwargs)
         json_dict = json.loads(json_string_og)
 
         def strip_data_array(sub_dict: dict) -> None:

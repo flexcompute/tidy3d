@@ -115,3 +115,12 @@ def test_updated_copy():
     assert s2.medium == m2
     s3 = s.updated_copy(**{"medium": m2, "geometry": b2})
     assert s3 == s2
+
+
+def test_equality():
+
+    # test freqs / arraylike
+    mnt1 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
+    mnt2 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
+
+    assert mnt1 == mnt2

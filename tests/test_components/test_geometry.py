@@ -50,6 +50,10 @@ SYM_DIFFERENCE = td.ClipOperation(
         geometry_b=td.Box(center=(0.25, 0, 0), size=(0.5, 1, 1)),
     ),
 )
+TRANSFORMED = td.Transformed(
+    geometry=BOX,
+    transform=td.Transformed.rotation(np.pi / 6, 0),
+)
 
 
 GEO_TYPES = [
@@ -62,6 +66,7 @@ GEO_TYPES = [
     DIFFERENCE,
     SYM_DIFFERENCE,
     GROUP,
+    TRANSFORMED,
 ]
 
 _, AX = plt.subplots()
@@ -258,7 +263,7 @@ def test_polyslab_inf_bounds(lower_bound, upper_bound):
     # catch any runtime warning related to inf operations
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        bounds = ps.bounds
+        _ = ps.bounds
         ps.intersections_plane(x=0.5)
         ps.intersections_plane(z=0)
 
@@ -286,7 +291,7 @@ def test_surfaces():
         td.Box.surfaces(size=(1, 0, 1), center=(0, 0, 0))
 
     td.FluxMonitor.surfaces(
-        size=(1, 1, 1), center=(0, 0, 0), normal_dir="+", name="test", freqs=[1]
+        size=(1, 1, 1), center=(0, 0, 0), normal_dir="+", name="test", freqs=[1e12]
     )
     td.Box.surfaces(size=(1, 1, 1), center=(0, 0, 0), normal_dir="+")
 
@@ -393,6 +398,58 @@ def test_geometryoperations():
     assert BOX ^ SPHERE == td.ClipOperation(
         operation="symmetric_difference", geometry_a=BOX, geometry_b=SPHERE
     )
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_planar_transform(axis):
+    geo = (
+        td.Box(size=(3 * axis, 2 * abs(axis - 1), 4 * (2 - axis)))
+        .rotated(2.0, axis)
+        .translated(-1, 2, 3)
+        .scaled(1.4, -1.2, 1.3)
+    )
+    assert geo.bounds[0][axis] == geo.bounds[1][axis]
+
+
+def test_transforms():
+    xyz = (np.array([1.4, 0]), np.array([0, 0.5]), np.array([0, 1.4]))
+    geo = td.Box(size=(2, 2, 2))
+    assert not geo.inside(*xyz).any()
+    geo = geo.rotated(np.pi / 4, 2).rotated(np.pi / 5, 0)
+    geo.plot(x=0)
+    assert geo.inside(*xyz).all()
+
+    xyz = (np.array([0, 0, -1.5 + 1e-6]), np.array([0, 0, 0]), np.array([-1e-6, 4 - 1e-6, 2]))
+    geo = td.Sphere(radius=1)
+    assert (geo.inside(*xyz) == (True, False, False)).all()
+    geo = geo.translated(0, 0, 1).scaled(1.5, 1, 2)
+    geo.plot(y=0)
+    assert (geo.inside(*xyz) == (False, True, True)).all()
+
+    xyz = (np.array([0.8, -0.8, -0.7]), np.array([0, 0, 0]), np.array([1.2, -1.2, 0]))
+    geo = td.Cylinder(length=2, radius=1)
+    assert (geo.inside(*xyz) == (False, False, True)).all()
+    geo = geo.scaled(0.5, 2, 1).rotated(-np.pi / 6, 2).rotated(np.pi / 2, 0)
+    assert (geo.inside(*xyz) == (True, True, False)).all()
+
+    xyz = (np.array([0, 2, 1, 3, -0.5]), np.array([0, 0, 0, 0, 0.5]), np.array([0, 0, 1.5, 0, 0]))
+    geo = geo = td.PolySlab(
+        vertices=[(2, -1), (-1, 1), (4, 1), (-1, 2), (4, 2), (1, 3), (5, 3), (5, -1)],
+        slab_bounds=(-1, 1),
+    )
+    assert (geo.inside(*xyz) == (False, True, False, True, False)).all()
+    assert len(geo.intersections_plane(x=0)) == 2
+    assert len(geo.intersections_plane(z=0)) == 1
+    geo = geo.translated(-2, 0, 0).rotated(-np.pi * 0.4, 1)
+    assert (geo.inside(*xyz) == (True, False, True, False, True)).all()
+    assert len(geo.intersections_plane(x=0)) == 1
+    assert len(geo.intersections_plane(z=0)) == 3
+
+
+def test_general_rotation():
+    assert np.allclose(td.Transformed.rotation(0.1, 0), td.Transformed.rotation(0.1, [2, 0, 0]))
+    assert np.allclose(td.Transformed.rotation(0.2, 1), td.Transformed.rotation(0.2, [0, 3, 0]))
+    assert np.allclose(td.Transformed.rotation(0.3, 2), td.Transformed.rotation(0.3, [0, 0, 4]))
 
 
 def test_flattening():
@@ -690,6 +747,21 @@ def test_from_gds():
     )
     assert len(geo.intersections_plane(z=0)) == 2
     assert len(geo.intersections_plane(z=1)) == 1
+
+
+@pytest.mark.parametrize("geometry", GEO_TYPES)
+def test_to_gds(geometry, tmp_path):
+    fname = str(tmp_path / f"{geometry.__class__.__name__}.gds")
+    geometry.to_gds_file(fname, z=0, gds_cell_name=geometry.__class__.__name__)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == geometry.__class__.__name__
+    assert len(cell.polygons) > 0
+
+    fname = str(tmp_path / f"{geometry.__class__.__name__}-empty.gds")
+    geometry.to_gds_file(fname, y=1e30, gds_cell_name=geometry.__class__.__name__)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert cell.name == geometry.__class__.__name__
+    assert len(cell.polygons) == 0
 
 
 def test_custom_surface_geometry(tmp_path):

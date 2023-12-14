@@ -15,10 +15,20 @@ from ..utils import SIM_FULL as SIM
 from ..utils import SIM_MONITORS as SIM2
 from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
+from ..utils import run_emulated
+
 from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
+
+
+@pytest.fixture
+def split_string(monkeypatch):
+    """Lower the max string length in hdf5 read/write, in order to test the string splitting."""
+    from tidy3d.components import base
+
+    monkeypatch.setattr(base, "MAX_STRING_LENGTH", 100)
 
 
 def set_datasets_to_none(sim):
@@ -47,7 +57,7 @@ def set_datasets_to_none(sim):
     return td.Simulation.parse_obj(sim_dict)
 
 
-def test_simulation_load_export():
+def test_simulation_load_export(split_string):
     major, minor, patch = __version__.split(".")
     path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
     # saving as .h5 since *.hdf5 is git ignored
@@ -56,7 +66,9 @@ def test_simulation_load_export():
     SIM.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
     SIM_HDF5 = td.Simulation.from_hdf5(path_hdf5)
-    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
     assert SIM == SIM_HDF5, "original and loaded from hdf5 simulations are not the same"
 
 
@@ -64,7 +76,9 @@ def test_simulation_load_export_yaml(tmp_path):
     path = str(tmp_path / "simulation.yaml")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
-    assert set_datasets_to_none(SIM) == SIM2, "original and loaded simulations are not the same"
+    assert (
+        set_datasets_to_none(SIM)._json_string == SIM2._json_string
+    ), "original and loaded simulations are not the same"
 
 
 def test_component_load_export(tmp_path):
@@ -81,28 +95,28 @@ def test_component_load_export_yaml(tmp_path):
     assert td.Medium() == M2, "original and loaded medium are not the same"
 
 
-def test_simulation_load_export_hdf5(tmp_path):
+def test_simulation_load_export_hdf5(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_gz(tmp_path):
+def test_simulation_load_export_hdf5_gz(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
     SIM.to_file(path)
     SIM2 = td.Simulation.from_file(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_explicit(tmp_path):
+def test_simulation_load_export_hdf5_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5")
     SIM.to_hdf5(path)
     SIM2 = td.Simulation.from_hdf5(path)
     assert SIM == SIM2, "original and loaded simulations are not the same"
 
 
-def test_simulation_load_export_hdf5_gz_explicit(tmp_path):
+def test_simulation_load_export_hdf5_gz_explicit(split_string, tmp_path):
     path = str(tmp_path / "simulation.hdf5.gz")
     SIM.to_hdf5_gz(path)
     SIM2 = td.Simulation.from_hdf5_gz(path)
@@ -123,7 +137,7 @@ def test_simulation_preserve_types(tmp_path):
     path = str(tmp_path / "simulation.json")
     SIM.to_file(path)
     sim_2 = td.Simulation.from_file(path)
-    assert set_datasets_to_none(SIM) == sim_2
+    assert set_datasets_to_none(SIM)._json_string == sim_2._json_string
 
     M_types = [type(s.medium) for s in sim_2.structures]
     for M in (td.Medium, td.PoleResidue, td.Lorentz, td.Sellmeier, td.Debye):
@@ -178,7 +192,7 @@ def test_validation_speed(tmp_path):
         _S = td.Simulation.from_file(path)
         time_validate = time() - time_start
         times_sec.append(time_validate)
-        assert set_datasets_to_none(S) == _S
+        assert set_datasets_to_none(S)._json_string == _S._json_string
 
         size = os.path.getsize(path)
         sizes_bytes.append(size)
@@ -266,3 +280,39 @@ def test_group_name_tuple():
         assert index == true_index
         group_name = tidy.get_tuple_group_name(index=index)
         assert group_name == key_name
+
+
+def test_monitor_data_from_file():
+    """Test the ability to load specific monitor data from a file."""
+
+    sim = td.Simulation(
+        size=(1, 1, 1),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        monitors=[
+            td.FieldMonitor(center=(0, 0, 0), size=(1, 1, 0), freqs=[2e14], name="field"),
+            td.ModeMonitor(
+                center=(0, 0, 0), size=(1, 1, 0), freqs=[2e14], mode_spec=td.ModeSpec(), name="mode"
+            ),
+        ],
+        sources=[
+            td.PointDipole(
+                center=(0, 0, 0),
+                polarization="Ex",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+            )
+        ],
+        run_time=2e-12,
+    )
+
+    sim_data = run_emulated(sim, task_name="test")
+
+    fname = "tests/data/sim_data.hdf5"
+    sim_data.to_file(fname)
+
+    fld_data = td.SimulationData.mnt_data_from_file(fname, mnt_name="field")
+    assert isinstance(fld_data, td.FieldData)
+    assert fld_data.monitor == sim.monitors[0]
+
+    mode_data = td.SimulationData.mnt_data_from_file(fname, mnt_name="mode")
+    assert isinstance(mode_data, td.ModeData)
+    assert mode_data.monitor == sim.monitors[1]

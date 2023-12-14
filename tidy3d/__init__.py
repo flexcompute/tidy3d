@@ -1,27 +1,33 @@
 """ Tidy3d package imports"""
+import os
 
 # grid
 from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
 
 # geometry
-from .components.geometry.base import Box, ClipOperation, GeometryGroup
+from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
 from .components.geometry.primitives import Sphere, Cylinder
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 
 # medium
-from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium, Medium2D
+from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
+from .components.medium import Medium2D, PEC2D
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
 from .components.medium import CustomMedium, CustomPoleResidue
 from .components.medium import CustomSellmeier, FullyAnisotropicMedium
 from .components.medium import CustomLorentz, CustomDrude, CustomDebye, CustomAnisotropicMedium
-from .components.medium import NonlinearSusceptibility
+from .components.medium import NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity
 from .components.transformation import RotationAroundAxis
 from .components.medium import PerturbationMedium, PerturbationPoleResidue
 from .components.parameter_perturbation import ParameterPerturbation
 from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
 from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
+
+# time modulation
+from .components.time_modulation import SpaceTimeModulation, SpaceModulation
+from .components.time_modulation import ContinuousWaveTimeModulation, ModulationSpec
 
 # structures
 from .components.structure import Structure, MeshOverrideStructure
@@ -73,6 +79,8 @@ from .components.data.monitor_data import FieldProjectionKSpaceData
 from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP
+from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
+from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
@@ -90,7 +98,7 @@ from .material_library.material_library import material_library
 from .material_library.parametric_materials import Graphene
 
 # for docs
-from .components.medium import AbstractMedium, NonlinearSpec
+from .components.medium import AbstractMedium, NonlinearSpec, NonlinearModel
 from .components.geometry.base import Geometry
 from .components.source import Source, SourceTime
 from .components.monitor import Monitor
@@ -107,6 +115,25 @@ from .version import __version__
 # updater
 from .updater import Updater
 
+# scene
+from .components.scene import Scene
+
+# boundary placement for other solvers
+from .components.bc_placement import StructureStructureInterface, StructureBoundary
+from .components.bc_placement import MediumMediumInterface
+from .components.bc_placement import StructureSimulationBoundary
+from .components.bc_placement import SimulationBoundary
+
+# heat
+from .components.heat_spec import FluidSpec, SolidSpec
+from .components.heat.simulation import HeatSimulation
+from .components.heat.data.sim_data import HeatSimulationData
+from .components.heat.data.monitor_data import TemperatureData
+from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
+from .components.heat.source import UniformHeatSource
+from .components.heat.monitor import TemperatureMonitor
+from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
+
 
 def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
@@ -116,8 +143,19 @@ def set_logging_level(level: str) -> None:
     )
 
 
+TIDY3D_DIR = f"{os.path.expanduser('~')}/.tidy3d"
+
+
+def create_config_folder():
+    if not os.path.exists(TIDY3D_DIR):
+        os.mkdir(TIDY3D_DIR)
+
+
+create_config_folder()
+
 log.info(f"Using client version: {__version__}")
 
+Transformed.update_forward_refs()
 ClipOperation.update_forward_refs()
 GeometryGroup.update_forward_refs()
 
@@ -133,6 +171,8 @@ __all__ = [
     "Cylinder",
     "PolySlab",
     "GeometryGroup",
+    "ClipOperation",
+    "Transformed",
     "TriangleMesh",
     "Medium",
     "PoleResidue",
@@ -140,6 +180,7 @@ __all__ = [
     "PEC",
     "PECMedium",
     "Medium2D",
+    "PEC2D",
     "Sellmeier",
     "Debye",
     "Drude",
@@ -161,7 +202,10 @@ __all__ = [
     "LinearChargePerturbation",
     "CustomChargePerturbation",
     "NonlinearSpec",
+    "NonlinearModel",
     "NonlinearSusceptibility",
+    "TwoPhotonAbsorption",
+    "KerrNonlinearity",
     "Structure",
     "MeshOverrideStructure",
     "ModeSpec",
@@ -265,4 +309,32 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
+    "Scene",
+    "StructureStructureInterface",
+    "StructureBoundary",
+    "MediumMediumInterface",
+    "StructureSimulationBoundary",
+    "SimulationBoundary",
+    "FluidSpec",
+    "SolidSpec",
+    "HeatSimulation",
+    "HeatSimulationData",
+    "TemperatureBC",
+    "ConvectionBC",
+    "HeatFluxBC",
+    "HeatBoundarySpec",
+    "UniformHeatSource",
+    "UniformUnstructuredGrid",
+    "DistanceUnstructuredGrid",
+    "TemperatureData",
+    "TemperatureMonitor",
+    "SpaceTimeModulation",
+    "SpaceModulation",
+    "ContinuousWaveTimeModulation",
+    "ModulationSpec",
+    "PointDataArray",
+    "CellDataArray",
+    "IndexedDataArray",
+    "TriangularGridDataset",
+    "TetrahedralGridDataset",
 ]

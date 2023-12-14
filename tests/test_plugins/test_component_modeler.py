@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import gdstk
 
 import tidy3d as td
-from tidy3d.web.container import Batch
+from tidy3d.web.api.container import Batch
 from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from ..utils import run_emulated
@@ -254,6 +254,12 @@ def test_plot_sim(tmp_path):
     plt.close()
 
 
+def test_plot_sim_eps(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    modeler.plot_sim_eps(z=0)
+    plt.close()
+
+
 def test_make_component_modeler(tmp_path):
     _ = make_component_modeler(path_dir=str(tmp_path))
 
@@ -369,3 +375,8 @@ def test_mapping_exclusion(monkeypatch, tmp_path):
 
     s_matrix = run_component_modeler(monkeypatch, modeler)
     _test_mappings(element_mappings, s_matrix)
+
+
+def test_batch_filename(tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    path = modeler._batch_path
