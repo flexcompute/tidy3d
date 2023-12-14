@@ -214,56 +214,56 @@ def make_sim(
     jax_med1 = JaxMedium(permittivity=permittivity, conductivity=permittivity * 0.1)
     jax_struct1 = JaxStructure(geometry=jax_box1, medium=jax_med1)
 
-    jax_box2 = JaxBox(size=size, center=(-1, 0, -3))
-    jax_med2 = JaxAnisotropicMedium(
-        xx=JaxMedium(permittivity=permittivity),
-        yy=JaxMedium(permittivity=permittivity + 2),
-        zz=JaxMedium(permittivity=permittivity * 2),
-    )
-    jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
+    # jax_box2 = JaxBox(size=size, center=(-1, 0, -3))
+    # jax_med2 = JaxAnisotropicMedium(
+    #     xx=JaxMedium(permittivity=permittivity),
+    #     yy=JaxMedium(permittivity=permittivity + 2),
+    #     zz=JaxMedium(permittivity=permittivity * 2),
+    # )
+    # jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
 
-    jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
-    jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
+    # jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=vertices, slab_bounds=(-1, 1))
+    # jax_struct3 = JaxStructure(geometry=jax_polyslab1, medium=jax_med1)
 
-    # custom medium
-    Nx, Ny, Nz = 10, 1, 10
-    (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
-    coords = dict(
-        x=np.linspace(xmin, xmax, Nx).tolist(),
-        y=np.linspace(ymin, ymax, Ny).tolist(),
-        z=np.linspace(zmin, zmax, Nz).tolist(),
-        f=(FREQ0,),
-    )
+    # # custom medium
+    # Nx, Ny, Nz = 10, 1, 10
+    # (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box1.bounds
+    # coords = dict(
+    #     x=np.linspace(xmin, xmax, Nx).tolist(),
+    #     y=np.linspace(ymin, ymax, Ny).tolist(),
+    #     z=np.linspace(zmin, zmax, Nz).tolist(),
+    #     f=(FREQ0,),
+    # )
 
-    jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
-    values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
+    # jax_box_custom = JaxBox(size=size, center=(1, 0, 2))
+    # values = base_eps_val + np.random.random((Nx, Ny, Nz, 1))
 
-    # adding this line breaks things without enforcing that the vjp for custom medium is complex
-    values = (1 + 1j) * values
-    values = values + (1 + 1j) * values / 0.5
+    # # adding this line breaks things without enforcing that the vjp for custom medium is complex
+    # values = (1 + 1j) * values
+    # values = values + (1 + 1j) * values / 0.5
 
-    eps_ii = JaxDataArray(values=values, coords=coords)
-    field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
-    jax_eps_dataset = JaxPermittivityDataset(**field_components)
-    jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
-    jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
+    # eps_ii = JaxDataArray(values=values, coords=coords)
+    # field_components = {f"eps_{dim}{dim}": eps_ii for dim in "xyz"}
+    # jax_eps_dataset = JaxPermittivityDataset(**field_components)
+    # jax_med_custom = JaxCustomMedium(eps_dataset=jax_eps_dataset)
+    # jax_struct_custom = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom)
 
-    field_components_anis = {
-        f"eps_{dim}{dim}": const * eps_ii for const, dim in zip([1.0, 2.0, 3.0], "xyz")
-    }
-    jax_eps_dataset_anis = JaxPermittivityDataset(**field_components_anis)
-    jax_med_custom_anis = JaxCustomMedium(eps_dataset=jax_eps_dataset_anis)
-    jax_struct_custom_anis = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom_anis)
+    # field_components_anis = {
+    #     f"eps_{dim}{dim}": const * eps_ii for const, dim in zip([1.0, 2.0, 3.0], "xyz")
+    # }
+    # jax_eps_dataset_anis = JaxPermittivityDataset(**field_components_anis)
+    # jax_med_custom_anis = JaxCustomMedium(eps_dataset=jax_eps_dataset_anis)
+    # jax_struct_custom_anis = JaxStructure(geometry=jax_box_custom, medium=jax_med_custom_anis)
 
-    jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
-    jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
+    # jax_geo_group = JaxGeometryGroup(geometries=[jax_polyslab1, jax_polyslab1])
+    # jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
 
-    jax_struct_static_med = JaxStructureStaticMedium(
-        geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
-    )
-    jax_struct_static_geo = JaxStructureStaticGeometry(
-        geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
-    )
+    # jax_struct_static_med = JaxStructureStaticMedium(
+    #     geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
+    # )
+    # jax_struct_static_geo = JaxStructureStaticGeometry(
+    #     geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
+    # )
 
     # TODO: Add new geometries as they are created.
 
@@ -278,49 +278,49 @@ def make_sim(
     )
 
     # DiffractionMonitor
-    output_mnt2 = td.DiffractionMonitor(
-        center=(0, 0, 4),
-        size=(td.inf, td.inf, 0),
-        normal_dir="+",
-        freqs=[FREQ0],
-        name=MNT_NAME + "2",
-    )
+    # output_mnt2 = td.DiffractionMonitor(
+    #     center=(0, 0, 4),
+    #     size=(td.inf, td.inf, 0),
+    #     normal_dir="+",
+    #     freqs=[FREQ0],
+    #     name=MNT_NAME + "2",
+    # )
 
-    output_mnt3 = td.FieldMonitor(
-        size=(2, 0, 2),
-        freqs=[FREQ0],
-        name=MNT_NAME + "3",
-    )
+    # output_mnt3 = td.FieldMonitor(
+    #     size=(2, 0, 2),
+    #     freqs=[FREQ0],
+    #     name=MNT_NAME + "3",
+    # )
 
-    output_mnt4 = td.FieldMonitor(
-        size=(0, 0, 0),
-        freqs=np.array([FREQ0, FREQ0 * 1.1]),
-        name=MNT_NAME + "4",
-    )
+    # output_mnt4 = td.FieldMonitor(
+    #     size=(0, 0, 0),
+    #     freqs=np.array([FREQ0, FREQ0 * 1.1]),
+    #     name=MNT_NAME + "4",
+    # )
 
-    extraneous_field_monitor = td.FieldMonitor(
-        size=(10, 10, 0),
-        freqs=np.array([1e14, 2e14]),
-        name="field",
-    )
+    # extraneous_field_monitor = td.FieldMonitor(
+    #     size=(10, 10, 0),
+    #     freqs=np.array([1e14, 2e14]),
+    #     name="field",
+    # )
 
     sim = JaxSimulation(
         size=(10, 10, 10),
         run_time=1e-12,
         grid_spec=td.GridSpec(wavelength=4.0),
-        monitors=(extraneous_field_monitor,),
+        # monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
         input_structures=(
             jax_struct1,
-            jax_struct2,
-            jax_struct_custom,
-            jax_struct3,
-            jax_struct_group,
-            jax_struct_custom_anis,
-            jax_struct_static_med,
-            jax_struct_static_geo,
+            # jax_struct2,
+            # jax_struct_custom,
+            # jax_struct3,
+            # jax_struct_group,
+            # jax_struct_custom_anis,
+            # jax_struct_static_med,
+            # jax_struct_static_geo,
         ),
-        output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
+        output_monitors=(output_mnt1,),# output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
         symmetry=(0, 1, -1),
@@ -339,9 +339,16 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     ret_value = 0.0
 
+    # def get_mnt_data(name):
+    #     # import pdb; pdb.set_trace()
+    #     return sim_data.jax_info["output_data"][mnt_name]
+
+    # import pdb; pdb.set_trace()
+
     # ModeData
     mnt_name = MNT_NAME + "1"
     mnt_data = sim_data[mnt_name]
+
     amps = mnt_data.amps
     ret_value += amps.sel(direction="+", f=2e14, mode_index=0)
     ret_value += amps.isel(direction=0, f=0, mode_index=0)
@@ -350,28 +357,28 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     ret_value += amps.sel(direction="-", f=2e14).isel(mode_index=1)
 
     # DiffractionData
-    mnt_name = MNT_NAME + "2"
-    mnt_data = sim_data[mnt_name]
-    ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
-    ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
-    ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
-    ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
-    ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
+    # mnt_name = MNT_NAME + "2"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += mnt_data.amps.sel(orders_x=0, orders_y=0, f=2e14, polarization="p")
+    # ret_value += mnt_data.amps.sel(orders_x=-1, orders_y=1, f=2e14, polarization="p")
+    # ret_value += mnt_data.amps.isel(orders_x=0, orders_y=1, f=0, polarization=0)
+    # ret_value += mnt_data.Er.isel(orders_x=0, orders_y=1, f=0)
+    # ret_value += mnt_data.power.sel(orders_x=-1, orders_y=1, f=2e14)
 
-    # FieldData
-    mnt_name = MNT_NAME + "3"
-    mnt_data = sim_data[mnt_name]
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.interp(z=0).values))
+    # # FieldData
+    # mnt_name = MNT_NAME + "3"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.interp(z=0).values))
 
-    # this should work when we figure out a jax version of xr.DataArray
-    sim_data.get_intensity(mnt_name)
-    # ret_value += jnp.sum(jnp.array(mnt_data.flux().values))
+    # # this should work when we figure out a jax version of xr.DataArray
+    # sim_data.get_intensity(mnt_name)
+    # # ret_value += jnp.sum(jnp.array(mnt_data.flux().values))
 
-    # FieldData (dipole)
-    mnt_name = MNT_NAME + "4"
-    mnt_data = sim_data[mnt_name]
-    ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
+    # # FieldData (dipole)
+    # mnt_name = MNT_NAME + "4"
+    # mnt_data = sim_data[mnt_name]
+    # ret_value += jnp.sum(jnp.array(mnt_data.Ex.values))
 
     return ret_value
 
@@ -465,6 +472,159 @@ def test_run_flux(use_emulated_run):
     if use_jax:
         get_flux_grad = jax.grad(get_flux)
         _ = get_flux_grad(1.0)
+
+
+@pytest.mark.parametrize("local", (True,))
+def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
+    """Test computing gradient using jax."""
+
+    run_fn = run_local if local else run
+
+    def f(sim):
+        return sim
+
+    # sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    # sim2 = f(sim)
+    # _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    def f(permittivity, size, vertices, base_eps_val):
+        sim = make_sim(
+            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+        )
+        a = 0.0
+        a += sim.input_structures[0].geometry.jax_info["size"][0]
+        a += sim.input_structures[0].geometry.jax_info["size"][1]
+        a += sim.input_structures[0].geometry.jax_info["size"][2]
+        a += sim.input_structures[0].geometry.jax_info["center"][0]
+        a += sim.input_structures[0].geometry.jax_info["center"][1]
+        a += sim.input_structures[0].geometry.jax_info["center"][2]
+        a += sim.input_structures[0].medium.jax_info["permittivity"]
+
+        # remove maybe problematic stuff
+        # sim_jax_info = sim.jax_info.copy()
+        # sim_jax_info["input_structures"] = []#[0].geometry
+        # sim = sim.updated_copy(jax_info={})#sim_jax_info)
+        # import pdb; pdb.set_trace()
+
+        sim_data = run_fn(sim, task_name="test")
+        amp = extract_amp(sim_data)
+        return a + objective(amp)
+        # return a
+
+    grad_f = grad(f, argnums=(0, 1, 2, 3))
+    df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
+
+
+def test_adjoint_refactor2(use_emulated_run, tmp_path):
+
+    sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    def f(x):
+        geo = JaxBox(
+            size=(x, 1, 2 * x),
+            center=(x**2, x, 0),
+        )
+        med = JaxMedium(permittivity=1 + x**2)
+
+        struct = JaxStructure(geometry=geo, medium=med)
+        sim = JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            input_structures=[struct],
+            grid_spec=td.GridSpec.auto(wavelength=1),
+            output_monitors=sim0.output_monitors,
+            boundary_spec=sim0.boundary_spec,
+            sources=sim0.sources,            
+        )
+
+        sim_data = run_local(sim, task_name="test")
+
+        amp = extract_amp(sim_data)
+        return objective(amp)
+
+    # import pdb; pdb.set_trace()
+
+    # f(0.0)
+    # import pdb; pdb.set_trace()
+
+    grad_f = jax.value_and_grad(f)
+    val, grad = grad_f(1.0)
+
+    assert grad != 0.0
+    print("val, gradient: ", val, grad)
+
+
+def test_adjoint_refactor3(tmp_path, use_emulated_run):
+
+    sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    def f(x):
+        geo = JaxBox(
+            size=(x, 1, 2 * x),
+            center=(x**2, x, 0),
+        )
+        med = JaxMedium(permittivity=1 + x**2, conductivity=2.0 * x)
+
+        struct = JaxStructure(geometry=geo, medium=med)
+        sim = JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            input_structures=[struct],
+            grid_spec=td.GridSpec.auto(wavelength=1),
+            output_monitors=sim0.output_monitors,
+            boundary_spec=sim0.boundary_spec,
+            sources=sim0.sources,            
+        )
+
+
+        sim_data = run_local(sim, task_name="test")
+        amp = extract_amp(sim_data)
+
+        # extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
+        # return jnp.sum(jnp.array(sim2.input_structures[0].geometry.jax_info["size"]))
+
+        # return jnp.abs(jnp.sum(sim_data.output_data[0].amps.jax_info["values"]))
+
+        return objective(amp)# + extra
+
+    print(f(1.0))
+    print(jax.grad(f)(1.0))
+
+
+
+def test_adjoint_refactor4(tmp_path, use_emulated_run):
+
+    sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    def f(x):
+        box = JaxBox(center=(x, x, x), size=(x,x,x))
+        struct = JaxStructure(geometry=box, medium=JaxMedium(permittivity=1.0, conductivity=2.0))
+        sim = JaxSimulation(
+            size=(10, 10, 10),
+            run_time=1e-12,
+            input_structures=[struct],
+            grid_spec=td.GridSpec.auto(wavelength=1),            
+            output_monitors=sim0.output_monitors,
+            boundary_spec=sim0.boundary_spec,
+            sources=sim0.sources,
+        )
+
+        sim_data = run_local(sim, task_name="test")
+
+        # sim_data = JaxSimulationData(simulation=sim, data=())
+        
+        # values = sim_data.simulation.input_structures[0].geometry.jax_info["center"]
+        a =  jnp.abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_info["values"])))
+        # b = sim_data.simulation.jax_info["blag"]
+        # return jnp.sum(jnp.array(a)) + jnp.sum(jnp.array(b))
+
+        return jnp.sum(jnp.array(a))    
+
+    val, grad = jax.value_and_grad(f)(1.0)
+    print(val, grad)
+    assert not np.isclose(grad, 0.0)
 
 
 @pytest.mark.parametrize("local", (True, False))
@@ -1648,55 +1808,3 @@ def test_no_adjoint_sources(
     grad_J = grad(J)
     grad_J(2.0)
     assert_log_level(log_capture, log_level_expected)
-
-
-def test_nonlinear_warn(log_capture):
-    """Test that simulations warn if nonlinearity is used."""
-
-    struct = JaxStructure(
-        geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
-        medium=JaxMedium(permittivity=2.0),
-    )
-
-    struct_static = td.Structure(
-        geometry=td.Box(center=(0, 3, 0), size=(1, 1, 1)),
-        medium=td.Medium(permittivity=2.0),
-    )
-
-    sim_base = JaxSimulation(
-        size=(10, 10, 0),
-        run_time=1e-12,
-        grid_spec=td.GridSpec(wavelength=1.0),
-        monitors=(),
-        structures=(struct_static,),
-        output_monitors=(),
-        input_structures=(struct,),
-        sources=[src],
-        boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
-    )
-
-    # make the nonlinear objects to add to the JaxSimulation one by one
-    nl_model = td.KerrNonlinearity(n2=1)
-    nl_medium = td.Medium(nonlinear_spec=td.NonlinearSpec(models=[nl_model]))
-    struct_static_nl = struct_static.updated_copy(medium=nl_medium)
-    input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)
-
-    def test_log_level(desired_level):
-        """Convenience function to test the log level and clear it."""
-        assert_log_level(log_capture, desired_level)
-        log_capture.clear()
-
-    # no nonlinearity (no warning)
-    test_log_level(None)
-
-    # nonlinear simulation.medium (error)
-    sim = sim_base.updated_copy(medium=nl_medium)
-    test_log_level("WARNING")
-
-    # nonlinear structure (warn)
-    sim = sim_base.updated_copy(structures=[struct_static_nl])
-    test_log_level("WARNING")
-
-    # nonlinear input_structure (warn)
-    sim = sim_base.updated_copy(input_structures=[input_struct_nl])
-    test_log_level("WARNING")

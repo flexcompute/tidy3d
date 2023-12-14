@@ -91,9 +91,11 @@ class JaxGeometry(Geometry, ABC):
 
     def to_tidy3d(self) -> Geometry:
         """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "jax_dict"})
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]
+        # for key in ("center", "size"):
+            # self_dict[key] = jax.lax.stop_gradient(self_dict[key])
         return tidy3d_type.parse_obj(self_dict)
 
     @staticmethod
@@ -145,8 +147,10 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         jax_field=True,
     )
 
-    _sanitize_size = validate_jax_tuple("size")
-    _sanitize_center = validate_jax_tuple("center")
+    # _sanitize_size = validate_jax_tuple("size")
+    # _sanitize_center = validate_jax_tuple("center")
+
+    _jax_leafs = ("size", "center")
 
     @cached_property
     def bounds(self):
@@ -667,7 +671,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
 
     def to_tidy3d(self) -> GeometryGroup:
         """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "jax_dict"})
         self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]

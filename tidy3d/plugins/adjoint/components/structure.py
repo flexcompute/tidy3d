@@ -30,6 +30,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
     # which of "geometry" or "medium" is differentiable for this class
     _differentiable_fields = ()
+    _jax_objs = ("medium", "geometry")
 
     @pd.validator("medium", always=True)
     def _check_2d_geometry(cls, val, values):
@@ -44,7 +45,7 @@ class AbstractJaxStructure(Structure, JaxObject):
     @property
     def exclude_fields(self):
         """Fields to exclude from the self dict."""
-        return set(["type"] + list(self.jax_fields.keys()))
+        return set(["type", "jax_dict"] + list(self.jax_fields.keys()))
 
     def to_structure(self) -> Structure:
         """Convert :class:`.JaxStructure` instance to :class:`.Structure`"""
@@ -198,6 +199,8 @@ class JaxStructure(AbstractJaxStructure, JaxObject):
         jax_field=True,
         discriminator=TYPE_TAG_STR,
     )
+
+    _jax_objs = ("medium", "geometry")
 
     _differentiable_fields = ("medium", "geometry")
 

@@ -620,6 +620,8 @@ def run_local(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
+    print('run_local')
+
     # convert to regular tidy3d (and accounting info)
     sim_tidy3d, jax_info = simulation.to_simulation()
 
@@ -646,6 +648,8 @@ def run_local_fwd(
     verbose: bool,
 ) -> Tuple[JaxSimulationData, tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
+
+    print('fwd')
 
     # add the gradient monitors and run the forward simulation
     grad_mnts = simulation.get_grad_monitors(
@@ -676,6 +680,8 @@ def run_local_bwd(
     sim_data_vjp: JaxSimulationData,
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
+
+    print('bwd')
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res

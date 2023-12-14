@@ -152,6 +152,8 @@ class JaxSimulation(Simulation, JaxObject):
         units=SECOND,
     )
 
+    _jax_obj_lists = ("input_structures",)
+
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
         """Make sure server-side colocation is off."""
@@ -381,6 +383,7 @@ class JaxSimulation(Simulation, JaxObject):
                 "input_structures",
                 "fwidth_adjoint",
                 "run_time_adjoint",
+                "jax_dict",
             }
         )
         sim = Simulation.parse_obj(sim_dict)
@@ -649,6 +652,8 @@ class JaxSimulation(Simulation, JaxObject):
             )
         )
 
+        # import pdb; pdb.set_trace()
+
         # load JaxSimulation from the dictionary
         return cls.parse_obj(sim_dict)
 
@@ -657,6 +662,7 @@ class JaxSimulation(Simulation, JaxObject):
         """Make the forward :class:`.JaxSimulation` from the supplied :class:`.Simulation`."""
 
         mnt_dict = JaxSimulation.split_monitors(monitors=simulation.monitors, jax_info=jax_info)
+
         structure_dict = JaxSimulation.split_structures(
             structures=simulation.structures, jax_info=jax_info
         )
@@ -670,10 +676,14 @@ class JaxSimulation(Simulation, JaxObject):
         grad_mnts = grad_mnt_dict["grad_monitors"]
         grad_eps_mnts = grad_mnt_dict["grad_eps_monitors"]
 
+        # full_monitors = list(simulation.monitors) + grad_mnts + grad_eps_mnts
+        # full_monitors = grad_mnts + grad_eps_mnts
         full_monitors = list(simulation.monitors) + grad_mnts + grad_eps_mnts
 
         # jax_sim_fwd = jax_sim.updated_copy(**grad_mnts)
         # sim_fwd, jax_info = jax_sim_fwd.to_simulation()
+
+        # import pdb; pdb.set_trace()
 
         sim_fwd = simulation.updated_copy(monitors=full_monitors)
         jax_info = jax_info.updated_copy(
@@ -689,6 +699,7 @@ class JaxSimulation(Simulation, JaxObject):
     def to_simulation_fwd(self) -> Tuple[Simulation, JaxInfo, JaxInfo]:
         """Like ``to_simulation()`` but the gradient monitors are included."""
         simulation, jax_info = self.to_simulation()
+        # import pdb; pdb.set_trace()
         sim_fwd, jax_info_fwd = self.make_sim_fwd(simulation=simulation, jax_info=jax_info)
         return sim_fwd, jax_info_fwd, jax_info
 

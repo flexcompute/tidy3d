@@ -5,6 +5,8 @@ from typing import Tuple, List, Any, Callable
 import json
 
 import numpy as np
+import pydantic.v1 as pd
+import jax
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
@@ -29,59 +31,83 @@ class JaxObject(Tidy3dBaseModel):
         return adjoint_fields
 
     """Methods needed for jax to register arbitary classes."""
+    
+    jax_dict : dict = {}
+    _jax_leafs = ()
+    _jax_objs = ()
+    _jax_obj_lists = ()
+    
+    def jax_dict_nested(self) -> dict:
+        """Return nested dict of all jax fields contained in this object."""
 
-    def tree_flatten(self) -> Tuple[list, dict]:
-        """How to flatten a :class:`.JaxObject` instance into a pytree."""
-        children = []
-        aux_data = self.dict()
-        for field_name in self.get_jax_field_names():
-            field = getattr(self, field_name)
-            sub_children, sub_aux_data = jax_tree_flatten(field)
-            children.append(sub_children)
-            aux_data[field_name] = sub_aux_data
-
-        def fix_polyslab(geo_dict: dict) -> None:
-            """Recursively Fix a dictionary possibly containing a polyslab geometry."""
-            if geo_dict["type"] == "PolySlab":
-                vertices = geo_dict["vertices"]
-                geo_dict["vertices"] = vertices.tolist()
-            elif geo_dict["type"] == "GeometryGroup":
-                for sub_geo_dict in geo_dict["geometries"]:
-                    fix_polyslab(sub_geo_dict)
-            elif geo_dict["type"] == "ClipOperation":
-                fix_polyslab(geo_dict["geometry_a"])
-                fix_polyslab(geo_dict["geometry_b"])
-
-        def fix_monitor(mnt_dict: dict) -> None:
-            """Fix a frequency containing monitor."""
-            if "freqs" in mnt_dict:
-                freqs = mnt_dict["freqs"]
-                if isinstance(freqs, np.ndarray):
-                    mnt_dict["freqs"] = freqs.tolist()
-
-        # fixes bug with jax handling 2D numpy array in polyslab vertices
-        if aux_data.get("type", "") == "JaxSimulation":
-            structures = aux_data["structures"]
-            for _i, structure in enumerate(structures):
-                geometry = structure["geometry"]
-                fix_polyslab(geometry)
-            for monitor in aux_data["monitors"]:
-                fix_monitor(monitor)
-            for monitor in aux_data["output_monitors"]:
-                fix_monitor(monitor)
-
+        # note, all jax_leafs contained in here already
+        jax_dict = self.jax_dict.copy()
+        
+        # iterate over jax_objs
+        for fld_name in self._jax_objs:
+            jax_obj = getattr(self, fld_name)
+            jax_dict[fld_name] = jax_obj.jax_dict_nested()
+        
+        # iterate over jax_obj_lists
+        for fld_name in self._jax_obj_lists:
+            jax_dict[fld_name] = []
+            jax_obj_list = getattr(self, fld_name)
+            for jax_obj in jax_obj_list:
+                jax_dict[fld_name].append(jax_obj.jax_dict_nested())
+                
+        return jax_dict
+    
+    def tree_flatten(self) -> tuple[list, dict]:
+        """Split ``JaxObject`` into jax-traced children and auxiliary data."""
+        children, treedef = jax_tree_flatten(self.jax_dict_nested())
+        aux_data = dict(treedef=treedef, self_dict=self.dict())
         return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
-        """How to unflatten a pytree into a :class:`.JaxObject` instance."""
-        self_dict = aux_data.copy()
-        for field_name, sub_children in zip(cls.get_jax_field_names(), children):
-            sub_aux_data = aux_data[field_name]
-            field = jax_tree_unflatten(sub_aux_data, sub_children)
-            self_dict[field_name] = field
-
+        """Create the ``JaxObject`` from the auxiliary data and children."""      
+        treedef = aux_data["treedef"]
+        self_dict = aux_data["self_dict"]
+        jax_dict = jax_tree_unflatten(treedef, children)
+        self_dict["jax_dict"] = jax_dict
         return cls.parse_obj(self_dict)
+    
+    @pd.root_validator(pre=True)
+    def _store_jax_values(cls, values):
+        
+        jax_dict = values.get("jax_dict") or {}
+
+        # store jax_dict of leaves
+        for key in cls._jax_leafs:
+            val = values[key]
+            if key not in jax_dict:
+                jax_dict[key] = val
+
+        # store jax_dict of jax_objs
+        for key in cls._jax_objs:
+            val = values[key]
+            if key not in jax_dict:
+                jax_dict[key] = val.jax_dict
+        
+        # store jax_dict of jax_obj_lists
+        for key in cls._jax_obj_lists:
+            val = values[key]
+            jax_dict[key] = []
+            for _val in val:
+                if key not in jax_dict:
+                    jax_dict[key].append(_val.jax_dict)
+        
+        values["jax_dict"] = jax_dict
+
+        return values
+    
+    @pd.root_validator(pre=True)
+    def _sanitize_jax_values(cls, values):
+
+        for key in cls._jax_leafs:
+            val = values[key]
+            values[key] = jax.lax.stop_gradient(val)
+        return values
 
     """Type conversion helpers."""
 

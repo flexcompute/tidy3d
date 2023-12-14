@@ -8,6 +8,7 @@ import pydantic.v1 as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
 import xarray as xr
+import jax
 
 from ....components.types import Bound, Literal
 from ....components.medium import Medium, AnisotropicMedium, CustomMedium
@@ -167,17 +168,21 @@ class JaxMedium(Medium, AbstractJaxMedium):
         jax_field=True,
     )
 
+    _jax_leafs = ("permittivity", "conductivity")
+
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Override of inherited validator."""
         return val
 
-    _sanitize_permittivity = validate_jax_float("permittivity")
-    _sanitize_conductivity = validate_jax_float("conductivity")
+    # _sanitize_permittivity = validate_jax_float("permittivity")
+    # _sanitize_conductivity = validate_jax_float("conductivity")
 
     def to_medium(self) -> Medium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "jax_dict"})
+        # for key in ("permittivity", "conductivity"):
+            # self_dict[key] = jax.lax.stop_gradient(self_dict[key])        
         return Medium.parse_obj(self_dict)
 
     def store_vjp(
