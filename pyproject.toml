@@ -148,6 +148,8 @@ ignore = [
   "B904",
   "B028",  # stacklevel
   "UP006", # typy annotation with Tuple[float] messes up pydantic
+  "UP038", # TODO decide what to do here
+  "UP035", # TODO decide what to do here
 ]
 select = [
   "E",  # pycodestyle errors
