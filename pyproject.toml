@@ -63,13 +63,13 @@ gdstk = {version="*", optional = true}
 jax = [
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", optional = true},
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "darwin", optional = true},
-    {version = "0.4.1", extras = ["cpu"], platform = "windows", python = "<3.9", optional = true},
+    {version = "0.4.1", extras = ["cpu"], platform = 'win32', python = "<3.9", optional = true},
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9", optional = true}
 ]
 jaxlib = [
     {version = ">=0.4.1,<=0.4.14", platform = "linux", optional = true},
     {version = ">=0.4.1,<=0.4.14", platform = "darwin", optional = true},
-    {version = "0.4.1", platform = "windows", python = "<3.9", optional = true},
+    {version = "0.4.1", platform = 'win32', python = "<3.9", optional = true},
     {version = ">=0.4.1,<=0.4.14", platform = "windows", python = ">=3.9", optional = true}
 ]
 
