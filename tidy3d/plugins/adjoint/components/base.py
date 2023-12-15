@@ -111,7 +111,7 @@ class JaxObject(Tidy3dBaseModel):
 
         for key in cls._jax_leafs:
             val = values[key]
-            # values[key] = jax.lax.stop_gradient(val)
+            values[key] = jax.lax.stop_gradient(val)
         return values
 
     """Type conversion helpers."""

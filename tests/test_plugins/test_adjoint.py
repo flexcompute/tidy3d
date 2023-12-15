@@ -586,6 +586,9 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
     sim0 = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
     def f(x):
+
+        x = debug(x)
+
         geo = JaxBox(
             size=(x, 1, 2 * x),
             center=(x**2, x, 0),
@@ -593,7 +596,7 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         med = JaxMedium(permittivity=1 + x**2, conductivity=2.0 * x)
 
         geo = debug(geo)
-    
+
         struct = JaxStructure(geometry=geo, medium=med)
         sim = JaxSimulation(
             size=(10, 10, 10),
@@ -621,7 +624,6 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         # sim_data = run_local(sim)
 
 
-        sim_data = debug(sim_data)
         # return abs(jnp.sum(sim_data))
 
         a = 0.0
@@ -633,6 +635,8 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_dict["values"])))
 
         a += extract_amp(sim_data)
+        a = debug(a)
+
         return abs((a)**2)
         # extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
         # return jnp.sum(jnp.array(sim2.input_structures[0].geometry.jax_info["size"]))
