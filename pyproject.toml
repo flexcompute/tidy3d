@@ -67,8 +67,8 @@ jaxlib = [
 ]
 
 jax = [
-    {version = ">=0.4.1,<=0.4.14", platform = "linux", source="jaxsource", optional = true},
-    {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", source="jaxsource", optional = true},
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "darwin",  source="jaxsource", optional = true},
     {version = ">=0.4.13,<=0.4.14", extras = ["cpu"], platform = "win32", source="jaxsource", optional = true}
 ]
 
@@ -119,14 +119,6 @@ priority = "default"
 name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
 priority = "primary"
-
-# This source is for CUDA equivalent JAX, and adding it here for reference if needed in the future.
-[[tool.poetry.source]]
-name = "jorenham/jax_pep503"
-url = "https://jorenham.github.io/jax_pep503/"
-priority = "supplemental"
-
-
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
