@@ -20,6 +20,7 @@ API
     submit_simulations
     plugins/index
     constants
+    abstract_base
     abstract_models
 
 .. include:: simulation.rst
@@ -36,4 +37,5 @@ API
 .. include:: submit_simulations.rst
 .. include:: plugins/index.rst
 .. include:: constants.rst
+.. include:: abstract_base.rst
 .. include:: abstract_models.rst

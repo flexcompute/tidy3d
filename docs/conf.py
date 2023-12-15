@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.abspath("notebooks"))
 sys.path.insert(0, os.path.abspath(""))
 sys.path.insert(0, os.path.abspath("../tidy3d"))
 sys.path.insert(0, os.path.abspath("../tidy3d/components"))
+sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
 sys.path.insert(0, os.path.abspath("../tidy3d/web"))
 sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
 

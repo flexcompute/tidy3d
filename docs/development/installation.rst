@@ -29,10 +29,6 @@ For ubuntu:
 Now you can run the following ``tidy3d`` cli commands to test them.
 
 
-Transitioning
---------------
-
-
 Automatic Environment Installation (Beta)
 '''''''''''''''''''''''''''''''''''''''''''''
 
@@ -68,7 +64,7 @@ If you do not have any of the above tools already installed and want to install 
 
 
 Environment Requirements
-------------------------
+''''''''''''''''''''''''''
 
 Make sure you have installed ``pipx``. We provide common installation flows below:
 
@@ -172,7 +168,7 @@ Congratulations! Now you have all the required tools installed, you can now use 
 
 
 Packaging Equivalent Functionality
------------------------------------
+'''''''''''''''''''''''''''''''''''
 
 This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow. Independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
 

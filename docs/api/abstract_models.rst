@@ -11,7 +11,7 @@ These are some classes that are used to organize the tidy3d components, but aren
    :template: module.rst
 
    tidy3d.components.base.Tidy3dBaseModel
-   tidy3d.components.base_sim.AbstractSimulation
+   tidy3d.components.base_sim.simulation.AbstractSimulation
    tidy3d.components.boundary.AbsorberSpec
    tidy3d.Geometry
    tidy3d.components.geometry.base.Centered

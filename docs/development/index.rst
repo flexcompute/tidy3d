@@ -11,7 +11,9 @@ Welecome to the ``tidy3d`` developers guide! These are just some recommendations
     project_structure
     installation
     usage
+    documentation
 
 .. include:: project_structure.rst
 .. include:: installation.rst
 .. include:: usage.rst
+.. include:: documentation.rst
