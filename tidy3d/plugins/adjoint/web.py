@@ -111,6 +111,8 @@ def run(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
+    print('run')
+
     sim, jax_info = simulation.to_simulation()
 
     sim_data = tidy3d_run_fn(
@@ -133,6 +135,8 @@ def run_fwd(
     verbose: bool,
 ) -> Tuple[JaxSimulationData, Tuple[RunResidual]]:
     """Run forward pass and stash extra objects for the backwards pass."""
+
+    print('run_fwd')
 
     sim_fwd, jax_info_fwd, jax_info_orig = simulation.to_simulation_fwd()
 
@@ -162,6 +166,8 @@ def run_bwd(
     sim_data_vjp: JaxSimulationData,
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
+
+    print('run_bwd')
 
     fwd_task_id = res[0].fwd_task_id
     fwidth_adj = sim_data_vjp.simulation._fwidth_adjoint
@@ -638,7 +644,6 @@ def run_local(
     # convert back to jax type and return
     return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
-
 def run_local_fwd(
     simulation: JaxSimulation,
     task_name: str,
@@ -649,34 +654,48 @@ def run_local_fwd(
 ) -> Tuple[JaxSimulationData, tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
-    print('fwd')
+    print('run_local_fwd')
 
     # add the gradient monitors and run the forward simulation
     grad_mnts = simulation.get_grad_monitors(
         input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
-    # sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_fwd = simulation#.updated_copy(**grad_mnts)
+    sim_fwd = simulation.updated_copy(**grad_mnts)
 
-    """ stand in for run(), since the fwd vjp was getting called."""
-    sim, jax_info = sim_fwd.to_simulation()
+    """ _run """
+    def _run(simulation: JaxSimulation) -> JaxSimulationData:
+  
+        sim, jax_info = simulation.to_simulation()
 
-    sim_data = tidy3d_run_fn(
-        simulation=sim,
-        task_name=str(task_name),
-        folder_name=folder_name,
-        path=path,
-        callback_url=callback_url,
-        verbose=verbose,
-    )
-    # sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)
-    """ end stand in for run()"""
+        sim_data = tidy3d_run_fn(
+            simulation=sim,
+            task_name=str(task_name),
+            folder_name=folder_name,
+            path=path,
+            callback_url=callback_url,
+            verbose=verbose,
+        )
+        return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
-    sim_data_fwd = JaxSimulationData(simulation=sim_fwd, output_data=[], data=[])
+    sim_data_fwd = _run(simulation=sim_fwd)
+    """ """
+
+    # sim, jax_info = sim_fwd.to_simulation()
+
+    # sim_data = tidy3d_run_fn(
+    #     simulation=sim,
+    #     task_name=str(task_name),
+    #     folder_name=folder_name,
+    #     path=path,
+    #     callback_url=callback_url,
+    #     verbose=verbose,
+    # )
+    # sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)    
+
 
     # remove the gradient data from the returned version (not needed)
-    # sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
-    return sim_data_fwd, (sim_data_fwd,)
+    sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
+    return sim_data_orig, (sim_data_fwd,)
 
 
 def run_local_bwd(
@@ -690,7 +709,7 @@ def run_local_bwd(
 ) -> Tuple[JaxSimulation]:
     """Run backward pass and return simulation storing vjp of the objective w.r.t. the sim."""
 
-    print('bwd')
+    print('run_local_bwd')
 
     # grab the forward simulation and its gradient monitor data
     (sim_data_fwd,) = res

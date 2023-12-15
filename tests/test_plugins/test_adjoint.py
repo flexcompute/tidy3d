@@ -593,10 +593,18 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
 
         sim_data = run_local(sim, task_name="test")
 
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
 
-        return jnp.sum(jnp.array(sim_data.tree_flatten()[0][1]))
+        # return abs(jnp.sum(sim_data))
+        a = 0.0
 
+        a += abs(jnp.sum(jnp.array(sim_data.tree_flatten()[0][0])))
+        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].tree_flatten()[0][0])))
+        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.tree_flatten()[0][0])))
+        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.values)))
+        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_dict["values"])))
+
+        return a
         # amp = extract_amp(sim_data)
 
         # extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
@@ -607,9 +615,8 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
         # return 1.0
         # return objective(amp)# + extra
 
-    print(f(1.0))
-    print(jax.grad(f)(1.0))
-
+    # print(f(1.0))
+    print(jax.value_and_grad(f)(1.0))
 
 
 def test_adjoint_refactor4(tmp_path, use_emulated_run):
