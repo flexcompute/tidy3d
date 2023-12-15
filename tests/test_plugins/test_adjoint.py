@@ -351,10 +351,12 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
 
     amps = sim_data.output_data[0].amps
     ret_value += jnp.sum(amps.jax_dict["values"])
+    ret_value += jnp.sum(amps.values)
 
     def sum_arr(x):
         return jnp.sum(jnp.array(x))
 
+    ret_value += sum_arr(amps.tree_flatten()[0])
     ret_value += sum_arr(sim_data.tree_flatten()[0][0])
     ret_value += sum_arr(sim_data.output_data[0].tree_flatten()[0][0])
     ret_value += sum_arr(sim_data.output_data[0].amps.tree_flatten()[0][0])
@@ -493,9 +495,6 @@ def test_adjoint_pipeline_refactor(local, use_emulated_run, tmp_path):
 
     run_fn = run_local if local else run
 
-    def f(sim):
-        return sim
-
     # sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
     # sim2 = f(sim)
     # _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
@@ -591,22 +590,34 @@ def test_adjoint_refactor3(tmp_path, use_emulated_run):
             sources=sim0.sources,            
         )
 
-        sim_data = run_local(sim, task_name="test")
+        sim_data = run(sim, task_name="test")
 
         # import pdb; pdb.set_trace()
 
+        amps = sim_data.output_data[0].amps
+
+        values = x * jnp.ones_like(amps.values)
+
+        amps = amps.updated_copy(values=values)
+        mnt_data = sim_data.output_data[0].updated_copy(amps=amps)
+
+        sim_data = JaxSimulationData(
+            output_data=[mnt_data],
+            simulation=sim,
+            data=(),
+        )
+
         # return abs(jnp.sum(sim_data))
-        a = 0.0
+        # a = 0.0
 
-        a += abs(jnp.sum(jnp.array(sim_data.tree_flatten()[0][0])))
-        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].tree_flatten()[0][0])))
-        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.tree_flatten()[0][0])))
-        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.values)))
-        a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_dict["values"])))
+        # a += abs(jnp.sum(jnp.array(sim_data.tree_flatten()[0][0])))
+        # a += abs(jnp.sum(jnp.array(sim_data.output_data[0].tree_flatten()[0][0])))
+        # a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.tree_flatten()[0][0])))
+        # a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.values)))
+        # a += abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_dict["values"])))
 
-        return a
-        # amp = extract_amp(sim_data)
-
+        amp = extract_amp(sim_data)
+        return abs((amp)**2)
         # extra = sim2.jax_info["input_structures"][0]["geometry"]["center"][0]
         # return jnp.sum(jnp.array(sim2.input_structures[0].geometry.jax_info["size"]))
 
@@ -641,7 +652,7 @@ def test_adjoint_refactor4(tmp_path, use_emulated_run):
         # sim_data = JaxSimulationData(simulation=sim, data=())
         
         # values = sim_data.simulation.input_structures[0].geometry.jax_info["center"]
-        a =  jnp.abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_info["values"])))
+        a =  jnp.abs(jnp.sum(jnp.array(sim_data.output_data[0].amps.jax_dict["values"])))
         # b = sim_data.simulation.jax_info["blag"]
         # return jnp.sum(jnp.array(a)) + jnp.sum(jnp.array(b))
 
