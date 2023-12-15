@@ -655,7 +655,8 @@ def run_local_fwd(
     grad_mnts = simulation.get_grad_monitors(
         input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
-    sim_fwd = simulation.updated_copy(**grad_mnts)
+    # sim_fwd = simulation.updated_copy(**grad_mnts)
+    sim_fwd = simulation#.updated_copy(**grad_mnts)
 
     """ stand in for run(), since the fwd vjp was getting called."""
     sim, jax_info = sim_fwd.to_simulation()
@@ -668,13 +669,14 @@ def run_local_fwd(
         callback_url=callback_url,
         verbose=verbose,
     )
-    sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)
+    # sim_data_fwd = JaxSimulationData.from_sim_data(sim_data, jax_info)
     """ end stand in for run()"""
 
+    sim_data_fwd = JaxSimulationData(simulation=sim_fwd, output_data=[], data=[])
+
     # remove the gradient data from the returned version (not needed)
-    sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
-    import pdb; pdb.set_trace()
-    return sim_data_orig, (sim_data_fwd,)
+    # sim_data_orig = sim_data_fwd.copy(update=dict(grad_data=(), simulation=simulation))
+    return sim_data_fwd, (sim_data_fwd,)
 
 
 def run_local_bwd(

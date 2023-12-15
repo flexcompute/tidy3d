@@ -103,6 +103,8 @@ class JaxInfo(Tidy3dBaseModel):
         description="Type of the original input_structures (as strings).",
     )
 
+    jax_dict: dict = {}
+
 
 @register_pytree_node_class
 class JaxSimulation(Simulation, JaxObject):
@@ -408,6 +410,7 @@ class JaxSimulation(Simulation, JaxObject):
             fwidth_adjoint=self.fwidth_adjoint,
             run_time_adjoint=self.run_time_adjoint,
             input_structure_types=[s.type for s in self.input_structures],
+            jax_dict=self.jax_dict,
         )
 
         return sim, jax_info
@@ -651,6 +654,7 @@ class JaxSimulation(Simulation, JaxObject):
                 run_time_adjoint=jax_info.run_time_adjoint,
             )
         )
+        sim_dict.update(jax_dict=jax_info.jax_dict)
 
         # import pdb; pdb.set_trace()
 
