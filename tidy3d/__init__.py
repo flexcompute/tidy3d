@@ -1,4 +1,5 @@
 """ Tidy3d package imports"""
+import os
 
 # grid
 from .components.grid.grid import Grid, Coords
@@ -141,6 +142,16 @@ def set_logging_level(level: str) -> None:
         f"To set the logging level, call ``tidy3d.config.logging_level = {level}``."
     )
 
+
+TIDY3D_DIR = f"{os.path.expanduser('~')}/.tidy3d"
+
+
+def create_config_folder():
+    if not os.path.exists(TIDY3D_DIR):
+        os.mkdir(TIDY3D_DIR)
+
+
+create_config_folder()
 
 log.info(f"Using client version: {__version__}")
 

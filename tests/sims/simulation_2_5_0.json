@@ -21,6 +21,11 @@
         "permittivity": 1.0,
         "conductivity": 0.0
     },
+    "symmetry": [
+        0,
+        0,
+        0
+    ],
     "structures": [
         {
             "geometry": {
@@ -1050,11 +1055,6 @@
                 "conductivity": 0.0
             }
         }
-    ],
-    "symmetry": [
-        0,
-        0,
-        0
     ],
     "sources": [
         {

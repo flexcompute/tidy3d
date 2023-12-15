@@ -17,13 +17,45 @@ GROUP_INDEX_STEP = 0.005
 
 
 class ModeSpec(Tidy3dBaseModel):
-    """Stores specifications for the mode solver to find an electromagntic mode.
-    Note, the planar axes are found by popping the injection axis from {x,y,z}.
-    For example, if injection axis is y, the planar axes are ordered {x,z}.
+    """
+    Stores specifications for the mode solver to find an electromagntic mode.
+
+    Notes
+    -----
+
+        The :attr:`angle_theta` and :attr:`angle_phi` parameters define the injection axis as illustrated in the figure
+        below, with respect to the axis normal to the mode plane (``x`` in the figure). Note that :attr:`angle_theta`
+        must be smaller than :math:`\\frac{pi}{2}`. To inject in the backward direction, we can still use the
+        ``direction`` parameter as also shown in the figure. Similarly, the mode amplitudes computed in mode monitors
+        are defined w.r.t. the ``forward`` and ``backward`` directions as illustrated. Note, the planar axes are
+        found by popping the injection axis from ``{x,y,z}``. For example, if injection axis is ``y``, the planar
+        axes are ordered ``{x,z}``.
+
+        .. image:: ../../notebooks/img/ring_modes.png
+
+        The :attr:`bend_axis` is the axis normal to the plane in which the bend lies, (``z`` in the diagram below). In
+        the mode specification, it is defined locally for the mode plane as one of the two axes tangential to the
+        plane. In the case of bends that lie in the ``xy``-plane, the mode plane would be either in ``xz`` or in
+        ``yz``, so in both cases the correct setting is ``bend_axis=1``, selecting the global ``z``. The
+        ``bend_radius`` is counted from the center of the mode plane to the center of the curvature,
+        along the tangential axis perpendicular to the bend axis. This radius can also be negative, if the center of
+        the mode plane is smaller than the center of the bend.
+
+        .. image:: ../../notebooks/img/mode_angled.png
 
     Example
     -------
     >>> mode_spec = ModeSpec(num_modes=3, target_neff=1.5)
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Introduction on tidy3d working principles <../../notebooks/Primer.html#Modes>`_
+        * `Defining mode sources and monitors <../../notebooks/ModalSourcesMonitors.html>`_
+        * `Injecting modes in bent and angled waveguides <../../notebooks/ModesBentAngled.html>`_
+        * `Waveguide to ring coupling <../../notebooks/WaveguideToRingCoupling.html>`_
+
     """
 
     num_modes: pd.PositiveInt = pd.Field(

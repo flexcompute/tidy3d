@@ -27,7 +27,82 @@ class WebContainer(Tidy3dBaseModel, ABC):
 
 
 class Job(WebContainer):
-    """Interface for managing the task runs on the server."""
+    """
+    Interface for managing the running of a :class:`.Simulation` on server.
+
+    Notes
+    -----
+
+        This class provides a more convenient way to manage single simulations, mainly because it eliminates the need
+        for keeping track of the ``task_id`` and original :class:`.Simulation`.
+
+        We can get the cost estimate of running the task before actually running it. This prevents us from
+        accidentally running large jobs that we set up by mistake. The estimated cost is the maximum cost
+        corresponding to running all the time steps.
+
+        Another convenient thing about :class:`Job` objects is that they can be saved and loaded just like other
+        ``tidy3d`` components.
+
+    Examples
+    --------
+
+        Once you've created a ``job`` object using :class:`tidy3d.web.Job`, you can upload it to our servers with:
+
+        .. code-block:: python
+
+            tidy3d.web.upload(simulation, task_name="task_name", verbose=verbose)`
+
+        It will not run until you explicitly tell it to do so with:
+
+         .. code-block:: python
+
+            tidy3d.web.start(job.task_id)
+
+        To monitor the simulation's progress and wait for its completion, use
+
+        .. code-block:: python
+
+            tidy3d.web.monitor(job.task_id, verbose=verbose)
+
+        After running the simulation, you can load the results using for example:
+
+        .. code-block:: python
+
+            sim_data = tidy3d.web.load(job.task_id, path="out/simulation.hdf5", verbose=verbose)
+
+        The job container has a convenient method to save and load the results of a job that has already finished,
+        without needing to know the task_id, as below:
+
+        .. code-block:: python
+
+            # Saves the job metadata to a single file.
+            job.to_file("data/job.json")
+
+            # You can exit the session, break here, or continue in new session.
+
+            # Load the job metadata from file.
+            job_loaded = tidy3d.web.Job.from_file("data/job.json")
+
+            # Download the data from the server and load it into a SimulationData object.
+            sim_data = job_loaded.load(path="data/sim.hdf5")
+
+
+    See Also
+    --------
+
+    :meth:`tidy3d.web.run_async`
+        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        downloads, and loads results as a :class:`.BatchData` object.
+
+    :class:`Batch`
+         Interface for submitting several :class:`Simulation` objects to sever.
+
+    **Notebooks**
+        *  `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
+        * `Parameter Scan using signac <../../notebooks/ParameterScan.html#Parameter-Scan-using-Signac>`_
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
+    """
 
     simulation: SimulationType = pd.Field(
         ...,
@@ -236,7 +311,33 @@ class Job(WebContainer):
 
 
 class BatchData(Tidy3dBaseModel):
-    """Holds a collection of data objects returned by :class:`.Batch`."""
+    """
+    Holds a collection of :class:`.SimulationData` returned by :class:`Batch`.
+
+    Notes
+    -----
+
+        When the batch is completed, the output is not a :class:`.SimulationData` but rather a :class:`BatchData`. The
+        data within this :class:`BatchData` object can either be indexed directly ``batch_results[task_name]`` or can be looped
+        through ``batch_results.items()`` to get the :class:`.SimulationData` for each task.
+
+        This was chosen to reduce the memory strain from loading all :class:`.SimulationData` objects at once.
+
+        Alternatively, the batch can be looped through (several times) using the ``.items()`` method, similar to a dictionary.
+
+    See Also
+    --------
+
+    :class:`Batch`:
+         Interface for submitting several :class:`.Simulation` objects to sever.
+
+    :class:`.SimulationData`:
+         Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
+
+    **Notebooks**
+        * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
+    """
 
     task_paths: Dict[TaskName, str] = pd.Field(
         ...,
@@ -296,7 +397,32 @@ class BatchData(Tidy3dBaseModel):
 
 
 class Batch(WebContainer):
-    """Interface for submitting multiple simulations to the sever."""
+    """
+    Interface for submitting several :class:`Simulation` objects to sever.
+
+    Notes
+    -----
+
+        Commonly one needs to submit a batch of :class:`Simulation`. The built-in :class:`Batch` object is the best way to upload,
+        start, monitor, and load a series of tasks. The batch object is like a :class:`Job`, but stores task metadata
+        for a series of simulations.
+
+    See Also
+    --------
+
+    :meth:`tidy3d.web.run_async`
+        Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
+        downloads, and loads results as a :class:`.BatchData` object.
+
+    :class:`Job`:
+        Interface for managing the running of a Simulation on server.
+
+    **Notebooks**
+        * `Running simulations through the cloud <../../notebooks/WebAPI.html>`_
+        * `Performing parallel / batch processing of simulations <../../notebooks/ParameterScan.html>`_
+        * `Parameter Scan using signac <../../notebooks/ParameterScan.html#Parameter-Scan-using-Signac>`_
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
+    """
 
     simulations: Dict[TaskName, SimulationType] = pd.Field(
         ...,

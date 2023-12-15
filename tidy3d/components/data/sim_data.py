@@ -29,8 +29,20 @@ DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in M
 class SimulationData(AbstractSimulationData):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
-    Example
-    -------
+    Notes
+    -----
+
+        The ``SimulationData`` objects store a copy of the original :class:`.Simulation`:, so it can be recovered if the
+        ``SimulationData`` is loaded in a new session and the :class:`.Simulation` is no longer in memory.
+
+        More importantly, the ``SimulationData`` contains a reference to the data for each of the monitors within the
+        original :class:`.Simulation`. This data can be accessed directly using the name given to the monitors initially.
+
+    Examples
+    --------
+
+    Standalone example:
+
     >>> import tidy3d as td
     >>> num_modes = 5
     >>> x = [-1,1,3]
@@ -66,6 +78,22 @@ class SimulationData(AbstractSimulationData):
     ... )
     >>> field_data = td.FieldData(monitor=field_monitor, Ex=scalar_field, grid_expanded=grid)
     >>> sim_data = td.SimulationData(simulation=sim, data=(field_data,))
+
+    To save and load the :class:`SimulationData` object.
+
+    .. code-block:: python
+
+        sim_data.to_file(fname='path/to/file.hdf5') # Save a SimulationData object to a HDF5 file
+        sim_data = SimulationData.from_file(fname='path/to/file.hdf5') # Load a SimulationData object from a HDF5 file.
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Performing visualization of simulation data <../../notebooks/VizData.html>`_
+        * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
+
     """
 
     simulation: Simulation = pd.Field(

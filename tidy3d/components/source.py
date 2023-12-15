@@ -468,7 +468,12 @@ class ReverseInterpolatedSource(Source):
 
 
 class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
-    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
+    """Source in a rectangular volume with uniform time dependence.
+
+    Notes
+    -----
+
+        Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.
 
     Example
     -------
@@ -480,10 +485,18 @@ class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
 class PointDipole(CurrentSource, ReverseInterpolatedSource):
     """Uniform current source with a zero size.
 
+    .. TODO add image of how it looks like based on sim 1.
+
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
+
+    See Also
+    --------
+
+    **Lectures:**
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
     size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
@@ -496,12 +509,20 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
 
 class CustomCurrentSource(ReverseInterpolatedSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
-    current distributions in the FDTD solver.
 
-    Note
-    ----
-        The coordinates of all provided fields are assumed to be relative to the source center.
+    Notes
+    -----
+
+        Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current
+        distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
+        source center.
+
+        The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source
+        accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,
+        z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also
+        fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar
+        without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source
+        center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.
 
     Example
     -------
@@ -520,6 +541,11 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     ...     source_time=pulse,
     ...     current_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     current_dataset: Optional[FieldDataset] = pydantic.Field(
@@ -631,21 +657,40 @@ class BroadbandSource(Source, ABC):
 
 class CustomFieldSource(FieldSource, PlanarSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,
-    using the equivalence principle to define the actual injected currents. For the injection to
-    work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
-    decay by the edges of the source plane, or the source plane must span the entire simulation
-    domain and the fields must match the simulation boundary conditions.
-    The equivalent source currents are fully defined by the field components tangential to the
-    source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
-    can be provided but will have no effect on the results, and at least one of the tangential
-    components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+    using the equivalence principle to define the actual injected currents.
+
+     Notes
+     -----
+
+        For the injection to work as expected (i.e. to reproduce the required ``E`` and ``H`` fields),
+        the field data must decay by the edges of the source plane, or the source plane must span the entire
+        simulation domain and the fields must match the simulation boundary conditions.
+
+        The equivalent source currents are fully defined by the field components tangential to the
+        source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
+        can be provided but will have no effect on the results, and at least one of the tangential
+        components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+
+        .. TODO add image here
+
+        ..
+            TODO is this generic? Only the field components tangential to the custom source plane are needed and used
+            in the simulation. Due to the equivalence principle, these fully define the currents that need to be
+            injected. This is not to say that the normal components of the data (:math:`E_x`, :math:`H_x` in our example)
+            is lost or not injected. It is merely not needed as it can be uniquely obtained using the tangential components.
+
+        ..
+            TODO add example for this standalone
+            Source data can be imported from file just as shown here, after the data is imported as a numpy array using
+            standard numpy functions like loadtxt.
+
+        If the data is not coming from a ``tidy3d`` simulation, the normalization is likely going to be arbitrary and
+        the directionality of the source will likely not be perfect, even if both the ``E`` and ``H`` fields are
+        provided. An empty normalizing run may be needed to accurately normalize results.
 
     Note
     ----
         The coordinates of all provided fields are assumed to be relative to the source center.
-
-    Note
-    ----
         If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
         but will inject equal power in both directions instead.
 
@@ -666,6 +711,11 @@ class CustomFieldSource(FieldSource, PlanarSource):
     ...     source_time=pulse,
     ...     field_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     field_dataset: Optional[FieldDataset] = pydantic.Field(
@@ -698,11 +748,18 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
 
 class AngledFieldSource(DirectionalSource, ABC):
-    """A FieldSource defined with a an angled direction of propagation. The direction is defined by
-    the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
-    backward ``-``. This base class only defines the ``direction`` and ``injection_axis``
-    attributes, but it must be composed with a class that also defines ``angle_theta`` and
-    ``angle_phi``."""
+    """A FieldSource defined with an angled direction of propagation.
+
+    Notes
+    -----
+
+        The direction is defined by
+        the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
+        backward ``-``. This base class only defines the :attr:`direction` and :attr:`injection_axis`
+        attributes, but it must be composed with a class that also defines :attr:`angle_theta` and
+        :attr:`angle_phi`.
+
+    """
 
     angle_theta: float = pydantic.Field(
         0.0,
@@ -772,6 +829,28 @@ class AngledFieldSource(DirectionalSource, ABC):
 class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     """Injects current source to excite modal profile on finite extent plane.
 
+    Notes
+    -----
+
+        Using this mode source, it is possible selectively excite one of the guided modes of a waveguide. This can be
+        computed in our eigenmode solver :class:`tidy3d.plugins.mode.ModeSolver` and implement the mode simulation in
+        FDTD.
+
+        Mode sources are normalized to inject exactly 1W of power at the central frequency.
+
+        The modal source allows you to do directional excitation. Illustrated
+        by the image below, the field is perfectly launched to the right of the source and there's zero field to the
+        left of the source. Now you can contrast the behavior of the modal source with that of a dipole source. If
+        you just put a dipole into the waveguide, well, you see quite a bit different in the field distribution.
+        First of all, the dipole source is not directional launching. It launches waves in both directions. The
+        second is that the polarization of the dipole is set to selectively excite a TE mode. But it takes some
+        propagation distance before the mode settles into a perfect TE mode profile. During this process,
+        there is radiation into the substrate.
+
+        .. image:: ../../_static/img/mode_vs_dipole_source.png
+
+        .. TODO improve links to other APIs functionality here.
+
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
@@ -782,6 +861,19 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     ...     mode_spec=mode_spec,
     ...     mode_index=1,
     ...     direction='-')
+
+    See Also
+    --------
+
+    :class:`tidy3d.plugins.mode.ModeSolver`:
+        Interface for solving electromagnetic eigenmodes in a 2D plane with translational invariance in the third dimension.
+
+    **Notebooks:**
+        * `Waveguide Y junction <../../notebooks/YJunction.html>`_
+        * `90 degree optical hybrid <../../notebooks/90OpticalHybrid.html>`_
+
+    **Lectures:**
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
     mode_spec: ModeSpec = pydantic.Field(
@@ -838,6 +930,15 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures:**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
 
@@ -853,6 +954,12 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     pol_angle=np.pi / 2,
     ...     direction='+',
     ...     waist_radius=1.0)
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
     waist_radius: pydantic.PositiveFloat = pydantic.Field(
@@ -875,11 +982,19 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
-    """This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,
-    Applied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows
+    """The simple astigmatic Guassian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
     directions, this source becomes equivalent to :class:`GaussianBeam`.
+
+    Notes
+    -----
+
+        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+
+        **References**:
+
+        .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
 
     Example
     -------
@@ -915,10 +1030,34 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 class TFSF(AngledFieldSource, VolumeSource):
     """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
-    The TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the
-    case of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,
-    and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
-    scattering and absorption cross sections without the need for additional normalization.
+
+    Notes
+    -----
+
+        The TFSF source injects :math:`\\frac{1 W}{\\mu m^2}` of power along the :attr:`injection_axis`. Note that in the
+        case of angled incidence, :math:`\\frac{1 W}{\\mu m^2}` is still injected along the source's :attr:`injection_axis`,
+        and not the propagation direction, unlike a :class:`PlaneWave` source. This allows computing
+        scattering and absorption cross-sections without the need for additional normalization.
+
+        The TFSF source allows specifying a box region into which a plane wave is injected. Fields inside this region
+        can be interpreted as the superposition of the incident field and the scattered field due to any scatterers
+        present in the simulation domain. The fields at the edges of the TFSF box are modified at each time step such
+        that the incident field is cancelled out, so that all fields outside the TFSF box are scattered fields only.
+        This is useful in scenarios where one is interested in computing scattered fields only, for example when
+        computing scattered cross-sections of various objects.
+
+        It is important to note that when a non-uniform grid is used in the directions transverse to the
+        :attr:`injection_axis` of the TFSF source, the suppression of the incident field outside the TFSF box may not be as
+        close to zero as in the case of a uniform grid. Because of this, a warning may be issued when nonuniform grid
+        TFSF setup is detected. In some cases, however, the accuracy may be only weakly affected, and the warnings
+        can be ignored.
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
+        * `Nanoparticle Scattering <../../notebooks/PlasmonicNanoparticle.html>`_: To force a uniform grid in the TFSF region and avoid the warnings, a mesh override structure can be used as illustrated here.
     """
 
     injection_axis: Axis = pydantic.Field(

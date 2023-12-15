@@ -60,7 +60,6 @@ try:
 except ImportError:
     gdspy_available = False
 
-
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
@@ -90,7 +89,44 @@ PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
 class Simulation(AbstractSimulation):
-    """Contains all information about Tidy3d simulation.
+    """
+    Custom implementation of Maxwell’s equations which represent the physical model to be solved using the FDTD
+    method.
+
+    Notes
+    -----
+
+        A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
+        to be solved using `the Finite-Difference Time-Domain (FDTD) method
+        <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
+        run very quickly in the cloud through GPU parallelization.
+
+        .. image:: ../../_static/img/field_update_fdtd.png
+            :width: 50%
+            :align: left
+
+        FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is
+        the most widely used method in photonics design. The Maxwell's
+        equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.
+
+        The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
+        which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to
+        computate the time dynamics of the electric and magnetic fields in this system. From these time-domain
+        results, frequency-domain information of the simulation can also be extracted, and used for device design and
+        optimization.
+
+        If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series
+        <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_
+
+        **Dimensions Selection**
+
+        By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation
+        :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.
+        ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.
+
+        .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/
+
+        See further parameter explanations below.
 
     Example
     -------
@@ -137,6 +173,21 @@ class Simulation(AbstractSimulation):
     ...     courant=0.8,
     ...     subpixel=False,
     ... )
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+        * See nearly all notebooks for :class:`Simulation` applications.
+
+    **Lectures:**
+        * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
+
+    **GUI:**
+        * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(
@@ -147,12 +198,92 @@ class Simulation(AbstractSimulation):
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
     )
+    """
+    Total electromagnetic evolution time in seconds. If simulation 'shutoff' is specified, simulation will
+    terminate early when shutoff condition met.
+
+    **How long to run a simulation?**
+
+    The frequency-domain response obtained in the FDTD simulation only accurately represents the continuous-wave
+    response of the system if the fields at the beginning and at the end of the time stepping are (very close to)
+    zero. So, you should run the simulation for a time enough to allow the electromagnetic fields decay to negligible
+    values within the simulation domain.
+
+    When dealing with light propagation in a NON-RESONANT device, like a simple optical waveguide, a good initial
+    guess to simulation run_time would be the a few times the largest domain dimension (:math:`L`) multiplied by the
+    waveguide mode group index (:math:`n_g`), divided by the speed of light in a vacuum (:math:`c_0`),
+    plus the ``source_time``:
+
+    .. math::
+
+        t_{sim} \\approx \\frac{n_g L}{c_0} + t_{source}
+
+    By default, ``tidy3d`` checks periodically the total field intensity left in the simulation, and compares that to
+    the maximum total field intensity recorded at previous times. If it is found that the ratio of these two values
+    is smaller than the default :attr:`shutoff` value :math:`10^{-5}`, the simulation is terminated as the fields
+    remaining in the simulation are deemed negligible. The shutoff value can be controlled using the :attr:`shutoff`
+    parameter, or completely turned off by setting it to zero. In most cases, the default behavior ensures that
+    results are correct, while avoiding unnecessarily long run times. The Flex Unit cost of the simulation is also
+    proportionally scaled down when early termination is encountered.
+
+    **Resonant Caveats**
+
+    Should I make sure that fields have fully decayed by the end of the simulation?
+
+    The main use case in which you may want to ignore the field decay warning is when you have high-Q modes in your
+    simulation that would require an extremely long run time to decay. In that case, you can use the the
+    :class:`tidy3d.plugins.resonance.ResonanceFinder` plugin to analyze the modes, as well as field monitors with
+    vaporization to capture the modal profiles. The only thing to note is that the normalization of these modal
+    profiles would be arbitrary, and would depend on the exact run time and apodization definition. An example of
+    such a use case is presented in our case study.
+
+    .. TODO add links to resonant plugins.
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    *   `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
+
+    """
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
         (),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
     )
+    """
+    Tuple of electric current sources injecting fields into the simulation.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+            sources=[
+                UniformCurrentSource(
+                    size=(0, 0, 0),
+                    center=(0, 0.5, 0),
+                    polarization="Hx",
+                    source_time=GaussianPulse(
+                        freq0=2e14,
+                        fwidth=4e13,
+                    ),
+                )
+            ],
+            ...
+         )
+
+    See Also
+    --------
+
+    `Index <../sources.html>`_:
+        Frequency and time domain source models.
+    """
 
     boundary_spec: BoundarySpec = pydantic.Field(
         BoundarySpec(),
@@ -160,6 +291,43 @@ class Simulation(AbstractSimulation):
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "PML boundary conditions are applied on all sides.",
     )
+    """Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are
+    applied on all sides.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+             boundary_spec=BoundarySpec(
+                x = Boundary.pml(num_layers=20),
+                y = Boundary.pml(num_layers=30),
+                z = Boundary.periodic(),
+            ),
+            ...
+         )
+
+    See Also
+    --------
+
+    :class:`PML`:
+        A perfectly matched layer model.
+
+    :class:`BoundarySpec`:
+        Specifies boundary conditions on each side of the domain and along each dimension.
+
+    `Index <../boundary_conditions.html>`_
+        All boundary condition models.
+
+    **Notebooks**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+    """
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
@@ -167,12 +335,162 @@ class Simulation(AbstractSimulation):
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
+    """
+    Tuple of monitors in the simulation. Monitor names are used to access data after simulation is run.
+
+    See Also
+    --------
+
+    `Index <../monitors.html>`_
+        All the monitor implementations.
+    """
 
     grid_spec: GridSpec = pydantic.Field(
         GridSpec(),
         title="Grid Specification",
         description="Specifications for the simulation grid along each of the three directions.",
     )
+    """
+    Specifications for the simulation grid along each of the three directions.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+             grid_spec=GridSpec(
+                grid_x = AutoGrid(min_steps_per_wvl = 20),
+                grid_y = AutoGrid(min_steps_per_wvl = 20),
+                grid_z = AutoGrid(min_steps_per_wvl = 20)
+            ),
+            ...
+         )
+
+    **Usage Recommendations**
+
+    In the *finite-difference* time domain method, the computational domain is discretized by a little cubes called
+    the Yee cell. A discrete lattice formed by this Yee cell is used to describe the fields. In 3D, the electric
+    fields are distributed on the edge of the Yee cell and the magnetic fields are distributed on the surface of the
+    Yee cell.
+
+    .. image:: ../../_static/img/yee_grid_illustration.png
+
+    Note
+    ----
+
+        A typical rule of thumb is to choose the discretization to be about :math:`\\frac{\\lambda_m}{20}` where
+        :math:`\\lambda_m` is the field wavelength.
+
+    **Numerical Dispersion - 1D Illustration**
+
+    Numerical dispersion is a form of numerical error dependent on the spatial and temporal discretization of the
+    fields. In order to reduce it, it is necessary to improve the discretization of the simulation for particular
+    frequencies and spatial features. This is an important aspect of defining the grid.
+
+    Consider a standard 1D wave equation in vacuum:
+
+    .. math::
+
+        \\left( \\frac{\\delta ^2 }{\\delta x^2} - \\frac{1}{c^2} \\frac{\\delta^2}{\\delta t^2} \\right) E = 0
+
+    which is ideally solved into a monochromatic travelling wave:
+
+    .. math::
+
+        E(x) = e^{j (kx - \\omega t)}
+
+    This physical wave is described with a wavevector :math:`k` for the spatial field variations and the angular
+    frequency :math:`\\omega` for temporal field variations. The spatial and temporal field variations are related by
+    a dispersion relation.
+
+    .. TODO explain the above more
+
+    The ideal dispersion relation is:
+
+    .. math::
+
+        \\left( \\frac{\\omega}{c} \\right)^2 = k^2
+
+    However, in the FDTD simulation, the spatial and temporal fields are discrete.
+
+    .. TODO improve the ways figures are represented.
+
+    .. image:: ../../_static/img/numerical_dispersion_grid_1d.png
+        :width: 30%
+        :align: right
+
+    The same 1D monochromatic wave can be solved using the FDTD method where :math:`m` is the index in the grid:
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta x^2} E(x_i) \\approx \\frac{1}{\\Delta x^2} \\left[ E(x_i + \\Delta x) + E(x_i -
+        \\Delta x) - 2 E(x_i) \\right]
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta t^2} E(t_{\\alpha}) \\approx \\frac{1}{\\Delta t^2} \\left[ E(t_{\\alpha} + \\Delta
+        t) + E(t_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
+
+    .. TODO define the alpha
+
+    Hence, these discrete fields have this new dispersion relation:
+
+    .. math::
+
+        \\left( \\frac{1}{c \\Delta t} \\text{sin} \\left( \\frac{\\omega \\Delta t}{2} \\right)^2 \\right) = \\left(
+        \\frac{1}{\\Delta x} \\text{sin} \\left( \\frac{k \\Delta x}{2} \\right) \\right)^2
+
+    The ideal wave solution and the discrete solution have a mismatch illustrated below as a result of the numerical
+    error introduced by numerical dispersion. This plot illustrates the angular frequency as a function of wavevector
+    for both the physical ideal wave and the numerical discrete wave implemented in FDTD.
+
+    .. image:: ../../_static/img/numerical_dispersion_discretization_1d.png
+
+    .. TODO improve these images positions
+
+    At lower frequencies, when the discretization of :math:`\\Delta x` is small compared to the wavelength the error
+    between the solutions is very low. When this proportionality increases between the spatial step size and the
+    angular wavelength, this introduces numerical dispersion errors.
+
+    .. math::
+
+        k \\Delta x = \\frac{2 \\pi}{\\lambda_k} \\Delta x
+
+
+    **Usage Recommendations**
+
+    *   It is important to understand the relationship between the time-step :math:`\\Delta t` defined by the
+        :attr:`courant` factor, and the spatial grid distribution to guarantee simulation stability.
+
+    *   If your structure has small features, consider using a spatially nonuniform grid. This guarantees finer
+        spatial resolution near the features, but away from it you use have a larger (and computationally faster) grid.
+        In this case, the time step :math:`\\Delta t` is defined by the smallest spatial grid size.
+
+    See Also
+    --------
+
+    :attr:`courant`
+        The Courant-Friedrichs-Lewy (CFL) stability factor
+
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
         1e-5,
@@ -182,6 +500,12 @@ class Simulation(AbstractSimulation):
         "Used to prevent extraneous run time of simulations with fully decayed fields. "
         "Set to ``0`` to disable this feature.",
     )
+    """
+    Ratio of the instantaneous integrated E-field intensity to the maximum value
+    at which the simulation will automatically terminate time stepping.
+    Used to prevent extraneous run time of simulations with fully decayed fields.
+    Set to ``0`` to disable this feature.
+    """
 
     subpixel: bool = pydantic.Field(
         True,
@@ -189,6 +513,48 @@ class Simulation(AbstractSimulation):
         description="If ``True``, uses subpixel averaging of the permittivity "
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
+    """
+    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
+    higher accuracy for a given grid size.,
+
+    **1D Illustration**
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` compute the effective permittivity of each grid point as the
+    average permittivity between the grid points. A simplified equation based on the ratio :math:`\\eta` between the
+    permittivity of the two materials at the interface in this case:
+
+    .. math::
+
+        \\epsilon_{eff} = \\eta \\epsilon_{si} + (1 - \\eta) \\epsilon_{air}
+
+    .. TODO check the actual implementation to be accurate here.
+
+    .. image:: ../../_static/img/subpixel_permittivity_1d.png
+
+    However, in this 1D case, this averaging is accurate because the dominant electric field is paralell to the
+    dielectric grid points.
+
+    You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
+    `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel
+    -averaging/>`_.
+
+    **2D & 3D Usage Caveats**
+
+    *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
+        incident electric field on the interface.
+
+    *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
+        spatial orientations.
+
+
+    See Also
+    --------
+
+    **Lectures:**
+        *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+        *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+    """
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
         0,
@@ -197,6 +563,10 @@ class Simulation(AbstractSimulation):
         "normalize the frequency-dependent data. If ``None``, the raw field data is returned "
         "unnormalized.",
     )
+    """
+    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent
+    data. If ``None``, the raw field data is returned. If ``None``, the raw field data is returned unnormalized.
+    """
 
     courant: float = pydantic.Field(
         0.99,
@@ -208,6 +578,75 @@ class Simulation(AbstractSimulation):
         gt=0.0,
         le=1.0,
     )
+    """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
+    physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
+    because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
+    over a time step :math:`\\Delta t`. This constraint enables the correct physics to be captured by the simulation.
+
+    **1D Illustration**
+
+    In a 1D model:
+
+    .. image:: ../../_static/img/courant_instability.png
+
+    Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This
+    factor is normalized to no larger than 1 when CFL stability condition is met in 3D.
+
+    .. TODO finish this section for 1D, 2D and 3D references.
+
+    For a 1D grid:
+
+    .. math::
+
+        C_{\\text{1D}} = \\frac{\\Delta x}{c \\Delta t} \\leq 1
+
+    **2D Illustration**
+
+    In a 2D grid, where the :math:`E_z` field is at the red dot center surrounded by four green magnetic edge components
+    in a square Yee cell grid:
+
+    .. image:: ../../_static/img/courant_instability_2d.png
+
+    .. math::
+
+        C_{\\text{2D}} = \\frac{\\Delta x}{c \\Delta t} \\leq \\frac{1}{\\sqrt{2}}
+
+    Hence, for the same spatial grid, the time step in 2D grid needs to be smaller than the time step in a 1D grid.
+
+    **3D Illustration**
+
+    For an isotropic medium with refractive index :math:`n`, the 3D time step condition can be derived to be:
+
+    .. math::
+
+        \\Delta t \\le \\frac{n}{c \\sqrt{\\frac{1}{\\Delta x^2} + \\frac{1}{\\Delta y^2} + \\frac{1}{\\Delta z^2}}}
+
+    In this case, the number of spatial grid points scale by :math:`\\sim \\frac{1}{\\Delta x^3}` where :math:`\\Delta x`
+    is the spatial discretization in the :math:`x` dimension. If the total simulation time is kept the same whilst
+    mantaining the CFL condition, then the number of time steps required scale by :math:`\\sim \\frac{1}{\\Delta x}`.
+    Hence, the spatial grid discretization influences the total time-steps required. The total simulation scaling per
+    spatial grid size in this case is by :math:`\\sim \\frac{1}{\\Delta x^4}.`
+
+    As an example, in this case, refining the mesh by a factor or 2 (reducing the spatial step size by half)
+    :math:`\\Delta x \\to \\frac{\\Delta x}{2}` will increase the total simulation computational cost by 16.
+
+    **Divergence Caveats**
+
+    ``tidy3d`` uses a default Courant factor of 0.99. When a dispersive material with ``eps_inf < 1`` is used,
+    the Courant factor will be automatically adjusted to be smaller than ``sqrt(eps_inf)`` to ensure stability. If
+    your simulation still diverges despite addressing any other issues discussed above, reducing the Courant
+    factor may help.
+
+    See Also
+    --------
+
+    :attr:`grid_spec`
+        Specifications for the simulation grid along each of the three directions.
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
 
     """ Validating setup """
 
@@ -449,7 +888,6 @@ class Simulation(AbstractSimulation):
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -529,7 +967,9 @@ class Simulation(AbstractSimulation):
                             medium_str = "The simulation background medium"
                             custom_loc = ["medium", "frequency_range"]
                         else:
-                            medium_str = f"The medium associated with structures[{medium_index-1}]"
+                            medium_str = (
+                                f"The medium associated with structures[{medium_index - 1}]"
+                            )
                             custom_loc = [
                                 "structures",
                                 medium_index - 1,
@@ -842,7 +1282,7 @@ class Simulation(AbstractSimulation):
                                 medium_str = "the simulation background medium"
                             else:
                                 medium_str = (
-                                    f"the medium associated with structures[{medium_index-1}]"
+                                    f"the medium associated with structures[{medium_index - 1}]"
                                 )
 
                             consolidated_logger.warning(
@@ -1729,6 +2169,13 @@ class Simulation(AbstractSimulation):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
+
         """
         hlim, vlim = Scene._get_plot_lims(
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
@@ -1792,6 +2239,12 @@ class Simulation(AbstractSimulation):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
         """
 
         hlim, vlim = Scene._get_plot_lims(
@@ -2562,12 +3015,19 @@ class Simulation(AbstractSimulation):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+
         Returns
         -------
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
         """
 
         sub_grid = self.discretize(box)

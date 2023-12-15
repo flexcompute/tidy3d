@@ -178,21 +178,24 @@ class HeatPerturbation(AbstractPerturbation):
 
 class LinearHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a linear function of
-    temperature:
+    temperature.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+        .. math::
 
-    where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
-    ``temperature_ref`` is the reference temperature point. A temperature range in which such
-    a model is deemed accurate may be provided as a field ``temperature_range``
-    (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+            \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+
+        where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
+        ``temperature_ref`` is the reference temperature point. A temperature range in which such
+        a model is deemed accurate may be provided as a field ``temperature_range``
+        (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
@@ -252,16 +255,23 @@ class LinearHeatPerturbation(HeatPerturbation):
 
 class CustomHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a custom function of
-    temperature defined as an array of perturbation values at sample temperature points. The linear
-    interpolation is used to calculate perturbation values between sample temperature points. For
-    temperature values outside of the provided sample region the perturbation value is extrapolated
-    as a constant.
-    The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
-    accurate is calculated automatically as the minimal and maximal sample temperature points.
-    Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+    temperature defined as an array of perturbation values at sample temperature points.
+
+     Notes
+     -----
+
+         The linear
+        interpolation is used to calculate perturbation values between sample temperature points. For
+        temperature values outside of the provided sample region the perturbation value is extrapolated
+        as a constant.
+        The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
+        accurate is calculated automatically as the minimal and maximal sample temperature points.
+        Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
@@ -538,21 +548,24 @@ class LinearChargePerturbation(ChargePerturbation):
     """Specifies parameter's perturbation due to free carrier effects as a linear function of
     electron and hole densities:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\Delta X (T) = \\text{electron\\_coeff} \\times (N_e - \\text{electron\\_ref})
-        + \\text{hole\\_coeff} \\times (N_h - \\text{hole\\_ref}),
+        .. math::
 
-    where ``electron_coeff`` and ``hole_coeff`` are the parameter's sensitivities to electron and
-    hole densities, while ``electron_ref`` and ``hole_ref`` are reference electron and hole density
-    values. Ranges of electron and hole densities in which such
-    a model is deemed accurate may be provided as fields ``electron_range`` and ``hole_range``
-    (default: ``[0, inf]`` each). Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``electron_range`` x ``hole_range`` due to
-    perturbations and raise a warning if this check fails. A warning is also issued if
-    the perturbation model is evaluated outside of ``electron_range`` x ``hole_range``.
+            \\Delta X (T) = \\text{electron\\_coeff} \\times (N_e - \\text{electron\\_ref})
+            + \\text{hole\\_coeff} \\times (N_h - \\text{hole\\_ref}),
+
+        where ``electron_coeff`` and ``hole_coeff`` are the parameter's sensitivities to electron and
+        hole densities, while ``electron_ref`` and ``hole_ref`` are reference electron and hole density
+        values. Ranges of electron and hole densities in which such
+        a model is deemed accurate may be provided as fields ``electron_range`` and ``hole_range``
+        (default: ``[0, inf]`` each). Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``electron_range`` x ``hole_range`` due to
+        perturbations and raise a warning if this check fails. A warning is also issued if
+        the perturbation model is evaluated outside of ``electron_range`` x ``hole_range``.
+
+        .. TODO add example here and links
 
     Example
     -------
@@ -660,16 +673,23 @@ class LinearChargePerturbation(ChargePerturbation):
 class CustomChargePerturbation(ChargePerturbation):
     """Specifies parameter's perturbation due to free carrier effects as a custom function of
     electron and hole densities defined as a two-dimensional array of perturbation values at sample
-    electron and hole density points. The linear interpolation is used to calculate perturbation
-    values between sample points. For electron and hole density values outside of the provided
-    sample region the perturbation value is extrapolated as a constant.
-    The electron and hole density ranges, ``electron_range`` and ``hole_range``, in which
-    the perturbation model is assumed to be accurate is calculated automatically as the minimal and
-    maximal density values provided in ``perturbation_values``. Wherever is applied, Tidy3D will
-    check that the parameter's value does not go out of its physical bounds within
-    ``electron_range`` x ``hole_range`` due to perturbations and raise a warning if this check
-    fails. A warning is also issued if the perturbation model is evaluated outside of
-    ``electron_range`` x ``hole_range``.
+    electron and hole density points.
+
+    Notes
+    -----
+
+        The linear interpolation is used to calculate perturbation
+        values between sample points. For electron and hole density values outside of the provided
+        sample region the perturbation value is extrapolated as a constant.
+        The electron and hole density ranges, ``electron_range`` and ``hole_range``, in which
+        the perturbation model is assumed to be accurate is calculated automatically as the minimal and
+        maximal density values provided in ``perturbation_values``. Wherever is applied, Tidy3D will
+        check that the parameter's value does not go out of its physical bounds within
+        ``electron_range`` x ``hole_range`` due to perturbations and raise a warning if this check
+        fails. A warning is also issued if the perturbation model is evaluated outside of
+        ``electron_range`` x ``hole_range``.
+
+        .. TODO add example here and links
 
     Example
     -------
