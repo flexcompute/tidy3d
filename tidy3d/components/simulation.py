@@ -2,70 +2,63 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
+from math import isclose
 
 import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
+import matplotlib.pyplot as plt
 import matplotlib as mpl
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .base import cached_property
-from .validators import assert_objects_in_sim_bounds
+from .validators import assert_unique_names, assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry.base import Geometry, Box
+from .geometry.base import Geometry, Box, GeometryGroup, ClipOperation
 from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod
+from .types import Ax, Shapely, FreqBound, Axis, annotate_type, Symmetry, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
-from .medium import Medium, MediumType, AbstractMedium
+from .medium import Medium, MediumType, AbstractMedium, PECMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
+from .source import CustomCurrentSource, CustomSourceTime
 from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
-from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
-from .scene import Scene
 
-from .viz import PlotParams
-from .viz import plot_params_pml, plot_params_override_structures
+from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, plot_params_symmetry, polygon_path
+from .viz import plot_params_structure, plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
 
-from ..constants import C_0, SECOND, fp_eps
-from ..exceptions import SetupError, ValidationError, Tidy3dError, Tidy3dImportError
+from ..version import __version__
+from ..constants import C_0, SECOND, inf, fp_eps
+from ..exceptions import Tidy3dKeyError, SetupError, ValidationError, Tidy3dError
 from ..log import log
 from ..updater import Updater
-
-from .base_sim.simulation import AbstractSimulation
-
-try:
-    gdstk_available = True
-    import gdstk
-except ImportError:
-    gdstk_available = False
-
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
-
 
 # minimum number of grid points allowed per central wavelength in a medium
 MIN_GRIDS_PER_WVL = 6.0
 
+# maximum number of mediums supported
+MAX_NUM_MEDIUMS = 65530
+
 # maximum number of sources
 MAX_NUM_SOURCES = 1000
+
+# maximum geometry count in a single structure
+MAX_GEOMETRY_COUNT = 100
 
 # maximum numbers of simulation parameters
 MAX_TIME_STEPS = 1e7
@@ -73,7 +66,6 @@ WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
 WARN_MONITOR_DATA_SIZE_GB = 10
-MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
 WARN_MODE_NUM_CELLS = 1e5
 
@@ -89,8 +81,45 @@ DIST_NEIGHBOR_REL_2D_MED = 1e-5
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
-class Simulation(AbstractSimulation):
-    """Contains all information about Tidy3d simulation.
+class Simulation(Box):
+    """
+    Custom implementation of Maxwell’s equations which represent the physical model to be solved using the FDTD
+    method.
+
+    Notes
+    -----
+
+        A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model
+        to be solved using `the Finite-Difference Time-Domain (FDTD) method
+        <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations
+        run very quickly in the cloud through GPU parallelization.
+
+        .. image:: ../../_static/img/field_update_fdtd.png
+            :width: 50%
+            :align: left
+
+        FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is
+        the most widely used method in photonics design. The Maxwell's
+        equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.
+
+        The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`
+        which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to
+        computate the time dynamics of the electric and magnetic fields in this system. From these time-domain
+        results, frequency-domain information of the simulation can also be extracted, and used for device design and
+        optimization.
+
+        If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series
+        <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_
+
+        **Dimensions Selection**
+
+        By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation
+        :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.
+        ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.
+
+        .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/
+
+        See further parameter explanations below.
 
     Example
     -------
@@ -137,6 +166,21 @@ class Simulation(AbstractSimulation):
     ...     courant=0.8,
     ...     subpixel=False,
     ... )
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+        * See nearly all notebooks for :class:`Simulation` applications.
+
+    **Lectures:**
+        * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
+
+    **GUI:**
+        * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_
     """
 
     run_time: pydantic.PositiveFloat = pydantic.Field(
@@ -147,12 +191,216 @@ class Simulation(AbstractSimulation):
         "simulation will terminate early when shutoff condition met. ",
         units=SECOND,
     )
+    """
+    Total electromagnetic evolution time in seconds. If simulation 'shutoff' is specified, simulation will
+    terminate early when shutoff condition met.
+
+    **How long to run a simulation?**
+
+    The frequency-domain response obtained in the FDTD simulation only accurately represents the continuous-wave
+    response of the system if the fields at the beginning and at the end of the time stepping are (very close to)
+    zero. So, you should run the simulation for a time enough to allow the electromagnetic fields decay to negligible
+    values within the simulation domain.
+
+    When dealing with light propagation in a NON-RESONANT device, like a simple optical waveguide, a good initial
+    guess to simulation run_time would be the a few times the largest domain dimension (:math:`L`) multiplied by the
+    waveguide mode group index (:math:`n_g`), divided by the speed of light in a vacuum (:math:`c_0`),
+    plus the ``source_time``:
+
+    .. math::
+
+        t_{sim} \\approx \\frac{n_g L}{c_0} + t_{source}
+
+    By default, ``tidy3d`` checks periodically the total field intensity left in the simulation, and compares that to
+    the maximum total field intensity recorded at previous times. If it is found that the ratio of these two values
+    is smaller than the default :attr:`shutoff` value :math:`10^{-5}`, the simulation is terminated as the fields
+    remaining in the simulation are deemed negligible. The shutoff value can be controlled using the :attr:`shutoff`
+    parameter, or completely turned off by setting it to zero. In most cases, the default behavior ensures that
+    results are correct, while avoiding unnecessarily long run times. The Flex Unit cost of the simulation is also
+    proportionally scaled down when early termination is encountered.
+
+    **Resonant Caveats**
+
+    Should I make sure that fields have fully decayed by the end of the simulation?
+
+    The main use case in which you may want to ignore the field decay warning is when you have high-Q modes in your
+    simulation that would require an extremely long run time to decay. In that case, you can use the the
+    :class:`tidy3d.plugins.resonance.ResonanceFinder` plugin to analyze the modes, as well as field monitors with
+    vaporization to capture the modal profiles. The only thing to note is that the normalization of these modal
+    profiles would be arbitrary, and would depend on the exact run time and apodization definition. An example of
+    such a use case is presented in our case study.
+
+    .. TODO add links to resonant plugins.
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    *   `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
+
+    """
+
+    medium: MediumType3D = pydantic.Field(
+        Medium(),
+        title="Background Medium",
+        description="Background medium of simulation, defaults to vacuum if not specified.",
+        discriminator=TYPE_TAG_STR,
+    )
+    """
+    Background medium of simulation, defaults to vacuum if not specified.
+
+    See Also
+    --------
+
+    `Material Library <../material_library.html>`_:
+        The material library is a dictionary containing various dispersive models from real world materials.
+
+    `Index <../mediums.html>`_:
+        Dispersive and dispersionless Mediums models.
+
+    **Notebooks:**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures:**
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    **GUI:**
+
+    * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+
+    """
+
+    symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
+        (0, 0, 0),
+        title="Symmetries",
+        description="Tuple of integers defining reflection symmetry across a plane "
+        "bisecting the simulation domain normal to the x-, y-, and z-axis "
+        "at the simulation center of each axis, respectively. "
+        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. :class:`PMC` symmetry) or "
+        "``-1`` (odd, i.e. :class:`PEC` symmetry). "
+        "Note that the vectorial nature of the fields must be taken into account to correctly "
+        "determine the symmetry value.",
+    )
+    """You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
+    defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
+    Each element can be 0 (no symmetry), 1 (even, i.e. :class:`PMC` symmetry) or -1 (odd, i.e. :class:`PEC`
+    symmetry). Note that the vectorial nature of the fields must be considered to determine the symmetry value
+    correctly.
+
+    The figure below illustrates how the electric and magnetic field components transform under :class:`PEC`- and
+    :class:`PMC`-like symmetry planes. You can refer to this figure when considering whether a source field conforms
+    to a :class:`PEC`- or :class:`PMC`-like symmetry axis. This would be helpful, especially when dealing with
+    optical waveguide modes.
+
+    .. image:: ../../notebooks/img/pec_pmc.png
+
+
+    .. TODO maybe resize?
+    """
+
+    structures: Tuple[Structure, ...] = pydantic.Field(
+        (),
+        title="Structures",
+        description="Tuple of structures present in simulation. "
+        "Note: Structures defined later in this list override the "
+        "simulation material properties in regions of spatial overlap.",
+    )
+    """Tuple of structures present in simulation. Structures defined later in this list override the simulation
+    material properties in regions of spatial overlap.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+        Simulation(
+            ...
+            structures=[
+                 Structure(
+                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                 medium=Medium(permittivity=2.0),
+                 ),
+            ],
+            ...
+        )
+
+    **Usage Caveats**
+
+    It is very important to understand the way the dielectric permittivity of the :class:`Structure` list is resolved
+    by the simulation grid. Without :attr:`subpixel` averaging, the structure geometry in relation to the
+    grid points can lead to its features permittivity not being fully resolved by the
+    simulation.
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` will compute equivalently because that grid does
+    not resolve the feature permittivity in between grid points without :attr:`subpixel` averaging.
+
+    .. image:: ../../_static/img/permittivity_on_yee_grid.png
+
+    See Also
+    --------
+
+    :class:`Structure`:
+        Defines a physical object that interacts with the electromagnetic fields.
+
+    :attr:`subpixel`
+        Subpixel averaging of the permittivity based on structure definition, resulting in much higher
+        accuracy for a given grid size.
+
+    **Notebooks:**
+
+    * `Visualizing geometries in Tidy3D <../../notebooks/VizSimulation.html>`_
+
+    **Lectures:**
+
+    * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`_
+    *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+
+    **GUI:**
+
+    * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
+    """
 
     sources: Tuple[annotate_type(SourceType), ...] = pydantic.Field(
         (),
         title="Sources",
         description="Tuple of electric current sources injecting fields into the simulation.",
     )
+    """
+    Tuple of electric current sources injecting fields into the simulation.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+            sources=[
+                UniformCurrentSource(
+                    size=(0, 0, 0),
+                    center=(0, 0.5, 0),
+                    polarization="Hx",
+                    source_time=GaussianPulse(
+                        freq0=2e14,
+                        fwidth=4e13,
+                    ),
+                )
+            ],
+            ...
+         )
+
+    See Also
+    --------
+
+    `Index <../sources.html>`_:
+        Frequency and time domain source models.
+    """
 
     boundary_spec: BoundarySpec = pydantic.Field(
         BoundarySpec(),
@@ -160,6 +408,43 @@ class Simulation(AbstractSimulation):
         description="Specification of boundary conditions along each dimension. If ``None``, "
         "PML boundary conditions are applied on all sides.",
     )
+    """Specification of boundary conditions along each dimension. If ``None``, :class:`PML` boundary conditions are
+    applied on all sides.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+             boundary_spec=BoundarySpec(
+                x = Boundary.pml(num_layers=20),
+                y = Boundary.pml(num_layers=30),
+                z = Boundary.periodic(),
+            ),
+            ...
+         )
+
+    See Also
+    --------
+
+    :class:`PML`:
+        A perfectly matched layer model.
+
+    :class:`BoundarySpec`:
+        Specifies boundary conditions on each side of the domain and along each dimension.
+
+    `Index <../boundary_conditions.html>`_
+        All boundary condition models.
+
+    **Notebooks**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
+    """
 
     monitors: Tuple[annotate_type(MonitorType), ...] = pydantic.Field(
         (),
@@ -167,12 +452,162 @@ class Simulation(AbstractSimulation):
         description="Tuple of monitors in the simulation. "
         "Note: monitor names are used to access data after simulation is run.",
     )
+    """
+    Tuple of monitors in the simulation. Monitor names are used to access data after simulation is run.
+
+    See Also
+    --------
+
+    `Index <../monitors.html>`_
+        All the monitor implementations.
+    """
 
     grid_spec: GridSpec = pydantic.Field(
         GridSpec(),
         title="Grid Specification",
         description="Specifications for the simulation grid along each of the three directions.",
     )
+    """
+    Specifications for the simulation grid along each of the three directions.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+             grid_spec=GridSpec(
+                grid_x = AutoGrid(min_steps_per_wvl = 20),
+                grid_y = AutoGrid(min_steps_per_wvl = 20),
+                grid_z = AutoGrid(min_steps_per_wvl = 20)
+            ),
+            ...
+         )
+
+    **Usage Recommendations**
+
+    In the *finite-difference* time domain method, the computational domain is discretized by a little cubes called
+    the Yee cell. A discrete lattice formed by this Yee cell is used to describe the fields. In 3D, the electric
+    fields are distributed on the edge of the Yee cell and the magnetic fields are distributed on the surface of the
+    Yee cell.
+
+    .. image:: ../../_static/img/yee_grid_illustration.png
+
+    Note
+    ----
+
+        A typical rule of thumb is to choose the discretization to be about :math:`\\frac{\\lambda_m}{20}` where
+        :math:`\\lambda_m` is the field wavelength.
+
+    **Numerical Dispersion - 1D Illustration**
+
+    Numerical dispersion is a form of numerical error dependent on the spatial and temporal discretization of the
+    fields. In order to reduce it, it is necessary to improve the discretization of the simulation for particular
+    frequencies and spatial features. This is an important aspect of defining the grid.
+
+    Consider a standard 1D wave equation in vacuum:
+
+    .. math::
+
+        \\left( \\frac{\\delta ^2 }{\\delta x^2} - \\frac{1}{c^2} \\frac{\\delta^2}{\\delta t^2} \\right) E = 0
+
+    which is ideally solved into a monochromatic travelling wave:
+
+    .. math::
+
+        E(x) = e^{j (kx - \\omega t)}
+
+    This physical wave is described with a wavevector :math:`k` for the spatial field variations and the angular
+    frequency :math:`\\omega` for temporal field variations. The spatial and temporal field variations are related by
+    a dispersion relation.
+
+    .. TODO explain the above more
+
+    The ideal dispersion relation is:
+
+    .. math::
+
+        \\left( \\frac{\\omega}{c} \\right)^2 = k^2
+
+    However, in the FDTD simulation, the spatial and temporal fields are discrete.
+
+    .. TODO improve the ways figures are represented.
+
+    .. image:: ../../_static/img/numerical_dispersion_grid_1d.png
+        :width: 30%
+        :align: right
+
+    The same 1D monochromatic wave can be solved using the FDTD method where :math:`m` is the index in the grid:
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta x^2} E(x_i) \\approx \\frac{1}{\\Delta x^2} \\left[ E(x_i + \\Delta x) + E(x_i -
+        \\Delta x) - 2 E(x_i) \\right]
+
+    .. math::
+
+        \\frac{\\delta^2}{\\delta t^2} E(t_{\\alpha}) \\approx \\frac{1}{\\Delta t^2} \\left[ E(t_{\\alpha} + \\Delta
+        t) + E(t_{\\alpha} - \\Delta t) - 2 E(t_{\\alpha}) \\right]
+
+    .. TODO define the alpha
+
+    Hence, these discrete fields have this new dispersion relation:
+
+    .. math::
+
+        \\left( \\frac{1}{c \\Delta t} \\text{sin} \\left( \\frac{\\omega \\Delta t}{2} \\right)^2 \\right) = \\left(
+        \\frac{1}{\\Delta x} \\text{sin} \\left( \\frac{k \\Delta x}{2} \\right) \\right)^2
+
+    The ideal wave solution and the discrete solution have a mismatch illustrated below as a result of the numerical
+    error introduced by numerical dispersion. This plot illustrates the angular frequency as a function of wavevector
+    for both the physical ideal wave and the numerical discrete wave implemented in FDTD.
+
+    .. image:: ../../_static/img/numerical_dispersion_discretization_1d.png
+
+    .. TODO improve these images positions
+
+    At lower frequencies, when the discretization of :math:`\\Delta x` is small compared to the wavelength the error
+    between the solutions is very low. When this proportionality increases between the spatial step size and the
+    angular wavelength, this introduces numerical dispersion errors.
+
+    .. math::
+
+        k \\Delta x = \\frac{2 \\pi}{\\lambda_k} \\Delta x
+
+
+    **Usage Recommendations**
+
+    *   It is important to understand the relationship between the time-step :math:`\\Delta t` defined by the
+        :attr:`courant` factor, and the spatial grid distribution to guarantee simulation stability.
+
+    *   If your structure has small features, consider using a spatially nonuniform grid. This guarantees finer
+        spatial resolution near the features, but away from it you use have a larger (and computationally faster) grid.
+        In this case, the time step :math:`\\Delta t` is defined by the smallest spatial grid size.
+
+    See Also
+    --------
+
+    :attr:`courant`
+        The Courant-Friedrichs-Lewy (CFL) stability factor
+
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
 
     shutoff: pydantic.NonNegativeFloat = pydantic.Field(
         1e-5,
@@ -182,6 +617,12 @@ class Simulation(AbstractSimulation):
         "Used to prevent extraneous run time of simulations with fully decayed fields. "
         "Set to ``0`` to disable this feature.",
     )
+    """
+    Ratio of the instantaneous integrated E-field intensity to the maximum value
+    at which the simulation will automatically terminate time stepping.
+    Used to prevent extraneous run time of simulations with fully decayed fields.
+    Set to ``0`` to disable this feature.
+    """
 
     subpixel: bool = pydantic.Field(
         True,
@@ -189,6 +630,48 @@ class Simulation(AbstractSimulation):
         description="If ``True``, uses subpixel averaging of the permittivity "
         "based on structure definition, resulting in much higher accuracy for a given grid size.",
     )
+    """
+    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
+    higher accuracy for a given grid size.,
+
+    **1D Illustration**
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` compute the effective permittivity of each grid point as the
+    average permittivity between the grid points. A simplified equation based on the ratio :math:`\\eta` between the
+    permittivity of the two materials at the interface in this case:
+
+    .. math::
+
+        \\epsilon_{eff} = \\eta \\epsilon_{si} + (1 - \\eta) \\epsilon_{air}
+
+    .. TODO check the actual implementation to be accurate here.
+
+    .. image:: ../../_static/img/subpixel_permittivity_1d.png
+
+    However, in this 1D case, this averaging is accurate because the dominant electric field is paralell to the
+    dielectric grid points.
+
+    You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
+    `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel
+    -averaging/>`_.
+
+    **2D & 3D Usage Caveats**
+
+    *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
+        incident electric field on the interface.
+
+    *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
+        spatial orientations.
+
+
+    See Also
+    --------
+
+    **Lectures:**
+        *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+        *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+    """
 
     normalize_index: Union[pydantic.NonNegativeInt, None] = pydantic.Field(
         0,
@@ -197,6 +680,10 @@ class Simulation(AbstractSimulation):
         "normalize the frequency-dependent data. If ``None``, the raw field data is returned "
         "unnormalized.",
     )
+    """
+    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent
+    data. If ``None``, the raw field data is returned. If ``None``, the raw field data is returned unnormalized.
+    """
 
     courant: float = pydantic.Field(
         0.99,
@@ -207,6 +694,81 @@ class Simulation(AbstractSimulation):
         "when CFL stability condition is met in 3D.",
         gt=0.0,
         le=1.0,
+    )
+    """The Courant-Friedrichs-Lewy (CFL) stability factor :math:`C`, controls time step to spatial step ratio.  A
+    physical wave has to propagate slower than the numerical information propagation in a Yee-cell grid. This is
+    because in this spatially-discrete grid, information propagates over 1 spatial step :math:`\\Delta x`
+    over a time step :math:`\\Delta t`. This constraint enables the correct physics to be captured by the simulation.
+
+    **1D Illustration**
+
+    In a 1D model:
+
+    .. image:: ../../_static/img/courant_instability.png
+
+    Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This
+    factor is normalized to no larger than 1 when CFL stability condition is met in 3D.
+
+    .. TODO finish this section for 1D, 2D and 3D references.
+
+    For a 1D grid:
+
+    .. math::
+
+        C_{\\text{1D}} = \\frac{\\Delta x}{c \\Delta t} \\leq 1
+
+    **2D Illustration**
+
+    In a 2D grid, where the :math:`E_z` field is at the red dot center surrounded by four green magnetic edge components
+    in a square Yee cell grid:
+
+    .. image:: ../../_static/img/courant_instability_2d.png
+
+    .. math::
+
+        C_{\\text{2D}} = \\frac{\\Delta x}{c \\Delta t} \\leq \\frac{1}{\\sqrt{2}}
+
+    Hence, for the same spatial grid, the time step in 2D grid needs to be smaller than the time step in a 1D grid.
+
+    **3D Illustration**
+
+    For an isotropic medium with refractive index :math:`n`, the 3D time step condition can be derived to be:
+
+    .. math::
+
+        \\Delta t \\le \\frac{n}{c \\sqrt{\\frac{1}{\\Delta x^2} + \\frac{1}{\\Delta y^2} + \\frac{1}{\\Delta z^2}}}
+
+    In this case, the number of spatial grid points scale by :math:`\\sim \\frac{1}{\\Delta x^3}` where :math:`\\Delta x`
+    is the spatial discretization in the :math:`x` dimension. If the total simulation time is kept the same whilst
+    mantaining the CFL condition, then the number of time steps required scale by :math:`\\sim \\frac{1}{\\Delta x}`.
+    Hence, the spatial grid discretization influences the total time-steps required. The total simulation scaling per
+    spatial grid size in this case is by :math:`\\sim \\frac{1}{\\Delta x^4}.`
+
+    As an example, in this case, refining the mesh by a factor or 2 (reducing the spatial step size by half)
+    :math:`\\Delta x \\to \\frac{\\Delta x}{2}` will increase the total simulation computational cost by 16.
+
+    **Divergence Caveats**
+
+    ``tidy3d`` uses a default Courant factor of 0.99. When a dispersive material with ``eps_inf < 1`` is used,
+    the Courant factor will be automatically adjusted to be smaller than ``sqrt(eps_inf)`` to ensure stability. If
+    your simulation still diverges despite addressing any other issues discussed above, reducing the Courant
+    factor may help.
+
+    See Also
+    --------
+
+    :attr:`grid_spec`
+        Specifications for the simulation grid along each of the three directions.
+
+    **Lectures:**
+        *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_
+        *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_
+    """
+
+    version: str = pydantic.Field(
+        __version__,
+        title="Version",
+        description="String specifying the front end version number.",
     )
 
     """ Validating setup """
@@ -230,9 +792,16 @@ class Simulation(AbstractSimulation):
             _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
+    _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
     _sources_in_bounds = assert_objects_in_sim_bounds("sources")
+    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
+
+    # make sure all names are unique
+    _unique_structure_names = assert_unique_names("structures")
+    _unique_source_names = assert_unique_names("sources")
+    _unique_monitor_names = assert_unique_names("monitors")
 
     # _few_enough_mediums = validate_num_mediums()
     # _structures_not_at_edges = validate_structure_bounds_not_at_edges()
@@ -267,7 +836,7 @@ class Simulation(AbstractSimulation):
                 continue
 
             _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
-            medium_set = Scene.intersecting_media(source, structures)
+            medium_set = cls.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
             for tan_dir in tan_dirs:
@@ -324,7 +893,7 @@ class Simulation(AbstractSimulation):
                 size=temp_size,
                 source_time=source.source_time,
             )
-            medium_set = Scene.intersecting_media(temp_src, structures)
+            medium_set = cls.intersecting_media(temp_src, structures)
             medium = medium_set.pop() if medium_set else sim_medium
 
             # the source shouldn't touch or cross any boundary in the direction of injection
@@ -385,17 +954,34 @@ class Simulation(AbstractSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     def boundaries_for_zero_dims(cls, val, values):
-        """Error if an absorbing boundary is used along a zero dimension."""
+        """Warn if an absorbing boundary is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
         for dim, (boundary, size_dim) in enumerate(zip(boundaries, size)):
             num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
             if num_absorbing_bdries > 0 and size_dim == 0:
-                raise SetupError(
-                    f"The simulation has zero size along the {'xyz'[dim]} axis, so "
-                    "using a PML or absorbing boundary along that axis is incorrect. "
-                    f"Use either 'Periodic' or 'BlochBoundary' along {'xyz'[dim]}."
+                log.warning(
+                    f"If the simulation is intended to be 2D in the plane normal to the "
+                    f"{'xyz'[dim]} axis, using a PML or absorbing boundary along that axis "
+                    f"is incorrect. Consider using a 'Periodic' boundary along {'xyz'[dim]}.",
+                    custom_loc=["boundary_spec", "xyz"[dim]],
                 )
+        return val
+
+    @pydantic.validator("structures", always=True)
+    def _validate_num_mediums(cls, val):
+        """Error if too many mediums present."""
+
+        if val is None:
+            return val
+
+        mediums = {structure.medium for structure in val}
+        if len(mediums) > MAX_NUM_MEDIUMS:
+            raise SetupError(
+                f"Tidy3d only supports {MAX_NUM_MEDIUMS} distinct mediums."
+                f"{len(mediums)} were supplied."
+            )
+
         return val
 
     @pydantic.validator("sources", always=True)
@@ -411,6 +997,58 @@ class Simulation(AbstractSimulation):
                 "For a complex source setup, consider using 'CustomFieldSource' or "
                 "'CustomCurrentSource' to combine multiple sources into one object."
             )
+
+        return val
+
+    @pydantic.validator("structures", always=True)
+    def _validate_num_geometries(cls, val):
+        """Error if too many geometries in a single structure."""
+
+        if val is None:
+            return val
+
+        for i, structure in enumerate(val):
+            for geometry in flatten_groups(structure.geometry):
+                count = sum(
+                    1
+                    for g in traverse_geometries(geometry)
+                    if not isinstance(g, (GeometryGroup, ClipOperation))
+                )
+                if count > MAX_GEOMETRY_COUNT:
+                    raise SetupError(
+                        f"Structure at 'structures[{i}]' has {count} geometries that cannot be "
+                        f"flattened. A maximum of {MAX_GEOMETRY_COUNT} is supported due to "
+                        f"preprocessing performance."
+                    )
+
+        return val
+
+    @pydantic.validator("structures", always=True)
+    def _structures_not_at_edges(cls, val, values):
+        """Warn if any structures lie at the simulation boundaries."""
+
+        if val is None:
+            return val
+
+        sim_box = Box(size=values.get("size"), center=values.get("center"))
+        sim_bound_min, sim_bound_max = sim_box.bounds
+        sim_bounds = list(sim_bound_min) + list(sim_bound_max)
+
+        with log as consolidated_logger:
+            for istruct, structure in enumerate(val):
+                struct_bound_min, struct_bound_max = structure.geometry.bounds
+                struct_bounds = list(struct_bound_min) + list(struct_bound_max)
+
+                for sim_val, struct_val in zip(sim_bounds, struct_bounds):
+
+                    if isclose(sim_val, struct_val):
+                        consolidated_logger.warning(
+                            f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
+                            "to simulation edges. This can cause unexpected behavior. "
+                            "If intending to extend the structure to infinity along one dimension, "
+                            "use td.inf as a size variable instead to make this explicit.",
+                            custom_loc=["structures", istruct],
+                        )
 
         return val
 
@@ -449,7 +1087,6 @@ class Simulation(AbstractSimulation):
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -459,7 +1096,7 @@ class Simulation(AbstractSimulation):
                 consolidated_logger.warning(
                     f"Structure at structures[{istruct}] was detected as being less "
                     f"than half of a central wavelength from a PML on side {side}. "
-                    "To avoid inaccurate results or divergence, please increase gap between "
+                    "To avoid inaccurate results, please increase gap between "
                     "any structures and PML or fully extend structure through the pml.",
                     custom_loc=["structures", istruct],
                 )
@@ -529,7 +1166,9 @@ class Simulation(AbstractSimulation):
                             medium_str = "The simulation background medium"
                             custom_loc = ["medium", "frequency_range"]
                         else:
-                            medium_str = f"The medium associated with structures[{medium_index-1}]"
+                            medium_str = (
+                                f"The medium associated with structures[{medium_index - 1}]"
+                            )
                             custom_loc = [
                                 "structures",
                                 medium_index - 1,
@@ -629,7 +1268,7 @@ class Simulation(AbstractSimulation):
 
         for monitor in val:
             if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                mediums = Scene.intersecting_media(monitor, total_structures)
+                mediums = cls.intersecting_media(monitor, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
                     raise SetupError(
@@ -637,97 +1276,6 @@ class Simulation(AbstractSimulation):
                         f"intersecting a {monitor.type}. Plane must be homogeneous."
                     )
 
-        return val
-
-    @pydantic.validator("monitors", always=True)
-    def _projection_direction(cls, val, values):
-        """Warn if field projection observation points are behind surface projection monitors."""
-        # This validator is in simulation.py rather than monitor.py because volume monitors are
-        # eventually converted to their bounding surface projection monitors, in which case we
-        # do not want this validator to be triggered.
-
-        if val is None:
-            return val
-
-        with log as consolidated_logger:
-            for monitor_ind, monitor in enumerate(val):
-                if isinstance(monitor, AbstractFieldProjectionMonitor):
-                    if monitor.size.count(0.0) != 1:
-                        continue
-
-                    normal_dir = monitor.projection_surfaces[0].normal_dir
-                    normal_ind = monitor.size.index(0.0)
-
-                    projecting_backwards = False
-                    if isinstance(monitor, FieldProjectionAngleMonitor):
-                        r, theta, phi = np.meshgrid(
-                            monitor.proj_distance,
-                            monitor.theta,
-                            monitor.phi,
-                            indexing="ij",
-                        )
-                        x, y, z = Geometry.sph_2_car(r=r, theta=theta, phi=phi)
-                    elif isinstance(monitor, FieldProjectionKSpaceMonitor):
-                        uxs, uys, _ = np.meshgrid(
-                            monitor.ux,
-                            monitor.uy,
-                            monitor.proj_distance,
-                            indexing="ij",
-                        )
-                        theta, phi = monitor.kspace_2_sph(uxs, uys, monitor.proj_axis)
-                        x, y, z = Geometry.sph_2_car(r=monitor.proj_distance, theta=theta, phi=phi)
-                    else:
-                        pts = monitor.unpop_axis(
-                            monitor.proj_distance, (monitor.x, monitor.y), axis=normal_ind
-                        )
-                        x, y, z = pts
-
-                    center = np.array(monitor.center) - np.array(monitor.local_origin)
-                    pts = [np.array(i) for i in [x, y, z]]
-                    normal_displacement = pts[normal_ind] - center[normal_ind]
-                    if np.any(normal_displacement < 0) and normal_dir == "+":
-                        projecting_backwards = True
-                    elif np.any(normal_displacement > 0) and normal_dir == "-":
-                        projecting_backwards = True
-
-                    if projecting_backwards:
-                        consolidated_logger.warning(
-                            f"Field projection monitor '{monitor.name}' has observation points set "
-                            "up such that the monitor is projecting backwards with respect to its "
-                            "'normal_dir'. If this was not intentional, please take a look at the "
-                            "documentation associated with this type of projection monitor to "
-                            "check how the observation point coordinate system is defined.",
-                            custom_loc=["monitors", monitor_ind],
-                        )
-
-        return val
-
-    @pydantic.validator("monitors", always=True)
-    def proj_distance_for_approx(cls, val, values):
-        """Warn if projection distance for projection monitors is not large compared to monitor or,
-        simulation size, yet far_field_approx is True."""
-        if val is None:
-            return val
-
-        sim_size = values.get("size")
-
-        with log as consolidated_logger:
-            for monitor_ind, monitor in enumerate(val):
-                if not isinstance(monitor, AbstractFieldProjectionMonitor):
-                    continue
-
-                name = monitor.name
-                max_size = min(np.max(monitor.size), np.max(sim_size))
-
-                if monitor.far_field_approx and np.abs(monitor.proj_distance) < 10 * max_size:
-                    consolidated_logger.warning(
-                        f"Monitor {name} projects to a distance comparable to the size of the "
-                        "monitor; we recommend setting ``far_field_approx=False`` to disable "
-                        "far-field approximations for this monitor, because the approximations "
-                        "are valid only when the observation points are very far compared to the "
-                        "size of the monitor that records near fields.",
-                        custom_loc=["monitors", monitor_ind],
-                    )
         return val
 
     @pydantic.validator("monitors", always=True)
@@ -790,7 +1338,7 @@ class Simulation(AbstractSimulation):
         medium = values.get("medium")
         for monitor in monitors:
             if isinstance(monitor, DiffractionMonitor):
-                medium_set = Scene.intersecting_media(monitor, structures)
+                medium_set = Simulation.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
                 _, index_k = medium.nk_model(frequency=np.array(monitor.freqs))
                 if not np.all(index_k == 0):
@@ -816,7 +1364,7 @@ class Simulation(AbstractSimulation):
                 for medium_index, medium in enumerate(mediums):
 
                     # min wavelength in PEC is meaningless and we'll get divide by inf errors
-                    if medium.is_pec:
+                    if isinstance(medium, PECMedium):
                         continue
                     # min wavelength in Medium2D is meaningless
                     if isinstance(medium, Medium2D):
@@ -824,16 +1372,9 @@ class Simulation(AbstractSimulation):
 
                     eps_material = medium.eps_model(freq0)
                     n_material, _ = medium.eps_complex_to_nk(eps_material)
+                    lambda_min = C_0 / freq0 / n_material
 
-                    for comp, (key, grid_spec) in enumerate(
-                        zip("xyz", (val.grid_x, val.grid_y, val.grid_z))
-                    ):
-                        if medium.is_pec or (
-                            isinstance(medium, AnisotropicMedium) and medium.is_comp_pec(comp)
-                        ):
-                            n_material = 1.0
-                        lambda_min = C_0 / freq0 / n_material
-
+                    for key, grid_spec in zip("xyz", (val.grid_x, val.grid_y, val.grid_z)):
                         if (
                             isinstance(grid_spec, UniformGrid)
                             and grid_spec.dl > lambda_min / MIN_GRIDS_PER_WVL
@@ -842,7 +1383,7 @@ class Simulation(AbstractSimulation):
                                 medium_str = "the simulation background medium"
                             else:
                                 medium_str = (
-                                    f"the medium associated with structures[{medium_index-1}]"
+                                    f"the medium associated with structures[{medium_index - 1}]"
                                 )
 
                             consolidated_logger.warning(
@@ -882,7 +1423,7 @@ class Simulation(AbstractSimulation):
         # for each plane wave in the sources list
         for source in val:
             if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
-                mediums = Scene.intersecting_media(source, total_structures)
+                mediums = cls.intersecting_media(source, total_structures)
                 # make sure there is no more than one medium in the returned list
                 if len(mediums) > 1:
                     raise SetupError(
@@ -921,31 +1462,14 @@ class Simulation(AbstractSimulation):
             if sources[val].source_time.amplitude == 0:
                 raise ValidationError("Cannot set 'normalize_index' to source with zero amplitude.")
 
-            # Warn if normalizing by a ContinuousWave or CustomSourceTime source, if frequency-domain monitors are present.
-            if isinstance(sources[val].source_time, ContinuousWave):
-                log.warning(
-                    f"'normalize_index' {val} is a source with 'ContinuousWave' "
-                    "time dependence. Normalizing frequency-domain monitors by this "
-                    "source is not meaningful because field decay does not occur. "
-                    "Consider setting 'normalize_index' to 'None' instead."
-                )
-            if isinstance(sources[val].source_time, CustomSourceTime):
-                log.warning(
-                    f"'normalize_index' {val} is a source with 'CustomSourceTime' "
-                    "time dependence. Normalizing frequency-domain monitors by this "
-                    "source is only meaningful if field decay occurs."
-                )
-
         return val
 
     """ Post-init validators """
 
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""
-        _ = self.scene
         self._validate_no_structures_pml()
         self._validate_tfsf_nonuniform_grid()
-        self._validate_nonlinear_specs()
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
@@ -1017,15 +1541,6 @@ class Simulation(AbstractSimulation):
                             custom_loc=["sources", source_ind],
                         )
 
-    def _validate_nonlinear_specs(self) -> None:
-        """Run :class:`.NonlinearSpec` validators that depend on knowing the central
-        frequencies of the sources."""
-        freqs = np.array([source.source_time.freq0 for source in self.sources])
-        for medium in self.scene.mediums:
-            if medium.nonlinear_spec is not None:
-                for model in medium._nonlinear_models:
-                    model._validate_medium_freqs(medium, freqs)
-
     """ Pre submit validation (before web.upload()) """
 
     def validate_pre_upload(self, source_required: bool = True) -> None:
@@ -1085,7 +1600,7 @@ class Simulation(AbstractSimulation):
         with log as consolidated_logger:
             datas = self.monitors_data_size
             for monitor_ind, (monitor_name, monitor_size) in enumerate(datas.items()):
-                monitor_size_gb = monitor_size / 1e9
+                monitor_size_gb = monitor_size / 2**30
                 if monitor_size_gb > WARN_MONITOR_DATA_SIZE_GB:
                     consolidated_logger.warning(
                         f"Monitor '{monitor_name}' estimated storage is {monitor_size_gb:1.2f}GB. "
@@ -1101,21 +1616,6 @@ class Simulation(AbstractSimulation):
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
                 f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
             )
-
-        # Some monitors store much less data than what is needed internally. Make sure that the
-        # internal storage also does not exceed the limit.
-        for monitor in self.monitors:
-            num_cells = self._monitor_num_cells(monitor)
-            # intermediate storage needed, in GB
-            solver_data = monitor._storage_size_solver(num_cells=num_cells, tmesh=self.tmesh) / 1e9
-            if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
-                raise SetupError(
-                    f"Estimated internal storage of monitor '{monitor.name}' is "
-                    f"{solver_data:1.2f}GB, which is larger than the maximum allowed "
-                    f"{MAX_MONITOR_INTERNAL_DATA_SIZE_GB:.2f}GB. Consider making it smaller, "
-                    "using fewer frequencies, or spatial or temporal downsampling using "
-                    "'interval_space' and 'interval', respectively."
-                )
 
     def _validate_modes_size(self) -> None:
         """Warn if mode sources or monitors have a large number of points."""
@@ -1157,19 +1657,18 @@ class Simulation(AbstractSimulation):
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
+        tmesh = self.tmesh
         data_size = {}
         for monitor in self.monitors:
-            num_cells = self._monitor_num_cells(monitor)
-            storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
-            data_size[monitor.name] = storage_size
-        return data_size
+            name = monitor.name
+            num_cells = self.discretize_monitor(monitor).num_cells
+            # take monitor downsampling into account
+            num_cells = monitor.downsampled_num_cells(num_cells)
+            num_cells = np.prod(num_cells)
+            monitor_size = monitor.storage_size(num_cells=num_cells, tmesh=tmesh)
+            data_size[name] = float(monitor_size)
 
-    def _monitor_num_cells(self, monitor: Monitor) -> int:
-        """Total number of cells included by monitor based on simulation grid."""
-        num_cells = self.discretize_monitor(monitor).num_cells
-        # take monitor downsampling into account
-        num_cells = monitor.downsampled_num_cells(num_cells)
-        return np.prod(np.array(num_cells, dtype=np.int64))
+        return data_size
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
@@ -1203,7 +1702,7 @@ class Simulation(AbstractSimulation):
 
                 if surface.name[-2] != "xyz"[source.injection_axis]:
                     sidewall_surfaces.append(surface)
-                    intersecting_structs = Scene.intersecting_structures(
+                    intersecting_structs = self.intersecting_structures(
                         test_object=surface, structures=self.structures
                     )
 
@@ -1261,7 +1760,6 @@ class Simulation(AbstractSimulation):
 
     """ Accounting """
 
-    # candidate for removal in 3.0
     @cached_property
     def mediums(self) -> Set[MediumType]:
         """Returns set of distinct :class:`.AbstractMedium` in simulation.
@@ -1271,13 +1769,10 @@ class Simulation(AbstractSimulation):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums in the simulation.
         """
-        log.warning(
-            "'Simulation.mediums' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.scene.mediums' instead."
-        )
-        return self.scene.mediums
+        medium_dict = {self.medium: None}
+        medium_dict.update({structure.medium: None for structure in self.structures})
+        return list(medium_dict.keys())
 
-    # candidate for removal in 3.0
     @cached_property
     def medium_map(self) -> Dict[MediumType, pydantic.NonNegativeInt]:
         """Returns dict mapping medium to index in material.
@@ -1290,24 +1785,21 @@ class Simulation(AbstractSimulation):
             Mapping between distinct mediums to index in simulation.
         """
 
-        log.warning(
-            "'Simulation.medium_map' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.scene.medium_map' instead."
-        )
-        return self.scene.medium_map
+        return {medium: index for index, medium in enumerate(self.mediums)}
 
-    # candidate for removal in 3.0
+    def get_monitor_by_name(self, name: str) -> Monitor:
+        """Return monitor named 'name'."""
+        for monitor in self.monitors:
+            if monitor.name == name:
+                return monitor
+        raise Tidy3dKeyError(f"No monitor named '{name}'")
+
     @cached_property
     def background_structure(self) -> Structure:
         """Returns structure representing the background of the :class:`.Simulation`."""
+        geometry = Box(size=(inf, inf, inf))
+        return Structure(geometry=geometry, medium=self.medium)
 
-        log.warning(
-            "'Simulation.background_structure' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.scene.background_structure' instead."
-        )
-        return self.scene.background_structure
-
-    # candidate for removal in 3.0
     @staticmethod
     def intersecting_media(
         test_object: Box, structures: Tuple[Structure, ...]
@@ -1328,14 +1820,20 @@ class Simulation(AbstractSimulation):
         List[:class:`.AbstractMedium`]
             Set of distinct mediums that intersect with the given planar object.
         """
+        if test_object.size.count(0.0) == 1:
+            # get all merged structures on the test_object, which is already planar
+            structures_merged = Simulation._filter_structures_plane(structures, test_object)
+            mediums = {medium for medium, _ in structures_merged}
+            return mediums
 
-        log.warning(
-            "'Simulation.intersecting_media()' will be removed in Tidy3D 3.0. "
-            "Use 'Scene.intersecting_media()' instead."
-        )
-        return Scene.intersecting_media(test_object=test_object, structures=structures)
+        # if the test object is a volume, test each surface recursively
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
+        mediums = set()
+        for surface in surfaces:
+            _mediums = Simulation.intersecting_media(surface, structures)
+            mediums.update(_mediums)
+        return mediums
 
-    # candidate for removal in 3.0
     @staticmethod
     def intersecting_structures(
         test_object: Box, structures: Tuple[Structure, ...]
@@ -1356,12 +1854,26 @@ class Simulation(AbstractSimulation):
             Set of distinct structures that intersect with the given surface, or with the surfaces
             of the given volume.
         """
+        if test_object.size.count(0.0) == 1:
+            # get all merged structures on the test_object, which is already planar
+            normal_axis_index = test_object.size.index(0.0)
+            dim = "xyz"[normal_axis_index]
+            pos = test_object.center[normal_axis_index]
+            xyz_kwargs = {dim: pos}
 
-        log.warning(
-            "'Simulation.intersecting_structures()' will be removed in Tidy3D 3.0. "
-            "Use 'Scene.intersecting_structures()' instead."
-        )
-        return Scene.intersecting_structures(test_object=test_object, structures=structures)
+            structures_merged = []
+            for structure in structures:
+                intersections = structure.geometry.intersections_plane(**xyz_kwargs)
+                if len(intersections) > 0:
+                    structures_merged.append(structure)
+            return structures_merged
+
+        # if the test object is a volume, test each surface recursively
+        surfaces = test_object.surfaces_with_exclusion(**test_object.dict())
+        structures_merged = []
+        for surface in surfaces:
+            structures_merged += Simulation.intersecting_structures(surface, structures)
+        return structures_merged
 
     def monitor_medium(self, monitor: MonitorType):
         """Return the medium in which the given monitor resides.
@@ -1376,7 +1888,7 @@ class Simulation(AbstractSimulation):
         :class:`.AbstractMedium`
             Medium associated with the given :class:`.Monitor`.
         """
-        medium_set = Scene.intersecting_media(monitor, self.structures)
+        medium_set = self.intersecting_media(monitor, self.structures)
         if len(medium_set) > 1:
             raise SetupError(f"Monitor '{monitor.name}' intersects more than one medium.")
         medium = medium_set.pop() if medium_set else self.medium
@@ -1426,268 +1938,6 @@ class Simulation(AbstractSimulation):
                     custom_loc=["boundary_spec", "xyz"[dim]],
                 )
 
-    def to_gdstk(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
-            medim
-        frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-
-        Return
-        ------
-        List
-            List of `gdstk.Polygon`.
-        """
-        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis)
-        _, bmax = self.pop_axis(self.bounds[1], axis)
-
-        _, symmetry = self.pop_axis(self.symmetry, axis)
-        if symmetry[0] != 0:
-            bmin = (0, bmin[1])
-        if symmetry[1] != 0:
-            bmin = (bmin[0], 0)
-        clip = gdstk.rectangle(bmin, bmax)
-
-        polygons = []
-        for structure in self.structures:
-            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
-            for polygon in structure.to_gdstk(
-                x=x,
-                y=y,
-                z=z,
-                permittivity_threshold=permittivity_threshold,
-                frequency=frequency,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            ):
-                pmin, pmax = polygon.bounding_box()
-                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                    polygons.extend(
-                        gdstk.boolean(clip, polygon, "and", layer=gds_layer, datatype=gds_dtype)
-                    )
-                else:
-                    polygons.append(polygon)
-
-        return polygons
-
-    def to_gdspy(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-    ) -> List:
-        """Convert a simulation's planar slice to a .gds type polygon list.
-
-        Parameters
-        ----------
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-
-        Return
-        ------
-        List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
-        """
-        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, bmin = self.pop_axis(self.bounds[0], axis)
-        _, bmax = self.pop_axis(self.bounds[1], axis)
-
-        _, symmetry = self.pop_axis(self.symmetry, axis)
-        if symmetry[0] != 0:
-            bmin = (0, bmin[1])
-        if symmetry[1] != 0:
-            bmin = (bmin[0], 0)
-        clip = gdspy.Rectangle(bmin, bmax)
-
-        polygons = []
-        for structure in self.structures:
-            gds_layer, gds_dtype = gds_layer_dtype_map.get(structure.medium, (0, 0))
-            for polygon in structure.to_gdspy(
-                x=x,
-                y=y,
-                z=z,
-                gds_layer=gds_layer,
-                gds_dtype=gds_dtype,
-            ):
-                pmin, pmax = polygon.get_bounding_box()
-                if pmin[0] < bmin[0] or pmin[1] < bmin[1] or pmax[0] > bmax[0] or pmax[1] > bmax[1]:
-                    polygon = gdspy.boolean(
-                        clip, polygon, "and", layer=gds_layer, datatype=gds_dtype
-                    )
-                polygons.append(polygon)
-        return polygons
-
-    def to_gds(
-        self,
-        cell,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-    ) -> None:
-        """Append the simulation structures to a .gds cell.
-
-        Parameters
-        ----------
-        cell : ``gdstk.Cell`` or ``gdspy.Cell``
-            Cell object to which the generated polygons are added.
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
-            medim
-        frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-        """
-        if gds_layer_dtype_map is None:
-            gds_layer_dtype_map = {}
-
-        if gdstk_available and isinstance(cell, gdstk.Cell):
-            polygons = self.to_gdstk(
-                x=x,
-                y=y,
-                z=z,
-                permittivity_threshold=permittivity_threshold,
-                frequency=frequency,
-                gds_layer_dtype_map=gds_layer_dtype_map,
-            )
-            if len(polygons) > 0:
-                cell.add(*polygons)
-
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
-            if len(polygons) > 0:
-                cell.add(polygons)
-
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
-
-    def to_gds_file(
-        self,
-        fname: str,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        permittivity_threshold: pydantic.NonNegativeFloat = 1,
-        frequency: pydantic.PositiveFloat = 0,
-        gds_layer_dtype_map: Dict[
-            AbstractMedium, Tuple[pydantic.NonNegativeInt, pydantic.NonNegativeInt]
-        ] = None,
-        gds_cell_name: str = "MAIN",
-    ) -> None:
-        """Append the simulation structures to a .gds cell.
-
-        Parameters
-        ----------
-        fname : str
-            Full path to the .gds file to save the :class:`Simulation` slice to.
-        x : float = None
-            Position of plane in x direction, only one of x,y,z can be specified to define plane.
-        y : float = None
-            Position of plane in y direction, only one of x,y,z can be specified to define plane.
-        z : float = None
-            Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
-            medim
-        frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
-        gds_layer_dtype_map : Dict
-            Dictionary mapping mediums to GDSII layer and data type tuples.
-        gds_cell_name : str = 'MAIN'
-            Name of the cell created in the .gds file to store the geometry.
-        """
-        if gdstk_available:
-            library = gdstk.Library()
-            reference = gdstk.Reference
-            rotation = np.pi
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-            reference = gdspy.CellReference
-            rotation = 180
-        else:
-            raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
-        cell = library.new_cell(gds_cell_name)
-
-        axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, symmetry = self.pop_axis(self.symmetry, axis)
-        if symmetry[0] != 0:
-            outer_cell = cell
-            cell = library.new_cell(gds_cell_name + "_X")
-            outer_cell.add(reference(cell))
-            outer_cell.add(reference(cell, rotation=rotation, x_reflection=True))
-        if symmetry[1] != 0:
-            outer_cell = cell
-            cell = library.new_cell(gds_cell_name + "_Y")
-            outer_cell.add(reference(cell))
-            outer_cell.add(reference(cell, x_reflection=True))
-
-        self.to_gds(
-            cell,
-            x=x,
-            y=y,
-            z=z,
-            permittivity_threshold=permittivity_threshold,
-            frequency=frequency,
-            gds_layer_dtype_map=gds_layer_dtype_map,
-        )
-        library.write_gds(fname)
-
     """ Plotting """
 
     @equal_aspect
@@ -1729,19 +1979,36 @@ class Simulation(AbstractSimulation):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
+
         """
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+
+        # account for unordered limits
+        if hlim is None:
+            hlim = (hmin, hmax)
+        if vlim is None:
+            vlim = (vmin, vmax)
+
+        if hlim[0] > hlim[1]:
+            raise Tidy3dError("Error: 'hmin' > 'hmax'")
+        if vlim[0] > vlim[1]:
+            raise Tidy3dError("Error: 'vmin' > 'vmax'")
 
         ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
 
@@ -1792,32 +2059,127 @@ class Simulation(AbstractSimulation):
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
-        """
 
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
+        """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+
+        # account for unordered limits
+        if hlim is None:
+            hlim = (hmin, hmax)
+        if vlim is None:
+            vlim = (vmin, vmax)
+
+        if hlim[0] > hlim[1]:
+            raise Tidy3dError("Error: hmin > hmax")
+        if vlim[0] > vlim[1]:
+            raise Tidy3dError("Error: vmin > vmax")
 
         ax = self.plot_structures_eps(
-            freq=freq,
-            cbar=True,
-            alpha=alpha,
-            ax=ax,
-            x=x,
-            y=y,
-            z=z,
-            hlim=hlim,
-            vlim=vlim,
+            freq=freq, cbar=True, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_structures(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> Ax:
+        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        medium_shapes = self._get_structures_2dbox(
+            structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        medium_map = self.medium_map
+        for medium, shape in medium_shapes:
+            mat_index = medium_map[medium]
+            ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+
+        # clean up the axis display
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        return ax
+
+    def _plot_shape_structure(self, medium: Medium, mat_index: int, shape: Shapely, ax: Ax) -> Ax:
+        """Plot a structure's cross section shape for a given medium."""
+        plot_params_struct = self._get_structure_plot_params(medium=medium, mat_index=mat_index)
+        ax = self.plot_shape(shape=shape, plot_params=plot_params_struct, ax=ax)
+        return ax
+
+    def _get_structure_plot_params(self, mat_index: int, medium: Medium) -> PlotParams:
+        """Constructs the plot parameters for a given medium in simulation.plot()."""
+
+        plot_params = plot_params_structure.copy(update={"linewidth": 0})
+
+        if mat_index == 0 or medium == self.medium:
+            # background medium
+            plot_params = plot_params.copy(update={"facecolor": "white", "edgecolor": "white"})
+        elif isinstance(medium, PECMedium):
+            # perfect electrical conductor
+            plot_params = plot_params.copy(
+                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
+        else:
+            # regular medium
+            facecolor = MEDIUM_CMAP[(mat_index - 1) % len(MEDIUM_CMAP)]
+            plot_params = plot_params.copy(update={"facecolor": facecolor})
+
+        return plot_params
+
+    @staticmethod
+    def _add_cbar(eps_min: float, eps_max: float, ax: Ax = None) -> None:
+        """Add a colorbar to eps plot."""
+        norm = mpl.colors.Normalize(vmin=eps_min, vmax=eps_max)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.15)
+        mappable = mpl.cm.ScalarMappable(norm=norm, cmap=STRUCTURE_EPS_CMAP)
+        plt.colorbar(mappable, cax=cax, label=r"$\epsilon_r$")
 
     @equal_aspect
     @add_ax_if_none
@@ -1869,33 +2231,292 @@ class Simulation(AbstractSimulation):
             The supplied or created matplotlib axes.
         """
 
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        structures = self.structures
 
-        return self.scene.plot_structures_eps(
-            freq=freq,
-            cbar=cbar,
-            alpha=alpha,
-            ax=ax,
-            x=x,
-            y=y,
-            z=z,
-            hlim=hlim,
-            vlim=vlim,
-            grid=self.grid,
-            reverse=reverse,
-        )
+        # alpha is None just means plot without any transparency
+        if alpha is None:
+            alpha = 1
 
-    # candidate for removal in 3.0
+        if alpha <= 0:
+            return ax
+
+        if alpha < 1 and not isinstance(self.medium, AbstractCustomMedium):
+            axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+            center = Box.unpop_axis(position, (0, 0), axis=axis)
+            size = Box.unpop_axis(0, (inf, inf), axis=axis)
+            plane = Box(center=center, size=size)
+            medium_shapes = self._filter_structures_plane(structures=structures, plane=plane)
+        else:
+            structures = [self.background_structure] + list(structures)
+            medium_shapes = self._get_structures_2dbox(
+                structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+            )
+
+        eps_min, eps_max = self.eps_bounds(freq=freq)
+        for medium, shape in medium_shapes:
+            # if the background medium is custom medium, it needs to be rendered separately
+            if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
+                continue
+            # no need to add patches for custom medium
+            if not isinstance(medium, AbstractCustomMedium):
+                ax = self._plot_shape_structure_eps(
+                    freq=freq,
+                    alpha=alpha,
+                    medium=medium,
+                    eps_min=eps_min,
+                    eps_max=eps_max,
+                    reverse=reverse,
+                    shape=shape,
+                    ax=ax,
+                )
+            else:
+                # For custom medium, apply pcolormesh clipped by the shape.
+                self._pcolormesh_shape_custom_medium_structure_eps(
+                    x, y, z, freq, alpha, medium, eps_min, eps_max, reverse, shape, ax
+                )
+
+        if cbar:
+            self._add_cbar(eps_min=eps_min, eps_max=eps_max, ax=ax)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+
+        # clean up the axis display
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        return ax
+
     def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
         """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
 
-        log.warning(
-            "'Simulation.eps_bounds()' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.scene.eps_bounds()' instead."
+        medium_list = [self.medium] + list(self.mediums)
+        medium_list = [medium for medium in medium_list if not isinstance(medium, PECMedium)]
+        # regular medium
+        eps_list = [
+            medium.eps_model(freq).real
+            for medium in medium_list
+            if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
+        ]
+        eps_min = min(eps_list, default=1)
+        eps_max = max(eps_list, default=1)
+        # custom medium, the min and max in the supplied dataset over all components and
+        # spatial locations.
+        for mat in [medium for medium in medium_list if isinstance(medium, AbstractCustomMedium)]:
+            eps_dataarray = mat.eps_dataarray_freq(freq)
+            eps_min = min(
+                eps_min,
+                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+            )
+            eps_max = max(
+                eps_max,
+                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+            )
+        return eps_min, eps_max
+
+    def _pcolormesh_shape_custom_medium_structure_eps(
+        self,
+        x: float,
+        y: float,
+        z: float,
+        freq: float,
+        alpha: float,
+        medium: Medium,
+        eps_min: float,
+        eps_max: float,
+        reverse: bool,
+        shape: Shapely,
+        ax: Ax,
+    ):
+        """
+        Plot shape made of custom medium with ``pcolormesh``.
+        """
+        coords = "xyz"
+        normal_axis_ind, normal_position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        normal_axis, plane_axes = self.pop_axis(coords, normal_axis_ind)
+
+        # First, obtain `span_inds` of grids for interpolating permittivity in the
+        # bounding box of the shape
+        shape_bounds = shape.bounds
+        rmin, rmax = [*shape_bounds[:2]], [*shape_bounds[2:]]
+        rmin.insert(normal_axis_ind, normal_position)
+        rmax.insert(normal_axis_ind, normal_position)
+        span_inds = self.grid.discretize_inds(Box.from_bounds(rmin=rmin, rmax=rmax), extend=True)
+        # filter negative or too large inds
+        n_grid = [len(grid_comp) for grid_comp in self.grid.boundaries.to_list]
+        span_inds = [
+            (max(fmin, 0), min(fmax, n_grid[f_ind])) for f_ind, (fmin, fmax) in enumerate(span_inds)
+        ]
+
+        # assemble the coordinate in the 2d plane
+        plane_coord = []
+        for plane_axis in range(2):
+            ind_axis = "xyz".index(plane_axes[plane_axis])
+            plane_coord.append(self.grid.boundaries.to_list[ind_axis][slice(*span_inds[ind_axis])])
+
+        # prepare `Coords` for interpolation
+        coord_dict = {
+            plane_axes[0]: plane_coord[0],
+            plane_axes[1]: plane_coord[1],
+            normal_axis: [normal_position],
+        }
+        coord_shape = Coords(**coord_dict)
+        # interpolate permittivity and take the average over components
+        eps_shape = np.mean(medium.eps_diagonal_on_grid(frequency=freq, coords=coord_shape), axis=0)
+        # remove the normal_axis and take real part
+        eps_shape = eps_shape.real.mean(axis=normal_axis_ind)
+        # reverse
+        if reverse:
+            eps_shape = eps_min + eps_max - eps_shape
+
+        # pcolormesh
+        plane_xp, plane_yp = np.meshgrid(plane_coord[0], plane_coord[1], indexing="ij")
+        ax.pcolormesh(
+            plane_xp,
+            plane_yp,
+            eps_shape,
+            clip_path=(polygon_path(shape), ax.transData),
+            cmap=STRUCTURE_EPS_CMAP,
+            vmin=eps_min,
+            vmax=eps_max,
+            alpha=alpha,
+            clip_box=ax.bbox,
         )
-        return self.scene.eps_bounds(freq=freq)
+
+    def _get_structure_eps_plot_params(
+        self,
+        medium: Medium,
+        freq: float,
+        eps_min: float,
+        eps_max: float,
+        reverse: bool = False,
+        alpha: float = None,
+    ) -> PlotParams:
+        """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
+
+        plot_params = plot_params_structure.copy(update={"linewidth": 0})
+        if alpha is not None:
+            plot_params = plot_params.copy(update={"alpha": alpha})
+
+        if isinstance(medium, PECMedium):
+            # perfect electrical conductor
+            plot_params = plot_params.copy(
+                update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
+            )
+        elif isinstance(medium, Medium2D):
+            # 2d material
+            plot_params = plot_params.copy(update={"edgecolor": "k", "linewidth": 1})
+        else:
+            # regular medium
+            eps_medium = medium.eps_model(frequency=freq).real
+            delta_eps = eps_medium - eps_min
+            delta_eps_max = eps_max - eps_min + 1e-5
+            eps_fraction = delta_eps / delta_eps_max
+            color = eps_fraction if reverse else 1 - eps_fraction
+            plot_params = plot_params.copy(update={"facecolor": str(color)})
+
+        return plot_params
+
+    def _plot_shape_structure_eps(
+        self,
+        freq: float,
+        medium: Medium,
+        shape: Shapely,
+        eps_min: float,
+        eps_max: float,
+        ax: Ax,
+        reverse: bool = False,
+        alpha: float = None,
+    ) -> Ax:
+        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
+        plot_params = self._get_structure_eps_plot_params(
+            medium=medium, freq=freq, eps_min=eps_min, eps_max=eps_max, alpha=alpha, reverse=reverse
+        )
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_sources(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the sources, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for source in self.sources:
+            ax = source.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_monitors(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's monitors on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the sources, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for monitor in self.monitors:
+            ax = monitor.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        return ax
 
     @cached_property
     def num_pml_layers(self) -> List[Tuple[float, float]]:
@@ -1932,18 +2553,8 @@ class Simulation(AbstractSimulation):
             pml_thicknesses.append((thick_l, thick_r))
         return pml_thicknesses
 
-    # candidate for removal in 3.0
     @cached_property
     def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-        """Simulation bounds including the PML regions."""
-        log.warning(
-            "'Simulation.bounds_pml' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.simulation_bounds' instead."
-        )
-        return self.simulation_bounds
-
-    @cached_property
-    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
         """Simulation bounds including the PML regions."""
         pml_thick = self.pml_thicknesses
         bounds_in = self.bounds
@@ -1951,6 +2562,14 @@ class Simulation(AbstractSimulation):
         bounds_max = tuple((bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)))
 
         return (bounds_min, bounds_max)
+
+    @cached_property
+    def simulation_geometry(self) -> Box:
+        """The entire simulation domain including PML layers. It is identical to
+        ``sim.geometry`` in the absence of PML.
+        """
+        rmin, rmax = self.bounds_pml
+        return Box.from_bounds(rmin=rmin, rmax=rmax)
 
     @equal_aspect
     @add_ax_if_none
@@ -1990,9 +2609,7 @@ class Simulation(AbstractSimulation):
         pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
         for pml_box in pml_boxes:
             pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
 
     def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
@@ -2011,7 +2628,7 @@ class Simulation(AbstractSimulation):
 
     def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
         """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = (list(bounds) for bounds in self.simulation_bounds)
+        rmin, rmax = (list(bounds) for bounds in self.bounds_pml)
         if sign == -1:
             rmax[pml_axis] = rmin[pml_axis] + pml_height
         else:
@@ -2026,6 +2643,77 @@ class Simulation(AbstractSimulation):
         pml_box = pml_box.updated_copy(size=new_size)
 
         return pml_box
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_symmetries(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's symmetries on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+
+        for sym_axis, sym_value in enumerate(self.symmetry):
+            if sym_value == 0 or sym_axis == normal_axis:
+                continue
+            sym_box = self._make_symmetry_box(sym_axis=sym_axis)
+            plot_params = self._make_symmetry_plot_params(sym_value=sym_value)
+            ax = sym_box.plot(x=x, y=y, z=z, ax=ax, **plot_params.to_kwargs())
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        return ax
+
+    def _make_symmetry_plot_params(self, sym_value: Symmetry) -> PlotParams:
+        """Make PlotParams for symmetry."""
+
+        plot_params = plot_params_symmetry.copy()
+
+        if sym_value == 1:
+            plot_params = plot_params.copy(
+                update={"facecolor": "lightsteelblue", "edgecolor": "lightsteelblue", "hatch": "++"}
+            )
+        elif sym_value == -1:
+            plot_params = plot_params.copy(
+                update={"facecolor": "goldenrod", "edgecolor": "goldenrod", "hatch": "--"}
+            )
+
+        return plot_params
+
+    def _make_symmetry_box(self, sym_axis: Axis) -> Box:
+        """Construct a :class:`.Box` representing the symmetry to be plotted."""
+        sym_box = self.simulation_geometry
+        size = list(sym_box.size)
+        size[sym_axis] /= 2
+        center = list(sym_box.center)
+        center[sym_axis] -= size[sym_axis] / 2
+
+        return Box(size=size, center=center)
 
     @add_ax_if_none
     def plot_grid(
@@ -2071,8 +2759,8 @@ class Simulation(AbstractSimulation):
         _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
         boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
         boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
+        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
         segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
         line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
         segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
@@ -2098,9 +2786,7 @@ class Simulation(AbstractSimulation):
             )
             ax.add_patch(rect)
 
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
+        ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
@@ -2221,6 +2907,217 @@ class Simulation(AbstractSimulation):
 
         return ax
 
+    def _set_plot_bounds(
+        self,
+        ax: Ax,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> Ax:
+        """Sets the xy limits of the simulation at a plane, useful after plotting.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes._subplots.Axes
+            Matplotlib axes to set bounds on.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The axes after setting the boundaries.
+        """
+
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (xmin, ymin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+
+        if hlim is not None:
+            (xmin, xmax) = hlim
+        if vlim is not None:
+            (ymin, ymax) = vlim
+
+        if xmin != xmax:
+            ax.set_xlim(xmin, xmax)
+        if ymin != ymax:
+            ax.set_ylim(ymin, ymax)
+
+        return ax
+
+    @staticmethod
+    def _get_structures_plane(
+        structures: List[Structure], x: float = None, y: float = None, z: float = None
+    ) -> List[Tuple[Medium, Shapely]]:
+        """Compute list of shapes to plot on plane specified by {x,y,z}.
+
+        Parameters
+        ----------
+        structures : List[:class:`.Structure`]
+            list of structures to filter on the plane.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane.
+        """
+        medium_shapes = []
+        for structure in structures:
+            intersections = structure.geometry.intersections_plane(x=x, y=y, z=z)
+            if len(intersections) > 0:
+                for shape in intersections:
+                    shape = Geometry.evaluate_inf_shape(shape)
+                    medium_shapes.append((structure.medium, shape))
+        return medium_shapes
+
+    def _get_structures_2dbox(
+        self,
+        structures: List[Structure],
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> List[Tuple[Medium, Shapely]]:
+        """Compute list of shapes to plot on 2d box specified by (x_min, x_max), (y_min, y_max).
+
+        Parameters
+        ----------
+        structures : List[:class:`.Structure`]
+            list of structures to filter on the plane.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane.
+        """
+        # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (hmin, vmin) = self.pop_axis(self.bounds_pml[0], axis=axis)
+        _, (hmax, vmax) = self.pop_axis(self.bounds_pml[1], axis=axis)
+
+        if hlim is not None:
+            (hmin, hmax) = hlim
+        if vlim is not None:
+            (vmin, vmax) = vlim
+
+        # get center and size with h, v
+        h_center = (hmin + hmax) / 2.0
+        v_center = (vmin + vmax) / 2.0
+        h_size = (hmax - hmin) or inf
+        v_size = (vmax - vmin) or inf
+
+        axis, center_normal = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        center = self.unpop_axis(center_normal, (h_center, v_center), axis=axis)
+        size = self.unpop_axis(0.0, (h_size, v_size), axis=axis)
+        plane = Box(center=center, size=size)
+
+        medium_shapes = []
+        for structure in structures:
+            intersections = plane.intersections_with(structure.geometry)
+            for shape in intersections:
+                if not shape.is_empty:
+                    shape = Box.evaluate_inf_shape(shape)
+                    medium_shapes.append((structure.medium, shape))
+        return medium_shapes
+
+    @staticmethod
+    def _filter_structures_plane(
+        structures: List[Structure], plane: Box
+    ) -> List[Tuple[Medium, Shapely]]:
+        """Compute list of shapes to plot on plane specified by {x,y,z}.
+        Overlaps are removed or merged depending on medium.
+
+        Parameters
+        ----------
+        structures : List[:class:`.Structure`]
+            list of structures to filter on the plane.
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+
+        Returns
+        -------
+        List[Tuple[:class:`.AbstractMedium`, shapely.geometry.base.BaseGeometry]]
+            List of shapes and mediums on the plane after merging.
+        """
+
+        shapes = []
+        for structure in structures:
+
+            # get list of Shapely shapes that intersect at the plane
+            shapes_plane = plane.intersections_with(structure.geometry)
+
+            # Append each of them and their medium information to the list of shapes
+            for shape in shapes_plane:
+                shapes.append((structure.medium, shape, shape.bounds))
+
+        background_shapes = []
+        for medium, shape, bounds in shapes:
+
+            minx, miny, maxx, maxy = bounds
+
+            # loop through background_shapes (note: all background are non-intersecting or merged)
+            for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
+
+                _minx, _miny, _maxx, _maxy = _bounds
+
+                # do a bounding box check to see if any intersection to do anything about
+                if minx > _maxx or _minx > maxx or miny > _maxy or _miny > maxy:
+                    continue
+
+                # look more closely to see if intersected.
+                if _shape.is_empty or not shape.intersects(_shape):
+                    continue
+
+                diff_shape = _shape - shape
+
+                # different medium, remove intersection from background shape
+                if medium != _medium and len(diff_shape.bounds) > 0:
+                    background_shapes[index] = (_medium, diff_shape, diff_shape.bounds)
+
+                # same medium, add diff shape to this shape and mark background shape for removal
+                else:
+                    shape = shape | diff_shape
+                    background_shapes[index] = None
+
+            # after doing this with all background shapes, add this shape to the background
+            background_shapes.append((medium, shape, shape.bounds))
+
+            # remove any existing background shapes that have been marked as 'None'
+            background_shapes = [b for b in background_shapes if b is not None]
+
+        # filter out any remaining None or empty shapes (shapes with area completely removed)
+        return [(medium, shape) for (medium, shape, _) in background_shapes if shape]
+
     @cached_property
     def frequency_range(self) -> FreqBound:
         """Range of frequencies spanning all sources' frequency dependence.
@@ -2263,7 +3160,7 @@ class Simulation(AbstractSimulation):
         dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
-        n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
+        n_cfl = min(min(mat.n_cfl for mat in self.mediums), 1)
         return n_cfl * self.courant * dl_avg / C_0
 
     @cached_property
@@ -2403,10 +3300,6 @@ class Simulation(AbstractSimulation):
         """
         if any(isinstance(boundary[0], BlochBoundary) for boundary in self.boundary_spec.to_list):
             return True
-        for medium in self.scene.mediums:
-            if medium.nonlinear_spec is not None:
-                if any(model.complex_fields for model in medium._nonlinear_models):
-                    return True
         return False
 
     @cached_property
@@ -2562,12 +3455,19 @@ class Simulation(AbstractSimulation):
         freq : float = None
             The frequency to evaluate the mediums at.
             If not specified, evaluates at infinite frequency.
+
         Returns
         -------
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
             refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
         """
 
         sub_grid = self.discretize(box)
@@ -2632,7 +3532,7 @@ class Simulation(AbstractSimulation):
             """returns epsilon data on grid of points defined by coords"""
             arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
             eps_background = get_eps(
-                structure=self.scene.background_structure, frequency=freq, coords=coords
+                structure=self.background_structure, frequency=freq, coords=coords
             )
             shape = tuple(len(array) for array in arrays)
             eps_array = eps_background * np.ones(shape, dtype=complex)
@@ -2697,11 +3597,7 @@ class Simulation(AbstractSimulation):
         datasets_current_source = [
             src.current_dataset for src in self.sources if isinstance(src, CustomCurrentSource)
         ]
-        datasets_medium = [
-            mat
-            for mat in self.scene.mediums
-            if isinstance(mat, AbstractCustomMedium) or mat.time_modulated
-        ]
+        datasets_medium = [mat for mat in self.mediums if isinstance(mat, AbstractCustomMedium)]
         datasets_geometry = []
 
         for struct in self.structures:
@@ -2721,7 +3617,7 @@ class Simulation(AbstractSimulation):
         """Generate a tuple of structures wherein any 2D materials are converted to 3D
         volumetric equivalents, using ``grid`` as the simulation grid."""
 
-        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
+        if not any(isinstance(medium, Medium2D) for medium in self.mediums):
             return self.structures
 
         def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
@@ -2786,7 +3682,7 @@ class Simulation(AbstractSimulation):
                 geom_shifted = set_bounds(
                     geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
                 )
-                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
+                media = self.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
                 if len(media) > 1:
                     raise SetupError(
                         "2D materials do not support multiple neighboring media on a side. "
@@ -2816,11 +3712,7 @@ class Simulation(AbstractSimulation):
             # get neighboring media and grid sizes
             (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
 
-            if not structure.medium.is_pec:
-                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
-            else:
-                new_bounds = (center, center)
-
+            new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
             new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
 
             new_medium = structure.medium.volumetric_equivalent(
@@ -2840,7 +3732,7 @@ class Simulation(AbstractSimulation):
     def allow_gain(self) -> bool:
         """``True`` if any of the mediums in the simulation allows gain."""
 
-        for medium in self.scene.mediums:
+        for medium in self.mediums:
             if isinstance(medium, AnisotropicMedium):
                 if np.any([med.allow_gain for med in [medium.xx, medium.yy, medium.zz]]):
                     return True
@@ -2853,7 +3745,6 @@ class Simulation(AbstractSimulation):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
-        interp_method: InterpMethod = "linear",
     ) -> Simulation:
         """Return a copy of the simulation with heat and/or charge data applied to all mediums
         that have perturbation models specified. That is, such mediums will be replaced with
@@ -2869,9 +3760,6 @@ class Simulation(AbstractSimulation):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
-        interp_method : :class:`.InterpMethod`, optional
-            Interpolation method to obtain heat and/or charge values that are not supplied
-            at the Yee grids.
 
         Returns
         -------
@@ -2881,7 +3769,7 @@ class Simulation(AbstractSimulation):
 
         sim_dict = self.dict()
         structures = self.structures
-        sim_bounds = self.simulation_bounds
+        sim_bounds = self.bounds_pml
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
@@ -2916,7 +3804,7 @@ class Simulation(AbstractSimulation):
                                 f"Provided '{name}' does not fully cover structures[{s_ind}]."
                             )
 
-                new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
+                new_medium = med.perturbed_copy(**restricted_arrays)
                 new_structure = structure.updated_copy(medium=new_medium)
                 new_structures.append(new_structure)
             else:
@@ -2942,45 +3830,6 @@ class Simulation(AbstractSimulation):
                     if not array.does_cover(bounds):
                         log.warning(f"Provided '{name}' does not fully cover simulation domain.")
 
-            sim_dict["medium"] = med.perturbed_copy(
-                **restricted_arrays, interp_method=interp_method
-            )
+            sim_dict["medium"] = med.perturbed_copy(**restricted_arrays)
 
         return Simulation.parse_obj(sim_dict)
-
-    @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> Simulation:
-        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
-        to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
-
-        Parameters
-        ----------
-        scene : :class:.`Scene`
-            Size of object in x, y, and z directions.
-        **kwargs
-            Other arguments
-
-        Example
-        -------
-        >>> from tidy3d import Scene, Medium, Box, Structure, GridSpec
-        >>> box = Structure(
-        ...     geometry=Box(center=(0, 0, 0), size=(1, 2, 3)),
-        ...     medium=Medium(permittivity=5),
-        ... )
-        >>> scene = Scene(
-        ...     structures=[box],
-        ...     medium=Medium(permittivity=3),
-        ... )
-        >>> sim = Simulation.from_scene(
-        ...     scene=scene,
-        ...     center=(0, 0, 0),
-        ...     size=(5, 6, 7),
-        ...     run_time=1e-12,
-        ...     grid_spec=GridSpec.uniform(dl=0.4),
-        ... )
-        """
-        return Simulation(
-            structures=scene.structures,
-            medium=scene.medium,
-            **kwargs,
-        )

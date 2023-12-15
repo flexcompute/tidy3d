@@ -1,12 +1,10 @@
 import pytest
 
 import responses
-
 from tidy3d.plugins.dispersion import DispersionFitter
 
-from tidy3d.web.core.environment import Env
-from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
-import tidy3d as td
+from tidy3d.web.environment import Env
+from tidy3d.web.material_fitter import FitterOptions, MaterialFitterTask
 
 Env.dev.active()
 
@@ -14,17 +12,16 @@ Env.dev.active()
 @pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
-    import tidy3d.web.core.http_util as httputil
+    import tidy3d.web.http_management as http_module
 
-    monkeypatch.setattr(httputil, "api_key", lambda: "apikey")
-    monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
 
 
 @responses.activate
-def test_material_fitter(tmp_path, monkeypatch, set_api_key):
+def test_material_fitter(monkeypatch, set_api_key):
     fitter = DispersionFitter.from_file("tests/data/nk_data.csv", skiprows=1, delimiter=",")
 
-    monkeypatch.setattr("tidy3d.web.api.material_fitter.uuid4", lambda: "fitter_id")
+    monkeypatch.setattr("tidy3d.web.material_fitter.uuid4", lambda: "fitter_id")
 
     responses.add(
         responses.GET,
@@ -39,7 +36,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
         status=200,
     )
     monkeypatch.setattr(
-        "tidy3d.web.api.material_fitter.MaterialFitterTask.submit",
+        "tidy3d.web.material_fitter.MaterialFitterTask.submit",
         lambda fitter, options: MaterialFitterTask(
             id="1234", status="ok", dispersion_fitter=fitter, resourcePath="", fileName=""
         ),
@@ -66,7 +63,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
         status=200,
     )
     monkeypatch.setattr(
-        "tidy3d.web.api.material_fitter.MaterialFitterTask.sync_status", lambda self: None
+        "tidy3d.web.material_fitter.MaterialFitterTask.sync_status", lambda self: None
     )
     task.sync_status()
     task.status == "running"

@@ -1,9 +1,8 @@
 import pytest
 import responses
 
-from tidy3d.web.core.environment import Env
-from tidy3d.web.api.material_libray import MaterialLibray
-import tidy3d as td
+from tidy3d.web.environment import Env
+from tidy3d.web.material_libray import MaterialLibray
 
 Env.dev.active()
 
@@ -11,10 +10,9 @@ Env.dev.active()
 @pytest.fixture
 def set_api_key(monkeypatch):
     """Set the api key."""
-    import tidy3d.web.core.http_util as httputil
+    import tidy3d.web.http_management as http_module
 
-    monkeypatch.setattr(httputil, "api_key", lambda: "apikey")
-    monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
+    monkeypatch.setattr(http_module, "api_key", lambda: "apikey")
 
 
 @responses.activate

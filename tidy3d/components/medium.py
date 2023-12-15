@@ -14,21 +14,18 @@ from .base import Tidy3dBaseModel, cached_property
 from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
-from .types import Axis, TensorReal, Complex
+from .types import Axis, TensorReal
 from .data.dataset import PermittivityDataset
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
 from .geometry.base import Geometry
 from .validators import validate_name_str, validate_parameter_perturbation
-from ..constants import C_0, pec_val, EPSILON_0, fp_eps, HBAR
+from ..constants import C_0, pec_val, EPSILON_0, LARGE_NUMBER, fp_eps, HBAR
 from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..constants import WATT, VOLT
 from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
-from .heat_spec import HeatSpecType
-from .time_modulation import ModulationSpec
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -37,8 +34,7 @@ FREQ_EVAL_INF = 1e50
 FILL_VALUE = "extrapolate"
 
 # cap on number of nonlinear iterations
-NONLINEAR_MAX_NUM_ITERS = 100
-NONLINEAR_DEFAULT_NUM_ITERS = 5
+NONLINEAR_MAX_NUMITERS = 100
 
 # Range for checking upper bound of Im[eps], in addition to extrema method.
 # The range is in unit of eV and it's in log scale.
@@ -53,13 +49,13 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     @functools.wraps(eps_model)
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
+
         # evaluate infs and None as FREQ_EVAL_INF
         is_inf_scalar = isinstance(frequency, float) and np.isinf(frequency)
         if frequency is None or is_inf_scalar:
             frequency = FREQ_EVAL_INF
 
         if isinstance(frequency, np.ndarray):
-            frequency = frequency.astype(float)
             frequency[np.where(np.isinf(frequency))] = FREQ_EVAL_INF
 
         # if frequency range not present just return original function
@@ -84,357 +80,71 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
 """ Medium Definitions """
 
 
-class NonlinearModel(ABC, Tidy3dBaseModel):
-    """Abstract model for a nonlinear material response.
-    Used as part of a :class:`.NonlinearSpec`."""
+class NonlinearSpec(ABC, Tidy3dBaseModel):
+    """Abstract specification for adding a nonlinearity to a medium.
 
-    def _validate_medium_type(self, medium: AbstractMedium):
-        """Check that the model is compatible with the medium."""
-        if isinstance(medium, AbstractCustomMedium):
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for medium class '{type(medium).__name__}'."
-            )
-        if medium.time_modulated:
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for time-modulated medium class '{type(medium).__name__}'."
-            )
-        if not isinstance(medium, (Medium, DispersiveMedium)):
-            raise ValidationError(
-                f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
-                f"for medium class '{type(medium).__name__}'."
-            )
-
-    def _validate_medium(self, medium: AbstractMedium):
-        """Any additional validation that depends on the medium"""
-        pass
-
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
-        """Any additional validation that depends on the central frequencies of the sources."""
-        pass
-
-    def _get_n0(
-        self,
-        n0: complex,
-        medium: AbstractMedium,
-        freqs: List[pd.PositiveFloat],
-    ) -> complex:
-        """Get a single value for n0."""
-        freqs = np.array(freqs, dtype=float)
-        ns, ks = medium.nk_model(freqs)
-        nks = ns + 1j * ks
-
-        # n0 not specified; need to calculate it
-        if n0 is None:
-            if not len(nks):
-                raise SetupError(
-                    f"Class '{type(self).__name__}' cannot determine 'n0' in the absence of "
-                    "sources. Please either specify 'n0' or add sources to the simulation."
-                )
-            if not all(np.isclose(nk, nks[0]) for nk in nks):
-                raise SetupError(
-                    f"Class '{type(self).__name__}' cannot determine 'n0' because at the source "
-                    f"frequencies '{freqs}' the complex refractive indices '{nks}' of the medium "
-                    f"are not all equal. Please specify 'n0' in '{type(self).__name__}' "
-                    "to match the complex refractive index of the medium at the desired "
-                    "source central frequency."
-                )
-            return nks[0]
-
-        # now, n0 is specified; we use it, but warn if it might be inconsistent
-        if not all(np.isclose(nk, n0) for nk in nks):
-            log.warning(
-                f"Class '{type(self).__name__}' given 'n0={n0}'. At the source frequencies "
-                f"'{freqs}' the medium has complex refractive indices '{nks}'. In order "
-                "to obtain correct nonlinearity parameters, the provided refractive index "
-                "should agree with the complex refractive index at the source frequencies. "
-                "The provided value of 'n0' is being used; the resulting nonlinearity parameters "
-                "may be incorrect for those sources where the complex refractive index of the "
-                "medium is different from this value."
-            )
-        return n0
-
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        pass
-
-
-class NonlinearSusceptibility(NonlinearModel):
-    """Model for an instantaneous nonlinear chi3 susceptibility.
-    The expression for the instantaneous nonlinear polarization is given below.
-
-    Note
-    ----
-    .. math::
-
-        P_{NL} = \\varepsilon_0 \\chi_3 |E|^2 E
-
-    Note
-    ----
-    This model uses real time-domain fields, so :math:`\\chi_3` must be real.
-    For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
-    is applied separately to the real and imaginary parts, so that the above equation
-    holds when both E and :math:`P_{NL}` are replaced by their real or imaginary parts.
-    The nonlinearity is applied to the real and imaginary components separately since
-    each of those represents a physical field.
-
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
-
-    Example
-    -------
-    >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
+    Notes
+    -----
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.numiters` can help with convergence.
     """
 
-    chi3: float = pd.Field(
-        0,
-        title="Chi3",
-        description="Chi3 nonlinear susceptibility.",
-        units=f"{MICROMETER}^2 / {VOLT}^2",
-    )
-
     numiters: pd.PositiveInt = pd.Field(
-        None,
+        1,
         title="Number of iterations",
-        description="Deprecated. The old usage 'nonlinear_spec=model' with 'model.numiters' "
-        "is deprecated and will be removed in a future release. The new usage is "
-        r"'nonlinear_spec=NonlinearSpec(models=\[model], num_iters=num_iters)'. Under the new "
-        "usage, this parameter is ignored, and 'NonlinearSpec.num_iters' is used instead.",
+        description="Number of iterations for solving nonlinear constitutive relation.",
     )
 
     @pd.validator("numiters", always=True)
     def _validate_numiters(cls, val):
         """Check that numiters is not too large."""
-        if val is None:
-            return val
-        if val > NONLINEAR_MAX_NUM_ITERS:
+        if val > NONLINEAR_MAX_NUMITERS:
             raise ValidationError(
-                "'NonlinearSusceptibility.numiters' must be less than "
-                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
+                "'NonlinearSpec.numiters' must be less than "
+                f"{NONLINEAR_MAX_NUMITERS}, currently {val}."
             )
         return val
 
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return False
 
+class NonlinearSusceptibility(NonlinearSpec):
+    """
+    Specification adding an instantaneous nonlinear susceptibility to a medium.
+    The expression for the instantaneous nonlinear polarization is given below.
 
-class TwoPhotonAbsorption(NonlinearModel):
-    """Model for two-photon absorption (TPA) nonlinearity which gives an intensity-dependent
-    absorption of the form :math:`\\alpha = \\alpha_0 + \\beta I`.
-    The expression for the nonlinear polarization is given below.
+    Notes
+    -----
 
-    Note
-    ----
-    .. math::
+        .. math::
 
-        P_{NL} = -\\frac{c_0^2 \\varepsilon_0^2 n_0 \\operatorname{Re}(n_0) \\beta}{2 i \\omega} |E|^2 E
+            P_{NL} = \\epsilon_0 \\chi_3 |E|^2 E
 
-    Note
-    ----
-    This frequency-domain equation is implemented in the time domain using complex-valued fields.
+        The nonlinear constitutive relation is solved iteratively; it may not converge
+        for strong nonlinearities. Increasing :attr:`tidy3d.NonlinearSpec.numiters` can help with convergence.
 
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
+        For complex fields (e.g. when using Bloch boundary conditions), the nonlinearity
+        is applied separately to the real and imaginary parts, so that the above equation
+        holds when both :math:`E` and :math:`P_{NL}` are replaced by their real or imaginary parts.
+        The nonlinearity is only applied to the real-valued fields since they are the
+        physical fields.
 
-    Note
-    ----
-    The implementation is described in::
+        Different field components do not interact nonlinearly. For example,
+        when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
+        This approximation is valid when the :math:`E` field is predominantly polarized along one
+        of the ``x``, ``y``, or ``z`` axes.
 
-        N. Suzuki, "FDTD Analysis of Two-Photon Absorption and Free-Carrier Absorption in Si
-        High-Index-Contrast Waveguides," J. Light. Technol. 25, 9 (2007).
+        .. TODO add links to notebooks here.
 
     Example
     -------
-    >>> tpa_model = TwoPhotonAbsorption(beta=1)
+    >>> medium = Medium(permittivity=2, nonlinear_spec=NonlinearSusceptibility(chi3=1))
     """
 
-    beta: Complex = pd.Field(
-        0,
-        title="TPA coefficient",
-        description="Coefficient for two-photon absorption (TPA).",
-        units=f"{MICROMETER} / {WATT}",
+    chi3: float = pd.Field(
+        ..., title="Chi3", description="Chi3 nonlinear susceptibility.", units="um^2 / V^2"
     )
 
-    n0: Optional[Complex] = pd.Field(
-        None,
-        title="Complex linear refractive index",
-        description="Complex linear refractive index of the medium, computed for instance using "
-        "'medium.nk_model'. If not provided, it is calculated automatically using the central "
-        "frequencies of the simulation sources (as long as these are all equal).",
-    )
 
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
-        """Any validation that depends on knowing the central frequencies of the sources.
-        This includes passivity checking, if necessary."""
-        n0 = self._get_n0(self.n0, medium, freqs)
-        beta = self.beta
-        if not medium.allow_gain:
-            chi_imag = np.real(beta * n0 * np.real(n0))
-            if chi_imag < 0:
-                raise ValidationError(
-                    "For passive medium, 'beta' in 'TwoPhotonAbsorption' must satisfy "
-                    f"'Re(beta * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
-                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
-                    "'allow_gain=True' in the medium class. Caution: simulations containing "
-                    "gain medium are unstable, and are likely to diverge."
-                )
-
-    def _validate_medium(self, medium: AbstractMedium):
-        """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
-
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return True
-
-
-class KerrNonlinearity(NonlinearModel):
-    """Model for Kerr nonlinearity which gives an intensity-dependent refractive index
-    of the form :math:`n = n_0 + n_2 I`. The expression for the nonlinear polarization
-    is given below.
-
-    Note
-    ----
-    .. math::
-
-        P_{NL} = \\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0) n_2 |E|^2 E
-
-    Note
-    ----
-    The fields in this equation are complex-valued, allowing a direct implementation of the Kerr
-    nonlinearity. In contrast, the model :class:`.NonlinearSusceptibility` implements a
-    chi3 nonlinear susceptibility using real-valued fields, giving rise to Kerr nonlinearity
-    as well as third-harmonic generation. The relationship between the parameters is given by
-    :math:`n_2 = \\frac{3}{4} \\frac{1}{\\varepsilon_0 c_0 n_0 \\operatorname{Re}(n_0)} \\chi_3`. The additional
-    factor of :math:`\\frac{3}{4}` comes from the usage of complex-valued fields for the Kerr
-    nonlinearity and real-valued fields for the nonlinear susceptibility.
-
-    Note
-    ----
-    Different field components do not interact nonlinearly. For example,
-    when calculating :math:`P_{NL, x}`, we approximate :math:`|E|^2 \\approx |E_x|^2`.
-    This approximation is valid when the E field is predominantly polarized along one
-    of the x, y, or z axes.
-
-    Example
-    -------
-    >>> kerr_model = KerrNonlinearity(n2=1)
-    """
-
-    n2: Complex = pd.Field(
-        0,
-        title="Nonlinear refractive index",
-        description="Nonlinear refractive index in the Kerr nonlinearity.",
-        units=f"{MICROMETER}^2 / {WATT}",
-    )
-
-    n0: Optional[Complex] = pd.Field(
-        None,
-        title="Complex linear refractive index",
-        description="Complex linear refractive index of the medium, computed for instance using "
-        "'medium.nk_model'. If not provided, it is calculated automatically using the central "
-        "frequencies of the simulation sources (as long as these are all equal).",
-    )
-
-    def _validate_medium_freqs(self, medium: AbstractMedium, freqs: List[pd.PositiveFloat]) -> None:
-        """Any validation that depends on knowing the central frequencies of the sources.
-        This includes passivity checking, if necessary."""
-        n0 = self._get_n0(self.n0, medium, freqs)
-        n2 = self.n2
-        if not medium.allow_gain:
-            chi_imag = np.imag(n2 * n0 * np.real(n0))
-            if chi_imag < 0:
-                raise ValidationError(
-                    "For passive medium, 'n2' in 'KerrNonlinearity' must satisfy "
-                    f"'Im(n2 * n0 * Re(n0)) >= 0'. Currently, this quantity equals '{chi_imag}', "
-                    f"and the linear index is 'n0={n0}'. To simulate gain medium, please set "
-                    "'allow_gain=True' in the medium class. Caution: simulations containing "
-                    "gain medium are unstable, and are likely to diverge."
-                )
-
-    def _validate_medium(self, medium: AbstractMedium):
-        """Check that the model is compatible with the medium."""
-        # if n0 is specified, we can go ahead and validate passivity
-        if self.n0 is not None:
-            self._validate_medium_freqs(medium, [])
-
-    @property
-    def complex_fields(self) -> bool:
-        """Whether the model uses complex fields."""
-        return True
-
-
-NonlinearModelType = Union[NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity]
-
-
-class NonlinearSpec(ABC, Tidy3dBaseModel):
-    """Abstract specification for adding nonlinearities to a medium.
-
-    Note
-    ----
-    The nonlinear constitutive relation is solved iteratively; it may not converge
-    for strong nonlinearities. Increasing ``num_iters`` can help with convergence.
-
-    Example
-    -------
-    >>> nonlinear_susceptibility = NonlinearSusceptibility(chi3=1)
-    >>> nonlinear_spec = NonlinearSpec(models=[nonlinear_susceptibility])
-    >>> medium = Medium(permittivity=2, nonlinear_spec=nonlinear_spec)
-    """
-
-    models: Tuple[NonlinearModelType, ...] = pd.Field(
-        (),
-        title="Nonlinear models",
-        description="The nonlinear models present in this nonlinear spec. "
-        "Nonlinear models of different types are additive. "
-        "Multiple nonlinear models of the same type are not allowed.",
-    )
-
-    num_iters: pd.PositiveInt = pd.Field(
-        NONLINEAR_DEFAULT_NUM_ITERS,
-        title="Number of iterations",
-        description="Number of iterations for solving nonlinear constitutive relation.",
-    )
-
-    @pd.validator("models", always=True)
-    def _no_duplicate_models(cls, val):
-        """Ensure each type of model appears at most once."""
-        if val is None:
-            return val
-        models = [model.__class__ for model in val]
-        models_unique = set(models)
-        if len(models) != len(models_unique):
-            raise ValidationError(
-                "Multiple 'NonlinearModels' of the same type "
-                "were found in a single 'NonlinearSpec'. Please ensure that "
-                "each type of 'NonlinearModel' appears at most once in a single 'NonlinearSpec'."
-            )
-        return val
-
-    @pd.validator("num_iters", always=True)
-    def _validate_num_iters(cls, val, values):
-        """Check that num_iters is not too large."""
-        if val > NONLINEAR_MAX_NUM_ITERS:
-            raise ValidationError(
-                "'NonlinearSpec.num_iters' must be less than "
-                f"{NONLINEAR_MAX_NUM_ITERS}, currently {val}."
-            )
-        return val
+NonlinearSpecType = Union[NonlinearSusceptibility]
 
 
 class AbstractMedium(ABC, Tidy3dBaseModel):
@@ -453,113 +163,29 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         False,
         title="Allow gain medium",
         description="Allow the medium to be active. Caution: "
-        "simulations with a gain medium are unstable, and are likely to diverge."
+        "simulations with gain medium are unstable, and are likely to diverge."
         "Simulations where 'allow_gain' is set to 'True' will still be charged even if "
         "diverged. Monitor data up to the divergence point will still be returned and can be "
         "useful in some cases.",
     )
 
-    nonlinear_spec: Union[NonlinearSpec, NonlinearSusceptibility] = pd.Field(
+    nonlinear_spec: NonlinearSpecType = pd.Field(
         None,
         title="Nonlinear Spec",
         description="Nonlinear spec applied on top of the base medium properties.",
     )
 
-    modulation_spec: ModulationSpec = pd.Field(
-        None,
-        title="Modulation Spec",
-        description="Modulation spec applied on top of the base medium properties.",
-    )
-
-    @cached_property
-    def _nonlinear_models(self) -> NonlinearSpec:
-        """The nonlinear models in the nonlinear_spec."""
-        if self.nonlinear_spec is None:
-            return []
-        if isinstance(self.nonlinear_spec, NonlinearModel):
-            return [self.nonlinear_spec]
-        if self.nonlinear_spec.models is None:
-            return []
-        return self.nonlinear_spec.models
-
-    @cached_property
-    def _nonlinear_num_iters(self) -> pd.PositiveInt:
-        """The num_iters of the nonlinear_spec."""
-        if self.nonlinear_spec is None:
-            return 0
-        if isinstance(self.nonlinear_spec, NonlinearModel):
-            if self.nonlinear_spec.numiters is None:
-                return 1  # old default value for backwards compatibility
-            return self.nonlinear_spec.numiters
-        return self.nonlinear_spec.num_iters
-
-    def _post_init_validators(self) -> None:
-        """Call validators taking `self` that get run after init."""
-        self._validate_nonlinear_spec()
-
-    def _validate_nonlinear_spec(self):
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
         """Check compatibility with nonlinear_spec."""
-        if self.__class__.__name__ == "AnisotropicMedium" and any(
-            comp.nonlinear_spec is not None for comp in [self.xx, self.yy, self.zz]
-        ):
-            raise ValidationError(
-                "Nonlinearities are not currently supported for the components "
-                "of an anisotropic medium."
-            )
-        if self.nonlinear_spec is None:
-            return
-        if isinstance(self.nonlinear_spec, NonlinearModel):
-            log.warning(
-                "The API for 'nonlinear_spec' has changed. "
-                "The old usage 'nonlinear_spec=model' is deprecated and will be removed "
-                "in a future release. The new usage is "
-                r"'nonlinear_spec=NonlinearSpec(models=\[model])'."
-            )
-        for model in self._nonlinear_models:
-            model._validate_medium_type(self)
-            model._validate_medium(self)
-            if (
-                isinstance(self.nonlinear_spec, NonlinearSpec)
-                and isinstance(model, NonlinearSusceptibility)
-                and model.numiters is not None
-            ):
-                raise ValidationError(
-                    "'NonlinearSusceptibility.numiters' is deprecated. "
-                    "Please use 'NonlinearSpec.num_iters' instead."
-                )
-
-    heat_spec: Optional[HeatSpecType] = pd.Field(
-        None,
-        title="Heat Specification",
-        description="Specification of the medium heat properties. They are used for solving "
-        "the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for "
-        "investigating the influence of heat propagation on the properties of optical systems. "
-        "Once the temperature distribution in the system is found using ``HeatSimulation`` object, "
-        "``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation "
-        "models defined into spatially dependent custom mediums. "
-        "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
-        "``Simulation``.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    @pd.validator("modulation_spec", always=True)
-    def _validate_modulation_spec(cls, val, values):
-        """Check compatibility with modulation_spec."""
-        nonlinear_spec = values.get("nonlinear_spec")
-        if val is not None and nonlinear_spec is not None:
-            raise ValidationError(
-                f"For medium class {cls}, 'modulation_spec' of class {type(val)} and "
-                f"'nonlinear_spec' of class {type(nonlinear_spec)} are "
-                "not simultaneously supported."
-            )
-        return val
+        if val is None:
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
 
     _name_validator = validate_name_str()
-
-    @cached_property
-    def time_modulated(self) -> bool:
-        """Whether any component of the medium is time modulated."""
-        return self.modulation_spec is not None and self.modulation_spec.applied_modulation
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -694,7 +320,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Returns
         -------
         complex
-            Complex-valued relative permittivity.
+            Complex-valued relative permittivty.
         """
         eps_real = n**2 - k**2
         eps_imag = 2 * n * k
@@ -807,11 +433,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         eps_inf = self.eps_model(np.inf)
         sigma = (eps_inf - eps_complex) * 1j * omega * EPSILON_0
         return sigma
-
-    @cached_property
-    def is_pec(self):
-        """Whether the medium is a PEC."""
-        return False
 
 
 class AbstractCustomMedium(AbstractMedium, ABC):
@@ -967,18 +588,12 @@ class PECMedium(AbstractMedium):
 
     Note
     ----
-    To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
-    """
 
-    @pd.validator("modulation_spec", always=True)
-    def _validate_modulation_spec(cls, val):
-        """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
-            )
-        return val
+        To avoid confusion from duplicate PECs, must import ``tidy3d.PEC`` instance directly.
+
+
+
+    """
 
     def eps_model(self, frequency: float) -> complex:
         # return something like frequency with value of pec_val + 0j
@@ -992,23 +607,42 @@ class PECMedium(AbstractMedium):
         """
         return 1.0
 
-    @cached_property
-    def is_pec(self):
-        """Whether the medium is a PEC."""
-        return True
-
 
 # PEC builtin instance
 PEC = PECMedium(name="PEC")
 
 
 class Medium(AbstractMedium):
-    """Dispersionless medium.
+    """Dispersionless medium. Mediums define the optical properties of the materials within the simulation.
+
+    Notes
+    -----
+
+        In a dispersion-less medium, the displacement field :math:`D(t)` reacts instantaneously to the applied
+        electric field :math:`E(t)`.
+
+        .. math::
+
+            D(t) = \\epsilon E(t)
 
     Example
     -------
     >>> dielectric = Medium(permittivity=4.0, name='my_medium')
     >>> eps = dielectric.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Introduction on Tidy3D working principles <../../notebooks/Primer.html#Mediums>`_
+        * `Index <../../notebooks/docs/features/medium.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+
+    **GUI**
+        * `Mediums <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-2-Mediums/>`_
+
     """
 
     permittivity: float = pd.Field(
@@ -1023,46 +657,24 @@ class Medium(AbstractMedium):
         units=CONDUCTIVITY,
     )
 
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
+        """Check compatibility with nonlinear_spec."""
+        if val is None or isinstance(val, NonlinearSusceptibility):
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
+
     @pd.validator("conductivity", always=True)
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if not values.get("allow_gain") and val < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate a gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
-            )
-        return val
-
-    @pd.validator("permittivity", always=True)
-    def _permittivity_modulation_validation(cls, val, values):
-        """Assert modulated permittivity cannot be <= 0."""
-        modulation = values.get("modulation_spec")
-        if modulation is None or modulation.permittivity is None:
-            return val
-
-        min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
-        if min_eps_inf - modulation.permittivity.max_modulation <= 0:
-            raise ValidationError(
-                "The minimum permittivity value with modulation applied was found to be negative."
-            )
-        return val
-
-    @pd.validator("conductivity", always=True)
-    def _passivity_modulation_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
-        modulation = values.get("modulation_spec")
-        if modulation is None or modulation.conductivity is None:
-            return val
-
-        min_sigma = val if np.ndim(val) == 0 else np.min(np.array(val))
-        if not values.get("allow_gain") and min_sigma - modulation.conductivity.max_modulation < 0:
-            raise ValidationError(
-                "For passive medium, 'conductivity' must be non-negative at any time."
-                "With conductivity modulation, this medium can sometimes be active. "
-                "Please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, "
-                "and are likely to diverge."
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
             )
         return val
 
@@ -1074,11 +686,7 @@ class Medium(AbstractMedium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        permittivity = self.permittivity
-        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
-            permittivity -= self.modulation_spec.permittivity.max_modulation
-        n, _ = self.eps_complex_to_nk(permittivity)
-        return n
+        return np.sqrt(self.permittivity)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -1142,6 +750,16 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=CONDUCTIVITY,
     )
 
+    @pd.validator("nonlinear_spec", always=True)
+    def _validate_nonlinear_spec(cls, val):
+        """Check compatibility with nonlinear_spec."""
+        if val is None:
+            return val
+        raise ValidationError(
+            f"A 'nonlinear_spec' of class {type(val)} is not "
+            f"currently supported for medium class {cls}."
+        )
+
     @pd.validator("permittivity", always=True)
     def _eps_inf_greater_no_less_than_one(cls, val):
         """Assert any eps_inf must be >=1"""
@@ -1179,8 +797,8 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not values.get("allow_gain") and np.any(val.values < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate a gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
             )
         return val
 
@@ -1192,11 +810,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        permittivity = np.min(self.permittivity.values)
-        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
-            permittivity -= self.modulation_spec.permittivity.max_modulation
-        n, _ = self.eps_complex_to_nk(permittivity)
-        return n
+        return np.sqrt(np.min(self.permittivity.values))
 
     @cached_property
     def is_isotropic(self):
@@ -1241,14 +855,6 @@ class CustomMedium(AbstractCustomMedium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    eps_dataset: Optional[PermittivityDataset] = pd.Field(
-        None,
-        title="Permittivity Dataset",
-        description="[To be deprecated] User-supplied dataset containing complex-valued "
-        "permittivity as a function of space. Permittivity distribution over the Yee-grid "
-        "will be interpolated based on ``interp_method``.",
-    )
-
     permittivity: Optional[SpatialDataArray] = pd.Field(
         None,
         title="Permittivity",
@@ -1263,6 +869,14 @@ class CustomMedium(AbstractCustomMedium):
         "that the imaginary part of the complex permittivity at angular "
         "frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
+    )
+
+    eps_dataset: Optional[PermittivityDataset] = pd.Field(
+        None,
+        title="Permittivity Dataset",
+        description="[To be deprecated] User-supplied dataset containing complex-valued "
+        "permittivity as a function of space. Permittivity distribution over the Yee-grid "
+        "will be interpolated based on ``interp_method``.",
     )
 
     @pd.root_validator(pre=True)
@@ -1362,7 +976,6 @@ class CustomMedium(AbstractCustomMedium):
         """Assert any eps_inf must be >=1"""
         if val is None:
             return val
-        modulation = values.get("modulation_spec")
 
         for comp in ["eps_xx", "eps_yy", "eps_zz"]:
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
@@ -1373,40 +986,17 @@ class CustomMedium(AbstractCustomMedium):
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
                 )
-
-            if modulation is not None and modulation.permittivity is not None:
-                if np.any(eps_real.values - modulation.permittivity.max_modulation <= 0):
-                    raise ValidationError(
-                        "The minimum permittivity value with modulation applied "
-                        "was found to be negative."
-                    )
-
             if not values.get("allow_gain") and np.any(sigma.values < 0):
                 raise ValidationError(
                     "For passive medium, imaginary part of permittivity must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
-                    "and are likely to diverge."
-                )
-
-            if (
-                not values.get("allow_gain")
-                and modulation is not None
-                and modulation.conductivity is not None
-                and np.any(sigma.values - modulation.conductivity.max_modulation <= 0)
-            ):
-                raise ValidationError(
-                    "For passive medium, imaginary part of permittivity must be non-negative "
-                    "at any time. "
-                    "With conductivity modulation, this medium can sometimes be active. "
-                    "Please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
 
     @pd.validator("permittivity", always=True)
-    def _eps_inf_greater_no_less_than_one(cls, val, values):
+    def _eps_inf_greater_no_less_than_one(cls, val):
         """Assert any eps_inf must be >=1"""
         if val is None:
             return val
@@ -1416,15 +1006,6 @@ class CustomMedium(AbstractCustomMedium):
 
         if np.any(val.values < 1):
             raise SetupError("'permittivity' must be no less than one.")
-
-        modulation = values.get("modulation_spec")
-        if modulation is None or modulation.permittivity is None:
-            return val
-
-        if np.any(val.values - modulation.permittivity.max_modulation <= 0):
-            raise ValidationError(
-                "The minimum permittivity value with modulation applied was found to be negative."
-            )
 
         return val
 
@@ -1444,36 +1025,13 @@ class CustomMedium(AbstractCustomMedium):
         if not values.get("allow_gain") and np.any(val.values < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
-                "To simulate a gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, "
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, "
                 "and are likely to diverge."
             )
 
         if values["permittivity"].coords != val.coords:
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
-
-        return val
-
-    @pd.validator("conductivity", always=True)
-    def _passivity_modulation_validation(cls, val, values):
-        """Assert passive medium at any time during modulation if `allow_gain` is False."""
-
-        # validated already when the data is supplied through `eps_dataset`
-        if values.get("eps_dataset"):
-            return val
-
-        # permittivity defined with ``permittivity`` and ``conductivity``
-        modulation = values.get("modulation_spec")
-        if values.get("allow_gain") or modulation is None or modulation.conductivity is None:
-            return val
-        if val is None or np.any(val.values - modulation.conductivity.max_modulation < 0):
-            raise ValidationError(
-                "For passive medium, 'conductivity' must be non-negative at any time. "
-                "With conductivity modulation, this medium can sometimes be active. "
-                "Please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, "
-                "and are likely to diverge."
-            )
         return val
 
     @cached_property
@@ -1529,7 +1087,6 @@ class CustomMedium(AbstractCustomMedium):
 
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
-
             eps_complex = self.eps_dataset.eps_xx
             eps_real, sigma = get_eps_sigma(eps_complex, freq=self.freqs[0])
 
@@ -1637,14 +1194,15 @@ class CustomMedium(AbstractCustomMedium):
             Interpolation method to obtain permittivity values that are not supplied
             at the Yee grids.
 
-        Note
-        ----
-        For lossy medium that has a complex-valued ``eps``, if ``eps`` is supplied through
-        :class:`.SpatialDataArray`, which doesn't contain frequency information,
-        the ``freq`` kwarg will be used to evaluate the permittivity and conductivity.
-        Alternatively, ``eps`` can be supplied through :class:`.ScalarFieldDataArray`,
-        which contains a frequency coordinate.
-        In this case, leave ``freq`` kwarg as the default of ``None``.
+        Notes
+        -----
+
+            For lossy medium that has a complex-valued ``eps``, if ``eps`` is supplied through
+            :class:`.SpatialDataArray`, which doesn't contain frequency information,
+            the ``freq`` kwarg will be used to evaluate the permittivity and conductivity.
+            Alternatively, ``eps`` can be supplied through :class:`.ScalarFieldDataArray`,
+            which contains a frequency coordinate.
+            In this case, leave ``freq`` kwarg as the default of ``None``.
 
         Returns
         -------
@@ -1812,50 +1370,43 @@ class CustomMedium(AbstractCustomMedium):
 
 
 class DispersiveMedium(AbstractMedium, ABC):
-    """A Medium with dispersion (propagation characteristics depend on frequency)"""
+    """
+    A Medium with dispersion: field propagation characteristics depend on frequency.
 
-    @staticmethod
-    def _permittivity_modulation_validation():
-        """Assert modulated permittivity cannot be <= 0 at any time."""
+    Notes
+    -----
 
-        @pd.validator("eps_inf", allow_reuse=True, always=True)
-        def _validate_permittivity_modulation(cls, val, values):
-            """Assert modulated permittivity cannot be <= 0."""
-            modulation = values.get("modulation_spec")
-            if modulation is None or modulation.permittivity is None:
-                return val
+        In dispersive mediums, the displacement field :math:`D(t)` depends on the previous electric field :math:`E(
+        t')` and time-dependent permittivity :math:`\\epsilon` changes.
 
-            min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
-            if min_eps_inf - modulation.permittivity.max_modulation <= 0:
-                raise ValidationError(
-                    "The minimum permittivity value with modulation applied was found to be negative."
-                )
-            return val
+        .. math::
 
-        return _validate_permittivity_modulation
+            D(t) = \\int \\epsilon(t - t') E(t') \\delta t'
 
-    @staticmethod
-    def _conductivity_modulation_validation():
-        """Assert passive medium at any time if not ``allow_gain``."""
+        Dispersive mediums can be defined in three ways:
 
-        @pd.validator("modulation_spec", allow_reuse=True, always=True)
-        def _validate_conductivity_modulation(cls, val, values):
-            """With conductivity modulation, the medium can exhibit gain during the cycle.
-            So `allow_gain` must be True when the conductivity is modulated.
-            """
-            if val is None or val.conductivity is None:
-                return val
+        - Imported from our `material library <../material_library.html>`_.
+        - Defined directly by specifying the parameters in the `various supplied dispersive models <../mediums.html>`_.
+        - Fitted to optical n-k data using the `dispersion fitting tool plugin <../plugins/dispersion.html>`_.
 
-            if not values.get("allow_gain"):
-                raise ValidationError(
-                    "For passive medium, 'conductivity' must be non-negative at any time. "
-                    "With conductivity modulation, this medium can sometimes be active. "
-                    "Please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, and are likely to diverge."
-                )
-            return val
+        It is important to keep in mind that dispersive materials are inevitably slower to simulate than their
+        dispersion-less counterparts, with complexity increasing with the number of poles included in the dispersion
+        model. For simulations with a narrow range of frequencies of interest, it may sometimes be faster to define
+        the material through its real and imaginary refractive index at the center frequency.
 
-        return _validate_conductivity_modulation
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
+    """
 
     @abstractmethod
     def _pole_residue_dict(self) -> Dict:
@@ -1875,11 +1426,7 @@ class DispersiveMedium(AbstractMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        permittivity = self.pole_residue.eps_inf
-        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
-            permittivity -= self.modulation_spec.permittivity.max_modulation
-        n, _ = self.eps_complex_to_nk(permittivity)
-        return n
+        return np.sqrt(self.pole_residue.eps_inf)
 
     @staticmethod
     def tuple_to_complex(value: Tuple[float, float]) -> complex:
@@ -1907,11 +1454,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        permittivity = np.min(self.pole_residue.eps_inf.values)
-        if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
-            permittivity -= self.modulation_spec.permittivity.max_modulation
-        n, _ = self.eps_complex_to_nk(permittivity)
-        return n
+        return np.sqrt(np.min(self.pole_residue.eps_inf.values))
 
     @cached_property
     def is_isotropic(self):
@@ -1968,20 +1511,33 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
 
 class PoleResidue(DispersiveMedium):
     """A dispersive medium described by the pole-residue pair model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
     Example
     -------
     >>> pole_res = PoleResidue(eps_inf=2.0, poles=[((-1+2j), (3+4j)), ((-5+6j), (7+8j))])
     >>> eps = pole_res.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2005,9 +1561,6 @@ class PoleResidue(DispersiveMedium):
             if np.any(np.real(a) > 0):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
-
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2081,111 +1634,6 @@ class PoleResidue(DispersiveMedium):
             conductivity=np.real(sigma),
             frequency_range=self.frequency_range,
         )
-
-    @staticmethod
-    def lo_to_eps_model(
-        poles: Tuple[Tuple[float, float, float, float], ...],
-        eps_inf: pd.PositiveFloat,
-        frequency: float,
-    ) -> complex:
-        """Complex permittivity as a function of frequency for a given set of LO-TO coefficients.
-        See ``from_lo_to`` in :class:`.PoleResidue` for the detailed form of the model
-        and a reference paper.
-
-        Parameters
-        ----------
-        poles : Tuple[Tuple[float, float, float, float], ...]
-            The LO-TO poles, given as list of tuples of the form
-            (omega_LO, gamma_LO, omega_TO, gamma_TO).
-        eps_inf: pd.PositiveFloat
-            The relative permittivity at infinite frequency.
-        frequency: float
-            Frequency at which to evaluate the permittivity.
-
-        Returns
-        -------
-        complex
-            The complex permittivity of the given LO-TO model at the given frequency.
-        """
-        omega = 2 * np.pi * frequency
-        eps = eps_inf
-        for (omega_lo, gamma_lo, omega_to, gamma_to) in poles:
-            eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
-            eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
-        return eps
-
-    @classmethod
-    def from_lo_to(
-        cls, poles: Tuple[Tuple[float, float, float, float], ...], eps_inf: pd.PositiveFloat = 1
-    ) -> PoleResidue:
-        """Construct a pole residue model from the LO-TO form
-        (longitudinal and transverse optical modes).
-        The LO-TO form is :math:`\\epsilon_\\infty \\prod_{i=1}^l \\frac{\\omega_{LO, i}^2 - \\omega^2 - i \\omega \\gamma_{LO, i}}{\\omega_{TO, i}^2 - \\omega^2 - i \\omega \\gamma_{TO, i}}` as given in the paper:
-
-            M. Schubert, T. E. Tiwald, and C. M. Herzinger,
-            "Infrared dielectric anisotropy and phonon modes of sapphire,"
-            Phys. Rev. B 61, 8187 (2000).
-
-        Parameters
-        ----------
-        poles : Tuple[Tuple[float, float, float, float], ...]
-            The LO-TO poles, given as list of tuples of the form
-            (omega_LO, gamma_LO, omega_TO, gamma_TO).
-        eps_inf: pd.PositiveFloat
-            The relative permittivity at infinite frequency.
-
-        Returns
-        -------
-        :class:`.PoleResidue`
-            The pole residue equivalent of the LO-TO form provided.
-        """
-
-        omegas_lo, gammas_lo, omegas_to, gammas_to = map(np.array, zip(*poles))
-
-        # discriminants of quadratic factors of denominator
-        discs = 2 * np.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
-
-        # require nondegenerate TO poles
-        if len({(omega_to, gamma_to) for (_, _, omega_to, gamma_to) in poles}) != len(poles) or any(
-            disc == 0 for disc in discs
-        ):
-            raise ValidationError(
-                "Unable to construct a pole residue model "
-                "from an LO-TO form with degenerate TO poles. Consider adding a "
-                "perturbation to split the poles, or using "
-                "'PoleResidue.lo_to_eps_model' and fitting with the 'FastDispersionFitter'."
-            )
-
-        # roots of denominator, in pairs
-        roots = []
-        for gamma_to, disc in zip(gammas_to, discs):
-            roots.append(-gamma_to / 2 + disc / 2)
-            roots.append(-gamma_to / 2 - disc / 2)
-
-        # interpolants
-        interpolants = eps_inf * np.ones(len(roots), dtype=complex)
-        for i, a in enumerate(roots):
-            for omega_lo, gamma_lo in zip(omegas_lo, gammas_lo):
-                interpolants[i] *= omega_lo**2 + a**2 + a * gamma_lo
-            for j, a2 in enumerate(roots):
-                if j != i:
-                    interpolants[i] /= a - a2
-
-        a_coeffs = []
-        c_coeffs = []
-
-        for i in range(0, len(roots), 2):
-            if not np.isreal(roots[i]):
-                a_coeffs.append(roots[i])
-                c_coeffs.append(interpolants[i])
-            else:
-                a_coeffs.append(roots[i])
-                a_coeffs.append(roots[i + 1])
-                # factor of two from adding conjugate pole of real pole
-                c_coeffs.append(interpolants[i] / 2)
-                c_coeffs.append(interpolants[i + 1] / 2)
-
-        return PoleResidue(eps_inf=eps_inf, poles=list(zip(a_coeffs, c_coeffs)))
 
     @staticmethod
     def eV_to_angular_freq(f_eV: float):
@@ -2336,15 +1784,34 @@ class PoleResidue(DispersiveMedium):
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     """A spatially varying dispersive medium described by the pole-residue pair model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of
+        resonant material poles _`[1]`.
+
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+
+        For each of these resonant poles identified by the index :math:`i`, an auxiliary differential equation is
+        used to relate the auxiliary current :math:`J_i(t)` to the applied electric field :math:`E(t)`.
+        The sum of all these auxiliary current contributions describes the total dielectric response of the material.
+
+        .. math::
+
+            \\frac{d}{dt} J_i (t) - a_i J_i (t) = \\epsilon_0 c_i \\frac{d}{dt} E (t)
+
+        Hence, the computational cost increases with the number of poles.
+
+        **References**
+
+        .. [1]   M. Han, R.W. Dutton and S. Fan, IEEE Microwave and Wireless Component Letters, 16, 119 (2006).
+
+        .. TODO add links to notebooks using this.
 
     Example
     -------
@@ -2359,6 +1826,17 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
     >>> eps = pole_res.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -2489,18 +1967,40 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
-    The frequency-dependence of the refractive index is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+        The frequency-dependence of the refractive index is described by:
+
+        .. math::
+
+            n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+
+        For lossless, weakly dispersive materials, the best way to incorporate the dispersion without doing
+        complicated fits and without slowing the simulation down significantly is to provide the value of the
+        refractive index dispersion :math:`\\frac{dn}{d\\lambda}` in :meth:`tidy3d.Sellmeier.from_dispersion`. The
+        value is assumed to be at the central frequency or wavelength (whichever is provided), and a one-pole model
+        for the material is generated.
 
     Example
     -------
     >>> sellmeier_medium = Sellmeier(coeffs=[(1,2), (3,4)])
     >>> eps = sellmeier_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomSellmeier`
+        A spatially varying dispersive medium described by the Sellmeier model.
+
+    **Notebooks**
+
+    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+
+    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     coeffs: Tuple[Tuple[float, pd.PositiveFloat], ...] = pd.Field(
@@ -2518,27 +2018,11 @@ class Sellmeier(DispersiveMedium):
             if B < 0:
                 raise ValidationError(
                     "For passive medium, 'B_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
-
-    @pd.validator("modulation_spec", always=True)
-    def _validate_permittivity_modulation(cls, val):
-        """Assert modulated permittivity cannot be <= 0."""
-
-        if val is None or val.permittivity is None:
-            return val
-
-        min_eps_inf = 1.0
-        if min_eps_inf - val.permittivity.max_modulation <= 0:
-            raise ValidationError(
-                "The minimum permittivity value with modulation applied was found to be negative."
-            )
-        return val
-
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
@@ -2607,13 +2091,15 @@ class Sellmeier(DispersiveMedium):
 
 class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     """A spatially varying dispersive medium described by the Sellmeier model.
-    The frequency-dependence of the refractive index is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
+        The frequency-dependence of the refractive index is described by:
+
+        .. math::
+
+            n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}
 
     Example
     -------
@@ -2625,6 +2111,18 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
     >>> eps = sellmeier_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`Sellmeier`
+        A dispersive medium described by the Sellmeier model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     coeffs: Tuple[Tuple[SpatialDataArray, SpatialDataArray], ...] = pd.Field(
@@ -2660,8 +2158,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             if np.any(B < 0):
                 raise ValidationError(
                     "For passive medium, 'B_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -2741,19 +2239,30 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
 class Lorentz(DispersiveMedium):
     """A dispersive medium described by the Lorentz model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
     Example
     -------
     >>> lorentz_medium = Lorentz(eps_inf=2.0, coeffs=[(1,2,3), (4,5,6)])
     >>> eps = lorentz_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2787,14 +2296,11 @@ class Lorentz(DispersiveMedium):
             if del_ep < 0:
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
-
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2843,14 +2349,16 @@ class Lorentz(DispersiveMedium):
 
 class CustomLorentz(CustomDispersiveMedium, Lorentz):
     """A spatially varying dispersive medium described by the Lorentz model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}
 
     Example
     -------
@@ -2864,6 +2372,18 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     >>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])
     >>> eps = lorentz_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomPoleResidue`:
+        A spatially varying dispersive medium described by the pole-residue pair model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -2943,8 +2463,8 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -2970,19 +2490,33 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
 class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-        \\frac{ f_i^2}{f^2 + jf\\delta_i}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+            \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
     Example
     -------
     >>> drude_medium = Drude(eps_inf=2.0, coeffs=[(1,2), (3,4)])
     >>> eps = drude_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomDrude`:
+        A spatially varying dispersive medium described by the Drude model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -2998,9 +2532,6 @@ class Drude(DispersiveMedium):
         description="List of (:math:`f_i, \\delta_i`) values for model.",
         units=(HERTZ, HERTZ),
     )
-
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -3041,14 +2572,16 @@ class Drude(DispersiveMedium):
 
 class CustomDrude(CustomDispersiveMedium, Drude):
     """A spatially varying dispersive medium described by the Drude model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
 
-        \\epsilon(f) = \\epsilon_\\infty - \\sum_i
-        \\frac{ f_i^2}{f^2 + jf\\delta_i}
+    Notes
+    -----
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty - \\sum_i
+            \\frac{ f_i^2}{f^2 + jf\\delta_i}
 
     Example
     -------
@@ -3061,6 +2594,18 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     >>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])
     >>> eps = drude_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`Drude`:
+        A dispersive medium described by the Drude model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -3128,19 +2673,33 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
 class Debye(DispersiveMedium):
     """A dispersive medium described by the Debye model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
     Example
     -------
     >>> debye_medium = Debye(eps_inf=2.0, coeffs=[(1,2),(3,4)])
     >>> eps = debye_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`CustomDebye`
+        A spatially varying dispersive medium described by the Debye model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: pd.PositiveFloat = pd.Field(
@@ -3166,14 +2725,11 @@ class Debye(DispersiveMedium):
             if del_ep < 0:
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
-
-    _validate_permittivity_modulation = DispersiveMedium._permittivity_modulation_validation()
-    _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -3204,14 +2760,16 @@ class Debye(DispersiveMedium):
 
 class CustomDebye(CustomDispersiveMedium, Debye):
     """A spatially varying dispersive medium described by the Debye model.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\epsilon(f) = \\epsilon_\\infty + \\sum_i
-        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
+        The frequency-dependence of the complex-valued permittivity is described by:
+
+        .. math::
+
+            \\epsilon(f) = \\epsilon_\\infty + \\sum_i
+            \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}
 
     Example
     -------
@@ -3224,6 +2782,18 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     >>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
     >>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])
     >>> eps = debye_medium.eps_model(200e12)
+
+    See Also
+    --------
+
+    :class:`Debye`
+        A dispersive medium described by the Debye model.
+
+    **Notebooks**
+        * `Fitting dispersive material models <../../notebooks/Fitting.html>`_
+
+    **Lectures**
+        * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
     eps_inf: SpatialDataArray = pd.Field(
@@ -3278,8 +2848,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
             if not allow_gain and np.any(del_ep < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
-                    "To simulate a gain medium, please set 'allow_gain=True'. "
-                    "Caution: simulations with a gain medium are unstable, "
+                    "To simulate gain medium, please set 'allow_gain=True'. "
+                    "Caution: simulations with gain medium are unstable, "
                     "and are likely to diverge."
                 )
         return val
@@ -3303,7 +2873,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return (eps, eps, eps)
 
 
-IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium]
+IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude]
 IsotropicCustomMediumType = Union[
     CustomPoleResidue,
     CustomSellmeier,
@@ -3318,9 +2888,9 @@ IsotropicMediumType = Union[IsotropicCustomMediumType, IsotropicUniformMediumTyp
 class AnisotropicMedium(AbstractMedium):
     """Diagonally anisotropic medium.
 
-    Note
-    ----
-    Only diagonal anisotropy is currently supported.
+    Notes
+    -----
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -3328,6 +2898,19 @@ class AnisotropicMedium(AbstractMedium):
     >>> medium_yy = Medium(permittivity=4.1)
     >>> medium_zz = Medium(permittivity=3.9)
     >>> anisotropic_dielectric = AnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+
+    See Also
+    --------
+
+    :class:`CustomAnisotropicMedium`
+        Diagonally anisotropic medium with spatially varying permittivity in each component.
+
+    :class:`FullyAnisotropicMedium`
+        Fully anisotropic medium including all 9 components of the permittivity and conductivity tensors.
+
+    **Notebooks**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
     """
 
     xx: IsotropicUniformMediumType = pd.Field(
@@ -3357,17 +2940,6 @@ class AnisotropicMedium(AbstractMedium):
         description="This field is ignored. Please set ``allow_gain`` in each component",
     )
 
-    @pd.validator("modulation_spec", always=True)
-    def _validate_modulation_spec(cls, val):
-        """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}. "
-                "Please add modulation to each component."
-            )
-        return val
-
     @pd.root_validator(pre=True)
     def _ignored_fields(cls, values):
         """The field is ignored."""
@@ -3381,11 +2953,6 @@ class AnisotropicMedium(AbstractMedium):
     def components(self) -> Dict[str, Medium]:
         """Dictionary of diagonal medium components."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
-
-    @cached_property
-    def time_modulated(self) -> bool:
-        """Whether any component of the medium is time modulated."""
-        return any(mat.time_modulated for mat in self.components.values())
 
     @cached_property
     def n_cfl(self):
@@ -3460,35 +3027,46 @@ class AnisotropicMedium(AbstractMedium):
         """The diagonal elements of the medium as a dictionary."""
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
-    @cached_property
-    def is_pec(self):
-        """Whether the medium is a PEC."""
-        return any(self.is_comp_pec(i) for i in range(3))
-
-    def is_comp_pec(self, comp: Axis):
-        """Whether the medium is a PEC."""
-        return isinstance(self.components[["xx", "yy", "zz"][comp]], PECMedium)
-
 
 class FullyAnisotropicMedium(AbstractMedium):
     """Fully anisotropic medium including all 9 components of the permittivity and conductivity
-    tensors. Provided permittivity tensor and the symmetric part of the conductivity tensor must
-    have coinciding main directions. A non-symmetric conductivity tensor can be used to model
-    magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
-    supported for fully anisotropic materials.
+    tensors.
+
+    Notes
+    -----
+
+        Provided permittivity tensor and the symmetric part of the conductivity tensor must
+        have coinciding main directions. A non-symmetric conductivity tensor can be used to model
+        magneto-optic effects. Note that dispersive properties and subpixel averaging are currently not
+        supported for fully anisotropic materials.
 
     Note
     ----
-    Simulations involving fully anisotropic materials are computationally more intensive, thus,
-    they take longer time to complete. This increase strongly depends on the filling fraction of
-    the simulation domain by fully anisotropic materials, varying approximately in the range from
-    1.5 to 5. Cost of running a simulation is adjusted correspondingly.
+
+        Simulations involving fully anisotropic materials are computationally more intensive, thus,
+        they take longer time to complete. This increase strongly depends on the filling fraction of
+        the simulation domain by fully anisotropic materials, varying approximately in the range from
+        1.5 to 5. The cost of running a simulation is adjusted correspondingly.
 
     Example
     -------
     >>> perm = [[2, 0, 0], [0, 1, 0], [0, 0, 3]]
     >>> cond = [[0.1, 0, 0], [0, 0, 0], [0, 0, 0]]
     >>> anisotropic_dielectric = FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+
+    See Also
+    --------
+
+    :class:`CustomAnisotropicMedium`
+        Diagonally anisotropic medium with spatially varying permittivity in each component.
+
+    :class:`AnisotropicMedium`
+        Diagonally anisotropic medium.
+
+    **Notebooks**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
+        * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
     permittivity: TensorReal = pd.Field(
@@ -3505,16 +3083,6 @@ class FullyAnisotropicMedium(AbstractMedium):
         "of the complex permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
-
-    @pd.validator("modulation_spec", always=True)
-    def _validate_modulation_spec(cls, val):
-        """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
-            )
-        return val
 
     @pd.validator("permittivity", always=True)
     def permittivity_spd_and_ge_one(cls, val):
@@ -3558,8 +3126,8 @@ class FullyAnisotropicMedium(AbstractMedium):
             raise ValidationError(
                 "For passive medium, main diagonal of provided conductivity tensor "
                 "must be non-negative. "
-                "To simulate a gain medium, please set 'allow_gain=True'. "
-                "Caution: simulations with a gain medium are unstable, and are likely to diverge."
+                "To simulate gain medium, please set 'allow_gain=True'. "
+                "Caution: simulations with gain medium are unstable, and are likely to diverge."
             )
         return val
 
@@ -3626,9 +3194,6 @@ class FullyAnisotropicMedium(AbstractMedium):
         """Complex-valued permittivity as a function of frequency."""
         perm_diag, cond_diag, _ = self.eps_sigma_diag
 
-        if not np.isscalar(frequency):
-            perm_diag = perm_diag[:, None]
-            cond_diag = cond_diag[:, None]
         eps_diag = AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
         return np.mean(eps_diag)
 
@@ -3703,7 +3268,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     Note
     ----
-    Only diagonal anisotropy is currently supported.
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -3721,6 +3286,17 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
     >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
+
+    See Also
+    --------
+
+    :class:`AnisotropicMedium`
+        Diagonally anisotropic medium.
+
+    **Notebooks**
+        * `Broadband polarizer assisted by anisotropic metamaterial <../../notebooks/SWGBroadbandPolarizer.html>`_
+        * `Thin film lithium niobate adiabatic waveguide coupler <../../notebooks/AdiabaticCouplerLN.html>`_
+        * `Defining fully anisotropic materials <../../notebooks/FullyAnisotropic.html>`_
     """
 
     xx: Union[IsotropicCustomMediumType, CustomMedium] = pd.Field(
@@ -3847,9 +3423,9 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     """Diagonally anisotropic medium with spatially varying permittivity in each component.
 
-    Note
-    ----
-    Only diagonal anisotropy is currently supported.
+    Notes
+    -----
+        Only diagonal anisotropy is currently supported.
 
     Example
     -------
@@ -3913,7 +3489,6 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
-        interp_method: InterpMethod = "linear",
     ) -> Union[AbstractMedium, AbstractCustomMedium]:
         """Sample perturbations on provided heat and/or charge data and create a custom medium.
         Any of ``temperature``, ``electron_density``, and ``hole_density`` can be ``None``.
@@ -3928,9 +3503,6 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
-        interp_method : :class:`.InterpMethod`, optional
-            Interpolation method to obtain heat and/or charge values that are not supplied
-            at the Yee grids.
 
         Returns
         -------
@@ -3989,7 +3561,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
-        interp_method: InterpMethod = "linear",
     ) -> Union[Medium, CustomMedium]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -4004,9 +3575,6 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
-        interp_method : :class:`.InterpMethod`, optional
-            Interpolation method to obtain heat and/or charge values that are not supplied
-            at the Yee grids.
 
         Returns
         -------
@@ -4015,11 +3583,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         """
 
         new_dict = self.dict(
-            exclude={
-                "permittivity_perturbation",
-                "conductivity_perturbation",
-                "type",
-            }
+            exclude={"permittivity_perturbation", "conductivity_perturbation", "type"}
         )
 
         if all(x is None for x in [temperature, electron_density, hole_density]):
@@ -4043,22 +3607,22 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
         new_dict["permittivity"] = permittivity_field
         new_dict["conductivity"] = conductivity_field
-        new_dict["interp_method"] = interp_method
 
         return CustomMedium.parse_obj(new_dict)
 
 
 class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """A dispersive medium described by the pole-residue pair model with perturbations.
-    The frequency-dependence of the complex-valued permittivity is described by:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
+        The frequency-dependence of the complex-valued permittivity is described by:
 
-        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
-        \\left[\\frac{c_i}{j \\omega + a_i} +
-        \\frac{c_i^*}{j \\omega + a_i^*}\\right]
+        .. math::
+
+            \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i
+            \\left[\\frac{c_i}{j \\omega + a_i} +
+            \\frac{c_i^*}{j \\omega + a_i^*}\\right]
 
     Example
     -------
@@ -4109,7 +3673,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         temperature: SpatialDataArray = None,
         electron_density: SpatialDataArray = None,
         hole_density: SpatialDataArray = None,
-        interp_method: InterpMethod = "linear",
     ) -> Union[PoleResidue, CustomPoleResidue]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
         Any of temperature, electron_density, and hole_density can be 'None'. If all passed
@@ -4124,9 +3687,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             Electron density field data.
         hole_density : SpatialDataArray = None
             Hole density field data.
-        interp_method : :class:`.InterpMethod`, optional
-            Interpolation method to obtain heat and/or charge values that are not supplied
-            at the Yee grids.
 
         Returns
         -------
@@ -4160,7 +3720,6 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field
-        new_dict["interp_method"] = interp_method
 
         return CustomPoleResidue.parse_obj(new_dict)
 
@@ -4193,8 +3752,8 @@ MediumType3D = Union[
 class Medium2D(AbstractMedium):
     """2D diagonally anisotropic medium.
 
-    Note
-    ----
+    Notes
+    -----
     Only diagonal anisotropy is currently supported.
 
     Example
@@ -4226,20 +3785,10 @@ class Medium2D(AbstractMedium):
         discriminator=TYPE_TAG_STR,
     )
 
-    @pd.validator("modulation_spec", always=True)
-    def _validate_modulation_spec(cls, val):
-        """Check compatibility with modulation_spec."""
-        if val is not None:
-            raise ValidationError(
-                f"A 'modulation_spec' of class {type(val)} is not "
-                f"currently supported for medium class {cls}."
-            )
-        return val
-
     @classmethod
     def _weighted_avg(
         cls, meds: List[IsotropicUniformMediumType], weights: List[float]
-    ) -> Union[PoleResidue, PECMedium]:
+    ) -> PoleResidue:
         """Average ``meds`` with weights ``weights``."""
         eps_inf = 1
         poles = []
@@ -4251,8 +3800,7 @@ class Medium2D(AbstractMedium):
                 pole_res = PoleResidue.from_medium(med)
                 eps_inf += weight * (med.eps_model(np.inf) - 1)
             elif isinstance(med, PECMedium):
-                # special treatment for PEC
-                return med
+                pole_res = PoleResidue.from_medium(Medium(conductivity=LARGE_NUMBER))
             else:
                 raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
             poles += [(a, weight * c) for (a, c) in pole_res.poles]
@@ -4383,8 +3931,6 @@ class Medium2D(AbstractMedium):
         :class:`.Medium`
             The 3D equivalent of this 2D medium.
         """
-        if self.is_pec:
-            return PEC
         return self.to_pole_residue(thickness=thickness).to_medium()
 
     @classmethod
@@ -4481,7 +4027,7 @@ class Medium2D(AbstractMedium):
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
         log.warning(
             "The refractive index of a 'Medium2D' is unphysical. "
-            "Use 'Medium2D.plot_sigma' instead to plot surface conductivity, or call "
+            "Use 'Medium2D.plot_sigma' instead to plot surface conductivty, or call "
             "'Medium2D.to_anisotropic_medium' or 'Medium2D.to_pole_residue' first "
             "to obtain the physical refractive index."
         )
@@ -4547,20 +4093,6 @@ class Medium2D(AbstractMedium):
         """
         return 1.0
 
-    @cached_property
-    def is_pec(self):
-        """Whether the medium is a PEC."""
-        return any(isinstance(comp, PECMedium) for comp in self.elements.values())
-
-    def is_comp_pec_2d(self, comp: Axis, axis: Axis):
-        """Whether the medium is a PEC."""
-        elements_3d = Geometry.unpop_axis(
-            ax_coord=Medium(), plane_coords=self.elements.values(), axis=axis
-        )
-        return isinstance(elements_3d[comp], PECMedium)
-
-
-PEC2D = Medium2D(ss=PEC, tt=PEC)
 
 # types of mediums that can be used in Simulation and Structures
 

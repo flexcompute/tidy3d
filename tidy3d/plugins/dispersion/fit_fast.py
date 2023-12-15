@@ -149,12 +149,10 @@ class FastFitterData(AdvancedFastFitterParam):
         title="eps_inf",
         description="Value of ``eps_inf``.",
     )
-    poles: Optional[ArrayComplex1D] = Field(
+    poles: ArrayComplex1D = Field(
         None, title="Pole frequencies in eV", description="Pole frequencies in eV"
     )
-    residues: Optional[ArrayComplex1D] = Field(
-        None, title="Residues in eV", description="Residues in eV"
-    )
+    residues: ArrayComplex1D = Field(None, title="Residues in eV", description="Residues in eV")
 
     passivity_optimized: Optional[bool] = Field(
         False,
@@ -190,11 +188,7 @@ class FastFitterData(AdvancedFastFitterParam):
         """Generate initial poles."""
         if val is not None:
             return val
-        if (
-            values.get("logspacing") is None
-            or values.get("smooth") is None
-            or values.get("num_poles") is None
-        ):
+        if values["logspacing"] is None or values["smooth"] is None:
             return None
         omega = values["omega"]
         num_poles = values["num_poles"]
@@ -217,7 +211,7 @@ class FastFitterData(AdvancedFastFitterParam):
         """Generate initial residues."""
         if val is not None:
             return val
-        poles = values.get("poles")
+        poles = values["poles"]
         if poles is None:
             return None
         return np.zeros(len(poles))
@@ -680,11 +674,6 @@ class FastDispersionFitter(DispersionFitter):
         Tuple[:class:`.PoleResidue`, float]
             Best fitting result: (dispersive medium, weighted RMS error).
         """
-
-        if max_num_poles < min_num_poles:
-            raise ValidationError(
-                "Dispersion fitter cannot have 'max_num_poles' less than 'min_num_poles'."
-            )
 
         omega = PoleResidue.angular_freq_to_eV(PoleResidue.Hz_to_angular_freq(self.freqs[::-1]))
         eps = self.eps_data[::-1]

@@ -9,11 +9,11 @@ import click
 import requests
 import toml
 
-from ..cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
-from ..cli.migrate import migrate
-from ..core.constants import KEY_APIKEY, HEADER_APIKEY
-from ..core.environment import Env
-from ..cli.converter import converter_arg
+from tidy3d.web.cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
+from tidy3d.web.cli.migrate import migrate
+from tidy3d.web.environment import Env
+from tidy3d.web.cli.converter import converter_arg
+from tidy3d.web.cli.develop import develop
 
 if not os.path.exists(TIDY3D_DIR):
     os.mkdir(TIDY3D_DIR)
@@ -31,7 +31,7 @@ def get_description():
         with open(CONFIG_FILE, encoding="utf-8") as f:
             content = f.read()
             config = toml.loads(content)
-            return config.get(KEY_APIKEY, "")
+            return config.get("apikey", "")
     return ""
 
 
@@ -75,7 +75,7 @@ def configure_fn(apikey: str) -> None:
         requests.Request
             Enriched request.
         """
-        req.headers[HEADER_APIKEY] = apikey
+        req.headers["simcloud-api-key"] = apikey
         return req
 
     if os.path.exists(CREDENTIAL_FILE):
@@ -104,7 +104,7 @@ def configure_fn(apikey: str) -> None:
         click.echo("Configured successfully.")
         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
             toml_config = toml.loads(config_file.read())
-            toml_config.update({KEY_APIKEY: apikey})
+            toml_config.update({"apikey": apikey})
             config_file.write(toml.dumps(toml_config))
     else:
         click.echo("API key is invalid.")
@@ -127,3 +127,4 @@ def convert(lsf_file, new_file):
 tidy3d_cli.add_command(configure)
 tidy3d_cli.add_command(migration)
 tidy3d_cli.add_command(convert)
+tidy3d_cli.add_command(develop)

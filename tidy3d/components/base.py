@@ -7,9 +7,6 @@ import os
 import tempfile
 from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
-from math import ceil
-import io
-import hashlib
 
 import rich
 import pydantic.v1 as pydantic
@@ -25,12 +22,9 @@ from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
 
-
-INDENT_JSON_FILE = 4  # default indentation of json string in json files
-INDENT = None  # default indentation of json string used internally
+# default indentation (# spaces) in files
+INDENT = 4
 JSON_TAG = "JSON_STRING"
-# If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
-MAX_STRING_LENGTH = 1e9
 
 
 def cache(prop):
@@ -70,20 +64,13 @@ def ndarray_encoder(val):
 
 def _get_valid_extension(fname: str) -> str:
     """Return the file extension from fname, validated to accepted ones."""
-    valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
-    extensions = [s.lower() for s in pathlib.Path(fname).suffixes[-2:]]
-    if len(extensions) == 0:
-        raise FileError(f"File '{fname}' missing extension.")
-    single_extension = extensions[-1]
-    if single_extension in valid_extensions:
-        return single_extension
-    double_extension = "".join(extensions)
-    if double_extension in valid_extensions:
-        return double_extension
-    raise FileError(
-        f"File extension must be one of {', '.join(valid_extensions)}; file '{fname}' does not "
-        "match any of those."
-    )
+    extension = "".join(pathlib.Path(fname).suffixes).lower()
+    valid_extensions = [".json", ".yaml", ".hdf5", ".hdf5.gz", ".h5"]
+    if extension not in valid_extensions:
+        raise FileError(
+            f"{fname}::File extension must be in {valid_extensions}, but '{extension}' given"
+        )
+    return extension
 
 
 class Tidy3dBaseModel(pydantic.BaseModel):
@@ -100,12 +87,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             return super().__hash__(self)
         except TypeError:
             return hash(self.json())
-
-    def _hash_self(self) -> str:
-        """Hash this component with ``hashlib`` in a way that is the same every session."""
-        bf = io.BytesIO()
-        self.to_hdf5(bf)
-        return hashlib.sha256(bf.getvalue()).hexdigest()
 
     def __init__(self, **kwargs):
         """Init method, includes post-init validators."""
@@ -328,7 +309,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_json(fname='folder/sim.json') # doctest: +SKIP
         """
-        json_string = self._json(indent=INDENT_JSON_FILE)
+        json_string = self._json_string
         self._warn_if_contains_data(json_string)
         with open(fname, "w", encoding="utf-8") as file_handle:
             file_handle.write(json_string)
@@ -394,7 +375,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         self._warn_if_contains_data(json_string)
         model_dict = json.loads(json_string)
         with open(fname, "w+", encoding="utf-8") as file_handle:
-            yaml.dump(model_dict, file_handle, indent=INDENT_JSON_FILE)
+            yaml.dump(model_dict, file_handle, indent=INDENT)
 
     @staticmethod
     def _warn_if_contains_data(json_str: str) -> None:
@@ -448,23 +429,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 else:
                     model_dict = model_dict[key]
         return model_dict
-
-    @staticmethod
-    def _json_string_key(index: int) -> str:
-        """Get json string key for string chunk number ``index``."""
-        if index:
-            return f"{JSON_TAG}_{index}"
-        return JSON_TAG
-
-    @classmethod
-    def _json_string_from_hdf5(cls, fname: str) -> str:
-        """Load the model json string from an hdf5 file."""
-        with h5py.File(fname, "r") as f_handle:
-            num_string_parts = len([key for key in f_handle.keys() if JSON_TAG in key])
-            json_string = b""
-            for ind in range(num_string_parts):
-                json_string += f_handle[cls._json_string_key(ind)][()]
-        return json_string
 
     @classmethod
     def dict_from_hdf5(
@@ -537,7 +501,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 elif isinstance(value, dict):
                     load_data_from_file(model_dict=value, group_path=subpath)
 
-        model_dict = json.loads(cls._json_string_from_hdf5(fname=fname))
+        with h5py.File(fname, "r") as f_handle:
+            json_string = f_handle[JSON_TAG][()]
+            model_dict = json.loads(json_string)
+
         group_path = cls._construct_group_path(group_path)
         model_dict = cls.get_sub_model(group_path=group_path, model_dict=model_dict)
         load_data_from_file(model_dict=model_dict, group_path=group_path)
@@ -596,11 +563,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         with h5py.File(fname, "w") as f_handle:
 
-            json_str = self._json_string
-            for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
-                ind_start = int(ind * MAX_STRING_LENGTH)
-                ind_stop = min(int(ind + 1) * MAX_STRING_LENGTH, len(json_str))
-                f_handle[self._json_string_key(ind)] = json_str[ind_start:ind_stop]
+            f_handle[JSON_TAG] = self._json_string
 
             def add_data_to_file(data_dict: dict, group_path: str = "") -> None:
                 """For every DataArray item in dictionary, write path of hdf5 group as value."""
@@ -744,51 +707,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def __eq__(self, other):
         """Define == for two Tidy3DBaseModels."""
-        if other is None:
-            return False
-
-        def check_equal(dict1: dict, dict2: dict) -> bool:
-            """Check if two dictionaries are equal, with special handlings."""
-
-            # if different keys, automatically fail
-            if not dict1.keys() == dict2.keys():
-                return False
-
-            # loop through elements in each dict
-            for key in dict1.keys():
-                val1 = dict1[key]
-                val2 = dict2[key]
-
-                # if one of val1 or val2 is None (exclusive OR)
-                if (val1 is None) != (val2 is None):
-                    return False
-
-                # convert tuple to dict to use this recursive function
-                if isinstance(val1, tuple) or isinstance(val2, tuple):
-                    val1 = dict(zip(range(len(val1)), val1))
-                    val2 = dict(zip(range(len(val2)), val2))
-
-                # if dictionaries, recurse
-                if isinstance(val1, dict) or isinstance(val2, dict):
-                    are_equal = check_equal(val1, val2)
-                    if not are_equal:
-                        return False
-
-                # if numpy arrays, use numpy to do equality check
-                elif isinstance(val1, np.ndarray) or isinstance(val2, np.ndarray):
-                    if not np.array_equal(val1, val2):
-                        return False
-
-                # everything else
-                else:
-
-                    # note: this logic is because != is handled differently in DataArrays apparently
-                    if not val1 == val2:
-                        return False
-
-            return True
-
-        return check_equal(self.dict(), other.dict())
+        return self._json_string == other._json_string
 
     @cached_property
     def _json_string(self) -> str:
@@ -874,14 +793,21 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 # handle cases where default values are pydantic models
                 default_val = f"{default_val.__class__.__name__}({default_val})"
                 default_val = (", ").join(default_val.split(" "))
+                default_val = default_val.replace("=", "")
 
             # make first line: name : type = default
             default_str = "" if field.required else f" = {default_val}"
-            doc += f"    {field_name} : {data_type}{default_str}\n"
+            doc += f"\n\t\t``{field_name}``: Attribute: :attr:`{field_name}` \n"
+            doc += "\n\t\t\t .. list-table::"
+            doc += "\n\t\t\t\t:widths: 20 80\n"
+            doc += "\n\t\t\t\t* -    ``Type``"
+            doc += f"\n\t\t\t\t  -    *{data_type}*"
+            doc += "\n\t\t\t\t* -    ``Default``"
+            doc += f"\n\t\t\t\t  -     {default_str}"
 
             # get field metadata
             field_info = field.field_info
-            doc += "        "
+            # doc += "        "
 
             # add units (if present)
             units = field_info.extra.get("units")
@@ -895,12 +821,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     unitstr += ")"
                 else:
                     unitstr = units
-                doc += f"[units = {unitstr}].  "
+                doc += "\n\t\t\t\t* -    ``Units``"
+                doc += f"\n\t\t\t\t  -    `{unitstr}`"
 
             # add description
             description_str = field_info.description
             if description_str is not None:
-                doc += f"{description_str}\n"
+                doc += "\n\t\t\t\t* -    ``Description``"
+                doc += f"\n\t\t\t\t  -    {description_str}\n"
 
         # add in remaining things in the docs
         if original_docstrings:

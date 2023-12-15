@@ -35,14 +35,14 @@ from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, Vali
 from ...constants import ETA_0, C_0, MICROMETER
 from ...log import log
 
-from ..base_sim.data.monitor_data import AbstractMonitorData
-
 
 Coords1D = ArrayFloat1D
 
 
-class MonitorData(AbstractMonitorData, ABC):
-    """Abstract base class of objects that store data pertaining to a single :class:`.monitor`."""
+class MonitorData(Dataset, ABC):
+    """
+    Abstract base class of objects that store data pertaining to a single :class:`.monitor`.
+    """
 
     monitor: MonitorType = pd.Field(
         ...,
@@ -55,6 +55,11 @@ class MonitorData(AbstractMonitorData, ABC):
     def symmetry_expanded(self) -> MonitorData:
         """Return self with symmetry applied."""
         return self
+
+    @property
+    def symmetry_expanded_copy(self) -> MonitorData:
+        """Return copy of self with symmetry applied."""
+        return self.copy()
 
     def normalize(self, source_spectrum_fn: Callable[[float], complex]) -> Dataset:
         """Return copy of self after normalization is applied using source spectrum function."""
@@ -737,7 +742,17 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
 
 class FieldData(FieldDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.FieldMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        This dataset can contain all electric and magnetic field components: ``Ex``, ``Ey``, ``Ez``, ``Hx``, ``Hy``,
+        and ``Hz``.
 
     Example
     -------
@@ -753,6 +768,16 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
     ...     size=(2,4,6), freqs=[2e14, 3e14], name='field', fields=['Ex', 'Hz'], colocate=True
     ... )
     >>> data = FieldData(monitor=monitor, Ex=scalar_field, Hz=scalar_field, grid_expanded=grid)
+
+    .. TODO sort out standalone data example.
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+        * `Performing visualization of simulation data <../../notebooks/VizData.html>`_
+        * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
     """
 
     monitor: FieldMonitor = pd.Field(
@@ -811,7 +836,14 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.FieldTimeMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------
@@ -843,8 +875,8 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
         # Tangential fields are ordered as E1, E2, H1, H2
         tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
-        e_x_h = np.real(tan_fields["E" + dim1]) * np.real(tan_fields["H" + dim2])
-        e_x_h -= np.real(tan_fields["E" + dim2]) * np.real(tan_fields["H" + dim1])
+        e_x_h = tan_fields["E" + dim1] * tan_fields["H" + dim2]
+        e_x_h -= tan_fields["E" + dim2] * tan_fields["H" + dim1]
         return e_x_h
 
     @cached_property
@@ -878,7 +910,14 @@ class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):
 
 
 class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
-    """Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
+    """
+    Data associated with a :class:`.ModeSolverMonitor`: scalar components of E and H fields.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------
@@ -1121,8 +1160,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
                 ]
 
             # Apply phase shift
-            phase_fact = np.exp(-1j * phase[None, None, None, :, :]).astype(field_sorted.data.dtype)
-            field_sorted.data = field_sorted.data * phase_fact
+            field_sorted.data = field_sorted.data * np.exp(-1j * phase[None, None, None, :, :])
 
             update_dict[field_name] = field_sorted
 
@@ -1177,7 +1215,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         )
 
         # remove data corresponding to frequencies used only for group index calculation
-        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group_raw": n_group}
+        update_dict = {"n_complex": self.n_complex.isel(f=center), "n_group": n_group}
 
         for key, field in self.field_components.items():
             update_dict[key] = field.isel(f=center)
@@ -1311,7 +1349,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             "wg TE fraction": self.pol_fraction_waveguide["te"],
             "wg TM fraction": self.pol_fraction_waveguide["tm"],
             "mode area": self.mode_area,
-            "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
+            "group index": self.n_group,
         }
 
         return xr.Dataset(data_vars=info)
@@ -1333,6 +1371,12 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
 class PermittivityData(PermittivityDataset, AbstractFieldData):
     """Data for a :class:`.PermittivityMonitor`: diagonal components of the permittivity tensor.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------
@@ -1356,7 +1400,23 @@ class PermittivityData(PermittivityDataset, AbstractFieldData):
 
 
 class ModeData(MonitorData):
-    """Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices.
+    """
+    Data associated with a :class:`.ModeMonitor`: modal amplitudes and propagation indices.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        The mode monitor data contains the complex effective indices and the complex mode amplitudes at the monitor
+        position calculated by mode decomposition. The data structure of the complex effective
+        indices :attr`n_complex` contains two coordinates: ``f`` and ``mode_index``, both of which are specified when
+        defining the :class:``ModeMonitor`` in the simulation.
+
+        Besides the effective index, :class:``ModeMonitor`` is primarily used to calculate the transmission of
+        certain modes in certain directions. We can extract the complex amplitude and square it to compute the mode
+        transmission power.
 
     Example
     -------
@@ -1392,9 +1452,8 @@ class ModeData(MonitorData):
         description="Complex-valued effective propagation constants associated with the mode.",
     )
 
-    n_group_raw: ModeIndexDataArray = pd.Field(
+    n_group: ModeIndexDataArray = pd.Field(
         None,
-        alias="n_group",
         title="Group Index",
         description="Index associated with group velocity of the mode.",
     )
@@ -1409,17 +1468,6 @@ class ModeData(MonitorData):
         """Imaginary part of the propagation index."""
         return self.n_complex.imag
 
-    @property
-    def n_group(self):
-        """Group index."""
-        if self.n_group_raw is None:
-            log.warning(
-                "The group index was not computed. To calculate group index, pass "
-                "'group_index_step = True' in the 'ModeSpec'.",
-                log_once=True,
-            )
-        return self.n_group_raw
-
     def normalize(self, source_spectrum_fn) -> ModeData:
         """Return copy of self after normalization is applied using source spectrum function."""
         source_freq_amps = source_spectrum_fn(self.amps.f)[None, :, None]
@@ -1428,7 +1476,19 @@ class ModeData(MonitorData):
 
 
 class FluxData(MonitorData):
-    """Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
+    """
+    Data associated with a :class:`.FluxMonitor`: flux data in the frequency-domain.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
+
+        We can access the data for each monitor by indexing into the :class:`SimulationData` with the monitor
+        ``.name``. For the flux monitor data, we can access the raw flux data as a function of frequency with
+        ``.flux``. As most data are multidimensional, it’s often very helpful to print out the data and directly
+        inspect its structure.
 
     Example
     -------
@@ -1438,6 +1498,12 @@ class FluxData(MonitorData):
     >>> flux_data = FluxDataArray(np.random.random(2), coords=coords)
     >>> monitor = FluxMonitor(size=(2,0,6), freqs=[2e14, 3e14], name='flux')
     >>> data = FluxData(monitor=monitor, flux=flux_data)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Advanced monitor data manipulation and visualization <../../notebooks/XarrayTutorial.html>`_
     """
 
     monitor: FluxMonitor = pd.Field(
@@ -1457,7 +1523,14 @@ class FluxData(MonitorData):
 
 
 class FluxTimeData(MonitorData):
-    """Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain.
+    """
+    Data associated with a :class:`.FluxTimeMonitor`: flux data in the time-domain.
+
+    Notes
+    -----
+
+        The data is stored as a `DataArray <https://docs.xarray.dev/en/stable/generated/xarray.DataArray.html>`_
+        object using the `xarray <https://docs.xarray.dev/en/stable/index.html>`_ package.
 
     Example
     -------

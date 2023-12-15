@@ -20,7 +20,7 @@ from ...components.viz import add_ax_if_none, equal_aspect
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...exceptions import SetupError, Tidy3dKeyError
 from ...log import log
-from ...web.api.container import BatchData, Batch
+from ...web.container import BatchData, Batch
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
@@ -78,7 +78,17 @@ class SMatrixDataArray(DataArray):
 
 
 class ComponentModeler(Tidy3dBaseModel):
-    """Tool for modeling devices and computing scattering matrix elements."""
+    """
+    Tool for modeling devices and computing scattering matrix elements.
+
+    .. TODO missing basic example
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
+    """
 
     simulation: Simulation = pd.Field(
         ...,
@@ -123,6 +133,10 @@ class ComponentModeler(Tidy3dBaseModel):
         "If this option is used, "
         "the data corresponding to other inputs will be missing in the resulting matrix.",
     )
+    """Finally, to exclude some rows of the scattering matrix, one can supply a ``run_only`` parameter to the
+    :class:`ComponentModeler`. ``run_only`` contains the scattering matrix indices that the user wants to run as a
+    source. If any indices are excluded, they will not be run."""
+
     verbose: bool = pd.Field(
         False,
         title="Verbosity",
@@ -298,9 +312,7 @@ class ComponentModeler(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_sim(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
+    def plot_sim(self, x: float = None, y: float = None, z: float = None, ax: Ax = None) -> Ax:
         """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
@@ -308,21 +320,7 @@ class ComponentModeler(Tidy3dBaseModel):
             mode_source_0 = self.to_source(port=port_source, mode_index=0)
             plot_sources.append(mode_source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
-        return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_sim_eps(
-        self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
-    ) -> Ax:
-        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
-
-        plot_sources = []
-        for port_source in self.ports:
-            mode_source_0 = self.to_source(port=port_source, mode_index=0)
-            plot_sources.append(mode_source_0)
-        sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
-        return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
+        return sim_plot.plot(x=x, y=y, z=z, ax=ax)
 
     @cached_property
     def batch(self) -> Batch:
@@ -365,8 +363,7 @@ class ComponentModeler(Tidy3dBaseModel):
     @cached_property
     def _batch_path(self) -> str:
         """Where we store the batch for this ComponentModeler instance after the run."""
-        hash_str = self._hash_self()
-        return os.path.join(self.path_dir, "batch" + hash_str + ".json")
+        return os.path.join(self.path_dir, "batch" + str(hash(self)) + ".json")
 
     def _run_sims(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Run :class:`Simulations` for each port and return the batch after saving."""

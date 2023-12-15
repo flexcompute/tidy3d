@@ -33,7 +33,21 @@ ArrayLikeN2F = Union[float, Tuple[float, ...], ArrayComplex4D]
 
 
 class FieldProjector(Tidy3dBaseModel):
-    """Projection of near fields to points on a given observation grid."""
+    """
+    Projection of near fields to points on a given observation grid.
+
+    .. TODO make images to illustrate this
+
+    See Also
+    --------
+
+    :class:`FieldProjectionAngleMonitor
+        :class:`Monitor` that samples electromagnetic near fields in the frequency domain
+        and projects them at given observation angles.`
+
+    **Notebooks**:
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+    """
 
     sim_data: SimulationData = pydantic.Field(
         ...,
@@ -341,7 +355,6 @@ class FieldProjector(Tidy3dBaseModel):
         phi: ArrayLikeN2F,
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
-        medium: MediumType,
     ):
         """Compute far fields at an angle in spherical coordinates
         for a given set of surface currents and observation angles.
@@ -359,14 +372,13 @@ class FieldProjector(Tidy3dBaseModel):
             :class:`FieldProjectionSurface` object to use as source of near field.
         currents : xarray.Dataset
             xarray Dataset containing surface currents associated with the surface monitor.
-        medium : :class:`.MediumType`
-            Background medium through which to project fields.
 
         Returns
         -------
         tuple(numpy.ndarray[float], ...)
             ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` for the given surface.
         """
+
         pts = [currents[name].values for name in ["x", "y", "z"]]
 
         try:
@@ -395,7 +407,7 @@ class FieldProjector(Tidy3dBaseModel):
 
         phase = [None] * 3
         propagation_factor = -1j * AbstractFieldProjectionData.wavenumber(
-            medium=medium, frequency=frequency
+            medium=self.medium, frequency=frequency
         )
 
         def integrate_for_one_theta(i_th: int):
@@ -450,7 +462,7 @@ class FieldProjector(Tidy3dBaseModel):
         # Lphi  (8.34b)
         Lphi = -M[0] * sin_phi[None, :] + M[1] * cos_phi[None, :]
 
-        eta = ETA_0 / np.sqrt(medium.eps_model(frequency))
+        eta = ETA_0 / np.sqrt(self.medium.eps_model(frequency))
 
         Etheta = -(Lphi + eta * Ntheta)
         Ephi = Ltheta - eta * Nphi
@@ -460,45 +472,6 @@ class FieldProjector(Tidy3dBaseModel):
         Hr = np.zeros_like(Hphi)
 
         return Er, Etheta, Ephi, Hr, Htheta, Hphi
-
-    @staticmethod
-    def apply_window_to_currents(
-        proj_monitor: AbstractFieldProjectionMonitor, currents: xr.Dataset
-    ) -> xr.Dataset:
-        """Apply windowing function to the surface currents."""
-        if proj_monitor.size.count(0.0) == 0:
-            return currents
-        if proj_monitor.window_size == (0, 0):
-            return currents
-
-        pts = [currents[name].values for name in ["x", "y", "z"]]
-
-        custom_bounds = [
-            [pts[i][0] for i in range(3)],
-            [pts[i][-1] for i in range(3)],
-        ]
-
-        window_size, window_minus, window_plus = proj_monitor.window_parameters(
-            custom_bounds=custom_bounds
-        )
-
-        new_currents = currents.copy(deep=True)
-        for dim, (dim_name, points) in enumerate(zip("xyz", pts)):
-            window_fn = proj_monitor.window_function(
-                points=points,
-                window_size=window_size,
-                window_minus=window_minus,
-                window_plus=window_plus,
-                dim=dim,
-            )
-            window_data = xr.DataArray(
-                window_fn,
-                dims=[dim_name],
-                coords=[points],
-            )
-            new_currents *= window_data
-
-        return new_currents
 
     def project_fields(
         self, proj_monitor: AbstractFieldProjectionMonitor
@@ -548,26 +521,17 @@ class FieldProjector(Tidy3dBaseModel):
             np.zeros((1, len(theta), len(phi), len(freqs)), dtype=complex) for _ in field_names
         ]
 
-        medium = monitor.medium if monitor.medium else self.medium
-        k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
+        k = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
         phase = np.atleast_1d(
             AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
         )
 
         for surface in self.surfaces:
 
-            # apply windowing to currents
-            currents = self.apply_window_to_currents(monitor, self.currents[surface.monitor.name])
-
             if monitor.far_field_approx:
                 for idx_f, frequency in enumerate(freqs):
                     _fields = self._far_fields_for_surface(
-                        frequency=frequency,
-                        theta=theta,
-                        phi=phi,
-                        surface=surface,
-                        currents=currents,
-                        medium=medium,
+                        frequency, theta, phi, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
                         field[..., idx_f] += _field * phase[idx_f]
@@ -584,7 +548,7 @@ class FieldProjector(Tidy3dBaseModel):
                 ):
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, _theta, _phi)
                     _fields = self._fields_for_surface_exact(
-                        x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
                         field[0, i, j, :] += _field
@@ -595,7 +559,7 @@ class FieldProjector(Tidy3dBaseModel):
             for name, field in zip(field_names, fields)
         }
         return FieldProjectionAngleData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
         )
 
     def _project_fields_cartesian(
@@ -626,8 +590,7 @@ class FieldProjector(Tidy3dBaseModel):
             np.zeros((len(x), len(y), len(z), len(freqs)), dtype=complex) for _ in field_names
         ]
 
-        medium = monitor.medium if monitor.medium else self.medium
-        wavenumber = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
+        wavenumber = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
 
         # Zip together all combinations of observation points for better progress tracking
         iter_coords = [
@@ -647,26 +610,16 @@ class FieldProjector(Tidy3dBaseModel):
 
             for surface in self.surfaces:
 
-                # apply windowing to currents
-                currents = self.apply_window_to_currents(
-                    monitor, self.currents[surface.monitor.name]
-                )
-
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(
-                            frequency=frequency,
-                            theta=theta,
-                            phi=phi,
-                            surface=surface,
-                            currents=currents,
-                            medium=medium,
+                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
                         )
                         for field, _field in zip(fields, _fields):
                             field[i, j, k, idx_f] += _field * phase[idx_f]
                 else:
                     _fields = self._fields_for_surface_exact(
-                        x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
                         field[i, j, k, :] += _field
@@ -677,7 +630,7 @@ class FieldProjector(Tidy3dBaseModel):
             for name, field in zip(field_names, fields)
         }
         return FieldProjectionCartesianData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
         )
 
     def _project_fields_kspace(
@@ -704,8 +657,7 @@ class FieldProjector(Tidy3dBaseModel):
         field_names = ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")
         fields = [np.zeros((len(ux), len(uy), 1, len(freqs)), dtype=complex) for _ in field_names]
 
-        medium = monitor.medium if monitor.medium else self.medium
-        k = AbstractFieldProjectionData.wavenumber(medium=medium, frequency=freqs)
+        k = AbstractFieldProjectionData.wavenumber(medium=self.medium, frequency=freqs)
         phase = np.atleast_1d(
             AbstractFieldProjectionData.propagation_phase(dist=monitor.proj_distance, k=k)
         )
@@ -720,20 +672,10 @@ class FieldProjector(Tidy3dBaseModel):
 
             for surface in self.surfaces:
 
-                # apply windowing to currents
-                currents = self.apply_window_to_currents(
-                    monitor, self.currents[surface.monitor.name]
-                )
-
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(
-                            frequency=frequency,
-                            theta=theta,
-                            phi=phi,
-                            surface=surface,
-                            currents=currents,
-                            medium=medium,
+                            frequency, theta, phi, surface, self.currents[surface.monitor.name]
                         )
                         for field, _field in zip(fields, _fields):
                             field[i, j, 0, idx_f] += _field * phase[idx_f]
@@ -741,7 +683,7 @@ class FieldProjector(Tidy3dBaseModel):
                 else:
                     _x, _y, _z = monitor.sph_2_car(monitor.proj_distance, theta, phi)
                     _fields = self._fields_for_surface_exact(
-                        x=_x, y=_y, z=_z, surface=surface, currents=currents, medium=medium
+                        _x, _y, _z, surface, self.currents[surface.monitor.name]
                     )
                     for field, _field in zip(fields, _fields):
                         field[i, j, 0, :] += _field
@@ -757,7 +699,7 @@ class FieldProjector(Tidy3dBaseModel):
             for name, field in zip(field_names, fields)
         }
         return FieldProjectionKSpaceData(
-            monitor=monitor, projection_surfaces=self.surfaces, medium=medium, **fields
+            monitor=monitor, projection_surfaces=self.surfaces, medium=self.medium, **fields
         )
 
     """Exact projections"""
@@ -769,7 +711,6 @@ class FieldProjector(Tidy3dBaseModel):
         z: float,
         surface: FieldProjectionSurface,
         currents: xr.Dataset,
-        medium: MediumType,
     ):
         """Compute projected fields in spherical coordinates at a given projection point on a
         Cartesian grid for a given set of surface currents using the exact homogeneous medium
@@ -787,8 +728,6 @@ class FieldProjector(Tidy3dBaseModel):
             :class:`FieldProjectionSurface` object to use as source of near field.
         currents : xarray.Dataset
             xarray Dataset containing surface currents associated with the surface monitor.
-        medium : :class:`.MediumType`
-            Background medium through which to project fields.
 
         Returns
         -------
@@ -796,12 +735,13 @@ class FieldProjector(Tidy3dBaseModel):
             ``Er``, ``Etheta``, ``Ephi``, ``Hr``, ``Htheta``, ``Hphi`` projected fields for
             each frequency.
         """
+
         freqs = np.array(self.frequencies)
         i_omega = 1j * 2.0 * np.pi * freqs[None, None, None, :]
-        wavenumber = AbstractFieldProjectionData.wavenumber(frequency=freqs, medium=medium)
+        wavenumber = AbstractFieldProjectionData.wavenumber(frequency=freqs, medium=self.medium)
         wavenumber = wavenumber[None, None, None, :]  # add space dimensions
 
-        eps_complex = medium.eps_model(frequency=freqs)
+        eps_complex = self.medium.eps_model(frequency=freqs)
         epsilon = EPSILON_0 * eps_complex[None, None, None, :]
 
         # source points

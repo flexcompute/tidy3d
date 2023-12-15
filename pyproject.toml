@@ -1,9 +1,116 @@
-[build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+[tool.poetry]
+name = "tidy3d"
+version = "2.4.3"  # Thinking about bump2version
+description = "A fast FDTD solver"
+authors = ["Tyler Hughes <tyler@flexcompute.com>"]
+license = "LGPLv2+"
+readme = "README.md"
+homepage = "https://github.com/flexcompute/tidy3d"
+repository = "https://github.com/flexcompute/tidy3d"
+classifiers = [
+    "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
 ]
-build-backend = "setuptools.build_meta"
+documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
+
+[tool.poetry.urls]
+"Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.12"
+pyroots = "^0.5.0"
+xarray = ">=0.16.2"
+importlib-metadata = "^6.0.0"
+h5netcdf = "1.0.2"
+h5py = "^3.0.0"
+rich = "<12.6.0"
+matplotlib = "*"
+shapely = "^2.0"
+pydantic = "^2.0"
+PyYAML = "*"
+dask = "*"
+toml = "*"
+scipy = "*"
+boto3 = "1.23.1"
+requests = "*"
+pyjwt = "*"
+click = "8.0.3"
+responses = "*"
+
+### Optional dependencies ### 
+# development core
+pre-commit = {version="*", optional = true}
+black = {version="22.3.0", optional = true}
+ruff = {version="*", optional = true}
+tox = {version="*", optional = true}
+pylint = {version="*", optional = true}
+pytest = {version="*", optional = true}
+pytest-timeout = {version="*", optional = true}
+memory_profiler = {version="*", optional = true}
+dill = {version="*", optional = true}
+ipython = {version="*", optional = true}
+
+# gdspy
+gdspy = {version="*", optional = true}
+
+# gdstk
+gdstk = {version="*", optional = true}
+
+# jax
+jax = [
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", optional = true},
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "darwin", optional = true}, # TODO verify with a mac user
+    {version = "==0.4.1", extras = ["cpu"], platform = "windows", python = "<3.9", optional = true},
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "windows", python = ">=3.9", optional = true}
+]
+jaxlib = [
+    {version = ">=0.4.1,<=0.4.14", platform = "linux", optional = true},
+    {version = ">=0.4.1,<=0.4.14", platform = "darwin", optional = true}, # TODO verify with a mac user
+    {version = "==0.4.1", platform = "windows", python = "<3.9", optional = true},
+    {version = ">=0.4.1,<=0.4.14", platform = "windows", python = ">=3.9", optional = true}
+]
+
+# trimesh
+trimesh = {version = "3.20.0", optional = true}
+networkx = {version = ">=2.6.3, <=3.0", optional = true}
+rtree = {version = "1.0.1", optional = true}
+
+# docs
+jupyter = {version="*", optional = true}
+jinja2 = {version = ">=3.1.2", optional = true}
+nbconvert = {version = ">=7.11.0", optional = true}
+sphinx = {version=">=6.2.1,<7", optional = true}
+nbsphinx = {version = ">=0.8.7", optional = true}
+sphinx-copybutton = {version=">=0.5.2", optional = true}
+sphinx-book-theme = {version = ">=1.0.1", optional = true}
+pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
+# divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
+# m2r2 = {version="*", optional = true}
+tmm = {version="*", optional = true}
+grcwa = {version="*", optional = true}
+sphinx-sitemap = {version=">=2.5.1", optional = true}
+sphinx-tabs = {version="*", optional = true}
+nbdime = {version="*", optional = true}
+optax = {version="*", optional = true}
+signac = {version="*", optional = true}
+sax = {version="*", optional = true}
+
+[tool.poetry.extras]
+dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "pydata-sphinx-theme", "sphinx-tabs"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs"]
+gdspy = ["gdspy"]
+gdstk = ["gdstk"]
+jax = ["jaxlib", "jax"]
+trimesh = ["trimesh", "networkx", "rtree"]
+
+[tool.poetry.scripts]
+tidy3d = "tidy3d.web.cli:tidy3d_cli"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
@@ -21,6 +128,7 @@ exclude = '''
   | dist
 )/
 '''
+
 
 [tool.ruff]
 ignore-init-module-imports = true

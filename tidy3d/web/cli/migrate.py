@@ -7,8 +7,7 @@ import requests
 import toml
 
 from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from ..core.constants import KEY_APIKEY, HEADER_APPLICATION, HEADER_APPLICATION_VALUE
-from ..core.environment import Env
+from ..environment import Env
 
 
 def migrate() -> bool:
@@ -31,7 +30,7 @@ def migrate() -> bool:
                 default=True,
             )
             if is_migrate:
-                headers = {HEADER_APPLICATION: HEADER_APPLICATION_VALUE}
+                headers = {"Application": "TIDY3D"}
                 resp = requests.get(
                     f"{Env.current.web_api_endpoint}/auth",
                     headers=headers,
@@ -64,7 +63,7 @@ def migrate() -> bool:
                             os.mkdir(TIDY3D_DIR)
                         with open(CONFIG_FILE, "w+", encoding="utf-8") as config_file:
                             toml_config = toml.loads(config_file.read())
-                            toml_config.update({KEY_APIKEY: apikey})
+                            toml_config.update({"apikey": apikey})
                             config_file.write(toml.dumps(toml_config))
 
                         # rename auth.json to auth.json.bak

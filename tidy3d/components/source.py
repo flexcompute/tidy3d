@@ -9,13 +9,12 @@ from typing_extensions import Literal
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .base import cached_property
-from .base_sim.source import AbstractSource
-from .time import AbstractTimeDependence
+from .base import Tidy3dBaseModel, cached_property
+
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
-from .validators import assert_plane, assert_volumetric, get_value
-from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
+from .validators import assert_plane, assert_volumetric, validate_name_str, get_value
+from .validators import warn_if_dataset_none, assert_single_freq_in_range
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
 from .geometry.base import Box
@@ -27,6 +26,8 @@ from ..constants import inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 
+# in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
+DFT_CUTOFF = 1e-8
 # when checking if custom data spans the source plane, allow for a small tolerance
 # due to numerical precision
 DATA_SPAN_TOL = 1e-8
@@ -36,8 +37,128 @@ CHEB_GRID_WIDTH = 1.5
 WARN_NUM_FREQS = 20
 
 
-class SourceTime(AbstractTimeDependence):
+class SourceTime(ABC, Tidy3dBaseModel):
     """Base class describing the time dependence of a source."""
+
+    amplitude: pydantic.NonNegativeFloat = pydantic.Field(
+        1.0, title="Amplitude", description="Real-valued maximum amplitude of the time dependence."
+    )
+
+    phase: float = pydantic.Field(
+        0.0, title="Phase", description="Phase shift of the time dependence.", units=RADIAN
+    )
+
+    @abstractmethod
+    def amp_time(self, time: float) -> complex:
+        """Complex-valued source amplitude as a function of time.
+
+        Parameters
+        ----------
+        time : float
+            Time in seconds.
+
+        Returns
+        -------
+        complex
+            Complex-valued source amplitude at that time..
+        """
+
+    def spectrum(
+        self,
+        times: ArrayFloat1D,
+        freqs: ArrayFloat1D,
+        dt: float,
+        complex_fields: bool = False,
+    ) -> complex:
+        """Complex-valued source spectrum as a function of frequency
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Times to use to evaluate spectrum Fourier transform.
+            (Typically the simulation time mesh).
+        freqs : np.ndarray
+            Frequencies in Hz to evaluate spectrum at.
+        dt : float or np.ndarray
+            Time step to weight FT integral with.
+            If array, use to weigh each of the time intervals in ``times``.
+        complex_fields : bool
+            Whether time domain fields are complex, e.g., for Bloch boundaries
+
+        Returns
+        -------
+        np.ndarray
+            Complex-valued array (of len(freqs)) containing spectrum at those frequencies.
+        """
+
+        times = np.array(times)
+        freqs = np.array(freqs)
+        time_amps = self.amp_time(times)
+
+        if not complex_fields:
+            time_amps = np.real(time_amps)
+
+        # Cut to only relevant times
+        relevant_time_inds = np.where(np.abs(time_amps) / np.amax(np.abs(time_amps)) > DFT_CUTOFF)
+        # find first and last index where the filter is True
+        start_ind = relevant_time_inds[0][0]
+        stop_ind = relevant_time_inds[0][-1]
+        time_amps = time_amps[start_ind:stop_ind]
+        times_cut = times[start_ind:stop_ind]
+
+        # only need to compute DTFT kernel for distinct dts
+        # usually, there is only one dt, if times is simulation time mesh
+        dts = np.diff(times_cut)
+        dts_unique, kernel_indices = np.unique(dts, return_inverse=True)
+
+        dft_kernels = [np.exp(2j * np.pi * freqs * curr_dt) for curr_dt in dts_unique]
+        running_kernel = np.exp(2j * np.pi * freqs * times_cut[0])
+        dft = np.zeros(len(freqs), dtype=complex)
+        for amp, kernel_index in zip(time_amps, kernel_indices):
+            dft += running_kernel * amp
+            running_kernel *= dft_kernels[kernel_index]
+
+        # kernel_indices was one index shorter than time_amps
+        dft += running_kernel * time_amps[-1]
+
+        return dt * dft / np.sqrt(2 * np.pi)
+
+    @add_ax_if_none
+    def plot(self, times: ArrayFloat1D, val: PlotVal = "real", ax: Ax = None) -> Ax:
+        """Plot the complex-valued amplitude of the source time-dependence.
+
+        Parameters
+        ----------
+        times : np.ndarray
+            Array of times (seconds) to plot source at.
+            To see source time amplitude for a specific :class:`Simulation`,
+            pass ``simulation.tmesh``.
+        val : Literal['real', 'imag', 'abs'] = 'real'
+            Which part of the spectrum to plot.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        times = np.array(times)
+        amp_complex = self.amp_time(times)
+
+        if val == "real":
+            ax.plot(times, amp_complex.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(times, amp_complex.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(times, np.abs(amp_complex), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
+        ax.set_xlabel("time (s)")
+        ax.set_title("source amplitude")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
 
     @add_ax_if_none
     def plot_spectrum(
@@ -46,9 +167,9 @@ class SourceTime(AbstractTimeDependence):
         num_freqs: int = 101,
         val: PlotVal = "real",
         ax: Ax = None,
+        complex_fields: bool = False,
     ) -> Ax:
         """Plot the complex-valued amplitude of the source time-dependence.
-        Note: Only the real part of the time signal is used.
 
         Parameters
         ----------
@@ -61,17 +182,40 @@ class SourceTime(AbstractTimeDependence):
             Number of frequencies to plot within the SourceTime.frequency_range.
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
+        complex_fields : bool
+            Whether time domain fields are complex, e.g., for Bloch boundaries
 
         Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
         """
+        times = np.array(times)
+
+        dts = np.diff(times)
+        if not np.allclose(dts, dts[0] * np.ones_like(dts), atol=1e-17):
+            raise SetupError("Supplied times not evenly spaced.")
+
+        dt = np.mean(dts)
 
         fmin, fmax = self.frequency_range()
-        return self.plot_spectrum_in_frequency_range(
-            times, fmin, fmax, num_freqs=num_freqs, val=val, ax=ax
-        )
+        freqs = np.linspace(fmin, fmax, num_freqs)
+
+        spectrum = self.spectrum(times=times, dt=dt, freqs=freqs, complex_fields=complex_fields)
+
+        if val == "real":
+            ax.plot(freqs, spectrum.real, color="blueviolet", label="real")
+        elif val == "imag":
+            ax.plot(freqs, spectrum.imag, color="crimson", label="imag")
+        elif val == "abs":
+            ax.plot(freqs, np.abs(spectrum), color="k", label="abs")
+        else:
+            raise ValueError(f"Plot 'val' option of '{val}' not recognized.")
+        ax.set_xlabel("frequency (Hz)")
+        ax.set_title("source spectrum")
+        ax.legend()
+        ax.set_aspect("auto")
+        return ax
 
     @abstractmethod
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
@@ -166,11 +310,6 @@ class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation
     and holds until end of simulation.
 
-    Note
-    ----
-    Field decay will not occur, so the simulation will run for the full ``run_time``.
-    Also, source normalization of frequency-domain monitors is not meaningful.
-
     Example
     -------
     >>> cw = ContinuousWave(freq0=200e12, fwidth=20e12)
@@ -202,13 +341,6 @@ class CustomSourceTime(Pulse):
         amp\\_time(t) = amplitude \\cdot \\
                 e^{i \\cdot phase - 2 \\pi i \\cdot freq0 \\cdot t} \\cdot \\
                 envelope(t - offset / (2 \\pi \\cdot fwidth))
-
-    Note
-    ----
-    Depending on the envelope, field decay may not occur.
-    If field decay does not occur, then the simulation will run for the full ``run_time``.
-    Also, if field decay does not occur, then source normalization of frequency-domain
-    monitors is not meaningful.
 
     Note
     ----
@@ -334,7 +466,7 @@ SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
 """ Source objects """
 
 
-class Source(Box, AbstractSource, ABC):
+class Source(Box, ABC):
     """Abstract base class for all sources."""
 
     source_time: SourceTimeType = pydantic.Field(
@@ -344,10 +476,14 @@ class Source(Box, AbstractSource, ABC):
         discriminator=TYPE_TAG_STR,
     )
 
+    name: str = pydantic.Field(None, title="Name", description="Optional name for the source.")
+
     @cached_property
     def plot_params(self) -> PlotParams:
         """Default parameters for plotting a Source object."""
         return plot_params_source
+
+    _name_validator = validate_name_str()
 
     @cached_property
     def geometry(self) -> Box:
@@ -369,12 +505,6 @@ class Source(Box, AbstractSource, ABC):
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Returns a vector indicating the source polarization for arrow plotting, if not None."""
         return None
-
-    @pydantic.validator("source_time", always=True)
-    def _freqs_lower_bound(cls, val):
-        """Raise validation error if central frequency is too low."""
-        _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
-        return val
 
     def plot(  #  pylint:disable=too-many-arguments
         self,
@@ -468,7 +598,12 @@ class ReverseInterpolatedSource(Source):
 
 
 class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
-    """Source in a rectangular volume with uniform time dependence. size=(0,0,0) gives point source.
+    """Source in a rectangular volume with uniform time dependence.
+
+    Notes
+    -----
+
+        Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.
 
     Example
     -------
@@ -480,10 +615,18 @@ class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
 class PointDipole(CurrentSource, ReverseInterpolatedSource):
     """Uniform current source with a zero size.
 
+    .. TODO add image of how it looks like based on sim 1.
+
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')
+
+    See Also
+    --------
+
+    **Lectures:**
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
     size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
@@ -496,12 +639,20 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
 
 class CustomCurrentSource(ReverseInterpolatedSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.
-    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M``
-    current distributions in the FDTD solver.
 
-    Note
-    ----
-        The coordinates of all provided fields are assumed to be relative to the source center.
+    Notes
+    -----
+
+        Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current
+        distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the
+        source center.
+
+        The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source
+        accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,
+        z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also
+        fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar
+        without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source
+        center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.
 
     Example
     -------
@@ -520,6 +671,11 @@ class CustomCurrentSource(ReverseInterpolatedSource):
     ...     source_time=pulse,
     ...     current_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     current_dataset: Optional[FieldDataset] = pydantic.Field(
@@ -631,21 +787,40 @@ class BroadbandSource(Source, ABC):
 
 class CustomFieldSource(FieldSource, PlanarSource):
     """Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields,
-    using the equivalence principle to define the actual injected currents. For the injection to
-    work as expected (i.e. to reproduce the required ``E`` and ``H`` fields), the field data must
-    decay by the edges of the source plane, or the source plane must span the entire simulation
-    domain and the fields must match the simulation boundary conditions.
-    The equivalent source currents are fully defined by the field components tangential to the
-    source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
-    can be provided but will have no effect on the results, and at least one of the tangential
-    components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+    using the equivalence principle to define the actual injected currents.
+
+     Notes
+     -----
+
+        For the injection to work as expected (i.e. to reproduce the required ``E`` and ``H`` fields),
+        the field data must decay by the edges of the source plane, or the source plane must span the entire
+        simulation domain and the fields must match the simulation boundary conditions.
+
+        The equivalent source currents are fully defined by the field components tangential to the
+        source plane. For e.g. source normal along ``z``, the normal components (``Ez`` and ``Hz``)
+        can be provided but will have no effect on the results, and at least one of the tangential
+        components has to be in the dataset, i.e. at least one of ``Ex``, ``Ey``, ``Hx``, and ``Hy``.
+
+        .. TODO add image here
+
+        ..
+            TODO is this generic? Only the field components tangential to the custom source plane are needed and used
+            in the simulation. Due to the equivalence principle, these fully define the currents that need to be
+            injected. This is not to say that the normal components of the data (:math:`E_x`, :math:`H_x` in our example)
+            is lost or not injected. It is merely not needed as it can be uniquely obtained using the tangential components.
+
+        ..
+            TODO add example for this standalone
+            Source data can be imported from file just as shown here, after the data is imported as a numpy array using
+            standard numpy functions like loadtxt.
+
+        If the data is not coming from a ``tidy3d`` simulation, the normalization is likely going to be arbitrary and
+        the directionality of the source will likely not be perfect, even if both the ``E`` and ``H`` fields are
+        provided. An empty normalizing run may be needed to accurately normalize results.
 
     Note
     ----
         The coordinates of all provided fields are assumed to be relative to the source center.
-
-    Note
-    ----
         If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
         but will inject equal power in both directions instead.
 
@@ -666,6 +841,11 @@ class CustomFieldSource(FieldSource, PlanarSource):
     ...     source_time=pulse,
     ...     field_dataset=dataset)
 
+    See Also
+    --------
+
+    **Notebooks**
+        * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_
     """
 
     field_dataset: Optional[FieldDataset] = pydantic.Field(
@@ -698,11 +878,18 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
 
 class AngledFieldSource(DirectionalSource, ABC):
-    """A FieldSource defined with a an angled direction of propagation. The direction is defined by
-    the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
-    backward ``-``. This base class only defines the ``direction`` and ``injection_axis``
-    attributes, but it must be composed with a class that also defines ``angle_theta`` and
-    ``angle_phi``."""
+    """A FieldSource defined with an angled direction of propagation.
+
+    Notes
+    -----
+
+        The direction is defined by
+        the polar and azimuth angles w.r.t. an injection axis, as well as forward ``+`` or
+        backward ``-``. This base class only defines the :attr:`direction` and :attr:`injection_axis`
+        attributes, but it must be composed with a class that also defines :attr:`angle_theta` and
+        :attr:`angle_phi`.
+
+    """
 
     angle_theta: float = pydantic.Field(
         0.0,
@@ -772,6 +959,28 @@ class AngledFieldSource(DirectionalSource, ABC):
 class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     """Injects current source to excite modal profile on finite extent plane.
 
+    Notes
+    -----
+
+        Using this mode source, it is possible selectively excite one of the guided modes of a waveguide. This can be
+        computed in our eigenmode solver :class:`tidy3d.plugins.mode.ModeSolver` and implement the mode simulation in
+        FDTD.
+
+        Mode sources are normalized to inject exactly 1W of power at the central frequency.
+
+        The modal source allows you to do directional excitation. Illustrated
+        by the image below, the field is perfectly launched to the right of the source and there's zero field to the
+        left of the source. Now you can contrast the behavior of the modal source with that of a dipole source. If
+        you just put a dipole into the waveguide, well, you see quite a bit different in the field distribution.
+        First of all, the dipole source is not directional launching. It launches waves in both directions. The
+        second is that the polarization of the dipole is set to selectively excite a TE mode. But it takes some
+        propagation distance before the mode settles into a perfect TE mode profile. During this process,
+        there is radiation into the substrate.
+
+        .. image:: ../../_static/img/mode_vs_dipole_source.png
+
+        .. TODO improve links to other APIs functionality here.
+
     Example
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
@@ -782,6 +991,19 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
     ...     mode_spec=mode_spec,
     ...     mode_index=1,
     ...     direction='-')
+
+    See Also
+    --------
+
+    :class:`tidy3d.plugins.mode.ModeSolver`:
+        Interface for solving electromagnetic eigenmodes in a 2D plane with translational invariance in the third dimension.
+
+    **Notebooks:**
+        * `Waveguide Y junction <../../notebooks/YJunction.html>`_
+        * `90 degree optical hybrid <../../notebooks/90OpticalHybrid.html>`_
+
+    **Lectures:**
+        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
     mode_spec: ModeSpec = pydantic.Field(
@@ -838,6 +1060,15 @@ class PlaneWave(AngledFieldSource, PlanarSource):
     -------
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> pw_source = PlaneWave(size=(inf,0,inf), source_time=pulse, pol_angle=0.1, direction='+')
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `How to troubleshoot a diverged FDTD simulation <../../notebooks/DivergedFDTDSimulation.html>`_
+
+    **Lectures:**
+        * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
 
@@ -853,6 +1084,12 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     ...     pol_angle=np.pi / 2,
     ...     direction='+',
     ...     waist_radius=1.0)
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
     waist_radius: pydantic.PositiveFloat = pydantic.Field(
@@ -875,11 +1112,19 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
-    """This class implements the simple astigmatic Gaussian beam described in Kochkina et al.,
-    Applied Optics, vol. 52, issue 24, 2013. The simple astigmatic Guassian distribution allows
+    """The simple astigmatic Guassian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
     directions, this source becomes equivalent to :class:`GaussianBeam`.
+
+    Notes
+    -----
+
+        This class implements the simple astigmatic Gaussian beam described in _`[1]`.
+
+        **References**:
+
+        .. [1] Kochkina et al., Applied Optics, vol. 52, issue 24, 2013.
 
     Example
     -------
@@ -915,10 +1160,34 @@ class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 class TFSF(AngledFieldSource, VolumeSource):
     """Total-field scattered-field (TFSF) source that can inject a plane wave in a finite region.
-    The TFSF source injects 1 W / um^2 of power along the ``injection_axis``. Note that in the
-    case of angled incidence, 1 W / um^2 is still injected along the source's ``injection_axis``,
-    and not the propagation direction, unlike a ``PlaneWave`` source. This allows computing
-    scattering and absorption cross sections without the need for additional normalization.
+
+    Notes
+    -----
+
+        The TFSF source injects :math:`\\frac{1 W}{\\mu m^2}` of power along the :attr:`injection_axis`. Note that in the
+        case of angled incidence, :math:`\\frac{1 W}{\\mu m^2}` is still injected along the source's :attr:`injection_axis`,
+        and not the propagation direction, unlike a :class:`PlaneWave` source. This allows computing
+        scattering and absorption cross-sections without the need for additional normalization.
+
+        The TFSF source allows specifying a box region into which a plane wave is injected. Fields inside this region
+        can be interpreted as the superposition of the incident field and the scattered field due to any scatterers
+        present in the simulation domain. The fields at the edges of the TFSF box are modified at each time step such
+        that the incident field is cancelled out, so that all fields outside the TFSF box are scattered fields only.
+        This is useful in scenarios where one is interested in computing scattered fields only, for example when
+        computing scattered cross-sections of various objects.
+
+        It is important to note that when a non-uniform grid is used in the directions transverse to the
+        :attr:`injection_axis` of the TFSF source, the suppression of the incident field outside the TFSF box may not be as
+        close to zero as in the case of a uniform grid. Because of this, a warning may be issued when nonuniform grid
+        TFSF setup is detected. In some cases, however, the accuracy may be only weakly affected, and the warnings
+        can be ignored.
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Defining a total-field scattered-field (TFSF) plane wave source <../../notebooks/TFSF.html>`_
+        * `Nanoparticle Scattering <../../notebooks/PlasmonicNanoparticle.html>`_: To force a uniform grid in the TFSF region and avoid the warnings, a mesh override structure can be used as illustrated here.
     """
 
     injection_axis: Axis = pydantic.Field(

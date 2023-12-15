@@ -5,19 +5,17 @@ from typing import Union, Tuple
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
-from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_min
+from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Numpy
+from .types import Literal, Direction, Coordinate, Axis, ObsGridArray
+from .geometry.base import Box
+from .validators import assert_plane
 from .base import cached_property, Tidy3dBaseModel
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
-from .medium import MediumType
-from .viz import ARROW_COLOR_MONITOR, ARROW_ALPHA
+from .viz import PlotParams, plot_params_monitor, ARROW_COLOR_MONITOR, ARROW_ALPHA
 from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-
-from .base_sim.monitor import AbstractMonitor
 
 
 BYTES_REAL = 4
@@ -25,40 +23,102 @@ BYTES_COMPLEX = 8
 WARN_NUM_FREQS = 2000
 WARN_NUM_MODES = 100
 
-# Field projection windowing factor that determines field decay at the edges of surface field
-# projection monitors. A value of 15 leads to a decay of < 1e-3x in field amplitude.
-# This number relates directly to the standard deviation of the Gaussian function which is used
-# for windowing the monitor.
-WINDOW_FACTOR = 15
 
-
-class Monitor(AbstractMonitor):
+class Monitor(Box, ABC):
     """Abstract base class for monitors."""
+
+    name: str = pydantic.Field(
+        ...,
+        title="Name",
+        description="Unique name for monitor.",
+        min_length=1,
+    )
 
     interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial Interval",
+        title="Spatial interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included. "
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included. "
         "Not all monitors support values different from 1.",
     )
 
     colocate: Literal[True] = pydantic.Field(
         True,
-        title="Colocate Fields",
+        title="Colocate fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
     )
 
+    @cached_property
+    def plot_params(self) -> PlotParams:
+        """Default parameters for plotting a Monitor object."""
+        return plot_params_monitor
+
+    @cached_property
+    def geometry(self) -> Box:
+        """:class:`Box` representation of monitor.
+
+        Returns
+        -------
+        :class:`Box`
+            Representation of the monitor geometry as a :class:`Box`.
+        """
+        return Box(center=self.center, size=self.size)
+
     @abstractmethod
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
-        """Size of monitor storage given the number of points after discretization."""
+        """Size of monitor storage given the number of points after discretization.
 
-    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
-        """Size of intermediate data recorded by the monitor during a solver run."""
-        return self.storage_size(num_cells=num_cells, tmesh=tmesh)
+        Parameters
+        ----------
+        num_cells : int
+            Number of grid cells within the monitor after discretization by a :class:`Simulation`.
+        tmesh : Array
+            The discretized time mesh of a :class:`Simulation`.
+
+        Returns
+        -------
+        int
+            Number of bytes to be stored in monitor.
+        """
+
+    def downsample(self, arr: Numpy, axis: Axis) -> Numpy:
+        """Downsample a 1D array making sure to keep the first and last entries, based on the
+        spatial interval defined for the ``axis``.
+
+        Parameters
+        ----------
+        arr : Numpy
+            A 1D array of arbitrary type.
+        axis : Axis
+            Axis for which to select the interval_space defined for the monitor.
+
+        Returns
+        -------
+        Numpy
+            Downsampled array.
+        """
+
+        size = len(arr)
+        interval = self.interval_space[axis]
+        # There should always be at least 3 indices for "surface" monitors. Also, if the
+        # size along this dim is already smaller than the interval, then don't downsample.
+        if size < 4 or (size - 1) <= interval:
+            return arr
+        # make sure the last index is always included
+        inds = np.arange(0, size, interval)
+        if inds[-1] != size - 1:
+            inds = np.append(inds, size - 1)
+        return arr[inds]
+
+    def downsampled_num_cells(self, num_cells: Tuple[int, int, int]) -> Tuple[int, int, int]:
+        """Given a tuple of the number of cells spanned by the monitor along each dimension,
+        return the number of cells one would have after downsampling based on ``interval_space``.
+        """
+        arrs = [np.arange(ncells) for ncells in num_cells]
+        return tuple((self.downsample(arr, axis=dim).size for dim, arr in enumerate(arrs)))
 
 
 class FreqMonitor(Monitor, ABC):
@@ -81,8 +141,12 @@ class FreqMonitor(Monitor, ABC):
         "affects the normalization of the frequency-domain fields.",
     )
 
-    _freqs_not_empty = validate_freqs_not_empty()
-    _freqs_lower_bound = validate_freqs_min()
+    @pydantic.validator("freqs", always=True)
+    def _freqs_non_empty(cls, val):
+        """Assert one frequency present."""
+        if len(val) == 0:
+            raise ValidationError("'freqs' must not be empty.")
+        return val
 
     @pydantic.validator("freqs", always=True)
     def _warn_num_freqs(cls, val, values):
@@ -114,14 +178,14 @@ class TimeMonitor(Monitor, ABC):
 
     start: pydantic.NonNegativeFloat = pydantic.Field(
         0.0,
-        title="Start Time",
+        title="Start time",
         description="Time at which to start monitor recording.",
         units=SECOND,
     )
 
     stop: pydantic.NonNegativeFloat = pydantic.Field(
         None,
-        title="Stop Time",
+        title="Stop time",
         description="Time at which to stop monitor recording.  "
         "If not specified, record until end of simulation.",
         units=SECOND,
@@ -129,7 +193,7 @@ class TimeMonitor(Monitor, ABC):
 
     interval: pydantic.PositiveInt = pydantic.Field(
         None,
-        title="Time Interval",
+        title="Time interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
         "Set ``inverval`` to 1 for the highest possible resolution in time. "
         "Higher integer values downsample the data by measuring every ``interval`` time steps. "
@@ -219,18 +283,31 @@ class AbstractFieldMonitor(Monitor, ABC):
         pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
     ] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial Interval",
+        title="Spatial interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included.",
     )
 
     colocate: bool = pydantic.Field(
-        True,
-        title="Colocate Fields",
+        None,
+        title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes).",
+        "primal grid nodes). Default is ``True``.",
     )
+
+    # TODO: remove after 2.4
+    @pydantic.validator("colocate", always=True)
+    def warn_set_colocate(cls, val):
+        """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
+        if val is None:
+            log.warning(
+                "Default value for the field monitor 'colocate' setting has changed to "
+                "'True' in Tidy3D 2.4.0. All field components will be colocated to the grid "
+                "boundaries. Set to 'False' to get the raw fields on the Yee grid instead."
+            )
+            return True
+        return val
 
 
 class PlanarMonitor(Monitor, ABC):
@@ -314,17 +391,16 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
             )
         return val
 
-    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
-        """Size of intermediate data recorded by the monitor during a solver run."""
-        # Need to store all fields on the mode surface
-        bytes_single = BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes * 6
-        if self.mode_spec.precision == "double":
-            return 2 * bytes_single
-        return bytes_single
-
 
 class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     """:class:`Monitor` that records electromagnetic fields in the frequency domain.
+
+    Notes
+    -----
+
+        :class:`FieldMonitor` objects operate by running a discrete Fourier transform of the fields at a given set of
+        frequencies to perform the calculation “in-place” with the time stepping. :class:`FieldMonitor`  objects are
+        useful for investigating the steady-state field distribution in 2D and 3D regions of the simulation.
 
     Example
     -------
@@ -335,6 +411,19 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
     ...     freqs=[250e12, 300e12],
     ...     name='steady_state_monitor',
     ...     colocate=True)
+
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.
+
+    **Lectures**
+
+    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.
+
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -345,6 +434,18 @@ class FieldMonitor(AbstractFieldMonitor, FreqMonitor):
 
 class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     """:class:`Monitor` that records electromagnetic fields in the time domain.
+
+    Notes
+    -----
+
+        :class:`FieldTimeMonitor` objects are best used to monitor the time dependence of the fields at a single
+        point, but they can also be used to create “animations” of the field pattern evolution.
+
+        To create an animation, we need to capture the frames at different time instances of the simulation. This can
+        be done by using a :class:`FieldTimeMonitor`. Usually a FDTD simulation contains a large number of time steps
+        and grid points. Recording the field at every time step and grid point will result in a large dataset. For
+        the purpose of making animations, this is usually unnecessary.
+
 
     Example
     -------
@@ -357,6 +458,15 @@ class FieldTimeMonitor(AbstractFieldMonitor, TimeMonitor):
     ...     interval=2,
     ...     colocate=True,
     ...     name='movie_monitor')
+
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `First walkthrough <../../notebooks/Simulation.html>`_: Usage in a basic simulation flow.
+        * `Creating FDTD animations <../../notebooks/AnimationTutorial.html>`_.
+
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -372,10 +482,13 @@ class PermittivityMonitor(FreqMonitor):
     :class:`.FieldMonitor` of the same geometry: the permittivity values are saved at the
     Yee grid locations, and can be interpolated to any point inside the monitor.
 
-    Note
-    ----
-    If 2D materials are present, then the permittivity values correspond to the
-    volumetric equivalent of the 2D materials.
+    Notes
+    -----
+
+        If 2D materials are present, then the permittivity values correspond to the
+        volumetric equivalent of the 2D materials.
+
+        .. TODO add links to relevant areas
 
     Example
     -------
@@ -388,7 +501,7 @@ class PermittivityMonitor(FreqMonitor):
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate Fields",
+        title="Colocate fields",
         description="Colocation turned off, since colocated permittivity values do not have a "
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
@@ -397,10 +510,10 @@ class PermittivityMonitor(FreqMonitor):
         pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
     ] = pydantic.Field(
         (1, 1, 1),
-        title="Spatial Interval",
+        title="Spatial interval",
         description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+        "there will be no downsampling. If greater than 1, the step will be applied, but the last "
+        "point of the monitor grid is always included.",
     )
 
     apodization: ApodizationSpec = pydantic.Field(
@@ -421,15 +534,15 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
 
     normal_dir: Direction = pydantic.Field(
         None,
-        title="Normal Vector Orientation",
+        title="Normal vector orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Applies to surface monitors only, and defaults to ``'+'`` if not provided.",
     )
 
-    exclude_surfaces: Tuple[BoxSurface, ...] = pydantic.Field(
+    exclude_surfaces: Tuple[Literal["x-", "x+", "y-", "y+", "z-", "z+"], ...] = pydantic.Field(
         None,
-        title="Excluded Surfaces",
+        title="Excluded surfaces",
         description="Surfaces to exclude in the integration, if a volume monitor.",
     )
 
@@ -473,13 +586,6 @@ class SurfaceIntegrationMonitor(Monitor, ABC):
             )
         return values
 
-    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
-        """Size of intermediate data recorded by the monitor during a solver run."""
-        # Need to store all fields on the integration surface. Frequency-domain monitors store at
-        # all frequencies, time domain at the current time step only.
-        num_sample = len(getattr(self, "freqs", [0]))
-        return BYTES_COMPLEX * num_cells * num_sample * 6
-
 
 class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):
     """:class:`Monitor` that records flux during the solver run."""
@@ -487,10 +593,14 @@ class AbstractFluxMonitor(SurfaceIntegrationMonitor, ABC):
 
 class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     """:class:`Monitor` that records power flux in the frequency domain.
-    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
-    positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
-    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
+
+    Notes
+    -----
+
+        If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+        positive sign corresponding to power flow in the positive direction along the axis normal to
+        the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+        integrating the flux over all box surfaces (except the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -499,6 +609,13 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
     ...     size=(2,2,0),
     ...     freqs=[200e12, 210e12],
     ...     name='flux_monitor')
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    * `THz integrated demultiplexer/filter based on a ring resonator <../../notebooks/THzDemultiplexerFilter.html>`_
     """
 
     def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
@@ -509,10 +626,14 @@ class FluxMonitor(AbstractFluxMonitor, FreqMonitor):
 
 class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
     """:class:`Monitor` that records power flux in the time domain.
-    If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
-    positive sign corresponding to power flow in the positive direction along the axis normal to
-    the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
-    integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
+
+    Notes
+    -----
+
+        If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
+        positive sign corresponding to power flow in the positive direction along the axis normal to
+        the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
+        integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -534,11 +655,24 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
 
 class ModeMonitor(AbstractModeMonitor):
     """:class:`Monitor` that records amplitudes from modal decomposition of fields on plane.
-    The amplitudes are defined as
-    ``mode_solver_data.dot(recorded_field) / mode_solver_data.dot(mode_solver_data)``, where
-    ``recorded_field`` is the field data recorded in the FDTD simulation at the monitor frequencies,
-    and ``mode_solver_data`` is the mode data from the mode solver at the monitor plane.
-    This gives the power amplitude of ``recorded_field`` carried by each mode.
+
+    Notes
+    ------
+
+        The fields recorded by frequency monitors (and hence also mode monitors) are automatically
+        normalized by the power amplitude spectrum of the source. For multiple sources, the user can select which
+        source to use for the normalization too.
+
+        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition of the radiated
+        power into forward- and backward-propagating modes, respectively.
+
+        .. TODO give an example of how to extract the data from this mode.
+
+        .. TODO add derivation in the notebook.
+
+        .. TODO add link to method
+
+        .. TODO add links to notebooks correspondingly
 
     Example
     -------
@@ -549,11 +683,17 @@ class ModeMonitor(AbstractModeMonitor):
     ...     freqs=[200e12, 210e12],
     ...     mode_spec=mode_spec,
     ...     name='mode_monitor')
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `ModalSourcesMonitors <../../notebooks/ModalSourcesMonitors.html>`_
     """
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate Fields",
+        title="Colocate fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
@@ -582,39 +722,46 @@ class ModeSolverMonitor(AbstractModeMonitor):
 
     direction: Direction = pydantic.Field(
         "+",
-        title="Propagation Direction",
+        title="Propagation direction",
         description="Direction of waveguide mode propagation along the axis defined by its normal "
         "dimension.",
     )
 
     colocate: bool = pydantic.Field(
         True,
-        title="Colocate Fields",
+        title="Colocate fields",
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
-        "primal grid nodes).",
+        "primal grid nodes). Default is ``True``.",
     )
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
-        if self.mode_spec.precision == "double":
-            return 2 * bytes_single
-        return bytes_single
+        return 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
 
 
 class FieldProjectionSurface(Tidy3dBaseModel):
-    """Data structure to store surface monitors where near fields are recorded for
-    field projections."""
+    """
+    Data structure to store surface monitors where near fields are recorded for
+    field projections.
+
+    .. TODO add example and derivation, and more relevant links.
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+    """
 
     monitor: FieldMonitor = pydantic.Field(
         ...,
-        title="Field Monitor",
+        title="Field monitor",
         description=":class:`.FieldMonitor` on which near fields will be sampled and integrated.",
     )
 
     normal_dir: Direction = pydantic.Field(
         ...,
-        title="Normal Vector Orientation",
+        title="Normal vector orientation",
         description=":class:`.Direction` of the surface monitor's normal vector w.r.t.\
  the positive x, y or z unit vectors. Must be one of '+' or '-'.",
     )
@@ -641,7 +788,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     custom_origin: Coordinate = pydantic.Field(
         None,
-        title="Local Origin",
+        title="Local origin",
         description="Local origin used for defining observation points. If ``None``, uses the "
         "monitor's center.",
         units=MICROMETER,
@@ -649,80 +796,13 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
 
     far_field_approx: bool = pydantic.Field(
         True,
-        title="Far Field Approximation",
+        title="Far field approximation",
         description="Whether to enable the far field approximation when projecting fields. "
         "If ``True``, terms that decay as O(1/r^2) are ignored, as are the radial components "
         "of fields. Typically, this should be set to ``True`` only when the projection distance "
         "is much larger than the size of the device being modeled, and the projected points are "
         "in the far field of the device.",
     )
-
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals at which near fields are recorded for "
-        "projection to the far field, along each direction. If equal to 1, there will be no "
-        "downsampling. If greater than 1, the step will be applied, but the first and last "
-        "point of the monitor grid are always included. Using values greater than 1 can "
-        "help speed up server-side far field projections with minimal accuracy loss, "
-        "especially in cases where it is necessary for the grid resolution to be high for "
-        "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
-        "projecting the recorded near fields to the far field.",
-    )
-
-    window_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(
-        (0, 0),
-        title="Spatial filtering window size",
-        description="Size of the transition region of the windowing function used to ensure that "
-        "the recorded near fields decay to zero near the edges of the monitor. "
-        "The two components refer to the two tangential directions associated with each surface. "
-        "For surfaces with the normal along ``x``, the two components are (``y``, ``z``). "
-        "For surfaces with the normal along ``y``, the two components are (``x``, ``z``). "
-        "For surfaces with the normal along ``z``, the two components are (``x``, ``y``). "
-        "Each value must be between 0 and 1, inclusive, and denotes the size of the transition "
-        "region over which fields are scaled to less than a thousandth of the original amplitude, "
-        "relative to half the size of the monitor in that direction. A value of 0 turns windowing "
-        "off in that direction, while a value of 1 indicates that the window will be applied to "
-        "the entire monitor in that direction. This field is applicable for surface monitors only, "
-        "and otherwise must remain (0, 0).",
-    )
-
-    medium: MediumType = pydantic.Field(
-        None,
-        title="Projection medium",
-        description="Medium through which to project fields. Generally, the fields should be "
-        "projected through the same medium as the one in which this monitor is placed, and "
-        "this is the default behavior when ``medium=None``. A custom ``medium`` can be useful "
-        "in some situations for advanced users, but we recommend trying to avoid using a "
-        "non-default ``medium``.",
-    )
-
-    @pydantic.validator("window_size", always=True)
-    def window_size_for_surface(cls, val, values):
-        """Ensures that windowing is applied for surface monitors only."""
-        size = values.get("size")
-        name = values.get("name")
-
-        if size.count(0.0) != 1:
-            if val != (0, 0):
-                raise ValidationError(
-                    f"A non-zero 'window_size' cannot be used for projection monitor '{name}'. "
-                    "Windowing can be applied only for surface projection monitors."
-                )
-        return val
-
-    @pydantic.validator("window_size", always=True)
-    def window_size_leq_one(cls, val, values):
-        """Ensures that each component of the window size is less than or equal to 1."""
-        name = values.get("name")
-        if val[0] > 1 or val[1] > 1:
-            raise ValidationError(
-                f"Each component of 'window_size' for monitor '{name}' "
-                "must be less than or equal to 1."
-            )
-        return val
 
     @property
     def projection_surfaces(self) -> Tuple[FieldProjectionSurface, ...]:
@@ -749,78 +829,87 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
             return self.center
         return self.custom_origin
 
-    def window_parameters(self, custom_bounds: Bound = None) -> Tuple[Size, Coordinate, Coordinate]:
-        """Return the physical size of the window transition region based on the monitor's size
-        and optional custom bounds (useful in case the monitor has infinite dimensions). The window
-        size is returned in 3D. Also returns the coordinate where the transition region beings on
-        the minus and plus side of the monitor."""
-
-        window_size = [0, 0, 0]
-        window_minus = [0, 0, 0]
-        window_plus = [0, 0, 0]
-
-        # windowing is for surface monitors only
-        if self.size.count(0.0) != 1:
-            return window_size, window_minus, window_plus
-
-        _, plane_inds = self.pop_axis([0, 1, 2], axis=self.size.index(0.0))
-
-        for i, ind in enumerate(plane_inds):
-            if custom_bounds:
-                size = min(self.size[ind], custom_bounds[1][ind] - custom_bounds[0][ind])
-                bound_min = max(self.bounds[0][ind], custom_bounds[0][ind])
-                bound_max = min(self.bounds[1][ind], custom_bounds[1][ind])
-            else:
-                size = self.size[ind]
-                bound_min = self.bounds[0][ind]
-                bound_max = self.bounds[1][ind]
-
-            window_size[ind] = self.window_size[i] * size / 2
-            window_minus[ind] = bound_min + window_size[ind]
-            window_plus[ind] = bound_max - window_size[ind]
-
-        return window_size, window_minus, window_plus
-
-    @staticmethod
-    def window_function(
-        points: ArrayFloat1D,
-        window_size: Size,
-        window_minus: Coordinate,
-        window_plus: Coordinate,
-        dim: int,
-    ) -> ArrayFloat1D:
-        """Get the windowing function along a given direction for a given set of points."""
-        rising_window = np.exp(
-            -0.5
-            * WINDOW_FACTOR
-            * ((points[points < window_minus[dim]] - window_minus[dim]) / window_size[dim]) ** 2
-        )
-        falling_window = np.exp(
-            -0.5
-            * WINDOW_FACTOR
-            * ((points[points > window_plus[dim]] - window_plus[dim]) / window_size[dim]) ** 2
-        )
-        window_fn = np.ones_like(points)
-        window_fn[points < window_minus[dim]] = rising_window
-        window_fn[points > window_plus[dim]] = falling_window
-        return window_fn
-
 
 class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them at given observation angles. The ``center`` and ``size`` fields define
-    where the monitor will be placed in order to record near fields, typically very close
-    to the structure of interest. The near fields are then projected
-    to far-field locations defined by ``phi``, ``theta``, and ``proj_distance``, relative
-    to the ``custom_origin``. If the distance between the near and far field locations is
-    much larger than the size of the device, one can typically set ``far_field_approx`` to
-    ``True``, which will make use of the far-field approximation to speed up calculations.
-    If the projection distance is comparable to the size of the device, we recommend setting
-    ``far_field_approx`` to ``False``, so that the approximations are not used, and the
-    projection is accurate even just a few wavelengths away from the near field locations.
-    For applications where the monitor is an open surface rather than a box that
-    encloses the device, it is advisable to pick the size of the monitor such that the
-    recorded near fields decay to negligible values near the edges of the monitor.
+    and projects them at given observation angles.
+
+    Notes
+    -----
+
+        .. TODO this needs an illustration
+
+        **Parameters Caveats**
+
+        The :attr:`center` and :attr:`size` parameters define
+        where the monitor will be placed in order to record near fields, typically very close
+        to the structure of interest. The near fields are then projected
+        to far-field locations defined by :attr:`phi`, :attr:`theta`, and :attr:`proj_distance`, relative
+        to the :attr:`custom_origin`.
+
+        **Usage Caveats**
+
+        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the
+        fields are propagating in a homogeneous medium. Therefore, one should use :class:`PML` / :class:`Absorber` as
+        boundary conditions in the part of the domain where fields are projected.
+
+        .. TODO why not add equation here
+
+        Server-side field projections will add to the monetary cost of the simulation. However, typically the far field
+        projections have a very small computation cost compared to the FDTD simulation itself, so the increase in monetary
+        cost should be negligibly small in most cases. For applications where the monitor is an open surface rather than a box that
+        encloses the device, it is advisable to pick the size of the monitor such that the
+        recorded near fields decay to negligible values near the edges of the monitor.
+
+        .. TODO TYPO FIX o that the approximations are not used, and the projection is accurate even just a few wavelengths away from the near field locations.
+
+        By default, if no :attr:`proj_distance` was provided, the fields are projected to a distance of 1m.
+
+        **Server-side field projection Application**
+
+        Provide the :class:`FieldProjectionAngleMonitor` monitor as an input to the
+        :class:`Simulation` object as one of its monitors. Now, we no longer need to provide a separate near-field
+        :class:`FieldMonitor` - the near fields will automatically be recorded based on the size and location of the
+        ``FieldProjectionAngleMonitor``. Note also that in some cases, the server-side computations may be slightly
+        more accurate than client-side ones, because on the server, the near fields are not downsampled at all.
+
+        We can re-project the already-computed far fields to a different distance away from the structure - we
+        neither need to run another simulation nor re-run the ``FieldProjector``.
+
+        **Far-Field Approximation Selection**
+
+        .. TODO unsure if add on params?
+
+        If the distance between the near and far field locations is
+        much larger than the size of the device, one can typically set :attr:`far_field_approx` to
+        ``True``, which will make use of the far-field approximation to speed up calculations.
+        If the projection distance is comparable to the size of the device, we recommend setting
+        :attr:`far_field_approx` to ``False``.
+
+        .. image:: ../../notebooks/img/n2f_diagram.png
+
+        .. TODO Fix that image so remove right irrelevant side
+
+        When selected, it is assumed that:
+
+        -   The fields are measured at a distance much greater than the size of our simulation in the transverse
+            direction.
+        -   The geometric approximations imply that any quantity whose magnitude drops off as
+            :math:`\\frac{1}{r^2}` or faster is ignored.
+
+        The advantages of these approximations are:
+
+        *   The projections are computed relatively fast.
+        *   The projections are cast in a simple mathematical form.
+            which allows re-projecting the fields to different distance without the need to re-run a simulation or to
+            re-run the :class:`FieldProjector`.
+
+        In cases where we may want to project to intermediate distances where the far field approximation is no
+        longer valid, simply include the class definition parameter :attr:`far_field_approx` to ``False`` in the
+        ``FieldProjectionAngleMonitor`` instantiation. The resulting computations will be a bit slower,
+        but the results will be significantly more accurate.
+
+        .. TODO include here inherited methods.
 
     Example
     -------
@@ -832,19 +921,30 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     ...     custom_origin=(1,2,3),
     ...     phi=[0, np.pi/2],
     ...     theta=np.linspace(-np.pi/2, np.pi/2, 100)
+    ...     far_field_approx=True,
     ...     )
+
+    See Also
+    --------
+
+    **Notebooks**:
+
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+        * `Field projection for a zone plate <../../notebooks/ZonePlateFieldProjection.html>`_: Realistic case study further demonstrating the accuracy of the field projections.
+        * `Metalens in the visible frequency range <../../notebooks/Metalens.html>`_: Realistic case study further demonstrating the accuracy of the field projections.
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_: For far field projections in the context of perdiodic boundary conditions.
     """
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection Distance",
+        title="Projection distance",
         description="Radial distance of the projection points from ``local_origin``.",
         units=MICROMETER,
     )
 
     theta: ObsGridArray = pydantic.Field(
         ...,
-        title="Polar Angles",
+        title="Polar angles",
         description="Polar angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
         units=RADIAN,
@@ -852,7 +952,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
     phi: ObsGridArray = pydantic.Field(
         ...,
-        title="Azimuth Angles",
+        title="Azimuth angles",
         description="Azimuth angles with respect to the global z axis, relative to the location of "
         "``local_origin``, at which to project fields.",
         units=RADIAN,
@@ -867,21 +967,82 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
 
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them on a Cartesian observation plane. The ``center`` and ``size`` fields define
-    where the monitor will be placed in order to record near fields, typically very close
-    to the structure of interest. The near fields are then projected
-    to far-field locations defined by ``x``, ``y``, and ``proj_distance``, relative
-    to the ``custom_origin``. Here, ``x`` and ``y`` correspond to a local coordinate system
-    where the local z axis is defined by ``proj_axis``: which is the axis normal to this monitor.
-    If the distance between the near and far field locations is much larger than the size of the
-    device, one can typically set ``far_field_approx`` to ``True``, which will make use of the
-    far-field approximation to speed up calculations. If the projection distance is comparable
-    to the size of the device, we recommend setting ``far_field_approx`` to ``False``,
-    so that the approximations are not used, and the projection is accurate even just a few
-    wavelengths away from the near field locations.
-    For applications where the monitor is an open surface rather than a box that
-    encloses the device, it is advisable to pick the size of the monitor such that the
-    recorded near fields decay to negligible values near the edges of the monitor.
+    and projects them on a Cartesian observation plane.
+
+    Notes
+    -----
+
+        **Parameters Caveats**
+
+        The :attr:`center` and :attr:`size` fields define
+        where the monitor will be placed in order to record near fields, typically very close
+        to the structure of interest. The near fields are then projected
+        to far-field locations defined by :attr:`x`, :attr:`y`, and :attr:`proj_distance`, relative
+        to the :attr:`custom_origin`.
+
+        Here, :attr:`x` and :attr:`y`, correspond to a local coordinate system
+        where the local ``z`` axis is defined by :attr:`proj_axis`: which is the axis normal to this monitor.
+
+        **Far-Field Approximation Selection**
+
+        If the distance between the near and far field locations is much larger than the size of the
+        device, one can typically set :attr:`far_field_approx` to ``True``, which will make use of the
+        far-field approximation to speed up calculations. If the projection distance is comparable
+        to the size of the device, we recommend setting :attr:`far_field_approx` to ``False``,
+        so that the approximations are not used, and the projection is accurate even just a few
+        wavelengths away from the near field locations.
+
+        For applications where the monitor is an open surface rather than a box that
+        encloses the device, it is advisable to pick the size of the monitor such that the
+        recorded near fields decay to negligible values near the edges of the monitor.
+
+        .. image:: ../../notebooks/img/n2f_diagram.png
+
+        .. TODO unsure if add on params?
+
+        When selected, it is assumed that:
+
+        -   The fields are measured at a distance much greater than the size of our simulation in the transverse
+            direction.
+        -   The geometric approximations imply that any quantity whose magnitude drops off as
+            :math:`\\frac{1}{r^2}` or faster is ignored.
+
+        The advantages of these approximations are:
+
+        *   The projections are computed relatively fast.
+        *   The projections are cast in a simple mathematical form.
+            which allows re-projecting the fields to different distance without the need to re-run a simulation or to
+            re-run the :class:`FieldProjector`.
+
+
+        In cases where we may want to project to intermediate distances where the far field approximation is no
+        longer valid, simply include the class definition parameter ``far_field_approx=False`` in the
+        ``FieldProjectionCartesianMonitor`` instantiation. The resulting computations will be a bit slower,
+        but the results will be significantly more accurate.
+
+        .. TODO include this example
+
+        **Usage Caveats**
+
+        .. TODO I belive a little illustration here would be handy.
+
+        Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
+        fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.
+        However, this requires that the field strength decays nearly to zero near the edges of the near-field
+        monitor, which may not always be the case. For example, if we had used a larger aperture compared to the full
+        simulation size in the transverse direction, we may expect a degradation in accuracy of the field
+        projections. Despite this limitation, the field projections are still remarkably accurate in realistic
+        scenarios. For realistic case studies further demonstrating the accuracy of the field projections,
+        see our metalens and zone plate case studies.
+
+        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the fields
+        are propagating in a homogeneous medium. Therefore, one should use PMLs / absorbers as boundary conditions in the
+        part of the domain where fields are projected. For far field projections in the context of perdiodic boundary
+        conditions, see the diffraction efficiency example which demonstrates the use of a DiffractionMonitor.
+
+        Server-side field projections will add to the monetary cost of the simulation. However, typically the far field
+        projections have a very small computation cost compared to the FDTD simulation itself, so the increase in monetary
+        cost should be negligibly small in most cases.
 
     Example
     -------
@@ -894,19 +1055,29 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     ...     x=[-1, 0, 1],
     ...     y=[-2, -1, 0, 1, 2],
     ...     proj_axis=2,
-    ...     proj_distance=5
+    ...     proj_distance=5,
+    ...     far_field_approx=True,
     ...     )
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+        * `Field projection for a zone plate <../../notebooks/ZonePlateFieldProjection.html>`_
+        * `Metalens in the visible frequency range <../../notebooks/Metalens.html>`_
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
     proj_axis: Axis = pydantic.Field(
         ...,
-        title="Projection Plane Axis",
+        title="Projection plane axis",
         description="Axis along which the observation plane is oriented.",
     )
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection Distance",
+        title="Projection distance",
         description="Signed distance of the projection plane along ``proj_axis``. "
         "from the plane containing ``local_origin``.",
         units=MICROMETER,
@@ -914,7 +1085,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
     x: ObsGridArray = pydantic.Field(
         ...,
-        title="Local x Observation Coordinates",
+        title="Local x observation coordinates",
         description="Local x observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
         "When ``proj_axis`` is 0, this corresponds to the global y axis. "
         "When ``proj_axis`` is 1, this corresponds to the global x axis. "
@@ -924,7 +1095,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
     y: ObsGridArray = pydantic.Field(
         ...,
-        title="Local y Observation Coordinates",
+        title="Local y observation coordinates",
         description="Local y observation coordinates w.r.t. ``local_origin`` and ``proj_axis``. "
         "When ``proj_axis`` is 0, this corresponds to the global z axis. "
         "When ``proj_axis`` is 1, this corresponds to the global z axis. "
@@ -941,21 +1112,47 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
 class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
-    and projects them on an observation plane defined in k-space. The ``center`` and ``size``
-    fields define where the monitor will be placed in order to record near fields, typically
-    very close to the structure of interest. The near fields are then
-    projected to far-field locations defined in k-space by ``ux``, ``uy``, and ``proj_distance``,
-    relative to the ``custom_origin``. Here, ``ux`` and ``uy`` are associated with a local
-    coordinate system where the local 'z' axis is defined by ``proj_axis``: which is the axis
-    normal to this monitor. If the distance between the near and far field locations is much
-    larger than the size of the device, one can typically set ``far_field_approx`` to ``True``,
-    which will make use of the far-field approximation to speed up calculations. If the
-    projection distance is comparable to the size of the device, we recommend setting
-    ``far_field_approx`` to ``False``, so that the approximations are not used, and the
-    projection is accurate even just a few wavelengths away from the near field locations.
-    For applications where the monitor is an open surface rather than a box that
-    encloses the device, it is advisable to pick the size of the monitor such that the
-    recorded near fields decay to negligible values near the edges of the monitor.
+    and projects them on an observation plane defined in k-space.
+
+     Notes
+     -----
+         The ``center`` and ``size``
+        fields define where the monitor will be placed in order to record near fields, typically
+        very close to the structure of interest. The near fields are then
+        projected to far-field locations defined in k-space by ``ux``, ``uy``, and ``proj_distance``,
+        relative to the ``custom_origin``. Here, ``ux`` and ``uy`` are associated with a local
+        coordinate system where the local 'z' axis is defined by ``proj_axis``: which is the axis
+        normal to this monitor. If the distance between the near and far field locations is much
+        larger than the size of the device, one can typically set ``far_field_approx`` to ``True``,
+        which will make use of the far-field approximation to speed up calculations. If the
+        projection distance is comparable to the size of the device, we recommend setting
+        ``far_field_approx`` to ``False``, so that the approximations are not used, and the
+        projection is accurate even just a few wavelengths away from the near field locations.
+        For applications where the monitor is an open surface rather than a box that
+        encloses the device, it is advisable to pick the size of the monitor such that the
+        recorded near fields decay to negligible values near the edges of the monitor.
+
+        **Usage Caveats**
+
+        .. TODO I belive a little illustration here would be handy.
+
+        Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
+        fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.
+        However, this requires that the field strength decays nearly to zero near the edges of the near-field
+        monitor, which may not always be the case. For example, if we had used a larger aperture compared to the full
+        simulation size in the transverse direction, we may expect a degradation in accuracy of the field
+        projections. Despite this limitation, the field projections are still remarkably accurate in realistic
+        scenarios. For realistic case studies further demonstrating the accuracy of the field projections,
+        see our metalens and zone plate case studies.
+
+        The field projections make use of the analytical homogeneous medium Green’s function, which assumes that the fields
+        are propagating in a homogeneous medium. Therefore, one should use PMLs / absorbers as boundary conditions in the
+        part of the domain where fields are projected. For far field projections in the context of perdiodic boundary
+        conditions, see the diffraction efficiency example which demonstrates the use of a :class:`DiffractionMonitor`.
+
+        Server-side field projections will add to the monetary cost of the simulation. However, typically the far field
+        projections have a very small computation cost compared to the FDTD simulation itself, so the increase in monetary
+        cost should be negligibly small in most cases.
 
     Example
     -------
@@ -969,17 +1166,26 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
     ...     ux=[0.1,0.2],
     ...     uy=[0.3,0.4,0.5]
     ...     )
+
+    See Also
+    --------
+
+    **Notebooks**:
+        * `Performing near field to far field projections <../../notebooks/FieldProjections.html>`_
+        * `Field projection for a zone plate <../../notebooks/ZonePlateFieldProjection.html>`_
+        * `Metalens in the visible frequency range <../../notebooks/Metalens.html>`_
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
     proj_axis: Axis = pydantic.Field(
         ...,
-        title="Projection Plane Axis",
+        title="Projection plane axis",
         description="Axis along which the observation plane is oriented.",
     )
 
     proj_distance: float = pydantic.Field(
         1e6,
-        title="Projection Distance",
+        title="Projection distance",
         description="Radial distance of the projection points from ``local_origin``.",
         units=MICROMETER,
     )
@@ -1034,11 +1240,17 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
     ...     name='diffraction_monitor',
     ...     normal_dir='+',
     ...     )
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Multilevel blazed diffraction grating <../../notebooks/GratingEfficiency.html>`_
     """
 
     normal_dir: Direction = pydantic.Field(
         "+",
-        title="Normal Vector Orientation",
+        title="Normal vector orientation",
         description="Direction of the surface monitor's normal vector w.r.t. "
         "the positive x, y or z unit vectors. Must be one of ``'+'`` or ``'-'``. "
         "Defaults to ``'+'`` if not provided.",
@@ -1046,7 +1258,7 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
 
     colocate: Literal[False] = pydantic.Field(
         False,
-        title="Colocate Fields",
+        title="Colocate fields",
         description="Defines whether fields are colocated to grid cell boundaries (i.e. to the "
         "primal grid) on-the-fly during a solver run. Can be toggled for field recording monitors "
         "and is hard-coded for other monitors depending on their specific function.",
