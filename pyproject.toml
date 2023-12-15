@@ -20,7 +20,7 @@ include = ["tidy3d/web/cacert.pem"] # Replacement directive for MANIFEST.in
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
+python = ">=3.9,<3.12"
 pyroots = ">=0.5.0"
 xarray = ">=0.16.2"
 importlib-metadata = ">=6.0.0"
@@ -60,18 +60,18 @@ gdspy = {version="*", optional = true}
 gdstk = {version="*", optional = true}
 
 # jax
-jax = [
-    {version = ">=0.4.1,<=0.4.14", platform = "linux", source="jaxsource", optional = true},
-    {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
-    {version = "0.3.14", extras = ["cpu"], platform = "win32", python = "<3.9",  source="jaxsource", optional = true},
-    {version = ">=0.3.14,<=0.4.14", extras = ["cpu"], platform = "win32", python = ">=3.9",  source="jaxsource", optional = true}
-]
 jaxlib = [
     {version = ">=0.4.1,<=0.4.14", platform = "linux",  source="jaxsource", optional = true},
     {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
-    {version = "0.3.14", platform = "win32", python = "<3.9",  source="jaxsource", optional = true},
-    {version = ">=0.3.14,<=0.4.14", platform = "win32", python = ">=3.9",  source="jaxsource", optional = true}
+    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource", optional = true}
 ]
+
+jax = [
+    {version = ">=0.4.1,<=0.4.14", platform = "linux", source="jaxsource", optional = true},
+    {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
+    {version = ">=0.4.13,<=0.4.14", extras = ["cpu"], platform = "win32", source="jaxsource", optional = true}
+]
+
 
 # trimesh
 trimesh = {version = "3.20.0", optional = true}
