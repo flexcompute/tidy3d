@@ -75,27 +75,32 @@ class JaxObject(Tidy3dBaseModel):
     @pd.root_validator(pre=True)
     def _store_jax_values(cls, values):
         
-        jax_dict = values.get("jax_dict") or {}
+        def get_jax_dict(val):
+            if isinstance(val, dict):
+                return val.get("jax_dict") or {}
+            elif isinstance(val, JaxObject):
+                return val.jax_dict
+            else:
+                return val
+
+        jax_dict = get_jax_dict(values)
 
         # store jax_dict of leaves
         for key in cls._jax_leafs:
             val = values[key]
-            if key not in jax_dict:
-                jax_dict[key] = val
+            jax_dict[key] = get_jax_dict(val)
 
         # store jax_dict of jax_objs
         for key in cls._jax_objs:
             val = values[key]
-            if key not in jax_dict:
-                jax_dict[key] = val.jax_dict
+            jax_dict[key] = get_jax_dict(val)            
         
         # store jax_dict of jax_obj_lists
         for key in cls._jax_obj_lists:
             val = values[key]
             jax_dict[key] = []
             for _val in val:
-                if key not in jax_dict:
-                    jax_dict[key].append(_val.jax_dict)
+                jax_dict[key] = get_jax_dict(_val)
         
         values["jax_dict"] = jax_dict
 
@@ -106,7 +111,7 @@ class JaxObject(Tidy3dBaseModel):
 
         for key in cls._jax_leafs:
             val = values[key]
-            values[key] = jax.lax.stop_gradient(val)
+            # values[key] = jax.lax.stop_gradient(val)
         return values
 
     """Type conversion helpers."""
