@@ -10,12 +10,15 @@ import tempfile
 import time
 
 import pydantic.v1 as pydantic
+from botocore.exceptions import ClientError
+
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...exceptions import WebError
 from ...log import log, get_logging_console
+from ..core.core_config import get_logger_console
 from ..core.http_util import http
-from ..core.s3utils import download_file, upload_file
+from ..core.s3utils import download_file, download_gz_file, upload_file
 from ..core.task_core import Folder
 from ..core.types import ResourceLifecycle, Submittable
 
@@ -31,6 +34,7 @@ MODESOLVER_GZ = "mode_solver.hdf5.gz"
 
 MODESOLVER_LOG = "output/result.log"
 MODESOLVER_RESULT = "output/result.hdf5"
+MODESOLVER_RESULT_GZ = "output/mode_solver_data.hdf5.gz"
 
 
 def run(
@@ -424,18 +428,36 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         :class:`.ModeSolverData`
             Mode solver data with the calculated results.
         """
+
+        file = None
         try:
-            download_file(
-                self.solver_id,
-                MODESOLVER_RESULT,
+            file = download_gz_file(
+                resource_id=self.task_id,
+                remote_filename=MODESOLVER_RESULT_GZ,
                 to_file=to_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-        except Exception:
-            raise WebError(
-                f"Failed to download file '{MODESOLVER_RESULT}' from server. Please confirm that the task was successful."
-            )
+        except ClientError:
+            if verbose:
+                console = get_logger_console()
+                console.log(f"Unable to download '{MODESOLVER_RESULT}'.")
+
+        if not file:
+            try:
+                file = download_file(
+                    resource_id=self.task_id,
+                    remote_filename=MODESOLVER_RESULT,
+                    to_file=to_file,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            except Exception as e:
+                raise WebError(
+                    "Failed to download the simulation data file from the server. "
+                    "Please confirm that the task was successfully run."
+                ) from e
+
         data = ModeSolverData.from_hdf5(to_file)
         data = data.copy(
             update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}

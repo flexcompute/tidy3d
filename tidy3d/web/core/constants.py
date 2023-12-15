@@ -21,6 +21,7 @@ TaskName = str
 
 SIMULATION_JSON = "simulation.json"
 SIMULATION_DATA_HDF5 = "output/monitor_data.hdf5"
+SIMULATION_DATA_HDF5_GZ = "output/simulation_data.hdf5.gz"
 RUNNING_INFO = "output/solver_progress.csv"
 SIM_LOG_FILE = "output/tidy3d.log"
 SIM_FILE_HDF5 = "simulation.hdf5"

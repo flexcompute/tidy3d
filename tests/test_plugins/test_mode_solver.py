@@ -38,7 +38,7 @@ def mock_remote_api(monkeypatch):
     def void(*args, **kwargs):
         return None
 
-    def mock_download(task_id, remote_path, to_file, *args, **kwargs):
+    def mock_download(resource_id, remote_filename, to_file, *args, **kwargs):
         simulation = td.Simulation(
             size=SIM_SIZE,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -68,6 +68,7 @@ def mock_remote_api(monkeypatch):
     monkeypatch.setattr(httputil, "api_key", lambda: "api_key")
     monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
     monkeypatch.setattr("tidy3d.web.api.mode.upload_file", void)
+    monkeypatch.setattr("tidy3d.web.api.mode.download_gz_file", mock_download)
     monkeypatch.setattr("tidy3d.web.api.mode.download_file", mock_download)
 
     responses.add(
