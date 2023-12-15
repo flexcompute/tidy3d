@@ -89,7 +89,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
         to_file = kwargs["to_file"]
         sim.to_file(to_file)
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.download_gz_file", mock_download)
 
     responses.add(
         responses.GET,
