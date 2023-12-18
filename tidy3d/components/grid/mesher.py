@@ -19,8 +19,14 @@ from ..structure import Structure, MeshOverrideStructure, StructureType
 from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ...exceptions import SetupError, ValidationError
 from ...constants import C_0, fp_eps
+from ...log import log
 
 _ROOTS_TOL = 1e-10
+
+# Shrink min_step a little so that if e.g. a structure has target dl = 0.1 and a width of 0.1,
+# a grid point will be added on both sides of the structure. Without this factor, the mesher
+# ``is_close`` check will deem that the second point is too close.
+MIN_STEP_SCALE = 0.9999
 
 
 class Mesher(Tidy3dBaseModel, ABC):
@@ -122,7 +128,7 @@ class GradedMesher(Mesher):
             structures_ordered, wavelength, min_steps_per_wvl, dl_min, axis
         )
         # Smallest of the maximum steps
-        min_step = np.amin(structure_steps)
+        min_step = MIN_STEP_SCALE * np.amin(structure_steps)
 
         # If empty simulation, return
         if len(structures) == 1:
@@ -135,40 +141,74 @@ class GradedMesher(Mesher):
         tree = self.bounds_2d_tree(struct_bbox)
 
         intervals = {"coords": list(domain_bounds), "structs": [[]]}
-        # Iterate in reverse order as latter structures override earlier ones. To properly handle
-        # containment then we need to populate interval coordinates starting from the top.
-        # If a structure is found to be completely contained, the corresponding ``struct_bbox`` is
-        # set to ``None``.
-        for str_ind in range(len(structures_ordered) - 1, -1, -1):
-            # 3D and 2D bounding box of current structure
-            bbox = struct_bbox[str_ind]
-            if bbox is None:
-                # Structure has been removed because it is completely contained
-                continue
-            bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+        """ Build the ``intervals`` dictionary. ``intervals["coords"]`` gets populated based on the
+        bounding boxes of all structures in the list (some filtering is done to exclude points that
+        will be too close together compared to the absolute lower desired step). At every point, the
+        ``"structs"`` list has length one lower than the ``"coords"`` list, and each element is
+        another list of all structure indexes that are found in the interval formed by ``coords[i]``
+        and ``coords[i + 1]``. This only includes structures that have a physical presence in the
+        interval, i.e. it excludes structures that are completely covered by higher-up ones.
 
-            # List of structure indexes that may intersect the current structure in 2D
-            try:
-                query_inds = tree.query_items(bbox_2d)
-            except AttributeError:
-                query_inds = tree.query(bbox_2d)
+        To build this, we iterate in reverse order as latter structures override earlier ones.
+        We also handle containment in the following way (note - we work with bounding boxes only):
+         1. If a structure that is lower in the list than the current structure is found to be
+          completely contained in 3D, the corresponding ``struct_bbox`` is immediately set to
+          ``None`` and nothing more will be done using that structure.
+         2. If the current structure is covering an interval but there's a higher-up structure that
+          contains it in 2D and also covers the same interval, then it will not be added to the
+          ``intervals["structs"] list for that interval.
+         3. If the current structure is found to not cover any interval, its bounding box
+          is set to ``None``, so that it will not affect structures that lie below it as per point
+          2. A warning is also raised since the structure will have an unpredictable effect on the
+          material coefficients used in the simulation.
+        """
 
-            # Remove all lower structures that the current structure completely contains
-            inds_lower = [
-                ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
-            ]
-            query_bbox = [struct_bbox[ind] for ind in inds_lower]
-            bbox_contains_inds = self.contains_3d(bbox, query_bbox)
-            for ind in bbox_contains_inds:
-                struct_bbox[inds_lower[ind]] = None
+        with log:
+            for str_ind in range(len(structures_ordered) - 1, -1, -1):
+                # 3D and 2D bounding box of current structure
+                bbox = struct_bbox[str_ind]
+                if bbox is None:
+                    # Structure has been removed because it is completely contained
+                    continue
+                bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
-            # List of structure bboxes that contain the current structure in 2D
-            inds_upper = [ind for ind in query_inds if ind > str_ind]
-            query_bbox = [struct_bbox[ind] for ind in inds_upper if struct_bbox[ind] is not None]
-            bbox_contained_2d = self.contained_2d(bbox, query_bbox)
+                # List of structure indexes that may intersect the current structure in 2D
+                try:
+                    query_inds = tree.query_items(bbox_2d)
+                except AttributeError:
+                    query_inds = tree.query(bbox_2d)
 
-            # Handle insertion of the current structure bounds in the intervals
-            intervals = self.insert_bbox(intervals, str_ind, bbox, bbox_contained_2d, min_step)
+                # Remove all lower structures that the current structure completely contains
+                inds_lower = [
+                    ind for ind in query_inds if ind < str_ind and struct_bbox[ind] is not None
+                ]
+                query_bbox = [struct_bbox[ind] for ind in inds_lower]
+                bbox_contains_inds = self.contains_3d(bbox, query_bbox)
+                for ind in bbox_contains_inds:
+                    struct_bbox[inds_lower[ind]] = None
+
+                # List of structure bboxes that contain the current structure in 2D
+                inds_upper = [ind for ind in query_inds if ind > str_ind]
+                query_bbox = [
+                    struct_bbox[ind] for ind in inds_upper if struct_bbox[ind] is not None
+                ]
+                bbox_contained_2d = self.contained_2d(bbox, query_bbox)
+
+                # Handle insertion of the current structure bounds in the intervals
+                # The intervals list is modified in-place
+                too_small = self.insert_bbox(intervals, str_ind, bbox, bbox_contained_2d, min_step)
+                if too_small and (bbox[1, 2] - bbox[0, 2]) > 0:
+                    # If the structure is too small (but not 0D), issue a warning
+                    log.warning(
+                        f"A structure has a nonzero dimension along axis {'xyz'[axis]}, which "
+                        "is however too small compared to the generated mesh step along that "
+                        "direction. This could produce unpredictable results. We recommend "
+                        "increasing the resolution, or adding a mesh override structure to ensure "
+                        "that all geometries are at least one pixel thick along all dimensions."
+                    )
+                    # Also remove this structure from the bbox list so that lower structures
+                    # will not be affected by it, as it was not added to any interval.
+                    struct_bbox[str_ind] = None
 
         # Truncate intervals to domain bounds
         coords = np.array(intervals["coords"])
@@ -226,17 +266,29 @@ class GradedMesher(Mesher):
             List of 3D bounding boxes that contain the current structure in 2D.
         min_step : float
             Absolute minimum interval size to impose.
+
+        Returns
+        -------
+        structure_too_small : bool
+            True if the structure did not span any interval after coordinates were inserted. This
+            would happen if the structure size is too small compared to the minimum step.
+
+        Note
+        ----
+            This function modifies ``intervals`` in-place.
         """
 
         coords = intervals["coords"]
         structs = intervals["structs"]
 
+        min_step_check = MIN_STEP_SCALE * min_step
+
         # Left structure bound
         bound_coord = str_bbox[0, 2]
         indsmin = np.nonzero(bound_coord <= coords)[0]
-        indmin = int(indsmin[0])  # coordinate is in interval index ``indmin - 1````
-        is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step)
-        is_close_r = self.is_close(bound_coord, coords, indmin, min_step)
+        indmin = int(indsmin[0])  # coordinate is in interval index ``indmin - 1``
+        is_close_l = self.is_close(bound_coord, coords, indmin - 1, min_step_check)
+        is_close_r = self.is_close(bound_coord, coords, indmin, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
         # Decide on whether coordinate should be inserted or indmin modified
@@ -254,8 +306,8 @@ class GradedMesher(Mesher):
         bound_coord = str_bbox[1, 2]
         indsmax = np.nonzero(bound_coord >= coords)[0]
         indmax = int(indsmax[-1])  # coordinate is in interval index ``indmax``
-        is_close_l = self.is_close(bound_coord, coords, indmax, min_step)
-        is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step)
+        is_close_l = self.is_close(bound_coord, coords, indmax, min_step_check)
+        is_close_r = self.is_close(bound_coord, coords, indmax + 1, min_step_check)
         is_contained = self.is_contained(bound_coord, bbox_contained_2d)
 
         # Decide on whether coordinate should be inserted or indmax modified
@@ -278,7 +330,7 @@ class GradedMesher(Mesher):
             if not self.is_contained(mid_coord, bbox_contained_2d):
                 structs[interval_ind].append(str_ind)
 
-        return {"coords": coords, "structs": structs}
+        return indmin >= indmax
 
     @staticmethod
     def reorder_structures_enforced_to_end(
@@ -501,7 +553,7 @@ class GradedMesher(Mesher):
         coords_filter = [interval_coords[0]]
         steps_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
-            if coord - coords_filter[-1] > min_step:
+            if coord - coords_filter[-1] >= min_step:
                 coords_filter.append(coord)
                 steps_filter.append(max_steps[coord_ind])
 

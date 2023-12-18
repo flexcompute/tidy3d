@@ -769,7 +769,7 @@ def test_large_grid_size(log_capture, grid_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, "INFO"), (9.9, "WARNING"), (20, "INFO")])
+@pytest.mark.parametrize("box_size,log_level", [(0.1, "INFO"), (9.9, "WARNING"), (20, "INFO")])
 def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
