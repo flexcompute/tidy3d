@@ -10,3 +10,13 @@ class WebError(Exception):
         log = get_logger()
         super().__init__(message)
         log.error(message)
+
+
+class TaskRepeatedError(Exception):
+    """Repeated task in tidy3d"""
+
+    def __init__(self, message: str = None):
+        """Log just the error message and then raise the Exception."""
+        # log = get_logger()
+        super().__init__(message)
+        # log.error(message)

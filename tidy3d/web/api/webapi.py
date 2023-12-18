@@ -17,6 +17,7 @@ from .connect_util import (
 )
 from ..core.environment import Env
 from ..core.constants import SIM_FILE_HDF5, TaskId
+from ..core.exceptions import TaskRepeatedError
 from ..core.task_core import SimulationTask, Folder
 from ..core.task_info import TaskInfo, ChargeType
 from ...components.types import Literal
@@ -88,15 +89,35 @@ def run(
         verbose=verbose,
         progress_callback=progress_callback_upload,
     )
-    start(
-        task_id,
-        solver_version=solver_version,
-        worker_group=worker_group,
-    )
-    monitor(task_id, verbose=verbose)
-    return load(
-        task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
-    )
+    try:
+        start(
+            task_id,
+            solver_version=solver_version,
+            worker_group=worker_group,
+        )
+        monitor(task_id, verbose=verbose)
+        return load(
+            task_id=task_id,
+            path=path,
+            verbose=verbose,
+            progress_callback=progress_callback_download,
+        )
+    except TaskRepeatedError as e:
+        new_task_id = e.args[0]
+        if verbose:
+            console = get_logging_console()
+            new_url = _get_url(new_task_id)
+            url = _get_url(task_id)
+            console.log(
+                f"There is a task that contains the same simulation file with '{task_id}', "
+                f"View task using web UI at [link={new_url}]'{new_url}'[/link], the original url [link={url}]'{url}'[/link] will be disabled."
+            )
+        return load(
+            task_id=new_task_id,
+            path=path,
+            verbose=verbose,
+            progress_callback=progress_callback_download,
+        )
 
 
 @wait_for_connection

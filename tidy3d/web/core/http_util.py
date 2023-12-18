@@ -21,7 +21,7 @@ from .constants import (
 )
 
 from .environment import Env
-from .exceptions import WebError
+from .exceptions import WebError, TaskRepeatedError
 from os.path import expanduser
 from . import core_config
 
@@ -41,6 +41,8 @@ class ResponseCodes(Enum):
     UNAUTHORIZED = 401
     OK = 200
     NOT_FOUND = 404
+    UNPROCESSABLE = 422
+    TASK_REPEATED = 4220000005
 
 
 def get_version() -> None:
@@ -129,6 +131,10 @@ def http_interceptor(func):
         if resp.status_code != ResponseCodes.OK.value:
             if resp.status_code == ResponseCodes.NOT_FOUND.value:
                 return None
+            if resp.status_code == ResponseCodes.UNPROCESSABLE.value and resp.text:
+                result = resp.json()
+                if str(ResponseCodes.TASK_REPEATED.value) == result["code"]:
+                    raise TaskRepeatedError(result["detail"])
             json_resp = resp.json()
             if "error" in json_resp.keys():
                 raise WebError(json_resp["error"])
