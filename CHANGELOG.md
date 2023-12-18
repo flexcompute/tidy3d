@@ -8,9 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
 - String matching feature `contains_str` to `assert_log_level` testing utility.
+- Warning in automatic grid generation if a structure has a non-zero size along a given direction that is too small compared to a single mesh step.
 
 ### Changed
 - `jax` and `jaxlib` versions bumped to `0.4.*`.
+
+### Fixed
+- Error in automatic grid generation in specific cases with multiple thin structures.
 
 ## [2.5.0] - 2023-12-13
 
