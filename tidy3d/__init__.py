@@ -12,7 +12,7 @@ from .components.geometry.polyslab import PolySlab
 
 # medium
 from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
-from .components.medium import Medium2D, PEC2D
+from .components.medium import Medium2D, PEC2D, medium_from_nk
 from .components.medium import Sellmeier, Debye, Drude, Lorentz
 from .components.medium import CustomMedium, CustomPoleResidue
 from .components.medium import CustomSellmeier, FullyAnisotropicMedium
@@ -326,4 +326,5 @@ __all__ = [
     "IndexedDataArray",
     "TriangularGridDataset",
     "TetrahedralGridDataset",
+    "medium_from_nk",
 ]

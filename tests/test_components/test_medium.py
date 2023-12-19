@@ -81,6 +81,60 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
+def test_lorentz_medium_conversions(log_capture):
+    freq = 3.0
+
+    # lossless, eps_r > 1
+    eps_complex = 2 + 0j
+    n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
+    medium = td.Lorentz.from_nk(n, k, freq)
+    assert_log_level(log_capture, "WARNING")
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+
+    # lossless, eps_r < 1
+    eps_complex = 0.5 + 0j
+    n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
+    medium = td.Lorentz.from_nk(n, k, freq)
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+
+    # lossy, eps_r < 1
+    eps_complex = 0.5 + 0.1j
+    n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
+    medium = td.Lorentz.from_nk(n, k, freq)
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+
+    # lossy, eps_r > 1
+    eps_complex = 1.5 + 2j
+    n, k = td.Lorentz.eps_complex_to_nk(eps_complex)
+    medium = td.Lorentz.from_nk(n, k, freq)
+    assert_log_level(log_capture, "WARNING")
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+
+
+def test_medium_from_nk():
+    freq = 3.0
+
+    # lossy, eps_r < 1
+    eps_complex = 0.5 + 0.1j
+    n, k = td.AbstractMedium.eps_complex_to_nk(eps_complex)
+    medium = td.medium_from_nk(n, k, freq)
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+    assert medium.type == "Lorentz"
+
+    # lossy, eps_r > 1
+    eps_complex = 1.5 + 2j
+    n, k = td.AbstractMedium.eps_complex_to_nk(eps_complex)
+    medium = td.medium_from_nk(n, k, freq)
+    eps_model = medium.eps_model(freq)
+    assert np.isclose(eps_complex, eps_model)
+    assert medium.type == "Medium"
+
+
 def test_PEC():
 
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
