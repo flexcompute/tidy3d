@@ -2950,12 +2950,12 @@ class Simulation(AbstractSimulation):
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> Simulation:
-        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
+        """Create a simulation from a :class:`.Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
 
         Parameters
         ----------
-        scene : :class:.`Scene`
+        scene : :class:`.Scene`
             Size of object in x, y, and z directions.
         **kwargs
             Other arguments
