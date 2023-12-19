@@ -197,6 +197,7 @@ Photonic Integrated Circuit Components
     notebooks/BullseyeCavityPSO
     notebooks/PlasmonicWaveguideCO2Sensor
     notebooks/BilayerSiNEdgeCoupler
+    notebooks/ScaleInvariantWaveguide
 
 Metamaterials, Gratings, and Other Periodic Structures
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

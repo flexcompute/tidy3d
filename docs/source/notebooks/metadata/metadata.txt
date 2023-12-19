@@ -455,6 +455,12 @@
     "keywords": "ring resonator, Tidy3D, FDTD",
     "feature_image": "./img/ring_resonator_2d.png"
   },
+  "ScaleInvariantWaveguide.ipynb": {
+    "title": "Dielectric Scale-invariant Waveguide in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to perform mode solving for the scale-invariant waveguides as well as strip waveguides.",
+    "keywords": "waveguide, mode solver, scale-invariant, Tidy3D, FDTD",
+    "feature_image": "./img/scale_invariant_waveguide.png"
+  },
   "SelfIntersectingPolyslab.ipynb": {
     "title": "Modeling Complex Polygon Geometries in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to model complex polygon geometries in Tidy3D for FDTD simulations.",
