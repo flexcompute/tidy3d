@@ -3016,7 +3016,6 @@ class Simulation(AbstractSimulation):
             # get intersecting polygons after shifting a bit upwards and downwards to catch
             # cases that would be missed due to numerical precision issues
             shift = dl * DIST_NEIGHBOR_REL_2D_MED
-            # shift = fp_eps # TEMP
             geom_shifted_up = set_bounds(geom, (center + shift, center + shift), axis)
             geom_shifted_down = set_bounds(geom, (center - shift, center - shift), axis)
 
@@ -3044,9 +3043,12 @@ class Simulation(AbstractSimulation):
             all_polygons = []
             for polygon in polygons:
                 if isinstance(polygon, shapely.MultiPolygon):
-                    for i in range(len(polygon.geoms)):
-                        all_polygons.append(polygon.geoms[i])
-                elif not isinstance(polygon, shapely.LineString):
+                    for _, poly_geom in enumerate(polygon.geoms):
+                        all_polygons.append(poly_geom)
+                    continue
+                if len(polygon.exterior.coords) == 0:
+                    continue
+                if not isinstance(polygon, shapely.LineString):
                     all_polygons.append(shapely.LineString(list(polygon.exterior.coords)))
                 else:
                     all_polygons.append(polygon)
@@ -3063,6 +3065,10 @@ class Simulation(AbstractSimulation):
             results = list(shapely.ops.polygonize(union))
             for result in results:
                 polygon = shapely.Polygon(result)
+
+                from shapely import affinity
+                polygon = affinity.scale(polygon, xfact=1.01, yfact=1.01)
+
                 xx, yy = polygon.exterior.coords.xy
                 vertices = list(zip(xx, yy))
                 piece = PolySlab(slab_bounds=(center, center), vertices=vertices, axis=axis)
@@ -3094,7 +3100,6 @@ class Simulation(AbstractSimulation):
             thickened_geom = get_thickened_geom(geom=geom, axis=axis)
             grid_sizes = get_dls(thickened_geom, axis, 2)
             dls_signed = [-grid_sizes[0], grid_sizes[1]]
-            # dls_signed = [-fp_eps, fp_eps] # TEMP
             neighboring_media = []
             neighboring_geoms = []
             for _, dl_signed in enumerate(dls_signed):

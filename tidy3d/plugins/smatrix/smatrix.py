@@ -298,16 +298,16 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         batch = self.batch
 
         # TEMP
-        import sys
-        TIDY3D_CORE_PATH = '/home/shashwat/flexcompute/repositories/tidy3d-core'
-        sys.path.insert(0, TIDY3D_CORE_PATH)
-        from tidy3d_backend.run import run_sim
-        batch_data = {}
-        for name, sim in self.sim_dict.items():
-            batch_data[name] = run_sim(sim, mpi=1)
+        # import sys
+        # TIDY3D_CORE_PATH = '/home/shashwat/flexcompute/repositories/tidy3d-core'
+        # sys.path.insert(0, TIDY3D_CORE_PATH)
+        # from tidy3d_backend.run import run_sim
+        # batch_data = {}
+        # for name, sim in self.sim_dict.items():
+        #     batch_data[name] = run_sim(sim, mpi=1)
 
         # TEMP
-        # batch_data = batch.run(path_dir=path_dir)
+        batch_data = batch.run(path_dir=path_dir)
         
         batch.to_file(self._batch_path)
         return batch_data
