@@ -1138,6 +1138,12 @@ class Medium(AbstractMedium):
             medium containing the corresponding ``permittivity`` and ``conductivity``.
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
+        if eps < 1:
+            raise ValidationError(
+                "Dispersiveless medium must have 'permittivity>=1`. "
+                "Please use 'Lorentz.from_nk()' to covert to a Lorentz medium, or the utility "
+                "function 'td.medium_from_nk()' to automatically return the proper medium type."
+            )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
 
@@ -2998,6 +3004,59 @@ class Lorentz(DispersiveMedium):
             return np.all(coeff_a.values > coeff_b.values)
         return coeff_a > coeff_b
 
+    @classmethod
+    def from_nk(cls, n: float, k: float, freq: float, **kwargs):
+        """Convert ``n`` and ``k`` values at frequency ``freq`` to a single-pole Lorentz
+        medium.
+
+        Parameters
+        ----------
+        n : float
+            Real part of refractive index.
+        k : float = 0
+            Imaginary part of refrative index.
+        freq : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        :class:`Lorentz`
+            Lorentz medium having refractive index n+ik at frequency ``freq``.
+        """
+        eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
+        eps_r, eps_i = eps_complex.real, eps_complex.imag
+        if eps_r >= 1:
+            log.warning(
+                "For 'permittivity>=1', it is more computationally efficient to "
+                "use a dispersiveless medium constructed from 'Medium.from_nk()'."
+            )
+        # first, lossless medium
+        if isclose(eps_i, 0):
+            if eps_r < 1:
+                fp = np.sqrt((eps_r - 1) / (eps_r - 2)) * freq
+                return cls(
+                    eps_inf=1,
+                    coeffs=[
+                        (1, fp, 0),
+                    ],
+                )
+            return cls(
+                eps_inf=1,
+                coeffs=[
+                    ((eps_r - 1) / 2, np.sqrt(2) * freq, 0),
+                ],
+            )
+        # lossy medium
+        alpha = (eps_r - 1) / eps_i
+        delta_p = freq / 2 / (alpha**2 - alpha + 1)
+        fp = np.sqrt((alpha**2 + 1) / (alpha**2 - alpha + 1)) * freq
+        return cls(
+            eps_inf=1,
+            coeffs=[
+                (eps_i, fp, delta_p),
+            ],
+        )
+
 
 class CustomLorentz(CustomDispersiveMedium, Lorentz):
     """A spatially varying dispersive medium described by the Lorentz model.
@@ -4843,3 +4902,27 @@ PEC2D = Medium2D(ss=PEC, tt=PEC)
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[MediumType3D, Medium2D]
+
+# Utility function
+def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, Lorentz]:
+    """Convert ``n`` and ``k`` values at frequency ``freq`` to :class:`Medium` if ``Re[epsilon]>=1``,
+    or :class:`Lorentz` if if ``Re[epsilon]<1``.
+
+    Parameters
+    ----------
+    n : float
+        Real part of refractive index.
+    k : float = 0
+        Imaginary part of refrative index.
+    freq : float
+        Frequency to evaluate permittivity at (Hz).
+
+    Returns
+    -------
+    Union[:class:`Medium`, :class:`Lorentz`]
+        Dispersionless medium or Lorentz medium having refractive index n+ik at frequency ``freq``.
+    """
+    eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
+    if eps_complex.real >= 1:
+        return Medium.from_nk(n, k, freq, **kwargs)
+    return Lorentz.from_nk(n, k, freq, **kwargs)
