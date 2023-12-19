@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 import pydantic.v1 as pd
 import trimesh
 
@@ -660,11 +660,25 @@ def log_capture(monkeypatch):
     return log_capture.records
 
 
-def assert_log_level(records, log_level_expected: str):
-    """ensure something got logged if log_level is not None.
-    note: I put this here rather than utils.py because if we import from utils.py,
-    it will validate the sims there and those get included in log.
+def assert_log_level(
+    records: List[Tuple[int, str]], log_level_expected: str, contains_str: str = None
+) -> None:
+    """Testing tool: Raises error if a log was not recorded as expected.
+
+    Parameters
+    ----------
+    records : List[Tuple[int, str]]
+        List of (log_level: int, message: str) holding all of the captured logs.
+    log_level_expected: str
+        String version of expected log level (all uppercase).
+    contains_str : str = None
+        If specified, errors if not found in the log message.
+
+    Returns
+    -------
+        None
     """
+
     import sys
 
     sys.stderr.write(str(records) + "\n")
@@ -685,9 +699,15 @@ def assert_log_level(records, log_level_expected: str):
     # both expected and got log, check the log levels match
     if records and log_level_expected:
         for log in records:
-            log_level = log[0]
+            log_level, log_message = log
             if log_level == log_level_expected_int:
                 # log level was triggered, exit
+
+                if contains_str:
+                    assert (
+                        contains_str in log_message
+                    ), f"log message '{log_message}' didnt contain '{contains_str}'."
+
                 return
         raise Exception
 
