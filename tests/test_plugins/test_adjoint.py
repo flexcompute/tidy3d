@@ -38,7 +38,7 @@ from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.api.container import BatchData
 import tidy3d.material_library as material_library
-from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated
+from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated, AssertLogLevel
 from ..test_components.test_custom import CUSTOM_MEDIUM
 
 TMP_PATH = None
@@ -1681,22 +1681,17 @@ def test_nonlinear_warn(log_capture):
     struct_static_nl = struct_static.updated_copy(medium=nl_medium)
     input_struct_nl = JaxStructureStaticMedium(geometry=struct.geometry, medium=nl_medium)
 
-    def test_log_level(desired_level):
-        """Convenience function to test the log level and clear it."""
-        assert_log_level(log_capture, desired_level)
-        log_capture.clear()
-
     # no nonlinearity (no warning)
-    test_log_level(None)
+    assert_log_level(log_capture, None)
 
     # nonlinear simulation.medium (error)
-    sim = sim_base.updated_copy(medium=nl_medium)
-    test_log_level("WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        sim = sim_base.updated_copy(medium=nl_medium)
 
     # nonlinear structure (warn)
-    sim = sim_base.updated_copy(structures=[struct_static_nl])
-    test_log_level("WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        sim = sim_base.updated_copy(structures=[struct_static_nl])
 
     # nonlinear input_structure (warn)
-    sim = sim_base.updated_copy(input_structures=[input_struct_nl])
-    test_log_level("WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        sim = sim_base.updated_copy(input_structures=[input_struct_nl])

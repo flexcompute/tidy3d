@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Any, Union
 import pydantic.v1 as pd
 import trimesh
 
@@ -670,9 +670,11 @@ def assert_log_level(
     records : List[Tuple[int, str]]
         List of (log_level: int, message: str) holding all of the captured logs.
     log_level_expected: str
-        String version of expected log level (all uppercase).
+        String version of expected log level (all uppercase). The function checks that this log
+        log level is present in the records, **as well as** that no higher log level is present.
     contains_str : str = None
-        If specified, errors if not found in the log message.
+        If specified, errors if not found in any of the log messages that are at level
+        ``log_level_expected``.
 
     Returns
     -------
@@ -688,28 +690,66 @@ def assert_log_level(
     else:
         log_level_expected_int = _get_level_int(log_level_expected)
 
-    # there's a log but the log level is not None (problem)
+    # there's a log but the log level is None (problem)
     if records and not log_level_expected_int:
-        raise Exception
+        raise AssertionError("Log was recorded but requested log level is None.")
 
     # we expect a log but none is given (problem)
     if log_level_expected_int and not records:
-        raise Exception
+        raise AssertionError("Log was not recorded but requested log level is not None.")
 
     # both expected and got log, check the log levels match
     if records and log_level_expected:
+        string_found = False
+        expected_level_present = False
+        expected_level_exceeded = False
         for log in records:
             log_level, log_message = log
             if log_level == log_level_expected_int:
-                # log level was triggered, exit
+                expected_level_present = True
+                if contains_str and contains_str in log_message:
+                    string_found = True
+            elif log_level > log_level_expected_int:
+                expected_level_exceeded = True
 
-                if contains_str:
-                    assert (
-                        contains_str in log_message
-                    ), f"log message '{log_message}' didnt contain '{contains_str}'."
+        if expected_level_exceeded:
+            raise AssertionError(
+                f"Recorded log level exceeds expected level '{log_level_expected}'."
+            )
+        if not expected_level_present:
+            raise AssertionError(
+                f"Expected log level '{log_level_expected}' was not found in record."
+            )
+        if contains_str and not string_found:
+            raise AssertionError(
+                f"Log record at level '{log_level_expected}' did not contain '{contains_str}'."
+            )
 
-                return
-        raise Exception
+
+@pd.dataclasses.dataclass
+class AssertLogLevel:
+    """Context manager to check log level for records logged within its context."""
+
+    records: Any
+    log_level_expected: Union[str, None]
+    contains_str: str = None
+
+    def __enter__(self):
+
+        # record number of records going into this context
+        self.num_records_before = len(self.records)
+
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+
+        # only check NEW records recorded since __enter__
+        records_check = self.records[self.num_records_before :]
+        assert_log_level(
+            records=records_check,
+            log_level_expected=self.log_level_expected,
+            contains_str=self.contains_str,
+        )
 
 
 def get_test_root_dir():

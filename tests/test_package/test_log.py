@@ -9,7 +9,7 @@ import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
 
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture, AssertLogLevel
 
 
 def test_log():
@@ -277,12 +277,23 @@ def test_assert_log_level(log_capture):
     """Test features of the assert_log_level"""
 
     # log was captured
-    td.log.warning("ABC")
-    assert_log_level(log_capture, "WARNING", contains_str="ABC")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING", contains_str="ABC"):
+        td.log.warning("ABC")
 
-    # string was not matched
+    # string was not matched (manually clear because not sure any other way using context manager)
     td.log.warning("ABC")
     with pytest.raises(Exception):
         assert_log_level(log_capture, "WARNING", contains_str="DEF")
+    log_capture.clear()
+
+    # string was matched at the wrong level
+    td.log.info("ABC")
+    with pytest.raises(Exception):
+        assert_log_level(log_capture, "WARNING", contains_str="ABC")
+    log_capture.clear()
+
+    # log exceeds expected level
+    td.log.warning("ABC")
+    with pytest.raises(Exception):
+        assert_log_level(log_capture, "INFO")
     log_capture.clear()
