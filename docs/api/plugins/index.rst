@@ -11,6 +11,7 @@ Plugins
     resonance
     adjoint
     waveguide
+    design
 
 
 .. include:: /api/plugins/mode_solver.rst
@@ -20,3 +21,4 @@ Plugins
 .. include:: /api/plugins/resonance.rst
 .. include:: /api/plugins/adjoint.rst
 .. include:: /api/plugins/waveguide.rst
+.. include:: /api/plugins/design.rst
