@@ -197,6 +197,12 @@
     "keywords": "custom medium, spatially-varying dielectric structures, Tidy3D, FDTD",
     "feature_image": ""
   },
+  "Design.ipynb": {
+      "title": "Design Space Exploration Tool | Flexcompute",
+      "description": "This notebook provides a deep dive tutorial on the "design" tool in Tidy3D.",
+      "keywords": "design space, parameter sweep, parameter scan, batch, parallel Tidy3D, FDTD",
+      "feature_image": "N/A"
+    },  
   "DielectricMetasurfaceAbsorber.ipynb": {
     "title": "Dielectric Metasurface Absorber | Flexcompute",
     "description": "This notebook demonstrates how to model a dielectric metasurface absorber in Tidy3D FDTD.",
