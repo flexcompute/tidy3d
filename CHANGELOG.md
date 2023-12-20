@@ -6,8 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
 - `tidy3d.plugins.design` tool to explore user-defined design spaces.
+- `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
 
 ### Changed
 
@@ -79,18 +79,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Can pass `kwargs` to `ComponentModeler.plot_sim()` to use in `Simulation.plot()`.
 - Ensure that mode solver fields are returned in single precision if `ModeSolver.ModeSpec.precision == "single"`.
 - If there are no adjoint sources for a simulation involved in an objective function, make a mock source with zero amplitude and warn user.
-
-## [2.5.0rc1] - 2023-10-10
-
-### Added
-- Time zone in webAPI logging output.
-- Class `Scene` consisting of a background medium and structures for easier drafting and visualization of simulation setups as well as transferring such information between different simulations.
-- Solver for thermal simulation (see `HeatSimulation` and related classes).
-- Specification of material thermal properties in medium classes through an optional field `.heat_spec`.
-
-### Changed
-- Internal refactor of Web API functionality.
-- `Geometry.from_gds` doesn't create unnecessary groups of single elements.
 
 ## [2.4.3] - 2023-10-16
 
