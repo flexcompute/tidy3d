@@ -4577,22 +4577,22 @@ test = ["cython", "filelock", "html5lib", "pytest (>=4.6)"]
 
 [[package]]
 name = "sphinx-book-theme"
-version = "1.0.1"
+version = "1.1.0"
 description = "A clean book theme for scientific explanations and documentation with Sphinx"
 optional = true
-python-versions = ">=3.7"
+python-versions = ">=3.9"
 files = [
-    {file = "sphinx_book_theme-1.0.1-py3-none-any.whl", hash = "sha256:d15f8248b3718a9a6be0ba617a32d1591f9fa39c614469bface777ba06a73b75"},
-    {file = "sphinx_book_theme-1.0.1.tar.gz", hash = "sha256:927b399a6906be067e49c11ef1a87472f1b1964075c9eea30fb82c64b20aedee"},
+    {file = "sphinx_book_theme-1.1.0-py3-none-any.whl", hash = "sha256:088bc69d65fab8446adb8691ed61687f71bf7504c9740af68bc78cf936a26112"},
+    {file = "sphinx_book_theme-1.1.0.tar.gz", hash = "sha256:ad4f92998e53e24751ecd0978d3eb79fdaa59692f005b1b286ecdd6146ebc9c1"},
 ]
 
 [package.dependencies]
-pydata-sphinx-theme = ">=0.13.3"
-sphinx = ">=4,<7"
+pydata-sphinx-theme = ">=0.14"
+sphinx = ">=5"
 
 [package.extras]
 code-style = ["pre-commit"]
-doc = ["ablog", "docutils (==0.17.1)", "folium", "ipywidgets", "matplotlib", "myst-nb", "nbclient", "numpy", "numpydoc", "pandas", "plotly", "sphinx-copybutton", "sphinx-design", "sphinx-examples", "sphinx-tabs (<=3.4.0)", "sphinx-thebe", "sphinx-togglebutton", "sphinxcontrib-bibtex", "sphinxcontrib-youtube", "sphinxext-opengraph"]
+doc = ["ablog", "folium", "ipywidgets", "matplotlib", "myst-nb", "nbclient", "numpy", "numpydoc", "pandas", "plotly", "sphinx-copybutton", "sphinx-design", "sphinx-examples", "sphinx-tabs", "sphinx-thebe", "sphinx-togglebutton", "sphinxcontrib-bibtex", "sphinxcontrib-youtube", "sphinxext-opengraph"]
 test = ["beautifulsoup4", "coverage", "myst-nb", "pytest", "pytest-cov", "pytest-regressions", "sphinx_thebe"]
 
 [[package]]
@@ -4750,6 +4750,19 @@ Sphinx = ">=5"
 [package.extras]
 lint = ["docutils-stubs", "flake8", "mypy"]
 test = ["pytest"]
+
+[[package]]
+name = "sphinxemoji"
+version = "0.2.0"
+description = "An extension to use emoji codes in your Sphinx documentation"
+optional = true
+python-versions = "*"
+files = [
+    {file = "sphinxemoji-0.2.0.tar.gz", hash = "sha256:27861d1dd7c6570f5e63020dac9a687263f7481f6d5d6409eb31ecebcc804e4c"},
+]
+
+[package.dependencies]
+sphinx = ">=1.8"
 
 [[package]]
 name = "stack-data"
@@ -5248,8 +5261,8 @@ docs = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.link
 testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy (>=0.9.1)", "pytest-ruff"]
 
 [extras]
-dev = ["black", "dill", "gdspy", "gdstk", "gdstk", "gdstk", "gdstk", "gdstk", "gdstk", "grcwa", "ipython", "ipython", "jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib", "jinja2", "jupyter", "memory_profiler", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "tmm", "tox", "trimesh", "vtk"]
-docs = ["gdstk", "gdstk", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "tmm"]
+dev = ["black", "dill", "gdspy", "gdstk", "gdstk", "gdstk", "gdstk", "gdstk", "gdstk", "grcwa", "ipython", "ipython", "jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib", "jinja2", "jupyter", "memory_profiler", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "tox", "trimesh", "vtk"]
+docs = ["gdstk", "gdstk", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk", "gdstk", "gdstk"]
 jax = ["jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib"]
@@ -5259,4 +5272,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "be702dcc5f4c4783ed636162e41b56096fe028ad1a917d2d9a8d8c734f1aa49b"
+content-hash = "c2de6ebeda2ba395236a7f1e9420a80bbce2ced94e2901b82bc8eb1a18f4e14c"

@@ -4,16 +4,16 @@ Using the Development Flow
 Developing ``tidy3d`` with ``poetry``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``poetry`` is an incredibly powerful tool for reproducible package development envrionments and dependency management. TODO add link.
+``poetry`` is an incredibly powerful tool for reproducible package development environments and dependency management. TODO add link.
 
-If you are developing ``tidy3d``, we recommend you work within the configured ``poetry`` environment defined by ``poetry.lock``. The way to install this envrionment is simple:
+If you are developing ``tidy3d``, we recommend you work within the configured ``poetry`` environment defined by ``poetry.lock``. The way to install this environment is simple:
 
 .. code::
 
     cd tidy3d/
     poetry install -E dev
 
-This function will install the package with all the development dependencies automatically. This means you should be able to run any functionality that is possible with ``tidy3d`` reprodicibly.
+This function will install the package with all the development dependencies automatically. This means you should be able to run any functionality that is possible with ``tidy3d`` reproducibly.
 
 It is important to note the function above is equivalent to ``pip install tidy3d[dev]``, but by using ``poetry`` there is a guarantee of using the reproducible locked environment.
 
@@ -41,22 +41,32 @@ There are a range of handy development functions that you might want to use to s
 
 .. list-table:: Use Cases
     :header-rows: 1
+    :widths: 25 25 50
 
     * - Description
       - Caveats
       - Command
-    * - Dual snapshot between the ``tidy3d`` and ``notebooks`` source and submodule repository.
-      - Make sure you are on the correct git branches you wish to commit to on both repositories, and all `non-git-ignored` files will be added to the commit.
-      - ``tidy3d develop commit <your message>``
-    * - Using ``tidy3d develop`` commands inside the ``poetry`` environment.
-      - Make sure you have already installed ``tidy3d`` in ``poetry``
-      - ``poetry run tidy3d develop <your command>``
-    * - Standard testing of the ``tidy3d`` frontend
-      - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
-      - ``poetry run tidy3d develop test-base``
+    * - Build documentation on reproducible environment
+      -
+      - ``poetry run tidy3d develop build-docs``
+    * - Build documentation with latest remote notebooks
+      -
+      - ``poetry run tidy3d develop build-docs-remote-notebooks``
     * - Complete notebooks + base testing of the ``tidy3d``
       - Make sure you have the notebooks downloaded.
       - ``poetry run tidy3d develop test-all``
+    * - Dual snapshot between the ``tidy3d`` and ``notebooks`` source and submodule repository.
+      - Make sure you are on the correct git branches you wish to commit to on both repositories, and all `non-git-ignored` files will be added to the commit.
+      - ``tidy3d develop commit <your message>``
     * - Running ``pytest`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run pytest``
+    * - Standard testing of the ``tidy3d`` frontend
+      - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
+      - ``poetry run tidy3d develop test-base``
+    * - Using ``tidy3d develop`` commands inside the ``poetry`` environment.
+      - Make sure you have already installed ``tidy3d`` in ``poetry``
+      - ``poetry run tidy3d develop <your command>``
+    * - Update lockfile after updating a dependency in ``pyproject.toml``
+      - Remember to install after this command.
+      - ``poetry lock``

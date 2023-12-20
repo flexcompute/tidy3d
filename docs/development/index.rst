@@ -12,8 +12,10 @@ Welecome to the ``tidy3d`` developers guide! These are just some recommendations
     installation
     usage
     documentation
+    release/index
 
-.. include:: project_structure.rst
-.. include:: installation.rst
-.. include:: usage.rst
-.. include:: documentation.rst
+.. include:: /development/project_structure.rst
+.. include:: /development/installation.rst
+.. include:: /development/usage.rst
+.. include:: /development/documentation.rst
+.. include:: /development/release/index.rst

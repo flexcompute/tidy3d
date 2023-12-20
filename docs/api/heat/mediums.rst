@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
 Material Thermal Specification
-===============================
+-------------------------------
 
 .. autosummary::
    :toctree: ../_autosummary/

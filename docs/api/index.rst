@@ -25,21 +25,21 @@ API
     abstract_base
     abstract_models
 
-.. include:: simulation.rst
-.. include:: boundary_conditions.rst
-.. include:: geometry.rst
-.. include:: mediums.rst
-.. include:: structures.rst
-.. include:: sources.rst
-.. include:: monitors.rst
-.. include:: mode.rst
-.. include:: discretization.rst
-.. include:: output_data.rst
-.. include:: scene.rst
-.. include:: logging.rst
-.. include:: submit_simulations.rst
-.. include:: heat/index.rst
-.. include:: plugins/index.rst
-.. include:: constants.rst
-.. include:: abstract_base.rst
-.. include:: abstract_models.rst
+.. include:: /api/simulation.rst
+.. include:: /api/boundary_conditions.rst
+.. include:: /api/geometry.rst
+.. include:: /api/mediums.rst
+.. include:: /api/structures.rst
+.. include:: /api/sources.rst
+.. include:: /api/monitors.rst
+.. include:: /api/mode.rst
+.. include:: /api/discretization.rst
+.. include:: /api/output_data.rst
+.. include:: /api/scene.rst
+.. include:: /api/logging.rst
+.. include:: /api/submit_simulations.rst
+.. include:: /api/heat/index.rst
+.. include:: /api/plugins/index.rst
+.. include:: /api/constants.rst
+.. include:: /api/abstract_base.rst
+.. include:: /api/abstract_models.rst
