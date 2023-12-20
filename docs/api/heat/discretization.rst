@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
 Grid Specification
-===========
+--------------------
 
 .. autosummary::
    :toctree: ../_autosummary/

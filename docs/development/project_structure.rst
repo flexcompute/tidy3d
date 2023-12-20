@@ -28,9 +28,6 @@ It is important to note the new tools we are using to manage our development env
 - ``poetry``
 - ``pipx``
 
-Release Flow
-^^^^^^^^^^^^^^^
 
-This is very straightforward. You just need to make sure that the ``develop`` branches of both ``tidy3d/`` and ``tidy3d-notebooks/`` repositories within the ``./`` and ``./docs/notebooks/`` directories are updated. The ``readthedocs`` documentation will be automatically updated through the ``sync-readthedocs-repo`` Github action.
 
 

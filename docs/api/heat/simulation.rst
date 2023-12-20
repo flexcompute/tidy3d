@@ -1,7 +1,7 @@
 .. currentmodule:: tidy3d
 
 Simulation
-==========
+-----------
 
 .. autosummary::
    :toctree: ../_autosummary/

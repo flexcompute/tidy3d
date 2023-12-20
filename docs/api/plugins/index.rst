@@ -13,10 +13,10 @@ Plugins
     waveguide
 
 
-.. include:: mode_solver.rst
-.. include:: dispersion.rst
-.. include:: polyslab.rst
-.. include:: smatrix.rst
-.. include:: resonance.rst
-.. include:: adjoint.rst
-.. include:: waveguide.rst
+.. include:: /api/plugins/mode_solver.rst
+.. include:: /api/plugins/dispersion.rst
+.. include:: /api/plugins/polyslab.rst
+.. include:: /api/plugins/smatrix.rst
+.. include:: /api/plugins/resonance.rst
+.. include:: /api/plugins/adjoint.rst
+.. include:: /api/plugins/waveguide.rst

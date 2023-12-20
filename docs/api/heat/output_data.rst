@@ -1,10 +1,10 @@
 .. currentmodule:: tidy3d
 
 Output Data
-===========
+-------------
 
 Monitor Data
-------------
+^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -14,7 +14,7 @@ Monitor Data
 
 
 Heat Simulation Data
---------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
    :toctree: ../_autosummary/

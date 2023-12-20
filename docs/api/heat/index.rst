@@ -1,5 +1,5 @@
-HEAT
-=======
+HEAT |:fire:|
+=============
 
 .. toctree::
     :hidden:
@@ -13,10 +13,10 @@ HEAT
     output_data
 
 
-.. include:: simulation.rst
-.. include:: mediums.rst
-.. include:: boundary_conditions.rst
-.. include:: source.rst
-.. include:: discretization.rst
-.. include:: monitor.rst
-.. include:: output_data.rst
+.. include:: /api/heat/simulation.rst
+.. include:: /api/heat/mediums.rst
+.. include:: /api/heat/boundary_conditions.rst
+.. include:: /api/heat/source.rst
+.. include:: /api/heat/discretization.rst
+.. include:: /api/heat/monitor.rst
+.. include:: /api/heat/output_data.rst

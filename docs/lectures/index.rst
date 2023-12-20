@@ -10,5 +10,5 @@ Welcome to our lecture series!
     fdtd101
     inversedesign
 
-.. include:: fdtd101.rst
-.. include:: inversedesign.rst
+.. include:: /lectures/fdtd101.rst
+.. include:: /lectures/inversedesign.rst

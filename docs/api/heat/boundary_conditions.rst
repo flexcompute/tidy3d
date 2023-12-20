@@ -1,10 +1,10 @@
 .. currentmodule:: tidy3d
 
 Thermal Boundary Conditions
-===============================
+-----------------------------
 
 Specifications
-----------------
+''''''''''''''''''
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -14,7 +14,7 @@ Specifications
 
 
 Types
-------
+''''''''''''''''''
 
 .. autosummary::
    :toctree: ../_autosummary/
@@ -26,7 +26,7 @@ Types
 
 
 Placement
------------
+''''''''''''''''''
 
 .. autosummary::
    :toctree: ../_autosummary/

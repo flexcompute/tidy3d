@@ -262,13 +262,14 @@ def uninstall_development_environment(args=None):
         exit("Nothing has been uninstalled.")
 
     # Verify and uninstall poetry if required
-    if verify_poetry_is_installed() and verify_pipx_is_installed():
+    if verify_poetry_is_installed():
         if platform.system() == "Windows":
-            echo_and_check_subprocess(["pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["pipx", "uninstall", "poetry"])
         elif platform.system() == "Darwin":
-            echo_and_check_subprocess(["pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["brew", "uninstall", "poetry"])
+            echo_and_run_subprocess(["pipx", "uninstall", "poetry"])
         elif platform.system() == "Linux":
-            echo_and_check_subprocess(["python3", "-m", "pipx", "uninstall", "poetry"])
+            echo_and_run_subprocess(["python3", "-m", "pipx", "uninstall", "poetry"])
         else:
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
@@ -280,14 +281,15 @@ def uninstall_development_environment(args=None):
     # Verify and install pipx if required
     if verify_pipx_is_installed():
         if platform.system() == "Windows":
-            echo_and_check_subprocess(["python", "-m", "pip", "uninstall", "-y", "pipx"])
+            echo_and_run_subprocess(["python", "-m", "pip", "uninstall", "-y", "pipx"])
             # TODO what's the deal here?
         elif platform.system() == "Darwin":
-            echo_and_check_subprocess(["python", "-m", "pip", "uninstall", "-y", "pipx"])
-            echo_and_check_subprocess(["rm", "-rf", "~/.local/pipx"])
+            echo_and_run_subprocess(["brew", "uninstall", "pipx"])
+            echo_and_run_subprocess(["python", "-m", "pip", "uninstall", "-y", "pipx"])
+            echo_and_run_subprocess(["rm", "-rf", "~/.local/pipx"])
         elif platform.system() == "Linux":
-            echo_and_check_subprocess(["python3", "-m", "pip", "uninstall", "-y", "pipx"])
-            echo_and_check_subprocess(["rm", "-rf", "~/.local/pipx"])
+            echo_and_run_subprocess(["python3", "-m", "pip", "uninstall", "-y", "pipx"])
+            echo_and_run_subprocess(["rm", "-rf", "~/.local/pipx"])
         else:
             raise OSError(
                 "Unsupported operating system installation flow. Verify the subprocess commands in "
@@ -337,7 +339,7 @@ def commit(message, submodule_path):
             ["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message]
         )
 
-    # TODO fix errors when commiting between the two repos.
+    # TODO fix errors when committing between the two repos.
     # Commit to the submodule
     commit_repository(submodule_path, message)
     # Commit to the main repository
@@ -349,8 +351,7 @@ def commit(message, submodule_path):
 def build_documentation(args=None):
     """Verifies and builds the documentation."""
     # Runs the documentation build from the poetry environment
-    # TODO update generic path management.
-    echo_and_run_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
+    echo_and_check_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0
 
 
@@ -358,19 +359,34 @@ def build_documentation(args=None):
 def build_documentation_pdf(args=None):
     """Verifies and builds the documentation."""
     # Runs the documentation build from the poetry environment
-    # TODO update generic path management.
     echo_and_run_subprocess(
         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
     )
     return 0
 
 
+@develop.command(
+    name="build-docs-remote-notebooks", help="Updates notebooks submodule and builds documentation."
+)
+def build_documentation_from_remote_notebooks(args=None):
+    """Updates notebooks submodule and builds documentation. Verifies and builds the documentation."""
+    # Runs the documentation build from the poetry environment
+    echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
+    print("Notebook submodule updated from remote.")
+    echo_and_check_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
+    return 0
+
+
 @develop.command(name="test-base", help="Tests the tidy3d base package.")
 def test_base_tidy3d(args=None):
-    """Verifies and builds the documentation."""
-    # Runs the documentation build from the poetry environment
-    # TODO update generic path management.
     echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests"])
+    return 0
+
+
+@develop.command(name="test-notebooks", help="Tests the tidy3d notebooks.")
+def test_notebooks_tidy3d(args=None):
+    """Tests the tidy3d notebooks."""
+    echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests/full_test_notebooks.py"])
     return 0
 
 
@@ -383,4 +399,12 @@ def install_in_poetry(args=None):
     # TODO update generic path management.
     activate_correct_poetry_python()
     echo_and_run_subprocess(["poetry", "install", "-E", "dev"])
+    return 0
+
+
+@develop.command(name="update-notebooks", help="Updates notebooks submodule from remote")
+def update_notebooks_remote(args=None):
+    """Updates notebooks submodule."""
+    # Runs the documentation build from the poetry environment
+    echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
     return 0
