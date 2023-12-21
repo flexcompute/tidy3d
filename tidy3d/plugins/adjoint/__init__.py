@@ -3,7 +3,7 @@
 # import the jax version of tidy3d components
 try:
     from .components.geometry import JaxBox, JaxPolySlab, JaxGeometryGroup
-    from .components.medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium
+    from .components.medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium, JaxPoleResidue
     from .components.structure import (
         JaxStructure,
         JaxStructureStaticGeometry,
@@ -33,6 +33,7 @@ __all__ = [
     "JaxMedium",
     "JaxAnisotropicMedium",
     "JaxCustomMedium",
+    "JaxPoleResidue",
     "JaxStructure",
     "JaxStructureStaticMedium",
     "JaxStructureStaticGeometry",

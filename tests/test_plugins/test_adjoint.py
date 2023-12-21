@@ -19,7 +19,7 @@ import tidy3d as td
 from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
 from tidy3d.plugins.adjoint.components.geometry import JaxBox, JaxPolySlab, MAX_NUM_VERTICES
 from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
-from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
+from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium, JaxPoleResidue
 from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
 from tidy3d.plugins.adjoint.components.structure import (
     JaxStructure,
@@ -267,6 +267,13 @@ def make_sim(
         geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
     )
 
+    a = -permittivity
+    c = a
+    pole1 = (a, c)
+    poles = [pole1, pole1]
+    jax_med_pole_res = JaxPoleResidue(eps_inf=1 + permittivity, poles=poles)
+    jax_struct_pole_res = JaxStructure(geometry=jax_box_custom, medium=jax_med_pole_res)
+
     # TODO: Add new geometries as they are created.
 
     # NOTE: Any new output monitors should be added below as they are made
@@ -321,6 +328,7 @@ def make_sim(
             jax_struct_custom_anis,
             jax_struct_static_med,
             jax_struct_static_geo,
+            jax_struct_pole_res,
         ),
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
