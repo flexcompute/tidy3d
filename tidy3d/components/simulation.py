@@ -3046,10 +3046,10 @@ class Simulation(AbstractSimulation):
                     for _, poly_geom in enumerate(polygon.geoms):
                         all_polygons.append(poly_geom)
                     continue
-                if len(polygon.exterior.coords) == 0:
-                    continue
                 if not isinstance(polygon, shapely.LineString):
                     all_polygons.append(shapely.LineString(list(polygon.exterior.coords)))
+                elif len(polygon.exterior.coords) == 0:
+                    continue
                 else:
                     all_polygons.append(polygon)
 
