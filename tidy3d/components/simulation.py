@@ -3047,9 +3047,9 @@ class Simulation(AbstractSimulation):
                         all_polygons.append(poly_geom)
                     continue
                 if not isinstance(polygon, shapely.LineString):
+                    if len(polygon.exterior.coords) == 0:
+                        continue
                     all_polygons.append(shapely.LineString(list(polygon.exterior.coords)))
-                elif len(polygon.exterior.coords) == 0:
-                    continue
                 else:
                     all_polygons.append(polygon)
 
