@@ -7,7 +7,6 @@ on:
       - main
       - latest
       - 'pre/*'
-      - dario/quick_patches_pre/2.6
   workflow_dispatch:
     inputs:
       env:

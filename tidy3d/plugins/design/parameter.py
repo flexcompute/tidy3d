@@ -170,7 +170,7 @@ class ParameterAny(Parameter):
 
     allowed_values: Tuple[Any, ...] = pd.Field(
         ...,
-        title="Alowed Values",
+        title="Allowed Values",
         description="The discrete set of values that this variable can take on.",
     )
 

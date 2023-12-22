@@ -10,7 +10,7 @@ from tidy3d.exceptions import SetupError, ValidationError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
-from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated
+from ..utils import assert_log_level, SIM_FULL, log_capture, run_emulated, AssertLogLevel
 from tidy3d.constants import LARGE_NUMBER
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
@@ -301,7 +301,7 @@ def test_monitor_medium_frequency_range(log_capture, freq, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("fwidth, log_level", [(0.1, "WARNING"), (2, "INFO")])
+@pytest.mark.parametrize("fwidth, log_level", [(0.1e12, "WARNING"), (2e12, "INFO")])
 def test_monitor_simulation_frequency_range(log_capture, fwidth, log_level):
     # monitor frequency outside of the simulation's frequency range should throw a warning
 
@@ -441,22 +441,22 @@ def test_validate_plane_wave_boundaries(log_capture):
         )
 
     # angled incidence plane wave with an integer-offset Bloch vector should warn
-    td.Simulation(
-        size=(1, 1, 1),
-        run_time=1e-12,
-        sources=[src2],
-        boundary_spec=bspec3,
-    )
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            sources=[src2],
+            boundary_spec=bspec3,
+        )
 
     # angled incidence plane wave with wrong Bloch vector should warn
-    td.Simulation(
-        size=(1, 1, 1),
-        run_time=1e-12,
-        sources=[src2],
-        boundary_spec=bspec4,
-    )
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            sources=[src2],
+            boundary_spec=bspec4,
+        )
 
 
 def test_validate_zero_dim_boundaries(log_capture):
@@ -769,7 +769,7 @@ def test_large_grid_size(log_capture, grid_size, log_level):
     assert_log_level(log_capture, log_level)
 
 
-@pytest.mark.parametrize("box_size,log_level", [(0.001, "INFO"), (9.9, "WARNING"), (20, "INFO")])
+@pytest.mark.parametrize("box_size,log_level", [(0.1, "INFO"), (9.9, "WARNING"), (20, "INFO")])
 def test_sim_structure_gap(log_capture, box_size, log_level):
     """Make sure the gap between a structure and PML is not too small compared to lambda0."""
     medium = td.Medium(permittivity=2)
@@ -1047,153 +1047,147 @@ def test_proj_monitor_warnings(log_capture):
     )
 
     # Cartesian monitor projecting backwards
-    monitor_n2f = td.FieldProjectionCartesianMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        x=[4],
-        y=[5],
-        proj_distance=-1e5,
-        proj_axis=2,
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionCartesianMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            x=[4],
+            y=[5],
+            proj_distance=-1e5,
+            proj_axis=2,
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Cartesian monitor with custom origin projecting backwards
-    monitor_n2f = td.FieldProjectionCartesianMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        x=[4],
-        y=[5],
-        proj_distance=39,
-        proj_axis=2,
-        custom_origin=(1, 2, -40),
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionCartesianMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            x=[4],
+            y=[5],
+            proj_distance=39,
+            proj_axis=2,
+            custom_origin=(1, 2, -40),
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Cartesian monitor with custom origin projecting backwards with normal_dir '-'
-    monitor_n2f = td.FieldProjectionCartesianMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        x=[4],
-        y=[5],
-        proj_distance=41,
-        proj_axis=2,
-        custom_origin=(1, 2, -40),
-        normal_dir="-",
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionCartesianMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            x=[4],
+            y=[5],
+            proj_distance=41,
+            proj_axis=2,
+            custom_origin=(1, 2, -40),
+            normal_dir="-",
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Angle monitor projecting backwards
-    monitor_n2f = td.FieldProjectionAngleMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        theta=[np.pi / 2 + 1e-2],
-        phi=[0],
-        proj_distance=1e3,
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionAngleMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            theta=[np.pi / 2 + 1e-2],
+            phi=[0],
+            proj_distance=1e3,
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Angle monitor projecting backwards with custom origin
-    monitor_n2f = td.FieldProjectionAngleMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        theta=[np.pi / 2 - 0.02],
-        phi=[0],
-        proj_distance=10,
-        custom_origin=(0, 0, -0.5),
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionAngleMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            theta=[np.pi / 2 - 0.02],
+            phi=[0],
+            proj_distance=10,
+            custom_origin=(0, 0, -0.5),
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Angle monitor projecting backwards with custom origin and normal_dir '-'
-    monitor_n2f = td.FieldProjectionAngleMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        theta=[np.pi / 2 + 0.02],
-        phi=[0],
-        proj_distance=10,
-        custom_origin=(0, 0, 0.5),
-        normal_dir="-",
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionAngleMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            theta=[np.pi / 2 + 0.02],
+            phi=[0],
+            proj_distance=10,
+            custom_origin=(0, 0, 0.5),
+            normal_dir="-",
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
     # Cartesian monitor using approximations but too short proj_distance
-    monitor_n2f = td.FieldProjectionCartesianMonitor(
-        center=(0, 0, 0),
-        size=(td.inf, td.inf, 0),
-        freqs=[2.5e14],
-        name="monitor_n2f",
-        x=[4],
-        y=[5],
-        proj_distance=9,
-        proj_axis=2,
-    )
-    _ = td.Simulation(
-        size=(1, 1, 1),
-        structures=[],
-        sources=[src],
-        run_time=1e-12,
-        monitors=[monitor_n2f],
-    )
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        monitor_n2f = td.FieldProjectionCartesianMonitor(
+            center=(0, 0, 0),
+            size=(td.inf, td.inf, 0),
+            freqs=[2.5e14],
+            name="monitor_n2f",
+            x=[4],
+            y=[5],
+            proj_distance=9,
+            proj_axis=2,
+        )
+        _ = td.Simulation(
+            size=(1, 1, 1),
+            structures=[],
+            sources=[src],
+            run_time=1e-12,
+            monitors=[monitor_n2f],
+        )
 
 
 def test_diffraction_medium():
@@ -1954,19 +1948,17 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     )
     assert isinstance(sim.volumetric_structures[1].medium.xx, td.PECMedium)
 
-    log_capture.clear()
-
-    # check that plotting 2d material doesn't raise an error
-    sim_data = run_emulated(sim)
-    sim_data.plot_field(field_monitor_name="field_xz", field_name="Ex", val="real")
-    plt.close()
-    _ = sim.plot_eps(x=0, alpha=0.2)
-    plt.close()
-    _ = sim.plot(x=0)
-    plt.close()
-
     # plotting should not raise warning
-    assert_log_level(log_capture, None)
+    with AssertLogLevel(log_capture, None):
+
+        # check that plotting 2d material doesn't raise an error
+        sim_data = run_emulated(sim)
+        sim_data.plot_field(field_monitor_name="field_xz", field_name="Ex", val="real")
+        plt.close()
+        _ = sim.plot_eps(x=0, alpha=0.2)
+        plt.close()
+        _ = sim.plot(x=0)
+        plt.close()
 
     # nonuniform sub/super-strate should error
     below_half = td.Structure(
@@ -2035,22 +2027,21 @@ def test_sim_volumetric_structures(log_capture, tmp_path):
     with pytest.raises(pydantic.ValidationError):
         _ = td.Structure(geometry=td.Sphere(radius=1), medium=box.medium)
 
-    log_capture.clear()
     # test warning for 2d geometry in simulation without Medium2D
-    struct = td.Structure(medium=td.Medium(), geometry=td.Box(size=(1, 0, 1)))
-    sim = td.Simulation(
-        size=(10, 10, 10),
-        structures=[struct],
-        sources=[src],
-        boundary_spec=td.BoundarySpec(
-            x=td.Boundary.pml(num_layers=5),
-            y=td.Boundary.pml(num_layers=5),
-            z=td.Boundary.pml(num_layers=5),
-        ),
-        grid_spec=td.GridSpec.uniform(dl=grid_dl),
-        run_time=1e-12,
-    )
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        struct = td.Structure(medium=td.Medium(), geometry=td.Box(size=(1, 0, 1)))
+        sim = td.Simulation(
+            size=(10, 10, 10),
+            structures=[struct],
+            sources=[src],
+            boundary_spec=td.BoundarySpec(
+                x=td.Boundary.pml(num_layers=5),
+                y=td.Boundary.pml(num_layers=5),
+                z=td.Boundary.pml(num_layers=5),
+            ),
+            grid_spec=td.GridSpec.uniform(dl=grid_dl),
+            run_time=1e-12,
+        )
 
 
 @pytest.mark.parametrize("normal_axis", (0, 1, 2))

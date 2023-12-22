@@ -154,7 +154,7 @@ def test_asending_grid_in_interval():
 def test_asending_plateau_grid_in_interval():
     """Nonuniform mesh in an interval from small to large to plateau"""
 
-    # # zero pixel for plateau, still asending
+    # # zero pixel for plateau, still ascending
     len_interval = 1.0
     max_scale = 2
     left_dl = 0.3

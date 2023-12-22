@@ -649,7 +649,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tan_dims = self._tangential_dims
 
         if not all(a == b for a, b in zip(tan_dims, field_data._tangential_dims)):
-            raise DataError("Tangential dimentions must match between the two monitors.")
+            raise DataError("Tangential dimensions must match between the two monitors.")
 
         # Tangential fields for current
         fields_self = self._colocated_tangential_fields

@@ -44,7 +44,7 @@ def main(args):
     # add the simulation body itself
     sim_string += sim.__repr__()
 
-    # new we need to get rid of all the "type" info that isnt needed
+    # new we need to get rid of all the "type" info that isn't needed
 
     # remove type='...', in middle
     pattern = r"type='([A-Za-z0-9_\./\\-]*)', "

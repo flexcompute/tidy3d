@@ -1,6 +1,6 @@
-*****************
-Development Guide
-*****************
+********************************************************************
+Development Guide |:hammer_and_wrench:|
+********************************************************************
 
 Welecome to the ``tidy3d`` developers guide! These are just some recommendations I've compiled, but we can change anything as we think might help the development cycle more.
 

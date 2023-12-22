@@ -26,6 +26,8 @@ iframe {width: 100%;border: unset}
 
 .toctree-wrapper li[class^=toctree-l1]>a {font-size: 1.4em; text-decoration: none}
 .toctree-wrapper li[class^=toctree-l2]>a {font-size: 1em; text-decoration: none}
+.toctree-wrapper li[class^=toctree-l3]>a {font-size: 0.9em; text-decoration: none}
+.toctree-wrapper li[class^=toctree-l4]>a {font-size: 0.9em; text-decoration: none}
 
 html[data-theme="light"] {
     --pst-color-primary: #b5445b;
@@ -77,6 +79,10 @@ img {
 
 .sphinx-tabs-tab[aria-selected="true"] {
     background-color: var(--sd-color-info-bg);
+}
+
+html[data-theme=dark] .dataframe {
+    background-color: var(--pst-color-primary);
 }
 
 /* TODO make sure this is only for the API tables */

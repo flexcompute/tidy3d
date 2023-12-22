@@ -2,8 +2,8 @@
 
 .. _howdoi:
 
-How do I ...
-============
+How do I ... |:eyes:|
+========================
 
 
 Work with the Tidy3d Package
@@ -48,7 +48,7 @@ Plot Tidy3D Components
    * - Change the object plotting characteristics (facecolor, edgecolor, etc).
      - Plotting keyword arguments can be supplied to ``plot()``, for example ``obj.plot(x=0, edgecolor='blue', fill=False)``.  These keyword arguments correspond to those fed to `Matplotlib Patches <https://tinyurl.com/2nf5c2fk>`__.
    * - Change the global plot characteristics (title, size, etc).
-     - The plotting function return a matplotlib ``Axes``, wihch can be manipulated, for example ``ax = obj.plot(x=0);  ax.set_title('my_title')``.
+     - The plotting function return a matplotlib ``Axes``, which can be manipulated, for example ``ax = obj.plot(x=0);  ax.set_title('my_title')``.
 
 Create Geometries
 -----------------
@@ -62,7 +62,7 @@ Create Geometries
    * - Load a structure from GDS format?
      - From a cell in the ``gdstk`` package, the ``ps = td.PolySlab.from_gds(gds_cell, ...)`` method will load the geometry into a :class:`PolySlab`.
    * - Create a complex geometry, such as a ring?
-     - While many complex geometries can be created by supplying the vertices to :class:`PolySlab`, simple geometries, such as rings, can be constructed by overlaying two structures with :class:`Cylinder` geomety with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
+     - While many complex geometries can be created by supplying the vertices to :class:`PolySlab`, simple geometries, such as rings, can be constructed by overlaying two structures with :class:`Cylinder` geometry with the inner cylinder defined with medium of air.  Note that structures later in the ``structures`` list will override previous structures, which can be leveraged to make more complex geometries.
 
 Materials
 ---------
@@ -163,7 +163,7 @@ Submit Jobs to Server
    * - Submit my simulation to run on Flexcompute's servers?
      - ``sim_data = web.run(simulation, task_name='my_task', path='out/data.hdf5')`` or ``job = web.Job(simulation, task_name='my_task'); job.run(path='out/data.hdf5')``.
    * - Upload a job to the web without running it so I can inspect it first?
-     - Once you've created a :class:`tidy3d.web.container.Job`, you can upload it to our servers with ``job.upload()`` and it will not run until you excplicitly tell it to with ``job.start()``.
+     - Once you've created a :class:`tidy3d.web.container.Job`, you can upload it to our servers with ``job.upload()`` and it will not run until you explicitly tell it to with ``job.start()``.
    * - Monitor the progress of a simulation?
      - ``web.monitor(task_id)``, ``job.monitor()``, or ``batch.monitor()`` will display the progress of your simulation(s).
    * - Load the results of a simulation?
@@ -175,7 +175,7 @@ Submit Jobs to Server
    * - Loop through :class:`tidy3d.web.container.BatchData` without loading all of the data into memory?
      - ``for task_name, sim_data in batch_data.items():`` will give access to a :class:`SimulationData` instance for each :class:`tidy3d.web.container.Job` in the batch one by one, so you can perform your postprocessing in the loop body without loading each of the simulations' data into memory at once.
    * - Save or load a :class:`tidy3d.web.container.Job` or :class:`tidy3d.web.container.Batch` so I can work with it later?
-     - Like most other tidy3d objects, :class:`tidy3d.web.container.Job` and :class:`tidy3d.web.container.Batch` instances have ``.to_file(path)`` and ``.from_file(path)`` methods that will export and load thier metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
+     - Like most other tidy3d objects, :class:`tidy3d.web.container.Job` and :class:`tidy3d.web.container.Batch` instances have ``.to_file(path)`` and ``.from_file(path)`` methods that will export and load their metadata as .json files.  This is especially useful for loading batches for analysis long after they have run.
 
 Extensions
 ----------
@@ -190,7 +190,7 @@ Extensions
      - Refer to the `Dispersion tutorial <notebooks/Fitting.html>`_ on the :class:`tidy3d.plugins.DispersionFitter` plugin.
    * - Specify the modes for a :class:`ModeMonitor` or :class:`ModeSource`?
      - Refer to the `Mode Solver tutorial <notebooks/ModeSolver.html>`_ on the :class:`tidy3d.plugins.ModeSolver` plugin.
-   * - Projet electromagnetic near field data to the far field?
+   * - Project electromagnetic near field data to the far field?
      - Refer to the `FieldProjections tutorial <notebooks/FieldProjections.html>`_.
    * - Compute scattering matrix parameters for modeling my device?
      - Refer to the `S Matrix tutorial <notebooks/SMatrix.html>`_ on the :class:`tidy3d.plugins.ComponentModeler` plugin.

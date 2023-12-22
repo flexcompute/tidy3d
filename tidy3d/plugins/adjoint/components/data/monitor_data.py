@@ -26,7 +26,7 @@ from ..base import JaxObject
 
 
 class JaxMonitorData(MonitorData, JaxObject, ABC):
-    """A :class:`.MonitorData` that we regsiter with jax."""
+    """A :class:`.MonitorData` that we register with jax."""
 
     @classmethod
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:

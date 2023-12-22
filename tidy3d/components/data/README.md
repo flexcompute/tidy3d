@@ -61,7 +61,7 @@ class FieldTimeData(ElectromagneticFieldData):
 
 The naming convention for `MonitorData` objects is to replace `Monitor` with `Data` in the monitor name, eg. "`FluxTimeMonitor`" becomes "`FluxTimeData`".
 
-Final note: data for a `FluxMonitor` and `FluxTimeMonitor` are loaded in `FluxData` and `FluxTimeData` instances, respectively. However, these classes contain a single `.flux` field that is a `FluxDataArray` and `FluxTimeDataArray`, respecitvely.  So to access the raw flux data for a monitor, one must do `flux_data.flux` instead of the data being stored directly.  This is a change that comes up a lot in the backend.
+Final note: data for a `FluxMonitor` and `FluxTimeMonitor` are loaded in `FluxData` and `FluxTimeData` instances, respectively. However, these classes contain a single `.flux` field that is a `FluxDataArray` and `FluxTimeDataArray`, respectively.  So to access the raw flux data for a monitor, one must do `flux_data.flux` instead of the data being stored directly.  This is a change that comes up a lot in the backend.
 
 #### Normalization
 
@@ -76,7 +76,7 @@ Rather than raw data being passed to this, `source_spectrum_fn` is a function of
 
 #### Symmetry
 
-All `MonitorData` subclasses also have an `.apply_symmetry()` method, whch returns a copy of the instance with symmetry applied. There is therefore no notion of "state" with regard to the symmetry of a monitor data.
+All `MonitorData` subclasses also have an `.apply_symmetry()` method, which returns a copy of the instance with symmetry applied. There is therefore no notion of "state" with regard to the symmetry of a monitor data.
 
 ```python
 def apply_symmetry(
@@ -89,12 +89,12 @@ def apply_symmetry(
 
 #### Field-Like Data
 
-The `MonitorData` subclass `AbstractFieldData` defines a few methods and properties needed to propertly handle field-like data, such as `FieldData`, `FieldTimeData`, `PermittivityData`, and `ModeSolverData`.
+The `MonitorData` subclass `AbstractFieldData` defines a few methods and properties needed to properly handle field-like data, such as `FieldData`, `FieldTimeData`, `PermittivityData`, and `ModeSolverData`.
 
 There are a few convenient properties defined for each `AbstractFieldData`:
 
 - `.field_components` is a dict mapping of the field name (str, eg. 'Ey') to the scalar field `DataArray`. It is very useful for iterating through the components and selecting by string.
-- `.grid_locations` is a dict mapping of the field name to the "grid_key" used to select the postition in the yee lattice. For example, for a `PermittivityMonitor` called `p`, we would have `p.grid_locations['eps_yy'] == 'Ey'`.
+- `.grid_locations` is a dict mapping of the field name to the "grid_key" used to select the position in the yee lattice. For example, for a `PermittivityMonitor` called `p`, we would have `p.grid_locations['eps_yy'] == 'Ey'`.
 - `.symmetry_eigenvalues` returns a dict mapping of the field name to a function of axis (0,1,2) that returns the eignenvalue of that field component under symmetry transformation along this axis.
 
 Field-like data also support `def colocate(x=None, y=None, z=None) -> xr.Dataset`, which returns an `xarray.Dataset` of all the field components colocated at the supplied x,y,z coordinates. If any of the coordinates are `None`, nothing is done to colocate along that coordinate.
@@ -105,7 +105,7 @@ The ``DATA_TYPE_MAP`` is defined in `monitor_data.py` as a dictionary mapping th
 
 ### `SimulationData` objects
 
-Like before, the `SimulationData` object contains all of the data for a given `Simulation`. The `Simulation` is still stored directly as a `pd.Field` and the `monitor_data` is still a dictionary mapping the names of the `Monitor` objects to the correspoding `MonitorData` objects.
+Like before, the `SimulationData` object contains all of the data for a given `Simulation`. The `Simulation` is still stored directly as a `pd.Field` and the `monitor_data` is still a dictionary mapping the names of the `Monitor` objects to the corresponding `MonitorData` objects.
 
 #### Normalizing
 

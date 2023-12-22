@@ -91,12 +91,12 @@ sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-book-theme = {version = ">=1.0.1", optional = true}
 pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
-# m2r2 = {version="*", optional = true}
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
 sphinx-tabs = {version="*", optional = true}
 nbdime = {version="*", optional = true}
+m2r2 = {git = "https://github.com/daquinteroflex/m2r2", optional = true, branch = "v2"}
 optax = {version="*", optional = true}
 signac = {version="*", optional = true}
 sax = {version="*", optional = true}
@@ -105,8 +105,12 @@ pyswarms = {version="*", optional = true}
 sphinxemoji = {version="*", optional = true}
 
 [tool.poetry.extras]
-dev = ["pre-commit", "black", "ruff", "tox", "pytest", "pytest-timeout", "memory_profiler", "dill", "ipython", "gdspy", "gdstk", "trimesh", "jax", "jaxlib", "networkx", "rtree", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "pydata-sphinx-theme", "sphinx-tabs", "vtk", "pyswarms", "sphinxemoji"]
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "m2r2", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji"]
+dev = ['black', 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
+  'jupyter', 'jupyterblack', 'm2r2', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
+  'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
+  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
+    'vtk']
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "m2r2"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]

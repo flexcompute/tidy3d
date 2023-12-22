@@ -1,12 +1,3 @@
-import os.path
-import shutil
-
-from click.testing import CliRunner
-
-from tidy3d.web.cli import tidy3d_cli
-from tidy3d.web.cli.constants import CONFIG_FILE
-
-
 def test_tidy3d_cli():
     pass
     # if os.path.exists(CONFIG_FILE):

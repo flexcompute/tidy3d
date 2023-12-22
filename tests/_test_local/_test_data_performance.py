@@ -19,7 +19,7 @@ from tidy3d_backend.utils import Profile
 PATH = "tests/tmp/memory.hdf5"
 
 """ Testing the memory usage of writing SimulationData to and from .hdf5 file.
-    
+
     pip install memory_profiler
     python -m memory_profiler tests/test_data_memory.py
 

@@ -2386,7 +2386,7 @@ class PoleResidue(DispersiveMedium):
     def _imag_ep_extrema_with_samples(self) -> ArrayFloat1D:
         """Provide a list of frequencies (in unit of rad/s) to probe the possible lower and
         upper bound of Im[eps] within the ``frequency_range``. If ``frequency_range`` is None,
-        it checkes the entire frequency range. The returned frequencies include not only extrema,
+        it checks the entire frequency range. The returned frequencies include not only extrema,
         but also a list of sampled frequencies.
         """
 

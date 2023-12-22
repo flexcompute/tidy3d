@@ -184,7 +184,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         assert np.all(out_of_plane.data == 123)
         assert out_of_plane.name == ds_name
 
-        # ouside of grid
+        # outside of grid
         invariant_no_intersection = tri_grid.interp(
             x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
         )
@@ -237,7 +237,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
 
-    # writting/reading .vtu
+    # writing/reading .vtu
     if vtk["mod"] is None:
         with pytest.raises(Tidy3dImportError):
             tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
@@ -428,7 +428,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         with pytest.raises(DataError):
             _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
 
-    # writting/reading .vtu
+    # writing/reading .vtu
     if vtk["mod"] is None:
         with pytest.raises(Tidy3dImportError):
             tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")

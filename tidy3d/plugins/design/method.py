@@ -40,7 +40,7 @@ class Method(Tidy3dBaseModel, ABC):
         except TypeError:
             raise ValueError(
                 "Function arguments must be hashable. "
-                "Parameter sweep tool wont work with sets of lists, dicts or numpy arrays. "
+                "Parameter sweep tool won't work with sets of lists, dicts or numpy arrays. "
                 "Convert these to 'tuple' for a workaround."
             )
 
@@ -112,7 +112,7 @@ class MethodIndependent(Method, ABC):
                 if sim_index is not None:
                     return f"{kwarg_str}_{sim_index}"
                 return kwarg_str
-            # just to be safe, handle the case if this doesnt work
+            # just to be safe, handle the case if this does not work
             except ValueError:
                 return f"{pt_index}_{sim_index}"
 

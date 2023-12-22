@@ -111,7 +111,7 @@ def test_webapi_9_load_simulation():
 
 
 def test_webapi_8_get_tasks():
-    """test that we can get tasks orderd chronologically"""
+    """test that we can get tasks ordered chronologically"""
     tasks = web.get_tasks(num_tasks=5)
     for i in range(4):
         assert tasks[i]["submit_time"] > tasks[i + 1]["submit_time"]

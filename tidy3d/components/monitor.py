@@ -130,7 +130,7 @@ class TimeMonitor(Monitor, ABC):
         None,
         title="Time Interval",
         description="Sampling rate of the monitor: number of time steps between each measurement. "
-        "Set ``inverval`` to 1 for the highest possible resolution in time. "
+        "Set ``interval`` to 1 for the highest possible resolution in time. "
         "Higher integer values downsample the data by measuring every ``interval`` time steps. "
         "This can be useful for reducing data storage as needed by the application.",
     )
@@ -570,7 +570,7 @@ class FluxTimeMonitor(AbstractFluxMonitor, TimeMonitor):
         If the monitor geometry is a 2D box, the total flux through this plane is returned, with a
         positive sign corresponding to power flow in the positive direction along the axis normal to
         the plane. If the geometry is a 3D box, the total power coming out of the box is returned by
-        integrating the flux over all box surfaces (excpet the ones defined in ``exclude_surfaces``).
+        integrating the flux over all box surfaces (except the ones defined in ``exclude_surfaces``).
 
     Example
     -------
@@ -1087,7 +1087,7 @@ class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
 
         **Usage Caveats**
 
-        .. TODO I belive a little illustration here would be handy.
+        .. TODO I believe a little illustration here would be handy.
 
         Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
         fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.
@@ -1198,7 +1198,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
 
         **Usage Caveats**
 
-        .. TODO I belive a little illustration here would be handy.
+        .. TODO I believe a little illustration here would be handy.
 
         Since field projections rely on the surface equivalence principle, we have assumed that the tangential near
         fields recorded on the near field monitor serve as equivalent sources which generate the correct far fields.

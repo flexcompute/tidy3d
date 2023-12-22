@@ -394,7 +394,7 @@ class GradedMesher(Mesher):
 
     @staticmethod
     def rotate_structure_bounds(structures: List[StructureType], axis: Axis) -> List[ArrayFloat1D]:
-        """Get sturcture bounding boxes with a given ``axis`` rotated to z.
+        """Get structure bounding boxes with a given ``axis`` rotated to z.
 
         Parameters
         ----------
@@ -497,7 +497,7 @@ class GradedMesher(Mesher):
         # Re-compute minimum step in case some high-index structures were completely covered
         min_step = np.amin(max_steps)
 
-        # Filter interval coordintaes and max_steps
+        # Filter interval coordinates and max_steps
         coords_filter = [interval_coords[0]]
         steps_filter = []
         for coord_ind, coord in enumerate(interval_coords[1:]):
@@ -757,7 +757,7 @@ class GradedMesher(Mesher):
             len_remaining = len_interval - len_scale
 
             # 1) interval length too small, cannot increase to large_dl, or barely can,
-            #    but the remaing part is less than large_dl
+            #    but the remaining part is less than large_dl
             if len_remaining < large_dl:
                 dl_list = self.grid_grow_in_interval(small_dl, max_scale, len_interval)
                 return dl_list if left_dl <= right_dl else np.flip(dl_list)

@@ -533,7 +533,7 @@ class Simulation(AbstractSimulation):
 
     .. image:: ../../_static/img/subpixel_permittivity_1d.png
 
-    However, in this 1D case, this averaging is accurate because the dominant electric field is paralell to the
+    However, in this 1D case, this averaging is accurate because the dominant electric field is parallel to the
     dielectric grid points.
 
     You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
@@ -624,7 +624,7 @@ class Simulation(AbstractSimulation):
 
     In this case, the number of spatial grid points scale by :math:`\\sim \\frac{1}{\\Delta x^3}` where :math:`\\Delta x`
     is the spatial discretization in the :math:`x` dimension. If the total simulation time is kept the same whilst
-    mantaining the CFL condition, then the number of time steps required scale by :math:`\\sim \\frac{1}{\\Delta x}`.
+    maintaining the CFL condition, then the number of time steps required scale by :math:`\\sim \\frac{1}{\\Delta x}`.
     Hence, the spatial grid discretization influences the total time-steps required. The total simulation scaling per
     spatial grid size in this case is by :math:`\\sim \\frac{1}{\\Delta x^4}.`
 
@@ -2682,7 +2682,7 @@ class Simulation(AbstractSimulation):
         Returns
         -------
         Tuple[float, float]
-            Minumum and maximum frequencies of the power spectrum of the sources.
+            Minimum and maximum frequencies of the power spectrum of the sources.
         """
         source_ranges = [source.source_time.frequency_range() for source in self.sources]
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
@@ -3008,7 +3008,7 @@ class Simulation(AbstractSimulation):
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
             Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
-            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the corresponding field
             locations on the yee lattice. If field values are selected, the corresponding diagonal
             (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
             component from the epsilon tensor is returned. Otherwise, the average of the main
@@ -3022,7 +3022,7 @@ class Simulation(AbstractSimulation):
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
-            refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
 
         See Also
         --------
@@ -3049,7 +3049,7 @@ class Simulation(AbstractSimulation):
         coord_key : str = 'centers'
             Specifies at what part of the grid to return the permittivity at.
             Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
-            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the correponding field
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. 'Ex') correspond to the corresponding field
             locations on the yee lattice. If field values are selected, the corresponding diagonal
             (eg. `eps_xx` in case of `Ex`) or off-diagonal (eg. `eps_xy` in case of `Exy`) epsilon
             component from the epsilon tensor is returned. Otherwise, the average of the main
@@ -3062,7 +3062,7 @@ class Simulation(AbstractSimulation):
         xarray.DataArray
             Datastructure containing the relative permittivity values and location coordinates.
             For details on xarray DataArray objects,
-            refer to `xarray's Documentaton <https://tinyurl.com/2zrzsp7b>`_.
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
         """
 
         grid_cells = np.prod(grid.num_cells)
@@ -3136,7 +3136,7 @@ class Simulation(AbstractSimulation):
 
         # combine all data into dictionary
         if coord_key[0] == "E":
-            # off-diagonal componets are sampled at respective locations (eg. `eps_xy` at `Ex`)
+            # off-diagonal components are sampled at respective locations (eg. `eps_xy` at `Ex`)
             coords = grid[coord_key[0:2]]
         else:
             coords = grid[coord_key]

@@ -45,7 +45,7 @@ packages = [
     { include = "tidy3d/plugins" },
 ]
 ```
-(note, not 100% sure I needed to include `web` and `plugins`, but I think they are needed because tey aren't imported in the top level `tidy3d/__init__.py` file.)
+(note, not 100% sure I needed to include `web` and `plugins`, but I think they are needed because they aren't imported in the top level `tidy3d/__init__.py` file.)
 
 Once I did this, the steps from the previous section worked properly.
 

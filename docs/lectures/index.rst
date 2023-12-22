@@ -1,5 +1,5 @@
-Lectures
-#########
+Lectures |:book:|
+##################
 
 Welcome to our lecture series!
 

@@ -1,4 +1,4 @@
-FAQ
+FAQ |:mag_right:|
 ==========================
 
 What is Tidy3D?

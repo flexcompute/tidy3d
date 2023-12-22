@@ -58,6 +58,9 @@ There are a range of handy development functions that you might want to use to s
     * - Dual snapshot between the ``tidy3d`` and ``notebooks`` source and submodule repository.
       - Make sure you are on the correct git branches you wish to commit to on both repositories, and all `non-git-ignored` files will be added to the commit.
       - ``tidy3d develop commit <your message>``
+    * - Interactively convert all markdown files to rst (replacement for m2r2)
+      -
+      - ``poetry run tidy3d develop convert-all-markdown-to-rst``
     * - Running ``pytest`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run pytest``
@@ -70,3 +73,4 @@ There are a range of handy development functions that you might want to use to s
     * - Update lockfile after updating a dependency in ``pyproject.toml``
       - Remember to install after this command.
       - ``poetry lock``
+

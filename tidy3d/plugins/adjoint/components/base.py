@@ -28,7 +28,7 @@ class JaxObject(Tidy3dBaseModel):
                 adjoint_fields.append(field_name)
         return adjoint_fields
 
-    """Methods needed for jax to register arbitary classes."""
+    """Methods needed for jax to register arbitrary classes."""
 
     def tree_flatten(self) -> Tuple[list, dict]:
         """How to flatten a :class:`.JaxObject` instance into a pytree."""

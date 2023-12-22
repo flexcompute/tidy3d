@@ -405,7 +405,7 @@ class DispersionFitter(Tidy3dBaseModel):
             Returns
             -------
             float
-                RMS error correponding to current coeffs.
+                RMS error corresponding to current coeffs.
             """
 
             medium = self._make_medium(coeffs)

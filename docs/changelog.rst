@@ -1,4 +1,5 @@
-Changelog
-=========
+********************
+Changelog |:rewind:|
+********************
 
-.. mdinclude:: ../../CHANGELOG.md
+.. mdinclude:: ../CHANGELOG.md

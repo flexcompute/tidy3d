@@ -126,7 +126,7 @@ class Updater(pd.BaseModel):
         return Version.from_string(version_string)
 
     def get_update_function(self):
-        """Get the highest update verion <= self.version."""
+        """Get the highest update version <= self.version."""
         leq_versions = [v for v in UPDATE_MAP if v <= self.version]
         if not leq_versions:
             raise SetupError(f"An update version <= {self.version} not found in update map.")

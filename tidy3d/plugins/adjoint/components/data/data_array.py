@@ -25,7 +25,7 @@ JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 @register_pytree_node_class
 class JaxDataArray(Tidy3dBaseModel):
-    """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
+    """A :class:`.DataArray`-like class that only wraps xarray for jax compatibility."""
 
     values: Any = pd.Field(
         ...,
@@ -254,7 +254,7 @@ class JaxDataArray(Tidy3dBaseModel):
         return self.coords.get(coord_name)
 
     def isel_single(self, coord_name: str, coord_index: int) -> JaxDataArray:
-        """Select a value cooresponding to a single coordinate from the :class:`.JaxDataArray`."""
+        """Select a value corresponding to a single coordinate from the :class:`.JaxDataArray`."""
 
         # select out the proper values and coordinates
         coord_axis = list(self.coords.keys()).index(coord_name)
