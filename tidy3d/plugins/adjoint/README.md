@@ -45,7 +45,7 @@ Rather than write our own AD package to handle everything outside of the FDTD ca
 
 ### Outline of Guide
 
-In this guide, we will first discuss how `jax` works and what is needed to get `Tidy3D` to integrate with its AD features. Then, we will discuss how the adjoint method is handled within the context of this AD framework. Finaly, we will give a practical guide to using the plugin successfully.
+In this guide, we will first discuss how `jax` works and what is needed to get `Tidy3D` to integrate with its AD features. Then, we will discuss how the adjoint method is handled within the context of this AD framework. Finally,, we will give a practical guide to using the plugin successfully.
 
 ## Automatic Differentiation w/ `Jax`
 
@@ -65,7 +65,7 @@ Intuitively, we may think of "v" as some data that has a similar structure as ou
 
 ### Custom VJPs
 
-`jax` "knows" the VJPs for most mathematical operations found natively in python, such as `+`, `*`, `abs()`. Additionally, it provides a wrapper "`jax.numpy`" for most of the `numpy` operations eg. `np.sum()`, with VJPs defined. This means in most cases, once can write a funciton using python builtins + `jax.numpy` and have all the VJPs for each step defined without any issue.
+`jax` "knows" the VJPs for most mathematical operations found natively in python, such as `+`, `*`, `abs()`. Additionally, it provides a wrapper "`jax.numpy`" for most of the `numpy` operations eg. `np.sum()`, with VJPs defined. This means in most cases, once can write a function using python builtins + `jax.numpy` and have all the VJPs for each step defined without any issue.
 
 However, for some functions, `jax` simply doesn't know the VJP, so we must define it ourselves and register it with jax. There is a thorough tutorial [here](https://jax.readthedocs.io/en/latest/notebooks/Custom_derivative_rules_for_Python_code.html) explaining this process and the many ways to perform it, but below is a snippet paraphrased from this tutorial showing the basic idea for defining the vjp for a custom function `f`:
 
@@ -98,9 +98,9 @@ The adjoint plugin actually only provides a single `VJP`, which is defined for t
 - adjoint simulation: simulation encoding derivative information passed from downstream in the AD process.
 and postprocesses the results into derivatve information for `jax`.
 
-The backward vjp function defined for `web.run()` accepts and returns quite abstract objects. First, the "v" provided is a `SimulationData` object storing the derivatives of the downstream operations w.r.t. the data stored in the various `MonitorData` objects. So for example, if the eventual output of the function being differentiated depends on a single amplitude in the `ModeData` of the foward pass, the adjoint `SimulationData` will contain a `ModeData` object with all 0 elements except for the coordiantes associated with that amplitude. The value of that amplitude data will store directly the derivative of the function output with respect to that amplitude. 
+The backward vjp function defined for `web.run()` accepts and returns quite abstract objects. First, the "v" provided is a `SimulationData` object storing the derivatives of the downstream operations w.r.t. the data stored in the various `MonitorData` objects. So for example, if the eventual output of the function being differentiated depends on a single amplitude in the `ModeData` of the forward pass, the adjoint `SimulationData` will contain a `ModeData` object with all 0 elements except for the coordinates associated with that amplitude. The value of that amplitude data will store directly the derivative of the function output with respect to that amplitude. 
 
-As the return value of the `web.run()` must look like the derivative of its input arguments, ths function returns a tuple of length 1 storing a `Simulation` where the contents of each field are simply the derivatives that field w.r.t. the outputs of the function being differentiated. 
+As the return value of the `web.run()` must look like the derivative of its input arguments, this function returns a tuple of length 1 storing a `Simulation` where the contents of each field are simply the derivatives that field w.r.t. the outputs of the function being differentiated. 
 
 This concept is hard to understand but is the crucial idea behind the workings of the plugin so it's again worth spending some time to digest. To reiterate, in its essence, the goal of the adjoint `web.run()` is to propagate the derivative of the function w.r.t. the output data (stored as a `SimulationData`) into the derivative of the function w.r.t. the `Simulation` fields (stored as a `Simulation`).
 
@@ -125,18 +125,18 @@ With that introduction to the basic flow for defining the VJP of `web.run()`, no
 ### Registering `Tidy3D` components with `jax`
 First, `jax` AD works only with only very basic datastructures, called "pytrees", and therefore does not know how to handle functions accepting and returning `pydantic.BaseModel` subclasses like our regular `Tidy3D` components. Pytrees are essentially nested datastructures in the form of regular python objects, such as tuples, dictionaries, and raw numeric data. For a much more detailed discussion on pytrees, see the [jax documentation page on them](https://jax.readthedocs.io/en/latest/pytrees.html).
 
-To get `Tidy3D` components to be recognized by jax, we must define rules for how each `Tidy3D `component is converted into a pytree (plus some arbitrary auxilary data) and how a pytree (plus some auxilary data) is converted back into a `Tidy3D` component. As discussed in the link on pytrees just above, we can perform this registration by:
+To get `Tidy3D` components to be recognized by jax, we must define rules for how each `Tidy3D `component is converted into a pytree (plus some arbitrary auxiliary data) and how a pytree (plus some auxiliary data) is converted back into a `Tidy3D` component. As discussed in the link on pytrees just above, we can perform this registration by:
 - decorating our `Tidy3D` component with `@jax.tree_util.register_pytree_node`.
-- defining a `.tree_flatten(self)` method to return the pytree plus any auxilary information we might need to unflatten.
-- defining a `.tree_unflatten(cls, aux_data, children` `@classmethod` to return an isntance of self given that auxilary information and the pytree (`children`).
+- defining a `.tree_flatten(self)` method to return the pytree plus any auxiliary information we might need to unflatten.
+- defining a `.tree_unflatten(cls, aux_data, children` `@classmethod` to return an instance of self given that auxiliary information and the pytree (`children`).
 
 ### `Jax` Subclasses of `Tidy3D` objects
 
-To do this registration in a systematic way, the adjoint plugin provides several subclasses of `Tidy3D` components that also inherit from a `JaxObject` base class, providing these methods. If a `Tidy3D` component is named `X`, the `jax`-compatible sublcass inherits from `X` and `JaxObject` and is named `JaxX` by convention. Note also that `JaxX` classes must also be decorated with `@jax.tree_util.register_pytree_node` to work properly.
+To do this registration in a systematic way, the adjoint plugin provides several subclasses of `Tidy3D` components that also inherit from a `JaxObject` base class, providing these methods. If a `Tidy3D` component is named `X`, the `jax`-compatible subclass inherits from `X` and `JaxObject` and is named `JaxX` by convention. Note also that `JaxX` classes must also be decorated with `@jax.tree_util.register_pytree_node` to work properly.
 
 The derivative information passed by `jax` is often in the form of very obscure datastructures. Therefore, if one were to try to directly put this information in a regular `Tidy3D` field, such as `Medium.permittivity`, `pydantic` would complain.  Therefore, for any `JaxX` objects that may contain `jax` tracers, one needs to overwrite the corresponding `pydantic.Field` and make it allow type of `Any` to avoid validation errors. Finally, we must mark this field as potentially containing a `jax` tracer by setting the `jax_field=True` in `pd.Field()`.
 
-The `JaxObject` provides a few convenience methods make use of the presence of this `jax_field` to determine how to correctly `tree_flatten` and `tree_unflatten` any sublasses. Luckily, we do not need to define these operations on subclasses except for `JaxDataArray`, which will be discussed later.
+The `JaxObject` provides a few convenience methods make use of the presence of this `jax_field` to determine how to correctly `tree_flatten` and `tree_unflatten` any subclasses. Luckily, we do not need to define these operations on subclasses except for `JaxDataArray`, which will be discussed later.
 
 ### Conversion Between `JaxTidy3D` and `Tidy3D` Components
 
@@ -144,11 +144,11 @@ Finally, there are some methods in the `JaxX` subclasses for converting `JaxX` t
 
 ### The One Exception: `DataArrays`
 
-Unfortunately, all `Tidy3D` components are not handled so simply. It turns out that `jax` datastructures do not work when added to `xarray.DataArray` containers. Therefore, we needed to find a replacement to the `DataArray` class in regular Tidy3D to use in our `JaxMonitorData` fields. To solve this problem, the adjoint plugin introduces a `JaxDataArray`, which stores `.vaues` as a `jax` `Array` (basically a `jax` version of `numpy` arrays) and `.coords` as a dictionary of coordinates with a dimensions string mapping to a list of values. 
+Unfortunately, all `Tidy3D` components are not handled so simply. It turns out that `jax` datastructures do not work when added to `xarray.DataArray` containers. Therefore, we needed to find a replacement to the `DataArray` class in regular Tidy3D to use in our `JaxMonitorData` fields. To solve this problem, the adjoint plugin introduces a `JaxDataArray`, which stores `.values` as a `jax` `Array` (basically a `jax` version of `numpy` arrays) and `.coords` as a dictionary of coordinates with a dimensions string mapping to a list of values. 
 
 The `JaxDataArray` may freely store `jax` values and tracers and implements a few basic emulations of `xarray.DataArray` objects, such as `.sel` and `.isel`. Note that at this time `.interp` is not supported, but I think we could consider implementing it later. A user could, in principle, wrap `.sel` to do the interpolation themselves, but it was not considered at this stage because some trials to implement it myself ended badly.
 
-The `JaxDataArray` inherits directly from `Tidy3DBaseModel` alone and therefore implements its own pytree flattening and unflattening operations. Luckily, these operations are quite trivial. There are also a set of custom valdations in the `JaxDataArray` to ensure it is set up and used properly as it does not natively provide nearly as strict argument checking as its `xarray.DataArray` counterpats.
+The `JaxDataArray` inherits directly from `Tidy3DBaseModel` alone and therefore implements its own pytree flattening and unflattening operations. Luckily, these operations are quite trivial. There are also a set of custom validations in the `JaxDataArray` to ensure it is set up and used properly as it does not natively provide nearly as strict argument checking as its `xarray.DataArray` counterparts.
 
 ## Adjoint Method
 
@@ -158,13 +158,13 @@ With an understanding on how `jax` is integrated into the plugin through subclas
 
 As discussed, computing the derivative information through the adjoint method requres performing integrals over the forward and adjoint field distributions, as well as the permittivty distributions in the simulations. As such, when running the forward and backward passes of the `web.run()` function, we must add monitors to capture this information and pass it to the VJP makers for each of the jax-compatible fields in the `JaxSimulation`.
 
-For this purpose, the `JaxSimulation` class provides an `add_gradient_monitors()` method, that loops throught any jax-compatible fields and calls their respective methods for generating whatever `Monitor`s are needed for the adjoint method to work. For example, the `JaxStructure` has a `.make_grad_monitors()` method, that returns a `FieldMonitor` and `PermittivityMonitor` spanning its volume (+ some dilation).
+For this purpose, the `JaxSimulation` class provides an `add_gradient_monitors()` method, that loops throughout any jax-compatible fields and calls their respective methods for generating whatever `Monitor`s are needed for the adjoint method to work. For example, the `JaxStructure` has a `.make_grad_monitors()` method, that returns a `FieldMonitor` and `PermittivityMonitor` spanning its volume (+ some dilation).
 
 These gradient monitors are generated and added to both forward and adjoint simulations before they are run and the data contained within are processed at the final stage when computing VJP rules for the `pydantic.Fields()` of the `JaxSimulations`.
 
 ### Adjoint Source Creation
 
-As mentioned, the derivative `SimulationData` recieved by the backwards pass of `web.run()` contains `JaxMonitorData` with data values corresponding to downstream derivative information. Following the math of the adjoint method, this derivative data must be converted to current sources to use in the adjoint `Simulation`. As such, each `JaxMonitorData` subclass has a `.to_adjoint_sources()` method, which returns a list of adjoint `Source` objects given whatever data is stored within. 
+As mentioned, the derivative `SimulationData` received by the backwards pass of `web.run()` contains `JaxMonitorData` with data values corresponding to downstream derivative information. Following the math of the adjoint method, this derivative data must be converted to current sources to use in the adjoint `Simulation`. As such, each `JaxMonitorData` subclass has a `.to_adjoint_sources()` method, which returns a list of adjoint `Source` objects given whatever data is stored within. 
 
 This method must be implemented separately for each subclass, eg. `JaxModeData` -> `[ModeSource]` and `JaxDiffractionData` -> `[PlaneWave]`. The basic idea for all of the methods, however, is to loop through each non-zero data contained within and use the coordinate and value to determine the proper adjoint source. Note: there is a factor of `1j` built into the amplitude to account for the phase shift between a specified `GaussianPulse` and the corresponding  `J(r,t)` that is injected into the simulation.
 
@@ -179,7 +179,7 @@ In the previous section, we discussed how adjoint sources are created from a sin
 
 ### PostProcessing Forward and Adjoint Fields for VJP Creation
 
-With the foward and adjoint simulations run and all of the field and permittivity data stored for each `JaxStructure` in the simulation, the final stage of the pipeline involves converting these gradient monitor data into VJP values to be stored in the `JaxSimulation` returned by the backwards pass of `web.run()`. 
+With the forward and adjoint simulations run and all of the field and permittivity data stored for each `JaxStructure` in the simulation, the final stage of the pipeline involves converting these gradient monitor data into VJP values to be stored in the `JaxSimulation` returned by the backwards pass of `web.run()`. 
 
 These VJPs are determined by performing integrals over the monitor data using the `Structure` geometry. For example, the derivative rule for the `Structure.medium.permittivity` involves a volume integral of the dot product of the E fields over the `Structure.geometry` and the derivatve rule for the `Structure.geometry` involves surface integrals over the `Geometry` surfaces. These integrals are defined respectively in the `JaxMedium.store_vjp()` and `JaxBox.store_vjp()` objects and are combined together in the `JaxStructure.store_vjp()`. The return value of these methods is a copy of the original instance where the values stored in the jax-compatible fields are the derivatives of the downstream function outputs w.r.t. the field. 
 
@@ -229,7 +229,7 @@ While they are hidden from normal use, the `JaxSimulation` contains fields stori
 #### Other Differences
 
 Finally, the `JaxSimulation` has a few other differences with the regular `Simulation` class.
-- It validates that `subpixel=True`, because otherwise adjoint gives innacurate and ill-defined results.
+- It validates that `subpixel=True`, because otherwise adjoint gives inaccurate and ill-defined results.
 - It has an `fwidth_adjoint` field, which, if specified, overwrites the `fwidth` of the adjoint source with a custom value. If not specified, the adjoint sources' `fwidth` is determined from the average of the `fwidths` contained in `.sources`.
 - To convert a `JaxSimulation` to a regular `Simulation`, one may call  `.to_simulation()` method, which returns a tuple of the `Simulation` and a datastructure containing extra information needed to reconstruct the `JaxSimulation` with `JaxSimulation.from_simulation()`. So a conversion would look like `sim=jax_sim.to_simulation()[0]`. If desired, we could easily add a `.simulation` `@property` to just return the `Simulation` part for convenience.
 - The `JaxSimulation` objects have their `.plot` and `.plot_eps` methods overwritten for convenience, which calls `.to_simulation()` and plots the result.
@@ -242,7 +242,7 @@ If a user forgets to use this custom `run()` function, the simulation will error
 
 ### Working with JaxSimulationData
 
-The `jax`-compatible `JaxSimulationData` sublcasses is more similar to the regular `SimulationData` with just one key difference:
+The `jax`-compatible `JaxSimulationData` subclasses is more similar to the regular `SimulationData` with just one key difference:
 `JaxSimulationData` has `.data` and `.output_data` tuples for storing the `MonitorData` and `JaxMonitorData` corresponding to the respective `.monitors` and `.output_monitors` in the original `JaxSimulation`. Similarly, it has `@properties` of `.monitor_data` and `output_monitor_data` for generating dictionaries mapping the monitor names to these quantities. 
 
 It is worth noting that the `__getitem__` method is overwritten to select by monitor name from both of these tuples, so the user doesn't need to know the previous information to work with it using eg. `sim_data['mode']` if desired.

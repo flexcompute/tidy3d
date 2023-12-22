@@ -335,7 +335,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         """Build override structures to define the simulation grid."""
 
         # Grid resolution factor applied to the materials (increase for waveguide corners
-        # and decrase for evanescent tail regions).
+        # and decrease for evanescent tail regions).
         scale_factor = 1.5
 
         freqs = C_0 / self.wavelength
@@ -920,7 +920,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlayed.
+        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
 
         Parameters
         ----------

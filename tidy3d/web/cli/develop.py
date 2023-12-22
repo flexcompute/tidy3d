@@ -1,30 +1,117 @@
 """Console script for tidy3d."""
 import click
+import json
 import pathlib
 import platform
 import subprocess
 import re
+import os
 import tidy3d
 
 
 def get_install_directory():
+    """
+    Retrieve the installation directory of the tidy3d module.
+
+    Returns
+    -------
+    pathlib.Path
+        The absolute path of the parent directory of the tidy3d module.
+    """
     return pathlib.Path(tidy3d.__file__).parent.parent.absolute()
 
 
 def echo_and_run_subprocess(command: list, **kwargs):
+    """
+    Print and execute a subprocess command.
+
+    Parameters
+    ----------
+    command : list
+        A list of command line arguments to be executed.
+    **kwargs : dict
+        Additional keyword arguments to pass to subprocess.run.
+
+    Returns
+    -------
+    subprocess.CompletedProcess
+        The result of the subprocess execution.
+    """
     concatenated_command = " ".join(command)
     print("Running: " + concatenated_command)
     return subprocess.run(command, cwd=get_install_directory(), **kwargs)
 
 
 def echo_and_check_subprocess(command: list, **kwargs):
+    """
+    Print and execute a subprocess command, ensuring it completes successfully.
+
+    Parameters
+    ----------
+    command : list
+        A list of command line arguments to be executed.
+    **kwargs : dict
+        Additional keyword arguments to pass to subprocess.check_call.
+
+    Returns
+    -------
+    int
+        The return code of the subprocess execution.
+    """
     concatenated_command = " ".join(command)
     print("Running: " + concatenated_command)
     return subprocess.check_call(command, cwd=get_install_directory(), **kwargs)
 
 
+def replace_in_files(directory, json_file_path, selected_version):
+    """
+    Recursively finds and replaces strings in files within a directory based on a given dictionary
+    loaded from a JSON file. The JSON file also includes a version selector.
+
+    Args:
+    - directory (str): The directory path to search for files.
+    - json_file_path (str): The path to the JSON file containing replacement instructions.
+
+    The function will print the file line and prompt for confirmation before replacing each string.
+    """
+
+    # Load data from the JSON file
+    with open(json_file_path, encoding="utf-8") as json_file:
+        data = json.load(json_file)
+        replace_dict = data.get("replacements", {}).get(selected_version, {})
+
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_path = os.path.join(root, file)
+
+            # Read file content and process each line
+            with open(file_path, encoding="utf-8") as f:
+                lines = f.readlines()
+
+            for i, line in enumerate(lines):
+                for find_str, replace_str in replace_dict.items():
+                    if find_str in line:
+                        print(f"Line {i + 1} in file '{file}': {line.strip()}")
+                        confirmation = input(
+                            f"Replace '{find_str}' with '{replace_str}' in this line? (y/n): "
+                        )
+                        if confirmation.lower() == "y":
+                            lines[i] = line.replace(find_str, replace_str)
+
+            # Write the modified content back to the file
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.writelines(lines)
+
+
 def verify_pandoc_is_installed_and_version_less_than_3():
-    # TODO ADD DOCSTRINGS AND DOCUMENTATION
+    """
+    Check if Pandoc is installed and its version is less than 3.
+
+    Returns
+    -------
+    bool
+        True if Pandoc is installed and its version is less than 3, False otherwise.
+    """
     try:
         # Running 'pandoc --version' command
         result = echo_and_run_subprocess(
@@ -54,6 +141,14 @@ def verify_pandoc_is_installed_and_version_less_than_3():
 
 
 def verify_pipx_is_installed():
+    """
+    Verify if pipx is installed on the system.
+
+    Returns
+    -------
+    bool
+        True if pipx is installed, False otherwise.
+    """
     try:
         # Running 'pipx --version' command
         result = echo_and_run_subprocess(
@@ -71,6 +166,19 @@ def verify_pipx_is_installed():
 
 
 def verify_poetry_is_installed():
+    """
+    Check if Poetry is installed on the system.
+
+    Returns
+    -------
+    bool
+        True if Poetry is installed, False otherwise.
+
+    Raises
+    ------
+    OSError
+        If Poetry is not installed or not found in the system PATH.
+    """
     try:
         # Running 'poetry --version' command
         result = echo_and_run_subprocess(
@@ -86,7 +194,14 @@ def verify_poetry_is_installed():
 
 
 def verify_sphinx_is_installed():
-    # TODO: Not working don't know why?
+    """
+    Verify if Sphinx is installed in the poetry environment.
+
+    Raises
+    ------
+    OSError
+        If Sphinx is not installed or not found in the poetry environment.
+    """
     try:
         # Running 'poetry --version' command
         activate_correct_poetry_python()
@@ -101,6 +216,9 @@ def verify_sphinx_is_installed():
 
 
 def activate_correct_poetry_python():
+    """
+    Activate the correct Python environment for Poetry based on the operating system.
+    """
     if platform.system() == "Windows":
         echo_and_run_subprocess(["poetry", "env", "use", "python"])
     elif platform.system() == "Darwin":
@@ -116,21 +234,40 @@ def activate_correct_poetry_python():
 
 @click.group(name="develop")
 def develop():
-    """Development related commands."""
+    """
+    Development related command group in the CLI.
+
+    This command group includes several subcommands for various development tasks such as
+    verifying and setting up the development environment, building documentation, testing, and more.
+    """
     pass
 
 
 @develop.command(name="get-install-directory", help="Gets the TIDY3D base directory.")
 def get_directory():
-    """Gets the tidy3d installation directory."""
+    """
+    Get the tidy3d installation directory.
+
+    This command prints the absolute path of the installation directory of the tidy3d module.
+    """
     print(get_install_directory())
     return 0
 
 
 @develop.command(name="verify-dev-environment", help="Verifies the development environment.")
 def verify_development_environment(args=None):
-    """Verifies that the environment in which this is run conforms to the provided poetry.lock with all the
-    development options included."""
+    """
+    Verify that the current development environment conforms to the specified requirements.
+
+    This command checks various development dependencies like pipx, poetry, and pandoc, and ensures
+    they are properly installed and configured. It also performs a dry run of poetry installation to check
+    package configurations.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the verification process.
+    """
     # Does all the docs verifications
     # Checks all the other development dependencies are properly installed
     # Verify pipx is installed
@@ -149,6 +286,16 @@ def verify_development_environment(args=None):
 
 
 def configure_notebook_submodule(args=None):
+    """
+    Initialize and update the notebook submodule.
+
+    This command configures the notebook submodule by initializing it and updating it from the remote repository.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the configuration process.
+    """
     echo_and_run_subprocess(["git", "submodule", "init"])
     echo_and_run_subprocess(["git", "submodule", "update", "--remote"])
     print("Notebook submodule updated from remote.")
@@ -160,25 +307,16 @@ def configure_notebook_submodule(args=None):
     help="Installs and configures the full required development environment.",
 )
 def install_development_environment(args=None):
-    """Install development environment.
+    """Install and configure the full required development environment.
 
-    Notes
-    -----
+    This command automates the installation of development tools like pipx, poetry, and pandoc, and sets up
+    the development environment according to 'The Detailed Lane' instructions. It is dependent on the
+    operating system and may require user interaction for certain steps.
 
-        Note that this is just a automatic script implementation of the `The Detailed Lane
-        <../../development/index.html#the-detailed-lane>`_ instructions. It is intended to help you and raise warnings
-        with suggestions of how to fix an environment setup issue. You do not have to use this helper function and can
-        just follow the instructions in `The Detailed Lane
-        <../../development/index.html#the-detailed-lane>`_.
-
-        The way this command works is dependent on the operating system you are running. There are some prerequisites for
-        each platform, but the command line tool will help you identify and install the tools it requires. You should rerun
-        the command after you have installed any prerequisite as it will just progress with the rest of the tools
-        installation. If you already have the tool installed, it will verify that it conforms to the supported versions.
-
-        This command will first check if you already have installed the development requirements, and if not, it will run the
-        installation scripts for pipx, poetry, and ask you to install the required version of pandoc. It will also install
-        the development requirements and tidy3d package in a specific poetry environment.
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the installation process.
     """
     # Verify and install pipx if required
     try:
@@ -243,13 +381,16 @@ def install_development_environment(args=None):
     name="uninstall-dev-environment", help="Uninstalls the tools installed by this CLI helper."
 )
 def uninstall_development_environment(args=None):
-    """Uninstall development environment.
+    """
+    Uninstall the development environment and the tools installed by this CLI.
 
-    Notes
-    -----
+    This command provides a clean-up mechanism to remove development tools like poetry, pipx, and pandoc
+    that were installed using this CLI. User confirmation is required before uninstallation.
 
-        Provides a clean development environment, and uninstalls the tools installed by this CLI.
-
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the uninstallation process.
     """
     answer = input(
         "This function will uninstall poetry, pipx and request you to uninstall pandoc. Are you sure you want to continue?"
@@ -317,12 +458,17 @@ def uninstall_development_environment(args=None):
 @click.option("--submodule-path", default="./docs/notebooks", help="Path to the submodule.")
 def commit(message, submodule_path):
     """
-    Commit changes in both a Git repository and its submodule.
-    TODO sort out tidy3d installation directory defined path
+    Add and commit changes in both the Git repository and its submodule.
 
-    Args
-        commit_message: The commit message to use for both commits.
-        submodule_path: The relative path to the submodule.
+    This command performs git commit operations on both the main repository and the specified submodule
+    using the provided commit message.
+
+    Parameters
+    ----------
+    message : str
+        The commit message to use for both commits.
+    submodule_path : str
+        The relative path to the submodule.
     """
 
     def commit_repository(repository_path, commit_message):
@@ -349,7 +495,16 @@ def commit(message, submodule_path):
 
 @develop.command(name="build-docs", help="Builds the sphinx documentation.")
 def build_documentation(args=None):
-    """Verifies and builds the documentation."""
+    """
+    Build the Sphinx documentation.
+
+    This command triggers the Sphinx documentation build process in the current poetry environment.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the documentation build process.
+    """
     # Runs the documentation build from the poetry environment
     echo_and_check_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0
@@ -357,7 +512,16 @@ def build_documentation(args=None):
 
 @develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
 def build_documentation_pdf(args=None):
-    """Verifies and builds the documentation."""
+    """
+    Build the Sphinx documentation in PDF format.
+
+    This command initiates the process to build the Sphinx documentation and generates a PDF output.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the PDF documentation build process.
+    """
     # Runs the documentation build from the poetry environment
     echo_and_run_subprocess(
         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
@@ -369,7 +533,16 @@ def build_documentation_pdf(args=None):
     name="build-docs-remote-notebooks", help="Updates notebooks submodule and builds documentation."
 )
 def build_documentation_from_remote_notebooks(args=None):
-    """Updates notebooks submodule and builds documentation. Verifies and builds the documentation."""
+    """
+    Update the notebooks submodule and build documentation.
+
+    This command updates the notebook submodule from the remote repository and then builds the Sphinx documentation.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the process of updating notebooks and building documentation.
+    """
     # Runs the documentation build from the poetry environment
     echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
     print("Notebook submodule updated from remote.")
@@ -379,13 +552,32 @@ def build_documentation_from_remote_notebooks(args=None):
 
 @develop.command(name="test-base", help="Tests the tidy3d base package.")
 def test_base_tidy3d(args=None):
+    """
+    Test the tidy3d base package.
+
+    This command runs tests on the tidy3d base package using pytest within the current poetry environment.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the testing process.
+    """
     echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests"])
     return 0
 
 
 @develop.command(name="test-notebooks", help="Tests the tidy3d notebooks.")
 def test_notebooks_tidy3d(args=None):
-    """Tests the tidy3d notebooks."""
+    """
+    Test the tidy3d notebooks.
+
+    This command runs tests specifically for the tidy3d notebooks using pytest in the poetry environment.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the notebook testing process.
+    """
     echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests/full_test_notebooks.py"])
     return 0
 
@@ -394,9 +586,17 @@ def test_notebooks_tidy3d(args=None):
     name="install-in-poetry", help="Just installs the tidy3d development package in poetry."
 )
 def install_in_poetry(args=None):
-    """Requires pipx and poetry installation to work."""
+    """
+    Install the tidy3d development package in the poetry environment.
+
+    This command ensures that the tidy3d package along with its development dependencies is installed in the current poetry environment.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the installation process.
+    """
     # Runs the documentation build from the poetry environment
-    # TODO update generic path management.
     activate_correct_poetry_python()
     echo_and_run_subprocess(["poetry", "install", "-E", "dev"])
     return 0
@@ -404,7 +604,81 @@ def install_in_poetry(args=None):
 
 @develop.command(name="update-notebooks", help="Updates notebooks submodule from remote")
 def update_notebooks_remote(args=None):
-    """Updates notebooks submodule."""
+    """
+    Update the notebooks submodule from the remote repository.
+
+    This command updates the notebook submodule, ensuring it is synchronized with the latest version from the remote repository.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the update process.
+    """
     # Runs the documentation build from the poetry environment
     echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
     return 0
+
+
+@develop.command(
+    name="replace-in-files",
+    help="Recursively find and replace strings in files based on a JSON configuration.",
+)
+@click.option(
+    "--directory",
+    "-d",
+    type=click.Path(exists=True, file_okay=False, readable=True),
+    default=".",
+    help="Directory to process (default is current directory)",
+)
+@click.option(
+    "--json-dictionary",
+    "-j",
+    type=click.Path(exists=True, file_okay=False, readable=True),
+    default=".",
+    help="JSON that contains the docstring version update files.",
+)
+@click.argument("selected_version")
+def replace_in_files_command(directory, json_file_path, selected_version):
+    if directory is None:
+        directory = get_install_directory()
+
+    replace_in_files(directory, json_file_path, selected_version)
+    return 0
+
+
+@develop.command(
+    name="convert-all-markdown-to-rst",
+    help="Recursively find all markdown files and convert them to rst files that can be included in the sphinx "
+    "documentation",
+)
+@click.option(
+    "--directory",
+    "-d",
+    type=click.Path(exists=True, file_okay=False, readable=True),
+    default=".",
+    help="Directory to process (default is current directory)",
+)
+def convert_markdown_to_rst(directory):
+    """
+    This script converts all Markdown files in a given DIRECTORY to reStructuredText format.
+    """
+    if directory is None:
+        directory = get_install_directory()
+
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".md"):
+                md_file = os.path.join(root, file)
+                rst_file = os.path.splitext(md_file)[0] + ".rst"
+
+                # Confirmation for each file
+                if not click.confirm(f"Convert {md_file} to RST format?", default=True):
+                    click.echo(f"Skipped {md_file}")
+                    continue
+
+                try:
+                    # Convert using Pandoc
+                    echo_and_check_subprocess(["pandoc", "-s", md_file, "-o", rst_file])
+                    click.echo(f"Converted {md_file} to {rst_file}")
+                except subprocess.CalledProcessError as e:
+                    click.echo(f"Error converting {md_file}: {e}", err=True)

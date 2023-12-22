@@ -106,7 +106,7 @@ def test_extended_subspace():
 
 
 def test_sim_nonuniform_small():
-    # tests when the nonuniform grid doesnt cover the simulation size
+    # tests when the nonuniform grid does not cover the simulation size
 
     size_x = 18
     num_layers_pml_x = 2

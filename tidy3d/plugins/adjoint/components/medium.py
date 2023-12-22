@@ -376,7 +376,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
     @pd.validator("eps_dataset", always=True)
     def _is_not_too_large(cls, val):
-        """Ensure number of pixels doesnt surpass a set amount."""
+        """Ensure number of pixels does not surpass a set amount."""
 
         for field_dim in "xyz":
             field_name = f"eps_{field_dim}{field_dim}"
@@ -474,7 +474,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
             eps_field_name = f"eps_{dim}{dim}"
 
-            # grab the original data and its coordinatess
+            # grab the original data and its coordinates
             orig_data_array = self.eps_dataset.field_components[eps_field_name]
             coords = orig_data_array.coords
 
@@ -522,7 +522,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                     d_sizes[dim_index] = np.array([d_len])
                     interp_coords[dim_pt] = coords_interp
 
-                    # only sum this dimesion if there are multiple points
+                    # only sum this dimension if there are multiple points
                     sum_axes.append(dim_pt)
 
                 # otherwise
@@ -533,7 +533,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             # outer product all dimensions to get a volume element mask
             d_vols = np.einsum("i, j, k -> ijk", *d_sizes)
 
-            # grab the correpsonding dotted fields at these interp_coords and sum over len-1 pixels
+            # grab the corresponding dotted fields at these interp_coords and sum over len-1 pixels
             field_name = "E" + dim
             e_dotted = (
                 self.e_mult_volume(

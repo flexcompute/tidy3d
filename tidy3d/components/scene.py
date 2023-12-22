@@ -119,7 +119,7 @@ class Scene(Tidy3dBaseModel):
     @cached_property
     def bounds(self) -> Bound:
         """Automatically defined scene's bounds based on present structures. Infinite dimensions
-        are ignored. If the scene contains no strucutres, the bounds are set to
+        are ignored. If the scene contains no structures, the bounds are set to
         (-1, -1, -1), (1, 1, 1). Similarly, if along a given axis all structures extend infinitely,
         the bounds along that axis are set from -1 to 1.
 

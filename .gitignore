@@ -102,6 +102,7 @@ pip-log.txt
 
 # Sphinx documentation
 _docs
+_autosummary
 
 # Spyder project settings
 .spyderproject

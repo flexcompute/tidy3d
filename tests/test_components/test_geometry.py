@@ -164,7 +164,7 @@ def test_inside_polyslab_sidewall():
     ps.inside(x=0, y=0, z=0)
 
 
-# TODO: Weiliang fix this test? doesnt work when sidewall non-zero
+# TODO: Weiliang fix this test? does not work when sidewall non-zero
 def test_inside_polyslab_sidewall_arrays():
     inside_kwargs = {coord: np.array([-1, 0, 1]) for coord in "xyz"}
     POLYSLAB.inside(**inside_kwargs)
@@ -656,7 +656,7 @@ def test_polyslab_merge():
     assert len(polyslabs_gap) == 2, "untouching polylsabs were merged incorrectly."
 
     polyslabs_touching = make_polyslabs(gap_size=0)
-    assert len(polyslabs_touching) == 1, "polyslabs didnt merge correctly."
+    assert len(polyslabs_touching) == 1, "polyslabs didn't merge correctly."
 
 
 def test_polyslab_side_plot_merge():

@@ -4,7 +4,6 @@ import pytest
 from math import isclose
 import pydantic.v1 as pydantic
 import tidy3d as td
-from tidy3d.exceptions import ValidationError
 
 np.random.seed(4)
 

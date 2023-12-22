@@ -60,7 +60,7 @@ If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run 
 The Detailed Lane
 ^^^^^^^^^^^^^^^^^
 
-If you do not have any of the above tools already installed and want to install them manually, let's go through the process of setting things up from scatch:
+If you do not have any of the above tools already installed and want to install them manually, let's go through the process of setting things up from scratch:
 
 
 Environment Requirements

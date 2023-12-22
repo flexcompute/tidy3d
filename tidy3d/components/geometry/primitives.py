@@ -77,7 +77,7 @@ class Sphere(base.Centered, base.Circular):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         normal = np.array(normal)
         unit_normal = normal / (np.sum(normal**2) ** 0.5)
@@ -116,7 +116,7 @@ class Sphere(base.Centered, base.Circular):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -251,7 +251,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
 
@@ -292,7 +292,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         # radius at z
@@ -322,7 +322,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         # position in the local coordinate of the cylinder
         position_local = position - self.center[axis]

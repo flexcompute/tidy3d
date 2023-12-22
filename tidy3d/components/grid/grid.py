@@ -94,7 +94,7 @@ class Coords(Tidy3dBaseModel):
             result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
             return result
 
-        # Check wich axes need interpolation or selection
+        # Check which axes need interpolation or selection
         interp_ax = []
         isel_ax = []
         for ax in "xyz":

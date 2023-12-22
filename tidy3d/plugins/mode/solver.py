@@ -119,7 +119,7 @@ class EigSolver(Tidy3dBaseModel):
         waveguide, there is strictly speaking no k-vector in the original coordinates as the system
         is not translationally invariant there. However, if we define kz = R k_phi, then the
         effective index approaches that for a straight-waveguide in the limit of infinite radius.
-        Since we use w = R phi in the radial_transform, there is nothing else neede in the k transform.
+        Since we use w = R phi in the radial_transform, there is nothing else needed in the k transform.
         For the angled_transform, the transformation between k-vectors follows from writing the field as
         E' exp(i k_p w) in transformed coordinates, and identifying this with
         E exp(i k_x x + i k_y y + i k_z z) in the original ones."""
@@ -676,7 +676,7 @@ class EigSolver(Tidy3dBaseModel):
         1) The field at x=0 and y=0 boundaries are set to 0. This should be
         the case for PEC boundaries, but wouldn't hurt for non-PEC boundary;
         2) The vector is np.complex128 by default, and will be converted to
-        approriate type afterwards.
+        appropriate type afterwards.
 
         Parameters
         ----------

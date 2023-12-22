@@ -159,7 +159,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
     @pd.validator("center", always=True)
     def _center_not_inf(cls, val):
-        """Overrides validator enforing that val is not inf."""
+        """Overrides validator enforcing that val is not inf."""
         return val
 
     def store_vjp(
@@ -474,7 +474,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             contrib_d_n = -delta_eps_inv_12 * d_n_edge
             contrib_total = contrib_e_t + contrib_d_n + contrib_e_z
 
-            # scale the gradient contribution by the normalized distange from the static edge
+            # scale the gradient contribution by the normalized distance from the static edge
             # make broadcasting work with both 2D and 3D simulation domains
             return (s * contrib_total.T).T
 

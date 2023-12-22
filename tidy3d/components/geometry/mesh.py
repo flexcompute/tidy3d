@@ -287,7 +287,7 @@ class TriangleMesh(base.Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
@@ -298,7 +298,7 @@ class TriangleMesh(base.Geometry, ABC):
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------

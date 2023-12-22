@@ -5,7 +5,7 @@ import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.exceptions import ValidationError, SetupError
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture, AssertLogLevel
 from typing import Dict
 
 MEDIUM = td.Medium()
@@ -392,11 +392,12 @@ def test_gain_medium(log_capture):
         _ = td.Drude(eps_inf=0.04, coeffs=[(1, -2)])
 
     # anisotropic medium, warn allow_gain is ignored
-    _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
-    assert_log_level(log_capture, "WARNING")
 
-    _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=True)
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
 
 
 def test_medium2d(log_capture):

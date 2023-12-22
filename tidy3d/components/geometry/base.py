@@ -204,7 +204,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def intersections_plane(
@@ -226,7 +226,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         origin = self.unpop_axis(position, (0, 0), axis=axis)
@@ -245,7 +245,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane. For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         log.warning(
             "'intersections_2dbox()' is deprecated and will be removed in the future. "
@@ -273,7 +273,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         # are all of other's minimum coordinates less than self's maximum coordinate?
         in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))
 
-        # are all of other's maximum coordinates greater than self's minum coordinate?
+        # are all of other's maximum coordinates greater than self's minimum coordinate?
         in_plus = all(o >= s for (s, o) in zip(self_bmin, other_bmax))
 
         # for intersection of bounds, both must be true
@@ -306,7 +306,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         Parameters
         ----------
         axis : int = None
-            Axis nomral to the plane.
+            Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
 
@@ -640,7 +640,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Index into xyz axis (0,1,2) and position along that axis.
         """
         xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
-        assert len(xyz_filtered) == 1, "exatly one kwarg in [x,y,z] must be specified."
+        assert len(xyz_filtered) == 1, "exactly one kwarg in [x,y,z] must be specified."
         axis_label, position = list(xyz_filtered.items())[0]
         axis = "xyz".index(axis_label)
         return axis, position
@@ -1521,7 +1521,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-        `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -1544,7 +1544,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @abstractmethod
@@ -1563,7 +1563,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def _order_axis(self, axis: int) -> int:
@@ -1612,7 +1612,7 @@ class Planar(Geometry, ABC):
     def _tanq(self) -> float:
         """Value of ``tan(sidewall_angle)``.
 
-        The (possibliy infinite) geometry offest is given by ``_tanq * length_axis``.
+        The (possibliy infinite) geometry offset is given by ``_tanq * length_axis``.
         """
         return np.tan(self.sidewall_angle)
 
@@ -1831,7 +1831,7 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         (x0, y0, z0), (x1, y1, z1) = self.bounds
         vertices = [
@@ -1877,7 +1877,7 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -1937,7 +1937,7 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect this 2D box.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         # Verify 2D
@@ -2038,7 +2038,7 @@ class Box(Centered):
         bend_axis : Axis = None
             Axis of curvature of `bend_radius`.
         both_dirs : bool = False
-            If True, plots an arrow ponting in direction and one in -direction.
+            If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
 
@@ -2272,7 +2272,7 @@ class Transformed(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return self.geometry.intersections_tilted_plane(
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
@@ -2506,7 +2506,7 @@ class ClipOperation(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         geom_a = Geometry.evaluate_inf_shape(
             shapely.unary_union(self.geometry_a.intersections_tilted_plane(normal, origin, to_2D))
@@ -2690,7 +2690,7 @@ class GeometryGroup(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return [
             intersection
@@ -2717,7 +2717,7 @@ class GeometryGroup(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if not self.intersects_plane(x, y, z):
             return []
@@ -2733,7 +2733,7 @@ class GeometryGroup(Geometry):
         Parameters
         ----------
         axis : int = None
-            Axis nomral to the plane.
+            Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
 

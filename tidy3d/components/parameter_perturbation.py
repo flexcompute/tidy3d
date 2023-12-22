@@ -117,7 +117,7 @@ class HeatPerturbation(AbstractPerturbation):
     temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Temperature range",
-        description="Temparature range in which perturbation model is valid.",
+        description="Temperature range in which perturbation model is valid.",
         units=KELVIN,
     )
 
@@ -291,7 +291,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Temperature range",
-        description="Temparature range in which perturbation model is valid. For "
+        description="Temperature range in which perturbation model is valid. For "
         ":class:`.CustomHeatPerturbation` this field is computed automatically based on "
         "temperature sample points provided in ``perturbation_values``.",
         units=KELVIN,

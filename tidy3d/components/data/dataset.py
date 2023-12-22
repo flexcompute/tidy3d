@@ -37,7 +37,7 @@ class AbstractFieldDataset(Dataset, ABC):
     @property
     @abstractmethod
     def field_components(self) -> Dict[str, DataArray]:
-        """Maps the field components to thier associated data."""
+        """Maps the field components to their associated data."""
 
     def apply_phase(self, phase: float) -> AbstractFieldDataset:
         """Create a copy where all elements are phase-shifted by a value (in radians)."""
@@ -83,7 +83,7 @@ class AbstractFieldDataset(Dataset, ABC):
         -------
         xr.Dataset
             Dataset containing all fields at the same spatial locations.
-            For more details refer to `xarray's Documentaton <https://tinyurl.com/cyca3krz>`_.
+            For more details refer to `xarray's Documentation <https://tinyurl.com/cyca3krz>`_.
 
         Note
         ----
@@ -169,7 +169,7 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
-        """Maps the field components to thier associated data."""
+        """Maps the field components to their associated data."""
         fields = dict(Ex=self.Ex, Ey=self.Ey, Ez=self.Ez, Hx=self.Hx, Hy=self.Hy, Hz=self.Hz)
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
@@ -371,7 +371,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
 
     @property
     def field_components(self) -> Dict[str, DataArray]:
-        """Maps the field components to thier associated data."""
+        """Maps the field components to their associated data."""
 
         return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
 
@@ -416,7 +416,7 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
         """Warn user to use the :class:`.ModeSolver` ``plot_field`` function now."""
         raise DeprecationWarning(
             "The 'plot_field()' method was moved to the 'ModeSolver' object."
-            "Once the 'ModeSolver' is contructed, one may call '.plot_field()' on the object and "
+            "Once the 'ModeSolver' is constructed, one may call '.plot_field()' on the object and "
             "the modes will be computed and displayed with 'Simulation' overlay."
         )
 
@@ -437,7 +437,7 @@ class PermittivityDataset(AbstractFieldDataset):
 
     @property
     def field_components(self) -> Dict[str, ScalarFieldDataArray]:
-        """Maps the field components to thier associated data."""
+        """Maps the field components to their associated data."""
         return dict(eps_xx=self.eps_xx, eps_yy=self.eps_yy, eps_zz=self.eps_zz)
 
     @property
@@ -578,8 +578,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         if max_index_used != num_points - 1 or min_index_used != 0:
             raise ValidationError(
-                "Cell connections array uses undefined point indicies in the range "
-                f"[{min_index_used}, {max_index_used}]. The valid range of point indicies is "
+                "Cell connections array uses undefined point indices in the range "
+                f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
                 f"[0, {num_points-1}]."
             )
         return val
@@ -892,7 +892,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         clipper.Update()
         clip = clipper.GetOutput()
 
-        # cleann grid from unused points
+        # clean grid from unused points
         grid_cleaner = vtk["mod"].vtkRemoveUnusedPoints()
         grid_cleaner.SetInputData(clip)
         grid_cleaner.GenerateOriginalPointIdsOff()

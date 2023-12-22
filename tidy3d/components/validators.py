@@ -86,7 +86,7 @@ def assert_volumetric():
 
 
 def validate_name_str():
-    """make sure the name doesnt include [, ] (used for default names)"""
+    """make sure the name does not include [, ] (used for default names)"""
 
     @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
     def field_has_unique_names(cls, val):
@@ -186,7 +186,7 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
 
 
 def enforce_monitor_fields_present():
-    """Make sure all of the fields in the monitor are present in the correponding data."""
+    """Make sure all of the fields in the monitor are present in the corresponding data."""
 
     @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
     def _contains_fields(cls, values):

@@ -488,7 +488,7 @@ class SimulationData(AbstractSimulationData):
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
+        """Plot the field data for a monitor with simulation plot overlaid.
 
         Parameters
         ----------
@@ -538,7 +538,7 @@ class SimulationData(AbstractSimulationData):
         # deprecated intensity
         if field_name == "int":
             log.warning(
-                "'int' field name is deprecated and will be removed in the future. Plese use "
+                "'int' field name is deprecated and will be removed in the future. Please use "
                 "field_name='E' and val='abs^2' for the same effect."
             )
             field_name = "E"
@@ -559,7 +559,7 @@ class SimulationData(AbstractSimulationData):
 
         if scale == "dB":
             if val == "phase":
-                log.warning("Ploting phase component in log scale masks the phase sign.")
+                log.warning("Plotting phase component in log scale masks the phase sign.")
             db_factor = {
                 ("S", "real"): 10,
                 ("S", "imag"): 10,
@@ -685,7 +685,7 @@ class SimulationData(AbstractSimulationData):
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
     ) -> Ax:
-        """Plot the field data for a monitor with simulation plot overlayed.
+        """Plot the field data for a monitor with simulation plot overlaid.
 
         Parameters
         ----------

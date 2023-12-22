@@ -76,7 +76,7 @@ class ModeSpec(Tidy3dBaseModel):
         None,
         title="Polarization filtering",
         description="The solver always computes the ``num_modes`` modes closest to the given "
-        "``target_neff``. If ``filter_pol==None``, they are simply sorted in order of decresing "
+        "``target_neff``. If ``filter_pol==None``, they are simply sorted in order of decreasing "
         "effective index. If a polarization filter is selected, the modes are rearranged such that "
         "the first ``n_pol`` modes in the list are the ones with the selected polarization "
         "fraction larger than or equal to 0.5, while the next ``num_modes - n_pol`` modes are the "

@@ -68,7 +68,7 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
             is_periodic=is_periodic,
         )
 
-        # incooperate symmetries
+        # incorporate symmetries
         if symmetry[axis] != 0:
             # Offset to center if symmetry present
             center = structures[0].geometry.center[axis]

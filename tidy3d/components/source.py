@@ -720,7 +720,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
         ...,
         title="Field Dataset",
         description=":class:`.FieldDataset` containing the desired frequency-domain "
-        "fields patterns to inject. At least one tangetial field component must be specified.",
+        "fields patterns to inject. At least one tangential field component must be specified.",
     )
 
     _field_dataset_none_warning = warn_if_dataset_none("field_dataset")
@@ -941,7 +941,7 @@ class PlaneWave(AngledFieldSource, PlanarSource):
 
 
 class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
-    """Guassian distribution on finite extent plane.
+    """Gaussian distribution on finite extent plane.
 
     Example
     -------
@@ -980,7 +980,7 @@ class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
 
 
 class AstigmaticGaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
-    """The simple astigmatic Guassian distribution allows
+    """The simple astigmatic Gaussian distribution allows
     both an elliptical intensity profile and different waist locations for the two principal axes
     of the ellipse. When equal waist sizes and equal waist distances are specified in the two
     directions, this source becomes equivalent to :class:`GaussianBeam`.

@@ -1,8 +1,3 @@
-import pytest
-import pydantic.v1 as pd
-import numpy as np
-
-import tidy3d as td
 from tidy3d.components.bc_placement import (
     StructureBoundary,
     StructureStructureInterface,

@@ -45,7 +45,7 @@ This signifies that the class is an "abstract base class".
 For all intents and purposes, this means that the class exists to give some organizational structure, but is not intended to be used directly.
 For example, `AbstractMedium(Tidy3dBaseModel, ABC)` is used to define common characteristics of both dispersive and non-dispersive media, but isn't intemded to be used in a simulation.
 
-The `@abstractmethod` decorator is similarly used to indicate that the method is indended to be implemented in the subclasses of the `ABC`, but not used or defined directly in the base class.
+The `@abstractmethod` decorator is similarly used to indicate that the method is intended to be implemented in the subclasses of the `ABC`, but not used or defined directly in the base class.
 
 ## Component Structure
 
@@ -129,7 +129,7 @@ The keys of these dictionaries are the names of the components and the values ar
 
 #### Validations
 
-Upon intialization, the simulation checks whether any of the objects are completely outside of the simulation bounding box, at which point it will error.
+Upon initialization, the simulation checks whether any of the objects are completely outside of the simulation bounding box, at which point it will error.
 Other checks may be added in future development.
 
 #### JSON Operations
@@ -228,6 +228,6 @@ There are three types of usable monitors, each stores different types of data:
 All monitors must be told how to sample the data in either time or frequency domain.
 For this, the `Sampler()` object is supplied to each `Monitor()`, which can either be:
 - `TimeSampler(times)` (defines the time steps to sample the data at)
-- `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier tranform).
+- `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier transform).
 Note that `ModeMonitors()` can only accept `FreqSamplers()` as the modes are only defined at a specific frequency.
 The functions `uniform_times()` and `uniform_freqs()` allow one to easily make evenly spaced samplers.

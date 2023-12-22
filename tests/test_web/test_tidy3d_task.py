@@ -308,7 +308,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     LOG_FNAME = str(tmp_path / "test.log")
     task.get_log(LOG_FNAME)
-    with open(LOG_FNAME, "r") as f:
+    with open(LOG_FNAME) as f:
         assert f.read() == "0.3,5.7"
 
 

@@ -89,7 +89,7 @@ class HeatSimulationData(AbstractSimulationData):
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the data for a monitor with simulation plot overlayed.
+        """Plot the data for a monitor with simulation plot overlaid.
 
         Parameters
         ----------

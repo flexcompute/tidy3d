@@ -9,8 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tidy3d.plugins.design` tool to explore user-defined design spaces.
 - `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
 - A utility function `td.medium_from_nk()` that automatically constructs a dispersivless medium when permittivity>=1, and a single-pole Lorentz medium when permittivity<1.
+- Integration of the `documentation` alongside the main codebase repository.
+- Integration of the `tidy3d-notebooks` repository.
+- `tidy3d develop` CLI and development guide on the main documentation.
 
 ### Changed
+- `poetry` based installation. Removal of `setup.py` and `requirements.txt`.
+- Upgrade to sphinx 6 for the documentation build, and change of theme.
 
 ### Fixed
 
@@ -805,12 +810,12 @@ which fields are to be projected is now determined automatically based on the me
 ### Added
 
 - New `grid_spec` Field in `Simulation` that allows more flexibility in defining the mesh.
-- `GridSpec1d` class defining how the meshing along each dimension should be done, with sublcasses `UniformGrid` and `CustomGrid` that cover the functionality 
+- `GridSpec1d` class defining how the meshing along each dimension should be done, with subclasses `UniformGrid` and `CustomGrid` that cover the functionality 
   previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the 
   mesh automatically generated based on the minimum required steps per wavelength.
 - New `PointDipole` source.
 - Opacity kwargs for monitor and source in `sim.plot`.
-- Separated `plotly`-based requirements from core requrements file, can be added with `"pip install tidy3d-beta[plotly]"`.
+- Separated `plotly`-based requirements from core requirements file, can be added with `"pip install tidy3d-beta[plotly]"`.
 
 ### Changed
 - `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
@@ -952,7 +957,7 @@ which fields are to be projected is now determined automatically based on the me
 - PML parameters and padding Grid with pml pixels by [@momchil-flex](https://github.com/momchil-flex) in #64
 - Documentation by [@tylerflex](https://github.com/tylerflex) in #63
 - Gds import from [@tylerflex](https://github.com/tylerflex) in #69
-- Loggin by [@tylerflex](https://github.com/tylerflex) in #70
+- Logging, by [@tylerflex](https://github.com/tylerflex) in #70
 - Multi-pole Drude medium by [@weiliangjin2021](https://github.com/weiliangjin2021) in #73
 - Mode Solver: from [@tylerflex](https://github.com/tylerflex) in #74
 - Near2Far from [@tylerflex](https://github.com/tylerflex) in #77

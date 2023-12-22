@@ -872,7 +872,7 @@ class ModeSolver(Tidy3dBaseModel):
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlayed.
+        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
 
         Parameters
         ----------

@@ -44,13 +44,13 @@ def _test_version(tmp_path):
     )
     path = str(tmp_path / "simulation.json")
     sim.to_file(path)
-    with open(path, "r") as f:
+    with open(path) as f:
         s = f.read()
         assert '"version": ' in s
 
 
 def test_deep_copy():
-    """Make sure deep copying works as expceted with defaults."""
+    """Make sure deep copying works as expected with defaults."""
     b = td.Box(size=(1, 1, 1))
     m = td.Medium(permittivity=1)
 
@@ -99,7 +99,7 @@ def test_deep_copy():
 
 
 def test_updated_copy():
-    """Make sure updated copying shortcut works as expceted with defaults."""
+    """Make sure updated copying shortcut works as expected with defaults."""
     b = td.Box(size=(1, 1, 1))
     m = td.Medium(permittivity=1)
 
