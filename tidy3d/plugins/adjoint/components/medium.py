@@ -13,8 +13,6 @@ from ....components.types import Bound, Literal
 from ....components.medium import Medium, AnisotropicMedium, CustomMedium
 from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
-from ....components.data.dataset import PermittivityDataset
-from ....components.data.data_array import ScalarFieldDataArray
 from ....exceptions import SetupError
 from ....constants import CONDUCTIVITY
 

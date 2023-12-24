@@ -12,7 +12,7 @@ from jax.tree_util import register_pytree_node_class
 import xarray as xr
 
 from ..base import JaxObject
-from .....components.base import Tidy3dBaseModel, cached_property
+from .....components.base import cached_property
 from .....components.data.data_array import DataArray
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
 
@@ -37,7 +37,7 @@ class JaxDataArray(JaxObject):
     values: Any = pd.Field(
         ...,
         jax_leaf=True,
-    )    
+    )
 
     coords: Dict[str, list] = pd.Field(
         ...,
@@ -48,7 +48,6 @@ class JaxDataArray(JaxObject):
     def to_tidy3d(self):
         values = np.array(jax.lax.stop_gradient(self.values))
         return DataArray(values, coords=self.coords)
-
 
     @pd.validator("values", pre=True, always=True)
     def _convert_values_to_jnp_array(cls, val):

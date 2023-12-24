@@ -1,8 +1,7 @@
 """Base model for Tidy3D components that are compatible with jax."""
 from __future__ import annotations
 
-from typing import Tuple, List, Any, Callable
-import json
+from typing import Tuple, List, Any
 
 import numpy as np
 import jax
@@ -12,6 +11,7 @@ from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel
+
 # from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 
 
