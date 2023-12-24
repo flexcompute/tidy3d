@@ -150,6 +150,7 @@ class JaxObject(Tidy3dBaseModel):
             orig_name = cls.__fields__[jax_name].field_info.extra.get("stores_jax_for")
             val = values.get(orig_name)
             if val is not None:
+
                 # try adding the sanitized (no trace) version to the regular field
                 try:
                     values[orig_name] = jax.lax.stop_gradient(val)
@@ -175,7 +176,11 @@ class JaxObject(Tidy3dBaseModel):
 
     """ IO """
 
+<<<<<<< HEAD
     # TODO: replace with JaxObject json encoder
+=======
+    # TODO: remove these extra methods
+>>>>>>> ee935a1b (adjoint refactor with separate jax fields)
 
     def _json(self, *args, **kwargs) -> str:
         """Overwritten method to get the json string to store in the files."""
@@ -186,6 +191,7 @@ class JaxObject(Tidy3dBaseModel):
         def strip_data_array(val: Any) -> Any:
             """Recursively strip any elements with type "JaxDataArray", replace with tag."""
 
+<<<<<<< HEAD
             if isinstance(val, dict):
                 if "type" in val and val["type"] == "JaxDataArray":
                     return JAX_DATA_ARRAY_TAG
@@ -193,6 +199,18 @@ class JaxObject(Tidy3dBaseModel):
 
             elif isinstance(val, (tuple, list)):
                 return [strip_data_array(v) for v in val]
+=======
+            for key, val in sub_dict.items():
+                if isinstance(val, dict):
+                    if "type" in val and val["type"] == "JaxDataArray":
+                        sub_dict[key] = JAX_DATA_ARRAY_TAG
+                    else:
+                        strip_data_array(val)
+                elif isinstance(val, (list, tuple)):
+                    val_dict = dict(zip(range(len(val)), val))
+                    strip_data_array(val_dict)
+                    sub_dict[key] = list(val_dict.values())
+>>>>>>> ee935a1b (adjoint refactor with separate jax fields)
 
             return val
 

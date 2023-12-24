@@ -501,9 +501,15 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
     # fail if some gradients dont match the pre/2.6 grads (before refactor).
     if local:
-        assert np.isclose(df_deps, 1284453200000000.0), "local grad doesn't match previous value."
+# <<<<<<< HEAD
+#         assert np.isclose(df_deps, 1284453200000000.0), "local grad doesn't match previous value."
+#     else:
+#         assert np.isclose(df_deps, 0.031678755), "non-local grad doesn't match previous value."
+# =======
+        assert np.isclose(df_deps, 1278130200000000.0), "local grad doesn't match previous value."
     else:
-        assert np.isclose(df_deps, 0.031678755), "non-local grad doesn't match previous value."
+        assert np.isclose(df_deps, 0.031742122), "non-local grad doesn't match previous value."
+# >>>>>>> ee935a1b (adjoint refactor with separate jax fields)
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 

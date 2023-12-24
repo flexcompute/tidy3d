@@ -1,6 +1,6 @@
 """Special types and validators used by adjoint plugin."""
-from typing import Union, Any
 
+from typing import Union, Any
 import numpy as np
 
 
