@@ -151,33 +151,27 @@ class AbstractJaxMedium(ABC, JaxObject):
 class JaxMedium(Medium, AbstractJaxMedium):
     """A :class:`.Medium` registered with jax."""
 
-    permittivity: JaxFloat = pd.Field(
+    permittivity_jax: JaxFloat = pd.Field(
         1.0,
         title="Permittivity",
         description="Relative permittivity of the medium. May be a ``jax`` ``Array``.",
         jax_field=True,
+        jax_leaf=True,
     )
 
-    conductivity: JaxFloat = pd.Field(
+    conductivity_jax: JaxFloat = pd.Field(
         0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
         jax_field=True,
+        jax_leaf=True,
     )
-
-    @pd.validator("conductivity", always=True)
-    def _passivity_validation(cls, val, values):
-        """Override of inherited validator."""
-        return val
-
-    _sanitize_permittivity = validate_jax_float("permittivity")
-    _sanitize_conductivity = validate_jax_float("conductivity")
 
     def to_medium(self) -> Medium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"})
+        self_dict = self.dict(exclude={"type", "permittivity_jax", "conductivity_jax"})
         return Medium.parse_obj(self_dict)
 
     def store_vjp(
@@ -212,8 +206,8 @@ class JaxMedium(Medium, AbstractJaxMedium):
 
         return self.copy(
             update=dict(
-                permittivity=vjp_eps,
-                conductivity=vjp_sigma,
+                permittivity_jax=vjp_eps,
+                conductivity_jax=vjp_sigma,
             )
         )
 
@@ -302,9 +296,10 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
                 vjp_eps_ii += _vjp_eps_ii
                 vjp_sigma_ii += _vjp_sigma_ii
 
-            vjp_fields[component_name] = JaxMedium(
-                permittivity=vjp_eps_ii,
-                conductivity=vjp_sigma_ii,
+            vjp_medium = self.components[component_name]
+            vjp_fields[component_name] = vjp_medium.updated_copy(
+                permittivity_jax=vjp_eps_ii,
+                conductivity_jax=vjp_sigma_ii,
             )
 
         return self.copy(update=vjp_fields)

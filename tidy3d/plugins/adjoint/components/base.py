@@ -5,6 +5,8 @@ from typing import Tuple, List, Any, Callable
 import json
 
 import numpy as np
+import jax
+import pydantic.v1 as pd
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
@@ -16,17 +18,27 @@ from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 class JaxObject(Tidy3dBaseModel):
     """Abstract class that makes a :class:`.Tidy3dBaseModel` jax-compatible through inheritance."""
 
-    """Shortcut to get names of all fields that have jax components."""
+    """Shortcut to get names of fields with certain properties."""
+
+    @classmethod
+    def _get_fields(cls, field_key: str) -> List[str]:
+        """Get all fields where ``field_key=True`` in the ``pydantic.Field``."""
+        fields = []
+        for field_name, model_field in cls.__fields__.items():
+            field_value = model_field.field_info.extra.get(field_key)
+            if field_value:
+                fields.append(field_name)
+        return fields
 
     @classmethod
     def get_jax_field_names(cls) -> List[str]:
-        """Returns list of field names that have a ``jax_field_type``."""
-        adjoint_fields = []
-        for field_name, model_field in cls.__fields__.items():
-            jax_field_type = model_field.field_info.extra.get("jax_field")
-            if jax_field_type:
-                adjoint_fields.append(field_name)
-        return adjoint_fields
+        """Returns list of field names where ``jax_field=True``."""
+        return cls._get_fields("jax_field")
+
+    @classmethod
+    def get_jax_leaf_names(cls) -> List[str]:
+        """Returns list of field names where ``jax_leaf=True``."""
+        return cls._get_fields("jax_leaf")
 
     """Methods needed for jax to register arbitary classes."""
 
@@ -34,6 +46,11 @@ class JaxObject(Tidy3dBaseModel):
         """How to flatten a :class:`.JaxObject` instance into a pytree."""
         children = []
         aux_data = self.dict()
+
+        for key, val in aux_data.items():
+            if isinstance(val, np.ndarray) and key != "vertices_jax":
+                aux_data[key] = val.tolist()
+
         for field_name in self.get_jax_field_names():
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
@@ -45,6 +62,8 @@ class JaxObject(Tidy3dBaseModel):
             if geo_dict["type"] == "PolySlab":
                 vertices = geo_dict["vertices"]
                 geo_dict["vertices"] = vertices.tolist()
+                vertices_jax = geo_dict["vertices_jax"]
+                geo_dict["vertices_jax"] = vertices_jax.tolist()
             elif geo_dict["type"] == "GeometryGroup":
                 for sub_geo_dict in geo_dict["geometries"]:
                     fix_polyslab(sub_geo_dict)
@@ -81,7 +100,10 @@ class JaxObject(Tidy3dBaseModel):
             field = jax_tree_unflatten(sub_aux_data, sub_children)
             self_dict[field_name] = field
 
-        return cls.parse_obj(self_dict)
+        try:
+            return cls.parse_obj(self_dict)
+        except:
+            import pdb; pdb.set_trace()
 
     """Type conversion helpers."""
 
@@ -90,6 +112,32 @@ class JaxObject(Tidy3dBaseModel):
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
         obj_dict = tidy3d_obj.dict(exclude={"type"})
         return cls.parse_obj(obj_dict)
+
+    """Accounting with jax and regular fields."""
+
+    @pd.root_validator(pre=True)
+    def handle_jax_inputs(cls, values: dict) -> dict:
+        """Pass jax inputs to the jax fields and pass untraced values to the regular fields."""
+        for jax_name in cls.get_jax_leaf_names():
+            orig_name = cls.get_orig_field(jax_name)
+            val = values.get(orig_name)
+            if val is not None:
+                values[orig_name] = jax.lax.stop_gradient(val)
+                values[jax_name] = val
+        return values
+
+    @staticmethod
+    def get_jax_field(orig_field: str) -> str:
+        """Get the 'jax' field name from the original field name."""
+        return orig_field + "_jax"
+
+    @staticmethod
+    def get_orig_field(jax_field: str) -> str:
+        """Get the 'jax' field name from the original field name."""
+        split = jax_field.split("_")
+        if len(split) != 2:
+            raise ValueError(f"Can't get original field from jax field {jax_field}.")
+        return split[0]
 
     """ IO """
 

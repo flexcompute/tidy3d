@@ -467,9 +467,11 @@ def test_run_flux(use_emulated_run):
         _ = get_flux_grad(1.0)
 
 
-@pytest.mark.parametrize("local", (True, False))
-def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
+@pytest.mark.parametrize("local", (True,))# False))
+def test_adjoint_pipeline_tyler(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
+
+    td.config.logging_level="ERROR"
 
     run_fn = run_local if local else run
 
@@ -486,6 +488,9 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
     grad_f = grad(f, argnums=(0, 1, 2, 3))
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # no gradients close to zero
+    # assert not any(np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base))
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 

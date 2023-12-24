@@ -91,7 +91,8 @@ class JaxGeometry(Geometry, ABC):
 
     def to_tidy3d(self) -> Geometry:
         """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        self_dict = self.dict(exclude={"type"})
+        exclude = ["type"] + self.get_jax_leaf_names()
+        self_dict = self.dict(exclude=set(exclude))
         map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
         tidy3d_type = map_reverse[type(self)]
         return tidy3d_type.parse_obj(self_dict)
@@ -131,36 +132,23 @@ class JaxGeometry(Geometry, ABC):
 class JaxBox(JaxGeometry, Box, JaxObject):
     """A :class:`.Box` registered with jax."""
 
-    size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
-        ...,
-        title="Size",
-        description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
+    center_jax: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+        (0.0, 0.0, 0.0),
+        title="Center (Jax)",
+        description="Jax traced value for the center of the box in (x, y, z).",
+        units=MICROMETER,        
         jax_field=True,
+        jax_leaf=True,
     )
 
-    center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    size_jax: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
-        title="Center",
-        description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
+        title="Size (Jax)",
+        description="Jax-traced value for the size of the box in (x, y, z).",
+        units=MICROMETER,        
         jax_field=True,
+        jax_leaf=True,
     )
-
-    _sanitize_size = validate_jax_tuple("size")
-    _sanitize_center = validate_jax_tuple("center")
-
-    @cached_property
-    def bounds(self):
-        """Bounds of this box."""
-        size = jax.lax.stop_gradient(self.size)
-        center = jax.lax.stop_gradient(self.center)
-        coord_min = tuple(c - s / 2 for (s, c) in zip(size, center))
-        coord_max = tuple(c + s / 2 for (s, c) in zip(size, center))
-        return (coord_min, coord_max)
-
-    @pd.validator("center", always=True)
-    def _center_not_inf(cls, val):
-        """Overrides validator enforing that val is not inf."""
-        return val
 
     def store_vjp(
         self,
@@ -285,71 +273,90 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         # convert surface vjps to center, size vjps. Note, convert these to jax types w/ np.sum()
         vjp_center = tuple(np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
         vjp_size = tuple(np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
-        return self.copy(update=dict(center=vjp_center, size=vjp_size))
+        return self.copy(update=dict(center_jax=vjp_center, size_jax=vjp_size))
 
 
 @register_pytree_node_class
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     """A :class:`.PolySlab` registered with jax."""
 
-    vertices: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
+    vertices_jax: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
         ...,
-        title="Vertices",
-        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
-        "face vertices at the ``reference_plane``. "
+        title="Vertices (Jax)",
+        description="Jax-traced list of (d1, d2) defining the 2 dimensional positions of the "
+        "polygon face vertices at the ``reference_plane``. "
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
         jax_field=True,
+        jax_leaf=True,
     )
 
-    @pd.validator("vertices", pre=True, always=True)
-    def convert_to_numpy(cls, val):
-        """Overwrite to not convert vertices to numpy."""
-        return val
+    # @pd.validator("vertices", pre=True, always=True)
+    # def _parse_vertices_array(cls, val) -> Tuple[Tuple[float, float], ...]:
+    #     """parse vertices when it's an array."""
+    #     vertices = []
+    #     for (vx, vy) in val:
+    #         vertices.append((vx, vy))
 
-    @pd.validator("vertices", pre=True, always=True)
-    def to_list(cls, val):
-        """Convert any numpy to list."""
-        if isinstance(val, np.ndarray):
-            return val.tolist()
-        return val
+    #     return tuple(vertices)
 
-    _sanitize_vertices = validate_jax_tuple_tuple("vertices")
+    @pd.validator("vertices_jax", pre=True, always=True)
+    def _parse_vertices_jax_array(cls, val) -> Tuple[Tuple[float, float], ...]:
+        """parse jax vertices when it's an array."""
+        vertices_jax = []
+        for (vx, vy) in val:
+            vertices_jax.append((vx, vy))
 
-    @cached_property
-    def bounds(self) -> Bound:
-        """Returns bounding box min and max coordinates. The dilation and slant angle are not
-        taken into account exactly for speed. Instead, the polygon may be slightly smaller than
-        the returned bounds, but it should always be fully contained.
+        return tuple(vertices_jax)
 
-        Returns
-        -------
-        Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-        """
+    # @pd.validator("vertices", pre=True, always=True)
+    # def convert_to_numpy(cls, val):
+    #     """Overwrite to not convert vertices to numpy."""
+    #     return val
 
-        xmin, ymin = np.amin(jax.lax.stop_gradient(self.vertices), axis=0)
-        xmax, ymax = np.amax(jax.lax.stop_gradient(self.vertices), axis=0)
+    # @pd.validator("vertices", pre=True, always=True)
+    # def to_list(cls, val):
+    #     """Convert any numpy to list."""
+    #     if isinstance(val, np.ndarray):
+    #         return val.tolist()
+    #     return val
 
-        # get bounds in (local) z
-        zmin, zmax = self.slab_bounds
+    # _sanitize_vertices = validate_jax_tuple_tuple("vertices")
 
-        # rearrange axes
-        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
-        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
-        return (tuple(coords_min), tuple(coords_max))
+    # @cached_property
+    # def bounds(self) -> Bound:
+    #     """Returns bounding box min and max coordinates. The dilation and slant angle are not
+    #     taken into account exactly for speed. Instead, the polygon may be slightly smaller than
+    #     the returned bounds, but it should always be fully contained.
+
+    #     Returns
+    #     -------
+    #     Tuple[float, float, float], Tuple[float, float float]
+    #         Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+    #     """
+
+    #     xmin, ymin = np.amin(jax.lax.stop_gradient(self.vertices), axis=0)
+    #     xmax, ymax = np.amax(jax.lax.stop_gradient(self.vertices), axis=0)
+
+    #     # get bounds in (local) z
+    #     zmin, zmax = self.slab_bounds
+
+    #     # rearrange axes
+    #     coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
+    #     coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
+    #     return (tuple(coords_min), tuple(coords_max))
 
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
-        """Overrides validator enforcing that val is not inf."""
+        """Don't allow sidewall."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support slanted sidewall.")
         return val
 
     @pd.validator("dilation", always=True)
     def no_dilation(cls, val):
-        """Overrides validator enforcing that val is not inf."""
+        """Don't allow dilation."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support dilation.")
         return val
@@ -380,9 +387,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
     @cached_property
     def is_ccw(self) -> bool:
-        """Is this PolySlab CCW oriented?"""
-        vertices = np.array(jax.lax.stop_gradient(self.vertices))
-        return PolySlab._area(vertices) > 0
+        """Is this ``PolySlab`` CCW-oriented?"""
+        return PolySlab._area(self.vertices) > 0
 
     def edge_contrib(
         self,
@@ -627,8 +633,9 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         # Construct arguments to pass to the parallel vertices_vjp computation
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-        vertices_vjp = list(map(self.vertex_vjp, *args))
-        return self.copy(update=dict(vertices=vertices_vjp))
+        vertices_vjp = tuple(map(self.vertex_vjp, *args))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
+        return self.updated_copy(vertices_jax=vertices_vjp)
 
     def store_vjp_parallel(
         self,
@@ -645,7 +652,9 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         with Pool(num_proc) as pool:
             vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
-        return self.copy(update=dict(vertices=vertices_vjp))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
+        import pdb ; pdb.set_trace()
+        return self.updated_copy(vertices_jax=vertices_vjp)
 
 
 JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
