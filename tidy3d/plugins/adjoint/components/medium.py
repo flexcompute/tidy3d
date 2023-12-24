@@ -360,25 +360,25 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
         return val
 
-    # @pd.validator("eps_dataset", always=True)
-    # def _eps_dataset_single_frequency(cls, val):
-    #     """Override of inherited validator."""
-    #     return val
+    @pd.validator("eps_dataset", always=True)
+    def _eps_dataset_single_frequency(cls, val):
+        """Override of inherited validator."""
+        return val
 
-    # @pd.validator("eps_dataset", always=True)
-    # def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
-    #     """Override of inherited validator."""
-    #     return val
+    @pd.validator("eps_dataset", always=True)
+    def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
+        """Override of inherited validator."""
+        return val
 
-    # @pd.validator("permittivity", always=True)
-    # def _eps_inf_greater_no_less_than_one(cls, val):
-    #     """Override of inherited validator."""
-    #     return val
+    @pd.validator("permittivity", always=True)
+    def _eps_inf_greater_no_less_than_one(cls, val):
+        """Override of inherited validator."""
+        return val
 
-    # @pd.validator("conductivity", always=True)
-    # def _conductivity_non_negative_correct_shape(cls, val, values):
-    #     """Override of inherited validator."""
-    #     return val
+    @pd.validator("conductivity", always=True)
+    def _conductivity_non_negative_correct_shape(cls, val, values):
+        """Override of inherited validator."""
+        return val
 
     def eps_dataarray_freq(self, frequency: float):
         """ "Permittivity array at ``frequency``"""
