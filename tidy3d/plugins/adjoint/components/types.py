@@ -39,19 +39,8 @@ _add_schema(JVPTracer, title="JVPTracer", field_type_str="jax.interpreters.ad.JV
 
 # define types usable as floats including the jax tracers
 JaxArrayLike = Union[NumpyArrayType, JaxArrayType]
-JaxFloat = Union[float, JaxArrayLike, JVPTracer]
-
-"""
-Note, currently set up for jax 0.3.x, which is the only installable version for windows.
-To get Array like in 0.3:
-# from jax.experimental.array import ArrayLike
-
-for jax 0.4.x, need to use
-# from jax._src.typing import ArrayLike
-
-and can make JaxFloat like
-# JaxFloat = Union[float, ArrayLike]
-"""
+JaxFloat = Union[float, JaxArrayLike, JVPTracer, object]
+# note: object is included here because sometimes jax passes just `object` (i think when untraced)
 
 
 def sanitize_validator_fn(cls, val):

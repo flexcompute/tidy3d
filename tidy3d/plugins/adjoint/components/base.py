@@ -6,6 +6,7 @@ import json
 
 import numpy as np
 import jax
+import jax.numpy as jnp
 import pydantic.v1 as pd
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
@@ -47,47 +48,63 @@ class JaxObject(Tidy3dBaseModel):
         children = []
         aux_data = self.dict()
 
-        for key, val in aux_data.items():
-            if isinstance(val, np.ndarray) and key != "vertices_jax":
-                aux_data[key] = val.tolist()
-
         for field_name in self.get_jax_field_names():
+            # if field_name == "vertices_jax":
+            #     import pdb; pdb.set_trace()
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
             children.append(sub_children)
             aux_data[field_name] = sub_aux_data
 
-        def fix_polyslab(geo_dict: dict) -> None:
-            """Recursively Fix a dictionary possibly containing a polyslab geometry."""
-            if geo_dict["type"] == "PolySlab":
-                vertices = geo_dict["vertices"]
-                geo_dict["vertices"] = vertices.tolist()
-                vertices_jax = geo_dict["vertices_jax"]
-                geo_dict["vertices_jax"] = vertices_jax.tolist()
-            elif geo_dict["type"] == "GeometryGroup":
-                for sub_geo_dict in geo_dict["geometries"]:
-                    fix_polyslab(sub_geo_dict)
-            elif geo_dict["type"] == "ClipOperation":
-                fix_polyslab(geo_dict["geometry_a"])
-                fix_polyslab(geo_dict["geometry_b"])
 
-        def fix_monitor(mnt_dict: dict) -> None:
-            """Fix a frequency containing monitor."""
-            if "freqs" in mnt_dict:
-                freqs = mnt_dict["freqs"]
-                if isinstance(freqs, np.ndarray):
-                    mnt_dict["freqs"] = freqs.tolist()
+        def fix_numpy(value: Any) -> Any:
+            """Recursively convert any numpy array in the value to nested list."""
+            if isinstance(value, (tuple, list)):
+                return [fix_numpy(val) for val in value]
+            if isinstance(value, np.ndarray):
+                return value.tolist()
+            if isinstance(value, dict):
+                return {key: fix_numpy(val) for key, val in value.items()}
+            else:
+                return value
 
-        # fixes bug with jax handling 2D numpy array in polyslab vertices
-        if aux_data.get("type", "") == "JaxSimulation":
-            structures = aux_data["structures"]
-            for _i, structure in enumerate(structures):
-                geometry = structure["geometry"]
-                fix_polyslab(geometry)
-            for monitor in aux_data["monitors"]:
-                fix_monitor(monitor)
-            for monitor in aux_data["output_monitors"]:
-                fix_monitor(monitor)
+        aux_data = fix_numpy(aux_data)
+
+        # def fix_polyslab(geo_dict: dict) -> None:
+        #     """Recursively Fix a dictionary possibly containing a polyslab geometry."""
+        #     if geo_dict["type"] == "PolySlab":
+        #         vertices = geo_dict["vertices"]
+        #         geo_dict["vertices"] = vertices.tolist()
+        #         # vertices_jax = geo_dict["vertices_jax"]
+        #         # geo_dict["vertices_jax"] = vertices_jax.tolist()
+        #     elif geo_dict["type"] == "GeometryGroup":
+        #         for sub_geo_dict in geo_dict["geometries"]:
+        #             fix_polyslab(sub_geo_dict)
+        #     elif geo_dict["type"] == "ClipOperation":
+        #         fix_polyslab(geo_dict["geometry_a"])
+        #         fix_polyslab(geo_dict["geometry_b"])
+
+        # def fix_monitor(mnt_dict: dict) -> None:
+        #     """Fix a frequency containing monitor."""
+        #     if "freqs" in mnt_dict:
+        #         freqs = mnt_dict["freqs"]
+        #         if isinstance(freqs, np.ndarray):
+        #             mnt_dict["freqs"] = freqs.tolist()
+
+        # for key, val in aux_data.items():
+        #     if isinstance(val, np.ndarray):
+        #         aux_data[key] = val.tolist()
+
+        # # fixes bug with jax handling 2D numpy array in polyslab vertices
+        # if aux_data.get("type", "") == "JaxSimulation":
+        #     structures = aux_data["structures"]
+        #     for _i, structure in enumerate(structures):
+        #         geometry = structure["geometry"]
+        #         fix_polyslab(geometry)
+        #     for monitor in aux_data["monitors"]:
+        #         fix_monitor(monitor)
+        #     for monitor in aux_data["output_monitors"]:
+        #         fix_monitor(monitor)
 
         return children, aux_data
 
@@ -99,11 +116,7 @@ class JaxObject(Tidy3dBaseModel):
             sub_aux_data = aux_data[field_name]
             field = jax_tree_unflatten(sub_aux_data, sub_children)
             self_dict[field_name] = field
-
-        try:
-            return cls.parse_obj(self_dict)
-        except:
-            import pdb; pdb.set_trace()
+        return cls.parse_obj(self_dict)
 
     """Type conversion helpers."""
 
@@ -116,14 +129,33 @@ class JaxObject(Tidy3dBaseModel):
     """Accounting with jax and regular fields."""
 
     @pd.root_validator(pre=True)
-    def handle_jax_inputs(cls, values: dict) -> dict:
+    def handle_jax_kwargs(cls, values: dict) -> dict:
         """Pass jax inputs to the jax fields and pass untraced values to the regular fields."""
+
         for jax_name in cls.get_jax_leaf_names():
+
+            # if a value was passed to the object for the regular field
             orig_name = cls.get_orig_field(jax_name)
             val = values.get(orig_name)
+
             if val is not None:
+
+                # add the sanitized (no trace) version to the regular field
                 values[orig_name] = jax.lax.stop_gradient(val)
-                values[jax_name] = val
+
+                # if the jax name was not specified directly, use the original traced value
+                if jax_name not in values:
+                    values[jax_name] = val
+
+        return values
+
+    @pd.root_validator(pre=True)
+    def handle_array_jax_leafs(cls, values: dict) -> dict:
+        """Handle jax_leafs that are numpy arrays."""
+        for jax_name in cls.get_jax_leaf_names():    
+            val = values.get(jax_name)
+            if isinstance(val, np.ndarray):
+                values[jax_name] = val.tolist()
         return values
 
     @staticmethod

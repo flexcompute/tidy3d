@@ -490,7 +490,38 @@ def test_adjoint_pipeline_tyler(local, use_emulated_run, tmp_path):
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
 
     # no gradients close to zero
-    # assert not any(np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base))
+    assert not all(np.all(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)), "REALLY BAD"
+    assert not any(np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base))
+
+    print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
+
+
+
+@pytest.mark.parametrize("local", (True,))# False))
+def _test_adjoint_pipeline_tyler(local, use_emulated_run, tmp_path):
+    """Test computing gradient using jax."""
+
+    td.config.logging_level="ERROR"
+
+    run_fn = run_local if local else run
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    _ = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    def f(permittivity, size, vertices, base_eps_val):
+        sim = make_sim(
+            permittivity=permittivity, size=size, vertices=vertices, base_eps_val=base_eps_val
+        )
+
+        sim_data = run_fn(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        amp = extract_amp(sim_data)
+        return objective(amp)
+
+    grad_f = grad(f, argnums=(0, 1, 2, 3))
+    df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # no gradients close to zero
+    assert not any(np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base))
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 

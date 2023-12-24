@@ -301,6 +301,16 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
     #     return tuple(vertices)
 
+    # @pd.validator("vertices", pre=True)
+    # def _parse_vertices_jax_array(cls, val) -> Tuple[Tuple[float, float], ...]:
+    #     """parse jax vertices when it's an array."""
+    #     vertices_jax = []
+    #     for (vx, vy) in val:
+    #         vertices_jax.append((vx, vy))
+
+    #     return tuple(vertices_jax)
+
+
     @pd.validator("vertices_jax", pre=True, always=True)
     def _parse_vertices_jax_array(cls, val) -> Tuple[Tuple[float, float], ...]:
         """parse jax vertices when it's an array."""
@@ -634,7 +644,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         vertices_vjp = tuple(map(self.vertex_vjp, *args))
-        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
         return self.updated_copy(vertices_jax=vertices_vjp)
 
     def store_vjp_parallel(
@@ -652,8 +661,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         with Pool(num_proc) as pool:
             vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
-        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
-        import pdb ; pdb.set_trace()
         return self.updated_copy(vertices_jax=vertices_vjp)
 
 
