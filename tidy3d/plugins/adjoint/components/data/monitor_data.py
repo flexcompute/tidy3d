@@ -32,7 +32,7 @@ class JaxMonitorData(MonitorData, JaxObject, ABC):
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:
         """Construct a :class:`.JaxMonitorData` instance from a :class:`.MonitorData`."""
         self_dict = mnt_data.dict(exclude={"type"}).copy()
-        for field_name in cls.get_jax_field_names():
+        for field_name in cls.get_jax_field_names_all():
             data_array = self_dict[field_name]
             if data_array is not None:
                 coords = {

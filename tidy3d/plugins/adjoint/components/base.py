@@ -43,21 +43,25 @@ class JaxObject(Tidy3dBaseModel):
         return cls._get_field_names("jax_leaf")
 
     @classmethod
-    def get_jax_fields_not_leaf(cls) -> List[str]:
-        """Returns list of field names where ``jax_field=True`` and ``jax_leaf`` unset."""
+    def get_jax_field_names_all(cls) -> List[str]:
+        """Returns list of field names where ``jax_field=True`` or ``jax_leaf=True``"""
         jax_field_names = cls.get_jax_field_names()
         jax_leaf_names = cls.get_jax_leaf_names()
-        return [x for x in jax_field_names if x not in jax_leaf_names]
+        return list(set(jax_field_names + jax_leaf_names))
 
     @property
     def jax_fields(self) -> dict:
         """Get dictionary of jax fields."""
+
+        # TODO: don't use getattr, define this dictionary better
         jax_field_names = self.get_jax_field_names()
         return {key: getattr(self, key) for key in jax_field_names}
 
     @property
     def jax_leafs(self) -> dict:
         """Get dictionary of jax leafs."""
+
+        # TODO: don't use getattr, define this dictionary better
         jax_leaf_names = self.get_jax_leaf_names()
         return {key: getattr(self, key) for key in jax_leaf_names}
 
@@ -68,7 +72,7 @@ class JaxObject(Tidy3dBaseModel):
         children = []
         aux_data = self.dict()
 
-        for field_name in self.get_jax_field_names():
+        for field_name in self.get_jax_field_names_all():
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
             children.append(sub_children)
@@ -93,7 +97,7 @@ class JaxObject(Tidy3dBaseModel):
     def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
         """How to unflatten a pytree into a :class:`.JaxObject` instance."""
         self_dict = aux_data.copy()
-        for field_name, sub_children in zip(cls.get_jax_field_names(), children):
+        for field_name, sub_children in zip(cls.get_jax_field_names_all(), children):
             sub_aux_data = aux_data[field_name]
             field = jax_tree_unflatten(sub_aux_data, sub_children)
             self_dict[field_name] = field
@@ -107,7 +111,7 @@ class JaxObject(Tidy3dBaseModel):
         self_dict = self.dict(exclude=self.exclude_leafs_leafs_only)
 
         # TODO: simplify this logic
-        for key in self.get_jax_fields_not_leaf():
+        for key in self.get_jax_field_names():
             sub_field = self.jax_fields[key]
 
             # TODO: simplify this logic
@@ -125,7 +129,7 @@ class JaxObject(Tidy3dBaseModel):
         obj_dict = tidy3d_obj.dict(exclude={"type"})
 
         # TODO: simplify this logic
-        for key in cls.get_jax_fields_not_leaf():
+        for key in cls.get_jax_field_names():
             sub_field_type = cls.__fields__[key].type_
             tidy3d_sub_field = getattr(tidy3d_obj, key)
 

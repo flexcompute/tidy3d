@@ -130,7 +130,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         title="Center (Jax)",
         description="Jax traced value for the center of the box in (x, y, z).",
         units=MICROMETER,
-        jax_field=True,
         jax_leaf=True,
     )
 
@@ -139,7 +138,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         title="Size (Jax)",
         description="Jax-traced value for the size of the box in (x, y, z).",
         units=MICROMETER,
-        jax_field=True,
         jax_leaf=True,
     )
 
@@ -277,7 +275,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
-        jax_field=True,
         jax_leaf=True,
     )
 

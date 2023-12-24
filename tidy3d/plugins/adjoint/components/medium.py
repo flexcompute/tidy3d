@@ -148,7 +148,6 @@ class JaxMedium(Medium, AbstractJaxMedium):
         1.0,
         title="Permittivity",
         description="Relative permittivity of the medium. May be a ``jax`` ``Array``.",
-        jax_field=True,
         jax_leaf=True,
     )
 
@@ -158,7 +157,6 @@ class JaxMedium(Medium, AbstractJaxMedium):
         description="Electric conductivity. Defined such that the imaginary part of the complex "
         "permittivity at angular frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
-        jax_field=True,
         jax_leaf=True,
     )
 
