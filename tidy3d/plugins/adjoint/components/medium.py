@@ -19,7 +19,7 @@ from ....exceptions import SetupError
 from ....constants import CONDUCTIVITY
 
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_float
+from .types import JaxFloat
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
 
@@ -55,7 +55,6 @@ class AbstractJaxMedium(ABC, JaxObject):
         d_vol = 1.0
         vol_coords = {}
         for coord_name, min_edge, max_edge in zip("xyz", rmin, rmax):
-
             size = max_edge - min_edge
 
             # don't discretize this dimension if there is no thickness along it
@@ -313,19 +312,19 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     with respect to the field variation.
     """
 
-    permittivity: Optional[JaxDataArray] = pd.Field(
-        None,
-        title="Permittivity",
-        description="Spatial profile of relative permittivity.",
-    )
+    # permittivity: Optional[JaxDataArray] = pd.Field(
+    #     None,
+    #     title="Permittivity",
+    #     description="Spatial profile of relative permittivity.",
+    # )
 
-    conductivity: Optional[JaxDataArray] = pd.Field(
-        None,
-        title="Conductivity",
-        description="Spatial profile Electric conductivity.  Defined such "
-        "that the imaginary part of the complex permittivity at angular "
-        "frequency omega is given by conductivity/omega.",
-    )
+    # conductivity: Optional[JaxDataArray] = pd.Field(
+    #     None,
+    #     title="Conductivity",
+    #     description="Spatial profile Electric conductivity.  Defined such "
+    #     "that the imaginary part of the complex permittivity at angular "
+    #     "frequency omega is given by conductivity/omega.",
+    # )
 
     eps_dataset: Optional[JaxPermittivityDataset] = pd.Field(
         None,
@@ -341,7 +340,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         """Don't allow permittivity as a field until we support it."""
         if values.get("permittivity"):
             raise SetupError(
-                "'permittivity' is not yet supported in adjoint plugin. "
+                "'permittivity' and 'conductivity' are not yet supported in adjoint plugin. "
                 "Please continue to use the 'eps_dataset' field to define the component "
                 "of the permittivity tensor."
             )
@@ -466,7 +465,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
         vjp_field_components = {}
         for dim in "xyz":
-
             eps_field_name = f"eps_{dim}{dim}"
 
             # grab the original data and its coordinatess
@@ -483,7 +481,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             sum_axes = []
 
             for dim_index, dim_pt in enumerate("xyz"):
-
                 coord_dim = coords[dim_pt]
 
                 # if it's uniform / single pixel along this dim
@@ -499,7 +496,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
                     # compute the length element along the dim, handling case of sim.size=0
                     if size > 0:
-
                         # discretize according to PTS_PER_WVL
                         num_cells_dim = int(size * PTS_PER_WVL_INTEGRATION / wvl_mat) + 1
                         d_len = size / num_cells_dim
@@ -508,7 +504,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
                         )
 
                     else:
-
                         # just interpolate at the single position, dL=1 to normalize out
                         d_len = 1.0
                         coords_interp = np.array([(r_min + r_max) / 2.0])

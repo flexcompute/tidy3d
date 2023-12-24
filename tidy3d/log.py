@@ -378,7 +378,6 @@ def set_logging_file(
             del log.handlers["file"]
 
     try:
-
         file = open(fname, filemode)
     except Exception:  # TODO: catch specific exception
         log.error(f"File {fname} could not be opened")

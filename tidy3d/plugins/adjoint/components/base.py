@@ -6,7 +6,6 @@ import json
 
 import numpy as np
 import jax
-import jax.numpy as jnp
 import pydantic.v1 as pd
 
 from jax.tree_util import tree_flatten as jax_tree_flatten
@@ -55,7 +54,6 @@ class JaxObject(Tidy3dBaseModel):
             sub_children, sub_aux_data = jax_tree_flatten(field)
             children.append(sub_children)
             aux_data[field_name] = sub_aux_data
-
 
         def fix_numpy(value: Any) -> Any:
             """Recursively convert any numpy array in the value to nested list."""
@@ -133,13 +131,11 @@ class JaxObject(Tidy3dBaseModel):
         """Pass jax inputs to the jax fields and pass untraced values to the regular fields."""
 
         for jax_name in cls.get_jax_leaf_names():
-
             # if a value was passed to the object for the regular field
             orig_name = cls.get_orig_field(jax_name)
             val = values.get(orig_name)
 
             if val is not None:
-
                 # add the sanitized (no trace) version to the regular field
                 values[orig_name] = jax.lax.stop_gradient(val)
 
@@ -152,7 +148,7 @@ class JaxObject(Tidy3dBaseModel):
     @pd.root_validator(pre=True)
     def handle_array_jax_leafs(cls, values: dict) -> dict:
         """Handle jax_leafs that are numpy arrays."""
-        for jax_name in cls.get_jax_leaf_names():    
+        for jax_name in cls.get_jax_leaf_names():
             val = values.get(jax_name)
             if isinstance(val, np.ndarray):
                 values[jax_name] = val.tolist()
@@ -183,7 +179,6 @@ class JaxObject(Tidy3dBaseModel):
             """Strip any elements of the dictionary with type "JaxDataArray", replace with tag."""
 
             for key, val in sub_dict.items():
-
                 if isinstance(val, dict):
                     if "type" in val and val["type"] == "JaxDataArray":
                         sub_dict[key] = JAX_DATA_ARRAY_TAG

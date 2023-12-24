@@ -321,7 +321,7 @@ class HeatSimulation(AbstractSimulation):
         )
 
         # plot boundary conditions
-        for (bc_spec, shape) in boundaries:
+        for bc_spec, shape in boundaries:
             ax = self._plot_boundary_condition(shape=shape, boundary_spec=bc_spec, ax=ax)
 
         # clean up the axis display
@@ -428,10 +428,8 @@ class HeatSimulation(AbstractSimulation):
         boundaries = []  # bc_spec, structure name, shape, bounds
         background_shapes = []
         for name, medium, shape, bounds in shapes:
-
             # intersect existing boundaries (both structure based and medium based)
             for index, (_bc_spec, _name, _bdry, _bounds) in enumerate(boundaries):
-
                 # simulation bc is overriden only by StructureSimulationBoundary
                 if isinstance(_bc_spec.placement, SimulationBoundary):
                     if name not in struct_to_bc_spec:
@@ -453,7 +451,6 @@ class HeatSimulation(AbstractSimulation):
 
             if name in struct_to_bc_spec:
                 for bc_spec in struct_to_bc_spec[name]:
-
                     if isinstance(bc_spec.placement, StructureBoundary):
                         bdry = shape.exterior
                         bdry = bdry.intersection(background_structure_shape)
@@ -473,7 +470,6 @@ class HeatSimulation(AbstractSimulation):
             # this is similar to _filter_structures_plane but only mediums participating in BCs
             # are tracked
             for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
-
                 if Box._do_not_intersect(bounds, _bounds, shape, _shape):
                     continue
 
@@ -530,16 +526,13 @@ class HeatSimulation(AbstractSimulation):
         boundaries_reverse = []
 
         for name, _, shape, bounds in shapes[:0:-1]:
-
             minx, miny, maxx, maxy = bounds
 
             # intersect existing boundaries
             for index, (_bc_spec, _name, _bdry, _bounds, _completed) in enumerate(
                 boundaries_reverse
             ):
-
                 if not _completed:
-
                     if Box._do_not_intersect(bounds, _bounds, shape, _bdry):
                         continue
 
@@ -607,7 +600,6 @@ class HeatSimulation(AbstractSimulation):
         # get structures in the plane and present named structures and media
         shapes = []  # structure name, structure medium, shape, bounds
         for structure in structures:
-
             # get list of Shapely shapes that intersect at the plane
             shapes_plane = plane.intersections_with(structure.geometry)
 
@@ -712,7 +704,7 @@ class HeatSimulation(AbstractSimulation):
         )
 
         source_min, source_max = self.source_bounds
-        for (source, shape) in source_shapes:
+        for source, shape in source_shapes:
             if source is not None:
                 ax = self._plot_shape_structure_source(
                     alpha=alpha,

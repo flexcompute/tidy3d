@@ -22,7 +22,7 @@ from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
 
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_tuple, validate_jax_tuple_tuple
+from .types import JaxFloat
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 50
@@ -107,7 +107,6 @@ class JaxGeometry(Geometry, ABC):
         d_mult_xyz = {}
 
         for dim in "xyz":
-
             # grab the E field components
             e_fld_key = f"E{dim}"
             e_fwd = grad_data_fwd.field_components[e_fld_key]
@@ -136,7 +135,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         (0.0, 0.0, 0.0),
         title="Center (Jax)",
         description="Jax traced value for the center of the box in (x, y, z).",
-        units=MICROMETER,        
+        units=MICROMETER,
         jax_field=True,
         jax_leaf=True,
     )
@@ -145,7 +144,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         ...,
         title="Size (Jax)",
         description="Jax-traced value for the size of the box in (x, y, z).",
-        units=MICROMETER,        
+        units=MICROMETER,
         jax_field=True,
         jax_leaf=True,
     )
@@ -175,9 +174,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
         # loop through all 6 surfaces (x,y,z) & (-, +)
         for dim_index, dim_normal in enumerate("xyz"):
-
             for min_max_index, min_max_val in enumerate(bounds_intersect):
-
                 # get the normal coordinate of this surface
                 normal_coord = {dim_normal: min_max_val[dim_index]}
 
@@ -198,7 +195,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                 d_area = 1.0
                 area_coords = {}
                 for dim_plane, min_edge, max_edge in zip(dims_plane, mins_plane, maxs_plane):
-
                     # if there is no thickness along this dimension, skip it
                     length_edge = max_edge - min_edge
                     if length_edge == 0:
@@ -218,7 +214,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                 # for each field component
                 for field_cmp_dim in "xyz":
-
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
                     eps_data = grad_data_eps.field_components[eps_field_name]
@@ -243,7 +238,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # get gradient contribution for normal component using normal D field
                     if field_cmp_dim == dim_normal:
-
                         # construct normal D fields, dotted together at surface
                         d_normal = d_mult_xyz[field_cmp_dim]
                         d_normal = d_normal.interp(**normal_coord, assume_sorted=True)
@@ -256,7 +250,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # get gradient contribution for parallel components using parallel E fields
                     else:
-
                         # measure parallel E fields, dotted together at surface
                         e_parallel = e_mult_xyz[field_cmp_dim]
                         e_parallel = e_parallel.interp(**normal_coord, assume_sorted=True)
@@ -292,71 +285,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         jax_leaf=True,
     )
 
-    # @pd.validator("vertices", pre=True, always=True)
-    # def _parse_vertices_array(cls, val) -> Tuple[Tuple[float, float], ...]:
-    #     """parse vertices when it's an array."""
-    #     vertices = []
-    #     for (vx, vy) in val:
-    #         vertices.append((vx, vy))
-
-    #     return tuple(vertices)
-
-    # @pd.validator("vertices", pre=True)
-    # def _parse_vertices_jax_array(cls, val) -> Tuple[Tuple[float, float], ...]:
-    #     """parse jax vertices when it's an array."""
-    #     vertices_jax = []
-    #     for (vx, vy) in val:
-    #         vertices_jax.append((vx, vy))
-
-    #     return tuple(vertices_jax)
-
-
-    @pd.validator("vertices_jax", pre=True, always=True)
-    def _parse_vertices_jax_array(cls, val) -> Tuple[Tuple[float, float], ...]:
-        """parse jax vertices when it's an array."""
-        vertices_jax = []
-        for (vx, vy) in val:
-            vertices_jax.append((vx, vy))
-
-        return tuple(vertices_jax)
-
-    # @pd.validator("vertices", pre=True, always=True)
-    # def convert_to_numpy(cls, val):
-    #     """Overwrite to not convert vertices to numpy."""
-    #     return val
-
-    # @pd.validator("vertices", pre=True, always=True)
-    # def to_list(cls, val):
-    #     """Convert any numpy to list."""
-    #     if isinstance(val, np.ndarray):
-    #         return val.tolist()
-    #     return val
-
-    # _sanitize_vertices = validate_jax_tuple_tuple("vertices")
-
-    # @cached_property
-    # def bounds(self) -> Bound:
-    #     """Returns bounding box min and max coordinates. The dilation and slant angle are not
-    #     taken into account exactly for speed. Instead, the polygon may be slightly smaller than
-    #     the returned bounds, but it should always be fully contained.
-
-    #     Returns
-    #     -------
-    #     Tuple[float, float, float], Tuple[float, float float]
-    #         Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-    #     """
-
-    #     xmin, ymin = np.amin(jax.lax.stop_gradient(self.vertices), axis=0)
-    #     xmax, ymax = np.amax(jax.lax.stop_gradient(self.vertices), axis=0)
-
-    #     # get bounds in (local) z
-    #     zmin, zmax = self.slab_bounds
-
-    #     # rearrange axes
-    #     coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
-    #     coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
-    #     return (tuple(coords_min), tuple(coords_max))
-
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
         """Don't allow sidewall."""
@@ -372,21 +300,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return val
 
     @pd.validator("vertices", always=True)
-    def correct_shape(cls, val):
-        """Overrides validator enforcing that val is not inf."""
-        return val
-
-    @pd.validator("vertices", always=True)
-    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
-        """Overrides validator enforcing that val is not inf."""
-        return val
-
-    @pd.validator("vertices", always=True)
-    def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
-        """Overrides validator enforcing that val is not inf."""
-        return val
-
-    @pd.validator("vertices", always=True)
     def limit_number_of_vertices(cls, val):
         """Limit the maximum number of vertices."""
         if len(val) > MAX_NUM_VERTICES:
@@ -394,11 +307,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'."
             )
         return val
-
-    @cached_property
-    def is_ccw(self) -> bool:
-        """Is this ``PolySlab`` CCW-oriented?"""
-        return PolySlab._area(self.vertices) > 0
 
     def edge_contrib(
         self,
@@ -644,6 +552,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         vertices_vjp = tuple(map(self.vertex_vjp, *args))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
+
         return self.updated_copy(vertices_jax=vertices_vjp)
 
     def store_vjp_parallel(
@@ -661,6 +571,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         with Pool(num_proc) as pool:
             vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
         return self.updated_copy(vertices_jax=vertices_vjp)
 
 

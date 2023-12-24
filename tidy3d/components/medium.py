@@ -2190,7 +2190,7 @@ class PoleResidue(DispersiveMedium):
         """
         omega = 2 * np.pi * frequency
         eps = eps_inf
-        for (omega_lo, gamma_lo, omega_to, gamma_to) in poles:
+        for omega_lo, gamma_lo, omega_to, gamma_to in poles:
             eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
             eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
         return eps

@@ -28,7 +28,6 @@ SimulationDataType = Union[SimulationData, HeatSimulationData]
 
 
 class Tidy3dStub(BaseModel, TaskStub):
-
     simulation: SimulationType = pd.Field(discriminator="type")
 
     @classmethod

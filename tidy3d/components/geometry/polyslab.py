@@ -427,6 +427,11 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
+    @cached_property
+    def is_ccw(self) -> bool:
+        """Is this ``PolySlab`` CCW-oriented?"""
+        return PolySlab._area(self.vertices) > 0
+
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
     ) -> np.ndarray[bool]:

@@ -189,7 +189,6 @@ class JaxDataArray(Tidy3dBaseModel):
         if isinstance(other, JaxDataArray):
             new_values = self.as_jnp_array * other.as_jnp_array
         elif isinstance(other, xr.DataArray):
-
             # handle case where other is missing dims present in self
             new_shape = list(self.shape)
             for dim_index, dim in enumerate(self.coords.keys()):
@@ -273,7 +272,6 @@ class JaxDataArray(Tidy3dBaseModel):
 
         # return just the values if no coordinate remain
         if not new_coords:
-
             if new_values.shape:
                 raise AdjointError(
                     "All coordinates selected out, but raw data values are still multi-dimensional."
