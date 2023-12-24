@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable, Optional
-from abc import ABC, abstractmethod
+from abc import ABC
 
 import pydantic.v1 as pd
 import numpy as np
@@ -33,14 +33,6 @@ MAX_NUM_CELLS_CUSTOM_MEDIUM = 250_000
 
 class AbstractJaxMedium(ABC, JaxObject):
     """Holds some utility functions for Jax medium types."""
-
-    def to_tidy3d(self) -> AbstractJaxMedium:
-        """Convert self to tidy3d component."""
-        return self.to_medium()
-
-    @abstractmethod
-    def to_medium(self) -> AbstractJaxMedium:
-        """Convert self to medium."""
 
     def _get_volume_disc(
         self, grad_data: FieldData, sim_bounds: Bound, wvl_mat: float
@@ -150,6 +142,8 @@ class AbstractJaxMedium(ABC, JaxObject):
 class JaxMedium(Medium, AbstractJaxMedium):
     """A :class:`.Medium` registered with jax."""
 
+    _tidy3d_class = Medium
+
     permittivity_jax: JaxFloat = pd.Field(
         1.0,
         title="Permittivity",
@@ -167,11 +161,6 @@ class JaxMedium(Medium, AbstractJaxMedium):
         jax_field=True,
         jax_leaf=True,
     )
-
-    def to_medium(self) -> Medium:
-        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type", "permittivity_jax", "conductivity_jax"})
-        return Medium.parse_obj(self_dict)
 
     def store_vjp(
         self,
@@ -215,6 +204,8 @@ class JaxMedium(Medium, AbstractJaxMedium):
 class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
     """A :class:`.Medium` registered with jax."""
 
+    _tidy3d_class = AnisotropicMedium
+
     xx: JaxMedium = pd.Field(
         ...,
         title="XX Component",
@@ -235,23 +226,6 @@ class JaxAnisotropicMedium(AnisotropicMedium, AbstractJaxMedium):
         description="Medium describing the zz-component of the diagonal permittivity tensor.",
         jax_field=True,
     )
-
-    def to_medium(self) -> AnisotropicMedium:
-        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type", "xx", "yy", "zz"})
-        for component in "xyz":
-            field_name = component + component
-            jax_medium = self.components[field_name]
-            self_dict[field_name] = jax_medium.to_medium()
-        return AnisotropicMedium.parse_obj(self_dict)
-
-    @classmethod
-    def from_tidy3d(cls, tidy3d_obj: AnisotropicMedium) -> JaxAnisotropicMedium:
-        """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "xx", "yy", "zz"})
-        for component, tidy3d_medium in tidy3d_obj.components.items():
-            obj_dict[component] = JaxMedium.from_tidy3d(tidy3d_medium)
-        return cls.parse_obj(obj_dict)
 
     def store_vjp(
         self,
@@ -408,10 +382,10 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
     def eps_dataarray_freq(self, frequency: float):
         """ "Permittivity array at ``frequency``"""
-        as_custom_medium = self.to_medium()
+        as_custom_medium = self.to_tidy3d()
         return as_custom_medium.eps_dataarray_freq(frequency)
 
-    def to_medium(self) -> CustomMedium:
+    def to_tidy3d(self) -> CustomMedium:
         """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
         self_dict = self.dict(exclude={"type"})
         eps_field_components = {}

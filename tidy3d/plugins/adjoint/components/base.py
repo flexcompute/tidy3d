@@ -18,6 +18,8 @@ from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 class JaxObject(Tidy3dBaseModel):
     """Abstract class that makes a :class:`.Tidy3dBaseModel` jax-compatible through inheritance."""
 
+    _tidy3d_class = Tidy3dBaseModel
+
     """Shortcut to get names of fields with certain properties."""
 
     @classmethod
@@ -48,8 +50,6 @@ class JaxObject(Tidy3dBaseModel):
         aux_data = self.dict()
 
         for field_name in self.get_jax_field_names():
-            # if field_name == "vertices_jax":
-            #     import pdb; pdb.set_trace()
             field = getattr(self, field_name)
             sub_children, sub_aux_data = jax_tree_flatten(field)
             children.append(sub_children)
@@ -68,42 +68,6 @@ class JaxObject(Tidy3dBaseModel):
 
         aux_data = fix_numpy(aux_data)
 
-        # def fix_polyslab(geo_dict: dict) -> None:
-        #     """Recursively Fix a dictionary possibly containing a polyslab geometry."""
-        #     if geo_dict["type"] == "PolySlab":
-        #         vertices = geo_dict["vertices"]
-        #         geo_dict["vertices"] = vertices.tolist()
-        #         # vertices_jax = geo_dict["vertices_jax"]
-        #         # geo_dict["vertices_jax"] = vertices_jax.tolist()
-        #     elif geo_dict["type"] == "GeometryGroup":
-        #         for sub_geo_dict in geo_dict["geometries"]:
-        #             fix_polyslab(sub_geo_dict)
-        #     elif geo_dict["type"] == "ClipOperation":
-        #         fix_polyslab(geo_dict["geometry_a"])
-        #         fix_polyslab(geo_dict["geometry_b"])
-
-        # def fix_monitor(mnt_dict: dict) -> None:
-        #     """Fix a frequency containing monitor."""
-        #     if "freqs" in mnt_dict:
-        #         freqs = mnt_dict["freqs"]
-        #         if isinstance(freqs, np.ndarray):
-        #             mnt_dict["freqs"] = freqs.tolist()
-
-        # for key, val in aux_data.items():
-        #     if isinstance(val, np.ndarray):
-        #         aux_data[key] = val.tolist()
-
-        # # fixes bug with jax handling 2D numpy array in polyslab vertices
-        # if aux_data.get("type", "") == "JaxSimulation":
-        #     structures = aux_data["structures"]
-        #     for _i, structure in enumerate(structures):
-        #         geometry = structure["geometry"]
-        #         fix_polyslab(geometry)
-        #     for monitor in aux_data["monitors"]:
-        #         fix_monitor(monitor)
-        #     for monitor in aux_data["output_monitors"]:
-        #         fix_monitor(monitor)
-
         return children, aux_data
 
     @classmethod
@@ -118,11 +82,58 @@ class JaxObject(Tidy3dBaseModel):
 
     """Type conversion helpers."""
 
+    def to_tidy3d(self: JaxObject) -> Tidy3dBaseModel:
+        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
+
+        self_dict = self.dict(exclude=self.exclude_leafs_leafs_only)
+
+        # TODO: simplify this logic
+        jax_leafs = self.get_jax_leaf_names()
+        for key in self.get_jax_field_names():
+            if key not in jax_leafs:
+                sub_field = getattr(self, key)
+                # end TODO
+
+                if isinstance(sub_field, (tuple, list)):
+                    self_dict[key] = [x.to_tidy3d() for x in sub_field]
+                else:
+                    self_dict[key] = sub_field.to_tidy3d()
+
+        return self._tidy3d_class.parse_obj(self_dict)
+
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: Tidy3dBaseModel) -> JaxObject:
         """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
         obj_dict = tidy3d_obj.dict(exclude={"type"})
+
+        # TODO: simplify this logic
+        jax_leafs = cls.get_jax_leaf_names()
+        for key in cls.get_jax_field_names():
+            if key not in jax_leafs:
+                sub_field_type = cls.__fields__[key].type_
+                tidy3d_sub_field = getattr(tidy3d_obj, key)
+                # end TODO
+
+                # TODO: simplify this logic
+                if isinstance(tidy3d_sub_field, (tuple, list)):
+                    sub_field = [sub_field_type.from_tidy3d(x) for x in tidy3d_sub_field]
+                else:
+                    sub_field = sub_field_type.from_tidy3d(tidy3d_sub_field)
+                # end TODO
+
+                obj_dict[key] = sub_field
+
         return cls.parse_obj(obj_dict)
+
+    @property
+    def exclude_fields_all_jax(self) -> set:
+        """Fields to exclude from dicts."""
+        return set(["type"] + self.get_jax_field_names())
+
+    @property
+    def exclude_leafs_leafs_only(self) -> set:
+        """Fields to exclude from dicts."""
+        return set(["type"] + self.get_jax_leaf_names())
 
     """Accounting with jax and regular fields."""
 

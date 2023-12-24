@@ -89,14 +89,6 @@ class JaxGeometry(Geometry, ABC):
         )
         return field_mnt, eps_mnt
 
-    def to_tidy3d(self) -> Geometry:
-        """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        exclude = ["type"] + self.get_jax_leaf_names()
-        self_dict = self.dict(exclude=set(exclude))
-        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
-        tidy3d_type = map_reverse[type(self)]
-        return tidy3d_type.parse_obj(self_dict)
-
     @staticmethod
     def compute_dotted_e_d_fields(
         grad_data_fwd: FieldData, grad_data_adj: FieldData, grad_data_eps: PermittivityData
@@ -130,6 +122,8 @@ class JaxGeometry(Geometry, ABC):
 @register_pytree_node_class
 class JaxBox(JaxGeometry, Box, JaxObject):
     """A :class:`.Box` registered with jax."""
+
+    _tidy3d_class = Box
 
     center_jax: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         (0.0, 0.0, 0.0),
@@ -272,6 +266,8 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 @register_pytree_node_class
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     """A :class:`.PolySlab` registered with jax."""
+
+    _tidy3d_class = PolySlab
 
     vertices_jax: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
         ...,
@@ -582,6 +578,8 @@ JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
 class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
     """A collection of Geometry objects that can be called as a single geometry object."""
 
+    _tidy3d_class = GeometryGroup
+
     geometries: Tuple[JaxPolySlab, ...] = pd.Field(
         ...,
         title="Geometries",
@@ -591,33 +589,6 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         "is supported.",
         jax_field=True,
     )
-
-    def to_tidy3d(self) -> GeometryGroup:
-        """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
-        self_dict = self.dict(exclude={"type"})
-        self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
-        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
-        tidy3d_type = map_reverse[type(self)]
-        return tidy3d_type.parse_obj(self_dict)
-
-    @classmethod
-    def from_tidy3d(cls, tidy3d_obj: GeometryGroup) -> JaxGeometryGroup:
-        """Convert :class:`.GeometryGroup` instance to :class:`.GeometryGroup`"""
-        obj_dict = tidy3d_obj.dict(exclude={"type"})
-        jax_geometries = []
-
-        tidy3d_type_map = {k.__name__: k for k, v in JAX_GEOMETRY_MAP.items()}
-        jax_type_map = {k.__name__: v for k, v in JAX_GEOMETRY_MAP.items()}
-
-        for geo in obj_dict["geometries"]:
-            type_str = geo["type"]
-            tidy3d_type = tidy3d_type_map[type_str]
-            jax_type = jax_type_map[type_str]
-            geo_tidy3d = tidy3d_type.parse_obj(geo)
-            geo_jax = jax_type.from_tidy3d(geo_tidy3d)
-            jax_geometries.append(geo_jax)
-        obj_dict["geometries"] = jax_geometries
-        return cls.parse_obj(obj_dict)
 
     @staticmethod
     def _store_vjp_geometry(
