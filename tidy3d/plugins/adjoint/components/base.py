@@ -141,12 +141,14 @@ class JaxObject(Tidy3dBaseModel):
     def handle_jax_kwargs(cls, values: dict) -> dict:
         """Pass jax inputs to the jax fields and pass untraced values to the regular fields."""
 
+        # for all jax-traced fields
         for jax_name in cls.get_jax_leaf_names():
+
             # if a value was passed to the object for the regular field
             orig_name = cls.get_orig_field(jax_name)
             val = values.get(orig_name)
-
             if val is not None:
+
                 # add the sanitized (no trace) version to the regular field
                 values[orig_name] = jax.lax.stop_gradient(val)
 
@@ -158,7 +160,7 @@ class JaxObject(Tidy3dBaseModel):
 
     @pd.root_validator(pre=True)
     def handle_array_jax_leafs(cls, values: dict) -> dict:
-        """Handle jax_leafs that are numpy arrays."""
+        """Convert jax_leafs that are passed as numpy arrays."""
         for jax_name in cls.get_jax_leaf_names():
             val = values.get(jax_name)
             if isinstance(val, np.ndarray):
