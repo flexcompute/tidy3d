@@ -23,7 +23,7 @@ class JaxObject(Tidy3dBaseModel):
     """Shortcut to get names of fields with certain properties."""
 
     @classmethod
-    def _get_fields(cls, field_key: str) -> List[str]:
+    def _get_field_names(cls, field_key: str) -> List[str]:
         """Get all fields where ``field_key=True`` in the ``pydantic.Field``."""
         fields = []
         for field_name, model_field in cls.__fields__.items():
@@ -35,12 +35,31 @@ class JaxObject(Tidy3dBaseModel):
     @classmethod
     def get_jax_field_names(cls) -> List[str]:
         """Returns list of field names where ``jax_field=True``."""
-        return cls._get_fields("jax_field")
+        return cls._get_field_names("jax_field")
 
     @classmethod
     def get_jax_leaf_names(cls) -> List[str]:
         """Returns list of field names where ``jax_leaf=True``."""
-        return cls._get_fields("jax_leaf")
+        return cls._get_field_names("jax_leaf")
+
+    @classmethod
+    def get_jax_fields_not_leaf(cls) -> List[str]:
+        """Returns list of field names where ``jax_field=True`` and ``jax_leaf`` unset."""
+        jax_field_names = cls.get_jax_field_names()
+        jax_leaf_names = cls.get_jax_leaf_names()
+        return [x for x in jax_field_names if x not in jax_leaf_names]
+
+    @property
+    def jax_fields(self) -> dict:
+        """Get dictionary of jax fields."""
+        jax_field_names = self.get_jax_field_names()
+        return {key: getattr(self, key) for key in jax_field_names}
+
+    @property
+    def jax_leafs(self) -> dict:
+        """Get dictionary of jax leafs."""
+        jax_leaf_names = self.get_jax_leaf_names()
+        return {key: getattr(self, key) for key in jax_leaf_names}
 
     """Methods needed for jax to register arbitary classes."""
 
@@ -88,16 +107,15 @@ class JaxObject(Tidy3dBaseModel):
         self_dict = self.dict(exclude=self.exclude_leafs_leafs_only)
 
         # TODO: simplify this logic
-        jax_leafs = self.get_jax_leaf_names()
-        for key in self.get_jax_field_names():
-            if key not in jax_leafs:
-                sub_field = getattr(self, key)
-                # end TODO
+        for key in self.get_jax_fields_not_leaf():
+            sub_field = self.jax_fields[key]
 
-                if isinstance(sub_field, (tuple, list)):
-                    self_dict[key] = [x.to_tidy3d() for x in sub_field]
-                else:
-                    self_dict[key] = sub_field.to_tidy3d()
+            # TODO: simplify this logic
+            if isinstance(sub_field, (tuple, list)):
+                self_dict[key] = [x.to_tidy3d() for x in sub_field]
+            else:
+                self_dict[key] = sub_field.to_tidy3d()
+            # end TODO
 
         return self._tidy3d_class.parse_obj(self_dict)
 
@@ -107,21 +125,16 @@ class JaxObject(Tidy3dBaseModel):
         obj_dict = tidy3d_obj.dict(exclude={"type"})
 
         # TODO: simplify this logic
-        jax_leafs = cls.get_jax_leaf_names()
-        for key in cls.get_jax_field_names():
-            if key not in jax_leafs:
-                sub_field_type = cls.__fields__[key].type_
-                tidy3d_sub_field = getattr(tidy3d_obj, key)
-                # end TODO
+        for key in cls.get_jax_fields_not_leaf():
+            sub_field_type = cls.__fields__[key].type_
+            tidy3d_sub_field = getattr(tidy3d_obj, key)
 
-                # TODO: simplify this logic
-                if isinstance(tidy3d_sub_field, (tuple, list)):
-                    sub_field = [sub_field_type.from_tidy3d(x) for x in tidy3d_sub_field]
-                else:
-                    sub_field = sub_field_type.from_tidy3d(tidy3d_sub_field)
-                # end TODO
-
-                obj_dict[key] = sub_field
+            # TODO: simplify this logic
+            if isinstance(tidy3d_sub_field, (tuple, list)):
+                obj_dict[key] = [sub_field_type.from_tidy3d(x) for x in tidy3d_sub_field]
+            else:
+                obj_dict[key] = sub_field_type.from_tidy3d(tidy3d_sub_field)
+            # end TODO
 
         return cls.parse_obj(obj_dict)
 
@@ -143,12 +156,10 @@ class JaxObject(Tidy3dBaseModel):
 
         # for all jax-traced fields
         for jax_name in cls.get_jax_leaf_names():
-
             # if a value was passed to the object for the regular field
             orig_name = cls.get_orig_field(jax_name)
             val = values.get(orig_name)
             if val is not None:
-
                 # add the sanitized (no trace) version to the regular field
                 values[orig_name] = jax.lax.stop_gradient(val)
 
