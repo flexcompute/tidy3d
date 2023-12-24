@@ -40,6 +40,17 @@ class JaxDataArray(Tidy3dBaseModel):
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
 
+    def to_tidy3d(self: JaxDataArray) -> xr.DataArray:
+        """Convert :class:`.JaxDataArray` instance to ``xr.DataArray`` instance."""
+        coords = {k: np.array(v).tolist() for k, v in self.coords.items()}
+        return xr.DataArray(np.array(self.values), coords=coords, dims=self.coords.keys())
+
+    @classmethod
+    def from_tidy3d(cls, tidy3d_obj: xr.DataArray) -> JaxDataArray:
+        """Convert ``xr.DataArray`` instance to :class:`.JaxDataArray`."""
+        coords = {k: np.array(v).tolist() for k, v in tidy3d_obj.coords.items()}
+        return cls(values=tidy3d_obj.data, coords=coords)
+
     @pd.validator("values", always=True)
     def _convert_values_to_np(cls, val):
         """Convert supplied values to numpy if they are list (from file)."""

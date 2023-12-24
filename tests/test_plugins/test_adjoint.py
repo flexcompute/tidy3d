@@ -1,6 +1,7 @@
 """Tests adjoint plugin."""
 
 from typing import Tuple, Dict, List
+import builtins
 
 import pytest
 import pydantic.v1 as pydantic
@@ -471,6 +472,8 @@ def test_run_flux(use_emulated_run):
 def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
 
+    td.config.logging_level = "ERROR"
+
     run_fn = run_local if local else run
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
@@ -486,6 +489,22 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
     grad_f = grad(f, argnums=(0, 1, 2, 3))
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # fail if all gradients close to zero
+    assert not all(
+        np.all(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)
+    ), "No gradients registered"
+
+    # fail if any gradients close to zero
+    assert not any(
+        np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)
+    ), "Some of the gradients are zero unexpectedly."
+
+    # fail if some gradients dont match the pre/2.6 grads (before refactor).
+    if local:
+        assert np.isclose(df_deps, 1278130200000000.0), "local grad doesn't match previous value."
+    else:
+        assert np.isclose(df_deps, 0.031742122), "non-local grad doesn't match previous value."
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
@@ -1328,11 +1347,18 @@ def _test_polyslab_scale(use_emulated_run):
 
 def test_validate_vertices():
     """Test the maximum number of vertices."""
-    vertices = np.random.rand(MAX_NUM_VERTICES, 2)
-    _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
-    vertices = np.random.rand(MAX_NUM_VERTICES + 1, 2)
+
+    def make_vertices(n: int) -> np.ndarray:
+        """Make circular polygon vertices of shape (n, 2)."""
+        angles = np.linspace(0, 2 * np.pi, n)
+        return np.stack((np.cos(angles), np.sin(angles)), axis=-1)
+
+    vertices_pass = make_vertices(MAX_NUM_VERTICES)
+    _ = JaxPolySlab(vertices=vertices_pass, slab_bounds=(-1, 1))
+
     with pytest.raises(pydantic.ValidationError):
-        _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+        vertices_fail = make_vertices(MAX_NUM_VERTICES + 1)
+        _ = JaxPolySlab(vertices=vertices_fail, slab_bounds=(-1, 1))
 
 
 def _test_custom_medium_3D(use_emulated_run):
@@ -1695,3 +1721,46 @@ def test_nonlinear_warn(log_capture):
     # nonlinear input_structure (warn)
     with AssertLogLevel(log_capture, "WARNING"):
         sim = sim_base.updated_copy(input_structures=[input_struct_nl])
+
+
+@pytest.fixture
+def hide_jax(monkeypatch, request):
+    import_orig = builtins.__import__
+
+    def mocked_import(name, *args, **kwargs):
+        if name in ["jax", "jax.interpreters.ad", "jax.interpreters.ad.JVPTracer"]:
+            raise ImportError()
+        return import_orig(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", mocked_import)
+
+
+def try_tracer_import() -> None:
+    """Try importing `tidy3d.plugins.adjoint.components.types`."""
+    from importlib import reload
+    import tidy3d
+
+    reload(tidy3d.plugins.adjoint.components.types)
+
+
+@pytest.mark.usefixtures("hide_jax")
+def test_jax_tracer_import_fail(tmp_path, log_capture):
+    """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
+    try_tracer_import()
+    assert_log_level(log_capture, "WARNING")
+
+
+def test_jax_tracer_import_pass(tmp_path, log_capture):
+    """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
+    try_tracer_import()
+    assert_log_level(log_capture, None)
+
+
+def test_inf_IO(tmp_path):
+    """test that components can save and load "Infinity" properly in jax fields."""
+    fname = str(tmp_path / "box.json")
+
+    box = JaxBox(size=(td.inf, td.inf, td.inf), center=(0, 0, 0))
+    box.to_file(fname)
+    box2 = JaxBox.from_file(fname)
+    assert box == box2
