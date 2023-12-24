@@ -12,6 +12,8 @@ from ..base import JaxObject
 class JaxPermittivityDataset(PermittivityDataset, JaxObject):
     """A :class:`.PermittivityDataset` registered with jax."""
 
+    _tidy3d_class = PermittivityDataset
+
     eps_xx: JaxDataArray = pd.Field(
         ...,
         title="Epsilon xx",

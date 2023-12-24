@@ -298,6 +298,8 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
     #     "frequency omega is given by conductivity/omega.",
     # )
 
+    _tidy3d_class = CustomMedium
+
     eps_dataset: Optional[JaxPermittivityDataset] = pd.Field(
         None,
         title="Permittivity Dataset",
@@ -383,40 +385,40 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         as_custom_medium = self.to_tidy3d()
         return as_custom_medium.eps_dataarray_freq(frequency)
 
-    def to_tidy3d(self) -> CustomMedium:
-        """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
-        self_dict = self.dict(exclude={"type"})
-        eps_field_components = {}
-        for dim in "xyz":
-            field_name = f"eps_{dim}{dim}"
-            data_array = self_dict["eps_dataset"][field_name]
-            values = np.array(data_array["values"])
-            coords = data_array["coords"]
-            scalar_field = ScalarFieldDataArray(values, coords=coords)
-            eps_field_components[field_name] = scalar_field
-        eps_dataset = PermittivityDataset(**eps_field_components)
-        self_dict["eps_dataset"] = eps_dataset
-        self_dict["permittivity"] = None
-        self_dict["conductivity"] = None
-        return CustomMedium.parse_obj(self_dict)
+    # def to_tidy3d(self) -> CustomMedium:
+    #     """Convert :class:`.JaxMedium` instance to :class:`.Medium`"""
+    #     self_dict = self.dict(exclude={"type"})
+    #     eps_field_components = {}
+    #     for dim in "xyz":
+    #         field_name = f"eps_{dim}{dim}"
+    #         data_array = self_dict["eps_dataset"][field_name]
+    #         values = np.array(data_array["values"])
+    #         coords = data_array["coords"]
+    #         scalar_field = ScalarFieldDataArray(values, coords=coords)
+    #         eps_field_components[field_name] = scalar_field
+    #     eps_dataset = PermittivityDataset(**eps_field_components)
+    #     self_dict["eps_dataset"] = eps_dataset
+    #     self_dict["permittivity"] = None
+    #     self_dict["conductivity"] = None
+    #     return CustomMedium.parse_obj(self_dict)
 
-    @classmethod
-    def from_tidy3d(cls, tidy3d_obj: CustomMedium) -> JaxCustomMedium:
-        """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
-        obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset", "permittivity", "conductivity"})
-        eps_dataset = tidy3d_obj.eps_dataset
-        field_components = {}
-        for dim in "xyz":
-            field_name = f"eps_{dim}{dim}"
-            data_array = eps_dataset.field_components[field_name]
-            values = data_array.values.tolist()
-            coords = {key: np.array(val).tolist() for key, val in data_array.coords.items()}
-            field_components[field_name] = JaxDataArray(values=values, coords=coords)
-        eps_dataset = JaxPermittivityDataset(**field_components)
-        obj_dict["eps_dataset"] = eps_dataset
-        obj_dict["permittivity"] = None
-        obj_dict["conductivity"] = None
-        return cls.parse_obj(obj_dict)
+    # @classmethod
+    # def from_tidy3d(cls, tidy3d_obj: CustomMedium) -> JaxCustomMedium:
+    #     """Convert :class:`.Tidy3dBaseModel` instance to :class:`.JaxObject`."""
+    #     obj_dict = tidy3d_obj.dict(exclude={"type", "eps_dataset", "permittivity", "conductivity"})
+    #     eps_dataset = tidy3d_obj.eps_dataset
+    #     field_components = {}
+    #     for dim in "xyz":
+    #         field_name = f"eps_{dim}{dim}"
+    #         data_array = eps_dataset.field_components[field_name]
+    #         values = data_array.values.tolist()
+    #         coords = {key: np.array(val).tolist() for key, val in data_array.coords.items()}
+    #         field_components[field_name] = JaxDataArray(values=values, coords=coords)
+    #     eps_dataset = JaxPermittivityDataset(**field_components)
+    #     obj_dict["eps_dataset"] = eps_dataset
+    #     obj_dict["permittivity"] = None
+    #     obj_dict["conductivity"] = None
+    #     return cls.parse_obj(obj_dict)
 
     def store_vjp(
         self,

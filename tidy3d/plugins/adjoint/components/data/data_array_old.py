@@ -11,10 +11,9 @@ import jax
 from jax.tree_util import register_pytree_node_class
 import xarray as xr
 
-from ..base import JaxObject
 from .....components.base import Tidy3dBaseModel, cached_property
-from .....components.data.data_array import DataArray
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
+
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -25,19 +24,15 @@ JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 
 @register_pytree_node_class
-class JaxDataArray(JaxObject):
+class JaxDataArray(Tidy3dBaseModel):
     """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
-
-    # values_numpy: Any = pd.Field(
-    #     None,
-    #     title="Values",
-    #     description="Nested list containing the raw values, which can be tracked by jax.",
-    # )
 
     values: Any = pd.Field(
         ...,
-        jax_leaf=True,
-    )    
+        title="Values",
+        description="Nested list containing the raw values, which can be tracked by jax.",
+        jax_field=True,
+    )
 
     coords: Dict[str, list] = pd.Field(
         ...,
@@ -45,21 +40,12 @@ class JaxDataArray(JaxObject):
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
 
-    def to_tidy3d(self):
-        values = np.array(jax.lax.stop_gradient(self.values))
-        return DataArray(values, coords=self.coords)
-
-
-    @pd.validator("values", pre=True, always=True)
-    def _convert_values_to_jnp_array(cls, val):
-        try:
-            return jnp.array(val)
-        except TypeError:
-            return val
-
-    @pd.validator("coords", pre=True, always=True)
-    def _convert_coords_to_list(cls, val):
-        return {k: np.array(v).tolist() for k, v in val.items()}
+    @pd.validator("values", always=True)
+    def _convert_values_to_np(cls, val):
+        """Convert supplied values to numpy if they are list (from file)."""
+        if isinstance(val, list):
+            return np.array(val)
+        return val
 
     @pd.validator("coords", always=True)
     def _coords_match_values(cls, val, values):
@@ -82,6 +68,11 @@ class JaxDataArray(JaxObject):
                 )
 
         return val
+
+    @pd.validator("coords", always=True)
+    def _convert_coords_to_list(cls, val):
+        """Convert supplied coordinates to Dict[str, list]."""
+        return {coord_name: list(coord_list) for coord_name, coord_list in val.items()}
 
     def __eq__(self, other) -> bool:
         """Check if two ``JaxDataArray`` instances are equal."""

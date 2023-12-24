@@ -115,6 +115,9 @@ class DataArray(xr.DataArray):
         )
         field_schema.update(schema)
 
+    def dict(self, **kwargs) -> dict:
+        return dict(values=self.data, coords=self.coords)
+
     @classmethod
     def _json_encoder(cls, val):
         """What function to call when writing a DataArray to json."""

@@ -12,7 +12,7 @@ from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel
-from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
+# from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 
 
 class JaxObject(Tidy3dBaseModel):
@@ -185,11 +185,15 @@ class JaxObject(Tidy3dBaseModel):
     @staticmethod
     def get_jax_field(orig_field: str) -> str:
         """Get the 'jax' field name from the original field name."""
+        if orig_field == "values_numpy":
+            return "values"
         return orig_field + "_jax"
 
     @staticmethod
     def get_orig_field(jax_field: str) -> str:
         """Get the 'jax' field name from the original field name."""
+        if jax_field == "values":
+            return "values_numpy"
         split = jax_field.split("_")
         if len(split) != 2:
             raise ValueError(f"Can't get original field from jax field {jax_field}.")
@@ -197,100 +201,100 @@ class JaxObject(Tidy3dBaseModel):
 
     """ IO """
 
-    def _json(self, *args, **kwargs) -> str:
-        """Overwritten method to get the json string to store in the files."""
+    # def _json(self, *args, **kwargs) -> str:
+    #     """Overwritten method to get the json string to store in the files."""
 
-        json_string_og = super()._json(*args, **kwargs)
-        json_dict = json.loads(json_string_og)
+    #     json_string_og = super()._json(*args, **kwargs)
+    #     json_dict = json.loads(json_string_og)
 
-        def strip_data_array(sub_dict: dict) -> None:
-            """Strip any elements of the dictionary with type "JaxDataArray", replace with tag."""
+    #     def strip_data_array(sub_dict: dict) -> None:
+    #         """Strip any elements of the dictionary with type "JaxDataArray", replace with tag."""
 
-            for key, val in sub_dict.items():
-                if isinstance(val, dict):
-                    if "type" in val and val["type"] == "JaxDataArray":
-                        sub_dict[key] = JAX_DATA_ARRAY_TAG
-                    else:
-                        strip_data_array(val)
-                elif isinstance(val, (list, tuple)):
-                    val_dict = dict(zip(range(len(val)), val))
-                    strip_data_array(val_dict)
-                    sub_dict[key] = list(val_dict.values())
+    #         for key, val in sub_dict.items():
+    #             if isinstance(val, dict):
+    #                 if "type" in val and val["type"] == "JaxDataArray":
+    #                     sub_dict[key] = JAX_DATA_ARRAY_TAG
+    #                 else:
+    #                     strip_data_array(val)
+    #             elif isinstance(val, (list, tuple)):
+    #                 val_dict = dict(zip(range(len(val)), val))
+    #                 strip_data_array(val_dict)
+    #                 sub_dict[key] = list(val_dict.values())
 
-        strip_data_array(json_dict)
-        return json.dumps(json_dict)
+    #     strip_data_array(json_dict)
+    #     return json.dumps(json_dict)
 
-    def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
-        """Exports :class:`JaxObject` instance to .hdf5 file.
+    # def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
+    #     """Exports :class:`JaxObject` instance to .hdf5 file.
 
-        Parameters
-        ----------
-        fname : str
-            Full path to the .hdf5 file to save the :class:`JaxObject` to.
-        custom_encoders : List[Callable]
-            List of functions accepting (fname: str, group_path: str, value: Any) that take
-            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
+    #     Parameters
+    #     ----------
+    #     fname : str
+    #         Full path to the .hdf5 file to save the :class:`JaxObject` to.
+    #     custom_encoders : List[Callable]
+    #         List of functions accepting (fname: str, group_path: str, value: Any) that take
+    #         the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
 
-        Example
-        -------
-        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
-        """
+    #     Example
+    #     -------
+    #     >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+    #     """
 
-        def data_array_encoder(fname: str, group_path: str, value: Any) -> None:
-            """Custom encoder to convert the JaxDataArray dict to an instance."""
-            if isinstance(value, dict) and "type" in value and value["type"] == "JaxDataArray":
-                data_array = JaxDataArray(values=value["values"], coords=value["coords"])
-                data_array.to_hdf5(fname=fname, group_path=group_path)
+    #     def data_array_encoder(fname: str, group_path: str, value: Any) -> None:
+    #         """Custom encoder to convert the JaxDataArray dict to an instance."""
+    #         if isinstance(value, dict) and "type" in value and value["type"] == "JaxDataArray":
+    #             data_array = JaxDataArray(values=value["values"], coords=value["coords"])
+    #             data_array.to_hdf5(fname=fname, group_path=group_path)
 
-        if custom_encoders is None:
-            custom_encoders = []
+    #     if custom_encoders is None:
+    #         custom_encoders = []
 
-        custom_encoders += [data_array_encoder]
+    #     custom_encoders += [data_array_encoder]
 
-        return super().to_hdf5(fname=fname, custom_encoders=custom_encoders)
+    #     return super().to_hdf5(fname=fname, custom_encoders=custom_encoders)
 
-    @classmethod
-    def dict_from_hdf5(
-        cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
-    ) -> dict:
-        """Loads a dictionary containing the model contents from a .hdf5 file.
+    # @classmethod
+    # def dict_from_hdf5(
+    #     cls, fname: str, group_path: str = "", custom_decoders: List[Callable] = None
+    # ) -> dict:
+    #     """Loads a dictionary containing the model contents from a .hdf5 file.
 
-        Parameters
-        ----------
-        fname : str
-            Full path to the .hdf5 file to load the :class:`JaxObject` from.
-        group_path : str, optional
-            Path to a group inside the file to selectively load a sub-element of the model only.
-        custom_decoders : List[Callable]
-            List of functions accepting
-            (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
-            value in the model dict after a custom decoding.
+    #     Parameters
+    #     ----------
+    #     fname : str
+    #         Full path to the .hdf5 file to load the :class:`JaxObject` from.
+    #     group_path : str, optional
+    #         Path to a group inside the file to selectively load a sub-element of the model only.
+    #     custom_decoders : List[Callable]
+    #         List of functions accepting
+    #         (fname: str, group_path: str, model_dict: dict, key: str, value: Any) that store the
+    #         value in the model dict after a custom decoding.
 
-        Returns
-        -------
-        dict
-            Dictionary containing the model.
+    #     Returns
+    #     -------
+    #     dict
+    #         Dictionary containing the model.
 
-        Example
-        -------
-        >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
-        """
+    #     Example
+    #     -------
+    #     >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+    #     """
 
-        def data_array_decoder(
-            fname: str, group_path: str, model_dict: dict, key: str, value: Any
-        ) -> None:
-            """Custom decoder to grab JaxDataArray from file and save it in model_dict."""
+    #     def data_array_decoder(
+    #         fname: str, group_path: str, model_dict: dict, key: str, value: Any
+    #     ) -> None:
+    #         """Custom decoder to grab JaxDataArray from file and save it in model_dict."""
 
-            # write the path to the element of the json dict where the data_array should be
-            if isinstance(value, str) and value == JAX_DATA_ARRAY_TAG:
-                jax_data_array = JaxDataArray.from_hdf5(fname=fname, group_path=group_path)
-                model_dict[key] = jax_data_array
+    #         # write the path to the element of the json dict where the data_array should be
+    #         if isinstance(value, str) and value == JAX_DATA_ARRAY_TAG:
+    #             jax_data_array = JaxDataArray.from_hdf5(fname=fname, group_path=group_path)
+    #             model_dict[key] = jax_data_array
 
-        if custom_decoders is None:
-            custom_decoders = []
+    #     if custom_decoders is None:
+    #         custom_decoders = []
 
-        custom_decoders += [data_array_decoder]
+    #     custom_decoders += [data_array_decoder]
 
-        return super().dict_from_hdf5(
-            fname=fname, group_path=group_path, custom_decoders=custom_decoders
-        )
+    #     return super().dict_from_hdf5(
+    #         fname=fname, group_path=group_path, custom_decoders=custom_decoders
+    #     )

@@ -30,6 +30,7 @@ class AbstractJaxStructure(Structure, JaxObject):
 
     # which of "geometry" or "medium" is differentiable for this class
     _differentiable_fields = ()
+    # TODO: make this a @classmethod, automatically generated from the `jax_field` tags
 
     @pd.validator("medium", always=True)
     def _check_2d_geometry(cls, val, values):
