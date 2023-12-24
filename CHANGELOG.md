@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - All solver output is now compressed. However, it is automatically unpacked to the same `simulation_data.hdf5` by default when loading simulation data from the server.
+- Internal refactor of `adjoint` plugin to separate `jax`-traced fields from regular `tidy3d` fields.
 
 ### Fixed
 
