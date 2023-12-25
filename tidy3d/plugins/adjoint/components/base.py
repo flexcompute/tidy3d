@@ -103,7 +103,6 @@ class JaxObject(Tidy3dBaseModel):
             """Strip any elements of the dictionary with type "JaxDataArray", replace with tag."""
 
             for key, val in sub_dict.items():
-
                 if isinstance(val, dict):
                     if "type" in val and val["type"] == "JaxDataArray":
                         sub_dict[key] = JAX_DATA_ARRAY_TAG

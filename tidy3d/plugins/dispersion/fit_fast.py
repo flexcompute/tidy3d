@@ -289,7 +289,7 @@ class FastFitterData(AdvancedFastFitterParam):
     def evaluate(self, omega: float) -> complex:
         """Evaluate model at omega in eV."""
         eps = self.eps_inf
-        for (pole, res) in zip(self.poles, self.residues):
+        for pole, res in zip(self.poles, self.residues):
             eps += -res / (1j * omega + pole) - np.conj(res) / (1j * omega + np.conj(pole))
         return eps
 
@@ -613,7 +613,6 @@ class FastDispersionFitter(DispersionFitter):
                     and len(model.poles) <= num_poles_range[1]
                     and model.rms_error < best_model.rms_error
                 ):
-
                     best_model = model
             return best_model
 
@@ -715,7 +714,6 @@ class FastDispersionFitter(DispersionFitter):
         configs = make_configs()
 
         with Progress(console=get_logging_console()) as progress:
-
             task = progress.add_task(
                 f"Fitting to weighted RMS of {tolerance_rms}...",
                 total=len(configs),
@@ -723,7 +721,6 @@ class FastDispersionFitter(DispersionFitter):
             )
 
             while not progress.finished:
-
                 # try different initial pole configurations
                 for num_poles, relaxed, smooth, logspacing, optimize_eps_inf in configs:
                     model = init_model.updated_copy(

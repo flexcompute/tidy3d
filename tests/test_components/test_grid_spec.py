@@ -48,7 +48,6 @@ def test_make_coords_2d():
 
 
 def test_wvl_from_sources():
-
     # no sources
     with pytest.raises(SetupError):
         td.GridSpec.wavelength_from_sources(sources=[])

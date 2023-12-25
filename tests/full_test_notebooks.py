@@ -163,7 +163,6 @@ def test_notebooks(fname):
 
 
 def _run_notebook(notebook_fname):
-
     # open the notebook
     with open(notebook_fname) as f:
         nb = nbformat.read(f, as_version=4)

@@ -86,7 +86,6 @@ class JaxModeData(JaxMonitorData, ModeData):
 
         adjoint_sources = []
         for amp, direction, freq, mode_index in zip(amps, directions, freqs, mode_indices):
-
             # TODO: figure out where this factor comes from
             k0 = 2 * np.pi * freq / C_0
             grad_const = k0 / 4 / ETA_0
@@ -235,12 +234,10 @@ class JaxFieldData(JaxMonitorData, FieldData):
 
         if np.allclose(np.array(self.monitor.size), np.zeros(3)):
             for polarization, field_component in self.field_components.items():
-
                 if field_component is None:
                     continue
 
                 for freq0 in field_component.coords["f"]:
-
                     omega0 = 2 * np.pi * freq0
                     scaling_factor = 1 / (MU_0 * omega0)
 
@@ -261,7 +258,6 @@ class JaxFieldData(JaxMonitorData, FieldData):
 
                     sources.append(src_adj)
         else:
-
             # Define source geometry based on coordinates in the data
             data_mins = []
             data_maxs = []
@@ -287,7 +283,6 @@ class JaxFieldData(JaxMonitorData, FieldData):
             # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
 
             for freq0 in tuple(self.field_components.values())[0].coords["f"]:
-
                 src_field_components = {}
                 for name, field_component in self.field_components.items():
                     field_component = field_component.sel(f=freq0)
@@ -412,7 +407,6 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         adjoint_sources = []
         for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
-
             # select the propagation angles from the data
             angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
             angle_theta = float(theta_data.sel(**angle_sel_kwargs))
