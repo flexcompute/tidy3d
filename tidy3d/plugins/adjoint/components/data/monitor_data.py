@@ -283,6 +283,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
             # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
 
             for freq0 in tuple(self.field_components.values())[0].coords["f"]:
+
                 src_field_components = {}
                 for name, field_component in self.field_components.items():
                     field_component = field_component.sel(f=freq0)
