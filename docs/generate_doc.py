@@ -9,7 +9,6 @@ LOW_LOSS_THRESHOLD = 2e-5
 
 
 def generate_material_library_doc():
-
     # Display unit for "Valid range" in table, select from 'eV', 'um', 'THz'
     unit = "um"
 
@@ -23,7 +22,6 @@ def generate_material_library_doc():
             return str(round(num, 2))
 
     with open(fname, "w") as f:
-
         # Write file header
         header = (
             "****************\n"
@@ -50,7 +48,6 @@ def generate_material_library_doc():
         for abbr, mat in sorted(
             lib.items(), key=lambda item: item[0].lower()
         ):  # iterate materials sorted by material abbreviation
-
             if isinstance(mat, type):
                 # Write material title
                 title = mat.__name__ + ' ("' + abbr + '")'
@@ -86,7 +83,6 @@ def generate_material_library_doc():
                 for varname, var in sorted(
                     mat.variants.items(), key=lambda item: item[0].lower()
                 ):  # iterate variants sorted by variant name
-
                     # Initialize row
                     row = {}
 
