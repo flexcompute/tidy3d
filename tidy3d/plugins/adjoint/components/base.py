@@ -176,7 +176,6 @@ class JaxObject(Tidy3dBaseModel):
 
     """ IO """
 
-
     def _json(self, *args, **kwargs) -> str:
         """Overwritten method to get the json string to store in the files."""
 
