@@ -1713,7 +1713,6 @@ def test_nonlinear_warn(log_capture):
     with AssertLogLevel(log_capture, "WARNING"):
         sim = sim_base.updated_copy(input_structures=[input_struct_nl])
 
-
 @pytest.fixture
 def hide_jax(monkeypatch, request):
     import_orig = builtins.__import__
