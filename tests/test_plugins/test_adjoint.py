@@ -267,8 +267,8 @@ def make_sim(
         geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
     )
 
-    a = -permittivity
-    c = a
+    a = -permittivity + 1j * permittivity
+    c = 2 * a
     pole1 = (a, c)
     poles = [pole1, pole1]
     jax_med_pole_res = JaxPoleResidue(eps_inf=1 + permittivity, poles=poles)
@@ -1753,7 +1753,6 @@ def test_jax_tracer_import_pass(tmp_path, log_capture):
     try_tracer_import()
     assert_log_level(log_capture, None)
 
-
 def test_inf_IO(tmp_path):
     """test that components can save and load "Infinity" properly in jax fields."""
     fname = str(tmp_path / "box.json")
@@ -1762,3 +1761,20 @@ def test_inf_IO(tmp_path):
     box.to_file(fname)
     box2 = JaxBox.from_file(fname)
     assert box == box2
+
+def test_grad_pole_residue():
+
+    frequency = 1.0
+
+    def get_eps(eps_inf: float, a_re: float, a_im: float, c_re: float, c_im: float) -> float:
+        a = a_re + 1j * a_im
+        c = c_re + 1j * c_im
+
+        pole = (a, c)
+        med = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+        return med.eps_model(frequency=frequency)
+
+    eps_inf = 2.0
+    a = (-1. - 2.j)
+    c = (-2. + 3.j)
+

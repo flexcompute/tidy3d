@@ -7,6 +7,8 @@ from abc import ABC
 import pydantic.v1 as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
+import jax
+import jax.numpy as jnp
 import xarray as xr
 
 from ....components.types import Bound, Literal
@@ -465,6 +467,17 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         stores_jax_for="poles",
     )
 
+
+    @staticmethod
+    def _eps_model_pole_contrib(a: complex, c: complex, frequency: float) -> complex:
+        """Contribution of a single ``a`` and ``c`` pole on the complex-valued permittivity."""
+
+        omega = 2 * np.pi * frequency
+        a_cc = jnp.conj(a)
+        c_cc = jnp.conj(c)
+        pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
+        return -pole_contrib
+
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -495,22 +508,38 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
             _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
             vjp_eps_inf += _vjp_eps
 
-            # TODO: work this out for real
             omega = float(2 * np.pi * freq)
-            for pole_i, (a, c) in enumerate(self.poles):
-                deps_da = -c / (1j * omega + a) ** 2
-                deps_dc = 1 / (1j * omega + a)
-                deps_da_CC = -np.conj(c) / (1j * omega + np.conj(a)) ** 2
-                deps_dc_CC = 1 / (1j * omega + np.conj(a))
 
-                vjp_a = deps_da * vjp_eps_complex_f
-                vjp_c = deps_dc * vjp_eps_complex_f
-                vjp_a_CC = deps_da_CC * vjp_eps_complex_f
-                vjp_c_CC = deps_dc_CC * vjp_eps_complex_f
+            def pole_contrib_fn(a: complex, c: complex) -> complex:
+                """Contribution to eps_complex from a single pole."""
+                a_cc = jnp.conj(a)
+                c_cc = jnp.conj(c)
+                pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
+                return -pole_contrib            
+
+            pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0,1), holomorphic=True)
+
+            for pole_i, (a_i, c_i) in enumerate(self.poles):
+
+                # a_re = np.real(a_i)
+                # a_im = np.imag(a_i)
+                # c_re = np.real(c_i)
+                # c_im = np.imag(c_i)
+
+                # denom = (a_re * a_im) + (2j * omega * a_re) - (omega**2)
+
+                # # note: applying CC (-1j)
+                # deps_da = (c_re * (a_im + 2j * omega) - 1j * (c_im * a_re)) / (denom**2)
+                # deps_dc = -((a_re + 2j * omega) - 1j * a_im) / denom
+
+                deps_da, deps_dc = pole_contrib_grad_fn(a_i, c_i)
+
+                vjp_a = vjp_eps_complex_f / deps_da
+                vjp_c = vjp_eps_complex_f / deps_dc
 
                 # update the VJP of each pole for this frequency
-                vjp_poles[pole_i][0] += vjp_a + np.conj(vjp_a_CC)
-                vjp_poles[pole_i][1] += vjp_c + np.conj(vjp_c_CC)
+                vjp_poles[pole_i][0] += vjp_a
+                vjp_poles[pole_i][1] += vjp_c
 
         return self.copy(
             update=dict(
