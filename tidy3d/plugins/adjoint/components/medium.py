@@ -522,14 +522,12 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
 
         vjp_eps_inf = 0.0
         vjp_poles = [[0.0j, 0.0j] for _ in self.poles]
+        eps_model_grad_fn = jax.grad(self._eps_model_1_pole, argnums=(0, 1), holomorphic=True)
 
         for freq in d_eps_map.coords["f"]:
             vjp_eps_complex_f = complex(vjp_eps_complex.sel(f=freq))
             _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
             vjp_eps_inf += _vjp_eps
-
-            # pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0, 1), holomorphic=True)
-            eps_model_grad_fn = jax.grad(self._eps_model_1_pole, argnums=(0, 1), holomorphic=True)
 
             for pole_i, (a_i, c_i) in enumerate(self.poles):
 
