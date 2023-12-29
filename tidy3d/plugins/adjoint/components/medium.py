@@ -1,7 +1,7 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional
+from typing import Dict, Tuple, Union, Callable, Optional, Any
 from abc import ABC
 
 import pydantic.v1 as pd
@@ -467,6 +467,26 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         stores_jax_for="poles",
     )
 
+    @staticmethod
+    def _to_complex(value: Any) -> complex:
+        """Convert a value to complex (if possible)."""
+        if isinstance(value, (jnp.ndarray, np.ndarray)):
+            return value.astype(complex)
+        if isinstance(value, dict) and all(key in value for key in ("real", "imag")):
+            return value["real"] + 1j * value["imag"]
+        if isinstance(value, float):
+            return complex(value)
+        return value
+
+    @pd.validator("poles", pre=True, always=True, allow_reuse=True)
+    def _handle_poles(cls, val):
+        """Make sure there are no poles that aren't of type complex."""
+        return tuple((cls._to_complex(a), cls._to_complex(c)) for (a, c) in val)
+
+    @pd.validator("poles_jax", pre=True, always=True, allow_reuse=True)
+    def _handle_poles_jax(cls, val):
+        """Make sure there are no jax poles that aren't of type complex."""
+        return tuple((cls._to_complex(a), cls._to_complex(c)) for (a, c) in val)
 
     @staticmethod
     def _eps_model_pole_contrib(a: complex, c: complex, frequency: float) -> complex:
@@ -503,6 +523,13 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         vjp_eps_inf = 0.0
         vjp_poles = [[0.0j, 0.0j] for _ in self.poles]
 
+        def pole_contrib_fn(a: complex, c: complex, omega: float) -> complex:
+            """Contribution to eps_complex from a single pole."""
+            a_cc = jnp.conj(a)
+            c_cc = jnp.conj(c)
+            pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
+            return -pole_contrib
+
         for freq in d_eps_map.coords["f"]:
             vjp_eps_complex_f = complex(vjp_eps_complex.sel(f=freq))
             _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
@@ -510,36 +537,18 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
 
             omega = float(2 * np.pi * freq)
 
-            def pole_contrib_fn(a: complex, c: complex) -> complex:
-                """Contribution to eps_complex from a single pole."""
-                a_cc = jnp.conj(a)
-                c_cc = jnp.conj(c)
-                pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
-                return -pole_contrib            
-
-            pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0,1), holomorphic=True)
+            pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0, 1), holomorphic=True)
 
             for pole_i, (a_i, c_i) in enumerate(self.poles):
 
-                # a_re = np.real(a_i)
-                # a_im = np.imag(a_i)
-                # c_re = np.real(c_i)
-                # c_im = np.imag(c_i)
+                deps_da, deps_dc = pole_contrib_grad_fn(a_i, c_i, omega)
 
-                # denom = (a_re * a_im) + (2j * omega * a_re) - (omega**2)
-
-                # # note: applying CC (-1j)
-                # deps_da = (c_re * (a_im + 2j * omega) - 1j * (c_im * a_re)) / (denom**2)
-                # deps_dc = -((a_re + 2j * omega) - 1j * a_im) / denom
-
-                deps_da, deps_dc = pole_contrib_grad_fn(a_i, c_i)
-
-                vjp_a = vjp_eps_complex_f / deps_da
-                vjp_c = vjp_eps_complex_f / deps_dc
+                vjp_a = vjp_eps_complex_f * deps_da  # TODO: not sure about multiply or divide
+                vjp_c = vjp_eps_complex_f * deps_dc  # TODO: not sure about multiply or divide
 
                 # update the VJP of each pole for this frequency
-                vjp_poles[pole_i][0] += vjp_a
-                vjp_poles[pole_i][1] += vjp_c
+                vjp_poles[pole_i][0] += complex(jnp.conj(vjp_a))  # TODO: not sure about conj
+                vjp_poles[pole_i][1] += complex(jnp.conj(vjp_c))  # TODO: not sure about conj
 
         return self.copy(
             update=dict(

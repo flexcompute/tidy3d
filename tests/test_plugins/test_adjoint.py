@@ -1775,6 +1775,6 @@ def test_grad_pole_residue():
         return med.eps_model(frequency=frequency)
 
     eps_inf = 2.0
-    a = (-1. - 2.j)
-    c = (-2. + 3.j)
 
+    a = -1.0 - 2.0j
+    c = -2.0 + 3.0j

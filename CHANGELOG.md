@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration of the `tidy3d-notebooks` repository.
 - `tidy3d develop` CLI and development guide on the main documentation.
 - Added a convenience method `Simulation.subsection()` to a create a new simulation based on a subregion of another one.
+- `JaxPoleResidue` with support for differentiation with respect to `eps_inf` and `poles`.
 
 ### Changed
 - `poetry` based installation. Removal of `setup.py` and `requirements.txt`.
