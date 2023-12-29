@@ -489,7 +489,7 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         return tuple((cls._to_complex(a), cls._to_complex(c)) for (a, c) in val)
 
     @staticmethod
-    def _eps_model_pole_contrib(a: complex, c: complex, frequency: float) -> complex:
+    def _eps_model_1_pole(a: complex, c: complex, frequency: float) -> complex:
         """Contribution of a single ``a`` and ``c`` pole on the complex-valued permittivity."""
 
         omega = 2 * np.pi * frequency
@@ -523,38 +523,28 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         vjp_eps_inf = 0.0
         vjp_poles = [[0.0j, 0.0j] for _ in self.poles]
 
-        def pole_contrib_fn(a: complex, c: complex, omega: float) -> complex:
-            """Contribution to eps_complex from a single pole."""
-            a_cc = jnp.conj(a)
-            c_cc = jnp.conj(c)
-            pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
-            return -pole_contrib
-
         for freq in d_eps_map.coords["f"]:
             vjp_eps_complex_f = complex(vjp_eps_complex.sel(f=freq))
             _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
             vjp_eps_inf += _vjp_eps
 
-            omega = float(2 * np.pi * freq)
-
-            pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0, 1), holomorphic=True)
+            # pole_contrib_grad_fn = jax.grad(pole_contrib_fn, argnums=(0, 1), holomorphic=True)
+            eps_model_grad_fn = jax.grad(self._eps_model_1_pole, argnums=(0, 1), holomorphic=True)
 
             for pole_i, (a_i, c_i) in enumerate(self.poles):
 
-                deps_da, deps_dc = pole_contrib_grad_fn(a_i, c_i, omega)
+                deps_da, deps_dc = eps_model_grad_fn(a_i, c_i, float(freq))
 
-                vjp_a = vjp_eps_complex_f * deps_da  # TODO: not sure about multiply or divide
-                vjp_c = vjp_eps_complex_f * deps_dc  # TODO: not sure about multiply or divide
+                vjp_a = vjp_eps_complex_f * deps_da
+                vjp_c = vjp_eps_complex_f * deps_dc
 
                 # update the VJP of each pole for this frequency
                 vjp_poles[pole_i][0] += complex(jnp.conj(vjp_a))  # TODO: not sure about conj
                 vjp_poles[pole_i][1] += complex(jnp.conj(vjp_c))  # TODO: not sure about conj
 
-        return self.copy(
-            update=dict(
-                eps_inf_jax=vjp_eps_inf,
-                poles_jax=tuple(vjp_poles),
-            )
+        return self.updated_copy(
+            eps_inf_jax=float(vjp_eps_inf),
+            poles_jax=tuple(vjp_poles),
         )
 
 
