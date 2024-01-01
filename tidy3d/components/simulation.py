@@ -385,17 +385,40 @@ class Simulation(AbstractSimulation):
 
     @pydantic.validator("boundary_spec", always=True)
     def boundaries_for_zero_dims(cls, val, values):
-        """Error if an absorbing boundary is used along a zero dimension."""
+        """Error if absorbing boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
-        for dim, (boundary, size_dim) in enumerate(zip(boundaries, size)):
-            num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
-            if num_absorbing_bdries > 0 and size_dim == 0:
-                raise SetupError(
-                    f"The simulation has zero size along the {'xyz'[dim]} axis, so "
-                    "using a PML or absorbing boundary along that axis is incorrect. "
-                    f"Use either 'Periodic' or 'BlochBoundary' along {'xyz'[dim]}."
-                )
+        symmetry = values.get("symmetry")
+        axis_names = "xyz"
+
+        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
+
+            if size_dim == 0:
+                axis = axis_names[dim]
+                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+
+                if num_absorbing_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using a PML or absorbing boundary along that axis is incorrect. "
+                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if symmetry_dim != 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
+                        "or 'PMCBoundary' to select source polarization if needed and set "
+                        f"Simulation.symmetry to 0 along {axis}."
+                    )
+
+                if boundary[0] != boundary[1]:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis. "
+                        f"The boundary condition for {axis} plus and {axis} "
+                        "minus must be the same."
+                    )
+
         return val
 
     @pydantic.validator("sources", always=True)

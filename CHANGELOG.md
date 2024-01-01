@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Warning in automatic grid generation if a structure has a non-zero size along a given direction that is too small compared to a single mesh step.
 - `assert_log_level` adds string matching with `contains_str` and ensures no higher log level recorded than expected.
 - `AssertLogLevel` context manager for testing log level and automatically clearing capture.
+- More robust validation for boundary conditions and symmetry in 1D and 2D simulations.
 
 ### Changed
 - `jax` and `jaxlib` versions bumped to `0.4.*`.
