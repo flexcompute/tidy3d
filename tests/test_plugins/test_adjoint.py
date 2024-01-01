@@ -323,7 +323,7 @@ def make_sim(
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
-        symmetry=(0, 1, -1),
+        symmetry=(1, 0, -1),
     )
 
     return sim
