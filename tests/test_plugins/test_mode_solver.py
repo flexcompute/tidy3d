@@ -214,6 +214,18 @@ def verify_dtype(ms):
         assert dtype == field.dtype
 
 
+def check_ms_reduction(ms):
+
+    ms_red = ms.reduced_simulation_copy
+    grids_1d = ms._solver_grid.boundaries
+    grids_1d_red = ms_red._solver_grid.boundaries
+    assert np.allclose(grids_1d.x, grids_1d_red.x)
+    assert np.allclose(grids_1d.y, grids_1d_red.y)
+    assert np.allclose(grids_1d.z, grids_1d_red.z)
+    modes_red = ms.solve()
+    assert np.allclose(ms.data.n_eff.values, modes_red.n_eff.values)
+
+
 def test_mode_solver_validation():
     """Test invalidate mode solver setups."""
 
@@ -319,6 +331,7 @@ def test_mode_solver_simple(mock_remote_api, local):
         verify_pol_fraction(ms)
         verify_dtype(ms)
         dataframe = ms.data.to_dataframe()
+        check_ms_reduction(ms)
 
     else:
         _ = msweb.run(ms)
@@ -378,6 +391,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         )
         modes = ms.solve() if local else msweb.run(ms)
         n_eff.append(modes.n_eff.values)
+
+        if local:
+            check_ms_reduction(ms)
 
         fname = str(tmp_path / "ms_custom_medium.hdf5")
         ms.to_file(fname)
@@ -445,6 +461,9 @@ def test_mode_solver_straight_vs_angled():
         direction="-",
     )
 
+    check_ms_reduction(ms)
+    check_ms_reduction(ms_angled)
+
     for key, val in ms.data.modes_info.items():
         tol = 1e-2
         if key == "mode area":
@@ -483,6 +502,7 @@ def test_mode_solver_angle_bend():
     verify_pol_fraction(ms)
     verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     # Plot field
     _, ax = plt.subplots(1)
@@ -519,6 +539,7 @@ def test_mode_solver_2D():
     verify_pol_fraction(ms)
     verify_dtype(ms)
     dataframe = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -540,6 +561,7 @@ def test_mode_solver_2D():
     compare_colocation(ms)
     # verify_pol_fraction(ms)
     dataframe = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     # The simulation and the mode plane are both 0D along the same dimension
     simulation = td.Simulation(
@@ -552,6 +574,7 @@ def test_mode_solver_2D():
     ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    check_ms_reduction(ms)
 
 
 @pytest.mark.parametrize("local", [True, False])
@@ -605,6 +628,7 @@ def test_group_index(mock_remote_api, log_capture, local):
         assert len(log_capture) == 2
         _ = modes.dispersion
         assert len(log_capture) == 2
+        check_ms_reduction(ms)
 
     # Group index calculated
     ms = ModeSolver(
@@ -623,6 +647,7 @@ def test_group_index(mock_remote_api, log_capture, local):
         assert (modes.dispersion.sel(mode_index=0).values < 1500).all()
         assert (modes.dispersion.sel(mode_index=1).values > -16500).all()
         assert (modes.dispersion.sel(mode_index=1).values < -15000).all()
+        check_ms_reduction(ms)
 
 
 def test_pml_params():
@@ -685,6 +710,7 @@ def test_mode_solver_nan_pol_fraction():
     )
 
     md = ms.solve()
+    check_ms_reduction(ms)
 
     assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]
 

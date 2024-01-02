@@ -1274,7 +1274,6 @@ class Scene(Tidy3dBaseModel):
 
         scene_dict = self.dict()
         structures = self.structures
-        scene_bounds = self.bounds
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
@@ -1289,12 +1288,7 @@ class Scene(Tidy3dBaseModel):
             med = structure.medium
             if isinstance(med, AbstractPerturbationMedium):
                 # get structure's bounding box
-                s_bounds = structure.geometry.bounds
-
-                bounds = [
-                    np.max([scene_bounds[0], s_bounds[0]], axis=0),
-                    np.min([scene_bounds[1], s_bounds[1]], axis=0),
-                ]
+                bounds = structure.geometry.bounds
 
                 # for each structure select a minimal subset of data that covers it
                 restricted_arrays = {}
@@ -1321,22 +1315,6 @@ class Scene(Tidy3dBaseModel):
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
 
-            # get scene's bounding box
-            bounds = scene_bounds
-
-            # for each structure select a minimal subset of data that covers it
-            restricted_arrays = {}
-
-            for name, array in array_dict.items():
-                if array is not None:
-                    restricted_arrays[name] = array.sel_inside(bounds)
-
-                    # check provided data fully cover scene
-                    if not array.does_cover(bounds):
-                        log.warning(f"Provided '{name}' does not fully cover scene domain.")
-
-            scene_dict["medium"] = med.perturbed_copy(
-                **restricted_arrays, interp_method=interp_method
-            )
+            scene_dict["medium"] = med.perturbed_copy(**array_dict, interp_method=interp_method)
 
         return Scene.parse_obj(scene_dict)

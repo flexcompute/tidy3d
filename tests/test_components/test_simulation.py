@@ -2248,3 +2248,76 @@ def test_to_gds(tmp_path):
     assert np.allclose(areas[(2, 1)], 0.5)
     assert np.allclose(areas[(1, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
     assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
+
+
+def test_sim_subsection():
+    region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
+
+    sim_red = SIM_FULL.subsection(region=region)
+    assert sim_red.structures != SIM_FULL.structures
+    sim_red = SIM_FULL.subsection(
+        region=region,
+        symmetry=(1, 0, -1),
+        monitors=[
+            mnt
+            for mnt in SIM_FULL.monitors
+            if not isinstance(mnt, (td.ModeMonitor, td.ModeSolverMonitor))
+        ],
+    )
+    assert sim_red.symmetry == (1, 0, -1)
+    sim_red = SIM_FULL.subsection(
+        region=region, boundary_spec=td.BoundarySpec.all_sides(td.Periodic())
+    )
+    sim_red = SIM_FULL.subsection(region=region, sources=[], grid_spec=td.GridSpec.uniform(dl=20))
+    assert len(sim_red.sources) == 0
+    sim_red = SIM_FULL.subsection(region=region, monitors=[])
+    assert len(sim_red.monitors) == 0
+    sim_red = SIM_FULL.subsection(region=region, remove_outside_structures=False)
+    assert sim_red.structures == SIM_FULL.structures
+    sim_red = SIM_FULL.subsection(region=region, remove_outside_custom_mediums=True)
+
+    fine_custom_medium = td.CustomMedium(
+        permittivity=td.SpatialDataArray(
+            1 + np.random.random((11, 12, 13)),
+            coords=dict(
+                x=np.linspace(-0.51, 0.52, 11),
+                y=np.linspace(-1.02, 1.04, 12),
+                z=np.linspace(-1.51, 1.51, 13),
+            ),
+        )
+    )
+
+    sim = SIM_FULL.updated_copy(
+        structures=[
+            td.Structure(
+                geometry=td.Box(size=(1, 2, 3)),
+                medium=fine_custom_medium,
+            )
+        ],
+        medium=fine_custom_medium,
+    )
+    sim_red = sim.subsection(region=region, remove_outside_custom_mediums=True)
+
+    # check automatic symmetry expansion
+    sim_sym = SIM_FULL.updated_copy(
+        symmetry=(-1, 0, 1),
+        sources=[src for src in SIM_FULL.sources if not isinstance(src, td.TFSF)],
+    )
+    sim_red = sim_sym.subsection(region=region)
+    assert np.allclose(sim_red.center, (0, 0.05, 0.0))
+
+    # check grid is preserved when requested
+    sim_red = SIM_FULL.subsection(
+        region=region, grid_spec="identical", boundary_spec=td.BoundarySpec.all_sides(td.Periodic())
+    )
+    grids_1d = SIM_FULL.grid.boundaries
+    grids_1d_red = sim_red.grid.boundaries
+    tol = 1e-8
+    for full_grid, red_grid in zip(
+        [grids_1d.x, grids_1d.y, grids_1d.z], [grids_1d_red.x, grids_1d_red.y, grids_1d_red.z]
+    ):
+        # find index into full grid at which reduced grid is starting
+        start = red_grid[0]
+        ind = np.argmax(np.logical_and(full_grid >= start - tol, full_grid <= start + tol))
+        # compare
+        assert np.allclose(red_grid, full_grid[ind : ind + len(red_grid)])

@@ -1,6 +1,7 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
 from typing import Dict, List
+from abc import ABC
 
 import xarray as xr
 import numpy as np
@@ -240,17 +241,8 @@ class MixedModeDataArray(DataArray):
     _dims = ("f", "mode_index_0", "mode_index_1")
 
 
-class SpatialDataArray(DataArray):
-    """Spatial distribution.
-
-    Example
-    -------
-    >>> x = [1,2]
-    >>> y = [2,3,4]
-    >>> z = [3,4,5,6]
-    >>> coords = dict(x=x, y=y, z=z)
-    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
-    """
+class AbstractSpatialDataArray(DataArray, ABC):
+    """Spatial distribution."""
 
     __slots__ = ()
     _dims = ("x", "y", "z")
@@ -274,33 +266,40 @@ class SpatialDataArray(DataArray):
 
         inds_list = []
 
-        for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1]):
+        coords = (self.x, self.y, self.z)
+
+        for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
 
             length = len(coord)
 
-            # if data does not cover structure at all take the closest index
-            if smax < coord[0]:  # structure is completely on the left side
-
-                # take 2 if possible, so that linear interpolation is possible
-                comp_inds = np.arange(0, max(2, length))
-
-            elif smin > coord[-1]:  # structure is completely on the right side
-
-                # take 2 if possible, so that linear interpolation is possible
-                comp_inds = np.arange(min(0, length - 2), length)
-
+            # one point along direction, assume invariance
+            if length == 1:
+                comp_inds = [0]
             else:
-                if smin < coord[0]:
-                    ind_min = 0
-                else:
-                    ind_min = max(0, (coord >= smin).argmax().data - 1)
 
-                if smax > coord[-1]:
-                    ind_max = length - 1
-                else:
-                    ind_max = (coord >= smax).argmax().data
+                # if data does not cover structure at all take the closest index
+                if smax < coord[0]:  # structure is completely on the left side
 
-                comp_inds = np.arange(ind_min, ind_max + 1)
+                    # take 2 if possible, so that linear iterpolation is possible
+                    comp_inds = np.arange(0, max(2, length))
+
+                elif smin > coord[-1]:  # structure is completely on the right side
+
+                    # take 2 if possible, so that linear iterpolation is possible
+                    comp_inds = np.arange(min(0, length - 2), length)
+
+                else:
+                    if smin < coord[0]:
+                        ind_min = 0
+                    else:
+                        ind_min = max(0, (coord >= smin).argmax().data - 1)
+
+                    if smax > coord[-1]:
+                        ind_max = length - 1
+                    else:
+                        ind_max = (coord >= smax).argmax().data
+
+                    comp_inds = np.arange(ind_min, ind_max + 1)
 
             inds_list.append(comp_inds)
 
@@ -323,10 +322,26 @@ class SpatialDataArray(DataArray):
             Full cover check outcome.
         """
 
+        coords = (self.x, self.y, self.z)
         return all(
             (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
-            for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1])
+            for coord, smin, smax in zip(coords, bounds[0], bounds[1])
         )
+
+
+class SpatialDataArray(AbstractSpatialDataArray):
+    """Spatial distribution.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
 
     def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
@@ -380,7 +395,7 @@ class SpatialDataArray(DataArray):
         return SpatialDataArray(new_data, coords=coords_dict)
 
 
-class ScalarFieldDataArray(DataArray):
+class ScalarFieldDataArray(AbstractSpatialDataArray):
     """Spatial distribution in the frequency-domain.
 
     Example
@@ -395,10 +410,9 @@ class ScalarFieldDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "f")
-    _data_attrs = {"long_name": "field value"}
 
 
-class ScalarFieldTimeDataArray(DataArray):
+class ScalarFieldTimeDataArray(AbstractSpatialDataArray):
     """Spatial distribution in the time-domain.
 
     Example
@@ -413,10 +427,9 @@ class ScalarFieldTimeDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "t")
-    _data_attrs = {"long_name": "field value"}
 
 
-class ScalarModeFieldDataArray(DataArray):
+class ScalarModeFieldDataArray(AbstractSpatialDataArray):
     """Spatial distribution of a mode in frequency-domain as a function of mode index.
 
     Example
@@ -432,7 +445,6 @@ class ScalarModeFieldDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "f", "mode_index")
-    _data_attrs = {"long_name": "field value"}
 
 
 class FluxDataArray(DataArray):

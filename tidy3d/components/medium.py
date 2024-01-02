@@ -816,6 +816,28 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """Whether the medium is a PEC."""
         return False
 
+    def sel_inside(self, bounds: Bound) -> AbstractMedium:
+        """Return a new medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        AbstractMedium
+            Medium with reduced data.
+        """
+
+        if self.modulation_spec is not None:
+            modulation_reduced = self.modulation_spec.sel_inside(bounds)
+            return self.updated_copy(modulation_spec=modulation_reduced)
+
+        return self
+
 
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
@@ -959,6 +981,31 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[SpatialDataArray, ...]) -> bool:
         """Validate that the dataarray is real"""
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
+
+    @abstractmethod
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new medium that contains the minimal amount custom data necessary to cover
+        a spatial region defined by ``bounds``."""
+
+    def sel_inside(self, bounds: Bound) -> AbstractCustomMedium:
+        """Return a new medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        AbstractMedium
+            Medium with reduced data.
+        """
+
+        self_mod_data_reduced = super().sel_inside(bounds)
+
+        return self_mod_data_reduced._sel_custom_data_inside(bounds)
 
 
 """ Dispersionless Medium """
@@ -1260,6 +1307,39 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
             conductivity = xr.zeros_like(self.permittivity)
         eps = self.eps_sigma_to_eps_complex(self.permittivity, conductivity, frequency)
         return (eps, eps, eps)
+
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomMedium
+            CustomMedium with reduced data.
+        """
+        if not self.permittivity.does_cover(bounds=bounds):
+            log.warning(
+                "Permittivity spatial data array does not fully cover the requested region."
+            )
+        perm_reduced = self.permittivity.sel_inside(bounds=bounds)
+        cond_reduced = None
+        if self.conductivity is not None:
+            if not self.conductivity.does_cover(bounds=bounds):
+                log.warning(
+                    "Conductivity spatial data array does not fully cover the requested region."
+                )
+            cond_reduced = self.conductivity.sel_inside(bounds=bounds)
+
+        return self.updated_copy(
+            permittivity=perm_reduced,
+            conductivity=cond_reduced,
+        )
 
 
 class CustomMedium(AbstractCustomMedium):
@@ -1843,6 +1923,55 @@ class CustomMedium(AbstractCustomMedium):
             grids[field_name] = make_grid(scalar_field)
 
         return grids
+
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomMedium
+            CustomMedium with reduced data.
+        """
+
+        perm_reduced = None
+        if self.permittivity is not None:
+            if not self.permittivity.does_cover(bounds=bounds):
+                log.warning(
+                    "Permittivity spatial data array does not fully cover the requested region."
+                )
+            perm_reduced = self.permittivity.sel_inside(bounds=bounds)
+
+        cond_reduced = None
+        if self.conductivity is not None:
+            if not self.conductivity.does_cover(bounds=bounds):
+                log.warning(
+                    "Conductivity spatial data array does not fully cover the requested region."
+                )
+            cond_reduced = self.conductivity.sel_inside(bounds=bounds)
+
+        eps_reduced = None
+        if self.eps_dataset is not None:
+            eps_reduced_dict = {}
+            for key, comp in self.eps_dataset.field_components.items():
+                if not comp.does_cover(bounds=bounds):
+                    log.warning(
+                        f"{key} spatial data array does not fully cover the requested region."
+                    )
+                eps_reduced_dict[key] = comp.sel_inside(bounds=bounds)
+            eps_reduced = PermittivityDataset(**eps_reduced_dict)
+
+        return self.updated_copy(
+            permittivity=perm_reduced,
+            conductivity=cond_reduced,
+            eps_dataset=eps_reduced,
+        )
 
 
 """ Dispersive Media """
@@ -2603,6 +2732,37 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """Not implemented yet."""
         raise SetupError("To be implemented.")
 
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomPoleResidue
+            CustomPoleResidue with reduced data.
+        """
+        if not self.eps_inf.does_cover(bounds=bounds):
+            log.warning("eps_inf spatial data array does not fully cover the requested region.")
+        eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
+        poles_reduced = []
+        for pole, residue in self.poles:
+
+            if not pole.does_cover(bounds=bounds):
+                log.warning("Pole spatial data array does not fully cover the requested region.")
+
+            if not residue.does_cover(bounds=bounds):
+                log.warning("Residue spatial data array does not fully cover the requested region.")
+
+            poles_reduced.append((pole.sel_inside(bounds), residue.sel_inside(bounds)))
+
+        return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
+
 
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
@@ -2890,6 +3050,38 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             interp_method=interp_method,
             **kwargs,
         )
+
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomSellmeier
+            CustomSellmeier with reduced data.
+        """
+        coeffs_reduced = []
+        for b_coeff, c_coeff in self.coeffs:
+
+            if not b_coeff.does_cover(bounds=bounds):
+                log.warning(
+                    "Sellmeier B coeff spatial data array does not fully cover the requested region."
+                )
+
+            if not c_coeff.does_cover(bounds=bounds):
+                log.warning(
+                    "Sellmeier C coeff spatial data array does not fully cover the requested region."
+                )
+
+            coeffs_reduced.append((b_coeff.sel_inside(bounds), c_coeff.sel_inside(bounds)))
+
+        return self.updated_copy(coeffs=coeffs_reduced)
 
 
 class Lorentz(DispersiveMedium):
@@ -3198,6 +3390,48 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         eps = Lorentz.eps_model(self, frequency)
         return (eps, eps, eps)
 
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomLorentz
+            CustomLorentz with reduced data.
+        """
+        if not self.eps_inf.does_cover(bounds=bounds):
+            log.warning("Eps inf spatial data array does not fully cover the requested region.")
+        eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
+        coeffs_reduced = []
+        for de, f, delta in self.coeffs:
+
+            if not de.does_cover(bounds=bounds):
+                log.warning(
+                    "Lorentz 'de' spatial data array does not fully cover the requested region."
+                )
+
+            if not f.does_cover(bounds=bounds):
+                log.warning(
+                    "Lorentz 'f' spatial data array does not fully cover the requested region."
+                )
+
+            if not delta.does_cover(bounds=bounds):
+                log.warning(
+                    "Lorentz 'delta' spatial data array does not fully cover the requested region."
+                )
+
+            coeffs_reduced.append(
+                (de.sel_inside(bounds), f.sel_inside(bounds), delta.sel_inside(bounds))
+            )
+
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
+
 
 class Drude(DispersiveMedium):
     """A dispersive medium described by the Drude model.
@@ -3384,6 +3618,41 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         """
         eps = Drude.eps_model(self, frequency)
         return (eps, eps, eps)
+
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomDrude
+            CustomDrude with reduced data.
+        """
+        if not self.eps_inf.does_cover(bounds=bounds):
+            log.warning("Eps inf spatial data array does not fully cover the requested region.")
+        eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
+        coeffs_reduced = []
+        for f, delta in self.coeffs:
+
+            if not f.does_cover(bounds=bounds):
+                log.warning(
+                    "Drude 'f' spatial data array does not fully cover the requested region."
+                )
+
+            if not delta.does_cover(bounds=bounds):
+                log.warning(
+                    "Drude 'delta' spatial data array does not fully cover the requested region."
+                )
+
+            coeffs_reduced.append((f.sel_inside(bounds), delta.sel_inside(bounds)))
+
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
 
 
 class Debye(DispersiveMedium):
@@ -3590,6 +3859,41 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         eps = Debye.eps_model(self, frequency)
         return (eps, eps, eps)
 
+    def _sel_custom_data_inside(self, bounds: Bound):
+        """Return a new custom medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        CustomDebye
+            CustomDebye with reduced data.
+        """
+        if not self.eps_inf.does_cover(bounds=bounds):
+            log.warning("Eps inf spatial data array does not fully cover the requested region.")
+        eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
+        coeffs_reduced = []
+        for de, tau in self.coeffs:
+
+            if not de.does_cover(bounds=bounds):
+                log.warning(
+                    "Debye 'f' spatial data array does not fully cover the requested region."
+                )
+
+            if not tau.does_cover(bounds=bounds):
+                log.warning(
+                    "Debye 'tau' spatial data array does not fully cover the requested region."
+                )
+
+            coeffs_reduced.append((de.sel_inside(bounds), tau.sel_inside(bounds)))
+
+        return self.updated_copy(eps_inf=eps_inf_reduced, coeffs=coeffs_reduced)
+
 
 IsotropicUniformMediumType = Union[Medium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, PECMedium]
 IsotropicCustomMediumType = Union[
@@ -3770,6 +4074,26 @@ class AnisotropicMedium(AbstractMedium):
     def is_comp_pec(self, comp: Axis):
         """Whether the medium is a PEC."""
         return isinstance(self.components[["xx", "yy", "zz"][comp]], PECMedium)
+
+    def sel_inside(self, bounds: Bound):
+        """Return a new medium that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        AnisotropicMedium
+            AnisotropicMedium with reduced data.
+        """
+
+        new_comps = [comp.sel_inside(bounds) for comp in [self.xx, self.yy, self.zz]]
+
+        return self.updated_copy(**dict(zip(["xx", "yy", "zz"], new_comps)))
 
 
 class FullyAnisotropicMedium(AbstractMedium):
@@ -4175,6 +4499,9 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
             mat_component.eps_dataarray_freq(frequency)[ind]
             for ind, mat_component in enumerate(self.components.values())
         )
+
+    def _sel_custom_data_inside(self, bounds: Bound):
+        return self
 
 
 class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
