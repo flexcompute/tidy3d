@@ -171,7 +171,7 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
             if not sim_box.intersects(geometric_object.geometry):
 
                 message = (
-                    f"'{geometric_object}' (at `simulation.{field_name}[{position_index}]`) "
+                    f"'simulation.{field_name}[{position_index}]'"
                     "is completely outside of simulation domain."
                 )
                 custom_loc = [field_name, position_index]

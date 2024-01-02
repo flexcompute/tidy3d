@@ -12,10 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Integration of the `documentation` alongside the main codebase repository.
 - Integration of the `tidy3d-notebooks` repository.
 - `tidy3d develop` CLI and development guide on the main documentation.
+- Added a convenience method `Simulation.subsection()` to a create a new simulation based on a subregion of another one.
 
 ### Changed
 - `poetry` based installation. Removal of `setup.py` and `requirements.txt`.
 - Upgrade to sphinx 6 for the documentation build, and change of theme.
+- Remote mode solver web api automatically reduces the associated `Simulation` object to the mode solver plane before uploading it to server.
 
 ### Fixed
 

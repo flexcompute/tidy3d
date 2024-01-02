@@ -983,7 +983,7 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
     ...     name='n2f_monitor',
     ...     custom_origin=(1,2,3),
     ...     phi=[0, np.pi/2],
-    ...     theta=np.linspace(-np.pi/2, np.pi/2, 100)
+    ...     theta=np.linspace(-np.pi/2, np.pi/2, 100),
     ...     far_field_approx=True,
     ...     )
 

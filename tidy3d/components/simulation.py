@@ -7,6 +7,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 import xarray as xr
 import matplotlib as mpl
+import math
 
 from .base import cached_property
 from .validators import assert_objects_in_sim_bounds
@@ -16,9 +17,10 @@ from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
 from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod
+from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
+from .types import Literal
 from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid
+from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
 from .medium import Medium, MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
@@ -1233,7 +1235,10 @@ class Simulation(AbstractSimulation):
             if isinstance(monitor, DiffractionMonitor):
                 medium_set = Scene.intersecting_media(monitor, structures)
                 medium = medium_set.pop() if medium_set else medium
-                _, index_k = medium.nk_model(frequency=np.array(monitor.freqs))
+                freqs = np.array(monitor.freqs)
+                if isinstance(medium, AbstractCustomMedium) and len(freqs) > 1:
+                    freqs = 0.5 * (np.min(freqs) + np.max(freqs))
+                _, index_k = medium.nk_model(frequency=freqs)
                 if not np.all(index_k == 0):
                     raise SetupError("Diffraction monitors must not lie in a lossy medium.")
         return val
@@ -3419,7 +3424,7 @@ class Simulation(AbstractSimulation):
         scene : :class:.`Scene`
             Size of object in x, y, and z directions.
         **kwargs
-            Other arguments
+            Other arguments passed to new simulation instance.
 
         Example
         -------
@@ -3445,3 +3450,201 @@ class Simulation(AbstractSimulation):
             medium=scene.medium,
             **kwargs,
         )
+
+    def subsection(
+        self,
+        region: Box,
+        boundary_spec: BoundarySpec = None,
+        grid_spec: Union[GridSpec, Literal["identical"]] = None,
+        symmetry: Tuple[Symmetry, Symmetry, Symmetry] = None,
+        sources: Tuple[SourceType, ...] = None,
+        monitors: Tuple[MonitorType, ...] = None,
+        remove_outside_structures: bool = True,
+        remove_outside_custom_mediums: bool = False,
+        **kwargs,
+    ) -> Simulation:
+        """Generate a simulation instance containing only the ``region``.
+
+        Parameters
+        ----------
+        region : :class:.`Box`
+            New simulation domain.
+        boundary_spec : :class:.`BoundarySpec` = None
+            New boundary specification. If ``None``, then it is inherited from the original
+            simulation.
+        grid_spec : :class:.`GridSpec` = None
+            New grid specification. If ``None``, then it is inherited from the original
+            simulation. If ``identical``, then the original grid is transferred directly as a
+            :class:.`CustomGrid`. Note that in the latter case the region of the new simulation is
+            snapped to the original grid lines.
+        symmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = None
+            New simulation symmetry. If ``None``, then it is inherited from the original
+            simulation. Note that in this case the size and placement of new simulation domain
+            must be commensurate with the original symmetry.
+        sources : Tuple[SourceType, ...] = None
+            New list of sources. If ``None``, then the sources intersecting the new simulation
+            domain are inherited from the original simulation.
+        monitors : Tuple[MonitorType, ...] = None
+            New list of monitors. If ``None``, then the monitors intersecting the new simulation
+            domain are inherited from the original simulation.
+        remove_outside_structures : bool = True
+            Remove structures outside of the new simulation domain.
+        remove_outside_custom_mediums : bool = True
+            Remove custom medium data outside of the new simulation domain.
+        **kwargs
+            Other arguments passed to new simulation instance.
+        """
+
+        # must intersect the original domain
+        if not self.intersects(region):
+            raise SetupError("Requested region does not intersect simulation domain")
+
+        # restrict to the original simulation domain
+        new_bounds = Box.bounds_intersection(self.bounds, region.bounds)
+        new_bounds = [list(new_bounds[0]), list(new_bounds[1])]
+
+        # grid spec inheritace
+        if grid_spec is None:
+            grid_spec = self.grid_spec
+        elif isinstance(grid_spec, str) and grid_spec == "identical":
+            # create a custom grid from existing one
+            grids_1d = self.grid.boundaries
+            grid_spec = GridSpec(
+                grid_x=CustomGrid(dl=tuple(np.diff(grids_1d.x)), custom_offset=grids_1d.x[0]),
+                grid_y=CustomGrid(dl=tuple(np.diff(grids_1d.y)), custom_offset=grids_1d.y[0]),
+                grid_z=CustomGrid(dl=tuple(np.diff(grids_1d.z)), custom_offset=grids_1d.z[0]),
+            )
+
+            # adjust region bounds to perfectly coincide with the grid
+            # note, sometimes (when a box already seems to perfrecty align with the grid)
+            # this causes the new region to expand one more pixel because of numerical roundoffs
+            aux_box = Box.from_bounds(*new_bounds)
+            grid_inds = self.grid.discretize_inds(box=aux_box)
+
+            new_bounds = [
+                [
+                    grids_1d.x[grid_inds[0][0]],
+                    grids_1d.y[grid_inds[1][0]],
+                    grids_1d.z[grid_inds[2][0]],
+                ],
+                [
+                    grids_1d.x[grid_inds[0][1]],
+                    grids_1d.y[grid_inds[1][1]],
+                    grids_1d.z[grid_inds[2][1]],
+                ],
+            ]
+
+        # if symmetry is not overriden we inherit it from the original simulation where is needed
+        if symmetry is None:
+
+            # start with no symmetry
+            symmetry = [0, 0, 0]
+
+            # now check in each dimension whether we cross symmetry plane
+            for dim in range(3):
+                if self.symmetry[dim] != 0:
+                    crosses_symmetry = (
+                        new_bounds[0][dim] < self.center[dim]
+                        and new_bounds[1][dim] > self.center[dim]
+                    )
+
+                    # inherit symmetry only if we cross symmetry plane, otherwise we don't impose
+                    # symmetry even if the original simulation had symmetry
+                    if crosses_symmetry:
+                        symmetry[dim] = self.symmetry[dim]
+                        center = (new_bounds[0][dim] + new_bounds[1][dim]) / 2
+
+                        if not math.isclose(center, self.center[dim]):
+                            log.warning(
+                                f"The original simulation is symmetric along {'xyz'[dim]} direction. "
+                                "The requested new simulation region does cross the symmetry plane but is "
+                                "not symmetric with respect to it. To preserve correct symmetry, "
+                                "the requested simulation region is expanded symmetrically."
+                            )
+                            new_bounds[0][dim] = 2 * self.center[dim] - new_bounds[1][dim]
+
+        # symmetry and grid spec treatments could change new simulation bounds
+        # thus, recreate a box instance
+        new_box = Box.from_bounds(*new_bounds)
+
+        # inheritance of structures, sources, monitors, and boundary specs
+        if remove_outside_structures:
+            new_structures = [strc for strc in self.structures if new_box.intersects(strc.geometry)]
+        else:
+            new_structures = self.structures
+
+        if sources is None:
+            sources = [src for src in self.sources if new_box.intersects(src)]
+
+        if monitors is None:
+            monitors = [mnt for mnt in self.monitors if new_box.intersects(mnt)]
+
+        if boundary_spec is None:
+            boundary_spec = self.boundary_spec
+
+        # reduction of custom medium data
+        new_sim_medium = self.medium
+        if remove_outside_custom_mediums:
+
+            # check for special treatment in case of PML
+            if any(
+                any(isinstance(edge, (PML, StablePML, Absorber)) for edge in boundary)
+                for boundary in boundary_spec.to_list
+            ):
+                # if we need to cut out outside custom medium we have to be careful about PML/Absorber
+                # we should include data in PML so that there is no artificial reflection at PML boundaries
+
+                # to do this, we first create an auxiliary simulation
+                aux_sim = self.updated_copy(
+                    center=new_box.center,
+                    size=new_box.size,
+                    grid_spec=grid_spec,
+                    boundary_spec=boundary_spec,
+                    monitors=[],
+                    sources=sources,  # need wavelength in case of auto grid
+                    symmetry=symmetry,
+                    structures=new_structures,
+                )
+
+                # then use its bounds as region for data cut off
+                new_bounds = aux_sim.simulation_bounds
+
+                # Note that this is not a full proof strategy. For example, if grid_spec is AutoGrid
+                # then after outside custom medium data is removed the grid sizes and, thus,
+                # pml extents can change as well
+
+            # now cut out custom medium data
+            new_structures_reduced_data = []
+
+            for structure in new_structures:
+                medium = structure.medium
+                if isinstance(medium, AbstractCustomMedium):
+                    new_structure_bounds = Box.bounds_intersection(
+                        new_bounds, structure.geometry.bounds
+                    )
+                    new_medium = medium.sel_inside(bounds=new_structure_bounds)
+                    new_structure = structure.updated_copy(medium=new_medium)
+                    new_structures_reduced_data.append(new_structure)
+                else:
+                    new_structures_reduced_data.append(structure)
+
+            new_structures = new_structures_reduced_data
+
+            if isinstance(self.medium, AbstractCustomMedium):
+                new_sim_medium = self.medium.sel_inside(bounds=new_bounds)
+
+        # finally, create an updated copy with all modifications
+        new_sim = self.updated_copy(
+            center=new_box.center,
+            size=new_box.size,
+            medium=new_sim_medium,
+            grid_spec=grid_spec,
+            boundary_spec=boundary_spec,
+            monitors=monitors,
+            sources=sources,
+            symmetry=symmetry,
+            structures=new_structures,
+            **kwargs,
+        )
+
+        return new_sim

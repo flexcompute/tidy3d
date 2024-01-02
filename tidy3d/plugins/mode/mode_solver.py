@@ -12,6 +12,7 @@ import xarray as xr
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.boundary import PECBoundary, BoundarySpec, Boundary, PML, StablePML, Absorber
 from ...components.geometry.base import Box
 from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
@@ -139,20 +140,33 @@ class ModeSolver(Tidy3dBaseModel):
         _, solver_sym = self.plane.pop_axis(mode_symmetry, axis=self.normal_axis)
         return solver_sym
 
-    @cached_property
-    def _solver_grid(self) -> Grid:
-        """Grid for the mode solver, not snapped to plane or simulation zero dims, and also with
-        a small correction for symmetries. We don't do the snapping yet because 0-sized cells are
-        currently confusing to the subpixel averaging. The final data coordinates along the
-        plane normal dimension and dimensions where the simulation domain is 2D will be correctly
-        set after the solve."""
+    def _get_solver_grid(
+        self, preserve_layer_behind: bool = False, truncate_symmetry: bool = True
+    ) -> Grid:
+        """Grid for the mode solver, not snapped to plane or simulation zero dims, and optionally
+        corrected for symmetries.
+
+        Parameters
+        ----------
+        preserve_layer_behind : bool = False
+            Do not discard the layer of cells behind the main layer of cells. Together they
+            represent the region where custom medium data is needed for proper subpixel.
+        truncate_symmetry : bool = True
+            Truncate to symmetry quadrant if symmetry present.
+
+        Returns
+        -------
+        :class:.`Grid`
+            The resulting grid.
+        """
 
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
 
         span_inds = self.simulation._discretize_inds_monitor(monitor)
 
         # Remove extension along monitor normal
-        span_inds[self.normal_axis, 0] += 1
+        if not preserve_layer_behind:
+            span_inds[self.normal_axis, 0] += 1
         span_inds[self.normal_axis, 1] -= 1
 
         # Do not extend if simulation has a single pixel along a dimension
@@ -161,12 +175,23 @@ class ModeSolver(Tidy3dBaseModel):
                 span_inds[dim] = [0, 1]
 
         # Truncate to symmetry quadrant if symmetry present
-        _, plane_inds = monitor.pop_axis([0, 1, 2], self.normal_axis)
-        for dim, sym in enumerate(self.solver_symmetry):
-            if sym != 0:
-                span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
+        if truncate_symmetry:
+            _, plane_inds = Box.pop_axis([0, 1, 2], self.normal_axis)
+            for dim, sym in enumerate(self.solver_symmetry):
+                if sym != 0:
+                    span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
 
         return self.simulation._subgrid(span_inds=span_inds)
+
+    @cached_property
+    def _solver_grid(self) -> Grid:
+        """Grid for the mode solver, not snapped to plane or simulation zero dims, and also with
+        a small correction for symmetries. We don't do the snapping yet because 0-sized cells are
+        currently confusing to the subpixel averaging. The final data coordinates along the
+        plane normal dimension and dimensions where the simulation domain is 2D will be correctly
+        set after the solve."""
+
+        return self._get_solver_grid(preserve_layer_behind=False, truncate_symmetry=True)
 
     @cached_property
     def _num_cells_freqs_modes(self) -> Tuple[int, int, int]:
@@ -940,3 +965,48 @@ class ModeSolver(Tidy3dBaseModel):
 
     def validate_pre_upload(self, source_required: bool = True):
         self._validate_modes_size()
+
+    @cached_property
+    def reduced_simulation_copy(self):
+        """Strip objects not used by the mode solver from simulation object.
+        This might significantly reduce upload time in the presence of custom mediums.
+        """
+
+        # we preserve extracells along the normal direction to ensure
+        extended_grid = self._get_solver_grid(preserve_layer_behind=True, truncate_symmetry=False)
+        grids_1d = extended_grid.boundaries
+        new_sim_box = Box.from_bounds(
+            rmin=(grids_1d.x[0], grids_1d.y[0], grids_1d.z[0]),
+            rmax=(grids_1d.x[-1], grids_1d.y[-1], grids_1d.z[-1]),
+        )
+
+        # remove PML, Absorers, etc, to avoid unnecessary cells
+        bspec = self.simulation.boundary_spec
+
+        new_bspec_dict = {}
+        for axis in "xyz":
+            bcomp = bspec["x"]
+            for bside, sign in zip([bcomp.plus, bcomp.minus], "+-"):
+                if isinstance(bside, (PML, StablePML, Absorber)):
+                    new_bspec_dict[axis + sign] = PECBoundary()
+                else:
+                    new_bspec_dict[axis + sign] = bside
+
+        new_bspec = BoundarySpec(
+            x=Boundary(plus=new_bspec_dict["x+"], minus=new_bspec_dict["x-"]),
+            y=Boundary(plus=new_bspec_dict["y+"], minus=new_bspec_dict["y-"]),
+            z=Boundary(plus=new_bspec_dict["z+"], minus=new_bspec_dict["z-"]),
+        )
+
+        # extract sub-simulation removing everything irrelevant
+        new_sim = self.simulation.subsection(
+            region=new_sim_box,
+            monitors=[],
+            sources=[],
+            grid_spec="identical",
+            boundary_spec=new_bspec,
+            remove_outside_custom_mediums=True,
+            remove_outside_structures=True,
+        )
+
+        return self.updated_copy(simulation=new_sim)

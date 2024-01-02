@@ -46,6 +46,7 @@ def run(
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
+    reduce_simulation: bool = True,
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -68,6 +69,9 @@ def run(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+    reduce_simulation : bool = True
+        Restrict simulation to mode solver region. This can help reduce the amount of uploaded and
+        dowloaded data.
 
     Returns
     -------
@@ -78,6 +82,9 @@ def run(
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
+
+    if reduce_simulation:
+        mode_solver = mode_solver.reduced_simulation_copy
 
     task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
     if verbose:
