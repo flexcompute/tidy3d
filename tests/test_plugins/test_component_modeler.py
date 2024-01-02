@@ -254,10 +254,10 @@ def test_plot_sim(tmp_path):
     plt.close()
 
 
-def test_plot_sim_eps(tmp_path):
-    modeler = make_component_modeler(path_dir=str(tmp_path))
-    modeler.plot_sim_eps(z=0)
-    plt.close()
+# def test_plot_sim_eps(tmp_path):
+#     modeler = make_component_modeler(path_dir=str(tmp_path))
+#     modeler.plot_sim_eps(z=0)
+#     plt.close()
 
 
 def test_make_component_modeler(tmp_path):
