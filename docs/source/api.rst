@@ -176,6 +176,30 @@ Time Modulation
    ContinuousWaveTimeModulation
    SpaceModulation
 
+Medium Perturbations
+--------------------
+
+Mediums with Heat and Charge Perturbation Models
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   PerturbationMedium
+   PerturbationPoleResidue
+
+Perturbation Specifications of Individual Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   ParameterPerturbation
+   LinearHeatPerturbation
+   CustomHeatPerturbation
+   LinearChargePerturbation
+   CustomChargePerturbation
+
 Material Library
 ----------------
 
