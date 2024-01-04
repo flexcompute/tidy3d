@@ -29,7 +29,7 @@ from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam,
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
-from .monitor import AbstractModeMonitor, FieldMonitor
+from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .data.dataset import Dataset
@@ -1065,7 +1065,7 @@ class Simulation(AbstractSimulation):
         self._validate_modes_size()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
-        # self._validate_run_time()
+        self._warn_time_monitors_outside_run_time()
         _ = self.volumetric_structures
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
@@ -1281,6 +1281,21 @@ class Simulation(AbstractSimulation):
                             "the same media along the injection axis "
                             f" '{'xyz'[source.injection_axis]}'."
                         )
+
+    def _warn_time_monitors_outside_run_time(self) -> None:
+        """Warn if time monitors start after the simulation run_time.
+        TODO: (remove this comment later) this is done as a pre-upload validator in view of a
+        planned change to allow ``run_time`` to accept a ``RunTimeSpec`` which would automatically
+        determine a run time based on simulation details. Then, we would have to access the
+        dynamically computed run_time e.g. through a ``_run_time`` cached property.
+        """
+        with log as consolidated_logger:
+            for monitor in self.monitors:
+                if isinstance(monitor, TimeMonitor) and monitor.start > self.run_time:
+                    consolidated_logger.warning(
+                        f"Monitor {monitor.name} has a start time {monitor.start:1.2e}s exceeding"
+                        f"the simulation run time {self.run_time:1.2e}s. No data will be recorded."
+                    )
 
     """ Accounting """
 
