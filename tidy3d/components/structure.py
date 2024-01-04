@@ -3,7 +3,7 @@ from typing import Union, Tuple, Optional
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .validators import validate_name_str
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
@@ -116,6 +116,7 @@ class Structure(AbstractStructure):
         return self.medium.eps_diagonal(frequency=frequency)
 
     @pydantic.validator("medium", always=True)
+    @skip_if_fields_missing(["geometry"])
     def _check_2d_geometry(cls, val, values):
         """Medium2D is only consistent with certain geometry types"""
         geom = values.get("geometry")

@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Union, Tuple
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel
+from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ...constants import MICROMETER
 from ...exceptions import ValidationError
 
@@ -107,6 +107,7 @@ class DistanceUnstructuredGrid(Tidy3dBaseModel):
     )
 
     @pd.validator("distance_bulk", always=True)
+    @skip_if_fields_missing(["distance_interface"])
     def names_exist_bcs(cls, val, values):
         """Error if distance_bulk is less than distance_interface"""
         distance_interface = values.get("distance_interface")

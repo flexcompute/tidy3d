@@ -7,6 +7,7 @@ from abc import ABC
 import pydantic.v1 as pd
 
 from ..monitor import TemperatureMonitor, HeatMonitorType
+from ...base import skip_if_fields_missing
 from ...base_sim.data.monitor_data import AbstractMonitorData
 from ...data.data_array import SpatialDataArray
 from ...data.dataset import TriangularGridDataset, TetrahedralGridDataset
@@ -74,6 +75,7 @@ class TemperatureData(HeatMonitorData):
     )
 
     @pd.validator("temperature", always=True)
+    @skip_if_fields_missing(["monitor"])
     def warn_no_data(cls, val, values):
         """Warn if no data provided."""
 

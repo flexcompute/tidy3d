@@ -11,7 +11,7 @@ import jax
 from jax.tree_util import register_pytree_node_class
 import xarray as xr
 
-from .....components.base import Tidy3dBaseModel, cached_property
+from .....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .....exceptions import DataError, Tidy3dKeyError, AdjointError
 
 
@@ -48,6 +48,7 @@ class JaxDataArray(Tidy3dBaseModel):
         return val
 
     @pd.validator("coords", always=True)
+    @skip_if_fields_missing(["values"])
     def _coords_match_values(cls, val, values):
         """Make sure the coordinate dimensions and shapes match the values data."""
 

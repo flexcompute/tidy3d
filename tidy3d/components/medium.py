@@ -11,6 +11,7 @@ import numpy as np
 import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
+from .base import skip_if_fields_missing
 from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
@@ -543,6 +544,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     )
 
     @pd.validator("modulation_spec", always=True)
+    @skip_if_fields_missing(["nonlinear_spec"])
     def _validate_modulation_spec(cls, val, values):
         """Check compatibility with modulation_spec."""
         nonlinear_spec = values.get("nonlinear_spec")
@@ -1024,6 +1026,7 @@ class Medium(AbstractMedium):
     )
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if not values.get("allow_gain") and val < 0:
@@ -1035,6 +1038,7 @@ class Medium(AbstractMedium):
         return val
 
     @pd.validator("permittivity", always=True)
+    @skip_if_fields_missing(["modulation_spec"])
     def _permittivity_modulation_validation(cls, val, values):
         """Assert modulated permittivity cannot be <= 0."""
         modulation = values.get("modulation_spec")
@@ -1049,6 +1053,7 @@ class Medium(AbstractMedium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["modulation_spec", "allow_gain"])
     def _passivity_modulation_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         modulation = values.get("modulation_spec")
@@ -1155,14 +1160,12 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["permittivity"])
     def _conductivity_real_and_correct_shape(cls, val, values):
         """Assert conductivity is real and of right shape."""
 
         if val is None:
             return val
-
-        if values.get("permittivity") is None:
-            raise ValidationError("'permittivity' failed validation.")
 
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
@@ -1172,6 +1175,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if val is None:
@@ -1358,6 +1362,7 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("eps_dataset", always=True)
+    @skip_if_fields_missing(["modulation_spec", "allow_gain"])
     def _eps_dataset_eps_inf_greater_no_less_than_one_sigma_positive(cls, val, values):
         """Assert any eps_inf must be >=1"""
         if val is None:
@@ -1406,6 +1411,7 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("permittivity", always=True)
+    @skip_if_fields_missing(["modulation_spec"])
     def _eps_inf_greater_no_less_than_one(cls, val, values):
         """Assert any eps_inf must be >=1"""
         if val is None:
@@ -1429,14 +1435,12 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["permittivity", "allow_gain"])
     def _conductivity_non_negative_correct_shape(cls, val, values):
         """Assert conductivity>=0"""
 
         if val is None:
             return val
-
-        if values.get("permittivity") is None:
-            raise ValidationError("'permittivity' failed validation.")
 
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
@@ -1455,6 +1459,7 @@ class CustomMedium(AbstractCustomMedium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["eps_dataset", "modulation_spec", "allow_gain"])
     def _passivity_modulation_validation(cls, val, values):
         """Assert passive medium at any time during modulation if `allow_gain` is False."""
 
@@ -1819,6 +1824,7 @@ class DispersiveMedium(AbstractMedium, ABC):
         """Assert modulated permittivity cannot be <= 0 at any time."""
 
         @pd.validator("eps_inf", allow_reuse=True, always=True)
+        @skip_if_fields_missing(["modulation_spec"])
         def _validate_permittivity_modulation(cls, val, values):
             """Assert modulated permittivity cannot be <= 0."""
             modulation = values.get("modulation_spec")
@@ -1839,6 +1845,7 @@ class DispersiveMedium(AbstractMedium, ABC):
         """Assert passive medium at any time if not ``allow_gain``."""
 
         @pd.validator("modulation_spec", allow_reuse=True, always=True)
+        @skip_if_fields_missing(["allow_gain"])
         def _validate_conductivity_modulation(cls, val, values):
             """With conductivity modulation, the medium can exhibit gain during the cycle.
             So `allow_gain` must be True when the conductivity is modulated.
@@ -2387,10 +2394,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         return val
 
     @pd.validator("poles", always=True)
+    @skip_if_fields_missing(["eps_inf"])
     def _poles_correct_shape(cls, val, values):
         """poles must have the same shape."""
-        if values.get("eps_inf") is None:
-            raise ValidationError("'eps_inf' failed validation.")
 
         expected_coords = values["eps_inf"].coords
         for coeffs in val:
@@ -2510,6 +2516,7 @@ class Sellmeier(DispersiveMedium):
     )
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if values.get("allow_gain"):
@@ -2652,6 +2659,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if values.get("allow_gain"):
@@ -2779,6 +2787,7 @@ class Lorentz(DispersiveMedium):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if values.get("allow_gain"):
@@ -2900,11 +2909,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape(cls, val, values):
         """coeffs must have consistent shape."""
-        if values.get("eps_inf") is None:
-            raise ValidationError("'eps_inf' failed validation.")
-
         expected_coords = values["eps_inf"].coords
         for de, f, delta in val:
             if (
@@ -2934,6 +2941,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         allow_gain = values.get("allow_gain")
@@ -3089,11 +3097,9 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs must have consistent shape and sign."""
-        if values.get("eps_inf") is None:
-            raise ValidationError("'eps_inf' failed validation.")
-
         expected_coords = values["eps_inf"].coords
         for f, delta in val:
             if f.coords != expected_coords or delta.coords != expected_coords:
@@ -3158,6 +3164,7 @@ class Debye(DispersiveMedium):
     )
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if values.get("allow_gain"):
@@ -3252,11 +3259,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape(cls, val, values):
         """coeffs must have consistent shape."""
-        if values.get("eps_inf") is None:
-            raise ValidationError("'eps_inf' failed validation.")
-
         expected_coords = values["eps_inf"].coords
         for de, tau in val:
             if de.coords != expected_coords or tau.coords != expected_coords:
@@ -3269,6 +3274,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         return val
 
     @pd.validator("coeffs", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         allow_gain = values.get("allow_gain")
@@ -3531,6 +3537,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["permittivity"])
     def conductivity_commutes(cls, val, values):
         """Check that the symmetric part of conductivity tensor commutes with permittivity tensor
         (that is, simultaneously diagonalizable).
@@ -3548,6 +3555,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         return val
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
         """Assert passive medium if `allow_gain` is False."""
         if values.get("allow_gain"):

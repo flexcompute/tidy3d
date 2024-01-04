@@ -7,7 +7,7 @@ import pydantic.v1 as pd
 import numpy as np
 
 from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF, fp_eps
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .types import Axis2D, Literal, TrackFreq
 from ..log import log
 from ..exceptions import SetupError, ValidationError
@@ -115,6 +115,7 @@ class ModeSpec(Tidy3dBaseModel):
     )
 
     @pd.validator("bend_axis", always=True)
+    @skip_if_fields_missing(["bend_radius"])
     def bend_axis_given(cls, val, values):
         """Check that ``bend_axis`` is provided if ``bend_radius`` is not ``None``"""
         if val is None and values.get("bend_radius") is not None:

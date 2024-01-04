@@ -9,6 +9,7 @@ import xarray as xr
 import matplotlib as mpl
 
 from .base import cached_property
+from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
@@ -224,6 +225,7 @@ class Simulation(AbstractSimulation):
         return updater.update_to_current()
 
     @pydantic.validator("grid_spec", always=True)
+    @skip_if_fields_missing(["sources"])
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
         if val.wavelength is None and val.auto_grid_used:
@@ -242,6 +244,7 @@ class Simulation(AbstractSimulation):
     # _plane_waves_in_homo = validate_plane_wave_intersections()
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["symmetry"])
     def bloch_with_symmetry(cls, val, values):
         """Error if a Bloch boundary is applied with symmetry"""
         boundaries = val.to_list
@@ -255,6 +258,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["medium", "size", "structures", "sources"])
     def plane_wave_boundaries(cls, val, values):
         """Error if there are plane wave sources incompatible with boundary conditions."""
         boundaries = val.to_list
@@ -296,6 +300,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
     def tfsf_boundaries(cls, val, values):
         """Error if the boundary conditions are compatible with TFSF sources, if any."""
         boundaries = val.to_list
@@ -375,6 +380,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("sources", always=True)
+    @skip_if_fields_missing(["symmetry"])
     def tfsf_with_symmetry(cls, val, values):
         """Error if a TFSF source is applied with symmetry"""
         symmetry = values.get("symmetry")
@@ -384,6 +390,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["size", "symmetry"])
     def boundaries_for_zero_dims(cls, val, values):
         """Error if absorbing boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         boundaries = val.to_list
@@ -461,6 +468,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["sources", "center", "size", "structures"])
     def _structures_not_close_pml(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
 
@@ -520,6 +528,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "structures"])
     def _warn_monitor_mediums_frequency_range(cls, val, values):
         """Warn user if any DFT monitors have frequencies outside of medium frequency range."""
 
@@ -571,18 +580,12 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["sources"])
     def _warn_monitor_simulation_frequency_range(cls, val, values):
         """Warn if any DFT monitors have frequencies outside of the simulation frequency range."""
 
         if val is None:
             return val
-
-        # Get simulation frequency range
-        if "sources" not in values:
-            raise ValidationError(
-                "could not validate `_warn_monitor_simulation_frequency_range` "
-                "as `sources` failed validation"
-            )
 
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if not source_ranges:
@@ -608,6 +611,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["boundary_spec"])
     def diffraction_monitor_boundaries(cls, val, values):
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
@@ -632,6 +636,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _projection_monitors_homogeneous(cls, val, values):
         """Error if any field projection monitor is not in a homogeneous region."""
 
@@ -726,6 +731,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size"])
     def proj_distance_for_approx(cls, val, values):
         """Warn if projection distance for projection monitors is not large compared to monitor or,
         simulation size, yet far_field_approx is True."""
@@ -754,6 +760,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["center", "size"])
     def _integration_surfaces_in_bounds(cls, val, values):
         """Error if any of the integration surfaces are outside of the simulation domain."""
 
@@ -774,6 +781,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size"])
     def _projection_monitors_distance(cls, val, values):
         """Warn if the projection distance is large for exact projections."""
 
@@ -806,6 +814,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "structures"])
     def diffraction_monitor_medium(cls, val, values):
         """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
@@ -821,6 +830,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("grid_spec", always=True)
+    @skip_if_fields_missing(["medium", "sources", "structures"])
     def _warn_grid_size_too_small(cls, val, values):
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
@@ -882,6 +892,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("sources", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _source_homogeneous_isotropic(cls, val, values):
         """Error if a plane wave or gaussian beam source is not in a homogeneous and isotropic
         region.
@@ -924,6 +935,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("normalize_index", always=True)
+    @skip_if_fields_missing(["sources"])
     def _check_normalize_index(cls, val, values):
         """Check validity of normalize index in context of simulation.sources."""
 

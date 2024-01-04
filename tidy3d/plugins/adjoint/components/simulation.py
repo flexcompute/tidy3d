@@ -10,7 +10,7 @@ import numpy as np
 from jax.tree_util import register_pytree_node_class
 
 from ....log import log
-from ....components.base import cached_property, Tidy3dBaseModel
+from ....components.base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
@@ -189,6 +189,7 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @pd.validator("input_structures", always=True)
+    @skip_if_fields_missing(["structures"])
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
 
