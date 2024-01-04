@@ -1833,6 +1833,27 @@ def test_error_large_monitors():
             s.validate_pre_upload()
 
 
+@pytest.mark.parametrize("start, log_level", [(1e-12, None), (1, "WARNING")])
+def test_warn_time_monitor_outside_run_time(log_capture, start, log_level):
+    """Make sure we get a warning if the mode monitor grid is too large."""
+
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.1),
+        run_time=1e-12,
+        sources=[
+            td.ModeSource(
+                size=(0.1, 0.1, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
+            )
+        ],
+        monitors=[td.FieldTimeMonitor(size=(td.inf, 0, td.inf), start=start, name="test")],
+    )
+    with AssertLogLevel(log_capture, log_level_expected=log_level, contains_str="start time"):
+        sim.validate_pre_upload()
+
+
 def test_dt():
     """make sure dt is reduced when there is a medium with eps_inf < 1."""
     sim = td.Simulation(
