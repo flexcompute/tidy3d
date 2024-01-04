@@ -34,12 +34,14 @@ pydantic = "^2.0"
 PyYAML = "*"
 dask = "*"
 toml = "*"
+### NOT CORE
 scipy = "*"
 boto3 = "1.23.1"
 requests = "*"
 pyjwt = "*"
 click = "8.0.3"
 responses = "*"
+### END NOT CORE
 
 ### Optional dependencies ### 
 # development core
