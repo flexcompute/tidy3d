@@ -20,7 +20,7 @@ from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..base import TYPE_TAG_STR, cached_property
+from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
 from ..types import EpsSpecType, Literal
 from ..grid.grid import Grid, Coords
@@ -926,6 +926,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
     )
 
     @pd.validator("eps_spec", always=True)
+    @skip_if_fields_missing(["monitor"])
     def eps_spec_match_mode_spec(cls, val, values):
         """Raise validation error if frequencies in eps_spec does not match frequency list"""
         if val:

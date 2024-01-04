@@ -8,7 +8,7 @@ from math import isclose
 import pydantic.v1 as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel, cached_property
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .types import InterpMethod
 from .time import AbstractTimeDependence
 from .data.data_array import SpatialDataArray
@@ -231,6 +231,7 @@ class ModulationSpec(Tidy3dBaseModel):
     )
 
     @pd.validator("conductivity", always=True)
+    @skip_if_fields_missing(["permittivity"])
     def _same_modulation_frequency(cls, val, values):
         """Assert same time-modulation applied to permittivity and conductivity."""
         permittivity = values.get("permittivity")

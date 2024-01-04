@@ -19,7 +19,7 @@ from .monitor import FieldMonitor, AbstractFieldProjectionMonitor, FieldProjecti
 from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor
 from .types import Direction, Coordinate, ArrayComplex4D
 from .medium import MediumType
-from .base import Tidy3dBaseModel, cached_property
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ..exceptions import SetupError
 from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
 from ..log import get_logging_console
@@ -72,6 +72,7 @@ class FieldProjector(Tidy3dBaseModel):
     )
 
     @pydantic.validator("origin", always=True)
+    @skip_if_fields_missing(["surfaces"])
     def set_origin(cls, val, values):
         """Sets .origin as the average of centers of all surface monitors if not provided."""
         if val is None:

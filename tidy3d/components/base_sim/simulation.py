@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 
 from .monitor import AbstractMonitor
 
-from ..base import cached_property
+from ..base import cached_property, skip_if_fields_missing
 from ..validators import assert_unique_names, assert_objects_in_sim_bounds
 from ..geometry.base import Box
 from ..types import Ax, Bound, Axis, Symmetry, TYPE_TAG_STR
@@ -97,6 +97,7 @@ class AbstractSimulation(Box, ABC):
     _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
 
     @pd.validator("structures", always=True)
+    @skip_if_fields_missing(["size", "center"])
     def _structures_not_at_edges(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
 

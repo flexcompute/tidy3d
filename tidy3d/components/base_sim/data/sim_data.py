@@ -12,6 +12,7 @@ from .monitor_data import AbstractMonitorData
 from ..simulation import AbstractSimulation
 from ...data.dataset import UnstructuredGridDatasetType
 from ...base import Tidy3dBaseModel
+from ...base import skip_if_fields_missing
 from ...types import FieldVal
 from ....exceptions import DataError, Tidy3dKeyError, ValidationError
 
@@ -51,13 +52,13 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return {monitor_data.monitor.name: monitor_data for monitor_data in self.data}
 
     @pd.validator("data", always=True)
+    @skip_if_fields_missing(["simulation"])
     def data_monitors_match_sim(cls, val, values):
         """Ensure each :class:`AbstractMonitorData` in ``.data`` corresponds to a monitor in
         ``.simulation``.
         """
         sim = values.get("simulation")
-        if sim is None:
-            raise ValidationError("'.simulation' failed validation, can't validate data.")
+
         for mnt_data in val:
             try:
                 monitor_name = mnt_data.monitor.name
@@ -70,14 +71,11 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
         return val
 
     @pd.validator("data", always=True)
+    @skip_if_fields_missing(["simulation"])
     def validate_no_ambiguity(cls, val, values):
         """Ensure all :class:`AbstractMonitorData` entries in ``.data`` correspond to different
         monitors in ``.simulation``.
         """
-        sim = values.get("simulation")
-        if sim is None:
-            raise ValidationError("'.simulation' failed validation, can't validate data.")
-
         names = [mnt_data.monitor.name for mnt_data in val]
 
         if len(set(names)) != len(names):

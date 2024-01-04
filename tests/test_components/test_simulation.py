@@ -505,11 +505,11 @@ def test_validate_components_none():
     assert SIM._source_homogeneous_isotropic(val=None, values=SIM.dict()) is None
 
 
-def test_sources_edge_case_validation():
+def test_sources_edge_case_validation(log_capture):
     values = SIM.dict()
     values.pop("sources")
-    with pytest.raises(ValidationError):
-        SIM._warn_monitor_simulation_frequency_range(val="test", values=values)
+    SIM._warn_monitor_simulation_frequency_range(val="test", values=values)
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_validate_size_run_time(monkeypatch):

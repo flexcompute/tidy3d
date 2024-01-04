@@ -9,12 +9,12 @@ from typing_extensions import Literal
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .base import cached_property
+from .base import cached_property, skip_if_fields_missing
 from .base_sim.source import AbstractSource
 from .time import AbstractTimeDependence
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
-from .validators import assert_plane, assert_volumetric, get_value
+from .validators import assert_plane, assert_volumetric
 from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
 from .data.dataset import FieldDataset, TimeDataset
 from .data.data_array import TimeDataArray
@@ -679,11 +679,12 @@ class CustomFieldSource(FieldSource, PlanarSource):
     _field_dataset_single_freq = assert_single_freq_in_range("field_dataset")
 
     @pydantic.validator("field_dataset", always=True)
+    @skip_if_fields_missing(["size"])
     def _tangential_component_defined(cls, val: FieldDataset, values: dict) -> FieldDataset:
         """Assert that at least one tangential field component is provided."""
         if val is None:
             return val
-        size = get_value(key="size", values=values)
+        size = values.get("size")
         normal_axis = size.index(0.0)
         _, (cmp1, cmp2) = cls.pop_axis("xyz", axis=normal_axis)
         for field in "EH":

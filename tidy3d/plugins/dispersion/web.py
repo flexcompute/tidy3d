@@ -10,7 +10,7 @@ import pydantic.v1 as pydantic
 from pydantic.v1 import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...log import log
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
 from ...components.types import Literal
 from ...components.medium import PoleResidue
 from ...constants import MICROMETER, HERTZ
@@ -97,6 +97,7 @@ class AdvancedFitterParam(Tidy3dBaseModel):
     )
 
     @validator("bound_f_lower", always=True)
+    @skip_if_fields_missing(["bound_f"])
     def _validate_lower_frequency_bound(cls, val, values):
         """bound_f_lower cannot be larger than bound_f."""
         if values["bound_f"] is not None and val > values["bound_f"]:

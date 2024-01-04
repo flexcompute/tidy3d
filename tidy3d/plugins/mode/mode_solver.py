@@ -11,7 +11,7 @@ import pydantic.v1 as pydantic
 import xarray as xr
 
 from ...log import log
-from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.geometry.base import Box
 from ...components.simulation import Simulation
 from ...components.grid.grid import Grid
@@ -100,6 +100,7 @@ class ModeSolver(Tidy3dBaseModel):
     _freqs_lower_bound = validate_freqs_min()
 
     @pydantic.validator("plane", always=True)
+    @skip_if_fields_missing(["simulation"])
     def plane_in_sim_bounds(cls, val, values):
         """Check that the plane is at least partially inside the simulation bounds."""
         sim_center = values.get("simulation").center

@@ -3,7 +3,7 @@
 import pydantic.v1 as pd
 import numpy as np
 
-from .base import Tidy3dBaseModel
+from .base import Tidy3dBaseModel, skip_if_fields_missing
 from ..constants import SECOND
 from ..exceptions import SetupError
 from .types import ArrayFloat1D, Ax
@@ -40,6 +40,7 @@ class ApodizationSpec(Tidy3dBaseModel):
     )
 
     @pd.validator("end", always=True, allow_reuse=True)
+    @skip_if_fields_missing(["start"])
     def end_greater_than_start(cls, val, values):
         """Ensure end is greater than or equal to start."""
         start = values.get("start")
@@ -48,6 +49,7 @@ class ApodizationSpec(Tidy3dBaseModel):
         return val
 
     @pd.validator("width", always=True, allow_reuse=True)
+    @skip_if_fields_missing(["start", "end"])
     def width_provided(cls, val, values):
         """Check that width is provided if either start or end apodization is requested."""
         start = values.get("start")
