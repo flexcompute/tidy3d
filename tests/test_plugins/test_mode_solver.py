@@ -162,7 +162,6 @@ def compare_colocation(ms):
     data_at_boundaries = ms_nocol.sim_data.at_boundaries(MODE_MONITOR_NAME)
 
     for key, field in data_col.field_components.items():
-
         # Check the colocated data is the same
         assert np.allclose(data_at_boundaries[key], field, atol=1e-7)
 
@@ -215,7 +214,6 @@ def verify_dtype(ms):
 
 
 def check_ms_reduction(ms):
-
     ms_red = ms.reduced_simulation_copy
     grids_1d = ms._solver_grid.boundaries
     grids_1d_red = ms_red._solver_grid.boundaries

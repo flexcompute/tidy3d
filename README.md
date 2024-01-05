@@ -6,7 +6,7 @@ Name](https://img.shields.io/badge/pypi-tidy3d-blue?style=for-the-badge)](https:
 ![Tests](https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge)
 ![License](https://img.shields.io/github/license/flexcompute/tidy3d?style=for-the-badge)
 [![Black](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
-[//]: # (TODO add coverage label)
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/daquinteroflex/4702549574741e87deaadba436218ebd/raw/tidy3d_extension.json)
 
 [![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://github.com/flexcompute/tidy3d-notebooks)
 

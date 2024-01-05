@@ -43,7 +43,6 @@ def test_scene_init():
 
 
 def test_validate_components_none():
-
     assert SCENE._validate_num_mediums(val=None) is None
 
 
@@ -169,7 +168,6 @@ def _test_names_default():
 
 
 def test_names_unique():
-
     with pytest.raises(pd.ValidationError):
         _ = td.Scene(
             structures=[
@@ -188,7 +186,6 @@ def test_names_unique():
 
 
 def test_perturbed_mediums_copy():
-
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(

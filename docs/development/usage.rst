@@ -50,7 +50,7 @@ There are a range of handy development functions that you might want to use to s
       -
       - ``poetry run tidy3d develop build-docs``
     * - Build documentation with latest remote notebooks
-      -
+      - It is defaulted to the  ``develop`` branch of the ``tidy3d-notebooks`` repository.
       - ``poetry run tidy3d develop build-docs-remote-notebooks``
     * - Complete notebooks + base testing of the ``tidy3d``
       - Make sure you have the notebooks downloaded.
@@ -64,6 +64,9 @@ There are a range of handy development functions that you might want to use to s
     * - Running ``pytest`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run pytest``
+    * - Run ``coverage`` testing from the ``poetry`` environment.
+      -
+      - ``poetry run coverage run -m pytest``
     * - Standard testing of the ``tidy3d`` frontend
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
       - ``poetry run tidy3d develop test-base``
@@ -73,4 +76,9 @@ There are a range of handy development functions that you might want to use to s
     * - Update lockfile after updating a dependency in ``pyproject.toml``
       - Remember to install after this command.
       - ``poetry lock``
+    * - Update and replace all the docstrings in the codebase between versions
+      -
+      - ``poetry run tidy3d develop replace-in-files``
+
+
 

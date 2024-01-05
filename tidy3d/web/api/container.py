@@ -56,7 +56,7 @@ class Job(WebContainer):
 
          .. code-block:: python
 
-            tidy3d.web.start(job.task_id)
+            tidy3d.web.api.webapi.start(job.task_id)
 
         To monitor the simulation's progress and wait for its completion, use
 
@@ -90,7 +90,7 @@ class Job(WebContainer):
     See Also
     --------
 
-    :meth:`tidy3d.web.run_async`
+    :meth:`tidy3d.web.api.webapi.run_async`
         Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
         downloads, and loads results as a :class:`.BatchData` object.
 
@@ -405,7 +405,7 @@ class Batch(WebContainer):
     See Also
     --------
 
-    :meth:`tidy3d.web.run_async`
+    :meth:`tidy3d.web.api.webapi.run_async`
         Submits a set of :class:`.Simulation` objects to server, starts running, monitors progress,
         downloads, and loads results as a :class:`.BatchData` object.
 
@@ -525,7 +525,6 @@ class Batch(WebContainer):
         solver_version = values.get("solver_version")
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-
             upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation

@@ -191,7 +191,7 @@ def upload(
 
             web.upload(simulation, task_name="task_name", verbose=verbose)
 
-        It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.start`.
+        It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
 
     """
     stub = Tidy3dStub(simulation=simulation)
@@ -345,7 +345,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
     task_info = get_info(task_id)
 
     if task_info.taskType in ("MODE_SOLVER", "HEAT"):
-
         log_level = "DEBUG" if verbose else "INFO"
         solver_name = "Mode" if task_info.taskType == "MODE_SOLVER" else "Heat"
 
@@ -373,7 +372,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
             return None
 
     elif task_info.taskType == "FDTD":
-
         task_name = task_info.taskName
 
         break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")

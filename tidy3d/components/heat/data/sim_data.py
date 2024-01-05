@@ -162,7 +162,6 @@ class HeatSimulationData(AbstractSimulationData):
             )
 
         if isinstance(field_data, TriangularGridDataset):
-
             field_data.plot(
                 ax=ax,
                 cmap=cmap,
@@ -184,7 +183,6 @@ class HeatSimulationData(AbstractSimulationData):
             max_bounds.pop(axis)
 
         if isinstance(field_data, SpatialDataArray):
-
             # interp out any monitor.size==0 dimensions
             monitor = self.simulation.get_monitor_by_name(monitor_name)
             thin_dims = {

@@ -99,7 +99,6 @@ class JaxGeometry(Geometry, ABC):
         d_mult_xyz = {}
 
         for dim in "xyz":
-
             # grab the E field components
             e_fld_key = f"E{dim}"
             e_fwd = grad_data_fwd.field_components[e_fld_key]
@@ -167,9 +166,7 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
         # loop through all 6 surfaces (x,y,z) & (-, +)
         for dim_index, dim_normal in enumerate("xyz"):
-
             for min_max_index, min_max_val in enumerate(bounds_intersect):
-
                 # get the normal coordinate of this surface
                 normal_coord = {dim_normal: min_max_val[dim_index]}
 
@@ -190,7 +187,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
                 d_area = 1.0
                 area_coords = {}
                 for dim_plane, min_edge, max_edge in zip(dims_plane, mins_plane, maxs_plane):
-
                     # if there is no thickness along this dimension, skip it
                     length_edge = max_edge - min_edge
                     if length_edge == 0:
@@ -210,7 +206,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                 # for each field component
                 for field_cmp_dim in "xyz":
-
                     # select the permittivity data
                     eps_field_name = f"eps_{field_cmp_dim}{field_cmp_dim}"
                     eps_data = grad_data_eps.field_components[eps_field_name]
@@ -235,7 +230,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # get gradient contribution for normal component using normal D field
                     if field_cmp_dim == dim_normal:
-
                         # construct normal D fields, dotted together at surface
                         d_normal = d_mult_xyz[field_cmp_dim]
                         d_normal = d_normal.interp(**normal_coord, assume_sorted=True)
@@ -248,7 +242,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
 
                     # get gradient contribution for parallel components using parallel E fields
                     else:
-
                         # measure parallel E fields, dotted together at surface
                         e_parallel = e_mult_xyz[field_cmp_dim]
                         e_parallel = e_parallel.interp(**normal_coord, assume_sorted=True)

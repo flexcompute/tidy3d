@@ -1,4 +1,4 @@
-name: Tidy3d Release
+name: "tidy3d-release"
 
 on:
   push:

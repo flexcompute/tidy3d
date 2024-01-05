@@ -36,12 +36,10 @@ SUBSECTION = td.Box(size=(0.3, 0.4, 0.35), center=(0.4, 0.4, 0.4))
 
 
 def reduce(obj):
-
     return obj.sel_inside(SUBSECTION.bounds)
 
 
 def check_reduction(obj, obj_reduced):
-
     for field in ["amplitude", "phase"]:
         original = getattr(obj, field)
         reduced = getattr(obj_reduced, field)
@@ -56,21 +54,17 @@ def check_reduction(obj, obj_reduced):
 
 
 def check_sp_reduction(sp):
-
     check_reduction(sp, reduce(sp))
 
 
 def check_st_reduction(st):
-
     check_reduction(st.space_modulation, reduce(st).space_modulation)
 
 
 def check_med_reduction(med):
-
     med_red = reduce(med)
 
     for field in ["permittivity", "conductivity"]:
-
         field_mod = getattr(med.modulation_spec, field)
         field_mod_red = getattr(med_red.modulation_spec, field)
         if field_mod is None:
@@ -80,19 +74,15 @@ def check_med_reduction(med):
 
 
 def check_ani_med_reduction(med):
-
     reduced_med = reduce(med)
 
     for comp, comp_red in zip(
         [med.xx, med.yy, med.zz], [reduced_med.xx, reduced_med.yy, reduced_med.zz]
     ):
-
         if comp.modulation_spec is None:
             assert comp_red.modulation_spec is None
         else:
-
             for field in ["permittivity", "conductivity"]:
-
                 field_mod = getattr(comp.modulation_spec, field)
                 field_mod_red = getattr(comp_red.modulation_spec, field)
                 if field_mod is None:

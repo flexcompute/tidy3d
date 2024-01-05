@@ -103,7 +103,6 @@ class TemperatureData(HeatMonitorData):
             # do not expand monitor with zero size along symmetry direction
             # this is done because 2d unstructured data does not support this
             if self.symmetry[dim] == 1 and self.monitor.size[dim] != 0:
-
                 new_temp = new_temp.reflect(axis=dim, center=self.symmetry_center[dim])
 
         return self.updated_copy(temperature=new_temp, symmetry=(0, 0, 0))

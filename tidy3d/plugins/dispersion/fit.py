@@ -287,13 +287,11 @@ class DispersionFitter(Tidy3dBaseModel):
         best_rms = np.inf
 
         with Progress(console=get_logging_console()) as progress:
-
             task = progress.add_task(
                 f"Fitting with {num_poles} to RMS of {tolerance_rms}...", total=num_tries
             )
 
             while not progress.finished:
-
                 # if guess is provided use it in the first optimization run
                 if guess is not None and progress.tasks[0].completed == 0:
                     medium, rms_error = self._fit_single(num_poles=num_poles, guess=guess)

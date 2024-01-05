@@ -7,6 +7,7 @@ import subprocess
 import re
 import os
 import tidy3d
+from typing import Optional
 
 
 def get_install_directory():
@@ -63,44 +64,78 @@ def echo_and_check_subprocess(command: list, **kwargs):
     return subprocess.check_call(command, cwd=get_install_directory(), **kwargs)
 
 
-def replace_in_files(directory, json_file_path, selected_version):
+def replace_in_files(
+    directory: str,
+    json_file_path: str,
+    selected_version: str,
+    dry_run=False,
+):
     """
-    Recursively finds and replaces strings in files within a directory based on a given dictionary
-    loaded from a JSON file. The JSON file also includes a version selector.
+    Recursively finds and replaces strings in files within a directory based on a given dictionary loaded from a JSON
+    file. The JSON file also includes a version selector. The function will print the file line and prompt for
+    confirmation before replacing each string.
+
+    Example JSON file:
+
+    {
+      "0.18.0": {
+        "tidy3d.someuniquestringa": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringb": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringc": "tidy3d.someuniquestring2"
+      }
+    }
 
     Args:
     - directory (str): The directory path to search for files.
     - json_file_path (str): The path to the JSON file containing replacement instructions.
-
-    The function will print the file line and prompt for confirmation before replacing each string.
+    - selected_version (str): The version to select from the JSON file.
+    - dry_run (bool): If True, the function will not modify any files, but will print the changes that would be made.
     """
+    allowed_extensions = (".py", ".rst", ".md", ".txt")
 
     # Load data from the JSON file
     with open(json_file_path, encoding="utf-8") as json_file:
         data = json.load(json_file)
-        replace_dict = data.get("replacements", {}).get(selected_version, {})
+        replace_dict = data.get(str(selected_version), {})
 
-    for root, _, files in os.walk(directory):
+    for root, dirs, files in os.walk(directory):
+        # Exclude directories that start with a period ('.')
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
         for file in files:
             file_path = os.path.join(root, file)
+            file_extension = os.path.splitext(file)[1].lower()  # Get the file extension
+            if not file.startswith("."):
+                # Check if the file has an allowed extension
+                if file_extension in allowed_extensions:
+                    # Read file content and process each line
+                    with open(file_path, encoding="utf-8") as f:
+                        try:
+                            lines = f.readlines()
 
-            # Read file content and process each line
-            with open(file_path, encoding="utf-8") as f:
-                lines = f.readlines()
+                            for i, line in enumerate(lines):
+                                for find_str, replace_str in replace_dict.items():
+                                    if find_str in line:
+                                        print(f"File: {file_path} --- Line {i + 1}")
+                                        print(f"Original: {line.strip()}")
+                                        confirmation = input(
+                                            f"Replace '{find_str}' with '{replace_str}' in this line? (y/n): "
+                                        )
+                                        if confirmation.lower() == "y":
+                                            lines[i] = line.replace(find_str, replace_str)
+                                            if not dry_run:
+                                                print(f"Modified: {lines[i].strip()}")
+                                            else:
+                                                print(
+                                                    f"Not modified because of dry run: {line.strip()}"
+                                                )
 
-            for i, line in enumerate(lines):
-                for find_str, replace_str in replace_dict.items():
-                    if find_str in line:
-                        print(f"Line {i + 1} in file '{file}': {line.strip()}")
-                        confirmation = input(
-                            f"Replace '{find_str}' with '{replace_str}' in this line? (y/n): "
-                        )
-                        if confirmation.lower() == "y":
-                            lines[i] = line.replace(find_str, replace_str)
+                            # Write the modified content back to the file if not in dry run mode
+                            if not dry_run:
+                                with open(file_path, "w", encoding="utf-8") as f:
+                                    f.writelines(lines)
 
-            # Write the modified content back to the file
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.writelines(lines)
+                        except:  # NOQA: E722
+                            pass
 
 
 def verify_pandoc_is_installed_and_version_less_than_3():
@@ -367,6 +402,7 @@ def install_development_environment(args=None):
     activate_correct_poetry_python()
     # Makes sure the package has installed all the development dependencies.
     echo_and_check_subprocess(["poetry", "install", "-E", "dev"])
+    echo_and_check_subprocess(["poetry", "run", "pre-commit", "install"])
 
     # Configure notebook submodule
     try:
@@ -454,9 +490,14 @@ def uninstall_development_environment(args=None):
 @develop.command(
     name="commit", help="Adds and commits the state of the repository and its submodule."
 )
-@click.argument("message")
-@click.option("--submodule-path", default="./docs/notebooks", help="Path to the submodule.")
-def commit(message, submodule_path):
+@click.argument("message", type=str)  # Specify the type as str for the 'message' argument
+@click.option(
+    "--submodule-path",
+    default="./docs/notebooks",
+    help="Path to the submodule.",
+    type=str,  # Specify the type as str for the 'submodule-path' option
+)
+def commit(message: str, submodule_path: str):
     """
     Add and commit changes in both the Git repository and its submodule.
 
@@ -532,6 +573,12 @@ def build_documentation_pdf(args=None):
 @develop.command(
     name="build-docs-remote-notebooks", help="Updates notebooks submodule and builds documentation."
 )
+@click.option(
+    "-nb",
+    "--notebook-branch",
+    default="./docs/notebooks",
+    help="The remote branch from tidy3d-notebooks.",
+)
 def build_documentation_from_remote_notebooks(args=None):
     """
     Update the notebooks submodule and build documentation.
@@ -545,6 +592,7 @@ def build_documentation_from_remote_notebooks(args=None):
     """
     # Runs the documentation build from the poetry environment
     echo_and_check_subprocess(["git", "submodule", "update", "--remote"])
+
     print("Notebook submodule updated from remote.")
     echo_and_check_subprocess(["poetry", "run", "python", "-m", "sphinx", "docs/", "_docs/"])
     return 0
@@ -633,16 +681,53 @@ def update_notebooks_remote(args=None):
 @click.option(
     "--json-dictionary",
     "-j",
-    type=click.Path(exists=True, file_okay=False, readable=True),
-    default=".",
+    type=click.Path(exists=True, file_okay=True, readable=True),
     help="JSON that contains the docstring version update files.",
 )
-@click.argument("selected_version")
-def replace_in_files_command(directory, json_file_path, selected_version):
+@click.option(
+    "--selected-version",
+    "-v",
+    type=str,
+    help="Version to select from the JSON file",
+)
+@click.option(
+    "--dry-run",
+    type=bool,
+    default=False,
+    help="Dry run the replace in files command.",
+)
+def replace_in_files_command(
+    directory: str, json_dictionary: Optional[str], selected_version: Optional[str], dry_run: bool
+):
+    """
+    Recursively finds and replaces strings in files within a directory based on a given dictionary loaded from a JSON
+    file. The JSON file also includes a version selector. The function will print the file line and prompt for
+    confirmation before replacing each string.
+
+    Example JSON file:
+
+    {
+      "0.18.0": {
+        "tidy3d.someuniquestringa": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringb": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringc": "tidy3d.someuniquestring2"
+      }
+    }
+
+    Usage:
+
+        poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
+        poetry run tidy3d develop replace-in-files --directory ./ --json-dictionary ./docs/versions/test_replace_in_files.json --selected-version 0.18.0 --dry-run True
+
+    Args:
+    - directory (str): The directory path to search for files.
+    - json_file_path (str): The path to the JSON file containing replacement instructions.
+    - selected_version (str): The version to select from the JSON file.
+    """
     if directory is None:
         directory = get_install_directory()
 
-    replace_in_files(directory, json_file_path, selected_version)
+    replace_in_files(directory, json_dictionary, selected_version, dry_run)
     return 0
 
 
@@ -658,7 +743,7 @@ def replace_in_files_command(directory, json_file_path, selected_version):
     default=".",
     help="Directory to process (default is current directory)",
 )
-def convert_markdown_to_rst(directory):
+def convert_markdown_to_rst(directory: str):
     """
     This script converts all Markdown files in a given DIRECTORY to reStructuredText format.
     """
