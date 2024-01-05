@@ -169,7 +169,6 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
 
         for position_index, geometric_object in enumerate(val):
             if not sim_box.intersects(geometric_object.geometry):
-
                 message = (
                     f"'simulation.{field_name}[{position_index}]'"
                     "is completely outside of simulation domain."
@@ -293,7 +292,6 @@ def validate_parameter_perturbation(
                     )
                 ):
                     if perturb is not None:
-
                         # check real/complex type
                         if perturb.is_complex and not allowed_complex:
                             raise SetupError(
@@ -312,7 +310,6 @@ def validate_parameter_perturbation(
                             [real_range, imag_range], [np.real, np.imag], ["Re", "Im"]
                         ):
                             if part_range is not None:
-
                                 min_allowed, max_allowed = part_range
 
                                 if min_allowed is not None and part_func(min_val) < min_allowed:

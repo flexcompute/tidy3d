@@ -50,7 +50,6 @@ def test_from_n_less_than_1():
 
 
 def test_medium():
-
     # mediums error with unacceptable values
     with pytest.raises(pydantic.ValidationError):
         _ = td.Medium(permittivity=0.0)
@@ -136,12 +135,10 @@ def test_medium_from_nk():
 
 
 def test_PEC():
-
     _ = td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.PEC)
 
 
 def test_medium_dispersion():
-
     # construct media
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
@@ -180,7 +177,6 @@ def test_medium_dispersion():
 
 
 def test_medium_dispersion_conversion():
-
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
@@ -196,7 +192,6 @@ def test_medium_dispersion_conversion():
 
 
 def test_medium_dispersion_create():
-
     m_PR = td.PoleResidue(eps_inf=1.0, poles=[((-1 + 2j), (1 + 3j)), ((-2 + 4j), (1 + 5j))])
     m_SM = td.Sellmeier(coeffs=[(2, 3), (2, 4)])
     m_LZ = td.Lorentz(eps_inf=1.0, coeffs=[(1, 3, 2), (2, 4, 1)])
@@ -228,7 +223,6 @@ def test_sellmeier_from_dispersion():
 
 
 def eps_compare(medium: td.Medium, expected: Dict, tol: float = 1e-5):
-
     for freq, val in expected.items():
         assert np.abs(medium.eps_model(freq) - val) < tol
 
@@ -518,7 +512,6 @@ def test_fully_anisotropic_media():
 
 
 def test_perturbation_medium():
-
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(

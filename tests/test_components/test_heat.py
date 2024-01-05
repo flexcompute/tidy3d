@@ -340,7 +340,6 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):
     CENTER_SHIFT = (-1.0, 1.0, 100.0)
 
     def place_box(center_offset):
-
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
         _ = td.HeatSimulation(

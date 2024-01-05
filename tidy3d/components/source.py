@@ -1088,7 +1088,6 @@ class TFSF(AngledFieldSource, VolumeSource):
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
-
         # call Source.plot but with the base of the arrow centered on the injection plane
         patch_kwargs["arrow_base"] = self.injection_plane_center
         ax = Source.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)

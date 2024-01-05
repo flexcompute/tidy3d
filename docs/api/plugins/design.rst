@@ -3,7 +3,9 @@
 Design Space Exploration
 ------------------------
 
-.. mdinclude:: ../../tidy3d/plugins/design/README.md
+.. toctree::
+
+    design_readme
 
 .. autosummary::
    :toctree: ../_autosummary/

@@ -10,7 +10,6 @@ np.random.seed(4)
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_triangular_dataset(tmp_path, ds_name):
-
     import tidy3d as td
     from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
@@ -45,7 +44,6 @@ def test_triangular_dataset(tmp_path, ds_name):
 
     # wrong points dimensionality
     with pytest.raises(pd.ValidationError):
-
         tri_grid_points_bad = td.PointDataArray(
             np.random.random((4, 3)),
             coords=dict(index=np.arange(4), axis=np.arange(3)),
@@ -75,7 +73,6 @@ def test_triangular_dataset(tmp_path, ds_name):
 
     # invalid cell connections
     with pytest.raises(pd.ValidationError):
-
         tri_grid_cells_bad = td.CellDataArray(
             [[0, 1, 2, 3]],
             coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
@@ -90,7 +87,6 @@ def test_triangular_dataset(tmp_path, ds_name):
         )
 
     with pytest.raises(pd.ValidationError):
-
         tri_grid_cells_bad = td.CellDataArray(
             [[0, 1, 5], [1, 2, 3]],
             coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
@@ -106,7 +102,6 @@ def test_triangular_dataset(tmp_path, ds_name):
 
     # wrong number of values
     with pytest.raises(pd.ValidationError):
-
         tri_grid_values_bad = td.IndexedDataArray(
             [1.0, 2.0, 3.0],
             coords=dict(index=np.arange(3)),
@@ -262,7 +257,6 @@ def test_triangular_dataset(tmp_path, ds_name):
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_tetrahedral_dataset(tmp_path, ds_name):
-
     import tidy3d as td
     from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
@@ -292,7 +286,6 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
 
     # wrong points dimensionality
     with pytest.raises(pd.ValidationError):
-
         tet_grid_points_bad = td.PointDataArray(
             np.random.random((5, 2)),
             coords=dict(index=np.arange(5), axis=np.arange(2)),
@@ -318,7 +311,6 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
 
     # invalid cell connections
     with pytest.raises(pd.ValidationError):
-
         tet_grid_cells_bad = td.CellDataArray(
             [[0, 1, 2], [1, 2, 3]],
             coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
@@ -331,7 +323,6 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         )
 
     with pytest.raises(pd.ValidationError):
-
         tet_grid_cells_bad = td.CellDataArray(
             [[0, 1, 2, 6], [1, 2, 3, 4]],
             coords=dict(cell_index=np.arange(2), vertex_index=np.arange(4)),
@@ -345,7 +336,6 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
 
     # wrong number of values
     with pytest.raises(pd.ValidationError):
-
         tet_grid_values_bad = td.IndexedDataArray(
             [1.0, 2.0, 3.0],
             coords=dict(index=np.arange(3)),

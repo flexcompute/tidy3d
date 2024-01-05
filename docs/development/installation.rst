@@ -8,8 +8,8 @@ Maybe you already have ``tidy3d`` installed in some form. After installing versi
 
 It does not matter how you have installed ``tidy3d`` before as long as you have any form of `tidy3d>=2.6`` in your environment. This can help you transition from a standard user installation to a development environment installation.
 
-Beta instructions for verification (REMOVE pre 2.6 release)
-'''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+Quick Start
+''''''''''''
 
 Instructions for anyone who wants to test the new development flow before it gets included as part of the pre-release:
 
@@ -19,12 +19,13 @@ For ubuntu:
 
     git clone https://github.com/flexcompute/tidy3d.git
     cd tidy3d
-    git fetch origin repo_merge_no_history
-    git checkout repo_merge_no_history
-    # Create and activate a virtual environment here based on your python installation
-    python3 -m pip install -e . # Follow standard pip development install
-    python3 -m tidy3d develop # list all new development commands
-    python3 -m tidy3d develop configure-dev-environment
+    # Make sure you're in a branch > pre/2.6 and you can `import tidy3d` in python
+    pip install -e . # or whatever local installation works for you
+    tidy3d develop # Read all the new development helper commands
+    # tidy3d develop uninstall-dev-envrionment # in case you need to reset your environment
+    tidy3d develop install-dev-environment # install all requirements that you don't have and verify the exisiting ones
+    poetry run tidy3d develop verify-dev-environment # reproducibly verify development envrionment
+    # poetry run tidy3d develop build-docs # eg. reproducibly build documentation
 
 Now you can run the following ``tidy3d`` cli commands to test them.
 
@@ -37,7 +38,7 @@ If you are transitioning from the old development flow, to this new one, there a
 .. code::
 
     # Automatically check and install requirements like pipx, poetry, pandoc
-    tidy3d develop configure-dev-environment
+    tidy3d develop install-dev-environment
 
 Note that this is just a automatic script implementation of the `The Detailed Lane`_ instructions. It is intended to help you and raise warnings with suggestions of how to fix an environment setup issue. You do not have to use this helper function and can just follow the instructions in  `The Detailed Lane`_. All commands are echo-ed in the terminal so you will be able to observe and reproduce what is failing if you desire.
 
@@ -146,7 +147,7 @@ If you want to locally build documentation, then it is required to install ``pan
         .. code-block:: bash
 
             sudo apt-get update
-            sudo apt-get install pandoc="2.9"
+            sudo apt-get install pandoc
 
    .. group-tab:: macOS
 
@@ -164,7 +165,37 @@ If you want to locally build documentation, then it is required to install ``pan
 
            choco install pandoc --version="2.9"
 
-Congratulations! Now you have all the required tools installed, you can now use all the `poetry run tidy3d develop` commands reproducibly.
+Now you need to install the package in the reproducible poetry environment in development mode:
+
+.. code::
+
+    poetry install -E dev
+
+Congratulations! Now you have all the required tools installed, you can now use all the ``poetry run tidy3d develop`` commands reproducibly.
+
+If you want to contribute to the project, read the following section:
+
+
+More Contribution Requirements
+''''''''''''''''''''''''''''''
+
+If you want to contribute to the development of ``tidy3d``, you can follow the instructions below to set up your development environment. This will allow you to run the tests, build the documentation, and run the examples. Another thing you need to do before committing to the project is to install the pre-commit hooks. This will ensure that your code is formatted correctly and passes the tests before you commit it. To do this, run the following command:
+
+.. code::
+
+    poetry run pre-commit install
+
+This will run a few file checks on your code before you commit it. After this whenever you commit, the pre-commit hooks will run automatically. If any of the checks fail, you will have to fix the issues before you can commit. If for some reason, it's a check you want to waive, you can follow the instructions of the tool to automatically waive them or you can run the following command to skip the checks **only on minimal circumstances**:
+
+.. code::
+
+    git commit --no-verify
+
+You can also run the checks manually on all files by running the following command:
+
+.. code::
+
+    poetry run pre-commit run --all-files
 
 
 Packaging Equivalent Functionality
@@ -181,3 +212,4 @@ This package installation process should be  approximately equivalent to the pre
     pip install tidy3d[jax]
 
 All these options can be found inside the ``pyproject.toml`` ``tool.poetry.extras`` section. Each has a corresponding list of dependencies whose versions are defined on the ``tool.poetry.dependencies`` section of the file.
+

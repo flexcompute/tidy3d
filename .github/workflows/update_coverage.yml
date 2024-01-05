@@ -1,13 +1,24 @@
-name: "tidy3d-frontend-tests"
+name: "tidy3d-coverage"
 
 on:
   workflow_dispatch:
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
   pull_request:
     branches:
       - develop
       - 'pre/*'
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+  FORCE_COLOR: 1    # Get colored pytest output
+
+permissions:
+  contents: read
 
 jobs:
   pre-commit:
@@ -24,15 +35,8 @@ jobs:
           pip install pre-commit
           pre-commit run
   build:
-    name: test ${{ matrix.python-version }} - ${{ matrix.platform }}
-    runs-on: ${{ matrix.platform }}
-    strategy:
-      matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11']
-        platform: [ubuntu-latest, macos-latest, windows-latest]
-        exclude:
-          - python-version: '3.8'
-            platform: 'windows-latest'
+    name: Coverage Test
+    runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
@@ -41,10 +45,10 @@ jobs:
       MPLBACKEND: agg
     steps:
     - uses: actions/checkout@v1
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python 3.10
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: "3.10"
     #----------------------------------------------
     #  -----  install & configure poetry  -----
     #----------------------------------------------
@@ -82,5 +86,22 @@ jobs:
         source $VENV
         black . --check --diff
         ruff check tidy3d --fix --exit-non-zero-on-fix
-        pytest -rA tests
-        pytest -rA tests/test_data/_test_datasets_no_vtk.py
+        coverage run -m pytest -rA tests
+        coverage report -m
+        echo "total=$(coverage report --format=total)" >> $GITHUB_ENV
+        echo '### Total coverage: ${{ env.total }}%'
+
+    - name: "Create badge"
+      # if: ${{ github.ref == 'refs/heads/latest' }}
+      # https://gist.githubusercontent.com/nedbat/8c6980f77988a327348f9b02bbaf67f5
+      uses: schneegans/dynamic-badges-action@v1.7.0
+      with:
+        auth: ${{ secrets.GH_TIDY3D_COVERAGE_GIST }}
+        gistID: 4702549574741e87deaadba436218ebd
+        filename: tidy3d_extension.json
+        label: Coverage
+        message: ${{ env.total }}%
+        minColorRange: 60
+        maxColorRange: 95
+        valColorRange: ${{ env.total }}
+        style: "for-the-badge"

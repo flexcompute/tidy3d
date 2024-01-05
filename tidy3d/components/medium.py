@@ -2325,7 +2325,7 @@ class PoleResidue(DispersiveMedium):
         """
         omega = 2 * np.pi * frequency
         eps = eps_inf
-        for (omega_lo, gamma_lo, omega_to, gamma_to) in poles:
+        for omega_lo, gamma_lo, omega_to, gamma_to in poles:
             eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
             eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
         return eps
@@ -2752,7 +2752,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
         poles_reduced = []
         for pole, residue in self.poles:
-
             if not pole.does_cover(bounds=bounds):
                 log.warning("Pole spatial data array does not fully cover the requested region.")
 
@@ -3068,7 +3067,6 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         """
         coeffs_reduced = []
         for b_coeff, c_coeff in self.coeffs:
-
             if not b_coeff.does_cover(bounds=bounds):
                 log.warning(
                     "Sellmeier B coeff spatial data array does not fully cover the requested region."
@@ -3410,7 +3408,6 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
         coeffs_reduced = []
         for de, f, delta in self.coeffs:
-
             if not de.does_cover(bounds=bounds):
                 log.warning(
                     "Lorentz 'de' spatial data array does not fully cover the requested region."
@@ -3639,7 +3636,6 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
         coeffs_reduced = []
         for f, delta in self.coeffs:
-
             if not f.does_cover(bounds=bounds):
                 log.warning(
                     "Drude 'f' spatial data array does not fully cover the requested region."
@@ -3879,7 +3875,6 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         eps_inf_reduced = self.eps_inf.sel_inside(bounds=bounds)
         coeffs_reduced = []
         for de, tau in self.coeffs:
-
             if not de.does_cover(bounds=bounds):
                 log.warning(
                     "Debye 'f' spatial data array does not fully cover the requested region."
@@ -5229,6 +5224,7 @@ PEC2D = Medium2D(ss=PEC, tt=PEC)
 # types of mediums that can be used in Simulation and Structures
 
 MediumType = Union[MediumType3D, Medium2D]
+
 
 # Utility function
 def medium_from_nk(n: float, k: float, freq: float, **kwargs) -> Union[Medium, Lorentz]:

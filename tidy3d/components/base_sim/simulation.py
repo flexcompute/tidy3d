@@ -212,7 +212,6 @@ class AbstractSimulation(Box, ABC):
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
                 for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-
                     if isclose(sim_val, struct_val):
                         consolidated_logger.warning(
                             f"Structure at 'structures[{istruct}]' has bounds that extend exactly "

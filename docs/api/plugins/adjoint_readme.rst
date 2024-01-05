@@ -1,0 +1,1 @@
+.. mdinclude:: ../../../tidy3d/plugins/adjoint/README.md

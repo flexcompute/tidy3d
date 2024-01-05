@@ -269,22 +269,18 @@ class AbstractSpatialDataArray(DataArray, ABC):
         coords = (self.x, self.y, self.z)
 
         for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
-
             length = len(coord)
 
             # one point along direction, assume invariance
             if length == 1:
                 comp_inds = [0]
             else:
-
                 # if data does not cover structure at all take the closest index
                 if smax < coord[0]:  # structure is completely on the left side
-
                     # take 2 if possible, so that linear iterpolation is possible
                     comp_inds = np.arange(0, max(2, length))
 
                 elif smin > coord[-1]:  # structure is completely on the right side
-
                     # take 2 if possible, so that linear iterpolation is possible
                     comp_inds = np.arange(min(0, length - 2), length)
 

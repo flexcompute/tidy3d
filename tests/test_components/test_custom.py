@@ -516,7 +516,7 @@ def verify_custom_dispersive_medium_methods(mat, reduced_fields=[]):
     poles_interp = mat.pole_residue.poles_on_grid(coord_interp)
     assert len(poles_interp) == len(mat.pole_residue.poles)
     coord_shape = tuple(len(grid) for grid in coord_interp.to_list)
-    for (a, c) in poles_interp:
+    for a, c in poles_interp:
         assert a.shape == coord_shape
         assert c.shape == coord_shape
 

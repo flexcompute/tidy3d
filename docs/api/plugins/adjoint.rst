@@ -3,6 +3,10 @@
 Adjoint
 -------
 
+.. toctree::
+
+    adjoint_readme
+
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst

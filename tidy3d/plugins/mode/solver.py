@@ -287,7 +287,6 @@ class EigSolver(Tidy3dBaseModel):
         is_eps_complex = cls.isinstance_complex(eps_tensor)
 
         if not is_tensorial:
-
             eps_spec = "diagonal"
             E, H, neff, keff = cls.solver_diagonal(**kwargs)
             if direction == "-":
@@ -296,7 +295,6 @@ class EigSolver(Tidy3dBaseModel):
                 E[2] *= -1
 
         elif not is_eps_complex:
-
             eps_spec = "tensorial_real"
             E, H, neff, keff = cls.solver_tensorial(**kwargs, direction="+")
             if direction == "-":
@@ -304,7 +302,6 @@ class EigSolver(Tidy3dBaseModel):
                 H = -np.conj(H)
 
         else:
-
             eps_spec = "tensorial_complex"
             E, H, neff, keff = cls.solver_tensorial(**kwargs, direction=direction)
 

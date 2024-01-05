@@ -43,43 +43,41 @@ responses = "*"
 
 ### Optional dependencies ### 
 # development core
+black = {version="23.12.1", optional = true}
+coverage = {version="*", optional = true}
+dill = {version="*", optional = true}
+ipython = {version="*", optional = true}
+memory_profiler = {version="*", optional = true}
 pre-commit = {version="*", optional = true}
-black = {version="22.3.0", optional = true}
-ruff = {version="*", optional = true}
-tox = {version="*", optional = true}
 pylint = {version="*", optional = true}
 pytest = {version="*", optional = true}
 pytest-timeout = {version="*", optional = true}
-memory_profiler = {version="*", optional = true}
-dill = {version="*", optional = true}
-ipython = {version="*", optional = true}
+ruff = {version="*", optional = true}
+tox = {version="*", optional = true}
+
 
 # gdspy
 gdspy = {version="*", optional = true}
 
 # gdstk
-gdstk = [
-    {version="*", optional = true, platform = "linux"},
-    {version="*", optional = true, platform = "win32"},
-    {version="<0.9.38", optional = true, platform = "darwin"},
-]
+gdstk = {version=">=0.9.49", optional = true}
 
 # jax
 jaxlib = [
     {version = ">=0.4.1,<=0.4.14", platform = "linux",  source="jaxsource", optional = true},
     {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
-    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource", optional = true}
+    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource",python = "^3.9", optional = true}
 ]
 jax = [
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", source="jaxsource", optional = true},
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "darwin",  source="jaxsource", optional = true},
-    {version = ">=0.4.13,<=0.4.14", extras = ["cpu"], platform = "win32", source="jaxsource", optional = true}
+    {version = ">=0.4.13,<=0.4.14", extras = ["cpu"], platform = "win32", python = "^3.9", source="jaxsource", optional = true}
 ]
 
 # trimesh
-trimesh = {version = "3.20.0", optional = true}
 networkx = {version = "^2.6.3", optional = true}
 rtree = {version = "1.0.1", optional = true}
+trimesh = {version = "3.20.0", optional = true}
 
 # docs
 jupyter = {version="*", optional = true}
@@ -105,7 +103,7 @@ pyswarms = {version="*", optional = true}
 sphinxemoji = {version="*", optional = true}
 
 [tool.poetry.extras]
-dev = ['black', 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
+dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'm2r2', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
   'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',

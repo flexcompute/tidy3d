@@ -351,7 +351,6 @@ class JaxSimulation(Simulation, JaxObject):
         run_time_adjoint = RUN_TIME_FACTOR / self._fwidth_adjoint
 
         if self._is_multi_freq:
-
             log.warning(
                 f"{len(self.freqs_adjoint)} unique frequencies detected in the output monitors "
                 f"with a minimum spacing of {self._min_delta_freq:.3e} (Hz). "
