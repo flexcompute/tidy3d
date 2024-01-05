@@ -9,7 +9,7 @@
 
 # required for development
 pre-commit
-black==22.3.0
+black==23.12.1
 ruff
 tox
 pytest

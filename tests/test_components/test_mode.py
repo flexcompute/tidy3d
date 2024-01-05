@@ -6,7 +6,6 @@ import tidy3d as td
 
 
 def test_modes():
-
     _ = td.ModeSpec(num_modes=2)
     _ = td.ModeSpec(num_modes=1, target_neff=1.0)
 

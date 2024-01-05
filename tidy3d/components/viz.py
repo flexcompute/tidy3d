@@ -234,7 +234,6 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """Make 3D display of simulation in ipyython notebook."""
 
     try:
-
         from IPython.display import display, HTML
     except ImportError as e:
         raise SetupError(

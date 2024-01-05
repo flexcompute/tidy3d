@@ -735,14 +735,12 @@ class AssertLogLevel:
     contains_str: str = None
 
     def __enter__(self):
-
         # record number of records going into this context
         self.num_records_before = len(self.records)
 
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-
         # only check NEW records recorded since __enter__
         records_check = self.records[self.num_records_before :]
         assert_log_level(

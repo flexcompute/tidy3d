@@ -167,7 +167,6 @@ def test_large_custom_medium(use_emulated_run):
 
 
 def test_time_custom_medium(use_emulated_run):
-
     num_tests = 50
     nxs = np.logspace(0, 2.0, num_tests)
     times_sec = np.zeros(num_tests)

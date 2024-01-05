@@ -523,7 +523,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             """For every DataArray item in dictionary, load path of hdf5 group as value."""
 
             for key, value in model_dict.items():
-
                 subpath = f"{group_path}/{key}"
 
                 # apply custom validation to the key value pair and modify model_dict
@@ -545,7 +544,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
                 # if a list, assign each element a unique key, recurse
                 if isinstance(value, (list, tuple)):
-
                     value_dict = cls.tuple_to_dict(tuple_values=value)
                     load_data_from_file(model_dict=value_dict, group_path=subpath)
 
@@ -617,7 +615,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         with h5py.File(fname, "w") as f_handle:
-
             json_str = self._json_string
             for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
                 ind_start = int(ind * MAX_STRING_LENGTH)
@@ -628,7 +625,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 """For every DataArray item in dictionary, write path of hdf5 group as value."""
 
                 for key, value in data_dict.items():
-
                     # append the key to the path
                     subpath = f"{group_path}/{key}"
 
@@ -803,7 +799,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
                 # everything else
                 else:
-
                     # note: this logic is because != is handled differently in DataArrays apparently
                     if not val1 == val2:
                         return False
@@ -882,7 +877,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # create the list of parameters (arguments) for the model
         doc += "\n\n    Parameters\n    ----------\n"
         for field_name, field in cls.__fields__.items():
-
             # ignore the type tag
             if field_name == TYPE_TAG_STR:
                 continue

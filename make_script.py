@@ -16,7 +16,6 @@ from black import format_str, FileMode
 
 
 def main(args):
-
     parser = argparse.ArgumentParser(description="Generate tidy3d script from a simulation file.")
 
     parser.add_argument(

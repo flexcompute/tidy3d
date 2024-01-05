@@ -412,13 +412,11 @@ class SimulationData(AbstractSimulationData):
 
             # loop through data
             for monitor_index_str, _mnt_data in f_handle["data"].items():
-
                 # grab the monitor data for this data element
                 monitor_dict = monitor_list[int(monitor_index_str)]
 
                 # if a match on the monitor name
                 if monitor_dict["name"] == mnt_name:
-
                     # try to grab the monitor data type
                     monitor_type_str = monitor_dict["type"]
                     if monitor_type_str not in DATA_TYPE_NAME_MAP:

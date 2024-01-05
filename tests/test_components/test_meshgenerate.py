@@ -279,7 +279,6 @@ def test_grid_in_interval():
 
 
 def test_grid_analytic_refinement():
-
     max_dl_list = np.array([0.5, 0.5, 0.4, 0.1, 0.4])
     len_interval_list = np.array([2.0, 0.5, 0.2, 0.1, 0.3])
     max_scale = 1.5
@@ -291,7 +290,6 @@ def test_grid_analytic_refinement():
 
 
 def test_grid_refinement():
-
     max_dl_list = np.array([0.5, 0.4, 0.1, 0.4])
     len_interval_list = np.array([0.5, 1.2, 0.1, 1.3])
     max_scale = 1.5
@@ -698,7 +696,6 @@ def test_small_structure_size(log_capture):
 
 
 def test_shapely_strtree_warnings():
-
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         _ = GradedMesher().parse_structures(

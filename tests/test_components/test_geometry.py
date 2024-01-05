@@ -572,7 +572,6 @@ def test_geometry():
 
 
 def test_geometry_sizes():
-
     # negative in size kwargs errors
     for size in (-1, 1, 1), (1, -1, 1), (1, 1, -1):
         with pytest.raises(pydantic.ValidationError):
@@ -851,7 +850,6 @@ def test_custom_surface_geometry(tmp_path):
 
 
 def test_geo_group_sim():
-
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")
     geos_orig = list(geo_grp.geometries)
     geo_grp_full = geo_grp.updated_copy(geometries=geos_orig + [td.Box(size=(1, 1, 1))])
