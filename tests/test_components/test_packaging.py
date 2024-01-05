@@ -1,7 +1,3 @@
-"""
-Thank you, ChatGPT, for the core of the following test code.
-"""
-
 import pytest
 from tidy3d.packaging import check_import, verify_packages_import, Tidy3dImportError
 
@@ -27,14 +23,14 @@ def test_verify_packages_import_all_required():
 
 
 def test_verify_packages_import_either_required():
-    @verify_packages_import(["tidy3d", "module2"], required="either")
+    @verify_packages_import(["tidy3d", "module2"], required="any")
     def my_function():
         pass
 
     # When at least one module is imported, it should not raise an error
     my_function()
 
-    @verify_packages_import(["module2", "module3"], required="either")
+    @verify_packages_import(["module2", "module3"], required="any")
     def my_function2():
         pass
 

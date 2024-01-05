@@ -6,6 +6,7 @@ This section should only depend on the standard core installation in the pyproje
 import functools
 import numpy as np
 from typing import Literal
+from importlib import import_module
 
 from .exceptions import Tidy3dImportError
 
@@ -33,13 +34,13 @@ def check_import(module_name: str) -> bool:
 
     """
     try:
-        __import__(module_name)
+        import_module(module_name)
         return True
     except ImportError:
         return False
 
 
-def verify_packages_import(modules: list, required: Literal["either", "all"] = "all"):
+def verify_packages_import(modules: list, required: Literal["any", "all"] = "all"):
     def decorator(func):
         """
         When decorating a method, requires that the specified modules are available. It will raise an error if the
@@ -48,7 +49,7 @@ def verify_packages_import(modules: list, required: Literal["either", "all"] = "
 
         There are a few options to choose for the 'required' parameter:
         - 'all': All the modules must be available for the operation to continue without raising an error
-        - 'either': At least one of the modules must be available for the operation to continue without raising an error
+        - 'any': At least one of the modules must be available for the operation to continue without raising an error
 
         Parameters
         ----------
@@ -85,24 +86,21 @@ def verify_packages_import(modules: list, required: Literal["either", "all"] = "
                             f"Please install the '{module}' dependencies using, for example, "
                             f"'pip install tidy3d[<see_options_in_pyproject.toml>]"
                         )
-                    elif required == "either":
+                    elif required == "any":
                         # Means we need to verify that at least one of the modules is available
-                        if any(available_modules_status):
-                            # Means that at least one of the modules is available, so we can just continue with the
-                            # operation
-                            pass
-                        else:
-                            if module_id_i == maximum_amount_modules:
-                                # Means that we have reached the last module and none of them were available
-                                raise Tidy3dImportError(
-                                    f"The package '{module}' is required for this operation, but it was not found. "
-                                    f"Please install the '{module}' dependencies using, for example, "
-                                    f"'pip install tidy3d[<see_options_in_pyproject.toml>]"
-                                )
+                        if (
+                            not any(available_modules_status)
+                        ) and module_id_i == maximum_amount_modules:
+                            # Means that we have reached the last module and none of them were available
+                            raise Tidy3dImportError(
+                                f"The package '{module}' is required for this operation, but it was not found. "
+                                f"Please install the '{module}' dependencies using, for example, "
+                                f"'pip install tidy3d[<see_options_in_pyproject.toml>]"
+                            )
                     else:
                         raise ValueError(
                             f"The value '{required}' is not a valid value for the 'required' parameter. "
-                            f"Please use either 'all' or 'either'."
+                            f"Please use any 'all' or 'any'."
                         )
                 else:
                     # Means that the module is available, so we can just continue with the operation

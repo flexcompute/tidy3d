@@ -929,7 +929,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return theta, phi
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="either")
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdstk(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -978,7 +978,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="either")
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdspy(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1021,7 +1021,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
-    @verify_packages_import(["gdstk", "gdspy"], required="either")
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def from_gds(
         gds_cell,
         axis: Axis,
@@ -1089,7 +1089,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             except ImportError:
                 raise Tidy3dImportError(
                     "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                    "files, please install one of those those modules."
+                    "files, please install one of those those modules through `pip install tidy3d[gdstk, gdspy]`"
                 )
 
         geometries = []
@@ -1246,7 +1246,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
-    @verify_packages_import(["gdstk", "gdspy"], required="either")
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds(
         self,
         cell,
@@ -1300,7 +1300,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
                 )
 
-    @verify_packages_import(["gdstk", "gdspy"], required="either")
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds_file(
         self,
         fname: str,
@@ -1343,8 +1343,8 @@ class Geometry(Tidy3dBaseModel, ABC):
                 library = gdspy.GdsLibrary()
             except ImportError:
                 raise Tidy3dImportError(
-                    "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                    "files, please install one of those those modules."
+                    "Either 'gdstk' or 'gdspy' must be installed to export geometries to .gds files. "
+                    "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
                 )
 
         cell = library.new_cell(gds_cell_name)
