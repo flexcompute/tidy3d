@@ -637,7 +637,6 @@ class LinearChargePerturbation(ChargePerturbation):
         e_type, h_type = self._get_eh_types(electron_density, hole_density)
 
         if e_type == "array" and h_type == "array":
-
             e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
 
             return self.electron_coeff * (e_mesh - self.electron_ref) + self.hole_coeff * (
@@ -913,7 +912,6 @@ class ParameterPerturbation(Tidy3dBaseModel):
             result = result + self.heat.sample(temperature)
 
         if (electron_density is not None or hole_density is not None) and self.charge is not None:
-
             if electron_density is None:
                 electron_density = 0
 

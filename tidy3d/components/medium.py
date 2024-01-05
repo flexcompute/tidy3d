@@ -1534,7 +1534,6 @@ class CustomMedium(AbstractCustomMedium):
 
         # isotropic, but with `eps_dataset`
         if self.is_isotropic:
-
             eps_complex = self.eps_dataset.eps_xx
             eps_real, sigma = get_eps_sigma(eps_complex, freq=self.freqs[0])
 
@@ -2116,7 +2115,7 @@ class PoleResidue(DispersiveMedium):
         """
         omega = 2 * np.pi * frequency
         eps = eps_inf
-        for (omega_lo, gamma_lo, omega_to, gamma_to) in poles:
+        for omega_lo, gamma_lo, omega_to, gamma_to in poles:
             eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
             eps /= omega_to**2 - omega**2 - 1j * omega * gamma_to
         return eps

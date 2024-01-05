@@ -4,7 +4,6 @@ from make_script import main
 
 
 def test_make_script(tmp_path):
-
     # make a sim
     simulation = td.Simulation(
         size=(1, 1, 1),

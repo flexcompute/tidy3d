@@ -405,7 +405,6 @@ class Batch(WebContainer):
         solver_version = values.get("solver_version")
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-
             upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation

@@ -68,7 +68,6 @@ class AbstractCircularFilter(Filter, ABC):
         input_shape = signal_in.shape
 
         if any((k_shape > in_shape for k_shape, in_shape in zip(kernel_shape, input_shape))):
-
             # remove some pixels from the kernel to make things right
             new_kernel = kernel.copy()
             for axis, (len_kernel, len_input) in enumerate(zip(kernel_shape, input_shape)):

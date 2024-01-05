@@ -399,7 +399,6 @@ class Simulation(AbstractSimulation):
         axis_names = "xyz"
 
         for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
-
             if size_dim == 0:
                 axis = axis_names[dim]
                 num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
@@ -480,7 +479,6 @@ class Simulation(AbstractSimulation):
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -549,7 +547,6 @@ class Simulation(AbstractSimulation):
                 fmin_mon = freqs.min()
                 fmax_mon = freqs.max()
                 for medium_index, medium in enumerate(mediums):
-
                     # skip mediums that have no freq range (all freqs valid)
                     if medium.frequency_range is None:
                         continue
@@ -847,7 +844,6 @@ class Simulation(AbstractSimulation):
                 freq0 = source.source_time.freq0
 
                 for medium_index, medium in enumerate(mediums):
-
                     # min wavelength in PEC is meaningless and we'll get divide by inf errors
                     if medium.is_pec:
                         continue
@@ -2360,7 +2356,6 @@ class Simulation(AbstractSimulation):
         with log as consolidated_logger:
             for structure in self.structures:
                 if isinstance(structure.medium, Medium2D):
-
                     normal = structure.geometry._normal_2dmaterial
                     grid_axes[normal] = True
                     for axis, grid_axis in enumerate(
@@ -2977,7 +2972,6 @@ class Simulation(AbstractSimulation):
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-
             # get simulation's bounding box
             bounds = sim_bounds
 

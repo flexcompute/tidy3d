@@ -289,7 +289,6 @@ class Scene(Tidy3dBaseModel):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
     ) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-
         # if no hlim and/or vlim given, the bounds will then be the usual pml bounds
         axis, _ = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         _, (hmin, vmin) = Box.pop_axis(bounds[0], axis=axis)
@@ -387,7 +386,7 @@ class Scene(Tidy3dBaseModel):
             structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         medium_map = self.medium_map
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
@@ -596,7 +595,6 @@ class Scene(Tidy3dBaseModel):
 
         shapes = []
         for structure, prop in zip(structures, property_list):
-
             # get list of Shapely shapes that intersect at the plane
             shapes_plane = plane.intersections_with(structure.geometry)
 
@@ -606,12 +604,10 @@ class Scene(Tidy3dBaseModel):
 
         background_shapes = []
         for prop, shape, bounds in shapes:
-
             minx, miny, maxx, maxy = bounds
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_prop, _shape, _bounds) in enumerate(background_shapes):
-
                 _minx, _miny, _maxx, _maxy = _bounds
 
                 # do a bounding box check to see if any intersection to do anything about
@@ -773,7 +769,6 @@ class Scene(Tidy3dBaseModel):
         eps_min, eps_max = eps_lim
 
         if eps_min is None or eps_max is None:
-
             eps_min_sim, eps_max_sim = self.eps_bounds(freq=freq)
 
             if eps_min is None:
@@ -782,7 +777,7 @@ class Scene(Tidy3dBaseModel):
             if eps_max is None:
                 eps_max = eps_max_sim
 
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             # if the background medium is custom medium, it needs to be rendered separately
             if medium == self.medium and alpha < 1 and not isinstance(medium, AbstractCustomMedium):
                 continue
@@ -1141,7 +1136,7 @@ class Scene(Tidy3dBaseModel):
             )
 
         heat_cond_min, heat_cond_max = self.heat_conductivity_bounds()
-        for (medium, shape) in medium_shapes:
+        for medium, shape in medium_shapes:
             ax = self._plot_shape_structure_heat_cond(
                 alpha=alpha,
                 medium=medium,
@@ -1320,7 +1315,6 @@ class Scene(Tidy3dBaseModel):
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-
             # get scene's bounding box
             bounds = scene_bounds
 

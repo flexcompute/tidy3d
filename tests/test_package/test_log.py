@@ -231,7 +231,6 @@ def test_logging_warning_capture():
 
     # for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
     for sim_dict in [sim_dict_no_source]:
-
         try:
             sim = td.Simulation.parse_obj(sim_dict)
             sim.validate_pre_upload()
