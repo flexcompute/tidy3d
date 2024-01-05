@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `jax` and `jaxlib` versions bumped to `0.4.*`.
+- Imporved and unified warning message for validation failure of dependecy fields in validators.
 
 ### Fixed
 - Error in automatic grid generation in specific cases with multiple thin structures.
