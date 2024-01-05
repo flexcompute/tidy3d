@@ -10,7 +10,7 @@ import scipy
 
 from .fit import DispersionFitter
 from ...log import log, get_logging_console
-from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.medium import PoleResidue, LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM
 from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayFloat2D, ArrayComplex2D
 from ...exceptions import ValidationError
@@ -178,6 +178,7 @@ class FastFitterData(AdvancedFastFitterParam):
     )
 
     @validator("eps_inf", always=True)
+    @skip_if_fields_missing(["optimize_eps_inf"])
     def _eps_inf_geq_one(cls, val, values):
         """Must have eps_inf >= 1 unless it is being optimized.
         In the latter case, it will be made >= 1 later."""
@@ -186,6 +187,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return val
 
     @validator("poles", always=True)
+    @skip_if_fields_missing(["logspacing", "smooth", "num_poles", "omega", "num_poles"])
     def _generate_initial_poles(cls, val, values):
         """Generate initial poles."""
         if val is not None:
@@ -213,6 +215,7 @@ class FastFitterData(AdvancedFastFitterParam):
         return poles
 
     @validator("residues", always=True)
+    @skip_if_fields_missing(["poles"])
     def _generate_initial_residues(cls, val, values):
         """Generate initial residues."""
         if val is not None:

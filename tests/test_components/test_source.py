@@ -6,7 +6,7 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture, AssertLogLevel
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -309,12 +309,12 @@ def test_custom_source_time(log_capture):
     assert_log_level(log_capture, None)
 
     # test normalization warning
-    sim = sim.updated_copy(normalize_index=0)
-    assert_log_level(log_capture, "WARNING")
-    log_capture.clear()
-    source = source.updated_copy(source_time=td.ContinuousWave(freq0=freq0, fwidth=0.1e12))
-    sim = sim.updated_copy(sources=[source])
-    assert_log_level(log_capture, "WARNING")
+    with AssertLogLevel(log_capture, "WARNING"):
+        sim = sim.updated_copy(normalize_index=0)
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        source = source.updated_copy(source_time=td.ContinuousWave(freq0=freq0, fwidth=0.1e12))
+        sim = sim.updated_copy(sources=[source])
 
     # test single value validation error
     with pytest.raises(pydantic.ValidationError):

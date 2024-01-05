@@ -13,6 +13,7 @@ from pydantic.v1 import Field, validator
 
 from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.base import skip_if_fields_missing
 from ...components.medium import PoleResidue, AbstractMedium
 from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayFloat1D
@@ -60,20 +61,18 @@ class DispersionFitter(Tidy3dBaseModel):
         return val
 
     @validator("n_data", always=True)
+    @skip_if_fields_missing(["wvl_um"])
     def _ndata_length_match_wvl(cls, val, values):
         """Validate n_data"""
-        if "wvl_um" not in values:
-            raise ValidationError("'wvl_um' failed validation.")
 
         if val.shape != values["wvl_um"].shape:
             raise ValidationError("The length of 'n_data' doesn't match 'wvl_um'.")
         return val
 
     @validator("k_data", always=True)
+    @skip_if_fields_missing(["wvl_um"])
     def _kdata_setup_and_length_match(cls, val, values):
         """Validate the length of k_data, or setup k if it's None."""
-        if "wvl_um" not in values:
-            raise ValidationError("'wvl_um' failed validation.")
 
         if val is None:
             return np.zeros_like(values["wvl_um"])

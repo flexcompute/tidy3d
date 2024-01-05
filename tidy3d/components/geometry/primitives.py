@@ -8,7 +8,7 @@ import pydantic.v1 as pydantic
 import numpy as np
 import shapely
 
-from ..base import cached_property
+from ..base import cached_property, skip_if_fields_missing
 from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, LARGE_NUMBER
@@ -199,6 +199,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     )
 
     @pydantic.validator("length", always=True)
+    @skip_if_fields_missing(["sidewall_angle", "reference_plane"])
     def _only_middle_for_infinite_length_slanted_cylinder(cls, val, values):
         """For a slanted cylinder of infinite length, ``reference_plane`` can only
         be ``middle``; otherwise, the radius at ``center`` is either td.inf or 0.

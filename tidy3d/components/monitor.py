@@ -8,7 +8,7 @@ import numpy as np
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
 from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_min
-from .base import cached_property, Tidy3dBaseModel
+from .base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
 from .mode import ModeSpec
 from .apodization import ApodizationSpec
 from .medium import MediumType
@@ -136,6 +136,7 @@ class TimeMonitor(Monitor, ABC):
     )
 
     @pydantic.validator("interval", always=True)
+    @skip_if_fields_missing(["start", "stop"])
     def _warn_interval_default(cls, val, values):
         """If all defaults used for time sampler, warn and set ``interval=1`` internally."""
 
@@ -162,6 +163,7 @@ class TimeMonitor(Monitor, ABC):
         return val
 
     @pydantic.validator("stop", always=True, allow_reuse=True)
+    @skip_if_fields_missing(["start"])
     def stop_greater_than_start(cls, val, values):
         """Ensure sure stop is greater than or equal to start."""
         start = values.get("start")
@@ -787,6 +789,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
     )
 
     @pydantic.validator("window_size", always=True)
+    @skip_if_fields_missing(["size", "name"])
     def window_size_for_surface(cls, val, values):
         """Ensures that windowing is applied for surface monitors only."""
         size = values.get("size")
@@ -801,6 +804,7 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         return val
 
     @pydantic.validator("window_size", always=True)
+    @skip_if_fields_missing(["name"])
     def window_size_leq_one(cls, val, values):
         """Ensures that each component of the window size is less than or equal to 1."""
         name = values.get("name")

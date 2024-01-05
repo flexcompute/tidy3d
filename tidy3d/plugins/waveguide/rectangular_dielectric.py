@@ -5,7 +5,7 @@ from typing import List, Any
 import numpy
 import pydantic.v1 as pydantic
 
-from ...components.base import Tidy3dBaseModel, cached_property
+from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import BoundarySpec, Periodic
 from ...components.data.data_array import ModeIndexDataArray, FreqModeDataArray
 from ...components.geometry.base import Box
@@ -209,11 +209,13 @@ class RectangularDielectric(Tidy3dBaseModel):
         return result
 
     @pydantic.validator("box_medium", always=True)
+    @skip_if_fields_missing(["clad_medium"])
     def _set_box_medium(cls, val, values):
         """Set BOX medium same as cladding as default value."""
         return values["clad_medium"] if val is None else val
 
     @pydantic.validator("clad_thickness", always=True)
+    @skip_if_fields_missing(["clad_medium", "wavelength"])
     def _set_clad_thickness(cls, val, values):
         """Set default cladding thickness based on the max wavelength in the cladding medium."""
         if val is None:
@@ -225,6 +227,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @pydantic.validator("box_thickness", always=True)
+    @skip_if_fields_missing(["clad_medium", "wavelength"])
     def _set_box_thickness(cls, val, values):
         """Set default BOX thickness based on the max wavelength in the BOX medium."""
         if val is None:
@@ -236,11 +239,13 @@ class RectangularDielectric(Tidy3dBaseModel):
         return val
 
     @pydantic.validator("side_margin", always=True)
+    @skip_if_fields_missing(["clad_thickness", "box_thickness"])
     def _set_side_margin(cls, val, values):
         """Set default side margin based on BOX and cladding thicknesses."""
         return max(values["clad_thickness"], values["box_thickness"]) if val is None else val
 
     @pydantic.validator("gap", always=True)
+    @skip_if_fields_missing(["core_width"])
     def _validate_gaps(cls, val, values):
         """Ensure the number of gaps is compatible with the number of cores supplied."""
         if val.size == 1 and values["core_width"].size != 2:

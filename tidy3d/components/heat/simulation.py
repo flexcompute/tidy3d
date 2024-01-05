@@ -15,7 +15,7 @@ from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CO
 from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
 from ..base_sim.simulation import AbstractSimulation
-from ..base import cached_property
+from ..base import cached_property, skip_if_fields_missing
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
@@ -139,6 +139,7 @@ class HeatSimulation(AbstractSimulation):
         return val
 
     @pd.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["structures", "medium"])
     def names_exist_bcs(cls, val, values):
         """Error if boundary conditions point to non-existing structures/media."""
 
@@ -175,6 +176,7 @@ class HeatSimulation(AbstractSimulation):
         return val
 
     @pd.validator("grid_spec", always=True)
+    @skip_if_fields_missing(["structures"])
     def names_exist_grid_spec(cls, val, values):
         """Warn if UniformUnstructuredGrid points at a non-existing structure."""
 
@@ -191,6 +193,7 @@ class HeatSimulation(AbstractSimulation):
         return val
 
     @pd.validator("sources", always=True)
+    @skip_if_fields_missing(["structures"])
     def names_exist_sources(cls, val, values):
         """Error if a heat source point to non-existing structures."""
         structures = values.get("structures")

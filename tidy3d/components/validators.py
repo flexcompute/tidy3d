@@ -1,5 +1,4 @@
 """ Defines various validation functions that get used to ensure inputs are legit """
-from typing import Any
 
 import pydantic.v1 as pydantic
 import numpy as np
@@ -7,7 +6,7 @@ import numpy as np
 from .geometry.base import Box
 from ..exceptions import ValidationError, SetupError
 from .data.dataset import Dataset, FieldDataset
-from .base import DATA_ARRAY_MAP
+from .base import DATA_ARRAY_MAP, skip_if_fields_missing
 from .types import Tuple
 from ..log import log
 
@@ -45,14 +44,6 @@ from ..log import log
 
 # Lowest frequency supported (Hz)
 MIN_FREQUENCY = 1e5
-
-
-def get_value(key: str, values: dict) -> Any:
-    """Grab value from values dictionary. If not present, raise an error before continuing."""
-    val = values.get(key)
-    if val is None:
-        raise ValidationError(f"value {key} not defined, must be present to validate.")
-    return val
 
 
 def assert_plane():
@@ -118,6 +109,7 @@ def validate_mode_objects_symmetry(field_name: str):
     obj_type = "ModeSource" if field_name == "sources" else "ModeMonitor"
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
+    @skip_if_fields_missing(["center", "symmetry"])
     def check_symmetry(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
         sim_center = values.get("center")
@@ -161,6 +153,7 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
     """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
+    @skip_if_fields_missing(["center", "size"])
     def objects_in_sim_bounds(cls, val, values):
         """check for intersection of each structure with simulation bounds."""
         sim_center = values.get("center")
@@ -202,6 +195,7 @@ def required_if_symmetry_present(field_name: str):
     """Make a field required (not None) if any non-zero symmetry eigenvalue is present."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
+    @skip_if_fields_missing(["symmetry"])
     def _make_required(cls, val, values):
         """Ensure val is not None if the symmetry is non-zero along any dimension."""
         symmetry = values.get("symmetry")
@@ -231,11 +225,12 @@ def assert_single_freq_in_range(field_name: str):
     """Assert only one frequency supplied in source and it's in source time range."""
 
     @pydantic.validator(field_name, always=True, allow_reuse=True)
+    @skip_if_fields_missing(["source_time"])
     def _single_frequency_in_range(cls, val: FieldDataset, values: dict) -> FieldDataset:
         """Assert only one frequency supplied and it's in source time range."""
         if val is None:
             return val
-        source_time = get_value(key="source_time", values=values)
+        source_time = values.get("source_time")
         fmin, fmax = source_time.frequency_range()
         for name, scalar_field in val.field_components.items():
             freqs = scalar_field.f

@@ -18,16 +18,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `poetry` based installation. Removal of `setup.py` and `requirements.txt`.
 - Upgrade to sphinx 6 for the documentation build, and change of theme.
 - Remote mode solver web api automatically reduces the associated `Simulation` object to the mode solver plane before uploading it to server.
-
-### Fixed
-
-
-### Changed
 - All solver output is now compressed. However, it is automatically unpacked to the same `simulation_data.hdf5` by default when loading simulation data from the server.
 - Internal refactor of `adjoint` plugin to separate `jax`-traced fields from regular `tidy3d` fields.
 
 ### Fixed
 
+## [2.5.1] - 2024-01-08
+
+### Added
+- `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
+- String matching feature `contains_str` to `assert_log_level` testing utility.
+- Warning in automatic grid generation if a structure has a non-zero size along a given direction that is too small compared to a single mesh step.
+- `assert_log_level` adds string matching with `contains_str` and ensures no higher log level recorded than expected.
+- `AssertLogLevel` context manager for testing log level and automatically clearing capture.
+- More robust validation for boundary conditions and symmetry in 1D and 2D simulations.
+
+### Changed
+- `jax` and `jaxlib` versions bumped to `0.4.*`.
+- Improved and unified warning message for validation failure of dependency fields in validators.
+
+### Fixed
+- Error in automatic grid generation in specific cases with multiple thin structures.
 
 ## [2.5.0] - 2023-12-13
 
@@ -1063,7 +1074,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
+[2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2

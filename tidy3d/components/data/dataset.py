@@ -20,6 +20,7 @@ from .data_array import PointDataArray, IndexedDataArray, CellDataArray, Spatial
 
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
+from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
 from ..types import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
@@ -523,13 +524,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return CellDataArray(val.data.astype(vtk["id_type"], copy=False), coords=val.coords)
 
     @pd.validator("values", always=True)
+    @skip_if_fields_missing(["points"])
     def number_of_values_matches_points(cls, val, values):
         """Check that the number of data values matches the number of grid points."""
         num_values = len(val)
 
         points = values.get("points")
-        if points is None:
-            raise ValidationError("Cannot validate '.values' because '.points' failed validation.")
         num_points = len(points)
 
         if num_points != num_values:
@@ -564,6 +564,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return val
 
     @pd.validator("cells", always=True)
+    @skip_if_fields_missing(["points"])
     def check_cell_vertex_range(cls, val, values):
         """Check that cell connections use only defined points."""
         all_point_indices_used = val.data.ravel()
@@ -571,8 +572,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         max_index_used = np.max(all_point_indices_used)
 
         points = values.get("points")
-        if points is None:
-            raise ValidationError("Cannot validate '.values' because '.points' failed validation.")
         num_points = len(points)
 
         if max_index_used != num_points - 1 or min_index_used != 0:

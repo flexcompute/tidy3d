@@ -5,8 +5,9 @@ import pytest
 
 import tidy3d as td
 from tidy3d.constants import fp_eps
-
 from tidy3d.components.grid.mesher import GradedMesher
+
+from ..utils import assert_log_level, log_capture
 
 np.random.seed(4)
 
@@ -646,6 +647,52 @@ def test_mesher_timeout():
     )
 
     _ = sim.grid
+
+
+def test_small_structure_size(log_capture):
+    """Test that a warning is raised if a structure size is small during the auto meshing"""
+    box_size = 0.03
+    medium = td.Medium(permittivity=4)
+    box = td.Structure(geometry=td.Box(size=(box_size, td.inf, td.inf)), medium=medium)
+    src = td.UniformCurrentSource(
+        source_time=td.GaussianPulse(freq0=2e14, fwidth=1e13),
+        size=(0, 0, 0),
+        polarization="Ex",
+    )
+    sim = td.Simulation(
+        size=(10, 10, 10),
+        sources=[src],
+        structures=[box],
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1),
+    )
+
+    # Warning raised as structure is too thin
+    assert_log_level(log_capture, "WARNING")
+
+    # Warning not raised if structure is higher index
+    log_capture.clear()
+    box2 = box.updated_copy(medium=td.Medium(permittivity=300))
+    sim2 = sim.updated_copy(structures=[box2])
+    assert len(log_capture) == 0
+
+    # Warning not raised if structure is covered by an override structure
+    log_capture.clear()
+    override = td.MeshOverrideStructure(geometry=box.geometry, dl=(box_size, td.inf, td.inf))
+    sim3 = sim.updated_copy(grid_spec=sim.grid_spec.updated_copy(override_structures=[override]))
+    assert len(log_capture) == 0
+    # Also check that the structure boundaries are in the grid
+    ind_mid_cell = int(sim3.grid.num_cells[0] // 2)
+    bounds = [-box_size / 2, box_size / 2]
+    assert np.allclose(bounds, sim3.grid.boundaries.x[ind_mid_cell : ind_mid_cell + 2])
+
+    # Test that the error coming from two thin slabs on top of each other is resolved
+    log_capture.clear()
+    box3 = td.Structure(
+        geometry=td.Box(center=(box_size, 0, 0), size=(box_size, td.inf, td.inf)), medium=medium
+    )
+    sim4 = sim.updated_copy(structures=[box3, box])
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_shapely_strtree_warnings():

@@ -10,6 +10,7 @@ import matplotlib as mpl
 import math
 
 from .base import cached_property
+from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
@@ -31,7 +32,7 @@ from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam,
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
-from .monitor import AbstractModeMonitor, FieldMonitor
+from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .data.dataset import Dataset
@@ -666,6 +667,7 @@ class Simulation(AbstractSimulation):
         return updater.update_to_current()
 
     @pydantic.validator("grid_spec", always=True)
+    @skip_if_fields_missing(["sources"])
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
         if val.wavelength is None and val.auto_grid_used:
@@ -684,6 +686,7 @@ class Simulation(AbstractSimulation):
     # _plane_waves_in_homo = validate_plane_wave_intersections()
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["symmetry"])
     def bloch_with_symmetry(cls, val, values):
         """Error if a Bloch boundary is applied with symmetry"""
         boundaries = val.to_list
@@ -697,6 +700,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["medium", "size", "structures", "sources"])
     def plane_wave_boundaries(cls, val, values):
         """Error if there are plane wave sources incompatible with boundary conditions."""
         boundaries = val.to_list
@@ -738,6 +742,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures", "sources"])
     def tfsf_boundaries(cls, val, values):
         """Error if the boundary conditions are compatible with TFSF sources, if any."""
         boundaries = val.to_list
@@ -817,6 +822,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("sources", always=True)
+    @skip_if_fields_missing(["symmetry"])
     def tfsf_with_symmetry(cls, val, values):
         """Error if a TFSF source is applied with symmetry"""
         symmetry = values.get("symmetry")
@@ -826,18 +832,41 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["size", "symmetry"])
     def boundaries_for_zero_dims(cls, val, values):
-        """Error if an absorbing boundary is used along a zero dimension."""
+        """Error if absorbing boundaries, unmatching pec/pmc, or symmetry is used along a zero dimension."""
         boundaries = val.to_list
         size = values.get("size")
-        for dim, (boundary, size_dim) in enumerate(zip(boundaries, size)):
-            num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
-            if num_absorbing_bdries > 0 and size_dim == 0:
-                raise SetupError(
-                    f"The simulation has zero size along the {'xyz'[dim]} axis, so "
-                    "using a PML or absorbing boundary along that axis is incorrect. "
-                    f"Use either 'Periodic' or 'BlochBoundary' along {'xyz'[dim]}."
-                )
+        symmetry = values.get("symmetry")
+        axis_names = "xyz"
+
+        for dim, (boundary, symmetry_dim, size_dim) in enumerate(zip(boundaries, symmetry, size)):
+            if size_dim == 0:
+                axis = axis_names[dim]
+                num_absorbing_bdries = sum(isinstance(bnd, AbsorberSpec) for bnd in boundary)
+
+                if num_absorbing_bdries > 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using a PML or absorbing boundary along that axis is incorrect. "
+                        f"Use either 'Periodic' or 'BlochBoundary' along {axis}."
+                    )
+
+                if symmetry_dim != 0:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis, so "
+                        "using symmetry along that axis is incorrect. Use 'PECBoundary' "
+                        "or 'PMCBoundary' to select source polarization if needed and set "
+                        f"Simulation.symmetry to 0 along {axis}."
+                    )
+
+                if boundary[0] != boundary[1]:
+                    raise SetupError(
+                        f"The simulation has zero size along the {axis} axis. "
+                        f"The boundary condition for {axis} plus and {axis} "
+                        "minus must be the same."
+                    )
+
         return val
 
     @pydantic.validator("sources", always=True)
@@ -880,6 +909,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("boundary_spec", always=True)
+    @skip_if_fields_missing(["sources", "center", "size", "structures"])
     def _structures_not_close_pml(cls, val, values):
         """Warn if any structures lie at the simulation boundaries."""
 
@@ -938,6 +968,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "structures"])
     def _warn_monitor_mediums_frequency_range(cls, val, values):
         """Warn user if any DFT monitors have frequencies outside of medium frequency range."""
 
@@ -990,18 +1021,12 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["sources"])
     def _warn_monitor_simulation_frequency_range(cls, val, values):
         """Warn if any DFT monitors have frequencies outside of the simulation frequency range."""
 
         if val is None:
             return val
-
-        # Get simulation frequency range
-        if "sources" not in values:
-            raise ValidationError(
-                "could not validate `_warn_monitor_simulation_frequency_range` "
-                "as `sources` failed validation"
-            )
 
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if not source_ranges:
@@ -1027,6 +1052,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["boundary_spec"])
     def diffraction_monitor_boundaries(cls, val, values):
         """If any :class:`.DiffractionMonitor` exists, ensure boundary conditions in the
         transverse directions are periodic or Bloch."""
@@ -1051,6 +1077,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _projection_monitors_homogeneous(cls, val, values):
         """Error if any field projection monitor is not in a homogeneous region."""
 
@@ -1145,6 +1172,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size"])
     def proj_distance_for_approx(cls, val, values):
         """Warn if projection distance for projection monitors is not large compared to monitor or,
         simulation size, yet far_field_approx is True."""
@@ -1173,6 +1201,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["center", "size"])
     def _integration_surfaces_in_bounds(cls, val, values):
         """Error if any of the integration surfaces are outside of the simulation domain."""
 
@@ -1193,6 +1222,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["size"])
     def _projection_monitors_distance(cls, val, values):
         """Warn if the projection distance is large for exact projections."""
 
@@ -1225,6 +1255,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "structures"])
     def diffraction_monitor_medium(cls, val, values):
         """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
@@ -1243,6 +1274,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("grid_spec", always=True)
+    @skip_if_fields_missing(["medium", "sources", "structures"])
     def _warn_grid_size_too_small(cls, val, values):
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
@@ -1303,6 +1335,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("sources", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _source_homogeneous_isotropic(cls, val, values):
         """Error if a plane wave or gaussian beam source is not in a homogeneous and isotropic
         region.
@@ -1345,6 +1378,7 @@ class Simulation(AbstractSimulation):
         return val
 
     @pydantic.validator("normalize_index", always=True)
+    @skip_if_fields_missing(["sources"])
     def _check_normalize_index(cls, val, values):
         """Check validity of normalize index in context of simulation.sources."""
 
@@ -1486,7 +1520,7 @@ class Simulation(AbstractSimulation):
         self._validate_modes_size()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
-        # self._validate_run_time()
+        self._warn_time_monitors_outside_run_time()
         _ = self.volumetric_structures
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
@@ -1702,6 +1736,21 @@ class Simulation(AbstractSimulation):
                             "the same media along the injection axis "
                             f" '{'xyz'[source.injection_axis]}'."
                         )
+
+    def _warn_time_monitors_outside_run_time(self) -> None:
+        """Warn if time monitors start after the simulation run_time.
+        TODO: (remove this comment later) this is done as a pre-upload validator in view of a
+        planned change to allow ``run_time`` to accept a ``RunTimeSpec`` which would automatically
+        determine a run time based on simulation details. Then, we would have to access the
+        dynamically computed run_time e.g. through a ``_run_time`` cached property.
+        """
+        with log as consolidated_logger:
+            for monitor in self.monitors:
+                if isinstance(monitor, TimeMonitor) and monitor.start > self.run_time:
+                    consolidated_logger.warning(
+                        f"Monitor {monitor.name} has a start time {monitor.start:1.2e}s exceeding"
+                        f"the simulation run time {self.run_time:1.2e}s. No data will be recorded."
+                    )
 
     """ Accounting """
 
@@ -3412,12 +3461,12 @@ class Simulation(AbstractSimulation):
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> Simulation:
-        """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
+        """Create a simulation from a :class:`.Scene` instance. Must provide additional parameters
         to define a valid simulation (for example, ``run_time``, ``grid_spec``, etc).
 
         Parameters
         ----------
-        scene : :class:.`Scene`
+        scene : :class:`.Scene`
             Size of object in x, y, and z directions.
         **kwargs
             Other arguments passed to new simulation instance.

@@ -86,6 +86,28 @@ def _get_valid_extension(fname: str) -> str:
     )
 
 
+def skip_if_fields_missing(fields: List[str]):
+    """Decorate ``validator`` to check that other fields have passed validation."""
+
+    def actual_decorator(validator):
+        @wraps(validator)
+        def _validator(cls, val, values):
+            """New validator function."""
+            for field in fields:
+                if field not in values:
+                    log.warning(
+                        f"Could not execute validator '{validator.__name__}' because field "
+                        f"'{field}' failed validation."
+                    )
+                    return val
+
+            return validator(cls, val, values)
+
+        return _validator
+
+    return actual_decorator
+
+
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures

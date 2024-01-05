@@ -11,6 +11,7 @@ import shapely
 from matplotlib import path
 
 from ..base import cached_property
+from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
 from ..types import MatrixReal4x4, Shapely, trimesh
 from ...log import log
@@ -105,6 +106,7 @@ class PolySlab(base.Planar):
         return val
 
     @pydantic.validator("vertices", always=True)
+    @skip_if_fields_missing(["dilation"])
     def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
         """At the reference plane, check if the polygon is self-intersecting.
 
@@ -154,6 +156,7 @@ class PolySlab(base.Planar):
         return val
 
     @pydantic.validator("vertices", always=True)
+    @skip_if_fields_missing(["sidewall_angle", "dilation", "slab_bounds", "reference_plane"])
     def no_self_intersecting_polygon_during_extrusion(cls, val, values):
         """In this simple polyslab, we don't support self-intersecting polygons yet, meaning that
         any normal cross section of the PolySlab cannot be self-intersecting. This part checks
@@ -168,8 +171,6 @@ class PolySlab(base.Planar):
         To detect this, we sample _N_SAMPLE_POLYGON_INTERSECT cross sections to see if any creation
         of polygons/holes, and changes in vertices number.
         """
-        if "sidewall_angle" not in values:
-            raise ValidationError("'sidewall_angle' failed validation.")
 
         # no need to validate anything here
         if isclose(values["sidewall_angle"], 0):
