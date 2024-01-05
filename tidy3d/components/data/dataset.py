@@ -22,7 +22,7 @@ from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
-from ..types import vtk, requires_vtk
+from ...packaging import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
 from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
 from ...log import log
