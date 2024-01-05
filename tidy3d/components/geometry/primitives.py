@@ -9,10 +9,10 @@ import numpy as np
 import shapely
 
 from ..base import cached_property, skip_if_fields_missing
-from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh
+from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, LARGE_NUMBER
-
+from ...packaging import verify_packages_import
 from . import base
 
 # for sampling conical frustum in visualization
@@ -224,7 +224,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
         return self.axis
 
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -246,6 +246,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
 
         angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]

@@ -22,7 +22,7 @@ def test_triangular_dataset_no_vtk(tmp_path):
     _test_triangular_dataset(tmp_path, "test_name")
 
     # double check that vtk was not imported
-    from tidy3d.components.types import vtk
+    from tidy3d.packaging import vtk
 
     assert vtk["mod"] is None
 
@@ -32,6 +32,6 @@ def test_tetrahedral_dataset_no_vtk(tmp_path):
     _test_tetrahedral_dataset(tmp_path, "test_name")
 
     # double check that vtk was not imported
-    from tidy3d.components.types import vtk
+    from tidy3d.packaging import vtk
 
     assert vtk["mod"] is None
