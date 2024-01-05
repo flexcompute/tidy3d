@@ -22,6 +22,7 @@ from ..structure import Structure
 from ..geometry.base import Box, GeometryGroup
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
+from ..geometry.mesh import TriangleMesh
 from ..scene import Scene
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
@@ -35,7 +36,7 @@ from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab)
+HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
 
 
 class HeatSimulation(AbstractSimulation):
