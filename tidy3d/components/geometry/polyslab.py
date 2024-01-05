@@ -13,10 +13,11 @@ from matplotlib import path
 from ..base import cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
-from ..types import MatrixReal4x4, Shapely, trimesh
+from ..types import MatrixReal4x4, Shapely
 from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, fp_eps
+from ...packaging import verify_packages_import
 
 from . import base
 from . import triangulation
@@ -525,7 +526,7 @@ class PolySlab(base.Planar):
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
 
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -547,6 +548,8 @@ class PolySlab(base.Planar):
             For more details refer to
             `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         if len(self.base_polygon) > _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION:
             log.warning(
                 "Processing of PolySlabs with large numbers of vertices can be slow.", log_once=True
