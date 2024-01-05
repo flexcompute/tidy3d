@@ -11,7 +11,7 @@ np.random.seed(4)
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_triangular_dataset(tmp_path, ds_name):
     import tidy3d as td
-    from tidy3d.components.types import vtk
+    from tidy3d.packaging import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
@@ -258,7 +258,7 @@ def test_triangular_dataset(tmp_path, ds_name):
 @pytest.mark.parametrize("ds_name", ["test123", None])
 def test_tetrahedral_dataset(tmp_path, ds_name):
     import tidy3d as td
-    from tidy3d.components.types import vtk
+    from tidy3d.packaging import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create

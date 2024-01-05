@@ -2,6 +2,7 @@ import pathlib
 
 import click
 from pathlib import Path
+import subprocess
 from .index import develop
 from .utils import echo_and_check_subprocess
 
@@ -62,10 +63,12 @@ def benchmark_timing_operations(
             "command."
         )
 
-    echo_and_check_subprocess(command=timing_command_list, stdout=output_file_write)
+    echo_and_check_subprocess(
+        command=timing_command_list, stdout=output_file_write, stderr=subprocess.STDOUT
+    )
 
 
-@develop.command(name="benchmark-timing-operations", help="")
+@develop.command(name="benchmark-timing-operations")
 @click.option(
     "-c",
     "--timing-command",
@@ -80,13 +83,15 @@ def benchmark_timing_operations(
     help="Runs in poetry environment if " "True.",
 )
 @click.option(
-    "--in-poetry-environment",
-    default=True,
-    type=bool,
-    is_flag=True,
-    help="Runs in poetry environment if " "True.",
+    "-o",
+    "--output-file",
+    default="import.log",
+    type=str,
+    help="Output file name. Defaults to 'import.log'.'",
 )
-def benchmark_timing_operations_command(timing_command: str, in_poetry_environment: bool = True):
+def benchmark_timing_operations_command(
+    timing_command: str, in_poetry_environment: bool = True, output_file: str = "import.log"
+):
     # If timing_command is inputted without a value, raise a warning and print out the existing key options from the
     # timing command dictionary.
     if timing_command is None:
@@ -98,4 +103,5 @@ def benchmark_timing_operations_command(timing_command: str, in_poetry_environme
     benchmark_timing_operations(
         timing_command=timing_command,
         in_poetry_environment=in_poetry_environment,
+        output_file=output_file,
     )
