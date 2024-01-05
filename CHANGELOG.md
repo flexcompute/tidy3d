@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2024-01-08
+
 ### Added
 - `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
 - String matching feature `contains_str` to `assert_log_level` testing utility.
@@ -15,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `jax` and `jaxlib` versions bumped to `0.4.*`.
-- Imporved and unified warning message for validation failure of dependecy fields in validators.
+- Improved and unified warning message for validation failure of dependency fields in validators.
 
 ### Fixed
 - Error in automatic grid generation in specific cases with multiple thin structures.
@@ -1054,7 +1056,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
+[2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
 [2.4.2]: https://github.com/flexcompute/tidy3d/compare/v2.4.1...v2.4.2
