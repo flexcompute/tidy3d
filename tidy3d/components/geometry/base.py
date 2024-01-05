@@ -16,7 +16,7 @@ from matplotlib import patches
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
-from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4, trimesh
+from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4
 from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
 from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
 from ..transformation import RotationAroundAxis
@@ -24,37 +24,10 @@ from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
-
-try:
-    gdstk_available = True
-    import gdstk
-except ImportError:
-    gdstk_available = False
-
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
+from ...packaging import verify_packages_import
 
 
 POLY_GRID_SIZE = 1e-12
-
-
-def requires_trimesh(fn):
-    """When decorating a method, requires that trimesh is available."""
-
-    @functools.wraps(fn)
-    def _fn(*args, **kwargs):
-        if trimesh is None:
-            raise Tidy3dImportError(
-                "The package 'trimesh' is required for this operation, but it was not found. "
-                "Please install the 'trimesh' dependencies using, for example, "
-                "'pip install -r requirements/trimesh.txt'."
-            )
-        return fn(*args, **kwargs)
-
-    return _fn
 
 
 _shapely_operations = {
@@ -956,6 +929,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return theta, phi
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdstk(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1004,6 +978,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdspy(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1046,6 +1021,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def from_gds(
         gds_cell,
         axis: Axis,
@@ -1091,23 +1067,30 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometries created from the 2D data.
         """
+        try:
+            import gdstk
 
-        if gdstk_available and isinstance(gds_cell, gdstk.Cell):
-            gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif gdspy_available and isinstance(gds_cell, gdspy.Cell):
-            gds_loader_fn = Geometry.load_gds_vertices_gdspy
-        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to import gdstk cells."
-            )
-        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to import to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+            if isinstance(gds_cell, gdstk.Cell):
+                gds_loader_fn = Geometry.load_gds_vertices_gdstk
+            else:
+                raise Tidy3dError(
+                    "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+                )
+        except ImportError:
+            try:
+                import gdspy
+
+                if isinstance(gds_cell, gdspy.Cell):
+                    gds_loader_fn = Geometry.load_gds_vertices_gdspy
+                else:
+                    raise Tidy3dError(
+                        "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+                    )
+            except ImportError:
+                raise Tidy3dImportError(
+                    "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                    "files, please install one of those those modules through `pip install tidy3d[gdstk, gdspy]`"
+                )
 
         geometries = []
         with log as consolidated_logger:
@@ -1165,6 +1148,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
 
+    @verify_packages_import(["gdstk"])
     def to_gdstk(
         self,
         x: float = None,
@@ -1193,11 +1177,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List
             List of `gdstk.Polygon`.
         """
-        if not gdstk_available:
-            raise Tidy3dImportError(
-                "Python module 'gdstk' not found. Install the module to be able to export shapes "
-                "using it."
-            )
+        import gdstk
 
         shapes = self.intersections_plane(x=x, y=y, z=z)
         polygons = []
@@ -1217,6 +1197,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
+    @verify_packages_import(["gdspy"])
     def to_gdspy(
         self,
         x: float = None,
@@ -1245,11 +1226,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List
             List of `gdspy.Polygon` and `gdspy.PolygonSet`.
         """
-        if not gdspy_available:
-            raise Tidy3dImportError(
-                "Python module 'gdspy' not found. Install the module to be able to export shapes "
-                "using it."
-            )
+        import gdspy
 
         shapes = self.intersections_plane(x=x, y=y, z=z)
         polygons = []
@@ -1269,6 +1246,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds(
         self,
         cell,
@@ -1295,29 +1273,34 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        if gdstk_available and isinstance(cell, gdstk.Cell):
-            polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(*polygons)
+        try:
+            import gdstk
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(polygons)
+            if isinstance(cell, gdstk.Cell):
+                polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+                if len(polygons) > 0:
+                    cell.add(*polygons)
+        except ImportError:
+            try:
+                import gdspy
 
-        elif "gdstk" in cell.__class__ and not gdstk_available:
-            raise Tidy3dImportError(
-                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
-            )
-        elif "gdspy" in cell.__class__ and not gdspy_available:
-            raise Tidy3dImportError(
-                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
-            )
-        else:
-            raise Tidy3dError(
-                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-            )
+                if isinstance(cell, gdspy.Cell):
+                    polygons = self.to_gdspy(
+                        x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype
+                    )
+                    if len(polygons) > 0:
+                        cell.add(polygons)
+                else:
+                    raise Tidy3dError(
+                        "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+                    )
+            except ImportError:
+                raise Tidy3dImportError(
+                    "Either 'gdstk' or 'gdspy' must be installed to export geometries to .gds files. "
+                    "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
+                )
 
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds_file(
         self,
         fname: str,
@@ -1347,15 +1330,23 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
-        if gdstk_available:
+
+        # Fundamental import structure for custom commands depending on which package is available.
+        try:
+            import gdstk
+
             library = gdstk.Library()
-        elif gdspy_available:
-            library = gdspy.GdsLibrary()
-        else:
-            raise Tidy3dImportError(
-                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                "files, please install one of those those modules."
-            )
+        except ImportError:
+            try:
+                import gdspy
+
+                library = gdspy.GdsLibrary()
+            except ImportError:
+                raise Tidy3dImportError(
+                    "Either 'gdstk' or 'gdspy' must be installed to export geometries to .gds files. "
+                    "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
+                )
+
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         library.write_gds(fname)
@@ -1809,7 +1800,7 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
-    @requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -1831,6 +1822,8 @@ class Box(Centered):
             For more details refer to
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         (x0, y0, z0), (x1, y1, z1) = self.bounds
         vertices = [
             (x0, y0, z0),  # 0

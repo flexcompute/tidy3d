@@ -42,7 +42,7 @@ def echo_and_run_subprocess(command: list, **kwargs):
     return subprocess.run(command, cwd=get_install_directory(), **kwargs)
 
 
-def echo_and_check_subprocess(command: list, **kwargs):
+def echo_and_check_subprocess(command: list, *args, **kwargs):
     """
     Print and execute a subprocess command, ensuring it completes successfully.
 
@@ -60,4 +60,4 @@ def echo_and_check_subprocess(command: list, **kwargs):
     """
     concatenated_command = " ".join(command)
     print("Running: " + concatenated_command)
-    return subprocess.check_call(command, cwd=get_install_directory(), **kwargs)
+    return subprocess.check_call(command, *args, **kwargs, cwd=get_install_directory())
