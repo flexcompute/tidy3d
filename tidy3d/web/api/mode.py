@@ -432,7 +432,7 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         file = None
         try:
             file = download_gz_file(
-                resource_id=self.task_id,
+                resource_id=self.solver_id,
                 remote_filename=MODESOLVER_RESULT_GZ,
                 to_file=to_file,
                 verbose=verbose,
@@ -441,12 +441,12 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         except ClientError:
             if verbose:
                 console = get_logger_console()
-                console.log(f"Unable to download '{MODESOLVER_RESULT}'.")
+                console.log(f"Unable to download '{MODESOLVER_RESULT_GZ}'.")
 
         if not file:
             try:
                 file = download_file(
-                    resource_id=self.task_id,
+                    resource_id=self.solver_id,
                     remote_filename=MODESOLVER_RESULT,
                     to_file=to_file,
                     verbose=verbose,
