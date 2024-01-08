@@ -160,8 +160,8 @@ def upload(
         )
         if task_type == "HEAT":
             console.log(
-                "Tidy3D's heat solver is currently in the beta stage. All heat simulations are "
-                "charged a flat fee of 0.025 FlexCredit."
+                "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
+                "is subject to change in the future."
             )
         else:
             url = _get_url(task.task_id)
