@@ -1,5 +1,0 @@
-[project]
-name = "tidy3d-docs"
-authors = [{name = "Flexcompute Inc.", email = "support@flexcompute.com"}]
-description = "Documentation for the Tidy3D electromagnetic simulation package."
-version = "2.5.0"
