@@ -1,5 +1,5 @@
-Example Library
-================
+Example Library |:books:|
+==========================
 
 .. toctree::
     :maxdepth: 2
