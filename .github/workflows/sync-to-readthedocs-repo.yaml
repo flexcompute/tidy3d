@@ -7,6 +7,7 @@ on:
       - main
       - latest
       - 'pre/*'
+      - 'v*'
   workflow_dispatch:
     inputs:
       env:
@@ -35,7 +36,11 @@ jobs:
     steps:
       - id: setenv
         run: |
-          if test -n "${{ github.event.inputs.env }}"
+          if [[ "${{ needs.extract_branch.outputs.branch }}" =~ ^v.*$ ]]
+          then
+            echo "::set-output name=env::version"
+            echo "ENV=version" >> $GITHUB_ENV
+          elif test -n "${{ github.event.inputs.env }}"
           then
             echo "::set-output name=env::${{ github.event.inputs.env }}"
             echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
@@ -55,12 +60,16 @@ jobs:
         run: |
           echo "The destination branch is ${{ needs.extract_branch.outputs.branch }}"
           case ${{ env.ENV }} in
+            version)
+              new_branch_name="${{ needs.extract_branch.outputs.branch }}"
+              echo "::set-output name=branch::${new_branch_name}"
+              ;;
             dev)
-            echo "::set-output name=branch::${{ needs.extract_branch.outputs.branch }}"
-            ;;
+              echo "::set-output name=branch::${{ needs.extract_branch.outputs.branch }}"
+              ;;
             prod)
-            echo "::set-output name=branch::main" 
-            ;;
+              echo "::set-output name=branch::main" 
+              ;;
           esac
   build-and-deploy:
     needs: set_env
@@ -68,6 +77,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Create new branch if version pattern
+        uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
+        with:
+          repository_owner: flexcompute-readthedocs
+          repository_name: tidy3d-docs
+          new_branch_name: ${{ needs.set_env.outputs.dest-branch }}
+          access_token: ${{ secrets.GH_PAT }}
+          ignore_branch_exists: true
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: .

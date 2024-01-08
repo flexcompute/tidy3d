@@ -33,8 +33,6 @@ for _, path in enumerate(notebook_filenames_all):
 run_only = []
 
 skip = [
-    "8ChannelDemultiplexer",
-    "90BendPolarizationSplitterRotator",
     "AdjointPlugin5BoundaryGradients",
     "AdjointPlugin6GratingCoupler",
     "AdjointPlugin7Metalens",
