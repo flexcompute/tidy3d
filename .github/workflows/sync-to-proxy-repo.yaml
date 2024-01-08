@@ -52,19 +52,15 @@ jobs:
         uses: actions/checkout@v3
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: docs/source/notebooks/
-          token: ${{ secrets.GH_PAT }}
-          repository-name: flexcompute/tidy3d-example-library
-          target-folder: notebooks
-          branch: ${{ needs.set_env.outputs.dest-branch }}
-      - run: |
-          mkdir -p build_toc
-          cp docs/source/examples.rst build_toc/examples.rst
-
-      - uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          folder: build_toc
+          folder: docs
           token: ${{ secrets.GH_PAT }}
           repository-name: flexcompute/tidy3d-example-library
           target-folder: toc
+          branch: ${{ needs.set_env.outputs.dest-branch }}
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          token: ${{ secrets.GH_PAT }}
+          repository-name: flexcompute/tidy3d-example-library
+          target-folder: notebooks
           branch: ${{ needs.set_env.outputs.dest-branch }}

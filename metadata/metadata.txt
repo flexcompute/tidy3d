@@ -269,6 +269,12 @@
     "keywords": "gds, import, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+  "GeneticAlgorithmReflector.ipynb": {
+    "title": "Genetic Algorithm Optimization of a Reflector | Flexcompute",
+    "description": "This notebook demonstrates how to use genetic algorithm (GA) to optimize an on-chip reflector.",
+    "keywords": "genetic algorithm, optimization, Tidy3D, FDTD",
+    "feature_image": "./img/optimized_reflector.png"
+  },
   "GradientMetasurfaceReflector.ipynb": {
     "title": "Gradient Metasurface Reflector | Flexcompute",
     "description": "This notebook demonstrates how to model a gradient metasurface reflector in Tidy3D FDTD.",
@@ -371,6 +377,12 @@
     "keywords": "Luneburg lens, custom medium, Tidy3D, FDTD",
     "feature_image": "./img/optical_luneburg_lens_schematic.png"
   },
+  "OpticalSwitchDBS.ipynb": {
+    "title": "Direct Binary Search Optimization of an Optical Switch | Flexcompute",
+    "description": "This notebook demonstrates how to use direct binary search to optimize an on-chip optical switch based on phase change material.",
+    "keywords": "direct binary search, optimization, optical switch, phase change material, Tidy3D, FDTD",
+    "feature_image": "./img/optical_switch.png"
+  },
   "OptimizedL3.ipynb": {
     "title": "Photonic Crystal Cavity Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to model a photonic crystal cavity in Tidy3D FDTD.",
@@ -454,6 +466,12 @@
     "description": "This notebook demonstrates how to model a 2D ring resonator in Tidy3D FDTD.",
     "keywords": "ring resonator, Tidy3D, FDTD",
     "feature_image": "./img/ring_resonator_2d.png"
+  },
+  "SbendCMAES.ipynb": {
+    "title": "Optimizing a Waveguide S-bend Using CMA-ES | Flexcompute",
+    "description": "This notebook demonstrates how to optimize a waveguide s-bend using the CMA-ES algorithm in Tidy3D FDTD.",
+    "keywords": "CMA-ES, optimization, S-bend, Tidy3D, FDTD",
+    "feature_image": "./img/optimized_sbend.png"
   },
   "ScaleInvariantWaveguide.ipynb": {
     "title": "Dielectric Scale-invariant Waveguide in Tidy3D | Flexcompute",
