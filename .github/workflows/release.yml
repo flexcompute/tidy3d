@@ -1,5 +1,8 @@
 name: "tidy3d-release"
 
+permissions:
+  contents: write
+
 on:
   push:
     tags:
@@ -12,6 +15,8 @@ jobs:
     - uses: actions/checkout@master
     - name: Release
       uses: softprops/action-gh-release@v1
+      with:
+        generate_release_notes: true      
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   pypi-release:
