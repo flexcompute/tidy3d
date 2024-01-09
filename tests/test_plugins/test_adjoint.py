@@ -1797,10 +1797,10 @@ def test_grad_pole_residue():
         return res
 
     EPS_INF = 2.0
-    A_RE = -1.0
-    A_IM = 1.0
-    C_RE = -2.0
-    C_IM = 2.0
+    A_RE = 0.#-3e14
+    A_IM = 7e15
+    C_RE = 0.0
+    C_IM = 2.5e16
     args = (EPS_INF, A_RE, A_IM, C_RE, C_IM)
     num_args = len(args)
 
@@ -1809,14 +1809,14 @@ def test_grad_pole_residue():
     # compute adjoint gradient
     val, grad_adj = grad_fn(*args)
 
-    delta = 1e-3
+    deltas = [abs(x) / 1e3 for x in args]
 
     # assemble simulations for batch to compute numerical gradient
     sims = {}
     for i in range(num_args):
         for pm in (-1, 1):
             args_ = np.array(args).copy()
-            args_[i] += pm * delta
+            args_[i] += pm * deltas[i]
             task_name = f"gradnum_{i}_{pm}"
             sims[task_name] = make_sim(*args_).to_simulation()[0]
 
@@ -1829,7 +1829,7 @@ def test_grad_pole_residue():
     for task_name, sim_data in batch_data.items():
         i, pm = task_name.split("_")[-2:]
         objective = post_process(sim_data)
-        grad_num[int(i)] += objective * float(pm) / 2 / delta
+        grad_num[int(i)] += objective * float(pm) / 2 / deltas[i]
 
     print("adjoint: ", grad_adj)
     print("numerical: ", grad_num)
