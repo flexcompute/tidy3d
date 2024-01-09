@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Internal storage estimation for 3D surface integration monitors now correctly includes only fields on the surfaces, and not the whole volume.
+
 ## [2.5.1] - 2024-01-08
 
 ### Added

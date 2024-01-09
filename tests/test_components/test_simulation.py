@@ -1826,6 +1826,27 @@ def test_error_large_monitors():
             s.validate_pre_upload()
 
 
+def test_monitor_num_cells():
+    """Test the computation of number of cells in monitor."""
+    sim = td.Simulation(
+        size=(2.0, 2.0, 2.0),
+        grid_spec=td.GridSpec.uniform(dl=0.01),
+        run_time=1e-12,
+    )
+    monitor_3d = td.FluxMonitor(size=[1, 1, 1], freqs=[1e12], name="test")
+    monitor_2d = td.FluxMonitor(size=[1, 0, 1], freqs=[1e12], name="test")
+    downsample = 3
+    monitor_downsample = td.FieldMonitor(
+        size=[1, 0, 1], freqs=[1e12], name="test", interval_space=[downsample] * 3
+    )
+    num_cells_3d = sim._monitor_num_cells(monitor_3d)
+    num_cells_2d = sim._monitor_num_cells(monitor_2d)
+    num_cells_downsample = sim._monitor_num_cells(monitor_downsample)
+    assert num_cells_2d * 6 == num_cells_3d
+    # downsampling is not exact
+    assert np.isclose(num_cells_downsample, num_cells_2d / downsample**2, rtol=0.1)
+
+
 @pytest.mark.parametrize("start, log_level", [(1e-12, None), (1, "WARNING")])
 def test_warn_time_monitor_outside_run_time(log_capture, start, log_level):
     """Make sure we get a warning if the mode monitor grid is too large."""
