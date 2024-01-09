@@ -254,6 +254,12 @@ class AbstractModeMonitor(PlanarMonitor, FreqMonitor):
         description="Parameters to feed to mode solver which determine modes measured by monitor.",
     )
 
+    store_fields_direction: Direction = pydantic.Field(
+        None,
+        title="Store Fields",
+        description="Propagation direction for the mode field profiles stored from mode solving.",
+    )
+
     def plot(
         self,
         x: float = None,
@@ -599,11 +605,11 @@ class ModeMonitor(AbstractModeMonitor):
     ------
 
         The fields recorded by frequency monitors (and hence also mode monitors) are automatically
-        normalized by the power amplitude spectrum of the source. For multiple sources, the user can select which
-        source to use for the normalization too.
+        normalized by the power amplitude spectrum of the source. For multiple sources, the user can
+        select which source to use for the normalization too.
 
-        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition of the radiated
-        power into forward- and backward-propagating modes, respectively.
+        We can also use the mode amplitudes recorded in the mode monitor to reveal the decomposition
+        of the radiated power into forward- and backward-propagating modes, respectively.
 
         .. TODO give an example of how to extract the data from this mode.
 
@@ -640,8 +646,13 @@ class ModeMonitor(AbstractModeMonitor):
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        # stores 3 complex numbers per frequency, per mode.
-        return 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
+        amps_size = 3 * BYTES_COMPLEX * len(self.freqs) * self.mode_spec.num_modes
+        fields_size = 0
+        if self.store_fields_direction is not None:
+            fields_size = 6 * BYTES_COMPLEX * num_cells * len(self.freqs) * self.mode_spec.num_modes
+            if self.mode_spec.precision == "double":
+                fields_size *= 2
+        return amps_size + fields_size
 
 
 class ModeSolverMonitor(AbstractModeMonitor):
@@ -672,6 +683,20 @@ class ModeSolverMonitor(AbstractModeMonitor):
         description="Toggle whether fields should be colocated to grid cell boundaries (i.e. "
         "primal grid nodes).",
     )
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def set_store_fields(cls, values):
+        """Ensure 'store_fields_direction' is compatible with 'direction'."""
+        store_fields_direction = values["store_fields_direction"]
+        direction = values["direction"]
+        if store_fields_direction is None:
+            values["store_fields_direction"] = direction
+        elif store_fields_direction != direction:
+            raise ValidationError(
+                f"The values of 'direction' ({direction}) and 'store_fields_direction' "
+                f"({store_fields_direction}) must be equal."
+            )
+        return values
 
     def storage_size(self, num_cells: int, tmesh: int) -> int:
         """Size of monitor storage given the number of points after discretization."""

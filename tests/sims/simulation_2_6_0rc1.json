@@ -1619,55 +1619,8 @@
                 "track_freq": "central",
                 "group_index_step": false,
                 "type": "ModeSpec"
-            }
-        },
-        {
-            "type": "ModeSolverMonitor",
-            "center": [
-                0.0,
-                0.0,
-                0.0
-            ],
-            "size": [
-                1.0,
-                1.0,
-                0.0
-            ],
-            "name": "mode_solver",
-            "interval_space": [
-                1,
-                1,
-                1
-            ],
-            "colocate": true,
-            "freqs": [
-                200000000000000.0,
-                250000000000000.0
-            ],
-            "apodization": {
-                "start": null,
-                "end": null,
-                "width": null,
-                "type": "ApodizationSpec"
             },
-            "mode_spec": {
-                "num_modes": 1,
-                "target_neff": null,
-                "num_pml": [
-                    0,
-                    0
-                ],
-                "filter_pol": null,
-                "angle_theta": 0.0,
-                "angle_phi": 0.0,
-                "precision": "single",
-                "bend_radius": null,
-                "bend_axis": null,
-                "track_freq": "central",
-                "group_index_step": false,
-                "type": "ModeSpec"
-            },
-            "direction": "+"
+            "store_fields_direction": null
         },
         {
             "type": "FieldProjectionAngleMonitor",

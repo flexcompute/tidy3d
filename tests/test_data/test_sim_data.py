@@ -10,7 +10,7 @@ from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
-from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
+from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
 
 from .test_monitor_data import make_field_data, make_field_time_data, make_permittivity_data
 from .test_monitor_data import make_mode_data, make_mode_solver_data
@@ -115,7 +115,9 @@ def test_getitem():
 def test_centers():
     sim_data = make_sim_data()
     for mon in sim_data.simulation.monitors:
-        if isinstance(mon, (FieldMonitor, FieldTimeMonitor, ModeSolverMonitor)):
+        if isinstance(mon, (FieldMonitor, FieldTimeMonitor)) or (
+            isinstance(mon, ModeMonitor) and mon.store_fields_direction
+        ):
             _ = sim_data.at_centers(mon.name)
 
 

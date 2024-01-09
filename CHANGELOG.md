@@ -6,9 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Mode field profiles can be stored directly from a `ModeMonitor` by setting `store_fields_direction`.
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.
+- `ModeSolverMonitor` is deprecated. Mode field profiles can be retrieved directly from `ModeMonitor` with `store_fields_direction` set.
 
 ### Fixed
 - Add dispersion information to dataframe output when available from mode solver under the column "dispersion (ps/(nm km))".
