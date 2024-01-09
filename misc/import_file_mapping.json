@@ -3,7 +3,7 @@
     "90OpticalHybrid.ipynb": ["mmi_stl.stl", "optical_hybrid_stl.stl"],    
     "AdjointPlugin6GratingCoupler.ipynb": ["invdes_gc.json"],
     "AdjointPlugin10YBranchLevelSet.ipynb": ["y_branch_fab.pkl"],
-    "AdjointPlugin12LightExtractor.ipynb": ["qe_coupler.pkl"],
+    "AdjointPlugin12LightExtractor.ipynb": ["qe_light_coupler.pkl"],
     "CMOSRGBSensor": ["red_eps.csv", "green_eps.csv", "blue_eps.csv"],    
     "Fitting.ipynb": ["nk_data.csv"],
     "FocusedApodGC.ipynb": ["Focusing_GC.gds"],
