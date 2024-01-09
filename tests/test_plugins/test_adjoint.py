@@ -1764,17 +1764,56 @@ def test_inf_IO(tmp_path):
 
 def test_grad_pole_residue():
 
-    frequency = 1.0
+    def make_sim(eps_inf, a_re, a_im, c_re, c_im):
 
-    def get_eps(eps_inf: float, a_re: float, a_im: float, c_re: float, c_im: float) -> float:
+        jax_box = JaxBox(size=(1,1,1), center=(0,0,0))
         a = a_re + 1j * a_im
         c = c_re + 1j * c_im
-
         pole = (a, c)
-        med = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
-        return med.eps_model(frequency=frequency)
+        jax_med = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+        jax_struct = JaxStructure(geometry=jax_box, medium=jax_med)
 
-    eps_inf = 2.0
+        mnt = td.ModeMonitor(
+            center=(1, 0, 0),
+            size=(10, 10, 0),
+            mode_spec=td.ModeSpec(num_modes=3),
+            freqs=[FREQ0],
+            name="mnt",
+        )
 
-    a = -1.0 - 2.0j
-    c = -2.0 + 3.0j
+        src = td.PointDipole(
+            center=(-1, 0, 0),
+            source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+            polarization="Ey",
+        )
+
+        return JaxSimulation(
+            size=(3, 3, 3),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            input_structures=(jax_struct,),
+            output_monitors=(mnt,),
+            sources=[src],
+            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
+        )
+
+    def post_process(jax_sim_data):
+        return jnp.sum(jnp.array(jax_sim_data["mnt"].amps.values))
+
+    def objective(eps_inf, a_re, a_im, c_re, c_im):
+        sim = make_sim(eps_inf, a_re, a_im, c_re, c_im)
+        data = run_local(sim, task_name="test_pole_residue")
+        res = post_process(data)
+        return res
+
+    grad_fn = jax.value_and_grad(objective)
+
+    EPS_INF = 2.0
+    A_RE = -1.0
+    A_IM = 1.0
+    C_RE = -2.0
+    C_IM = 2.0
+    args = (EPS_INF, A_RE, A_IM, C_RE, C_IM)
+
+    val, grad_adj = grad_fn(*args)
+    print(grad_adj)
