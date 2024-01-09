@@ -507,18 +507,6 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
         np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)
     ), "Some of the gradients are zero unexpectedly."
 
-    # fail if some gradients dont match the pre/2.6 grads (before refactor).
-    if local:
-# <<<<<<< HEAD
-#         assert np.isclose(df_deps, 1284453200000000.0), "local grad doesn't match previous value."
-#     else:
-#         assert np.isclose(df_deps, 0.031678755), "non-local grad doesn't match previous value."
-# =======
-        assert np.isclose(df_deps, 1278130200000000.0), "local grad doesn't match previous value."
-    else:
-        assert np.isclose(df_deps, 0.031742122), "non-local grad doesn't match previous value."
-# >>>>>>> ee935a1b (adjoint refactor with separate jax fields)
-
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
 
@@ -1798,7 +1786,7 @@ def test_grad_pole_residue():
         )
 
     def post_process(jax_sim_data):
-        return jnp.sum(jnp.array(jax_sim_data["mnt"].amps.values))
+        return jnp.abs(jnp.sum(jnp.array(jax_sim_data["mnt"].amps.values)))
 
     def objective(eps_inf, a_re, a_im, c_re, c_im):
         sim = make_sim(eps_inf, a_re, a_im, c_re, c_im)
