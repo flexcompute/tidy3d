@@ -8,6 +8,7 @@ on:
       - latest
       - 'pre/*'
       - 'v*'
+      - "dario/notebooks_to_subtree"
   workflow_dispatch:
     inputs:
       env:
