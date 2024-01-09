@@ -1,0 +1,5 @@
+tidy3d
+tmm
+nlopt
+tqdm
+gdspy
