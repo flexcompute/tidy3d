@@ -92,3 +92,6 @@ jobs:
           repository-name: flexcompute-readthedocs/tidy3d-docs
           target-folder: .
           branch: ${{ needs.set_env.outputs.dest-branch }}
+          clean: true
+          force: true
+
