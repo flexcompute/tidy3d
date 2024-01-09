@@ -8,6 +8,7 @@ on:
       - latest
       - 'pre/*'
       - 'v*'
+      - "dario/fix_sync_with_submodule"
   workflow_dispatch:
     inputs:
       env:
@@ -77,6 +78,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Create new branch if version pattern
         uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
         with:
