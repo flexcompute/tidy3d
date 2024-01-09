@@ -583,7 +583,12 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         coords_amps = dict(direction=["+", "-"])
         coords_amps.update(coords_ind)
         amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
-        return td.ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
+        return td.ModeData(
+            monitor=monitor,
+            n_complex=n_complex,
+            amps=amps,
+            grid_expanded=simulation.discretize_monitor(monitor),
+        )
 
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
