@@ -8,6 +8,8 @@ on:
       - latest
       - 'pre/*'
       - 'v*'
+      - "dario/fix_sync_with_submodule"
+
   workflow_dispatch:
     inputs:
       env:
@@ -77,6 +79,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+        with:
+          submodules: true
       - name: Create new branch if version pattern
         uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
         with:
@@ -84,6 +88,7 @@ jobs:
           repository_name: tidy3d-docs
           new_branch_name: ${{ needs.set_env.outputs.dest-branch }}
           access_token: ${{ secrets.GH_PAT }}
+          new_branch_ref: default_clean_sync_branch
           ignore_branch_exists: true
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
