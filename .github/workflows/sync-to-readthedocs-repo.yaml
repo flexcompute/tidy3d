@@ -8,6 +8,7 @@ on:
       - latest
       - 'pre/*'
       - 'v*'
+      - "dario/sync_repos_fix"
   workflow_dispatch:
     inputs:
       env:
