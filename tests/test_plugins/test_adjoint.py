@@ -1649,16 +1649,15 @@ def test_no_adjoint_sources(
     if not has_adj_src:
         monkeypatch.setattr(JaxModeData, "to_adjoint_sources", lambda *args, **kwargs: [])
 
-    def J(x):
-        sim = make_sim(eps=x)
-        data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
-        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
-        power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
-        return power
+    x = 2.0
+    sim = make_sim(eps=x)
+    data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
-    grad_J = grad(J)
-    grad_J(2.0)
-    assert_log_level(log_capture, log_level_expected)
+    # check whether we got a warning for no sources?
+    with AssertLogLevel(log_capture, log_level_expected, contains_str="No adjoint sources"):
+        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+
+    power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
 
 def test_nonlinear_warn(log_capture):

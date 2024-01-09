@@ -170,7 +170,14 @@ class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to their associated data."""
-        fields = dict(Ex=self.Ex, Ey=self.Ey, Ez=self.Ez, Hx=self.Hx, Hy=self.Hy, Hz=self.Hz)
+        fields = {
+            "Ex": self.Ex,
+            "Ey": self.Ey,
+            "Ez": self.Ez,
+            "Hx": self.Hx,
+            "Hy": self.Hy,
+            "Hz": self.Hz,
+        }
         return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
@@ -319,32 +326,32 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     """
 
     Ex: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field of the mode.",
     )
     Ey: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Ey",
         description="Spatial distribution of the y-component of the electric field of the mode.",
     )
     Ez: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Ez",
         description="Spatial distribution of the z-component of the electric field of the mode.",
     )
     Hx: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Hx",
         description="Spatial distribution of the x-component of the magnetic field of the mode.",
     )
     Hy: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Hy",
         description="Spatial distribution of the y-component of the magnetic field of the mode.",
     )
     Hz: ScalarModeFieldDataArray = pd.Field(
-        ...,
+        None,
         title="Hz",
         description="Spatial distribution of the z-component of the magnetic field of the mode.",
     )
@@ -372,8 +379,15 @@ class ModeSolverDataset(ElectromagneticFieldDataset):
     @property
     def field_components(self) -> Dict[str, DataArray]:
         """Maps the field components to their associated data."""
-
-        return {field: getattr(self, field) for field in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]}
+        fields = {
+            "Ex": self.Ex,
+            "Ey": self.Ey,
+            "Ez": self.Ez,
+            "Hx": self.Hx,
+            "Hy": self.Hy,
+            "Hz": self.Hz,
+        }
+        return {field_name: field for field_name, field in fields.items() if field is not None}
 
     @property
     def n_eff(self) -> ModeIndexDataArray:
