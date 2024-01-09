@@ -37,7 +37,7 @@ from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
-from tidy3d.web.api.container import BatchData
+from tidy3d.web.api.container import BatchData, Batch
 import tidy3d.material_library as material_library
 from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated, AssertLogLevel
 from ..test_components.test_custom import CUSTOM_MEDIUM
@@ -1709,6 +1709,7 @@ def test_nonlinear_warn(log_capture):
     with AssertLogLevel(log_capture, "WARNING"):
         sim = sim_base.updated_copy(input_structures=[input_struct_nl])
 
+
 @pytest.fixture
 def hide_jax(monkeypatch, request):
     import_orig = builtins.__import__
@@ -1741,6 +1742,7 @@ def test_jax_tracer_import_pass(tmp_path, log_capture):
     try_tracer_import()
     assert_log_level(log_capture, None)
 
+
 def test_inf_IO(tmp_path):
     """test that components can save and load "Infinity" properly in jax fields."""
     fname = str(tmp_path / "box.json")
@@ -1750,11 +1752,11 @@ def test_inf_IO(tmp_path):
     box2 = JaxBox.from_file(fname)
     assert box == box2
 
-def test_grad_pole_residue():
 
+def test_grad_pole_residue():
     def make_sim(eps_inf, a_re, a_im, c_re, c_im):
 
-        jax_box = JaxBox(size=(1,1,1), center=(0,0,0))
+        jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
         a = a_re + 1j * a_im
         c = c_re + 1j * c_im
         pole = (a, c)
@@ -1794,14 +1796,41 @@ def test_grad_pole_residue():
         res = post_process(data)
         return res
 
-    grad_fn = jax.value_and_grad(objective)
-
     EPS_INF = 2.0
     A_RE = -1.0
     A_IM = 1.0
     C_RE = -2.0
     C_IM = 2.0
     args = (EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    num_args = len(args)
 
+    grad_fn = jax.value_and_grad(objective, argnums=tuple(range(num_args)))
+
+    # compute adjoint gradient
     val, grad_adj = grad_fn(*args)
-    print(grad_adj)
+
+    delta = 1e-3
+
+    # assemble simulations for batch to compute numerical gradient
+    sims = {}
+    for i in range(num_args):
+        for pm in (-1, 1):
+            args_ = np.array(args).copy()
+            args_[i] += pm * delta
+            task_name = f"gradnum_{i}_{pm}"
+            sims[task_name] = make_sim(*args_).to_simulation()[0]
+
+    # run batch
+    batch = Batch(simulations=sims)
+    batch_data = batch.run(path_dir="data")
+
+    # assemble numerical gradient
+    grad_num = np.zeros(num_args)
+    for task_name, sim_data in batch_data.items():
+        i, pm = task_name.split("_")[-2:]
+        objective = post_process(sim_data)
+        grad_num[int(i)] += objective * float(pm) / 2 / delta
+
+    print("adjoint: ", grad_adj)
+    print("numerical: ", grad_num)
+    assert np.allclose(grad_adj, grad_num), "Pole residue adjoint grad doesn't match numerical."
