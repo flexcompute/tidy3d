@@ -498,6 +498,15 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
         pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
         return -pole_contrib
 
+    def _eps_model(
+        self, eps_inf: float, poles: List[complex, complex], frequency: float
+    ) -> complex:
+        """Eps model of the JaxPoleResidue."""
+        eps = eps_inf
+        for (a, c) in poles:
+            eps += self._eps_model_1_pole(a, c, frequency)
+        return eps
+
     def store_vjp(
         self,
         grad_data_fwd: FieldData,
@@ -537,8 +546,8 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
                 vjp_c = vjp_eps_complex_f * deps_dc
 
                 # update the VJP of each pole for this frequency
-                vjp_poles[pole_i][0] += complex(jnp.conj(vjp_a))  # TODO: not sure about conj
-                vjp_poles[pole_i][1] += complex(jnp.conj(vjp_c))  # TODO: not sure about conj
+                vjp_poles[pole_i][0] += complex(vjp_a)  # TODO: not sure about conj
+                vjp_poles[pole_i][1] += complex(vjp_c)  # TODO: not sure about conj
 
         return self.updated_copy(
             eps_inf_jax=float(vjp_eps_inf),
