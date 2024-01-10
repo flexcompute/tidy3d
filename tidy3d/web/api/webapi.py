@@ -54,7 +54,7 @@ def run(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -78,7 +78,7 @@ def run(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing solver results for the supplied simulation.
 
     Notes
@@ -156,7 +156,7 @@ def upload(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -211,6 +211,11 @@ def upload(
         if task_type == "HEAT":
             console.log(
                 "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
+                "is subject to change in the future."
+            )
+        elif task_type == "EME":
+            console.log(
+                "Tidy3D's EME solver is currently in the beta stage. Cost of EME simulations "
                 "is subject to change in the future."
             )
         else:
@@ -577,7 +582,7 @@ def load_simulation(
 
     Returns
     -------
-    Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation loaded from downloaded json file.
     """
 
@@ -653,7 +658,7 @@ def load(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:

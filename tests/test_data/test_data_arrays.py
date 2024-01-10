@@ -328,3 +328,22 @@ def test_spatial_data_array():
 
     with pytest.raises(DataError):
         reflected = arr.reflect(axis=2, center=2.5)
+
+
+def test_eme_scalar_field_data_array():
+    x = [1, 2]
+    y = [2, 3, 4]
+    z = [3, 4, 5, 6]
+    f = [2e14, 3e14]
+    mode_index = np.arange(5)
+    port_index = [0, 1]
+    coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, port_index=port_index)
+    _ = td.EMEScalarFieldDataArray((1 + 1j) * np.random.random((2, 3, 4, 2, 5, 2)), coords=coords)
+
+
+def test_eme_smatrix_data_array():
+    mode_index_in = [0, 1]
+    mode_index_out = [0, 1, 2]
+    f = [2e14]
+    coords = dict(f=f, mode_index_out=mode_index_out, mode_index_in=mode_index_in)
+    _ = td.EMESMatrixDataArray((1 + 1j) * np.random.random((1, 3, 2)), coords=coords)

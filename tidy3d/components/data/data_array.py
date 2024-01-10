@@ -28,6 +28,9 @@ DIM_ATTRS = {
     "t": {"units": SECOND, "long_name": "time"},
     "direction": {"long_name": "propagation direction"},
     "mode_index": {"long_name": "mode index"},
+    "port_index": {"long_name": "port index"},
+    "mode_index_in": {"long_name": "mode index in"},
+    "mode_index_out": {"long_name": "mode index out"},
     "theta": {"units": RADIAN, "long_name": "elevation angle"},
     "phi": {"units": RADIAN, "long_name": "azimuth angle"},
     "ux": {"long_name": "normalized kx"},
@@ -650,6 +653,47 @@ class HeatDataArray(DataArray):
     _dims = "T"
 
 
+class EMEScalarFieldDataArray(AbstractSpatialDataArray):
+    """Spatial distribution of a mode in frequency-domain as a function of mode index
+    and port index.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> port_index = [0, 1]
+    >>> coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, port_index=port_index)
+    >>> fd = EMEScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2,5,2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "f", "mode_index", "port_index")
+
+
+class EMESMatrixDataArray(DataArray):
+    """Scattering matrix elements for a fixed pair of ports.
+
+    Example
+    -------
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1, 2]
+    >>> f = [2e14]
+    >>> coords = dict(
+    ...     f=f,
+    ...     mode_index_out=mode_index_out,
+    ...     mode_index_in=mode_index_in,
+    ... )
+    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 3, 2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "mode_index_out", "mode_index_in")
+    _data_attrs = {"long_name": "scattering matrix element"}
+
+
 class ChargeDataArray(DataArray):
     """Charge data array.
 
@@ -744,6 +788,8 @@ DATA_ARRAY_TYPES = [
     FreqModeDataArray,
     TriangleMeshDataArray,
     HeatDataArray,
+    EMEScalarFieldDataArray,
+    EMESMatrixDataArray,
     ChargeDataArray,
     PointDataArray,
     CellDataArray,
