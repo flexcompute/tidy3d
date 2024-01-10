@@ -973,7 +973,8 @@ class ModeSolver(Tidy3dBaseModel):
         This might significantly reduce upload time in the presence of custom mediums.
         """
 
-        # we preserve extracells along the normal direction to ensure
+        # we preserve extracells along the normal direction to ensure there is enough data for
+        # subpixel
         extended_grid = self._get_solver_grid(preserve_layer_behind=True, truncate_symmetry=False)
         grids_1d = extended_grid.boundaries
         new_sim_box = Box.from_bounds(

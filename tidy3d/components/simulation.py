@@ -3563,7 +3563,10 @@ class Simulation(AbstractSimulation):
             # adjust region bounds to perfectly coincide with the grid
             # note, sometimes (when a box already seems to perfrecty align with the grid)
             # this causes the new region to expand one more pixel because of numerical roundoffs
-            aux_box = Box.from_bounds(*new_bounds)
+            # To help to avoid that we shrink new region by a small amount.
+            center = [(bmin + bmax) / 2 for bmin, bmax in zip(*new_bounds)]
+            size = [max(0.0, bmax - bmin - 2 * fp_eps) for bmin, bmax in zip(*new_bounds)]
+            aux_box = Box(center=center, size=size)
             grid_inds = self.grid.discretize_inds(box=aux_box)
 
             new_bounds = [
