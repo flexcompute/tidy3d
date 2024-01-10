@@ -18,6 +18,7 @@ from .data_array import FieldProjectionKSpaceDataArray
 from .data_array import DataArray, DiffractionDataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
 from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
+from .data_array import EMEFreqModeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
@@ -107,7 +108,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """If ``grid_expanded`` not provided and fields data is present, warn that some methods
         will break."""
         field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-        if val is None and any(values[comp] is not None for comp in field_comps):
+        if val is None and any(values.get(comp) is not None for comp in field_comps):
             log.warning(
                 "Monitor data requires 'grid_expanded' to be defined to compute values like "
                 "flux, Poynting and dot product with other data."
@@ -236,7 +237,11 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
     """Collection of electromagnetic fields."""
 
     grid_primal_correction: Union[
-        float, FreqDataArray, TimeDataArray, FreqModeDataArray
+        float,
+        FreqDataArray,
+        TimeDataArray,
+        FreqModeDataArray,
+        EMEFreqModeDataArray,
     ] = pd.Field(
         1.0,
         title="Field correction factor",
@@ -245,7 +250,13 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         "which the data was computed. The factor is applied to fields defined on the primal grid "
         "locations along the normal direction.",
     )
-    grid_dual_correction: Union[float, FreqDataArray, TimeDataArray, FreqModeDataArray] = pd.Field(
+    grid_dual_correction: Union[
+        float,
+        FreqDataArray,
+        TimeDataArray,
+        FreqModeDataArray,
+        EMEFreqModeDataArray,
+    ] = pd.Field(
         1.0,
         title="Field correction factor",
         description="Correction factor that needs to be applied for data corresponding to a 2D "
@@ -690,9 +701,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Mode indices, if available
         modes_in_self = "mode_index" in coords[0]
-        coords[0]["mode_index"].values if modes_in_self else np.zeros(1, dtype=int)
         modes_in_other = "mode_index" in coords[1]
-        coords[1]["mode_index"].values if modes_in_other else np.zeros(1, dtype=int)
 
         keys = (e_1, e_2, h_1, h_2)
         for key in keys:
