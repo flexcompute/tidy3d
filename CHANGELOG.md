@@ -6,6 +6,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 - 2D heat simulations are now fully supported. 
 
+### Added
+- EME solver through `EMESimulation` class.
+
 ### Fixed
 - Better error message when trying to transform a geometry with infinite bounds.
 

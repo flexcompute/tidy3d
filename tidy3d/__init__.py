@@ -138,6 +138,19 @@ from .components.heat.source import UniformHeatSource
 from .components.heat.monitor import TemperatureMonitor
 from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
 
+# EME
+from .components.eme.simulation import EMESimulation
+from .components.eme.data.sim_data import EMESimulationData
+from .components.eme.monitor import EMEMonitor, EMEModeSolverMonitor, EMEFieldMonitor
+from .components.eme.monitor import EMECoefficientMonitor
+from .components.data.data_array import EMESMatrixDataArray, EMEScalarFieldDataArray
+from .components.data.data_array import EMECoefficientDataArray
+from .components.data.data_array import EMEScalarModeFieldDataArray, EMEModeIndexDataArray
+from .components.eme.data.dataset import EMEFieldDataset, EMECoefficientDataset, EMESMatrixDataset
+from .components.eme.data.dataset import EMEModeSolverDataset
+from .components.eme.data.monitor_data import EMEModeSolverData, EMEFieldData, EMECoefficientData
+from .components.eme.grid import EMEGrid, EMEUniformGrid, EMECompositeGrid, EMEExplicitGrid
+
 
 def set_logging_level(level: str) -> None:
     """Raise a warning here instead of setting the logging level."""
@@ -336,4 +349,26 @@ __all__ = [
     "BenklerConformalMeshSpec",
     "StaircasingConformalMeshSpec",
     "HeuristicConformalMeshSpec",
+    "EMESimulation",
+    "EMESimulationData",
+    "EMEMonitor",
+    "EMEModeSolverMonitor",
+    "EMEFieldMonitor",
+    "EMESMatrixDataArray",
+    "EMEFieldDataset",
+    "EMECoefficientDataset",
+    "EMESMatrixDataset",
+    "EMEModeSolverData",
+    "EMEFieldData",
+    "EMECoefficientData",
+    "EMECoefficientMonitor",
+    "EMEGrid",
+    "EMEUniformGrid",
+    "EMECompositeGrid",
+    "EMEExplicitGrid",
+    "EMEScalarFieldDataArray",
+    "EMEScalarModeFieldDataArray",
+    "EMEModeIndexDataArray",
+    "EMECoefficientDataArray",
+    "EMEModeSolverDataset",
 ]

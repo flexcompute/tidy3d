@@ -172,7 +172,7 @@ class Job(WebContainer):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
 
@@ -265,7 +265,7 @@ class Job(WebContainer):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
         return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
@@ -383,8 +383,8 @@ class BatchData(Tidy3dBaseModel):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
-            for each Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+            for each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
         """
 
         batch_file = Batch._batch_path(path_dir=path_dir)
@@ -487,8 +487,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for
-            each Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData] for
+            each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
 
         Note
         ----
@@ -734,8 +734,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for each
-            Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
+            Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
 
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
