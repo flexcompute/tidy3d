@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
+from abc import ABC, abstractmethod
 
 import pydantic.v1 as pydantic
 import numpy as np
@@ -92,7 +93,1208 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
-class Simulation(AbstractSimulation):
+class AbstractYeeGridSimulation(AbstractSimulation, ABC):
+    """
+    Abstract class for a simulation involving electromagnetic fields defined on a Yee grid.
+    """
+
+    lumped_elements: Tuple[LumpedElementType, ...] = pydantic.Field(
+        (),
+        title="Lumped Elements",
+        description="Tuple of lumped elements in the simulation. "
+        "Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
+    )
+    """
+    Tuple of lumped elements in the simulation.
+    """
+
+    grid_spec: GridSpec = pydantic.Field(
+        GridSpec(),
+        title="Grid Specification",
+        description="Specifications for the simulation grid along each of the three directions.",
+    )
+    """
+    Specifications for the simulation grid along each of the three directions.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+         Simulation(
+            ...
+             grid_spec=GridSpec(
+                grid_x = AutoGrid(min_steps_per_wvl = 20),
+                grid_y = AutoGrid(min_steps_per_wvl = 20),
+                grid_z = AutoGrid(min_steps_per_wvl = 20)
+            ),
+            ...
+         )
+
+    See Also
+    --------
+
+    :class:`GridSpec`
+        Collective grid specification for all three dimensions.
+
+    :class:`UniformGrid`
+        Uniform 1D grid.
+
+    :class:`AutoGrid`
+        Specification for non-uniform grid along a given dimension.
+
+    **Notebooks:**
+        * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
+    """
+
+    subpixel: bool = pydantic.Field(
+        True,
+        title="Subpixel Averaging",
+        description="If ``True``, uses subpixel averaging of the permittivity "
+        "based on structure definition, resulting in much higher accuracy for a given grid size.",
+    )
+    """
+    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
+    higher accuracy for a given grid size.,
+
+    **1D Illustration**
+
+    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
+    spatial discretization :math:`\\Delta z = 25\\text{nm}` compute the effective permittivity of each grid point as the
+    average permittivity between the grid points. A simplified equation based on the ratio :math:`\\eta` between the
+    permittivity of the two materials at the interface in this case:
+
+    .. math::
+
+        \\epsilon_{eff} = \\eta \\epsilon_{si} + (1 - \\eta) \\epsilon_{air}
+
+    .. TODO check the actual implementation to be accurate here.
+
+    .. image:: ../../_static/img/subpixel_permittivity_1d.png
+
+    However, in this 1D case, this averaging is accurate because the dominant electric field is parallel to the
+    dielectric grid points.
+
+    You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
+    `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel
+    -averaging/>`_.
+
+    **2D & 3D Usage Caveats**
+
+    *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
+        incident electric field on the interface.
+
+    *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
+        spatial orientations.
+
+
+    See Also
+    --------
+
+    **Lectures:**
+        *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
+        *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
+    """
+
+    @pydantic.validator("lumped_elements", always=True)
+    @skip_if_fields_missing(["structures"])
+    def _validate_num_lumped_elements(cls, val, values):
+        """Error if too many lumped elements present."""
+
+        if val is None:
+            return val
+        structures = values.get("structures")
+        mediums = {structure.medium for structure in structures}
+        total_num_mediums = len(val) + len(mediums)
+        if total_num_mediums > MAX_NUM_MEDIUMS:
+            raise ValidationError(
+                f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct lumped elements and structures."
+                f"{total_num_mediums} were supplied."
+            )
+
+        return val
+
+    @pydantic.validator("lumped_elements")
+    @skip_if_fields_missing(["size"])
+    def _check_3d_simulation_with_lumped_elements(cls, val, values):
+        """Error if Simulation contained lumped elements and is not a 3D simulation"""
+        size = values.get("size")
+        if val and size.count(0.0) > 0:
+            raise ValidationError(
+                f"'{cls.__name__}' must be a 3D simulation when a 'LumpedElement' is present."
+            )
+        return val
+
+    @pydantic.validator("grid_spec", always=True)
+    @abstractmethod
+    def _validate_auto_grid_wavelength(cls, val, values):
+        """Check that wavelength can be defined if there is auto grid spec."""
+        pass
+
+    def _monitor_num_cells(self, monitor: Monitor) -> int:
+        """Total number of cells included in monitor based on simulation grid."""
+
+        def num_cells_in_monitor(monitor: Monitor) -> int:
+            """Get the number of measurement cells in a monitor given the simulation grid and
+            downsampling."""
+            if not self.intersects(monitor):
+                # Monitor is outside of simulation domain; can happen e.g. for integration surfaces
+                return 0
+            num_cells = self.discretize_monitor(monitor).num_cells
+            # take monitor downsampling into account
+            num_cells = monitor.downsampled_num_cells(num_cells)
+            return np.prod(np.array(num_cells, dtype=np.int64))
+
+        if isinstance(monitor, SurfaceIntegrationMonitor):
+            return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
+        return num_cells_in_monitor(monitor)
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        source_alpha: float = None,
+        monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        **patch_kwargs,
+    ) -> Ax:
+        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
+
+        """
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+
+        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_eps(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        freq: float = None,
+        alpha: float = None,
+        source_alpha: float = None,
+        monitor_alpha: float = None,
+        lumped_element_alpha: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        source_alpha : float = None
+            Opacity of the sources. If ``None``, uses Tidy3d default.
+        monitor_alpha : float = None
+            Opacity of the monitors. If ``None``, uses Tidy3d default.
+        lumped_element_alpha : float = None
+            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+
+        See Also
+        ---------
+
+        **Notebooks**
+            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
+        """
+
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+
+        ax = self.plot_structures_eps(
+            freq=freq,
+            cbar=True,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+        )
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
+        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
+        ax = self.plot_lumped_elements(
+            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
+        )
+        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_structures_eps(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        freq: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        reverse: bool = False,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> Ax:
+        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
+        The permittivity is plotted in grayscale based on its value at the specified frequency.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        freq : float = None
+            Frequency to evaluate the relative permittivity of all mediums.
+            If not specified, evaluates at infinite frequency.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
+        cbar : bool = True
+            Whether to plot a colorbar for the relative permittivity.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        hlim, vlim = Scene._get_plot_lims(
+            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+
+        return self.scene.plot_structures_eps(
+            freq=freq,
+            cbar=cbar,
+            alpha=alpha,
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            hlim=hlim,
+            vlim=vlim,
+            grid=self.grid,
+            reverse=reverse,
+        )
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_pml(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's absorbing boundaries
+        on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
+        for pml_box in pml_boxes:
+            pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        return ax
+
+    # candidate for removal in 3.0
+    @cached_property
+    def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Simulation bounds including the PML regions."""
+        log.warning(
+            "'Simulation.bounds_pml' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.simulation_bounds' instead."
+        )
+        return self.simulation_bounds
+
+    @cached_property
+    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+        """Simulation bounds including the PML regions."""
+        pml_thick = self.pml_thicknesses
+        bounds_in = self.bounds
+        bounds_min = tuple((bmin - pml[0] for bmin, pml in zip(bounds_in[0], pml_thick)))
+        bounds_max = tuple((bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)))
+
+        return (bounds_min, bounds_max)
+
+    def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
+        """make a list of Box objects representing the pml to plot on plane."""
+        pml_boxes = []
+        pml_thicks = self.pml_thicknesses
+        for pml_axis, num_layers_dim in enumerate(self.num_pml_layers):
+            if pml_axis == normal_axis:
+                continue
+            for sign, pml_height, num_layers in zip((-1, 1), pml_thicks[pml_axis], num_layers_dim):
+                if num_layers == 0:
+                    continue
+                pml_box = self._make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
+                pml_boxes.append(pml_box)
+        return pml_boxes
+
+    def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
+        """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
+        rmin, rmax = (list(bounds) for bounds in self.simulation_bounds)
+        if sign == -1:
+            rmax[pml_axis] = rmin[pml_axis] + pml_height
+        else:
+            rmin[pml_axis] = rmax[pml_axis] - pml_height
+        pml_box = Box.from_bounds(rmin=rmin, rmax=rmax)
+
+        # if any dimension of the sim has size 0, set the PML to a very small size along that dim
+        new_size = list(pml_box.size)
+        for dim_index, sim_size in enumerate(self.size):
+            if sim_size == 0.0:
+                new_size[dim_index] = PML_HEIGHT_FOR_0_DIMS
+        pml_box = pml_box.updated_copy(size=new_size)
+
+        return pml_box
+
+    # candidate for removal in 3.0
+    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
+        """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
+
+        log.warning(
+            "'Simulation.eps_bounds()' will be removed in Tidy3D 3.0. "
+            "Use 'Simulation.scene.eps_bounds()' instead."
+        )
+        return self.scene.eps_bounds(freq=freq)
+
+    @cached_property
+    def pml_thicknesses(self) -> List[Tuple[float, float]]:
+        """Thicknesses (um) of absorbers in all three axes and directions (-, +)
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            List containing the absorber thickness (micron) in - and + boundaries.
+        """
+        num_layers = self.num_pml_layers
+        pml_thicknesses = []
+        for num_layer, boundaries in zip(num_layers, self.grid.boundaries.to_list):
+            thick_l = boundaries[num_layer[0]] - boundaries[0]
+            thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
+            pml_thicknesses.append((thick_l, thick_r))
+        return pml_thicknesses
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_lumped_elements(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's lumped elements on a plane defined by one
+        nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the lumped element, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        bounds = self.bounds
+        for element in self.lumped_elements:
+            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+        return ax
+
+    @add_ax_if_none
+    def plot_grid(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+        kwargs.setdefault("linewidth", 0.2)
+        kwargs.setdefault("colors", "black")
+        cell_boundaries = self.grid.boundaries
+        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
+        boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
+        boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
+        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
+        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
+        segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
+        line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
+        segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
+        line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
+
+        # Plot grid
+        ax.add_collection(line_segments_x)
+        ax.add_collection(line_segments_y)
+
+        # Plot bounding boxes of override structures
+        plot_params = plot_params_override_structures.include_kwargs(
+            linewidth=2 * kwargs["linewidth"], edgecolor=kwargs["colors"]
+        )
+        for structure in self.grid_spec.override_structures:
+            bounds = list(zip(*structure.geometry.bounds))
+            _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
+            xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
+            rect = mpl.patches.Rectangle(
+                xy=(xmin, ymin),
+                width=(xmax - xmin),
+                height=(ymax - ymin),
+                **plot_params.to_kwargs(),
+            )
+            ax.add_patch(rect)
+
+        ax = Scene._set_plot_bounds(
+            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        )
+
+        return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_boundaries(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the simulation boundary conditions as lines on a plane
+           defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        def set_plot_params(boundary_edge, lim, side, thickness):
+            """Return the line plot properties such as color and opacity based on the boundary"""
+            if isinstance(boundary_edge, PECBoundary):
+                plot_params = plot_params_pec.copy(deep=True)
+            elif isinstance(boundary_edge, PMCBoundary):
+                plot_params = plot_params_pmc.copy(deep=True)
+            elif isinstance(boundary_edge, BlochBoundary):
+                plot_params = plot_params_bloch.copy(deep=True)
+            else:
+                plot_params = PlotParams(alpha=0)
+
+            # expand axis limit so that the axis ticks and labels aren't covered
+            new_lim = lim
+            if plot_params.alpha != 0:
+                if side == -1:
+                    new_lim = lim - thickness
+                elif side == 1:
+                    new_lim = lim + thickness
+
+            return plot_params, new_lim
+
+        boundaries = self.boundary_spec.to_list
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
+
+        umin, umax = ax.get_xlim()
+        vmin, vmax = ax.get_ylim()
+
+        size_factor = 1.0 / 35.0
+        thickness_u = (umax - umin) * size_factor
+        thickness_v = (vmax - vmin) * size_factor
+
+        # boundary along the u axis, minus side
+        plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umin - thickness_u, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the u axis, plus side
+        plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umax, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, minus side
+        plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmin - thickness_v),
+            width=(umax - umin),
+            height=thickness_v,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, plus side
+        plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmax),
+            width=(umax - umin),
+            height=thickness_v,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax.set_xlim([ulim_minus, ulim_plus])
+        ax.set_ylim([vlim_minus, vlim_plus])
+
+        return ax
+
+    # TODO: not yet supported
+    # def plot_3d(self, width=800, height=800) -> None:
+    #    """Render 3D plot of ``Simulation`` (in jupyter notebook only).
+    #    Parameters
+    #    ----------
+    #    width : float = 800
+    #        width of the 3d view dom's size
+    #    height : float = 800
+    #        height of the 3d view dom's size
+    #
+    #    """
+    #    return plot_sim_3d(self, width=width, height=height)
+
+    @cached_property
+    def grid(self) -> Grid:
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        :class:`.Grid`
+            :class:`.Grid` storing the spatial locations relevant to the simulation.
+        """
+
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.structures
+
+        grid = self.grid_spec.make_grid(
+            structures=structures,
+            symmetry=self.symmetry,
+            periodic=self._periodic,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+        )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid
+
+    @cached_property
+    def num_cells(self) -> int:
+        """Number of cells in the simulation.
+
+        Returns
+        -------
+        int
+            Number of yee cells in the simulation.
+        """
+
+        return np.prod(self.grid.num_cells, dtype=np.int64)
+
+    def _subgrid(self, span_inds: np.ndarray, grid: Grid = None):
+        """Take a subgrid of the simulation grid with cell span defined by ``span_inds`` along the
+        three dimensions. Optionally, a grid different from the simulation grid can be provided.
+        The ``span_inds`` can also extend beyond the grid, in which case the grid is padded based
+        on the boundary conditions of the simulation along the different dimensions."""
+
+        if not grid:
+            grid = self.grid
+
+        boundary_dict = {}
+        for idim, (dim, periodic) in enumerate(zip("xyz", self._periodic)):
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = grid.extended_subspace(idim, ind_beg, ind_end + 1, periodic)
+        return Grid(boundaries=Coords(**boundary_dict))
+
+    @cached_property
+    def _periodic(self) -> Tuple[bool, bool, bool]:
+        """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
+        We check on both sides but in practice there should be no cases in which a periodic/Bloch
+        BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
+        periodic, in which case we allow PEC/PMC on the other side, but we replace the periodic
+        boundary with another PEC/PMC plane upon initialization."""
+        periodic = []
+        for bcs_1d in self.boundary_spec.to_list:
+            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+        return periodic
+
+    @cached_property
+    def num_pml_layers(self) -> List[Tuple[float, float]]:
+        """Number of absorbing layers in all three axes and directions (-, +).
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+        """
+        num_layers = [[0, 0], [0, 0], [0, 0]]
+
+        for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
+            for idx_j, boundary in enumerate(boundary1d):
+                if isinstance(boundary, (PML, StablePML, Absorber)):
+                    num_layers[idx_i][idx_j] = boundary.num_layers
+
+        return num_layers
+
+    def _snap_zero_dim(self, grid: Grid):
+        """Snap a grid to the simulation center along any dimension along which simulation is
+        effectively 0D, defined as having a single pixel. This is more general than just checking
+        size = 0."""
+        size_snapped = [
+            size if num_cells > 1 else 0 for num_cells, size in zip(self.grid.num_cells, self.size)
+        ]
+        return grid.snap_to_box_zero_dim(Box(center=self.center, size=size_snapped))
+
+    def _discretize_grid(self, box: Box, grid: Grid, extend: bool = False) -> Grid:
+        """Grid containing only cells that intersect with a :class:`Box`.
+
+        As opposed to ``Simulation.discretize``, this function operates on a ``grid``
+        which may not be the grid of the simulation.
+        """
+
+        if not self.intersects(box):
+            log.error(f"Box {box} is outside simulation, cannot discretize.")
+
+        span_inds = grid.discretize_inds(box=box, extend=extend)
+        return self._subgrid(span_inds=span_inds, grid=grid)
+
+    def _discretize_inds_monitor(self, monitor: Monitor):
+        """Start and stopping indexes for the cells where data needs to be recorded to fully cover
+        a ``monitor``. This is used during the solver run. The final grid on which a monitor data
+        lives is computed in ``discretize_monitor``, with the difference being that 0-sized
+        dimensions of the monitor or the simulation are snapped in post-processing."""
+
+        # Expand monitor size slightly to break numerical precision in favor of always having
+        # enough data to span the full monitor.
+        expand_size = [size + fp_eps if size > fp_eps else size for size in monitor.size]
+        box_expanded = Box(center=monitor.center, size=expand_size)
+        # Discretize without extension for now
+        span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
+
+        if any(ind[0] >= ind[1] for ind in span_inds):
+            # At least one dimension has no indexes inside the grid, e.g. monitor is entirely
+            # outside of the grid
+            return span_inds
+
+        # Now add extensions, which are specific for monitors and are determined such that data
+        # colocated to grid boundaries can be interpolated anywhere inside the monitor.
+        # We always need to expand on the right.
+        span_inds[:, 1] += 1
+        # Non-colocating monitors also need to expand on the left.
+        if not monitor.colocate:
+            span_inds[:, 0] -= 1
+        return span_inds
+
+    def discretize_monitor(self, monitor: Monitor) -> Grid:
+        """Grid on which monitor data corresponding to a given monitor will be computed."""
+        span_inds = self._discretize_inds_monitor(monitor)
+        grid_snapped = self._subgrid(span_inds=span_inds).snap_to_box_zero_dim(monitor)
+        grid_snapped = self._snap_zero_dim(grid=grid_snapped)
+        return grid_snapped
+
+    def discretize(self, box: Box, extend: bool = False) -> Grid:
+        """Grid containing only cells that intersect with a :class:`.Box`.
+
+        Parameters
+        ----------
+        box : :class:`.Box`
+            Rectangular geometry within simulation to discretize.
+        extend : bool = False
+            If ``True``, ensure that the returned indexes extend sufficiently in every direction to
+            be able to interpolate any field component at any point within the ``box``, for field
+            components sampled on the Yee grid.
+
+        Returns
+        -------
+        :class:`Grid`
+            The FDTD subgrid containing simulation points that intersect with ``box``.
+        """
+        return self._discretize_grid(box=box, grid=self.grid, extend=extend)
+
+    def epsilon(
+        self,
+        box: Box,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at volume specified by box and freq.
+
+        Parameters
+        ----------
+        box : :class:`.Box`
+            Rectangular geometry specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
+        """
+
+        sub_grid = self.discretize(box)
+        return self.epsilon_on_grid(grid=sub_grid, coord_key=coord_key, freq=freq)
+
+    def epsilon_on_grid(
+        self,
+        grid: Grid,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at a given freq on a given grid.
+
+        Parameters
+        ----------
+        grid : :class:`.Grid`
+            Grid specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+        """
+
+        grid_cells = np.prod(grid.num_cells)
+        num_structures = len(self.structures)
+        if grid_cells > NUM_CELLS_WARN_EPSILON:
+            log.warning(
+                f"Requested grid contains {int(grid_cells):.2e} grid cells. "
+                "Epsilon calculation may be slow."
+            )
+        if num_structures > NUM_STRUCTURES_WARN_EPSILON:
+            log.warning(
+                f"Simulation contains {num_structures:.2e} structures. "
+                "Epsilon calculation may be slow."
+            )
+
+        def get_eps(structure: Structure, frequency: float, coords: Coords):
+            """Select the correct epsilon component if field locations are requested."""
+            if coord_key[0] != "E":
+                return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
+            row = ["x", "y", "z"].index(coord_key[1])
+            if len(coord_key) == 2:  # diagonal component in case of Ex, Ey, and Ez
+                col = row
+            else:  # off-diagonal component in case of Exy, Exz, Eyx, etc
+                col = ["x", "y", "z"].index(coord_key[2])
+            return structure.eps_comp(row, col, frequency, coords)
+
+        def make_eps_data(coords: Coords):
+            """returns epsilon data on grid of points defined by coords"""
+            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
+            eps_background = get_eps(
+                structure=self.scene.background_structure, frequency=freq, coords=coords
+            )
+            shape = tuple(len(array) for array in arrays)
+            eps_array = eps_background * np.ones(shape, dtype=complex)
+            # replace 2d materials with volumetric equivalents
+            with log as consolidated_logger:
+                for structure in self.volumetric_structures:
+                    # Indexing subset within the bounds of the structure
+
+                    inds = structure.geometry._inds_inside_bounds(*arrays)
+
+                    # Get permittivity on meshgrid over the reduced coordinates
+                    coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+                    if any(coords.size == 0 for coords in coords_reduced):
+                        continue
+
+                    red_coords = Coords(**dict(zip("xyz", coords_reduced)))
+                    eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                    if structure.medium.nonlinear_spec is not None:
+                        consolidated_logger.warning(
+                            "Evaluating permittivity of a nonlinear "
+                            "medium ignores the nonlinearity."
+                        )
+
+                    if isinstance(structure.geometry, TriangleMesh):
+                        consolidated_logger.warning(
+                            "Client-side permittivity of a 'TriangleMesh' may be "
+                            "inaccurate if the mesh is not unionized. We recommend unionizing "
+                            "all meshes before import. A 'PermittivityMonitor' can be used to "
+                            "obtain the true permittivity and check that the surface mesh is "
+                            "loaded correctly."
+                        )
+
+                    # Update permittivity array at selected indexes within the geometry
+                    is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                    eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
+
+            coords = dict(zip("xyz", arrays))
+            return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
+
+        # combine all data into dictionary
+        if coord_key[0] == "E":
+            # off-diagonal components are sampled at respective locations (eg. `eps_xy` at `Ex`)
+            coords = grid[coord_key[0:2]]
+        else:
+            coords = grid[coord_key]
+        return make_eps_data(coords)
+
+    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents, using ``grid`` as the simulation grid."""
+
+        if (
+            not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
+            and not self.lumped_elements
+        ):
+            return self.structures
+
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
+            """Get grid size around the 2D material."""
+            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
+                axis
+            ]
+            # When 1 dl is requested it is assumed that only an approximate value is needed
+            # before the 2D material has been snapped to the grid
+            if num_dls == 1:
+                return [np.mean(dls)]
+
+            # When 2 dls are requested the 2D geometry should have been snapped to grid,
+            # so this represents the exact adjacent grid spacing
+            if len(dls) != num_dls:
+                raise Tidy3dError(
+                    "Failed to detect grid size around the 2D material. "
+                    "Can't generate volumetric equivalent for this simulation. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )
+            return dls
+
+        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
+            """Snap a 2D material to the Yee grid."""
+            center = get_bounds(geom, axis)[0]
+            assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
+            snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
+            return set_bounds(geom, (snapped_center, snapped_center), axis)
+
+        lumped_structures = []
+        for lumped_element in self.lumped_elements:
+            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
+
+            if isinstance(lumped_element, LumpedResistor):
+                conductivity = lumped_element.sheet_conductance
+
+                if tan_dirs[0] == lumped_element.voltage_axis:
+                    medium_dict = {
+                        "ss": Medium(conductivity=conductivity),
+                        "tt": self.medium,
+                    }
+                else:
+                    medium_dict = {
+                        "tt": Medium(conductivity=conductivity),
+                        "ss": self.medium,
+                    }
+                lumped_structures.append(
+                    Structure(
+                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
+                        medium=Medium2D(**medium_dict),
+                    )
+                )
+
+        # Begin volumetric structures grid
+        all_structures = list(self.structures) + lumped_structures
+
+        # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
+        placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
+        simulation_placeholder_geometry = self.geometry.updated_copy(
+            center=self.geometry.center, size=placeholder_size
+        )
+
+        simulation_background = Structure(
+            geometry=simulation_placeholder_geometry, medium=self.medium
+        )
+        background_structures = [simulation_background]
+        new_structures = []
+        for structure in all_structures:
+            if not isinstance(structure.medium, Medium2D):
+                # found a 3D material; keep it
+                background_structures.append(structure)
+                new_structures.append(structure)
+                continue
+            # otherwise, found a 2D material; replace it with volumetric equivalent
+            axis = structure.geometry._normal_2dmaterial
+            geometry = structure.geometry
+
+            # subdivide
+            avg_axis_dl = get_dls(geometry, axis, 1)[0]
+            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
+            # Create and add volumetric equivalents
+            background_structures_temp = []
+            for subdivided_geometry in subdivided_geometries:
+                # Snap to the grid and create volumetric equivalent
+                snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
+                snapped_center = get_bounds(snapped_geometry, axis)[0]
+                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
+                adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
+
+                # Create the new volumetric medium
+                new_medium = structure.medium.volumetric_equivalent(
+                    axis=axis, adjacent_media=adjacent_media, adjacent_dls=dls
+                )
+
+                new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
+                temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
+
+                if structure.medium.is_pec:
+                    pec_plus = increment_float(snapped_center, 1.0)
+                    pec_minus = increment_float(snapped_center, -1.0)
+                    new_bounds = (pec_minus, pec_plus)
+                new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+
+                new_structures.append(new_structure)
+                background_structures_temp.append(temp_structure)
+
+            background_structures += background_structures_temp
+
+        return tuple(new_structures)
+
+    @cached_property
+    def volumetric_structures(self) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+        return self._volumetric_structures_grid(self.grid)
+
+    def suggest_mesh_overrides(self, **kwargs) -> List[MeshOverrideStructure]:
+        """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
+        from structures in the simulation.
+        """
+        mesh_overrides = []
+
+        # For now we can suggest MeshOverrideStructures for lumped elements.
+        for lumped_element in self.lumped_elements:
+            mesh_overrides.extend(lumped_element.to_mesh_overrides())
+
+        return mesh_overrides
+
+
+class Simulation(AbstractYeeGridSimulation):
     """
     Custom implementation of Maxwell’s equations which represents the physical model to be solved using the FDTD
     method.
@@ -1611,35 +2813,6 @@ class Simulation(AbstractSimulation):
 
         return val
 
-    @pydantic.validator("lumped_elements", always=True)
-    @skip_if_fields_missing(["structures"])
-    def _validate_num_lumped_elements(cls, val, values):
-        """Error if too many lumped elements present."""
-
-        if val is None:
-            return val
-        structures = values.get("structures")
-        mediums = {structure.medium for structure in structures}
-        total_num_mediums = len(val) + len(mediums)
-        if total_num_mediums > MAX_NUM_MEDIUMS:
-            raise ValidationError(
-                f"Tidy3D only supports {MAX_NUM_MEDIUMS} distinct lumped elements and structures."
-                f"{total_num_mediums} were supplied."
-            )
-
-        return val
-
-    @pydantic.validator("lumped_elements")
-    @skip_if_fields_missing(["size"])
-    def _check_3d_simulation_with_lumped_elements(cls, val, values):
-        """Error if Simulation contained lumped elements and is not a 3D simulation"""
-        size = values.get("size")
-        if val and size.count(0.0) > 0:
-            raise ValidationError(
-                f"'{cls.__name__}' must be a 3D simulation when a 'LumpedElement' is present."
-            )
-        return val
-
     """ Post-init validators """
 
     def _post_init_validators(self) -> None:
@@ -1881,24 +3054,6 @@ class Simulation(AbstractSimulation):
             storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=self.tmesh))
             data_size[monitor.name] = storage_size
         return data_size
-
-    def _monitor_num_cells(self, monitor: Monitor) -> int:
-        """Total number of cells included in monitor based on simulation grid."""
-
-        def num_cells_in_monitor(monitor: Monitor) -> int:
-            """Get the number of measurement cells in a monitor given the simulation grid and
-            downsampling."""
-            if not self.intersects(monitor):
-                # Monitor is outside of simulation domain; can happen e.g. for integration surfaces
-                return 0
-            num_cells = self.discretize_monitor(monitor).num_cells
-            # take monitor downsampling into account
-            num_cells = monitor.downsampled_num_cells(num_cells)
-            return np.prod(np.array(num_cells, dtype=np.int64))
-
-        if isinstance(monitor, SurfaceIntegrationMonitor):
-            return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
-        return num_cells_in_monitor(monitor)
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
@@ -2434,607 +3589,6 @@ class Simulation(AbstractSimulation):
 
     """ Plotting """
 
-    @equal_aspect
-    @add_ax_if_none
-    def plot(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        lumped_element_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        **patch_kwargs,
-    ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        source_alpha : float = None
-            Opacity of the sources. If ``None``, uses Tidy3d default.
-        monitor_alpha : float = None
-            Opacity of the monitors. If ``None``, uses Tidy3d default.
-        lumped_element_alpha : float = None
-            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-
-        See Also
-        ---------
-
-        **Notebooks**
-            * `Visualizing geometries in Tidy3D: Plotting Materials <../../notebooks/VizSimulation.html#Plotting-Materials>`_
-
-        """
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-
-        ax = self.plot_structures(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
-        ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
-        )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        lumped_element_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
-        alpha : float = None
-            Opacity of the structures being plotted.
-            Defaults to the structure default alpha.
-        source_alpha : float = None
-            Opacity of the sources. If ``None``, uses Tidy3d default.
-        monitor_alpha : float = None
-            Opacity of the monitors. If ``None``, uses Tidy3d default.
-        lumped_element_alpha : float = None
-            Opacity of the lumped elements. If ``None``, uses Tidy3d default.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-
-        See Also
-        ---------
-
-        **Notebooks**
-            * `Visualizing geometries in Tidy3D: Plotting Permittivity <../../notebooks/VizSimulation.html#Plotting-Permittivity>`_
-        """
-
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-
-        ax = self.plot_structures_eps(
-            freq=freq,
-            cbar=True,
-            alpha=alpha,
-            ax=ax,
-            x=x,
-            y=y,
-            z=z,
-            hlim=hlim,
-            vlim=vlim,
-        )
-        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=source_alpha)
-        ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=monitor_alpha)
-        ax = self.plot_lumped_elements(
-            ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, alpha=lumped_element_alpha
-        )
-        ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = self.plot_pml(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-        ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_structures_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        cbar: bool = True,
-        reverse: bool = False,
-        ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
-        reverse : bool = False
-            If ``False``, the highest permittivity is plotted in black.
-            If ``True``, it is plotteed in white (suitable for black backgrounds).
-        cbar : bool = True
-            Whether to plot a colorbar for the relative permittivity.
-        alpha : float = None
-            Opacity of the structures being plotted.
-            Defaults to the structure default alpha.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        hlim, vlim = Scene._get_plot_lims(
-            bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-
-        return self.scene.plot_structures_eps(
-            freq=freq,
-            cbar=cbar,
-            alpha=alpha,
-            ax=ax,
-            x=x,
-            y=y,
-            z=z,
-            hlim=hlim,
-            vlim=vlim,
-            grid=self.grid,
-            reverse=reverse,
-        )
-
-    # candidate for removal in 3.0
-    def eps_bounds(self, freq: float = None) -> Tuple[float, float]:
-        """Compute range of (real) permittivity present in the simulation at frequency "freq"."""
-
-        log.warning(
-            "'Simulation.eps_bounds()' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.scene.eps_bounds()' instead."
-        )
-        return self.scene.eps_bounds(freq=freq)
-
-    @cached_property
-    def num_pml_layers(self) -> List[Tuple[float, float]]:
-        """Number of absorbing layers in all three axes and directions (-, +).
-
-        Returns
-        -------
-        List[Tuple[float, float]]
-            List containing the number of absorber layers in - and + boundaries.
-        """
-        num_layers = [[0, 0], [0, 0], [0, 0]]
-
-        for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
-            for idx_j, boundary in enumerate(boundary1d):
-                if isinstance(boundary, (PML, StablePML, Absorber)):
-                    num_layers[idx_i][idx_j] = boundary.num_layers
-
-        return num_layers
-
-    @cached_property
-    def pml_thicknesses(self) -> List[Tuple[float, float]]:
-        """Thicknesses (um) of absorbers in all three axes and directions (-, +)
-
-        Returns
-        -------
-        List[Tuple[float, float]]
-            List containing the absorber thickness (micron) in - and + boundaries.
-        """
-        num_layers = self.num_pml_layers
-        pml_thicknesses = []
-        for num_layer, boundaries in zip(num_layers, self.grid.boundaries.to_list):
-            thick_l = boundaries[num_layer[0]] - boundaries[0]
-            thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
-            pml_thicknesses.append((thick_l, thick_r))
-        return pml_thicknesses
-
-    # candidate for removal in 3.0
-    @cached_property
-    def bounds_pml(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-        """Simulation bounds including the PML regions."""
-        log.warning(
-            "'Simulation.bounds_pml' will be removed in Tidy3D 3.0. "
-            "Use 'Simulation.simulation_bounds' instead."
-        )
-        return self.simulation_bounds
-
-    @cached_property
-    def simulation_bounds(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-        """Simulation bounds including the PML regions."""
-        pml_thick = self.pml_thicknesses
-        bounds_in = self.bounds
-        bounds_min = tuple((bmin - pml[0] for bmin, pml in zip(bounds_in[0], pml_thick)))
-        bounds_max = tuple((bmax + pml[1] for bmax, pml in zip(bounds_in[1], pml_thick)))
-
-        return (bounds_min, bounds_max)
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_pml(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's absorbing boundaries
-        on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        pml_boxes = self._make_pml_boxes(normal_axis=normal_axis)
-        for pml_box in pml_boxes:
-            pml_box.plot(x=x, y=y, z=z, ax=ax, **plot_params_pml.to_kwargs())
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-        return ax
-
-    def _make_pml_boxes(self, normal_axis: Axis) -> List[Box]:
-        """make a list of Box objects representing the pml to plot on plane."""
-        pml_boxes = []
-        pml_thicks = self.pml_thicknesses
-        for pml_axis, num_layers_dim in enumerate(self.num_pml_layers):
-            if pml_axis == normal_axis:
-                continue
-            for sign, pml_height, num_layers in zip((-1, 1), pml_thicks[pml_axis], num_layers_dim):
-                if num_layers == 0:
-                    continue
-                pml_box = self._make_pml_box(pml_axis=pml_axis, pml_height=pml_height, sign=sign)
-                pml_boxes.append(pml_box)
-        return pml_boxes
-
-    def _make_pml_box(self, pml_axis: Axis, pml_height: float, sign: int) -> Box:
-        """Construct a :class:`.Box` representing an arborbing boundary to be plotted."""
-        rmin, rmax = (list(bounds) for bounds in self.simulation_bounds)
-        if sign == -1:
-            rmax[pml_axis] = rmin[pml_axis] + pml_height
-        else:
-            rmin[pml_axis] = rmax[pml_axis] - pml_height
-        pml_box = Box.from_bounds(rmin=rmin, rmax=rmax)
-
-        # if any dimension of the sim has size 0, set the PML to a very small size along that dim
-        new_size = list(pml_box.size)
-        for dim_index, sim_size in enumerate(self.size):
-            if sim_size == 0.0:
-                new_size[dim_index] = PML_HEIGHT_FOR_0_DIMS
-        pml_box = pml_box.updated_copy(size=new_size)
-
-        return pml_box
-
-    @add_ax_if_none
-    def plot_grid(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        **kwargs,
-    ) -> Ax:
-        """Plot the cell boundaries as lines on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib ``LineCollection``.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        kwargs.setdefault("linewidth", 0.2)
-        kwargs.setdefault("colors", "black")
-        cell_boundaries = self.grid.boundaries
-        axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (axis_x, axis_y) = self.pop_axis([0, 1, 2], axis=axis)
-        boundaries_x = cell_boundaries.dict()["xyz"[axis_x]]
-        boundaries_y = cell_boundaries.dict()["xyz"[axis_y]]
-        _, (xmin, ymin) = self.pop_axis(self.simulation_bounds[0], axis=axis)
-        _, (xmax, ymax) = self.pop_axis(self.simulation_bounds[1], axis=axis)
-        segs_x = [((bound, ymin), (bound, ymax)) for bound in boundaries_x]
-        line_segments_x = mpl.collections.LineCollection(segs_x, **kwargs)
-        segs_y = [((xmin, bound), (xmax, bound)) for bound in boundaries_y]
-        line_segments_y = mpl.collections.LineCollection(segs_y, **kwargs)
-
-        # Plot grid
-        ax.add_collection(line_segments_x)
-        ax.add_collection(line_segments_y)
-
-        # Plot bounding boxes of override structures
-        plot_params = plot_params_override_structures.include_kwargs(
-            linewidth=2 * kwargs["linewidth"], edgecolor=kwargs["colors"]
-        )
-        for structure in self.grid_spec.override_structures:
-            bounds = list(zip(*structure.geometry.bounds))
-            _, ((xmin, xmax), (ymin, ymax)) = structure.geometry.pop_axis(bounds, axis=axis)
-            xmin, xmax, ymin, ymax = (self._evaluate_inf(v) for v in (xmin, xmax, ymin, ymax))
-            rect = mpl.patches.Rectangle(
-                xy=(xmin, ymin),
-                width=(xmax - xmin),
-                height=(ymax - ymin),
-                **plot_params.to_kwargs(),
-            )
-            ax.add_patch(rect)
-
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_boundaries(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        **kwargs,
-    ) -> Ax:
-        """Plot the simulation boundary conditions as lines on a plane
-           defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        **kwargs
-            Optional keyword arguments passed to the matplotlib ``LineCollection``.
-            For details on accepted values, refer to
-            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-
-        def set_plot_params(boundary_edge, lim, side, thickness):
-            """Return the line plot properties such as color and opacity based on the boundary"""
-            if isinstance(boundary_edge, PECBoundary):
-                plot_params = plot_params_pec.copy(deep=True)
-            elif isinstance(boundary_edge, PMCBoundary):
-                plot_params = plot_params_pmc.copy(deep=True)
-            elif isinstance(boundary_edge, BlochBoundary):
-                plot_params = plot_params_bloch.copy(deep=True)
-            else:
-                plot_params = PlotParams(alpha=0)
-
-            # expand axis limit so that the axis ticks and labels aren't covered
-            new_lim = lim
-            if plot_params.alpha != 0:
-                if side == -1:
-                    new_lim = lim - thickness
-                elif side == 1:
-                    new_lim = lim + thickness
-
-            return plot_params, new_lim
-
-        boundaries = self.boundary_spec.to_list
-
-        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
-        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
-
-        umin, umax = ax.get_xlim()
-        vmin, vmax = ax.get_ylim()
-
-        size_factor = 1.0 / 35.0
-        thickness_u = (umax - umin) * size_factor
-        thickness_v = (vmax - vmin) * size_factor
-
-        # boundary along the u axis, minus side
-        plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
-        rect = mpl.patches.Rectangle(
-            xy=(umin - thickness_u, vmin),
-            width=thickness_u,
-            height=(vmax - vmin),
-            **plot_params.to_kwargs(),
-            **kwargs,
-        )
-        ax.add_patch(rect)
-
-        # boundary along the u axis, plus side
-        plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
-        rect = mpl.patches.Rectangle(
-            xy=(umax, vmin),
-            width=thickness_u,
-            height=(vmax - vmin),
-            **plot_params.to_kwargs(),
-            **kwargs,
-        )
-        ax.add_patch(rect)
-
-        # boundary along the v axis, minus side
-        plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
-        rect = mpl.patches.Rectangle(
-            xy=(umin, vmin - thickness_v),
-            width=(umax - umin),
-            height=thickness_v,
-            **plot_params.to_kwargs(),
-            **kwargs,
-        )
-        ax.add_patch(rect)
-
-        # boundary along the v axis, plus side
-        plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
-        rect = mpl.patches.Rectangle(
-            xy=(umin, vmax),
-            width=(umax - umin),
-            height=thickness_v,
-            **plot_params.to_kwargs(),
-            **kwargs,
-        )
-        ax.add_patch(rect)
-
-        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
-        ax.set_xlim([ulim_minus, ulim_plus])
-        ax.set_ylim([vlim_minus, vlim_plus])
-
-        return ax
-
-    @equal_aspect
-    @add_ax_if_none
-    def plot_lumped_elements(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        alpha: float = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Plot each of simulation's lumped elements on a plane defined by one
-        nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-        alpha : float = None
-            Opacity of the lumped element, If ``None`` uses Tidy3d default.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        bounds = self.bounds
-        for element in self.lumped_elements:
-            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
-        ax = Scene._set_plot_bounds(
-            bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
-        )
-        return ax
-
     @cached_property
     def frequency_range(self) -> FreqBound:
         """Range of frequencies spanning all sources' frequency dependence.
@@ -3159,44 +3713,6 @@ class Simulation(AbstractSimulation):
         return Grid(boundaries=Coords(**dict(zip("xyz", coords_all))))
 
     @cached_property
-    def grid(self) -> Grid:
-        """FDTD grid spatial locations and information.
-
-        Returns
-        -------
-        :class:`.Grid`
-            :class:`.Grid` storing the spatial locations relevant to the simulation.
-        """
-
-        # Add a simulation Box as the first structure
-        structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.structures
-
-        grid = self.grid_spec.make_grid(
-            structures=structures,
-            symmetry=self.symmetry,
-            periodic=self._periodic,
-            sources=self.sources,
-            num_pml_layers=self.num_pml_layers,
-        )
-
-        # This would AutoGrid the in-plane directions of the 2D materials
-        # return self._grid_corrections_2dmaterials(grid)
-        return grid
-
-    @cached_property
-    def num_cells(self) -> int:
-        """Number of cells in the simulation.
-
-        Returns
-        -------
-        int
-            Number of yee cells in the simulation.
-        """
-
-        return np.prod(self.grid.num_cells, dtype=np.int64)
-
-    @cached_property
     def wvl_mat_min(self) -> float:
         """Minimum wavelength in the material.
 
@@ -3261,258 +3777,6 @@ class Simulation(AbstractSimulation):
 
         return nyquist_step
 
-    def _subgrid(self, span_inds: np.ndarray, grid: Grid = None):
-        """Take a subgrid of the simulation grid with cell span defined by ``span_inds`` along the
-        three dimensions. Optionally, a grid different from the simulation grid can be provided.
-        The ``span_inds`` can also extend beyond the grid, in which case the grid is padded based
-        on the boundary conditions of the simulation along the different dimensions."""
-
-        if not grid:
-            grid = self.grid
-
-        boundary_dict = {}
-        for idim, (dim, periodic) in enumerate(zip("xyz", self._periodic)):
-            ind_beg, ind_end = span_inds[idim]
-            # ind_end + 1 because we are selecting cell boundaries not cells
-            boundary_dict[dim] = grid.extended_subspace(idim, ind_beg, ind_end + 1, periodic)
-        return Grid(boundaries=Coords(**boundary_dict))
-
-    def _snap_zero_dim(self, grid: Grid):
-        """Snap a grid to the simulation center along any dimension along which simulation is
-        effectively 0D, defined as having a single pixel. This is more general than just checking
-        size = 0."""
-        size_snapped = [
-            size if num_cells > 1 else 0 for num_cells, size in zip(self.grid.num_cells, self.size)
-        ]
-        return grid.snap_to_box_zero_dim(Box(center=self.center, size=size_snapped))
-
-    @cached_property
-    def _periodic(self) -> Tuple[bool, bool, bool]:
-        """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
-        We check on both sides but in practice there should be no cases in which a periodic/Bloch
-        BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
-        periodic, in which case we allow PEC/PMC on the other side, but we replace the periodic
-        boundary with another PEC/PMC plane upon initialization."""
-        periodic = []
-        for bcs_1d in self.boundary_spec.to_list:
-            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
-        return periodic
-
-    def _discretize_grid(self, box: Box, grid: Grid, extend: bool = False) -> Grid:
-        """Grid containing only cells that intersect with a :class:`Box`.
-
-        As opposed to ``Simulation.discretize``, this function operates on a ``grid``
-        which may not be the grid of the simulation.
-        """
-
-        if not self.intersects(box):
-            log.error(f"Box {box} is outside simulation, cannot discretize.")
-
-        span_inds = grid.discretize_inds(box=box, extend=extend)
-        return self._subgrid(span_inds=span_inds, grid=grid)
-
-    def _discretize_inds_monitor(self, monitor: Monitor):
-        """Start and stopping indexes for the cells where data needs to be recorded to fully cover
-        a ``monitor``. This is used during the solver run. The final grid on which a monitor data
-        lives is computed in ``discretize_monitor``, with the difference being that 0-sized
-        dimensions of the monitor or the simulation are snapped in post-processing."""
-
-        # Expand monitor size slightly to break numerical precision in favor of always having
-        # enough data to span the full monitor.
-        expand_size = [size + fp_eps if size > fp_eps else size for size in monitor.size]
-        box_expanded = Box(center=monitor.center, size=expand_size)
-        # Discretize without extension for now
-        span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
-
-        if any(ind[0] >= ind[1] for ind in span_inds):
-            # At least one dimension has no indexes inside the grid, e.g. monitor is entirely
-            # outside of the grid
-            return span_inds
-
-        # Now add extensions, which are specific for monitors and are determined such that data
-        # colocated to grid boundaries can be interpolated anywhere inside the monitor.
-        # We always need to expand on the right.
-        span_inds[:, 1] += 1
-        # Non-colocating monitors also need to expand on the left.
-        if not monitor.colocate:
-            span_inds[:, 0] -= 1
-        return span_inds
-
-    def discretize_monitor(self, monitor: Monitor) -> Grid:
-        """Grid on which monitor data corresponding to a given monitor will be computed."""
-        span_inds = self._discretize_inds_monitor(monitor)
-        grid_snapped = self._subgrid(span_inds=span_inds).snap_to_box_zero_dim(monitor)
-        grid_snapped = self._snap_zero_dim(grid=grid_snapped)
-        return grid_snapped
-
-    def discretize(self, box: Box, extend: bool = False) -> Grid:
-        """Grid containing only cells that intersect with a :class:`.Box`.
-
-        Parameters
-        ----------
-        box : :class:`.Box`
-            Rectangular geometry within simulation to discretize.
-        extend : bool = False
-            If ``True``, ensure that the returned indexes extend sufficiently in every direction to
-            be able to interpolate any field component at any point within the ``box``, for field
-            components sampled on the Yee grid.
-
-        Returns
-        -------
-        :class:`Grid`
-            The FDTD subgrid containing simulation points that intersect with ``box``.
-        """
-        return self._discretize_grid(box=box, grid=self.grid, extend=extend)
-
-    def epsilon(
-        self,
-        box: Box,
-        coord_key: str = "centers",
-        freq: float = None,
-    ) -> xr.DataArray:
-        """Get array of permittivity at volume specified by box and freq.
-
-        Parameters
-        ----------
-        box : :class:`.Box`
-            Rectangular geometry specifying where to measure the permittivity.
-        coord_key : str = 'centers'
-            Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
-            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
-            locations on the yee lattice. If field values are selected, the corresponding diagonal
-            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
-            component from the epsilon tensor is returned. Otherwise, the average of the main
-            values is returned.
-        freq : float = None
-            The frequency to evaluate the mediums at.
-            If not specified, evaluates at infinite frequency.
-
-        Returns
-        -------
-        xarray.DataArray
-            Datastructure containing the relative permittivity values and location coordinates.
-            For details on xarray DataArray objects,
-            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
-
-        See Also
-        --------
-
-        **Notebooks**
-            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
-        """
-
-        sub_grid = self.discretize(box)
-        return self.epsilon_on_grid(grid=sub_grid, coord_key=coord_key, freq=freq)
-
-    def epsilon_on_grid(
-        self,
-        grid: Grid,
-        coord_key: str = "centers",
-        freq: float = None,
-    ) -> xr.DataArray:
-        """Get array of permittivity at a given freq on a given grid.
-
-        Parameters
-        ----------
-        grid : :class:`.Grid`
-            Grid specifying where to measure the permittivity.
-        coord_key : str = 'centers'
-            Specifies at what part of the grid to return the permittivity at.
-            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
-            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
-            locations on the yee lattice. If field values are selected, the corresponding diagonal
-            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
-            component from the epsilon tensor is returned. Otherwise, the average of the main
-            values is returned.
-        freq : float = None
-            The frequency to evaluate the mediums at.
-            If not specified, evaluates at infinite frequency.
-        Returns
-        -------
-        xarray.DataArray
-            Datastructure containing the relative permittivity values and location coordinates.
-            For details on xarray DataArray objects,
-            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
-        """
-
-        grid_cells = np.prod(grid.num_cells)
-        num_structures = len(self.structures)
-        if grid_cells > NUM_CELLS_WARN_EPSILON:
-            log.warning(
-                f"Requested grid contains {int(grid_cells):.2e} grid cells. "
-                "Epsilon calculation may be slow."
-            )
-        if num_structures > NUM_STRUCTURES_WARN_EPSILON:
-            log.warning(
-                f"Simulation contains {num_structures:.2e} structures. "
-                "Epsilon calculation may be slow."
-            )
-
-        def get_eps(structure: Structure, frequency: float, coords: Coords):
-            """Select the correct epsilon component if field locations are requested."""
-            if coord_key[0] != "E":
-                return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
-            row = ["x", "y", "z"].index(coord_key[1])
-            if len(coord_key) == 2:  # diagonal component in case of Ex, Ey, and Ez
-                col = row
-            else:  # off-diagonal component in case of Exy, Exz, Eyx, etc
-                col = ["x", "y", "z"].index(coord_key[2])
-            return structure.eps_comp(row, col, frequency, coords)
-
-        def make_eps_data(coords: Coords):
-            """returns epsilon data on grid of points defined by coords"""
-            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
-            eps_background = get_eps(
-                structure=self.scene.background_structure, frequency=freq, coords=coords
-            )
-            shape = tuple(len(array) for array in arrays)
-            eps_array = eps_background * np.ones(shape, dtype=complex)
-            # replace 2d materials with volumetric equivalents
-            with log as consolidated_logger:
-                for structure in self.volumetric_structures:
-                    # Indexing subset within the bounds of the structure
-
-                    inds = structure.geometry._inds_inside_bounds(*arrays)
-
-                    # Get permittivity on meshgrid over the reduced coordinates
-                    coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
-                    if any(coords.size == 0 for coords in coords_reduced):
-                        continue
-
-                    red_coords = Coords(**dict(zip("xyz", coords_reduced)))
-                    eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
-
-                    if structure.medium.nonlinear_spec is not None:
-                        consolidated_logger.warning(
-                            "Evaluating permittivity of a nonlinear "
-                            "medium ignores the nonlinearity."
-                        )
-
-                    if isinstance(structure.geometry, TriangleMesh):
-                        consolidated_logger.warning(
-                            "Client-side permittivity of a 'TriangleMesh' may be "
-                            "inaccurate if the mesh is not unionized. We recommend unionizing "
-                            "all meshes before import. A 'PermittivityMonitor' can be used to "
-                            "obtain the true permittivity and check that the surface mesh is "
-                            "loaded correctly."
-                        )
-
-                    # Update permittivity array at selected indexes within the geometry
-                    is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
-                    eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
-
-            coords = dict(zip("xyz", arrays))
-            return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
-
-        # combine all data into dictionary
-        if coord_key[0] == "E":
-            # off-diagonal components are sampled at respective locations (eg. `eps_xy` at `Ex`)
-            coords = grid[coord_key[0:2]]
-        else:
-            coords = grid[coord_key]
-        return make_eps_data(coords)
-
     @property
     def custom_datasets(self) -> List[Dataset]:
         """List of custom datasets for verification purposes. If the list is not empty, then
@@ -3548,133 +3812,6 @@ class Simulation(AbstractSimulation):
             + datasets_medium
             + datasets_geometry
         )
-
-    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
-        """Generate a tuple of structures wherein any 2D materials are converted to 3D
-        volumetric equivalents, using ``grid`` as the simulation grid."""
-
-        if (
-            not any(isinstance(medium, Medium2D) for medium in self.scene.mediums)
-            and not self.lumped_elements
-        ):
-            return self.structures
-
-        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
-            """Get grid size around the 2D material."""
-            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
-                axis
-            ]
-            # When 1 dl is requested it is assumed that only an approximate value is needed
-            # before the 2D material has been snapped to the grid
-            if num_dls == 1:
-                return [np.mean(dls)]
-
-            # When 2 dls are requested the 2D geometry should have been snapped to grid,
-            # so this represents the exact adjacent grid spacing
-            if len(dls) != num_dls:
-                raise Tidy3dError(
-                    "Failed to detect grid size around the 2D material. "
-                    "Can't generate volumetric equivalent for this simulation. "
-                    "If you received this error, please create an issue in the Tidy3D "
-                    "github repository."
-                )
-            return dls
-
-        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
-            """Snap a 2D material to the Yee grid."""
-            center = get_bounds(geom, axis)[0]
-            assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
-            snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
-            return set_bounds(geom, (snapped_center, snapped_center), axis)
-
-        lumped_structures = []
-        for lumped_element in self.lumped_elements:
-            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
-
-            if isinstance(lumped_element, LumpedResistor):
-                conductivity = lumped_element.sheet_conductance
-
-                if tan_dirs[0] == lumped_element.voltage_axis:
-                    medium_dict = {
-                        "ss": Medium(conductivity=conductivity),
-                        "tt": self.medium,
-                    }
-                else:
-                    medium_dict = {
-                        "tt": Medium(conductivity=conductivity),
-                        "ss": self.medium,
-                    }
-                lumped_structures.append(
-                    Structure(
-                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
-                        medium=Medium2D(**medium_dict),
-                    )
-                )
-
-        # Begin volumetric structures grid
-        all_structures = list(self.structures) + lumped_structures
-
-        # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
-        placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
-        simulation_placeholder_geometry = self.geometry.updated_copy(
-            center=self.geometry.center, size=placeholder_size
-        )
-
-        simulation_background = Structure(
-            geometry=simulation_placeholder_geometry, medium=self.medium
-        )
-        background_structures = [simulation_background]
-        new_structures = []
-        for structure in all_structures:
-            if not isinstance(structure.medium, Medium2D):
-                # found a 3D material; keep it
-                background_structures.append(structure)
-                new_structures.append(structure)
-                continue
-            # otherwise, found a 2D material; replace it with volumetric equivalent
-            axis = structure.geometry._normal_2dmaterial
-            geometry = structure.geometry
-
-            # subdivide
-            avg_axis_dl = get_dls(geometry, axis, 1)[0]
-            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
-            # Create and add volumetric equivalents
-            background_structures_temp = []
-            for subdivided_geometry in subdivided_geometries:
-                # Snap to the grid and create volumetric equivalent
-                snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
-                snapped_center = get_bounds(snapped_geometry, axis)[0]
-                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
-                adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
-
-                # Create the new volumetric medium
-                new_medium = structure.medium.volumetric_equivalent(
-                    axis=axis, adjacent_media=adjacent_media, adjacent_dls=dls
-                )
-
-                new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
-                temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
-                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
-
-                if structure.medium.is_pec:
-                    pec_plus = increment_float(snapped_center, 1.0)
-                    pec_minus = increment_float(snapped_center, -1.0)
-                    new_bounds = (pec_minus, pec_plus)
-                new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
-                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
-
-                new_structures.append(new_structure)
-                background_structures_temp.append(temp_structure)
-
-            background_structures += background_structures_temp
-
-        return tuple(new_structures)
-
-    @cached_property
-    def volumetric_structures(self) -> Tuple[Structure]:
-        """Generate a tuple of structures wherein any 2D materials are converted to 3D
-        volumetric equivalents."""
-        return self._volumetric_structures_grid(self.grid)
 
     @cached_property
     def allow_gain(self) -> bool:
@@ -4039,15 +4176,3 @@ class Simulation(AbstractSimulation):
         )
 
         return new_sim
-
-    def suggest_mesh_overrides(self, **kwargs) -> List[MeshOverrideStructure]:
-        """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
-        from structures in the simulation.
-        """
-        mesh_overrides = []
-
-        # For now we can suggest MeshOverrideStructures for lumped elements.
-        for lumped_element in self.lumped_elements:
-            mesh_overrides.extend(lumped_element.to_mesh_overrides())
-
-        return mesh_overrides

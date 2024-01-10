@@ -55,7 +55,7 @@ def run(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -81,7 +81,7 @@ def run(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing solver results for the supplied simulation.
 
     Notes
@@ -160,7 +160,7 @@ def upload(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -217,9 +217,13 @@ def upload(
                 "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
                 "is subject to change in the future."
             )
-        else:
-            url = _get_url(task.task_id)
-            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+        elif task_type == "EME":
+            console.log(
+                "Tidy3D's EME solver is currently in the beta stage. Cost of EME simulations "
+                "is subject to change in the future."
+            )
+        url = _get_url(task.task_id)
+        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
     task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
 
@@ -350,9 +354,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_info = get_info(task_id)
 
-    if task_info.taskType in ("MODE_SOLVER", "HEAT"):
+    if task_info.taskType in ("MODE_SOLVER", "HEAT", "EME"):
         log_level = "DEBUG" if verbose else "INFO"
-        solver_name = "Mode" if task_info.taskType == "MODE_SOLVER" else "Heat"
+        if task_info.taskType == "MODE_SOLVER":
+            solver_name = "Mode"
+        elif task_info.taskType == "HEAT":
+            solver_name = "Heat"
+        elif task_info.taskType == "EME":
+            solver_name = "EME"
 
         # Wait for task to finish
         prev_status = "draft"
@@ -581,7 +590,7 @@ def load_simulation(
 
     Returns
     -------
-    Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation loaded from downloaded json file.
     """
 
@@ -657,7 +666,7 @@ def load(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:
