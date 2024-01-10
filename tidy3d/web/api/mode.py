@@ -14,6 +14,8 @@ from botocore.exceptions import ClientError
 
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
+from ...components.medium import AbstractCustomMedium
+from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import log, get_logging_console
 from ..core.core_config import get_logger_console
@@ -46,7 +48,7 @@ def run(
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
-    reduce_simulation: bool = True,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -69,9 +71,9 @@ def run(
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-    reduce_simulation : bool = True
-        Restrict simulation to mode solver region. This can help reduce the amount of uploaded and
-        dowloaded data.
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Restrict simulation to mode solver region. If "auto", then simulation is automatically
+        restricted if it contains custom mediums.
 
     Returns
     -------
@@ -82,6 +84,21 @@ def run(
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
+
+    if reduce_simulation == "auto":
+        sim = mode_solver.simulation
+        contains_custom = any(isinstance(s.medium, AbstractCustomMedium) for s in sim.structures)
+        contains_custom = contains_custom or isinstance(sim.medium, AbstractCustomMedium)
+        reduce_simulation = contains_custom
+
+        if reduce_simulation:
+            log.warning(
+                "The associated `Simulation` object contains custom mediums. It will be "
+                "automatically restricted to the mode solver plane to reduce data for uploading. "
+                "To force uploading the original `Simulation` object use `reduce_simulation=False`."
+                " Setting `reduce_simulation=True` will force simulation reduction in all cases and"
+                " silence this warning."
+            )
 
     if reduce_simulation:
         mode_solver = mode_solver.reduced_simulation_copy
