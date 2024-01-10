@@ -35,3 +35,10 @@ If you look within ``pyproject.toml``, it is possible to see that we have differ
 
 Some examples from these are ``[vtk, jax, trimesh, gdstk, gdspy]`` etc. What we want to do is improve the import speed of the core-package in order to minimise small core operations. As we scale into a bigger package, decoupling these type of imports from the total pacakge import is essential.
 
+
+Benchmarking Package Import
+''''''''''''''''''''''''''''
+
+We want to make the tidy3d package be as light as possible for a given set of operations. As such, it is important to understand exactly where a given set of operations is expending computational power.
+
+We have a set of utilties to verify this.
