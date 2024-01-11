@@ -59,7 +59,8 @@ class TriangleMesh(base.Geometry, ABC):
         if not all(np.array(mesh.area_faces) > fp_eps):
             raise ValidationError(
                 "The provided mesh has triangles with zero area. "
-                "Consider using 'trimesh.Trimesh.remove_degenerate_faces' to fix this."
+                "Consider using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
+                "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
             )
         if not mesh.is_winding_consistent:
             log.warning(
