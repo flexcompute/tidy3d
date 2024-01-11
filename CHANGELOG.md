@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0rc1] - 2024-01-11
+
 ### Added
 - `tidy3d.plugins.design` tool to explore user-defined design spaces.
 - `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
@@ -1074,7 +1076,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0rc1...pre/2.6
+[2.6.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.6.0rc1
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
