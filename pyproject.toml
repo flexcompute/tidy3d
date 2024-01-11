@@ -81,34 +81,37 @@ networkx = {version = "^2.6.3", optional = true}
 rtree = {version = "1.0.1", optional = true}
 trimesh = {version = "3.20.0", optional = true}
 
+# vtk
+vtk = {version="<=9.2.6", optional = true}
+
 # docs
-jupyter = {version="*", optional = true}
-jinja2 = {version = ">=3.1.2", optional = true}
-nbconvert = {version = ">=7.11.0", optional = true}
-sphinx = {version=">=6.2.1,<7", optional = true}
-nbsphinx = {version = ">=0.8.7", optional = true}
-sphinx-copybutton = {version=">=0.5.2", optional = true}
-sphinx-book-theme = {version = ">=1.0.1", optional = true}
-pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
-# divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
-tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
+jinja2 = {version = ">=3.1.2", optional = true}
+jupyter = {version="*", optional = true}
+m2r2 = {git = "https://github.com/daquinteroflex/m2r2", optional = true, branch = "v2"}
+nbdime = {version="*", optional = true}
+nbconvert = {version = ">=7.11.0", optional = true}
+nbsphinx = {version = ">=0.8.7", optional = true}
+optax = {version="*", optional = true}
+pyswarms = {version="*", optional = true}
+pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
+sax = {version="*", optional = true}
+signac = {version="*", optional = true}
+sphinx = {version="^7", optional = true}
+sphinx-book-theme = {version = ">=1.0.1", optional = true}
+sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
 sphinx-tabs = {version="*", optional = true}
-nbdime = {version="*", optional = true}
-m2r2 = {git = "https://github.com/daquinteroflex/m2r2", optional = true, branch = "v2"}
-optax = {version="*", optional = true}
-signac = {version="*", optional = true}
-sax = {version="*", optional = true}
-vtk = {version="<=9.2.6", optional = true}
-pyswarms = {version="*", optional = true}
+sphinxcontrib-autoflex = {git = "https://github.com/daquinteroflex/sphinxcontrib-autoflex", optional = true}
 sphinxemoji = {version="*", optional = true}
+tmm = {version="*", optional = true}
+
 
 [tool.poetry.extras]
 dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'm2r2', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
-  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
+  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', "sphinxcontrib-autoflex", 'tmm', 'tox', 'trimesh',
     'vtk']
 docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "m2r2"]
 gdspy = ["gdspy"]
