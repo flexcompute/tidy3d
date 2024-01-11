@@ -14,6 +14,7 @@ from ..api import webapi as web
 from ..core.task_info import TaskInfo, RunInfo
 from ..core.constants import TaskId, TaskName
 from ...components.base import Tidy3dBaseModel
+from ...components.types import annotate_type
 from ...log import log, get_logging_console
 
 from ...exceptions import DataError
@@ -418,7 +419,7 @@ class Batch(WebContainer):
         * `Inverse taper edge coupler <../../notebooks/EdgeCoupler.html>`_
     """
 
-    simulations: Dict[TaskName, SimulationType] = pd.Field(
+    simulations: Dict[TaskName, annotate_type(SimulationType)] = pd.Field(
         ...,
         title="Simulations",
         description="Mapping of task names to Simulations to run as a batch.",
