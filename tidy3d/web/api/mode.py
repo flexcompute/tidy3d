@@ -86,9 +86,8 @@ def run(
         console = get_logging_console()
 
     if reduce_simulation == "auto":
-        sim = mode_solver.simulation
-        contains_custom = any(isinstance(s.medium, AbstractCustomMedium) for s in sim.structures)
-        contains_custom = contains_custom or isinstance(sim.medium, AbstractCustomMedium)
+        sim_mediums = mode_solver.simulation.scene.mediums
+        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
         reduce_simulation = contains_custom
 
         if reduce_simulation:
