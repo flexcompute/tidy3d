@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.2] - 2024-01-11
+
 ### Fixed
 - Internal storage estimation for 3D surface integration monitors now correctly includes only fields on the surfaces, and not the whole volume.
 
@@ -1060,6 +1062,7 @@ which fields are to be projected is now determined automatically based on the me
 - A large number of small improvements and bug fixes.
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
+[2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3
