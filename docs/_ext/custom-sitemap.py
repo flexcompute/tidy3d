@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 import re
+import pathlib
 
 
 def match_exclude_url(app, url):
@@ -16,7 +17,7 @@ def process_sitemap(app, exception):
         return
 
     # Get path to sitemap.xml file
-    sitemap_path = app.outdir + "/sitemap.xml"
+    sitemap_path = pathlib.Path(app.outdir) / "sitemap.xml"
 
     # Parse sitemap.xml file
     tree = ET.parse(sitemap_path)
