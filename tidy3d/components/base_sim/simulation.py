@@ -230,6 +230,10 @@ class AbstractSimulation(Box, ABC):
         """Call validators taking z`self` that get run after init."""
         _ = self.scene
 
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized simulation is ok for upload to our servers."""
+        pass
+
     """ Accounting """
 
     @cached_property
