@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, Any
+from typing import Union, Dict, Callable, Any, Tuple
 
 import xarray as xr
 import numpy as np
@@ -527,6 +527,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Dataset name."""
         # we redirect name to values.name
         return self.values.name
+
+    @cached_property
+    def coords(self) -> Tuple[PointDataArray, CellDataArray]:
+        """Grid information."""
+        return (self.points, self.cells)
 
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
@@ -1098,6 +1103,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
         bounds_2d = super().bounds
         bounds_3d = self._points_2d_to_3d(bounds_2d)
         return tuple(bounds_3d[0]), tuple(bounds_3d[1])
+
+    @cached_property
+    def coords(self) -> Tuple[PointDataArray, CellDataArray, Axis, float]:
+        """Grid information."""
+        return (self.points, self.cells, self.normal_axis, self.normal_pos)
 
     @classmethod
     def _point_dims(cls) -> pd.PositiveInt:
