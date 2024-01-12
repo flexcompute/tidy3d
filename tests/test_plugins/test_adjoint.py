@@ -1846,14 +1846,25 @@ def test_pole_residue_grad():
 def test_pole_residue_grad_sim():
     """Numerically test gradient of function involving simulation with JaxPoleResidue"""
 
+    OMEGA = 2 * np.pi * FREQ0
+
     def make_sim(eps_inf, a_re, a_im, c_re, c_im):
+
+        eps_inf, a_re, a_im, c_re, c_im = map(jnp.array, (eps_inf, a_re, a_im, c_re, c_im))
 
         a = OMEGA * a_re + 1j * OMEGA * a_im
         c = OMEGA * c_re + 1j * OMEGA * c_im
         pole = (a, c)
+
+        # jax pole res
         jax_med = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
-        jax_box = JaxBox(size=(2, 2, 2), center=(0, 0, 0))
+        jax_box = JaxBox(size=(6, 2, 2), center=(0, 0, 0))
         jax_struct = JaxStructure(geometry=jax_box, medium=jax_med)
+
+        # regular medium
+        # jax_med = JaxMedium(permittivity=eps_inf)
+        # jax_box = JaxBox(size=(6, 2, 2), center=(0, 0, 0))
+        # jax_struct = JaxStructure(geometry=jax_box, medium=jax_med)
 
         wvg = td.Structure(
             geometry=td.Box(center=(0, 0, 0), size=(td.inf, 0.6, 0.6)),
@@ -1861,31 +1872,31 @@ def test_pole_residue_grad_sim():
         )
 
         mode_src = td.ModeSource(
-            center=(-3, 0, 0),
+            center=(-4, 0, 0),
             size=(0, td.inf, td.inf),
             mode_index=0,
             source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
             direction="+",
-            mode_spec=td.ModeSpec(num_modes=4),
+            mode_spec=td.ModeSpec(num_modes=1),
         )
 
         mnt = td.ModeMonitor(
-            center=(3, 0, 0),
+            center=(4, 0, 0),
             size=(0, td.inf, td.inf),
             freqs=[FREQ0],
-            mode_spec=td.ModeSpec(num_modes=4),
+            mode_spec=td.ModeSpec(num_modes=1),
             name="mnt",
         )
 
         return JaxSimulation(
-            size=(8.1, 4, 4),
+            size=(10, 5, 0),
             run_time=100 / FREQ0,
-            grid_spec=td.GridSpec(wavelength=1.0),
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=30, wavelength=1.0),
             input_structures=(jax_struct,),
             structures=(wvg,),
             output_monitors=(mnt,),
             sources=[mode_src],
-            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
+            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
         )
 
     def post_process(jax_sim_data):
@@ -1894,66 +1905,67 @@ def test_pole_residue_grad_sim():
 
     def objective(eps_inf, a_re, a_im, c_re, c_im):
         sim = make_sim(eps_inf, a_re, a_im, c_re, c_im)
-        data = run_local(sim, task_name="test_pole_residue")
+        data = run_local(sim, task_name="test_pole_residue", verbose=False)
         res = post_process(data)
         return res
 
-    OMEGA = 2 * np.pi * FREQ0
     EPS_INF = 2.0
 
     # in units of OMEGA!
     a = -0.5 - 1.0j
-    c = +1.0 + 1.0j
+    c = +0.001 + 0.001j
 
     A_RE = np.real(a)
     A_IM = np.imag(a)
     C_RE = np.real(c)
     C_IM = np.imag(c)
 
-    args = (EPS_INF, A_RE, A_IM, C_RE, C_IM)
-    num_args = len(args)
+    arguments = (EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    num_args = len(arguments)
 
     grad_fn = jax.value_and_grad(objective, argnums=tuple(range(num_args)))
-    val, grad_adj = grad_fn(*args)
-    val2 = objective(*args)
+    print(EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    val, grad_adj = grad_fn(EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    print(EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    val2 = objective(EPS_INF, A_RE, A_IM, C_RE, C_IM)
     print(f'val = {val}')
     print(f'val2 = {val2}')
 
-    # _delta = 1e-2
+    _delta = 1e-2
 
-    _deltas = [1e-2, 1e-2, 1e-2, 1e-2, 1e-2]
-    deltas = [0 * abs(x) * d for x, d in zip(args, _deltas)]
+    _deltas = [_delta] * num_args#[5e-3, 1e-2, 7e-3, 1e-3, 1e-3]
+    deltas = [abs(x) * d for x, d in zip(arguments, _deltas)]
 
     # assemble simulations for batch to compute numerical gradient
     sims = {}
     for i in range(num_args):
         for pm in (-1, 1):
-            args_ = np.array(args).copy()
-            args_[i] += pm * deltas[i]
+            arguments_ = np.array(arguments).copy()
+            arguments_[i] += pm * deltas[i]
             task_name = f"gradnum_{i}_{pm}"
-            sims[task_name] = make_sim(*args_).to_simulation()[0]
+            sims[task_name] = make_sim(*arguments_).to_simulation()[0]
 
     # run batch
     batch = Batch(simulations=sims, verbose=False)
     batch_data = batch.run(path_dir="data")
     print(f'value_and_grad[0] = {val}')
-    print(f"objective(*args) = {objective(*args)}")
+    print(f"objective(*args) = {objective(*arguments)}")
 
-    # # assemble numerical gradient
-    # grad_num = np.zeros(num_args)
-    # for task_name, sim_data in batch_data.items():
-    #     i, pm = task_name.split("_")[-2:]
-    #     i = int(i)
-    #     pm = float(pm)
-    #     obj_ = post_process(sim_data)
-    #     print(task_name, obj_)
-    #     grad_num[i] += obj_ * float(pm) / 2 / 1#deltas[i]
+    # assemble numerical gradient
+    grad_num = np.zeros(num_args)
+    for task_name, sim_data in batch_data.items():
+        i, pm = task_name.split("_")[-2:]
+        i = int(i)
+        pm = float(pm)
+        obj_ = post_process(sim_data)
+        print(f"element: {i}\tsign: {pm}\tval: {obj_}")
+        grad_num[i] += obj_ * pm / 2 / deltas[i]
 
-    # grad_adj = list(map(float, grad_adj))
+    grad_adj = list(map(float, grad_adj))
 
-    # grad_num = np.array(grad_num)
-    # grad_adj = np.array(grad_adj)
+    grad_num = np.array(grad_num)
+    grad_adj = np.array(grad_adj)
 
-    # print("adjoint: ", grad_adj)
-    # print("numerical: ", grad_num)
-    # assert np.allclose(grad_adj, grad_num), "Pole residue adjoint grad doesn't match numerical."
+    print("adjoint: ", grad_adj)
+    print("numerical: ", grad_num)
+    assert np.allclose(grad_adj, grad_num), "Pole residue adjoint grad doesn't match numerical."
