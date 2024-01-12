@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Dict
 import os
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from ...constants import HERTZ
@@ -155,8 +155,7 @@ class ComponentModeler(Tidy3dBaseModel):
         sim_dict = {}
         mode_monitors = [self.to_monitor(port=port) for port in self.ports]
 
-        for (port_name, mode_index) in self.matrix_indices_run_sim:
-
+        for port_name, mode_index in self.matrix_indices_run_sim:
             port = self.get_port_by_name(port_name=port_name)
 
             port_source = self.shift_port(port=port)
@@ -197,7 +196,6 @@ class ComponentModeler(Tidy3dBaseModel):
         # loop through rows of the full s matrix and record rows that still need running.
         source_indices_needed = []
         for col_index in self.matrix_indices_source:
-
             # loop through columns and keep track of whether each element is covered by mapping.
             matrix_elements_covered = []
             for row_index in self.matrix_indices_monitor:
@@ -425,14 +423,12 @@ class ComponentModeler(Tidy3dBaseModel):
 
         # loop through source ports
         for col_index in self.matrix_indices_run_sim:
-
             port_name_in, mode_index_in = col_index
             port_in = self.get_port_by_name(port_name=port_name_in)
 
             sim_data = batch_data[self._task_name(port=port_in, mode_index=mode_index_in)]
 
             for row_index in self.matrix_indices_monitor:
-
                 port_name_out, mode_index_out = row_index
                 port_out = self.get_port_by_name(port_name=port_name_out)
 
@@ -454,8 +450,7 @@ class ComponentModeler(Tidy3dBaseModel):
                 ] = s_matrix_elements
 
         # element can be determined by user-defined mapping
-        for ((row_in, col_in), (row_out, col_out), mult_by) in self.element_mappings:
-
+        for (row_in, col_in), (row_out, col_out), mult_by in self.element_mappings:
             port_out_from, mode_index_out_from = row_in
             port_in_from, mode_index_in_from = col_in
             coords_from = dict(

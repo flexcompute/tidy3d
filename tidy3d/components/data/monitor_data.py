@@ -7,7 +7,7 @@ import warnings
 
 import xarray as xr
 import numpy as np
-import pydantic.v1 as pd
+import pydantic as pd
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeIndexDataArray, ModeAmpsDataArray
@@ -115,14 +115,12 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
 
         update_dict = {}
         for field_name, scalar_data in self.field_components.items():
-
             eigenval_fn = self.symmetry_eigenvalues[field_name]
 
             # get grid locations for this field component on the expanded grid
             field_coords = self._expanded_grid_field_coords(field_name)
 
             for sym_dim, (sym_val, sym_loc) in enumerate(zip(self.symmetry, self.symmetry_center)):
-
                 dim_name = "xyz"[sym_dim]
 
                 # Continue if no symmetry along this dimension
@@ -934,13 +932,11 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         # Sort in two directions from the base frequency
         for step, last_ind in zip([-1, 1], [-1, num_freqs]):
-
             # Start with the base frequency
             data_template = self._isel(f=[f0_ind])
 
             # March to lower/higher frequencies
             for freq_id in range(f0_ind + step, last_ind, step):
-
                 # Get next frequency to sort
                 data_to_sort = self._isel(f=[freq_id])
 
@@ -1016,7 +1012,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         data_template_reduced = self._isel(mode_index=modes_to_sort)
 
         for i, mode_index in enumerate(modes_to_sort):
-
             # Get one mode from data_to_sort
 
             one_mode = data_to_sort._isel(mode_index=[mode_index])
@@ -1069,7 +1064,6 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
         # Create new dict with rearranged field components
         update_dict = {}
         for field_name, field in self.field_components.items():
-
             field_sorted = field.copy()
 
             # Rearrange modes

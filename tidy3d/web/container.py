@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 import time
 
 from rich.progress import Progress
-import pydantic.v1 as pd
+import pydantic as pd
 
 from . import webapi as web
 from .task import TaskId, TaskInfo, RunInfo, TaskName
@@ -391,7 +391,6 @@ class Batch(WebContainer):
         verbose = bool(values.get("verbose"))
         jobs = {}
         for task_name, simulation in values.get("simulations").items():
-
             upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation

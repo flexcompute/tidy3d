@@ -2,7 +2,7 @@
 
 from typing import Tuple, Union
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from ..constants import MICROMETER, RADIAN, GLANCING_CUTOFF, fp_eps

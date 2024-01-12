@@ -6,7 +6,7 @@ from math import isclose
 from itertools import compress
 import warnings
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 from pyroots import Brentq
 from shapely.strtree import STRtree

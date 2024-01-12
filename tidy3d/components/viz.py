@@ -6,11 +6,11 @@ from functools import wraps
 import random
 import time
 
-import matplotlib.pyplot as plt
-from matplotlib.patches import PathPatch, ArrowStyle
-from matplotlib.path import Path
+# import matplotlib.pylab as plt
+# from matplotlib.patches import PathPatch, ArrowStyle
+# from matplotlib.path import Path
 from numpy import array, concatenate, ones, inf
-import pydantic.v1 as pd
+import pydantic as pd
 
 from .types import Ax
 from .base import Tidy3dBaseModel
@@ -131,7 +131,7 @@ MEDIUM_CMAP = [
 STRUCTURE_EPS_CMAP = "gist_yarg"
 
 # default arrow style
-arrow_style = ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
+arrow_style = {}  # ArrowStyle.Simple(head_length=12, head_width=9, tail_width=4)
 
 
 """=================================================================================================
@@ -231,7 +231,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """Make 3D display of simulation in ipyython notebook."""
 
     try:
-
+        # pylint:disable=import-outside-toplevel
         from IPython.display import display, HTML
     except ImportError as e:
         raise SetupError(

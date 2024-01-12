@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional
 
 from typing_extensions import Literal
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
@@ -1080,7 +1080,6 @@ class TFSF(AngledFieldSource, VolumeSource):
         ax: Ax = None,
         **patch_kwargs,
     ) -> Ax:
-
         # call Source.plot but with the base of the arrow centered on the injection plane
         patch_kwargs["arrow_base"] = self.injection_plane_center
         ax = Source.plot(self, x=x, y=y, z=z, ax=ax, **patch_kwargs)

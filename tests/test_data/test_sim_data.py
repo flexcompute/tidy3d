@@ -2,7 +2,7 @@
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 import tidy3d as td
 from tidy3d.exceptions import DataError, Tidy3dKeyError
@@ -307,7 +307,6 @@ def test_empty_io(tmp_path):
 
 
 def test_run_time_lt_start(tmp_path):
-
     # Point source inside a box
     box = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, 1, 1)),

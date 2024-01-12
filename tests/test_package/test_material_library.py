@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 from tidy3d.material_library.material_library import (
     VariantItem,

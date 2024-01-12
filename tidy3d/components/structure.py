@@ -1,6 +1,6 @@
 """Defines Geometric objects with Medium properties."""
 from typing import Union, Tuple, Optional
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 from .base import Tidy3dBaseModel
 from .validators import validate_name_str

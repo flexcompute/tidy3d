@@ -1,6 +1,6 @@
 """Tests the simulation and its validators."""
 import pytest
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -182,7 +182,6 @@ def test_sim_bounds(shift_amount, log_level, log_capture):
     CENTER_SHIFT = (-1.0, 1.0, 100.0)
 
     def place_box(center_offset):
-
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
         _ = td.Simulation(
@@ -222,7 +221,6 @@ def test_sim_bounds(shift_amount, log_level, log_capture):
 
 
 def test_sim_size():
-
     # note dl may need to change if we change the maximum allowed number of cells
     mesh1d = td.UniformGrid(dl=2e-4)
     grid_spec = td.GridSpec(grid_x=mesh1d, grid_y=mesh1d, grid_z=mesh1d)
@@ -255,7 +253,6 @@ def test_sim_size():
 
 
 def _test_monitor_size():
-
     with pytest.raises(SetupError):
         s = td.Simulation(
             size=(1, 1, 1),
@@ -453,7 +450,6 @@ def test_validate_plane_wave_boundaries(log_capture):
 
 
 def test_validate_zero_dim_boundaries(log_capture):
-
     # zero-dim simulation with an absorbing boundary in that direction should warn
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
@@ -489,7 +485,6 @@ def test_validate_zero_dim_boundaries(log_capture):
 
 
 def test_validate_components_none():
-
     assert SIM._structures_not_at_edges(val=None, values=SIM.dict()) is None
     assert SIM._validate_num_mediums(val=None) is None
     assert SIM._warn_monitor_mediums_frequency_range(val=None, values=SIM.dict()) is None
@@ -520,7 +515,6 @@ def test_validate_size_spatial_and_time(monkeypatch):
 
 
 def test_validate_mnt_size(monkeypatch, log_capture):
-
     # warning for monitor size
     monkeypatch.setattr(simulation, "WARN_MONITOR_DATA_SIZE_GB", 1 / 2**30)
     s = SIM.copy(update=dict(monitors=(td.FieldMonitor(name="f", freqs=[1], size=(1, 1, 1)),)))
@@ -1238,7 +1232,6 @@ def _test_names_default():
 
 
 def test_names_unique():
-
     with pytest.raises(pydantic.ValidationError):
         _ = td.Simulation(
             size=(2.0, 2.0, 2.0),
@@ -1856,7 +1849,6 @@ def test_allow_gain():
 
 
 def test_perturbed_mediums_copy():
-
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(

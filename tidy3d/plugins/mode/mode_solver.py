@@ -6,7 +6,8 @@ from __future__ import annotations
 from typing import List, Tuple, Dict
 
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pydantic
+import pydantic
 import xarray as xr
 
 from ...log import log
@@ -382,7 +383,6 @@ class ModeSolver(Tidy3dBaseModel):
         n_complex = []
         eps_spec = []
         for freq in self.freqs:
-
             n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
                 freq=freq, coords=coords, symmetry=symmetry
             )

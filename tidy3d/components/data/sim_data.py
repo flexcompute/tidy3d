@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Callable, Tuple
 
 import xarray as xr
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData

@@ -3,7 +3,7 @@ from typing import Tuple, Dict, List
 from functools import partial
 import tempfile
 
-import pydantic.v1 as pd
+import pydantic as pd
 from jax import custom_vjp
 from jax.tree_util import register_pytree_node_class
 
@@ -802,7 +802,6 @@ def run_async_local_fwd(
 
     sims_fwd = []
     for simulation in simulations:
-
         grad_mnts = simulation.get_grad_monitors(
             input_structures=simulation.input_structures, freq_adjoint=simulation.freq_adjoint
         )
@@ -873,7 +872,6 @@ def run_async_local_bwd(
 
     sims_vjp = []
     for i, (sim_data_fwd, sim_data_adj) in enumerate(zip(batch_data_fwd, batch_data_adj)):
-
         grad_data_fwd = sim_data_fwd.grad_data_symmetry
         grad_data_adj = sim_data_adj.grad_data_symmetry
         grad_data_eps_fwd = sim_data_fwd.grad_eps_data_symmetry

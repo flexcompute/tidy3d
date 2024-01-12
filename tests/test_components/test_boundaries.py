@@ -1,7 +1,7 @@
 """Tests boundary conditions."""
 
 import pytest
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 import tidy3d as td
 from tidy3d.components.boundary import BoundarySpec, Boundary

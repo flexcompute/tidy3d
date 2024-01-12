@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import List, Tuple, Union, Optional
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 
 from ..base import cached_property
@@ -26,7 +26,6 @@ except Exception:
     TRIMESH_AVAILABLE = False
 
 try:
-
     NETWORKX_RTREE_AVAILABLE = True
 except Exception:
     NETWORKX_RTREE_AVAILABLE = False

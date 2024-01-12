@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import List
 from math import isclose
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 import shapely
 

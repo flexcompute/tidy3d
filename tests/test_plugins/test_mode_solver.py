@@ -2,7 +2,7 @@ import pytest
 import responses
 import numpy as np
 import matplotlib.pyplot as plt
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 import tidy3d as td
 
@@ -158,7 +158,6 @@ def compare_colocation(ms):
     data_at_boundaries = ms_nocol.sim_data.at_boundaries(MODE_MONITOR_NAME)
 
     for key, field in data_col.field_components.items():
-
         # Check the colocated data is the same
         assert np.allclose(data_at_boundaries[key], field)
 

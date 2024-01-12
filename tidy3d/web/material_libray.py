@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import List, Optional
 
-from pydantic.v1 import Field, parse_obj_as, validator
+from pydantic import Field, parse_obj_as, validator
 from tidy3d.components.medium import MediumType
 
 from .http_management import http

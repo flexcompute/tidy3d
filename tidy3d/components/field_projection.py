@@ -3,8 +3,9 @@
 from __future__ import annotations
 from typing import Dict, Tuple, Union, List
 import numpy as np
-import xarray as xr
-import pydantic.v1 as pydantic
+
+# import xarray as xr
+import pydantic as pydantic
 
 from rich.progress import track
 
@@ -140,7 +141,6 @@ class FieldProjector(Tidy3dBaseModel):
 
     @cached_property
     def currents(self):
-
         """Sets the surface currents."""
         sim_data = self.sim_data
         surfaces = self.surfaces
@@ -295,7 +295,6 @@ class FieldProjector(Tidy3dBaseModel):
         _, idx_uv = surface.monitor.pop_axis((0, 1, 2), axis=surface.axis)
 
         for idx in idx_uv:
-
             # pick sample points on the monitor and handle the possibility of an "infinite" monitor
             start = np.maximum(
                 surface.monitor.center[idx] - surface.monitor.size[idx] / 2.0,
@@ -400,7 +399,6 @@ class FieldProjector(Tidy3dBaseModel):
             """Perform integration for a given theta angle index"""
 
             for j_ph in np.arange(len(phi)):
-
                 phase[0] = np.exp(propagation_factor * pts[0] * sin_theta[i_th] * cos_phi[j_ph])
                 phase[1] = np.exp(propagation_factor * pts[1] * sin_theta[i_th] * sin_phi[j_ph])
                 phase[2] = np.exp(propagation_factor * pts[2] * cos_theta[i_th])
@@ -513,7 +511,6 @@ class FieldProjector(Tidy3dBaseModel):
         )
 
         for surface in self.surfaces:
-
             if monitor.far_field_approx:
                 for idx_f, frequency in enumerate(freqs):
                     _fields = self._far_fields_for_surface(
@@ -595,7 +592,6 @@ class FieldProjector(Tidy3dBaseModel):
             )
 
             for surface in self.surfaces:
-
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(
@@ -657,7 +653,6 @@ class FieldProjector(Tidy3dBaseModel):
             theta, phi = monitor.kspace_2_sph(_ux, _uy, monitor.proj_axis)
 
             for surface in self.surfaces:
-
                 if monitor.far_field_approx:
                     for idx_f, frequency in enumerate(freqs):
                         _fields = self._far_fields_for_surface(

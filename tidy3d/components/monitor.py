@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import Union, Tuple
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 
 from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Numpy

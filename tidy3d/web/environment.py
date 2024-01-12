@@ -1,7 +1,7 @@
 """Environment Setup."""
 import os
 
-from pydantic.v1 import BaseSettings, Field
+from pydantic import BaseSettings, Field
 
 from tidy3d import log
 

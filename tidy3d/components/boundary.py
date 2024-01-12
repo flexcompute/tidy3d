@@ -4,7 +4,7 @@ from __future__ import annotations
 from abc import ABC
 from typing import Union, Tuple, List
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property

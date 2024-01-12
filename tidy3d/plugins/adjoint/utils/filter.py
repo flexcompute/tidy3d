@@ -1,7 +1,7 @@
 """Spatial filtering Functions for adjoint plugin."""
 from abc import ABC, abstractmethod
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
 import jax.scipy as jsp

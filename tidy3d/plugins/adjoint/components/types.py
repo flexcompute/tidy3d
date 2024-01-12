@@ -1,6 +1,6 @@
 """Special types and validators used by adjoint plugin."""
 from typing import Union, Callable
-import pydantic.v1 as pd
+import pydantic as pd
 
 import numpy as np
 from jax.interpreters.ad import JVPTracer

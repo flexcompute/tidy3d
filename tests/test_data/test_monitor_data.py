@@ -2,7 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pytest
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import tidy3d as td
 
 from tidy3d.exceptions import DataError
@@ -415,7 +415,6 @@ def test_mode_solver_plot_field():
 
 
 def test_field_data_symmetry_present():
-
     coords = {"x": np.arange(10), "y": np.arange(10), "z": np.arange(10), "t": []}
     fields = {"Ex": td.ScalarFieldTimeDataArray(np.random.rand(10, 10, 10, 0), coords=coords)}
     monitor = td.FieldTimeMonitor(size=(1, 1, 1), name="test", fields=["Ex"])

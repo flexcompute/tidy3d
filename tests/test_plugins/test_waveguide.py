@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import tidy3d as td
 from tidy3d.plugins import waveguide
-from pydantic.v1 import ValidationError
+from pydantic import ValidationError
 
 
 def test_rectangular_dielectric_validations():

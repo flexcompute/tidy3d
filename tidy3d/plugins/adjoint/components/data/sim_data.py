@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Tuple, Dict, Union, List
 
-import pydantic.v1 as pd
+import pydantic as pd
 
 from jax.tree_util import register_pytree_node_class
 

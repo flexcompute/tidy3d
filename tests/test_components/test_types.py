@@ -1,6 +1,6 @@
 """Tests type definitions."""
 import pytest
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 from tidy3d.components.types import ArrayLike, Complex, constrained_array, Tuple
 from tidy3d.components.base import Tidy3dBaseModel
 import numpy as np
@@ -37,7 +37,6 @@ def test_schemas():
 
 def test_array_like():
     class MyClass(Tidy3dBaseModel):
-
         a: ArrayLike = None  # can be any array-like thing
         b: constrained_array(ndim=2) = None  # must be 2D
         c: constrained_array(dtype=float) = None  # must be float-like
@@ -64,7 +63,6 @@ def test_array_like():
 
 def test_array_like_field_name():
     class MyClass(Tidy3dBaseModel):
-
         a: ArrayLike  # can be any array-like thing
         b: constrained_array(ndim=2)  # must be 2D
         c: constrained_array(dtype=float)  # must be float-like
@@ -88,7 +86,6 @@ def test_array_like_field_name():
 
 def test_hash():
     class MyClass(Tidy3dBaseModel):
-
         a: ArrayLike
         b: constrained_array(ndim=1)
         c: Tuple[ArrayLike, ...]

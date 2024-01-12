@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import matplotlib.pyplot as plt
 import gdstk
 
@@ -137,7 +137,6 @@ def make_coupler():
 
 
 def make_ports():
-
     sim = make_coupler()
     # source
     src_pos = sim.size[0] / 2 - straight_wg_length / 2
@@ -270,10 +269,8 @@ def test_run_component_modeler(monkeypatch, tmp_path):
 
     for port_in in modeler.ports:
         for mode_index_in in range(port_in.mode_spec.num_modes):
-
             for port_out in modeler.ports:
                 for mode_index_out in range(port_out.mode_spec.num_modes):
-
                     coords_in = dict(port_in=port_in.name, mode_index_in=mode_index_in)
                     coords_out = dict(port_out=port_out.name, mode_index_out=mode_index_out)
 
@@ -306,7 +303,6 @@ def test_component_modeler_run_only(monkeypatch):
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
     for (i, j), (k, l), mult_by in element_mappings:
-
         (port_out_from, mode_index_out_from) = i
         (port_in_from, mode_index_in_from) = j
         (port_out_to, mode_index_out_to) = k

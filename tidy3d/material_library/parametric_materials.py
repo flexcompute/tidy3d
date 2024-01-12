@@ -2,7 +2,7 @@
 from abc import ABC, abstractmethod
 from typing import List, Tuple
 import warnings
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from ..components.medium import PoleResidue, Medium2D, Drude
@@ -257,7 +257,6 @@ class Graphene(ParametricVariantItem2D):
         integration_min = GRAPHENE_INT_MIN
         integration_max = GRAPHENE_INT_MAX
         for i, omega in enumerate(omegas):
-
             integral, _ = integrate.quad(
                 integrand, integration_min, integration_max, args=(omega,), epsabs=GRAPHENE_INT_TOL
             )
@@ -299,7 +298,7 @@ class Graphene(ParametricVariantItem2D):
             Each item in ``coeffslist`` is a list of four coefficients corresponding to
             a single Pade term."""
             res = np.zeros(len(omega), dtype=complex)
-            for (alpha0, alpha1, beta1, beta2) in coeffslist:
+            for alpha0, alpha1, beta1, beta2 in coeffslist:
                 res += (alpha0 + alpha1 * 1j * omega) / (
                     1 + beta1 * 1j * omega + beta2 * (1j * omega) ** 2
                 )
@@ -347,7 +346,7 @@ class Graphene(ParametricVariantItem2D):
         def get_pole_residue(coeffslist: List[List[float]]) -> PoleResidue:
             """Convert a list of Pade coefficients into a :class:`.PoleResidue` model."""
             poles = []
-            for (alpha0, alpha1, beta1, beta2) in coeffslist:
+            for alpha0, alpha1, beta1, beta2 in coeffslist:
                 disc = beta1**2 - 4 * beta2
                 root1 = (beta1 + np.sqrt(complex(disc))) / (2 * beta2)
                 root2 = (beta1 - np.sqrt(complex(disc))) / (2 * beta2)
@@ -355,13 +354,13 @@ class Graphene(ParametricVariantItem2D):
                 res2 = alpha1 / beta2 - res1
 
                 if disc > 0:
-                    for (root, res) in zip([root1, root2], [res1, res2]):
+                    for root, res in zip([root1, root2], [res1, res2]):
                         poles.append((root, res / 2))
                 else:
                     poles.append((root1, res1))
 
             flipped_poles = []
-            for (a, c) in poles:
+            for a, c in poles:
                 if np.real(a) > 0:
                     flipped_poles += [(-1j * np.conj(1j * a), c)]
                 else:
@@ -388,7 +387,7 @@ class Graphene(ParametricVariantItem2D):
         """Clean up poles, merging poles at zero frequency."""
         zero_res = 0
         poles = []
-        for (a, c) in medium.poles:
+        for a, c in medium.poles:
             if a == 0:
                 zero_res += c
             elif abs(a) > 1e17:

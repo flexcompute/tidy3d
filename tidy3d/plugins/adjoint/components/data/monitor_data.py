@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Union, List, Dict, Any
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 import jax.numpy as jnp
 
@@ -86,7 +86,6 @@ class JaxModeData(JaxMonitorData, ModeData):
 
         adjoint_sources = []
         for amp, direction, freq, mode_index in zip(amps, directions, freqs, mode_indices):
-
             # TODO: figure out where this factor comes from
             k0 = 2 * np.pi * freq / C_0
             grad_const = k0 / 4 / ETA_0
@@ -411,7 +410,6 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         adjoint_sources = []
         for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
-
             # select the propagation angles from the data
             angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
             angle_theta = float(theta_data.sel(**angle_sel_kwargs))

@@ -3,7 +3,7 @@
 import pytest
 import json
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
@@ -229,7 +229,6 @@ def test_logging_warning_capture():
 
     # for sim_dict in [sim_dict_no_source, sim_dict_large_mnt]:
     for sim_dict in [sim_dict_no_source]:
-
         try:
             sim = td.Simulation.parse_obj(sim_dict)
             sim.validate_pre_upload()

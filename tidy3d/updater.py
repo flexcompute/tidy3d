@@ -5,8 +5,8 @@ from typing import Dict, Callable
 import json
 import functools
 
-import yaml
-import pydantic.v1 as pd
+# import yaml
+import pydantic as pd
 
 from .log import log
 from .version import __version__

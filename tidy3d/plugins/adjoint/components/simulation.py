@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Tuple, Union, List, Dict
 from multiprocessing import Pool
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from jax.tree_util import register_pytree_node_class

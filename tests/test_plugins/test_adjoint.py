@@ -3,7 +3,7 @@
 from typing import Tuple, Dict, List
 
 import pytest
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import jax.numpy as jnp
 import numpy as np
 from jax import grad
@@ -51,6 +51,7 @@ BASE_EPS_VAL = 2.0
 
 # name of the output monitor used in tests
 MNT_NAME = "mode"
+
 
 # Emulated forward and backward run functions
 def run_emulated_fwd(
@@ -404,7 +405,6 @@ def test_run_flux(use_emulated_run):
     # whether to run the flux pipeline through jax (True) or regular tidy3d (False)
     use_jax = True
     if not use_jax:
-
         td_field_components = {}
         for fld, jax_data_array in mnt_data.field_components.items():
             data_array = td.ScalarFieldDataArray(
@@ -415,7 +415,6 @@ def test_run_flux(use_emulated_run):
         mnt_data = td.FieldData(monitor=mnt_data.monitor, **td_field_components)
 
     def get_flux(x):
-
         fld_components = {}
         for fld, fld_component in mnt_data.field_components.items():
             new_values = x * fld_component.values
@@ -461,7 +460,6 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
 @pytest.mark.parametrize("local", (True, False))
 def test_adjoint_pipeline_2d(local, use_emulated_run):
-
     run_fn = run_local if local else run
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
@@ -888,12 +886,10 @@ def _test_polyslab_box(use_emulated_run):
     np.random.seed(0)
 
     def f(size, center, is_box=True):
-
         jax_med = JaxMedium(permittivity=2.0)
         POLYSLAB_AXIS = 2
 
         if is_box:
-
             size = list(size)
             size[POLYSLAB_AXIS] = jax.lax.stop_gradient(size[POLYSLAB_AXIS])
             center = list(center)
@@ -904,7 +900,6 @@ def _test_polyslab_box(use_emulated_run):
             jax_struct = JaxStructure(geometry=jax_box, medium=jax_med)
 
         else:
-
             size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(size, axis=POLYSLAB_AXIS)
             cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(center, axis=POLYSLAB_AXIS)
 
@@ -988,7 +983,6 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
     np.random.seed(0)
 
     def f(size, center):
-
         jax_med = JaxMedium(permittivity=2.0)
         POLYSLAB_AXIS = 2
 
@@ -1103,7 +1097,6 @@ def test_adjoint_run_async(local, use_emulated_run_async):
 
 @pytest.mark.parametrize("axis", (0, 1, 2))
 def test_diff_data_angles(axis):
-
     center = td.DiffractionMonitor.unpop_axis(2, (0, 0), axis)
     size = td.DiffractionMonitor.unpop_axis(0, (td.inf, td.inf), axis)
 
@@ -1209,7 +1202,6 @@ def _test_polyslab_scale(use_emulated_run):
         start_time = time.time()
 
         def f(scale=1.0):
-
             jax_med = JaxMedium(permittivity=2.0)
             POLYSLAB_AXIS = 2
 
@@ -1296,7 +1288,6 @@ def _test_custom_medium_3D(use_emulated_run):
     jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
 
     def make_custom_medium(Nx: int, Ny: int, Nz: int) -> JaxCustomMedium:
-
         # custom medium
         (xmin, ymin, zmin), (xmax, ymax, zmax) = jax_box.bounds
         coords = dict(
@@ -1329,7 +1320,6 @@ def test_custom_medium_size(use_emulated_run):
     jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
 
     def make_custom_medium(num_cells: int) -> JaxCustomMedium:
-
         Nx = num_cells
         Ny = Nz = 1
 
@@ -1355,11 +1345,9 @@ def test_custom_medium_size(use_emulated_run):
 
 
 def test_jax_sim_io(tmp_path):
-
     jax_box = JaxBox(size=(1, 1, 1), center=(0, 0, 0))
 
     def make_custom_medium(num_cells: int) -> JaxCustomMedium:
-
         n = int(np.sqrt(num_cells))
         Nx = n
         Ny = n
@@ -1406,7 +1394,6 @@ def test_num_input_structures():
     """Assert proper error is raised if number of input structures is too large."""
 
     def make_sim_(num_input_structures: int) -> JaxSimulation:
-
         sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
         struct = sim.input_structures[0]
         return sim.updated_copy(input_structures=num_input_structures * [struct])

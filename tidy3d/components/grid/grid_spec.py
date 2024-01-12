@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Union
 
 import numpy as np
-import pydantic.v1 as pd
+import pydantic as pd
 
 from .grid import Coords1D, Coords, Grid
 from .mesher import GradedMesher, MesherType

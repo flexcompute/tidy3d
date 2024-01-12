@@ -4,12 +4,13 @@ from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 from math import isclose
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 import xarray as xr
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+# import matplotlib.pylab as plt
+# import matplotlib as mpl
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .base import cached_property
 from .validators import assert_unique_names, assert_objects_in_sim_bounds
@@ -244,7 +245,7 @@ class Simulation(Box):
         updater = Updater(sim_dict=values)
         return updater.update_to_current()
 
-    @pydantic.validator("grid_spec", always=True)
+    # @pydantic.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
         """Check that wavelength can be defined if there is auto grid spec."""
         if val.wavelength is None and val.auto_grid_used:
@@ -483,7 +484,6 @@ class Simulation(Box):
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
                 for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-
                     if isclose(sim_val, struct_val):
                         consolidated_logger.warning(
                             f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
@@ -530,7 +530,6 @@ class Simulation(Box):
         sources = values.get("sources")
 
         if (not structures) or (not sources):
-
             return val
 
         with log as consolidated_logger:
@@ -598,7 +597,6 @@ class Simulation(Box):
                 fmin_mon = freqs.min()
                 fmax_mon = freqs.max()
                 for medium_index, medium in enumerate(mediums):
-
                     # skip mediums that have no freq range (all freqs valid)
                     if medium.frequency_range is None:
                         continue
@@ -787,8 +785,8 @@ class Simulation(Box):
                     raise SetupError("Diffraction monitors must not lie in a lossy medium.")
         return val
 
-    @pydantic.validator("grid_spec", always=True)
-    def _warn_grid_size_too_small(cls, val, values):
+    # @pydantic.validator("grid_spec", always=True)
+    def _warn_grid_size_too_small(cls, val, values):  # pylint:disable=too-many-locals
         """Warn user if any grid size is too large compared to minimum wavelength in material."""
 
         if val is None:
@@ -804,7 +802,6 @@ class Simulation(Box):
                 freq0 = source.source_time.freq0
 
                 for medium_index, medium in enumerate(mediums):
-
                     # min wavelength in PEC is meaningless and we'll get divide by inf errors
                     if isinstance(medium, PECMedium):
                         continue
@@ -1522,6 +1519,7 @@ class Simulation(Box):
             structures=self.structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
         medium_map = self.medium_map
+
         for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
@@ -2463,7 +2461,6 @@ class Simulation(Box):
 
         shapes = []
         for structure in structures:
-
             # get list of Shapely shapes that intersect at the plane
             shapes_plane = plane.intersections_with(structure.geometry)
 
@@ -2473,12 +2470,10 @@ class Simulation(Box):
 
         background_shapes = []
         for medium, shape, bounds in shapes:
-
             minx, miny, maxx, maxy = bounds
 
             # loop through background_shapes (note: all background are non-intersecting or merged)
             for index, (_medium, _shape, _bounds) in enumerate(background_shapes):
-
                 _minx, _miny, _maxx, _maxy = _bounds
 
                 # do a bounding box check to see if any intersection to do anything about
@@ -2598,7 +2593,6 @@ class Simulation(Box):
         with log as consolidated_logger:
             for structure in self.structures:
                 if isinstance(structure.medium, Medium2D):
-
                     normal = structure.geometry._normal_2dmaterial
                     grid_axes[normal] = True
                     for axis, grid_axis in enumerate(
@@ -3199,7 +3193,6 @@ class Simulation(Box):
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-
             # get simulation's bounding box
             bounds = sim_bounds
 

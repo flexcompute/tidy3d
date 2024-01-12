@@ -4,7 +4,8 @@ from typing import Dict, List
 
 import xarray as xr
 import numpy as np
-import dask
+
+# import dask
 import h5py
 
 from ...constants import HERTZ, SECOND, MICROMETER, RADIAN

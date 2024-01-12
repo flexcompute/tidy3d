@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 import responses
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 import matplotlib.pyplot as plt
 

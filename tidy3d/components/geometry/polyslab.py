@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import List, Tuple
 from math import isclose
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 import numpy as np
 import shapely
-from matplotlib import path
+# from matplotlib import path
 
 from ..base import cached_property
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D

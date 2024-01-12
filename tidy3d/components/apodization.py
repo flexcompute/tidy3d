@@ -1,6 +1,6 @@
 """Defines specification for apodization."""
 
-import pydantic.v1 as pd
+import pydantic as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel

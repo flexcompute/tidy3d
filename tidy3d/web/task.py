@@ -4,7 +4,7 @@ from enum import Enum
 from abc import ABC
 from typing import Optional
 
-import pydantic.v1 as pydantic
+import pydantic as pydantic
 
 
 class TaskStatus(Enum):

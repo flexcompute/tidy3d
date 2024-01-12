@@ -6,8 +6,8 @@ import ssl
 from typing import Tuple, Optional
 from enum import Enum
 import requests
-import pydantic.v1 as pydantic
-from pydantic.v1 import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
+import pydantic as pydantic
+from pydantic import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
 
 from ...log import log
 from ...components.base import Tidy3dBaseModel
