@@ -96,7 +96,7 @@ grcwa = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
 sphinx-tabs = {version="*", optional = true}
 nbdime = {version="*", optional = true}
-m2r2 = {git = "https://github.com/daquinteroflex/m2r2", optional = true, branch = "v2"}
+m2r3 = {version="*", optional = true}
 optax = {version="*", optional = true}
 signac = {version="*", optional = true}
 sax = {version="*", optional = true}
@@ -106,11 +106,11 @@ sphinxemoji = {version="*", optional = true}
 
 [tool.poetry.extras]
 dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
-  'jupyter', 'jupyterblack', 'm2r2', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
+  'jupyter', 'jupyterblack', 'm2r3', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
   'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
     'vtk']
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "m2r2"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "m2r3"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]
