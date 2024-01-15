@@ -2,4 +2,4 @@
 Changelog |:rewind:|
 ********************
 
-.. mdinclude:: ../CHANGELOG.md
+.. include:: ../CHANGELOG.md

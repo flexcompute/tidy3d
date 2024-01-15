@@ -5,7 +5,7 @@ Adjoint
 
 .. toctree::
 
-    adjoint_readme
+    ../../../tidy3d/plugins/adjoint/README
 
 .. autosummary::
    :toctree: ../_autosummary/

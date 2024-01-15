@@ -8,7 +8,6 @@ on:
       - latest
       - 'pre/*'
       - 'v*'
-      - "dario/fix_sync_with_submodule"
 
   workflow_dispatch:
     inputs:
