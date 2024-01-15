@@ -12,6 +12,7 @@ from botocore.exceptions import ClientError
 
 from . import http_util
 from .core_config import get_logger_console
+from .environment import Env
 from .exceptions import WebError
 
 from .cache import FOLDER_CACHE
@@ -416,6 +417,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "solverVersion": solver_version,
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
+                "enableCaching": Env.current.enable_caching,
             },
         )
 

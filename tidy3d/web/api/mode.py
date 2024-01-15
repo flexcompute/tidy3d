@@ -12,6 +12,7 @@ import time
 import pydantic.v1 as pydantic
 from botocore.exceptions import ClientError
 
+from ..core.environment import Env
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
 from ...components.medium import AbstractCustomMedium
@@ -74,7 +75,6 @@ def run(
     reduce_simulation : Literal["auto", True, False] = "auto"
         Restrict simulation to mode solver region. If "auto", then simulation is automatically
         restricted if it contains custom mediums.
-
     Returns
     -------
     :class:`.ModeSolverData`
@@ -329,7 +329,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
-        http.post(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run")
+        http.post(
+            f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
+            {"enableCaching": Env.current.enable_caching},
+        )
 
     def delete(self):
         """Delete the mode solver and its corresponding task from the server."""

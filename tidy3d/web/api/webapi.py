@@ -262,7 +262,6 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
-
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
