@@ -1,16 +1,18 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional
+from typing import Dict, Tuple, Union, Callable, Optional, Any, List
 from abc import ABC
 
 import pydantic.v1 as pd
 import numpy as np
 from jax.tree_util import register_pytree_node_class
+import jax
+import jax.numpy as jnp
 import xarray as xr
 
 from ....components.types import Bound, Literal
-from ....components.medium import Medium, AnisotropicMedium, CustomMedium
+from ....components.medium import Medium, AnisotropicMedium, CustomMedium, PoleResidue
 from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
 from ....exceptions import SetupError
@@ -444,11 +446,121 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
         return self.copy(update=dict(eps_dataset=vjp_eps_dataset))
 
 
-JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium]
+@register_pytree_node_class
+class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
+    _tidy3d_class = PoleResidue
 
+    eps_inf_jax: JaxFloat = pd.Field(
+        1.0,
+        title="Epsilon at Infinity (Jax)",
+        description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
+        # units=PERMITTIVITY,
+        stores_jax_for="eps_inf",
+    )
+
+    poles_jax: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
+        (),
+        # title="Poles",
+        # description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+        # units=(RADPERSEC, RADPERSEC),
+        stores_jax_for="poles",
+    )
+
+    @staticmethod
+    def _to_complex(value: Any) -> complex:
+        """Convert a value to complex (if possible)."""
+        if isinstance(value, (jnp.ndarray, np.ndarray)):
+            return value.astype(complex)
+        if isinstance(value, dict) and all(key in value for key in ("real", "imag")):
+            return value["real"] + 1j * value["imag"]
+        if isinstance(value, float):
+            return complex(value)
+        return value
+
+    @pd.validator("poles", pre=True, always=True, allow_reuse=True)
+    def _handle_poles(cls, val):
+        """Make sure there are no poles that aren't of type complex."""
+        return tuple((cls._to_complex(a), cls._to_complex(c)) for (a, c) in val)
+
+    @pd.validator("poles_jax", pre=True, always=True, allow_reuse=True)
+    def _handle_poles_jax(cls, val):
+        """Make sure there are no jax poles that aren't of type complex."""
+        return tuple((cls._to_complex(a), cls._to_complex(c)) for (a, c) in val)
+
+    @staticmethod
+    def _eps_model_1_pole(a: complex, c: complex, frequency: float) -> complex:
+        """Contribution of a single ``a`` and ``c`` pole on the complex-valued permittivity."""
+
+        omega = 2 * np.pi * frequency
+        a_cc = jnp.conj(a)
+        c_cc = jnp.conj(c)
+        pole_contrib = c / (1j * omega + a) + c_cc / (1j * omega + a_cc)
+        return -pole_contrib
+
+    def _eps_model(
+        self, eps_inf: float, poles: List[complex, complex], frequency: float
+    ) -> complex:
+        """Eps model of the JaxPoleResidue."""
+        eps = eps_inf
+        for a, c in poles:
+            eps += self._eps_model_1_pole(a, c, frequency)
+        return eps
+
+    def store_vjp(
+        self,
+        grad_data_fwd: FieldData,
+        grad_data_adj: FieldData,
+        sim_bounds: Bound,
+        wvl_mat: float,
+        inside_fn: Callable[[np.ndarray, np.ndarray, np.ndarray], np.ndarray],
+    ) -> JaxPoleResidue:
+        """Returns the gradient of the medium parameters given forward and adjoint field data."""
+
+        # integrate the dot product of each E component over the volume, update vjp for epsilon
+        d_eps_map = self.d_eps_map(
+            grad_data_fwd=grad_data_fwd,
+            grad_data_adj=grad_data_adj,
+            sim_bounds=sim_bounds,
+            wvl_mat=wvl_mat,
+            inside_fn=inside_fn,
+        )
+
+        # TODO: refactor this into a bulk volume grad calculator
+        vjp_eps_complex = d_eps_map.sum(dim=("x", "y", "z"))
+
+        vjp_eps_inf = 0.0
+        vjp_poles = [[0.0j, 0.0j] for _ in self.poles]
+        eps_model_grad_fn = jax.grad(self._eps_model_1_pole, argnums=(0, 1), holomorphic=True)
+
+        for freq in d_eps_map.coords["f"]:
+            vjp_eps_complex_f = complex(vjp_eps_complex.sel(f=freq))
+            _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
+            vjp_eps_inf += _vjp_eps
+
+            for pole_i, (a_i, c_i) in enumerate(self.poles):
+                deps_da, deps_dc = eps_model_grad_fn(a_i, c_i, float(freq))
+
+                vjp_a = vjp_eps_complex_f * deps_da
+                vjp_c = vjp_eps_complex_f * deps_dc
+
+                vjp_a = vjp_a
+                vjp_c = -jnp.conj(vjp_c)
+
+                # update the VJP of each pole for this frequency
+                vjp_poles[pole_i][0] += complex(vjp_a)  # TODO: not sure about conj
+                vjp_poles[pole_i][1] += complex(vjp_c)  # TODO: not sure about conj
+
+        return self.updated_copy(
+            eps_inf_jax=float(vjp_eps_inf),
+            poles_jax=tuple(vjp_poles),
+        )
+
+
+JaxMediumType = Union[JaxMedium, JaxAnisotropicMedium, JaxCustomMedium, JaxPoleResidue]
 
 JAX_MEDIUM_MAP = {
     Medium: JaxMedium,
     AnisotropicMedium: JaxAnisotropicMedium,
     CustomMedium: JaxCustomMedium,
+    PoleResidue: JaxPoleResidue,
 }

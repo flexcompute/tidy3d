@@ -2,7 +2,7 @@
 
 # import the jax version of tidy3d components
 from .geometry import JaxBox, JaxPolySlab
-from .medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium
+from .medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium, JaxPoleResidue
 from .structure import JaxStructure, JaxStructureStaticMedium, JaxStructureStaticGeometry
 from .simulation import JaxSimulation
 from .data.sim_data import JaxSimulationData
@@ -17,6 +17,7 @@ __all__ = [
     "JaxMedium",
     "JaxAnisotropicMedium",
     "JaxCustomMedium",
+    "JaxPoleResidue",
     "JaxStructure",
     "JaxStructureStaticMedium",
     "JaxStructureStaticGeometry",
