@@ -150,7 +150,6 @@ class JaxObject(Tidy3dBaseModel):
             orig_name = cls.__fields__[jax_name].field_info.extra.get("stores_jax_for")
             val = values.get(orig_name)
             if val is not None:
-
                 # try adding the sanitized (no trace) version to the regular field
                 try:
                     values[orig_name] = jax.lax.stop_gradient(val)

@@ -448,7 +448,6 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
 @register_pytree_node_class
 class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
-
     _tidy3d_class = PoleResidue
 
     eps_inf_jax: JaxFloat = pd.Field(
@@ -503,7 +502,7 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
     ) -> complex:
         """Eps model of the JaxPoleResidue."""
         eps = eps_inf
-        for (a, c) in poles:
+        for a, c in poles:
             eps += self._eps_model_1_pole(a, c, frequency)
         return eps
 
@@ -539,11 +538,13 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
             vjp_eps_inf += _vjp_eps
 
             for pole_i, (a_i, c_i) in enumerate(self.poles):
-
                 deps_da, deps_dc = eps_model_grad_fn(a_i, c_i, float(freq))
 
                 vjp_a = vjp_eps_complex_f * deps_da
                 vjp_c = vjp_eps_complex_f * deps_dc
+
+                vjp_a = vjp_a
+                vjp_c = -jnp.conj(vjp_c)
 
                 # update the VJP of each pole for this frequency
                 vjp_poles[pole_i][0] += complex(vjp_a)  # TODO: not sure about conj

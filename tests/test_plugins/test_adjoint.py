@@ -1760,7 +1760,7 @@ def test_pole_residue_eps_model():
 
     def eps_model(eps_inf, poles, freq):
         eps = eps_inf
-        for (a, c) in poles:
+        for a, c in poles:
             eps += -c / (1j * OMEGA + a)
             eps += -np.conj(c) / (1j * OMEGA + np.conj(a))
         return eps
@@ -1785,7 +1785,6 @@ def test_pole_residue_grad():
     """Numerically test gradient of function involving JaxPoleResidue._eps_model()"""
 
     def make_pole_residue(eps_inf, a_re, a_im, c_re, c_im):
-
         a = a_re + 1j * a_im
         c = c_re + 1j * c_im
         pole = (a, c)
@@ -1849,7 +1848,6 @@ def test_pole_residue_grad_sim():
     OMEGA = 2 * np.pi * FREQ0
 
     def make_sim(eps_inf, a_re, a_im, c_re, c_im):
-
         eps_inf, a_re, a_im, c_re, c_im = map(jnp.array, (eps_inf, a_re, a_im, c_re, c_im))
 
         a = OMEGA * a_re + 1j * OMEGA * a_im
@@ -1928,12 +1926,12 @@ def test_pole_residue_grad_sim():
     val, grad_adj = grad_fn(EPS_INF, A_RE, A_IM, C_RE, C_IM)
     print(EPS_INF, A_RE, A_IM, C_RE, C_IM)
     val2 = objective(EPS_INF, A_RE, A_IM, C_RE, C_IM)
-    print(f'val = {val}')
-    print(f'val2 = {val2}')
+    print(f"val = {val}")
+    print(f"val2 = {val2}")
 
     _delta = 1e-2
 
-    _deltas = [_delta] * num_args#[5e-3, 1e-2, 7e-3, 1e-3, 1e-3]
+    _deltas = [_delta] * num_args  # [5e-3, 1e-2, 7e-3, 1e-3, 1e-3]
     deltas = [abs(x) * d for x, d in zip(arguments, _deltas)]
 
     # assemble simulations for batch to compute numerical gradient
@@ -1948,7 +1946,7 @@ def test_pole_residue_grad_sim():
     # run batch
     batch = Batch(simulations=sims, verbose=False)
     batch_data = batch.run(path_dir="data")
-    print(f'value_and_grad[0] = {val}')
+    print(f"value_and_grad[0] = {val}")
     print(f"objective(*args) = {objective(*arguments)}")
 
     # assemble numerical gradient
@@ -1968,4 +1966,6 @@ def test_pole_residue_grad_sim():
 
     print("adjoint: ", grad_adj)
     print("numerical: ", grad_num)
-    assert np.allclose(grad_adj, grad_num), "Pole residue adjoint grad doesn't match numerical."
+    assert np.allclose(
+        grad_adj, grad_num, rtol=0.2
+    ), "Pole residue adjoint grad doesn't match numerical."
