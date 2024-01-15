@@ -16,6 +16,7 @@ class EnvironmentConfig(BaseSettings):
     website_endpoint: str
     s3_region: str
     ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
+    enable_caching: bool = True
 
     def active(self) -> None:
         """Activate the environment instance."""
@@ -163,6 +164,17 @@ class Environment:
             The environment to set to current.
         """
         self._current = config
+
+    def enable_caching(self, enable_caching: bool = True) -> None:
+        """Set the environment configuration setting with regards to caching simulation results.
+
+        Parameters
+        ----------
+        enable_caching: bool = True
+            If `True`, do duplicate checking. Return the previous simulation result if duplicate simulation is found.
+            If `False`, do not duplicate checking. Just run the task directly.
+        """
+        self._current.enable_caching = enable_caching
 
 
 Env = Environment()
