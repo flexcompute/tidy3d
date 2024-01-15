@@ -1,7 +1,7 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional, Any
+from typing import Dict, Tuple, Union, Callable, Optional, Any, List
 from abc import ABC
 
 import pydantic.v1 as pd
