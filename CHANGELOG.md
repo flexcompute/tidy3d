@@ -5,6 +5,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+- `DataArray.to_hdf5()` accepts both file handles and file paths.
+
+### Fixed
+
 ## [2.6.0rc1] - 2024-01-11
 
 ### Added

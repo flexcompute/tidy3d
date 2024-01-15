@@ -1,6 +1,6 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Union
 from abc import ABC
 
 import xarray as xr
@@ -139,12 +139,24 @@ class DataArray(xr.DataArray):
         """Absolute value of data array."""
         return abs(self)
 
-    def to_hdf5(self, fname: str, group_path: str) -> None:
-        """Save an xr.DataArray to the hdf5 file with a given path to the group."""
-        sub_group = fname.create_group(group_path)
+    def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
+
+        # file name passed
+        if isinstance(fname, str):
+            with h5py.File(fname, "w") as f_handle:
+                self.to_hdf5_handle(f_handle=f_handle, group_path=group_path)
+
+        # file handle passed
+        else:
+            self.to_hdf5_handle(f_handle=fname, group_path=group_path)
+
+    def to_hdf5_handle(self, f_handle: h5py.File, group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
+
+        sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = self.values
         for key, val in self.coords.items():
-            # sub_group[key] = val
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
             else:
