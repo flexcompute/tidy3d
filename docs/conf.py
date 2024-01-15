@@ -80,7 +80,7 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
-    "m2r2",
+    "myst_parser",
     # "sphinxcontrib.divparams", # TODO FIX
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
@@ -160,6 +160,10 @@ man_pages = [(master_doc, "tidy3d", "tidy3d Documentation", [author], 1)]
 mathjax3_config = {
     "tex": {"tags": "ams", "useLabelIds": True},
 }
+myst_enable_extensions = [
+    "amsmath",
+    "dollarmath",
+]
 nbsphinx_allow_errors = True  # Continue through Jupyter errors
 nbsphinx_execute = "never"
 project = "tidy3d"

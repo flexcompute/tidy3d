@@ -1,1 +1,0 @@
-.. mdinclude:: ../../../tidy3d/plugins/design/README.md

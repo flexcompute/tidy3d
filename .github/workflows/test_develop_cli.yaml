@@ -7,7 +7,7 @@ on:
   pull_request:
     branches:
       - develop
-      - 'pre/*'
+      - 'pre/*' # We should reduce the frequency of these builds to save resources since it tests the docs build which is pretty long.
 
 jobs:
   test-dev-commands:
@@ -30,18 +30,17 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev]
 
-    - name: Pre-install Pandoc
-      run: |
-        if ([[ "${{ matrix.os }}" == "ubuntu-latest" ]]); then
-          sudo apt-get install pandoc
-          # Additional installation steps for Ubuntu
-        elif ([[ "${{ matrix.os }}" == "macos-latest" ]]); then
-          brew install pandoc
-          # Additional installation steps for macOS
-        elif ([[ "${{ matrix.os }}" == "windows-latest" ]]); then
-          choco install pandoc
-          # Additional installation steps for Windows
-        fi
+    - name: matrix.os install Pandoc
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get install pandoc
+
+    - name: matrix.os install Pandoc
+      if: matrix.os == 'macos-latest'
+      run: brew install pandoc
+
+    - name: matrix.os install Pandoc
+      if: matrix.os == 'windows-latest'
+      run: choco install pandoc
 
     - name: Verify existing installations
       run: |
@@ -67,6 +66,6 @@ jobs:
 
     - name: Run development test commands
       run: |
-        exit
+        poetry run python -m pytest ./tests/test_cli/full_test_development.py
         
         

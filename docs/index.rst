@@ -125,8 +125,7 @@ b) View the results of this simulation on our web-based `graphical user interfac
   install
   lectures/index
   notebooks/docs/index
-  howdoi
-  faq
+  faq/docs/index
   api/index
   development/index
   changelog
