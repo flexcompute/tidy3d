@@ -68,6 +68,7 @@ autodoc_default_options = {
     "undoc-members": True,
 }
 autodoc_typehints = "none"
+autodoc_pydantic_model_show_field_summary = True
 ## TODO DEBATE KEEP
 # autoclass_content = "class"
 ##
@@ -80,7 +81,6 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
     "nbsphinx",  # Integrate Jupyter Notebooks and Sphinx
-    "m2r2",
     "sphinx.ext.autodoc",  # Core Sphinx library for auto html doc generation from docstrings
     "sphinx.ext.autosummary",  # Create neat summary tables for modules/classes/methods etc
     "sphinx.ext.coverage",
@@ -91,11 +91,11 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
+    "sphinxemoji.sphinxemoji",
+    "sphinxcontrib.autodoc_pydantic",
     "sphinx_copybutton",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
-    "sphinxemoji.sphinxemoji",
-    "sphinxcontrib.autoflex",
     "custom-meta",  # In _ext, these need to be at the end of the extensions list
     "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
     "custom-robots",  # In _ext, these need to be at the end of the extensions list
