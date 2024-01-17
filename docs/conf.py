@@ -58,18 +58,8 @@ master_doc = "index"  # The master toctree document.s
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 add_module_names = False  # Remove namespaces from class/method signatures
 autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
-# autoclass_content = "both"  # Add __init__ doc (ie. params) to class summaries
-# autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
-autodoc_class_signature = "separated"
-autodoc_default_options = {
-    "members": True,
-    "member-order": "bysource",
-    "special-members": "__init__",
-    "undoc-members": True,
-}
+autodoc_default_options = {"inherited-members": True, "show-inheritance": True}
 autodoc_typehints = "none"
-autodoc_pydantic_model_show_field_summary = True
-## TODO DEBATE KEEP
 # autoclass_content = "class"
 ##
 copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
@@ -91,8 +81,8 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
-    "sphinxemoji.sphinxemoji",
     "sphinxcontrib.autodoc_pydantic",
+    "sphinxemoji.sphinxemoji",
     "sphinx_copybutton",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
@@ -212,18 +202,3 @@ latex_elements = {
     \usepackage{cmap}
     """
 }
-# latex_elements: dict = {
-#     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
-#     # The paper size ('letterpaper' or 'a4paper').
-#     #
-#     # 'papersize': 'letterpaper',
-#     # The font size ('10pt', '11pt' or '12pt').
-#     #
-#     # 'pointsize': '10pt',
-#     # Additional stuff for the LaTeX preamble.
-#     #
-#     # 'preamble': '',
-#     # Latex figure (float) alignment
-#     #
-#     # 'figure_align': 'htbp',
-# }
