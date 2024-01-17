@@ -22,7 +22,8 @@ from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
-from ...packaging import vtk, requires_vtk
+from ...packaging import check_import
+from ...config_extra import verify_and_configure_vtk, get_vtk_id_type
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
 from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
 from ...log import log
@@ -517,11 +518,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
         """Check that cell connections does not have duplicate points."""
-        if vtk is None:
+        if not check_import("vtk"):
             return val
 
-        # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
-        return CellDataArray(val.data.astype(vtk["id_type"], copy=False), coords=val.coords)
+        vtk_id_type = get_vtk_id_type()
+        # Using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
+        return CellDataArray(val.data.astype(vtk_id_type, copy=False), coords=val.coords)
 
     @pd.validator("values", always=True)
     @skip_if_fields_missing(["points"])
@@ -660,56 +662,67 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @classmethod
     @abstractmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_cell_type(cls):
         """VTK cell type to use in the VTK representation."""
 
     @cached_property
     def _vtk_offsets(self) -> ArrayLike:
         """Offsets array to use in the VTK representation."""
+        import vtk
+
         offsets = np.arange(len(self.cells) + 1) * self._cell_num_vertices()
         if vtk is None:
             return offsets
-
-        return offsets.astype(vtk["id_type"], copy=False)
+        vtk_id_type = get_vtk_id_type()
+        return offsets.astype(vtk_id_type, copy=False)
 
     @property
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_cells(self):
         """VTK cell array to use in the VTK representation."""
-        cells = vtk["mod"].vtkCellArray()
+        import vtk
+        from vtk.util.numpy_support import numpy_to_vtkIdTypeArray
+
+        cells = vtk.vtkCellArray()
         cells.SetData(
-            vtk["numpy_to_vtkIdTypeArray"](self._vtk_offsets),
-            vtk["numpy_to_vtkIdTypeArray"](self.cells.data.ravel()),
+            numpy_to_vtkIdTypeArray(self._vtk_offsets),
+            numpy_to_vtkIdTypeArray(self.cells.data.ravel()),
         )
         return cells
 
     @property
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_points(self):
         """VTK point array to use in the VTK representation."""
-        pts = vtk["mod"].vtkPoints()
-        pts.SetData(vtk["numpy_to_vtk"](self._points_3d_array))
+        import vtk
+        from vtk.util.numpy_support import numpy_to_vtk
+
+        pts = vtk.vtkPoints()
+        pts.SetData(numpy_to_vtk(self._points_3d_array))
         return pts
 
     @property
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_obj(self):
         """A VTK representation (vtkUnstructuredGrid) of the grid."""
+        import vtk
+        from vtk.util.numpy_support import numpy_to_vtk
 
-        grid = vtk["mod"].vtkUnstructuredGrid()
+        grid = vtk.vtkUnstructuredGrid()
 
         grid.SetPoints(self._vtk_points)
         grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
-        point_data_vtk = vtk["numpy_to_vtk"](self.values.data)
+        point_data_vtk = numpy_to_vtk(self.values.data)
         point_data_vtk.SetName(self.values.name)
         grid.GetPointData().AddArray(point_data_vtk)
 
         return grid
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def _plane_slice_raw(self, axis: Axis, pos: float):
         """Slice data with a plane and return the resulting VTK object."""
+        import vtk
 
         if pos > self.bounds[1][axis] or pos < self.bounds[0][axis]:
             raise DataError(
@@ -724,26 +737,26 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         normal[axis] = 1
 
         # create cutting plane
-        plane = vtk["mod"].vtkPlane()
+        plane = vtk.vtkPlane()
         plane.SetOrigin(origin[0], origin[1], origin[2])
         plane.SetNormal(normal[0], normal[1], normal[2])
 
         # create cutter
-        cutter = vtk["mod"].vtkPlaneCutter()
+        cutter = vtk.vtkPlaneCutter()
         cutter.SetPlane(plane)
         cutter.SetInputData(self._vtk_obj)
         cutter.InterpolateAttributesOn()
         cutter.Update()
 
         # clean up the slice
-        cleaner = vtk["mod"].vtkCleanPolyData()
+        cleaner = vtk.vtkCleanPolyData()
         cleaner.SetInputData(cutter.GetOutput())
         cleaner.Update()
 
         return cleaner.GetOutput()
 
     @abstractmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def plane_slice(
         self, axis: Axis, pos: float
     ) -> Union[SpatialDataArray, UnstructuredGridDataset]:
@@ -764,10 +777,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """
 
     @staticmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _read_vtkUnstructuredGrid(fname: str):
         """Load a :class:`vtkUnstructuredGrid` from a file."""
-        reader = vtk["mod"].vtkXMLUnstructuredGridReader()
+        import vtk
+
+        reader = vtk.vtkXMLUnstructuredGridReader()
         reader.SetFileName(fname)
         reader.Update()
         grid = reader.GetOutput()
@@ -776,12 +791,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @classmethod
     @abstractmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _from_vtk_obj(cls, vtk_obj) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def from_vtu(cls, file: str) -> UnstructuredGridDataset:
         """Load unstructured data from a vtu file.
 
@@ -798,7 +813,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         grid = cls._read_vtkUnstructuredGrid(file)
         return cls._from_vtk_obj(grid)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def to_vtu(self, fname: str):
         """Exports unstructured grid data into a .vtu file.
 
@@ -807,16 +822,18 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         fname : str
             Full path to the .vtu file to save the unstructured data to.
         """
+        import vtk
 
-        writer = vtk["mod"].vtkXMLUnstructuredGridWriter()
+        writer = vtk.vtkXMLUnstructuredGridWriter()
         writer.SetFileName(fname)
         writer.SetInputData(self._vtk_obj)
         writer.Write()
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _get_values_from_vtk(cls, vtk_obj, num_points: pd.PositiveInt) -> IndexedDataArray:
         """Get point data values from a VTK object."""
+        from vtk.util.numpy_support import vtk_to_numpy
 
         point_data = vtk_obj.GetPointData()
         num_point_arrays = point_data.GetNumberOfArrays()
@@ -854,7 +871,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     f"The length of found point data array ({num_tuples}) does not match the number of grid points ({num_points})."
                 )
 
-            values_numpy = vtk["vtk_to_numpy"](array_vtk)
+            values_numpy = vtk_to_numpy(array_vtk)
             values_name = array_vtk.GetName()
 
         values = IndexedDataArray(
@@ -863,7 +880,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return values
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def box_clip(self, bounds: Bound) -> UnstructuredGridDataset:
         """Clip the unstructured grid using a box defined by ``bounds``.
 
@@ -877,9 +894,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         UnstructuredGridDataset
             Clipped grid.
         """
+        import vtk
 
         # make and run a VTK clipper
-        clipper = vtk["mod"].vtkBoxClipDataSet()
+        clipper = vtk.vtkBoxClipDataSet()
         clipper.SetOrientation(0)
         clipper.SetBoxClip(
             bounds[0][0], bounds[1][0], bounds[0][1], bounds[1][1], bounds[0][2], bounds[1][2]
@@ -891,7 +909,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         clip = clipper.GetOutput()
 
         # clean grid from unused points
-        grid_cleaner = vtk["mod"].vtkRemoveUnusedPoints()
+        grid_cleaner = vtk.vtkRemoveUnusedPoints()
         grid_cleaner.SetInputData(clip)
         grid_cleaner.GenerateOriginalPointIdsOff()
         grid_cleaner.Update()
@@ -903,7 +921,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return self._from_vtk_obj(clean_clip)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
@@ -929,6 +947,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         SpatialDataArray
             Interpolated data.
         """
+        import vtk
+        from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 
         # calculate the resulting array shape
         x = np.atleast_1d(x)
@@ -937,14 +957,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         shape = (len(x), len(y), len(z))
 
         # create a VTK rectilinear grid to sample onto
-        structured_grid = vtk["mod"].vtkRectilinearGrid()
+        structured_grid = vtk.vtkRectilinearGrid()
         structured_grid.SetDimensions(shape)
-        structured_grid.SetXCoordinates(vtk["numpy_to_vtk"](x))
-        structured_grid.SetYCoordinates(vtk["numpy_to_vtk"](y))
-        structured_grid.SetZCoordinates(vtk["numpy_to_vtk"](z))
+        structured_grid.SetXCoordinates(numpy_to_vtk(x))
+        structured_grid.SetYCoordinates(numpy_to_vtk(y))
+        structured_grid.SetZCoordinates(numpy_to_vtk(z))
 
         # create and execute VTK interpolator
-        interpolator = vtk["mod"].vtkResampleWithDataSet()
+        interpolator = vtk.vtkResampleWithDataSet()
         interpolator.SetInputData(structured_grid)
         interpolator.SetSourceData(self._vtk_obj)
         interpolator.Update()
@@ -952,13 +972,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # get results in a numpy representation
         array_id = 0 if self.values.name is None else self.values.name
-        values_numpy = vtk["vtk_to_numpy"](interpolated.GetPointData().GetAbstractArray(array_id))
+        values_numpy = vtk_to_numpy(interpolated.GetPointData().GetAbstractArray(array_id))
 
         # fill points without interpolated values
         if fill_value != 0:
-            mask = vtk["vtk_to_numpy"](
-                interpolated.GetPointData().GetAbstractArray("vtkValidPointMask")
-            )
+            mask = vtk_to_numpy(interpolated.GetPointData().GetAbstractArray("vtkValidPointMask"))
             values_numpy[mask != 1] = fill_value
 
         # VTK arrays are the z-y-x order, reorder interpolation results to x-y-z order
@@ -967,7 +985,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         return SpatialDataArray(values_reordered, coords=dict(x=x, y=y, z=z), name=self.values.name)
 
     @abstractmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
@@ -992,7 +1010,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Extracted data.
         """
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def reflect(
         self, axis: Axis, center: float, reflection_only: bool = False
     ) -> UnstructuredGridDataset:
@@ -1014,8 +1032,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         UnstructuredGridDataset
             Data after reflextion is performed.
         """
+        import vtk
 
-        reflector = vtk["mod"].vtkReflectionFilter()
+        reflector = vtk.vtkReflectionFilter()
         reflector.SetPlane([reflector.USE_X, reflector.USE_Y, reflector.USE_Z][axis])
         reflector.SetCenter(center)
         reflector.SetCopyInput(not reflection_only)
@@ -1098,32 +1117,36 @@ class TriangularGridDataset(UnstructuredGridDataset):
         return 3
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_cell_type(cls):
         """VTK cell type to use in the VTK representation."""
-        return vtk["mod"].VTK_TRIANGLE
+        import vtk
+
+        return vtk.VTK_TRIANGLE
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _from_vtk_obj(cls, vtk_obj):
         """Initialize from a vtkUnstructuredGrid instance."""
+        import vtk
+        from vtk.util.numpy_support import vtk_to_numpy
 
         # get points cells data from vtk object
-        if isinstance(vtk_obj, vtk["mod"].vtkPolyData):
+        if isinstance(vtk_obj, vtk.vtkPolyData):
             cells_vtk = vtk_obj.GetPolys()
-        elif isinstance(vtk_obj, vtk["mod"].vtkUnstructuredGrid):
+        elif isinstance(vtk_obj, vtk.vtkUnstructuredGrid):
             cells_vtk = vtk_obj.GetCells()
 
-        cells_numpy = vtk["vtk_to_numpy"](cells_vtk.GetConnectivityArray())
+        cells_numpy = vtk_to_numpy(cells_vtk.GetConnectivityArray())
 
-        cell_offsets = vtk["vtk_to_numpy"](cells_vtk.GetOffsetsArray())
+        cell_offsets = vtk_to_numpy(cells_vtk.GetOffsetsArray())
         if not np.all(np.diff(cell_offsets) == cls._cell_num_vertices()):
             raise DataError(
                 "Only triangular 'vtkUnstructuredGrid' or 'vtkPolyData' can be converted into "
                 "'TriangularGridDataset'."
             )
 
-        points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
+        points_numpy = vtk_to_numpy(vtk_obj.GetPoints().GetData())
 
         # data values are read directly into Tidy3D array
         values = cls._get_values_from_vtk(vtk_obj, len(points_numpy))
@@ -1169,7 +1192,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
             values=values,
         )
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def plane_slice(self, axis: Axis, pos: float) -> SpatialDataArray:
         """Slice data with a plane and return the resulting line as a SpatialDataArray.
 
@@ -1185,6 +1208,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         SpatialDataArray
             The resulting slice.
         """
+        from vtk.util.numpy_support import vtk_to_numpy
 
         if axis == self.normal_axis:
             raise DataError(
@@ -1194,7 +1218,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # perform slicing in vtk and get unprocessed points and values
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
-        points_numpy = vtk["vtk_to_numpy"](slice_vtk.GetPoints().GetData())
+        points_numpy = vtk_to_numpy(slice_vtk.GetPoints().GetData())
         values = self._get_values_from_vtk(slice_vtk, len(points_numpy))
 
         # axis of the resulting line
@@ -1305,7 +1329,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
@@ -1353,7 +1377,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         return super().interp(x=x, y=y, z=z, fill_value=fill_value)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,
@@ -1408,7 +1432,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         if num_provided == 3:
             return self.interp(x=x, y=y, z=z)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def reflect(
         self, axis: Axis, center: float, reflection_only: bool = False
     ) -> UnstructuredGridDataset:
@@ -1486,23 +1510,26 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         return 4
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _vtk_cell_type(cls):
         """VTK cell type to use in the VTK representation."""
-        return vtk["mod"].VTK_TETRA
+        import vtk
+
+        return vtk.VTK_TETRA
 
     @classmethod
-    @requires_vtk
+    @verify_and_configure_vtk
     def _from_vtk_obj(cls, grid) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
+        from vtk.util.numpy_support import vtk_to_numpy
 
         # read point, cells, and values info from a vtk instance
-        cells_numpy = vtk["vtk_to_numpy"](grid.GetCells().GetConnectivityArray())
-        points_numpy = vtk["vtk_to_numpy"](grid.GetPoints().GetData())
+        cells_numpy = vtk_to_numpy(grid.GetCells().GetConnectivityArray())
+        points_numpy = vtk_to_numpy(grid.GetPoints().GetData())
         values = cls._get_values_from_vtk(grid, len(points_numpy))
 
         # verify cell_types
-        cells_types = vtk["vtk_to_numpy"](grid.GetCellTypesArray())
+        cells_types = vtk_to_numpy(grid.GetCellTypesArray())
         if not np.all(cells_types == cls._vtk_cell_type()):
             raise DataError("Only tetrahedral 'vtkUnstructuredGrid' is currently supported")
 
@@ -1524,7 +1551,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return cls(points=points, cells=cells, values=values)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def plane_slice(self, axis: Axis, pos: float) -> TriangularGridDataset:
         """Slice data with a plane and return the resulting :class:.`TriangularGridDataset`.
 
@@ -1545,7 +1572,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return TriangularGridDataset._from_vtk_obj(slice_vtk)
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def line_slice(self, axis: Axis, pos: Coordinate) -> SpatialDataArray:
         """Slice data with a line and return the resulting :class:.`SpatialDataArray`.
 
@@ -1561,6 +1588,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         SpatialDataArray
             The resulting slice.
         """
+        import vtk
 
         bounds = self.bounds
         start = list(pos)
@@ -1570,7 +1598,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         end[axis] = bounds[1][axis]
 
         # create cutting plane
-        line = vtk["mod"].vtkLineSource()
+        line = vtk.vtkLineSource()
         line.SetPoint1(start)
         line.SetPoint2(end)
         line.SetResolution(1)
@@ -1582,7 +1610,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         # 2) do plane slice along first direction
         # 3) do second plane slice along second direction
 
-        prober = vtk["mod"].vtkExtractCellsAlongPolyLine()
+        prober = vtk.vtkExtractCellsAlongPolyLine()
         prober.SetSourceConnection(line.GetOutputPort())
         prober.SetInputData(self._vtk_obj)
         prober.Update()
@@ -1604,7 +1632,7 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         return line_slice
 
-    @requires_vtk
+    @verify_and_configure_vtk
     def sel(
         self,
         x: Union[float, ArrayLike] = None,

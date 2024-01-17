@@ -3,19 +3,9 @@ This file contains a set of functions relating to packaging tidy3d for distribut
 
 This section should only depend on the standard core installation in the pyproject.toml, and should not depend on any other part of the codebase optional imports.
 """
-import functools
-import numpy as np
 from typing import Literal
 
 from .exceptions import Tidy3dImportError
-
-vtk = {
-    "mod": None,
-    "id_type": np.int64,
-    "vtk_to_numpy": None,
-    "numpy_to_vtkIdTypeArray": None,
-    "numpy_to_vtk": None,
-}
 
 
 def check_import(module_name: str) -> bool:
@@ -114,35 +104,43 @@ def verify_packages_import(modules: list, required: Literal["either", "all"] = "
     return decorator
 
 
-def requires_vtk(fn):
-    """When decorating a method, requires that vtk is available."""
+# vtk = {
+#     "mod": None,
+#     "id_type": np.int64,
+#     "vtk_to_numpy": None,
+#     "numpy_to_vtkIdTypeArray": None,
+#     "numpy_to_vtk": None,
+# }
 
-    @functools.wraps(fn)
-    def _fn(*args, **kwargs):
-        if vtk["mod"] is None:
-            try:
-                import vtk as vtk_mod
-                from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-                from vtk.util.numpy_support import numpy_to_vtkIdTypeArray
-                from vtkmodules.vtkCommonCore import vtkLogger
-
-                vtk["mod"] = vtk_mod
-                vtk["vtk_to_numpy"] = vtk_to_numpy
-                vtk["numpy_to_vtkIdTypeArray"] = numpy_to_vtkIdTypeArray
-                vtk["numpy_to_vtk"] = numpy_to_vtk
-
-                vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
-
-                if vtk["mod"].vtkIdTypeArray().GetDataTypeSize() == 4:
-                    vtk["id_type"] = np.int32
-
-            except ImportError:
-                raise Tidy3dImportError(
-                    "The package 'vtk' is required for this operation, but it was not found. "
-                    "Please install the 'vtk' dependencies using, for example, "
-                    "'pip install .[vtk]'."
-                )
-
-        return fn(*args, **kwargs)
-
-    return _fn
+# def requires_vtk(fn):
+#     """When decorating a method, requires that vtk is available."""
+#
+#     @functools.wraps(fn)
+#     def _fn(*args, **kwargs):
+#         if vtk["mod"] is None:
+#             try:
+#                 import vtk as vtk_mod
+#                 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+#                 from vtk.util.numpy_support import numpy_to_vtkIdTypeArray
+#                 from vtkmodules.vtkCommonCore import vtkLogger
+#
+#                 vtk["mod"] = vtk_mod
+#                 vtk["vtk_to_numpy"] = vtk_to_numpy
+#                 vtk["numpy_to_vtkIdTypeArray"] = numpy_to_vtkIdTypeArray
+#                 vtk["numpy_to_vtk"] = numpy_to_vtk
+#
+#                 vtkLogger.SetStderrVerbosity(vtkLogger.VERBOSITY_WARNING)
+#
+#                 if vtk["mod"].vtkIdTypeArray().GetDataTypeSize() == 4:
+#                     vtk["id_type"] = np.int32
+#
+#             except ImportError:
+#                 raise Tidy3dImportError(
+#                     "The package 'vtk' is required for this operation, but it was not found. "
+#                     "Please install the 'vtk' dependencies using, for example, "
+#                     "'pip install .[vtk]'."
+#                 )
+#
+#         return fn(*args, **kwargs)
+#
+#     return _fn
