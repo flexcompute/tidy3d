@@ -30,3 +30,4 @@ Photonic Integrated Circuit Components
     ../../PlasmonicWaveguideCO2Sensor
     ../../BilayerSiNEdgeCoupler
     ../../ScaleInvariantWaveguide
+    ../../MachZehnderModulator
