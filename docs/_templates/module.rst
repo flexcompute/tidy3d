@@ -5,3 +5,4 @@
 
 .. automodule:: {{ fullname }}
    :inherited-members:
+   :undoc-members:

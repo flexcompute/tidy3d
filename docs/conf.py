@@ -81,11 +81,12 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
-    "sphinxcontrib.autodoc_pydantic",
     "sphinxemoji.sphinxemoji",
     "sphinx_copybutton",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
+    "sphinxcontrib.autodoc_pydantic",
+    "sphinxcontrib.mermaid",
     "custom-meta",  # In _ext, these need to be at the end of the extensions list
     "custom-sitemap",  # In _ext, these need to be at the end of the extensions list
     "custom-robots",  # In _ext, these need to be at the end of the extensions list
@@ -101,10 +102,11 @@ latex_documents = [
 html_baseurl = "https://docs.flexcompute.com/projects/tidy3d/"  # for sphinx-sitemap
 html_css_files = [
     "css/custom.css",
+    "_static/autodoc_pydantic.css",
 ]
 html_extra_path = ["./_static/robots.txt"]
 html_favicon = "_static/logo.ico"
-html_js_files = ["js/custom-download.js"]
+html_js_files = ["js/custom-download.js", "mermaid.min.js"]
 htmlhelp_basename = "tidy3ddoc"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_sourcelink_suffix = ""

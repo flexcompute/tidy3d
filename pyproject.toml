@@ -85,7 +85,8 @@ trimesh = {version = "3.20.0", optional = true}
 vtk = {version="<=9.2.6", optional = true}
 
 # docs
-autodoc_pydantic = {git = "https://github.com/daquintero/autodoc_pydantic.git", optional = true, branch = "daquintero/visualisation_extension"}
+# autodoc_pydantic = {git = "https://github.com/daquintero/autodoc_pydantic.git", optional = true, branch = "daquintero/visualisation_extension"}
+autodoc_pydantic = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 jinja2 = {version = ">=3.1.2", optional = true}
 jupyter = {version="*", optional = true}
@@ -102,6 +103,7 @@ sphinx-book-theme = {version = ">=1.0.1", optional = true}
 sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
 sphinx-tabs = {version="*", optional = true}
+sphinxcontrib-mermaid = { version = "^0.7", optional = true }
 sphinxemoji = {version="*", optional = true}
 tmm = {version="*", optional = true}
 
@@ -110,11 +112,11 @@ tmm = {version="*", optional = true}
 dev = ["autodoc_pydantic", 'black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
-  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', "sphinxcontrib-autoflex", 'tmm', 'tox', 'trimesh',
+  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', "sphinxcontrib-mermaid", 'tmm', 'tox', 'trimesh',
     'vtk']
 docs = ["autodoc_pydantic", "jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams",
     "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap",
-    "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji"]
+    "nbdime", "optax", "signac", "sax", "sphinxcontrib-mermaid", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]

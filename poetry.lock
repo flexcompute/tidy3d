@@ -2,13 +2,13 @@
 
 [[package]]
 name = "absl-py"
-version = "2.0.0"
+version = "2.1.0"
 description = "Abseil Python Common Libraries, see https://github.com/abseil/abseil-py."
 optional = true
 python-versions = ">=3.7"
 files = [
-    {file = "absl-py-2.0.0.tar.gz", hash = "sha256:d9690211c5fcfefcdd1a45470ac2b5c5acd45241c3af71eed96bc5441746c0d5"},
-    {file = "absl_py-2.0.0-py3-none-any.whl", hash = "sha256:9a28abb62774ae4e8edbe2dd4c49ffcd45a6a848952a5eccc6a49f3f0fc1e2f3"},
+    {file = "absl-py-2.1.0.tar.gz", hash = "sha256:7820790efbb316739cde8b4e19357243fc3608a152024288513dd968d7d959ff"},
+    {file = "absl_py-2.1.0-py3-none-any.whl", hash = "sha256:526a04eadab8b4ee719ce68f204172ead1027549089702d99b9059f129ff1308"},
 ]
 
 [[package]]
@@ -223,12 +223,14 @@ tests-no-zope = ["attrs[tests-mypy]", "cloudpickle", "hypothesis", "pympler", "p
 
 [[package]]
 name = "autodoc-pydantic"
-version = "2.1.0"
+version = "2.0.1"
 description = "Seamlessly integrate pydantic models in your Sphinx documentation."
 optional = true
-python-versions = ">=3.8,<4.0.0"
-files = []
-develop = false
+python-versions = ">=3.7.1,<4.0.0"
+files = [
+    {file = "autodoc_pydantic-2.0.1-py3-none-any.whl", hash = "sha256:d3c302fdb6d37edb5b721f0f540252fa79cea7018bc1a9a85bf70f33a68b0ce4"},
+    {file = "autodoc_pydantic-2.0.1.tar.gz", hash = "sha256:7a125a4ff18e4903e27be71e4ddb3269380860eacab4a584d6cc2e212fa96991"},
+]
 
 [package.dependencies]
 pydantic = ">=2.0,<3.0.0"
@@ -240,12 +242,6 @@ dev = ["coverage (>=7,<8)", "flake8 (>=3,<4)", "pytest (>=7,<8)", "sphinx-copybu
 docs = ["sphinx-copybutton (>=0.4,<0.5)", "sphinx-rtd-theme (>=1.0,<2.0)", "sphinx-tabs (>=3,<4)", "sphinxcontrib-mermaid (>=0.7,<0.8)"]
 erdantic = ["erdantic (>=0.6,<0.7)"]
 test = ["coverage (>=7,<8)", "pytest (>=7,<8)"]
-
-[package.source]
-type = "git"
-url = "https://github.com/daquintero/autodoc_pydantic.git"
-reference = "daquintero/visualisation_extension"
-resolved_reference = "1d14f120373e481023de889711210f4d2a2b853c"
 
 [[package]]
 name = "autograd"
@@ -278,19 +274,22 @@ dev = ["freezegun (>=1.0,<2.0)", "pytest (>=6.0)", "pytest-cov"]
 
 [[package]]
 name = "beautifulsoup4"
-version = "4.12.2"
+version = "4.12.3"
 description = "Screen-scraping library"
 optional = true
 python-versions = ">=3.6.0"
 files = [
-    {file = "beautifulsoup4-4.12.2-py3-none-any.whl", hash = "sha256:bd2520ca0d9d7d12694a53d44ac482d181b4ec1888909b035a3dbf40d0f57d4a"},
-    {file = "beautifulsoup4-4.12.2.tar.gz", hash = "sha256:492bbc69dca35d12daac71c4db1bfff0c876c00ef4a2ffacce226d4638eb72da"},
+    {file = "beautifulsoup4-4.12.3-py3-none-any.whl", hash = "sha256:b80878c9f40111313e55da8ba20bdba06d8fa3969fc68304167741bbf9e082ed"},
+    {file = "beautifulsoup4-4.12.3.tar.gz", hash = "sha256:74e3d1928edc070d21748185c46e3fb33490f22f52a3addee9aee0f4f7781051"},
 ]
 
 [package.dependencies]
 soupsieve = ">1.2"
 
 [package.extras]
+cchardet = ["cchardet"]
+chardet = ["chardet"]
+charset-normalizer = ["charset-normalizer"]
 html5lib = ["html5lib"]
 lxml = ["lxml"]
 
@@ -1501,13 +1500,13 @@ files = [
 
 [[package]]
 name = "ipykernel"
-version = "6.28.0"
+version = "6.29.0"
 description = "IPython Kernel for Jupyter"
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "ipykernel-6.28.0-py3-none-any.whl", hash = "sha256:c6e9a9c63a7f4095c0a22a79f765f079f9ec7be4f2430a898ddea889e8665661"},
-    {file = "ipykernel-6.28.0.tar.gz", hash = "sha256:69c11403d26de69df02225916f916b37ea4b9af417da0a8c827f84328d88e5f3"},
+    {file = "ipykernel-6.29.0-py3-none-any.whl", hash = "sha256:076663ca68492576f051e4af7720d33f34383e655f2be0d544c8b1c9de915b2f"},
+    {file = "ipykernel-6.29.0.tar.gz", hash = "sha256:b5dd3013cab7b330df712891c96cd1ab868c27a7159e606f762015e9bf8ceb3f"},
 ]
 
 [package.dependencies]
@@ -1530,7 +1529,7 @@ cov = ["coverage[toml]", "curio", "matplotlib", "pytest-cov", "trio"]
 docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinx-autodoc-typehints", "sphinxcontrib-github-alt", "sphinxcontrib-spelling", "trio"]
 pyqt5 = ["pyqt5"]
 pyside6 = ["pyside6"]
-test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio", "pytest-cov", "pytest-timeout"]
+test = ["flaky", "ipyparallel", "pre-commit", "pytest (>=7.0)", "pytest-asyncio (==0.23.2)", "pytest-cov", "pytest-timeout"]
 
 [[package]]
 name = "ipython"
@@ -1852,13 +1851,13 @@ files = [
 
 [[package]]
 name = "jsonschema"
-version = "4.20.0"
+version = "4.21.0"
 description = "An implementation of JSON Schema validation for Python"
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "jsonschema-4.20.0-py3-none-any.whl", hash = "sha256:ed6231f0429ecf966f5bc8dfef245998220549cbbcf140f913b7464c52c3b6b3"},
-    {file = "jsonschema-4.20.0.tar.gz", hash = "sha256:4f614fd46d8d61258610998997743ec5492a648b33cf478c1ddc23ed4598a5fa"},
+    {file = "jsonschema-4.21.0-py3-none-any.whl", hash = "sha256:70a09719d375c0a2874571b363c8a24be7df8071b80c9aa76bc4551e7297c63c"},
+    {file = "jsonschema-4.21.0.tar.gz", hash = "sha256:3ba18e27f7491ea4a1b22edce00fb820eec968d397feb3f9cb61d5894bb38167"},
 ]
 
 [package.dependencies]
@@ -2007,13 +2006,13 @@ test = ["click", "pre-commit", "pytest (>=7.0)", "pytest-asyncio (>=0.19.0)", "p
 
 [[package]]
 name = "jupyter-lsp"
-version = "2.2.1"
+version = "2.2.2"
 description = "Multi-Language Server WebSocket proxy for Jupyter Notebook/Lab server"
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "jupyter-lsp-2.2.1.tar.gz", hash = "sha256:b17fab6d70fe83c8896b0cff59237640038247c196056b43684a0902b6a9e0fb"},
-    {file = "jupyter_lsp-2.2.1-py3-none-any.whl", hash = "sha256:17a689910c5e4ae5e7d334b02f31d08ffbe98108f6f658fb05e4304b4345368b"},
+    {file = "jupyter-lsp-2.2.2.tar.gz", hash = "sha256:256d24620542ae4bba04a50fc1f6ffe208093a07d8e697fea0a8d1b8ca1b7e5b"},
+    {file = "jupyter_lsp-2.2.2-py3-none-any.whl", hash = "sha256:3b95229e4168355a8c91928057c1621ac3510ba98b2a925e82ebd77f078b1aa5"},
 ]
 
 [package.dependencies]
@@ -2022,13 +2021,13 @@ jupyter-server = ">=1.1.2"
 
 [[package]]
 name = "jupyter-server"
-version = "2.12.4"
+version = "2.12.5"
 description = "The backend—i.e. core services, APIs, and REST endpoints—to Jupyter web applications."
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "jupyter_server-2.12.4-py3-none-any.whl", hash = "sha256:a125ae18a60de568f78f55c84dd58759901a18ef279abf0418ac220653ca1320"},
-    {file = "jupyter_server-2.12.4.tar.gz", hash = "sha256:41f4a1e6b912cc24a7c6c694851b37d3d8412b180f43d72315fe422cb2b85cc2"},
+    {file = "jupyter_server-2.12.5-py3-none-any.whl", hash = "sha256:184a0f82809a8522777cfb6b760ab6f4b1bb398664c5860a27cec696cb884923"},
+    {file = "jupyter_server-2.12.5.tar.gz", hash = "sha256:0edb626c94baa22809be1323f9770cf1c00a952b17097592e40d03e6a3951689"},
 ]
 
 [package.dependencies]
@@ -2681,13 +2680,13 @@ test = ["flaky", "ipykernel (>=6.19.3)", "ipython", "ipywidgets", "nbconvert (>=
 
 [[package]]
 name = "nbconvert"
-version = "7.14.1"
+version = "7.14.2"
 description = "Converting Jupyter Notebooks"
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "nbconvert-7.14.1-py3-none-any.whl", hash = "sha256:aa83e3dd27ea38d0c1d908e3ce9518d15fa908dd30521b6d5040bd23f33fffb0"},
-    {file = "nbconvert-7.14.1.tar.gz", hash = "sha256:20cba10e0448dc76b3bebfe1adf923663e3b98338daf77b97b42511ef5a88618"},
+    {file = "nbconvert-7.14.2-py3-none-any.whl", hash = "sha256:db28590cef90f7faf2ebbc71acd402cbecf13d29176df728c0a9025a49345ea1"},
+    {file = "nbconvert-7.14.2.tar.gz", hash = "sha256:a7f8808fd4e082431673ac538400218dd45efd076fbeb07cc6e5aa5a3a4e949e"},
 ]
 
 [package.dependencies]
@@ -2955,13 +2954,13 @@ test = ["dm-haiku (>=0.0.3)", "dm-tree (>=0.1.7)", "flax (==0.5.3)"]
 
 [[package]]
 name = "orbax-checkpoint"
-version = "0.4.8"
+version = "0.5.0"
 description = "Orbax Checkpoint"
 optional = true
 python-versions = ">=3.9"
 files = [
-    {file = "orbax_checkpoint-0.4.8-py3-none-any.whl", hash = "sha256:3440922fa1e92f8298a9543d3ae14cce08b2d006e2f1c9a0486dd317757c4ec8"},
-    {file = "orbax_checkpoint-0.4.8.tar.gz", hash = "sha256:b72aacbfbd07fe767ca39ed4152118894181412e620cf283b5951c8ce1e0ea6c"},
+    {file = "orbax_checkpoint-0.5.0-py3-none-any.whl", hash = "sha256:95eaeee41ce8974080d5cfcc17d296234c6dc44cd10f9f10289fc3deaceeeaf4"},
+    {file = "orbax_checkpoint-0.5.0.tar.gz", hash = "sha256:3daa8db461a24f89ff9afa03cb2f32a5a1fa65160cd7fbd3ad99222ba8e3d938"},
 ]
 
 [package.dependencies]
@@ -4813,6 +4812,17 @@ files = [
 test = ["flake8", "mypy", "pytest"]
 
 [[package]]
+name = "sphinxcontrib-mermaid"
+version = "0.7.1"
+description = "Mermaid diagrams in yours Sphinx powered docs"
+optional = true
+python-versions = "*"
+files = [
+    {file = "sphinxcontrib-mermaid-0.7.1.tar.gz", hash = "sha256:aa8a40b50ec86ad12824b62180240ca52a9bda8424455d7eb252eae9aa5d293c"},
+    {file = "sphinxcontrib_mermaid-0.7.1-py2.py3-none-any.whl", hash = "sha256:3e20de1937c30dfa807e446bf99983d73d0dd3dc5c6524addda59800fe928762"},
+]
+
+[[package]]
 name = "sphinxcontrib-qthelp"
 version = "1.0.7"
 description = "sphinxcontrib-qthelp is a sphinx extension which outputs QtHelp documents"
@@ -4846,16 +4856,17 @@ test = ["pytest"]
 
 [[package]]
 name = "sphinxemoji"
-version = "0.2.0"
+version = "0.3.0"
 description = "An extension to use emoji codes in your Sphinx documentation"
 optional = true
-python-versions = "*"
+python-versions = ">=3.9"
 files = [
-    {file = "sphinxemoji-0.2.0.tar.gz", hash = "sha256:27861d1dd7c6570f5e63020dac9a687263f7481f6d5d6409eb31ecebcc804e4c"},
+    {file = "sphinxemoji-0.3.0-py3-none-any.whl", hash = "sha256:fd7bc505e97c50c49b08826656589e7c3239200beeba2518e853c682846e8b2f"},
+    {file = "sphinxemoji-0.3.0.tar.gz", hash = "sha256:82d053baa1e30b0c4285be6faf77d76b9ea08d788786795c36363ac33d2358e7"},
 ]
 
 [package.dependencies]
-sphinx = ">=1.8"
+sphinx = ">=4.0"
 
 [[package]]
 name = "stack-data"
@@ -5037,13 +5048,13 @@ files = [
 
 [[package]]
 name = "tox"
-version = "4.12.0"
+version = "4.12.1"
 description = "tox is a generic virtualenv management and test command line tool"
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "tox-4.12.0-py3-none-any.whl", hash = "sha256:c94bf5852ba41f3d9f1e3470ccf3390e0b7bdc938095be3cd96dce25ab5062a0"},
-    {file = "tox-4.12.0.tar.gz", hash = "sha256:76adc53a3baff7bde80d6ad7f63235735cfc5bc42e8cb6fccfbf62cb5ffd4d92"},
+    {file = "tox-4.12.1-py3-none-any.whl", hash = "sha256:c07ea797880a44f3c4f200ad88ad92b446b83079d4ccef89585df64cc574375c"},
+    {file = "tox-4.12.1.tar.gz", hash = "sha256:61aafbeff1bd8a5af84e54ef6e8402f53c6a6066d0782336171ddfbf5362122e"},
 ]
 
 [package.dependencies]
@@ -5317,19 +5328,19 @@ files = [
 
 [[package]]
 name = "xarray"
-version = "2023.12.0"
+version = "2024.1.0"
 description = "N-D labeled arrays and datasets in Python"
 optional = false
 python-versions = ">=3.9"
 files = [
-    {file = "xarray-2023.12.0-py3-none-any.whl", hash = "sha256:3c22b6824681762b6c3fcad86dfd18960a617bccbc7f456ce21b43a20e455fb9"},
-    {file = "xarray-2023.12.0.tar.gz", hash = "sha256:4565dbc890de47e278346c44d6b33bb07d3427383e077a7ca8ab6606196fd433"},
+    {file = "xarray-2024.1.0-py3-none-any.whl", hash = "sha256:df040f835441babf0a04c0bd6eacf7780f7dad6044a86603b16f6b4d204a99bd"},
+    {file = "xarray-2024.1.0.tar.gz", hash = "sha256:56b4bcb7c7be2e31143608261c1608c0e52579b8a51ba1b240bc2509e04d28d0"},
 ]
 
 [package.dependencies]
-numpy = ">=1.22"
-packaging = ">=21.3"
-pandas = ">=1.4"
+numpy = ">=1.23"
+packaging = ">=22"
+pandas = ">=1.5"
 
 [package.extras]
 accel = ["bottleneck", "flox", "numbagg", "opt-einsum", "scipy"]
@@ -5354,8 +5365,8 @@ docs = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.link
 testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "pytest (>=6)", "pytest-black (>=0.3.7)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-ignore-flaky", "pytest-mypy (>=0.9.1)", "pytest-ruff"]
 
 [extras]
-dev = ["autodoc_pydantic", "black", "coverage", "dill", "gdspy", "gdstk", "gdstk", "grcwa", "ipython", "ipython", "jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib", "jinja2", "jupyter", "memory_profiler", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm", "tox", "trimesh", "vtk"]
-docs = ["autodoc_pydantic", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxemoji", "tmm"]
+dev = ["autodoc_pydantic", "black", "coverage", "dill", "gdspy", "gdstk", "gdstk", "grcwa", "ipython", "ipython", "jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib", "jinja2", "jupyter", "memory_profiler", "nbconvert", "nbdime", "nbsphinx", "networkx", "optax", "pre-commit", "pydata-sphinx-theme", "pylint", "pyswarms", "pytest", "pytest-timeout", "rtree", "ruff", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxcontrib-mermaid", "sphinxemoji", "tmm", "tox", "trimesh", "vtk"]
+docs = ["autodoc_pydantic", "gdstk", "grcwa", "ipython", "jinja2", "jupyter", "nbconvert", "nbdime", "nbsphinx", "optax", "pydata-sphinx-theme", "pylint", "sax", "signac", "sphinx", "sphinx-book-theme", "sphinx-copybutton", "sphinx-sitemap", "sphinx-tabs", "sphinxcontrib-mermaid", "sphinxemoji", "tmm"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jax", "jax", "jax", "jaxlib", "jaxlib", "jaxlib"]
@@ -5365,4 +5376,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<3.12"
-content-hash = "db89dbe502b9f8afe75ccef6c10123b2db454a4cc043f4f11387483577964140"
+content-hash = "318403a02ef96572e3f00affc2f9d367dcd48805ffee0218266195ccb5a1d90c"
