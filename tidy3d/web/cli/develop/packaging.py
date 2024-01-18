@@ -68,7 +68,7 @@ def benchmark_timing_operations(
     )
 
 
-@develop.command(name="benchmark-timing-operations")
+@develop.command(name="benchmark-timing-operations", help="Benchmarks the timing operations.")
 @click.option(
     "-c",
     "--timing-command",
