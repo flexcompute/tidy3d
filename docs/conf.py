@@ -26,7 +26,7 @@ import tidy3d
 
 # import sphinxcontrib.divparams as divparams
 
-full_build = True
+full_build = False
 
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))

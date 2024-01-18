@@ -1,9 +1,6 @@
 ***************
 API |:computer:|
 ***************
-.. currentmodule:: tidy3d
-
-.. autopydantic_model:: tidy3d.test_pydantic_class.Model
 
 .. toctree::
     :hidden:

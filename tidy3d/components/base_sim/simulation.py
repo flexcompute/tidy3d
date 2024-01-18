@@ -109,7 +109,7 @@ class AbstractSimulation(Box, ABC):
         Defines a physical object that interacts with the electromagnetic fields.
 
     :attr:`subpixel`
-        Subpixel averaging of the permittivity based on structure definition, resulting in much higher
+        Subpoposiciones de leyesixel averaging of the permittivity based on structure definition, resulting in much higher
         accuracy for a given grid size.
 
     **Notebooks:**

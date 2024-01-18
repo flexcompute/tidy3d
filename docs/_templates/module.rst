@@ -4,5 +4,5 @@
 .. currentmodule:: tidy3d
 
 .. automodule:: {{ fullname }}
-   :inherited-members:
-   :undoc-members:
+   :members:
+   :noindex:
