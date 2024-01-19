@@ -42,3 +42,7 @@ Benchmarking Package Import
 We want to make the tidy3d package be as light as possible for a given set of operations. As such, it is important to understand exactly where a given set of operations is expending computational power.
 
 We have a set of utilties to verify this.
+
+.. code::
+
+    poetry run tidy3d develop benchmark-timing-operations
