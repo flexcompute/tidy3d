@@ -36,7 +36,7 @@ If you want to locally develop notebooks in ``tidy3d/docs/notebooks`` then just 
 Updating Docstrings
 '''''''''''''''''''''
 
-``tidy3d develop`` has a utility to update docstrings in the codebase.
+The ``tidy3d develop`` suite includes a utility command ``replace-in-files``, which is designed to recursively find and replace strings in files within a specified directory. This functionality is particularly useful for updating docstrings across the codebase when there are changes in the API, ensuring that the documentation remains consistent with multiple version updates.
 This is useful when updating the API and you want to update the docstrings to reflect the changes from multiple versions.
 
 Example usage:
@@ -45,3 +45,39 @@ Example usage:
 
     poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
 
+
+**Command Details**
+
+- **Name:** ``replace-in-files``
+- **Description:** Recursively finds and replaces strings in files based on a JSON configuration.
+- **Options:**
+  - ``--directory`` or ``-d``: Specifies the directory to process. Defaults to the current directory if not provided.
+  - ``--json-dictionary`` or ``-j``: Path to a JSON file containing the mapping of strings to be replaced.
+  - ``--selected-version`` or ``-v``: Specifies the version to select from the JSON file.
+  - ``--dry-run``: Executes the command in a dry run mode without making actual changes.
+
+
+The JSON file should contain a dictionary where keys are version numbers and values are dictionaries of strings to find and their replacements.
+
+Example JSON structure:
+
+.. code-block:: json
+
+    {
+      "0.18.0": {
+        "tidy3d.someuniquestringa": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringb": "tidy3d.someuniquestring2",
+        "tidy3d.someuniquestringc": "tidy3d.someuniquestring2"
+      }
+    }
+
+
+The command can be executed using the ``poetry run`` command. It requires specifying the directory, JSON dictionary, and the selected version. The ``--dry-run`` option allows you to preview changes without applying them.
+
+**Example Command**
+
+.. code::
+
+    poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
+
+This example will process files in the current directory (``./``), using the replacement rules specified in ``test_replace_in_files.json`` for version ``0.18.0``. The ``--dry-run`` flag set to ``True`` ensures that changes are not actually applied, allowing for a safe preview of potential modifications.
