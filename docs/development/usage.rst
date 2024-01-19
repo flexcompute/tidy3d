@@ -46,6 +46,9 @@ There are a range of handy development functions that you might want to use to s
     * - Description
       - Caveats
       - Command
+    * - Benchmark timing import of ``tidy3d``
+      - Verify the available timing tests by running the command without any arguments.
+      - ``poetry run tidy3d develop benchmark-timing-operations -c <timing_command>``
     * - Build documentation on reproducible environment
       -
       - ``poetry run tidy3d develop build-docs``

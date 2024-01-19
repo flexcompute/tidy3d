@@ -44,6 +44,7 @@ def replace_in_files(
     - dry_run (bool): If True, the function will not modify any files, but will print the changes that would be made.
     """
     allowed_extensions = (".py", ".rst", ".md", ".txt")
+    exceptions = []
 
     # Load data from the JSON file
     with open(json_file_path, encoding="utf-8") as json_file:
@@ -86,17 +87,24 @@ def replace_in_files(
                                 with open(file_path, "w", encoding="utf-8") as f:
                                     f.writelines(lines)
 
-                        except:  # NOQA: E722
-                            pass
+                        except Exception as e:  # Catch any exception
+                            exceptions.append(e)
+
+    # At the end of the file/script:
+    if exceptions:
+        for ex in exceptions:
+            # Handle or print the exceptions as needed
+            print(f"An error occurred: {ex}")
 
 
 @develop.command(
-    name="commit", help="Adds and commits the state of the repository and its submodule."
+    name="commit",
+    help="Adds and commits the state of the repository and its notebook & faq submodule.",
 )
 @click.argument("message", type=str)  # Specify the type as str for the 'message' argument
 @click.option(
     "--submodule-path",
-    default="./docs/notebooks",
+    default=str(get_install_directory() / "docs" / "notebooks"),
     help="Path to the submodule.",
     type=str,  # Specify the type as str for the 'submodule-path' option
 )
@@ -124,8 +132,8 @@ def commit(message: str, submodule_path: str):
             message: Commit message.
         """
 
-        subprocess.check_call(["git", "-C", repository_path, "add", "."])
-        subprocess.check_call(
+        echo_and_check_subprocess(["git", "-C", repository_path, "add", "."])
+        echo_and_check_subprocess(
             ["git", "-C", repository_path, "commit", "--no-verify", "-am", commit_message]
         )
 

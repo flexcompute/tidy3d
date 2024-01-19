@@ -6,6 +6,11 @@ import subprocess
 from .index import develop
 from .utils import echo_and_check_subprocess
 
+__all__ = [
+    "benchmark_timing_operations",
+    "benchmark_timing_operations_command",
+]
+
 output_timing_log = ["python", "-X", "importtime", "-c", "import tidy3d"]
 
 # Runs the import 100 times.
@@ -41,7 +46,6 @@ def benchmark_timing_operations(
 
     try:
         output_file_write = open(output_file_path, "w+")
-        pass
     except FileNotFoundError:
         raise FileNotFoundError(
             "The output file path "
@@ -57,10 +61,8 @@ def benchmark_timing_operations(
     except KeyError:
         # This has to do with choosing a timing command not available in the dictionary
         raise KeyError(
-            "Make sure the selected timing command "
-            + str(timing_command)
-            + "corresponds to an existing "
-            "command."
+            f"Make sure the selected timing command {timing_command}"
+            + "corresponds to an existing command."
         )
 
     echo_and_check_subprocess(
