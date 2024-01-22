@@ -15,6 +15,11 @@ def runner():
 
 
 def test_develop_install_dev_environment(runner):
+    """
+    Test the install-dev-environment command runs. It will rerun the file. Hard to assert the result as the behaviour
+    depends on the base envrionment and it is an interactive script that will throw helpful errors in terms of asking
+    for the required toolset.
+    """
     with runner.isolated_filesystem():
         with open("test_file", "w") as f:
             f.write("Test content")
@@ -23,8 +28,23 @@ def test_develop_install_dev_environment(runner):
         # assert result.exit_code == 0 # Not necessary as depends on HEAD state
 
 
+def test_develop_verify_dev_environment(runner):
+    """
+    Test the verify-dev-environment command runs without throwing an error.
+    """
+    with runner.isolated_filesystem():
+        with open("test_file", "w") as f:
+            f.write("Test content")
+
+        result = runner.invoke(tidy3d_cli, ["develop", "verify-dev-environment"])
+        assert result.exit_code == 0
+
+
 # Example test for the 'commit' command
 def test_develop_commit(runner):
+    """
+    Test the commit command runs between the relevant submodules included. Hard to assert as depends on the HEAD state.
+    """
     with runner.isolated_filesystem():
         with open("test_file", "w") as f:
             f.write("Test content")
@@ -35,16 +55,10 @@ def test_develop_commit(runner):
         # assert result.exit_code == 0 # Not necessary as depends on HEAD state
 
 
-def test_develop_build_docs(runner):
-    with runner.isolated_filesystem():
-        with open("test_file", "w") as f:
-            f.write("Test content")
-
-        result = runner.invoke(tidy3d_cli, ["develop", "build-docs"])
-        assert result.exit_code == 0  # Verifies docs build successfully
-
-
 def test_replace_in_files(runner):
+    """
+    Test the replace-in-files command runs with a little demo file. Asserts that the file has been replaced with a new string.
+    """
     import json
 
     with runner.isolated_filesystem():
@@ -73,3 +87,41 @@ def test_replace_in_files(runner):
             )
 
         assert result.exit_code == 0
+
+
+def test_develop_update_submodules(runner):
+    """
+    Test the update-submodules command runs without error. Hard to assert as it depends from a HEAD state.
+    """
+    with runner.isolated_filesystem():
+        with open("test_file", "w") as f:
+            f.write("Test content")
+
+        runner.invoke(tidy3d_cli, ["develop", "update-submodules"])
+        # assert result.exit_code == 0  # Verifies docs build successfully
+
+
+def test_develop_benchmark_timing_average(runner):
+    """
+    Test the benchmark-timing-average command runs without error.
+    """
+    with runner.isolated_filesystem():
+        with open("test_file", "w") as f:
+            f.write("Test content")
+
+        result = runner.invoke(
+            tidy3d_cli, ["develop", "benchmark-timing-operations", "-c", "average_test_import"]
+        )
+        assert result.exit_code == 0
+
+
+def test_develop_build_docs(runner):
+    """
+    Test the build-docs command runs without error. Guarantees the documentation builds.
+    """
+    with runner.isolated_filesystem():
+        with open("test_file", "w") as f:
+            f.write("Test content")
+
+        result = runner.invoke(tidy3d_cli, ["develop", "build-docs"])
+        assert result.exit_code == 0  # Verifies docs build successfully

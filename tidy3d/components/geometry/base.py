@@ -24,7 +24,7 @@ from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
-from ...packaging import verify_packages_import
+from ...packaging import verify_packages_import, check_import
 
 
 POLY_GRID_SIZE = 1e-12
@@ -1067,30 +1067,31 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometries created from the 2D data.
         """
-        try:
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
+
+        if gdstk_available:
             import gdstk
 
             if isinstance(gds_cell, gdstk.Cell):
                 gds_loader_fn = Geometry.load_gds_vertices_gdstk
-            else:
-                raise Tidy3dError(
-                    "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-                )
-        except ImportError:
-            try:
-                import gdspy
+        elif gdspy_available:
+            import gdspy
 
-                if isinstance(gds_cell, gdspy.Cell):
-                    gds_loader_fn = Geometry.load_gds_vertices_gdspy
-                else:
-                    raise Tidy3dError(
-                        "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-                    )
-            except ImportError:
-                raise Tidy3dImportError(
-                    "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
-                    "files, please install one of those those modules through `pip install tidy3d[gdstk, gdspy]`"
-                )
+            if isinstance(gds_cell, gdspy.Cell):
+                gds_loader_fn = Geometry.load_gds_vertices_gdspy
+        elif "gdstk" in gds_cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to import gdstk cells."
+            )
+        elif "gdspy" in gds_cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to import to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'gds_cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
 
         geometries = []
         with log as consolidated_logger:
@@ -1273,32 +1274,37 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        try:
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
+
+        if gdstk_available:
             import gdstk
 
             if isinstance(cell, gdstk.Cell):
                 polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
                 if len(polygons) > 0:
                     cell.add(*polygons)
-        except ImportError:
-            try:
-                import gdspy
 
-                if isinstance(cell, gdspy.Cell):
-                    polygons = self.to_gdspy(
-                        x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype
-                    )
-                    if len(polygons) > 0:
-                        cell.add(polygons)
-                else:
-                    raise Tidy3dError(
-                        "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
-                    )
-            except ImportError:
-                raise Tidy3dImportError(
-                    "Either 'gdstk' or 'gdspy' must be installed to export geometries to .gds files. "
-                    "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
-                )
+        elif gdspy_available:
+            import gdspy
+
+            if isinstance(cell, gdspy.Cell):
+                polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+                if len(polygons) > 0:
+                    cell.add(polygons)
+
+        elif "gdstk" in cell.__class__ and not gdstk_available:
+            raise Tidy3dImportError(
+                "Module 'gdstk' not found. It is required to export shapes to gdstk cells."
+            )
+        elif "gdspy" in cell.__class__ and not gdspy_available:
+            raise Tidy3dImportError(
+                "Module 'gdspy' not found. It is required to export shapes to gdspy cells."
+            )
+        else:
+            raise Tidy3dError(
+                "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
+            )
 
     @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds_file(
@@ -1332,20 +1338,22 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
 
         # Fundamental import structure for custom commands depending on which package is available.
-        try:
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
+
+        if gdstk_available:
             import gdstk
 
             library = gdstk.Library()
-        except ImportError:
-            try:
-                import gdspy
+        elif gdspy_available:
+            import gdspy
 
-                library = gdspy.GdsLibrary()
-            except ImportError:
-                raise Tidy3dImportError(
-                    "Either 'gdstk' or 'gdspy' must be installed to export geometries to .gds files. "
-                    "Try `pip install tidy3d[gdstk]` or `pip install tidy3d[gdspy]"
-                )
+            library = gdspy.GdsLibrary()
+        else:
+            raise Tidy3dImportError(
+                "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
+                "files, please install one of those those modules."
+            )
 
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)

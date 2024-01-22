@@ -1,4 +1,4 @@
-"""Console script for tidy3d."""
+"""Console script subcommand for tidy3d."""
 import click
 
 __all__ = [

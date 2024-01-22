@@ -1,17 +1,30 @@
+"""
+These are common operations CLI tools for the documentation build process.
+These functions are used to build the documentation. They are called from the CLI using the following command:
+
+    poetry run tidy3d develop build-docs
+
+The functions are also used to update the notebooks submodule and build the documentation using the following command:
+
+    poetry run tidy3d develop build-docs-remote-notebooks
+
+The functions are also used to convert all Markdown files to RST format using the following command:
+
+    poetry run tidy3d develop convert-all-markdown-to-rst
+"""
 import click
 import json
-import subprocess
 import os
 from typing import Optional
 from .index import develop
-from .utils import echo_and_run_subprocess, echo_and_check_subprocess, get_install_directory
+from .utils import echo_and_check_subprocess, get_install_directory
 
 __all__ = [
     "build_documentation",
-    "build_documentation_pdf",
+    # "build_documentation_pdf",
     "build_documentation_from_remote_notebooks",
     "commit",
-    "convert_all_markdown_to_rst_command",
+    # "convert_all_markdown_to_rst_command",
     "replace_in_files_command",
 ]
 
@@ -162,23 +175,24 @@ def build_documentation(args=None):
     return 0
 
 
-@develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
-def build_documentation_pdf(args=None):
-    """
-    Build the Sphinx documentation in PDF format.
-
-    This command initiates the process to build the Sphinx documentation and generates a PDF output.
-
-    Parameters
-    ----------
-    args : optional
-        Additional arguments for the PDF documentation build process.
-    """
-    # Runs the documentation build from the poetry environment
-    echo_and_run_subprocess(
-        ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
-    )
-    return 0
+# TODO: Fix the PDF build process
+# @develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
+# def build_documentation_pdf(args=None):
+#     """
+#     Build the Sphinx documentation in PDF format.
+#
+#     This command initiates the process to build the Sphinx documentation and generates a PDF output.
+#
+#     Parameters
+#     ----------
+#     args : optional
+#         Additional arguments for the PDF documentation build process.
+#     """
+#     # Runs the documentation build from the poetry environment
+#     echo_and_run_subprocess(
+#         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
+#     )
+#     return 0
 
 
 @develop.command(
@@ -209,42 +223,43 @@ def build_documentation_from_remote_notebooks(args=None):
     return 0
 
 
-@develop.command(
-    name="convert-all-markdown-to-rst",
-    help="Recursively find all markdown files and convert them to rst files that can be included in the sphinx "
-    "documentation",
-)
-@click.option(
-    "--directory",
-    "-d",
-    type=click.Path(exists=True, file_okay=False, readable=True),
-    default=".",
-    help="Directory to process (default is current directory)",
-)
-def convert_all_markdown_to_rst_command(directory: str):
-    """
-    This script converts all Markdown files in a given DIRECTORY to reStructuredText format.
-    """
-    if directory is None:
-        directory = get_install_directory()
-
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith(".md"):
-                md_file = os.path.join(root, file)
-                rst_file = os.path.splitext(md_file)[0] + ".rst"
-
-                # Confirmation for each file
-                if not click.confirm(f"Convert {md_file} to RST format?", default=True):
-                    click.echo(f"Skipped {md_file}")
-                    continue
-
-                try:
-                    # Convert using Pandoc
-                    echo_and_check_subprocess(["pandoc", "-s", md_file, "-o", rst_file])
-                    click.echo(f"Converted {md_file} to {rst_file}")
-                except subprocess.CalledProcessError as e:
-                    click.echo(f"Error converting {md_file}: {e}", err=True)
+# TODO decide if this is useful in any form.
+# @develop.command(
+#     name="convert-all-markdown-to-rst",
+#     help="Recursively find all markdown files and convert them to rst files that can be included in the sphinx "
+#     "documentation",
+# )
+# @click.option(
+#     "--directory",
+#     "-d",
+#     type=click.Path(exists=True, file_okay=False, readable=True),
+#     default=".",
+#     help="Directory to process (default is current directory)",
+# )
+# def convert_all_markdown_to_rst_command(directory: str):
+#     """
+#     This script converts all Markdown files in a given DIRECTORY to reStructuredText format.
+#     """
+#     if directory is None:
+#         directory = get_install_directory()
+#
+#     for root, _, files in os.walk(directory):
+#         for file in files:
+#             if file.endswith(".md"):
+#                 md_file = os.path.join(root, file)
+#                 rst_file = os.path.splitext(md_file)[0] + ".rst"
+#
+#                 # Confirmation for each file
+#                 if not click.confirm(f"Convert {md_file} to RST format?", default=True):
+#                     click.echo(f"Skipped {md_file}")
+#                     continue
+#
+#                 try:
+#                     # Convert using Pandoc
+#                     echo_and_check_subprocess(["pandoc", "-s", md_file, "-o", rst_file])
+#                     click.echo(f"Converted {md_file} to {rst_file}")
+#                 except subprocess.CalledProcessError as e:
+#                     click.echo(f"Error converting {md_file}: {e}", err=True)
 
 
 @develop.command(
