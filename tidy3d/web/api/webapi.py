@@ -133,6 +133,7 @@ def run(
         solver_version=solver_version,
         worker_group=worker_group,
     )
+
     monitor(task_id, verbose=verbose)
     return load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
