@@ -1,3 +1,7 @@
+"""
+Utility functions for the tidy3d develop CLI.
+"""
+
 import pathlib
 import subprocess
 import tidy3d

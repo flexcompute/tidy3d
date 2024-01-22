@@ -1,3 +1,11 @@
+"""
+This module contains the functions and commands used to benchmark the timing of various operations in the codebase.
+
+The idea of this functionality is to be able to track the performance of various operations over time and normalise
+it for different hardware. For example, say we just need to use a certain section of the codebase, we can use this
+functionality to extract the timing performance of that specific operation and compare it to previous usages.
+"""
+
 import pathlib
 
 import click
@@ -70,7 +78,6 @@ def benchmark_timing_operations(
     )
 
 
-@develop.command(name="benchmark-timing-operations")
 @click.option(
     "-c",
     "--timing-command",
@@ -90,6 +97,9 @@ def benchmark_timing_operations(
     default="import.log",
     type=str,
     help="Output file name. Defaults to 'import.log'.'",
+)
+@develop.command(
+    name="benchmark-timing-operations", help="Benchmarks the timing of various operations."
 )
 def benchmark_timing_operations_command(
     timing_command: str, in_poetry_environment: bool = True, output_file: str = "import.log"

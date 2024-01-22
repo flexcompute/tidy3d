@@ -30,15 +30,15 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e .[dev]
 
-    - name: matrix.os install Pandoc
+    - name: Ubuntu install Pandoc
       if: matrix.os == 'ubuntu-latest'
       run: sudo apt-get install pandoc
 
-    - name: matrix.os install Pandoc
+    - name: MacOS install Pandoc
       if: matrix.os == 'macos-latest'
       run: brew install pandoc
 
-    - name: matrix.os install Pandoc
+    - name: Windows install Pandoc
       if: matrix.os == 'windows-latest'
       run: choco install pandoc
 
@@ -47,25 +47,33 @@ jobs:
         python3 --version
         pipx --version
 
-    - name: Install poetry
-      run: |
-        if ! pipx install poetry; then
-          echo "Failed to install poetry"
-          exit 1
-        fi
-
-    - name: Verify poetry installation
-      run: |
-        poetry --version
+      #----------------------------------------------
+      #  -----  install & configure poetry  -----
+      #----------------------------------------------
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.7.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+      #----------------------------------------------
+      #       load cached venv if cache exists
+      #----------------------------------------------
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
     - name: Run install-dev-environment command
       run: |
         # Unsure if this is a valid command since it just guarantees things run on previous dependencies installation
-        # TODO finish debugging installation without previous installation.
+        # TODO finish debugging installation without previous installation. Tricky on GH Actions on its own.
         tidy3d develop install-dev-environment
 
     - name: Run development test commands
       run: |
-        poetry run python -m pytest ./tests/test_cli/full_test_development.py
+        poetry run pytest tests/test_cli/full_test_develop.py
         
         

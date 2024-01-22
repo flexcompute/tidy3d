@@ -1,3 +1,8 @@
+"""
+This module contains the CLI commands for testing the tidy3d package. This includes testing the base package and the
+notebooks in order to achieve reproducibility between hardwares.
+"""
+
 import click
 from .utils import echo_and_run_subprocess
 from .index import develop

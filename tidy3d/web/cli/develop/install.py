@@ -1,3 +1,9 @@
+"""
+This module contains the implementation of the `tidy3d develop` installation commands. These commands are used to
+install and configure the development environment for tidy3d. The commands are implemented using the Click library and
+are available as CLI commands when tidy3d is installed.
+"""
+
 import platform
 import re
 import subprocess
@@ -9,7 +15,7 @@ from .utils import echo_and_check_subprocess, echo_and_run_subprocess, get_insta
 
 __all__ = [
     "activate_correct_poetry_python",
-    "configure_notebook_submodule",
+    "configure_submodules",
     "verify_pandoc_is_installed_and_version_less_than_3",
     "verify_pipx_is_installed",
     "verify_poetry_is_installed",
@@ -18,7 +24,7 @@ __all__ = [
     "install_development_environment",
     "install_in_poetry",
     "uninstall_development_environment",
-    "update_notebooks_remote",
+    "update_submodules_remote",
     "verify_development_environment",
 ]
 
@@ -40,7 +46,7 @@ def activate_correct_poetry_python():
             print("Do you have a python available in your terminal?")
 
 
-def configure_notebook_submodule(args=None):
+def configure_submodules(args=None):
     """
     Initialize and update the notebook submodule.
 
@@ -53,7 +59,7 @@ def configure_notebook_submodule(args=None):
     """
     echo_and_run_subprocess(["git", "submodule", "init"])
     echo_and_run_subprocess(["git", "submodule", "update", "--remote"])
-    print("Notebook submodule updated from remote.")
+    print("Submodules updated from remote.")
     return 0
 
 
@@ -249,7 +255,7 @@ def install_development_environment(args=None):
 
     # Configure notebook submodule
     try:
-        configure_notebook_submodule()
+        configure_submodules()
     except:  # NOQA: E722
         print("Notebook submodule not configured.")
 
@@ -357,8 +363,8 @@ def uninstall_development_environment(args=None):
     return 0
 
 
-@develop.command(name="update-notebooks", help="Updates notebooks submodule from remote")
-def update_notebooks_remote(args=None):
+@develop.command(name="update-submodules", help="Updates notebooks and FAQ submodule from remote")
+def update_submodules_remote(args=None):
     """
     Update the notebooks submodule from the remote repository.
 
