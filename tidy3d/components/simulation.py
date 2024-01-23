@@ -16,7 +16,7 @@ from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, increment_float, set_bounds, get_thickened_geom
+from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom
 from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
@@ -3638,10 +3638,7 @@ class Simulation(AbstractSimulation):
                 temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
 
-                if structure.medium.is_pec:
-                    pec_plus = increment_float(snapped_center, 1.0)
-                    pec_minus = increment_float(snapped_center, -1.0)
-                    new_bounds = (pec_minus, pec_plus)
+                new_bounds = (snapped_center, snapped_center)
                 new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
