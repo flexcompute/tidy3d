@@ -4477,6 +4477,12 @@ class AnisotropicMedium(AbstractMedium):
         return self.updated_copy(**dict(zip(["xx", "yy", "zz"], new_comps)))
 
 
+class AnisotropicMediumFromMedium2D(AnisotropicMedium):
+    """The same as ``AnisotropicMedium``, but converted from Medium2D.
+    (This class is for internal use only)
+    """
+
+
 class FullyAnisotropicMedium(AbstractMedium):
     """Fully anisotropic medium including all 9 components of the permittivity and conductivity
     tensors.
@@ -5358,7 +5364,7 @@ class Medium2D(AbstractMedium):
                 return med
             else:
                 raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
-            poles += [(a, weight * c) for (a, c) in pole_res.poles]
+            poles += [(a, weight * c) for (a, c) in pole_res.poles if c != 0.0]
         return PoleResidue(eps_inf=np.real(eps_inf), poles=poles)
 
     def volumetric_equivalent(
@@ -5430,7 +5436,9 @@ class Medium2D(AbstractMedium):
             ax_coord=media_bg[axis], plane_coords=media_fg_weighted, axis=axis
         )
         media_3d_kwargs = {dim + dim: medium for dim, medium in zip("xyz", media_3d)}
-        return AnisotropicMedium(**media_3d_kwargs, frequency_range=self.frequency_range)
+        return AnisotropicMediumFromMedium2D(
+            **media_3d_kwargs, frequency_range=self.frequency_range
+        )
 
     def to_anisotropic_medium(self, axis: Axis, thickness: float) -> AnisotropicMedium:
         """Generate a 3D :class:`.AnisotropicMedium` equivalent of a given thickness.
@@ -5667,7 +5675,7 @@ PEC2D = Medium2D(ss=PEC, tt=PEC)
 
 # types of mediums that can be used in Simulation and Structures
 
-MediumType = Union[MediumType3D, Medium2D]
+MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
 
 
 # Utility function

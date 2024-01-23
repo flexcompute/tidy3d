@@ -29,21 +29,18 @@ for _, path in enumerate(notebook_filenames_all):
     print(f"'{notebook_base[:-6]}',")
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = [
-]
+run_only = []
 
 skip = [
-
-# long time (excluding most adjoint)
-'8ChannelDemultiplexer',
-'BullseyeCavityPSO',
-'FocusedApodGC',
-"GeneticAlgorithmReflector",
-'ParticleSwarmOptimizedPBS',
-
-# hang by default
-"AdjointPlugin14PreFab.ipynb",
-"WaveguideBendSimulator",
+    # long time (excluding most adjoint)
+    "8ChannelDemultiplexer",
+    "BullseyeCavityPSO",
+    "FocusedApodGC",
+    "GeneticAlgorithmReflector",
+    "ParticleSwarmOptimizedPBS",
+    # hang by default
+    "AdjointPlugin14PreFab.ipynb",
+    "WaveguideBendSimulator",
 ]
 
 # if any run only supplied, only add those

@@ -2003,10 +2003,10 @@ def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
         )
         if isinstance(struct.geometry, td.Box):
             assert np.isclose(
-                sim.volumetric_structures[0].geometry.bounding_box.size[2], grid_dl, rtol=RTOL
+                sim.volumetric_structures[0].geometry.bounding_box.size[2], 0, rtol=RTOL
             )
         else:
-            assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, grid_dl, rtol=RTOL)
+            assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, 0, rtol=RTOL)
         assert np.isclose(
             sim.volumetric_structures[0].medium.xx.to_medium().conductivity,
             sigma * thickness / grid_dl,

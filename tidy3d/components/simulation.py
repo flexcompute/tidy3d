@@ -18,7 +18,7 @@ from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, increment_float, set_bounds, get_thickened_geom
+from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom
 from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
@@ -1245,7 +1245,6 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             avg_axis_dl = get_dls(geometry, axis, 1)[0]
             subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
             # Create and add volumetric equivalents
-            background_structures_temp = []
             for subdivided_geometry in subdivided_geometries:
                 # Snap to the grid and create volumetric equivalent
                 snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
@@ -1258,21 +1257,11 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                     axis=axis, adjacent_media=adjacent_media, adjacent_dls=dls
                 )
 
-                new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
-                temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
-                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
-
-                if structure.medium.is_pec:
-                    pec_plus = increment_float(snapped_center, 1.0)
-                    pec_minus = increment_float(snapped_center, -1.0)
-                    new_bounds = (pec_minus, pec_plus)
+                new_bounds = (snapped_center, snapped_center)
                 new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
                 new_structures.append(new_structure)
-                background_structures_temp.append(temp_structure)
-
-            background_structures += background_structures_temp
 
         return tuple(new_structures)
 
