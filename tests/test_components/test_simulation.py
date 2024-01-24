@@ -1897,7 +1897,9 @@ def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
             run_time=1e-12,
         )
         if isinstance(struct.geometry, td.Box):
-            assert np.isclose(sim.volumetric_structures[0].geometry.size[2], grid_dl, rtol=RTOL)
+            assert np.isclose(
+                sim.volumetric_structures[0].geometry.bounding_box.size[2], grid_dl, rtol=RTOL
+            )
         else:
             assert np.isclose(sim.volumetric_structures[0].geometry.length_axis, grid_dl, rtol=RTOL)
         assert np.isclose(
@@ -1974,7 +1976,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
         _ = sim.plot(x=0)
         plt.close()
 
-    # nonuniform sub/super-strate should error
+    # nonuniform sub/super-strate should not error
     below_half = td.Structure(
         geometry=td.Box.from_bounds([-100, -td.inf, -1000], [0, td.inf, 0]),
         medium=aniso_medium,
@@ -1993,8 +1995,7 @@ def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
         run_time=1e-12,
     )
 
-    with pytest.raises(SetupError):
-        _ = sim.volumetric_structures
+    _ = sim.volumetric_structures
 
     # structure overlaying the 2D material should overwrite it like normal
     sim = td.Simulation(
@@ -2330,3 +2331,149 @@ def test_sim_subsection():
         ind = np.argmax(np.logical_and(full_grid >= start - tol, full_grid <= start + tol))
         # compare
         assert np.allclose(red_grid, full_grid[ind : ind + len(red_grid)])
+
+
+def test_2d_material_subdivision():
+    units = 1e3
+    plane_pos = 1.0 * units
+    plane_width = 1.0 * units
+    plane_height = 1.0 * units
+
+    two = td.Medium(permittivity=2.0)
+    three = td.Medium(permittivity=3.0)
+    four = td.Medium(permittivity=4.0)
+    five = td.Medium(permittivity=5.0)
+
+    # ~Copper
+    conductor = td.Medium(conductivity=5.8e7)
+
+    freq_start = 1e1
+    freq_stop = 10e9
+    freq0 = (freq_start + freq_stop) / 2
+    wavelength0 = td.C_0 / freq0
+
+    # Setup simulation size
+    size_sim = [
+        4 * abs(plane_pos),
+        4 * abs(plane_width),
+        4 * abs(plane_height),
+    ]
+    center_sim = [plane_pos, 0, 0]
+
+    face = td.Structure(
+        geometry=td.Box(
+            center=[plane_pos / 2, 0, 0],
+            size=[plane_pos, 0.9 * plane_width, 0.9 * plane_height],
+        ),
+        medium=two,
+    )
+
+    left_center = [plane_pos / 2, -0.25 * plane_width, 0.25 * plane_height]
+    left_top = td.Structure(
+        geometry=td.Box(
+            center=left_center,
+            size=[plane_pos, 0.2 * plane_width, 0.2 * plane_height],
+        ),
+        medium=three,
+    )
+    right_center = [plane_pos / 2, 0.25 * plane_width, 0.25 * plane_height]
+    right_top = td.Structure(
+        geometry=td.Box(
+            center=right_center,
+            size=[plane_pos, 0.2 * plane_width, 0.2 * plane_height],
+        ),
+        medium=four,
+    )
+    # This object fully extrudes through the 2d material
+    bottom_center = [plane_pos, 0, -0.25 * plane_height]
+    bottom = td.Structure(
+        geometry=td.Box(
+            center=bottom_center,
+            size=[1.8 * plane_pos, 0.5 * plane_width, 0.3 * plane_height],
+        ),
+        medium=five,
+    )
+
+    med_2d = td.Medium2D(ss=conductor, tt=conductor)
+    plane_size = [0, 1.5 * plane_width, 1.5 * plane_height]
+    plane_material = td.Structure(
+        geometry=td.Box(size=plane_size, center=[plane_pos, 0, 0]), medium=med_2d
+    )
+
+    structures = [face, left_top, right_top, bottom, plane_material]
+
+    uni_grid = td.UniformGrid(dl=wavelength0 / 1000)
+
+    sim_td = td.Simulation(
+        center=center_sim,
+        size=size_sim,
+        grid_spec=td.GridSpec(grid_x=uni_grid, grid_y=uni_grid, grid_z=uni_grid),
+        structures=structures,
+        sources=[],
+        monitors=[],
+        run_time=1e-12,
+    )
+
+    volume = td.Box(center=(plane_pos, 0, 0), size=(0, 2 * plane_width, 2 * plane_height))
+    eps_centers = sim_td.epsilon(box=volume, freq=freq0, coord_key="Ey")
+    # Plot should give a smiley face
+    # f, (ax1, ax2) = plt.subplots(1, 2, tight_layout=True, figsize=(10, 4))
+    # eps_centers.real.plot(x="y", y="z", cmap="Greys", ax=ax1)
+    # eps_centers.imag.plot(x="y", y="z", cmap="Greys", ax=ax2)
+
+    # Test some positions to make sure the correct volumetric permittivity was computed. All positions should take on the same volumetric version of the conductivity
+    assert np.isclose(
+        np.real(eps_centers.sel(x=plane_pos, y=0, z=-0.4 * plane_size[2], method="nearest").values),
+        1,
+    )
+    assert np.isclose(
+        np.imag(eps_centers.sel(x=plane_pos, y=0, z=-0.4 * plane_size[2], method="nearest").values),
+        3492562622979.975,
+    )
+
+    assert np.isclose(np.real(eps_centers.sel(x=plane_pos, y=0, z=0, method="nearest").values), 1.5)
+    assert np.isclose(
+        np.imag(eps_centers.sel(x=plane_pos, y=0, z=0, method="nearest").values), 3492562622979.975
+    )
+
+    assert np.isclose(
+        np.real(
+            eps_centers.sel(
+                x=plane_pos, y=left_center[1], z=left_center[2], method="nearest"
+            ).values
+        ),
+        2,
+    )
+    assert np.isclose(
+        np.imag(
+            eps_centers.sel(
+                x=plane_pos, y=left_center[1], z=left_center[2], method="nearest"
+            ).values
+        ),
+        3492562622979.975,
+    )
+
+    assert np.isclose(
+        np.real(
+            eps_centers.sel(
+                x=plane_pos, y=right_center[1], z=right_center[2], method="nearest"
+            ).values
+        ),
+        2.5,
+    )
+    assert np.isclose(
+        np.imag(
+            eps_centers.sel(
+                x=plane_pos, y=right_center[1], z=right_center[2], method="nearest"
+            ).values
+        ),
+        3492562622979.975,
+    )
+    # In this position the substrate and superstrate are the same so the average value should be the original
+    assert np.isclose(
+        np.real(eps_centers.sel(x=plane_pos, y=0, z=bottom_center[2], method="nearest").values), 5.0
+    )
+    assert np.isclose(
+        np.imag(eps_centers.sel(x=plane_pos, y=0, z=bottom_center[2], method="nearest").values),
+        3492562622979.975,
+    )

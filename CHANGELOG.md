@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Automatic subdivision of 2D materials with inhomogeneous substrate/superstrate.
 - Mode field profiles can be stored directly from a `ModeMonitor` by setting `store_fields_direction`.
 
 ### Changed
