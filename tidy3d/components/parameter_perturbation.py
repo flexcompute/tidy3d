@@ -311,12 +311,6 @@ class CustomHeatPerturbation(HeatPerturbation):
     @pd.root_validator(skip_on_failure=True)
     def compute_temperature_range(cls, values):
         """Compute and set temperature range based on provided ``perturbation_values``."""
-        if values["temperature_range"] is not None:
-            log.warning(
-                "Temperature range for 'CustomHeatPerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'temperature_range' will be "
-                "overwritten."
-            )
 
         perturbation_values = values["perturbation_values"]
 
@@ -325,6 +319,16 @@ class CustomHeatPerturbation(HeatPerturbation):
             np.min(perturbation_values.coords["T"]).item(),
             np.max(perturbation_values.coords["T"]).item(),
         )
+
+        if (
+            values["temperature_range"] is not None
+            and values["temperature_range"] != temperature_range
+        ):
+            log.warning(
+                "Temperature range for 'CustomHeatPerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'temperature_range' will be "
+                "overwritten."
+            )
 
         values.update({"temperature_range": temperature_range})
 
@@ -740,19 +744,6 @@ class CustomChargePerturbation(ChargePerturbation):
         """Compute and set electron and hole density ranges based on provided
         ``perturbation_values``.
         """
-        if values["electron_range"] is not None:
-            log.warning(
-                "Electron density range for 'CustomChargePerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'electron_range' will be "
-                "overwritten."
-            )
-
-        if values["hole_range"] is not None:
-            log.warning(
-                "Hole density range for 'CustomChargePerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'hole_range' will be "
-                "overwritten."
-            )
 
         perturbation_values = values["perturbation_values"]
 
@@ -765,6 +756,20 @@ class CustomChargePerturbation(ChargePerturbation):
             np.min(perturbation_values.coords["p"]).item(),
             np.max(perturbation_values.coords["p"]).item(),
         )
+
+        if values["electron_range"] is not None and electron_range != values["electron_range"]:
+            log.warning(
+                "Electron density range for 'CustomChargePerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'electron_range' will be "
+                "overwritten."
+            )
+
+        if values["hole_range"] is not None and hole_range != values["hole_range"]:
+            log.warning(
+                "Hole density range for 'CustomChargePerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'hole_range' will be "
+                "overwritten."
+            )
 
         values.update({"electron_range": electron_range, "hole_range": hole_range})
 
