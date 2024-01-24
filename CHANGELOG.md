@@ -11,13 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `DataArray.to_hdf5()` accepts both file handles and file paths.
 
 ### Fixed
+- Add dispersion information to dataframe output when available from mode solver under the column "dispersion (ps/(nm km))".
 
 ## [2.6.0rc1] - 2024-01-11
 
 ### Added
 - `tidy3d.plugins.design` tool to explore user-defined design spaces.
 - `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
-- A utility function `td.medium_from_nk()` that automatically constructs a dispersivless medium when permittivity>=1, and a single-pole Lorentz medium when permittivity<1.
+- A utility function `td.medium_from_nk()` that automatically constructs a non-dispersive medium when permittivity>=1, and a single-pole Lorentz medium when permittivity<1.
 - Integration of the `documentation` alongside the main codebase repository.
 - Integration of the `tidy3d-notebooks` repository.
 - `tidy3d develop` CLI and development guide on the main documentation.

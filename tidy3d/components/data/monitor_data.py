@@ -1363,6 +1363,7 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
             "wg TM fraction": self.pol_fraction_waveguide["tm"],
             "mode area": self.mode_area,
             "group index": self.n_group_raw,  # Use raw field to avoid issuing a warning
+            "dispersion (ps/(nm km))": self.dispersion_raw,  # Use raw field to avoid issuing a warning
         }
 
         return xr.Dataset(data_vars=info)
@@ -1376,6 +1377,8 @@ class ModeSolverData(ModeSolverDataset, ElectromagneticFieldData):
 
         if not np.any(dataset["group index"].values):
             drop.append("group index")
+        if not np.any(dataset["dispersion (ps/(nm km))"].values):
+            drop.append("dispersion (ps/(nm km))")
         if np.all(dataset["loss (dB/cm)"] == 0):
             drop.append("loss (dB/cm)")
 
