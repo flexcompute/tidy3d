@@ -777,18 +777,20 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @classmethod
     @abstractmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj) -> UnstructuredGridDataset:
+    def _from_vtk_obj(cls, vtk_obj, field=None) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
     @requires_vtk
-    def from_vtu(cls, file: str) -> UnstructuredGridDataset:
+    def from_vtu(cls, file: str, field: str = None) -> UnstructuredGridDataset:
         """Load unstructured data from a vtu file.
 
         Parameters
         ----------
         fname : str
             Full path to the .vtu file to load the unstructured data from.
+        field : str
+            Name of the field to load.
 
         Returns
         -------
@@ -796,7 +798,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Unstructured data.
         """
         grid = cls._read_vtkUnstructuredGrid(file)
-        return cls._from_vtk_obj(grid)
+        return cls._from_vtk_obj(grid, field=field)
 
     @requires_vtk
     def to_vtu(self, fname: str):
@@ -815,7 +817,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @classmethod
     @requires_vtk
-    def _get_values_from_vtk(cls, vtk_obj, num_points: pd.PositiveInt) -> IndexedDataArray:
+    def _get_values_from_vtk(
+        cls, vtk_obj, num_points: pd.PositiveInt, field: str = None
+    ) -> IndexedDataArray:
         """Get point data values from a VTK object."""
 
         point_data = vtk_obj.GetPointData()
@@ -829,10 +833,13 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             values_name = None
 
         else:
-            array_vtk = point_data.GetAbstractArray(0)
+            if field is not None:
+                array_vtk = point_data.GetAbstractArray(field)
+            else:
+                array_vtk = point_data.GetAbstractArray(0)
 
             # currently we assume there is only one point data array provided in the VTK object
-            if num_point_arrays > 1:
+            if num_point_arrays > 1 and field is None:
                 array_name = array_vtk.GetName()
                 log.warning(
                     f"{num_point_arrays} point data arrays are found in a VTK object. "
@@ -1105,7 +1112,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     @classmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj):
+    def _from_vtk_obj(cls, vtk_obj, field=None):
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # get points cells data from vtk object
@@ -1126,7 +1133,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         points_numpy = vtk["vtk_to_numpy"](vtk_obj.GetPoints().GetData())
 
         # data values are read directly into Tidy3D array
-        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy))
+        values = cls._get_values_from_vtk(vtk_obj, len(points_numpy), field)
 
         # detect zero size dimension
         bounds = np.max(points_numpy, axis=0) - np.min(points_numpy, axis=0)
@@ -1493,13 +1500,13 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     @classmethod
     @requires_vtk
-    def _from_vtk_obj(cls, grid) -> TetrahedralGridDataset:
+    def _from_vtk_obj(cls, grid, field=None) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
         cells_numpy = vtk["vtk_to_numpy"](grid.GetCells().GetConnectivityArray())
         points_numpy = vtk["vtk_to_numpy"](grid.GetPoints().GetData())
-        values = cls._get_values_from_vtk(grid, len(points_numpy))
+        values = cls._get_values_from_vtk(grid, len(points_numpy), field)
 
         # verify cell_types
         cells_types = vtk["vtk_to_numpy"](grid.GetCellTypesArray())

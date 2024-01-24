@@ -119,6 +119,14 @@ def test_triangular_dataset(tmp_path, ds_name):
     assert tri_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 0.0, 1.0))
     assert np.all(tri_grid._vtk_offsets == np.array([0, 3, 6]))
 
+    # since vtk is attempted to be imported during a dependent function call
+    # let's call one of those so that vtk dict is properly populated
+    try:
+        _ = tri_grid._vtk_cells
+        print("Testing with 'vtk'.")
+    except Tidy3dImportError:
+        print("Testing without 'vtk'.")
+
     if vtk["mod"] is None:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid._vtk_cells
@@ -240,9 +248,23 @@ def test_triangular_dataset(tmp_path, ds_name):
             tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
     else:
         tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
-        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
 
+        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
         assert tri_grid == tri_grid_loaded
+
+        custom_name = "newname"
+        tri_grid_renamed = tri_grid.rename(custom_name)
+        tri_grid_renamed.to_vtu(tmp_path / "tri_grid_test.vtu")
+
+        tri_grid_loaded = td.TriangularGridDataset.from_vtu(
+            tmp_path / "tri_grid_test.vtu", field=custom_name
+        )
+        assert tri_grid == tri_grid_loaded
+
+        with pytest.raises(Exception):
+            tri_grid_loaded = td.TriangularGridDataset.from_vtu(
+                tmp_path / "tri_grid_test.vtu", field=custom_name + "blah"
+            )
 
     # test ariphmetic operations
     def operation(arr):
@@ -352,6 +374,14 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
     assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8]))
     assert tet_grid.name == ds_name
 
+    # since vtk is attempted to be imported during a dependent function call
+    # let's call one of those so that vtk dict is properly populated
+    try:
+        _ = tet_grid._vtk_cells
+        print("Testing with 'vtk'.")
+    except Tidy3dImportError:
+        print("Testing without 'vtk'.")
+
     if vtk["mod"] is None:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid._vtk_cells
@@ -429,6 +459,20 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
 
         assert tet_grid == tet_grid_loaded
+
+        custom_name = "newname"
+        tet_grid_renamed = tet_grid.rename(custom_name)
+        tet_grid_renamed.to_vtu(tmp_path / "tet_grid_test.vtu")
+
+        tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
+            tmp_path / "tet_grid_test.vtu", field=custom_name
+        )
+        assert tet_grid == tet_grid_loaded
+
+        with pytest.raises(Exception):
+            tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
+                tmp_path / "tet_grid_test.vtu", field=custom_name + "blah"
+            )
 
     # test ariphmetic operations
     def operation(arr):
