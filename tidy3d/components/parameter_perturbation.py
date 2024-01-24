@@ -11,6 +11,7 @@ import xarray as xr
 import matplotlib.pyplot as plt
 
 from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray
+from .data.dataset import SpatialDataType, UnstructuredGridDataset, get_numpy_array
 from .base import Tidy3dBaseModel, cached_property
 from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
@@ -42,8 +43,8 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def _get_val(
-        field: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray], val: FieldVal
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        field: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType], val: FieldVal
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
         """Get specified value from a field."""
 
         if val == "real":
@@ -67,10 +68,12 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
         )
 
     @staticmethod
-    def _array_type(value: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]) -> str:
+    def _array_type(value: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]) -> str:
         """Check whether variable is scalar, array, or spatial array."""
         if isinstance(value, SpatialDataArray):
             return "spatial"
+        if isinstance(value, UnstructuredGridDataset):
+            return "spatial_unstructured"
         if np.ndim(value) == 0:
             return "scalar"
         return "array"
@@ -81,26 +84,26 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
 def ensure_temp_in_range(
     sample: Callable[
-        Union[ArrayLike[float], SpatialDataArray],
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+        Union[ArrayLike[float], SpatialDataType],
+        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType],
     ]
 ) -> Callable[
-    Union[ArrayLike[float], SpatialDataArray],
-    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+    Union[ArrayLike[float], SpatialDataType],
+    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType],
 ]:
     """Decorate ``sample`` to log warning if temperature supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: Union[ArrayLike[float], SpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
         """New sample function."""
 
         if np.iscomplexobj(temperature):
             raise ValueError("Cannot pass complex 'temperature' to 'sample()'")
 
         temp_min, temp_max = self.temperature_range
-        temperature_numpy = np.array(temperature)
+        temperature_numpy = get_numpy_array(temperature)
         if np.any(temperature_numpy < temp_min) or np.any(temperature_numpy > temp_max):
             log.warning(
                 "Temperature passed to 'HeatPerturbation.sample()'"
@@ -123,8 +126,8 @@ class HeatPerturbation(AbstractPerturbation):
 
     @abstractmethod
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: Union[ArrayLike[float], SpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
         """Sample perturbation.
 
         Parameters
@@ -227,8 +230,8 @@ class LinearHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: Union[ArrayLike[float], SpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
         """Sample perturbation at temperature points.
 
         Parameters
@@ -336,8 +339,8 @@ class CustomHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataArray]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        self, temperature: Union[ArrayLike[float], SpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
         """Sample perturbation at provided temperature points.
 
         Parameters
@@ -883,9 +886,9 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
     @staticmethod
     def _zeros_like(
-        T: SpatialDataArray = None,
-        n: SpatialDataArray = None,
-        p: SpatialDataArray = None,
+        T: SpatialDataType = None,
+        n: SpatialDataType = None,
+        p: SpatialDataType = None,
     ):
         """Check that fields have the same coordinates and return an array field with zeros."""
         template = None
@@ -904,14 +907,15 @@ class ParameterPerturbation(Tidy3dBaseModel):
                 "provided."
             )
 
-        return xr.zeros_like(template)
+#        return xr.zeros_like(template)
+        return 0 * template
 
     def apply_data(
         self,
-        temperature: SpatialDataArray = None,
-        electron_density: SpatialDataArray = None,
-        hole_density: SpatialDataArray = None,
-    ) -> SpatialDataArray:
+        temperature: SpatialDataType = None,
+        electron_density: SpatialDataType = None,
+        hole_density: SpatialDataType = None,
+    ) -> SpatialDataType:
         """Sample perturbations on provided heat and/or charge data. At least one of
         ``temperature``, ``electron_density``, and ``hole_density`` must be not ``None``.
         All provided fields must have identical coords.

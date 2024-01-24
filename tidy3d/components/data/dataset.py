@@ -1266,6 +1266,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         vmax: float = None,
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Dict = None,
+        pcolor_kwargs: Dict = None,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -1300,6 +1301,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         if cbar_kwargs is None:
             cbar_kwargs = {}
+        if pcolor_kwargs is None:
+            pcolor_kwargs = {}
         if not (field or grid):
             raise DataError("Nothing to plot ('field == False', 'grid == False').")
 
@@ -1312,6 +1315,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
                 cmap=cmap,
                 vmin=vmin,
                 vmax=vmax,
+                **pcolor_kwargs,
             )
 
             if cbar:
@@ -1688,3 +1692,14 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
+
+SpatialDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
+
+
+def get_numpy_array(data_array: Union[ArrayLike, SpatialDataType]) -> ArrayLike:
+    """Get numpy representation of dataarray/dataset values."""
+    if isinstance(data_array, UnstructuredGridDataset):
+        return data_array.values.values
+    if isinstance(data_array, SpatialDataArray):
+        return data_array.values
+    return np.array(data_array)

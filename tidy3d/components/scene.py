@@ -20,6 +20,7 @@ from .medium import AbstractPerturbationMedium
 from .grid.grid import Grid
 from .structure import Structure
 from .data.data_array import SpatialDataArray
+from .data.dataset import get_numpy_array, UnstructuredGridDataset,TetrahedralGridDataset, TriangularGridDataset
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from .heat_spec import SolidSpec
@@ -850,11 +851,11 @@ class Scene(Tidy3dBaseModel):
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+                min(np.min(get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+                max(np.max(get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
@@ -891,9 +892,38 @@ class Scene(Tidy3dBaseModel):
             plane_axes_inds = [0, 1, 2]
             plane_axes_inds.pop(normal_axis_ind)
 
+            eps_diag = medium.eps_dataarray_freq(frequency=freq)
+
+            if isinstance(eps_diag[0], UnstructuredGridDataset):
+                if isinstance(eps_diag[0], TriangularGridDataset) and eps_diag[0].normal_axis != normal_axis_ind:
+                    eps_diag = list(eps_diag)
+                    for dim in range(3):
+                        eps_diag[dim] = eps_diag[dim].plane_slice(axis=normal_axis_ind, pos=normal_position)
+                else:
+                    eps_mean = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
+                    if isinstance(eps_mean, TetrahedralGridDataset):
+                        eps_mean = eps_mean.plane_slice(axis=normal_axis_ind, pos=normal_position)
+
+                    if reverse:
+                        eps_mean = eps_min + eps_max - eps_mean
+
+                    eps_mean.plot(
+                        grid=False,
+                        ax=ax,
+                        cbar=False,
+                        cmap=STRUCTURE_EPS_CMAP,
+                        vmin=eps_min,
+                        vmax=eps_max,
+                        pcolor_kwargs=dict(
+                            clip_path=(polygon_path(shape), ax.transData),
+                            clip_box=ax.bbox,
+                            alpha=alpha,
+                        ),
+                    )
+                    return
+
             # in case when different components of custom medium are defined on different grids
             # we will combine all points along each dimension
-            eps_diag = medium.eps_dataarray_freq(frequency=freq)
             if (
                 eps_diag[0].coords == eps_diag[1].coords
                 and eps_diag[0].coords == eps_diag[2].coords
