@@ -17,4 +17,5 @@
     "RadiativeCoolingGlass.ipynb": ["mat_SiO2.csv", "mat_Al2O3.csv"],
     "XarrayTutorial.ipynb": ["gaussian_beam_data.hdf5", "mmi_simulation_data.hdf5", "waveguide_mode_data.hdf5"],
     "TunableChiralMetasurface.ipynb": ["GST_A_nk.csv", "GST_C_nk.csv"],
+    "MoS2Waveguide.ipynb": ["MoS2_nk.csv"],
 }
