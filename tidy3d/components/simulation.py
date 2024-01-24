@@ -14,16 +14,15 @@ from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
-from .geometry.primitives import Cylinder
 from .geometry.mesh import TriangleMesh
-from .geometry.polyslab import PolySlab
 from .geometry.utils import flatten_groups, traverse_geometries
+from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom, subdivide
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
-from .medium import Medium, MediumType, AbstractMedium
-from .medium import AbstractCustomMedium, Medium2D, MediumType3D
+from .medium import MediumType, AbstractMedium
+from .medium import AbstractCustomMedium, Medium2D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
@@ -84,9 +83,6 @@ WARN_MODE_NUM_CELLS = 1e5
 NUM_CELLS_WARN_EPSILON = 100_000_000
 # number of structures at which we warn about slow Simulation.epsilon()
 NUM_STRUCTURES_WARN_EPSILON = 10_000
-# for 2d materials. to find neighboring media, search a distance on either side
-# equal to this times the grid size
-DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = 0.02
@@ -3236,34 +3232,18 @@ class Simulation(AbstractSimulation):
         if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
             return self.structures
 
-        def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
-            """Get the bounds of a geometry in the axis direction."""
-            return (geom.bounds[0][axis], geom.bounds[1][axis])
-
-        def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
-            """Set the bounds of a geometry in the axis direction."""
-            if isinstance(geom, Box):
-                new_center = list(geom.center)
-                new_center[axis] = (bounds[0] + bounds[1]) / 2
-                new_size = list(geom.size)
-                new_size[axis] = bounds[1] - bounds[0]
-                return geom.updated_copy(center=new_center, size=new_size)
-            if isinstance(geom, PolySlab):
-                return geom.updated_copy(slab_bounds=bounds)
-            if isinstance(geom, Cylinder):
-                new_center = list(geom.center)
-                new_center[axis] = (bounds[0] + bounds[1]) / 2
-                new_length = bounds[1] - bounds[0]
-                return geom.updated_copy(center=new_center, length=new_length)
-            raise ValidationError(
-                "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
-            )
-
-        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> float:
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
             """Get grid size around the 2D material."""
             dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
                 axis
             ]
+            # When 1 dl is requested it is assumed that only an approximate value is needed
+            # before the 2D material has been snapped to the grid
+            if num_dls == 1:
+                return [np.mean(dls)]
+
+            # When 2 dls are requested the 2D geometry should have been snapped to grid,
+            # so this represents the exact adjacent grid spacing
             if len(dls) != num_dls:
                 raise Tidy3dError(
                     "Failed to detect grid size around the 2D material. "
@@ -3281,34 +3261,7 @@ class Simulation(AbstractSimulation):
             new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
             return set_bounds(geom, (new_center, new_center), axis)
 
-        def get_neighboring_media(
-            geom: Geometry, axis: Axis, structures: List[Structure]
-        ) -> Tuple[List[MediumType3D], List[float]]:
-            """Find the neighboring material properties and grid sizes."""
-            dl = get_dls(geom, axis, 1)[0]
-            center = get_bounds(geom, axis)[0]
-            thickness = dl * DIST_NEIGHBOR_REL_2D_MED
-            thickened_geom = set_bounds(
-                geom, bounds=(center - thickness / 2, center + thickness / 2), axis=axis
-            )
-            grid_sizes = get_dls(thickened_geom, axis, 2)
-            dls_signed = [-grid_sizes[0], grid_sizes[1]]
-            neighbors = []
-            for _, dl_signed in enumerate(dls_signed):
-                geom_shifted = set_bounds(
-                    geom, bounds=(center + dl_signed, center + dl_signed), axis=axis
-                )
-                media = Scene.intersecting_media(Box.from_bounds(*geom_shifted.bounds), structures)
-                if len(media) > 1:
-                    raise SetupError(
-                        "2D materials do not support multiple neighboring media on a side. "
-                        "Please split the 2D material into multiple smaller 2D materials, one "
-                        "for each background medium."
-                    )
-                medium_side = Medium() if len(media) == 0 else list(media)[0]
-                neighbors.append(medium_side)
-            return (neighbors, grid_sizes)
-
+        # Begin volumetric structures grid
         simulation_background = Structure(geometry=self.geometry, medium=self.medium)
         background_structures = [simulation_background]
         new_structures = []
@@ -3320,25 +3273,39 @@ class Simulation(AbstractSimulation):
                 continue
             # otherwise, found a 2D material; replace it with volumetric equivalent
             axis = structure.geometry._normal_2dmaterial
+            geometry = structure.geometry
 
-            # snap monolayer to grid
-            geometry = snap_to_grid(structure.geometry, axis)
-            center = get_bounds(geometry, axis)[0]
+            # subdivide
+            avg_axis_dl = get_dls(geometry, axis, 1)[0]
+            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
+            # Create and add volumetric equivalents
+            background_structures_temp = []
+            for subdivided_geometry in subdivided_geometries:
+                # Snap to the grid and create volumetric equivalent
+                snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
+                snapped_center = get_bounds(snapped_geometry, axis)[0]
+                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
+                adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
 
-            # get neighboring media and grid sizes
-            (neighbors, dls) = get_neighboring_media(geometry, axis, background_structures)
+                # Create the new volumetric medium
+                new_medium = structure.medium.volumetric_equivalent(
+                    axis=axis, adjacent_media=adjacent_media, adjacent_dls=dls
+                )
 
-            if not structure.medium.is_pec:
-                new_bounds = (center - dls[0] / 2, center + dls[1] / 2)
-            else:
-                new_bounds = (center, center)
+                new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
+                temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
 
-            new_geometry = set_bounds(structure.geometry, bounds=new_bounds, axis=axis)
+                if structure.medium.is_pec:
+                    pec_delta = fp_eps * max(np.abs(snapped_center), 1.0)
+                    new_bounds = (snapped_center - pec_delta, snapped_center + pec_delta)
+                new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
-            new_medium = structure.medium.volumetric_equivalent(
-                axis=axis, adjacent_media=neighbors, adjacent_dls=dls
-            )
-            new_structures.append(structure.updated_copy(geometry=new_geometry, medium=new_medium))
+                new_structures.append(new_structure)
+                background_structures_temp.append(temp_structure)
+
+            background_structures += background_structures_temp
 
         return tuple(new_structures)
 
