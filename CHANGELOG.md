@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remote mode solver web api automatically reduces the associated `Simulation` object to the mode solver plane before uploading it to server.
 - All solver output is now compressed. However, it is automatically unpacked to the same `simulation_data.hdf5` by default when loading simulation data from the server.
 - Internal refactor of `adjoint` plugin to separate `jax`-traced fields from regular `tidy3d` fields.
-- Added argument `field` in class method `.from_vtu()` of `TriangularGridDataset` and `TetrahedralGridDataset` for specifying the name of data field to load.
+- Added an optional argument `field` in class method `.from_vtu()` of `TriangularGridDataset` and `TetrahedralGridDataset` for specifying the name of data field to load.
 
 ### Fixed
 - Removed spurious warnings realted to reloading simulation containing `PerturbationMedium` with `CustomChargePerturbation`/`CustomHeatPerturbation`

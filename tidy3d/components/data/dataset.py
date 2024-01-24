@@ -789,7 +789,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         ----------
         fname : str
             Full path to the .vtu file to load the unstructured data from.
-        field : str
+        field : str = None
             Name of the field to load.
 
         Returns
