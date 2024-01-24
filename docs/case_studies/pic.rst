@@ -1,5 +1,5 @@
-Photonic Integrated Circuit Components
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Passive Photonic Integrated Circuit Components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
@@ -30,4 +30,3 @@ Photonic Integrated Circuit Components
     ../../PlasmonicWaveguideCO2Sensor
     ../../BilayerSiNEdgeCoupler
     ../../ScaleInvariantWaveguide
-    ../../MachZehnderModulator
