@@ -9,9 +9,8 @@ np.random.seed(4)
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(tmp_path, ds_name):
+def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
-    from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
@@ -119,15 +118,7 @@ def test_triangular_dataset(tmp_path, ds_name):
     assert tri_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 0.0, 1.0))
     assert np.all(tri_grid._vtk_offsets == np.array([0, 3, 6]))
 
-    # since vtk is attempted to be imported during a dependent function call
-    # let's call one of those so that vtk dict is properly populated
-    try:
-        _ = tri_grid._vtk_cells
-        print("Testing with 'vtk'.")
-    except Tidy3dImportError:
-        print("Testing without 'vtk'.")
-
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid._vtk_cells
         with pytest.raises(Tidy3dImportError):
@@ -140,7 +131,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         _ = tri_grid._vtk_obj
 
     # plane slicing
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.plane_slice(axis=2, pos=0.5)
     else:
@@ -157,7 +148,7 @@ def test_triangular_dataset(tmp_path, ds_name):
             _ = tri_grid.plane_slice(axis=0, pos=2)
 
     # clipping by a box
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
     else:
@@ -169,7 +160,7 @@ def test_triangular_dataset(tmp_path, ds_name):
             _ = tri_grid.box_clip([[0.1, 0.1, 0.3], [0.2, 0.2, 0.9]])
 
     # interpolation
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             invariant = tri_grid.interp(
                 x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
@@ -227,7 +218,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         _ = tri_grid.plot(field=False, grid=False)
 
     # generalized selection method
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.sel(x=0.2)
     else:
@@ -241,7 +232,7 @@ def test_triangular_dataset(tmp_path, ds_name):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
 
     # writing/reading .vtu
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
@@ -278,9 +269,8 @@ def test_triangular_dataset(tmp_path, ds_name):
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(tmp_path, ds_name):
+def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
-    from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
@@ -374,15 +364,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
     assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8]))
     assert tet_grid.name == ds_name
 
-    # since vtk is attempted to be imported during a dependent function call
-    # let's call one of those so that vtk dict is properly populated
-    try:
-        _ = tet_grid._vtk_cells
-        print("Testing with 'vtk'.")
-    except Tidy3dImportError:
-        print("Testing without 'vtk'.")
-
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid._vtk_cells
         with pytest.raises(Tidy3dImportError):
@@ -395,7 +377,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         _ = tet_grid._vtk_obj
 
     # plane slicing
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.plane_slice(axis=2, pos=0.5)
     else:
@@ -407,7 +389,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
             _ = tet_grid.plane_slice(axis=1, pos=2)
 
     # clipping by a box
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
     else:
@@ -419,7 +401,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
             _ = tet_grid.box_clip([[0.1, 1.1, 0.3], [0.2, 1.2, 0.9]])
 
     # interpolation
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
     else:
@@ -435,7 +417,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         assert no_intersection.name == ds_name
 
     # generalized selection method
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.sel(x=0.2)
     else:
@@ -449,7 +431,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
             _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
 
     # writing/reading .vtu
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
