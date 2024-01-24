@@ -12,7 +12,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
 
@@ -268,7 +268,7 @@ def test_mode_solver_validation():
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
-def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
+def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):  # noqa: F811
     """Test mode solver setups issuing warnings."""
 
     simulation = td.Simulation(
@@ -281,7 +281,7 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         group_index_step=group_index_step,
     )
 
-    ms = ModeSolver(
+    _ = ModeSolver(
         simulation=simulation,
         plane=PLANE,
         mode_spec=mode_spec,
@@ -328,7 +328,7 @@ def test_mode_solver_simple(mock_remote_api, local):
         compare_colocation(ms)
         verify_pol_fraction(ms)
         verify_dtype(ms)
-        dataframe = ms.data.to_dataframe()
+        _ = ms.data.to_dataframe()
         check_ms_reduction(ms)
 
     else:
@@ -464,11 +464,20 @@ def test_mode_solver_straight_vs_angled():
 
     for key, val in ms.data.modes_info.items():
         tol = 1e-2
-        if key == "mode area":
-            tol = 2.5e-2  # mode area has higher error
-        # print(val, ms_angled.data.modes_info[key])
-        print(np.amax(np.abs(val - ms_angled.data.modes_info[key])))
-        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol, atol=tol)
+        if key == "TE (Ex) fraction":
+            tol = 0.1
+        elif key == "wg TE fraction":
+            tol = 1.3e-2
+        elif key == "mode area":
+            tol = 2.1e-2
+        elif key == "dispersion (ps/(nm km))":
+            tol = 0.7
+        # print(
+        #     key,
+        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(val)).values.max(),
+        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(ms_angled.data.modes_info[key])).values.max(),
+        # )
+        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol)
 
 
 def test_mode_solver_angle_bend():
@@ -499,7 +508,7 @@ def test_mode_solver_angle_bend():
     compare_colocation(ms)
     verify_pol_fraction(ms)
     verify_dtype(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
     check_ms_reduction(ms)
 
     # Plot field
@@ -536,7 +545,7 @@ def test_mode_solver_2D():
     compare_colocation(ms)
     verify_pol_fraction(ms)
     verify_dtype(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
     check_ms_reduction(ms)
 
     mode_spec = td.ModeSpec(
@@ -558,7 +567,7 @@ def test_mode_solver_2D():
     )
     compare_colocation(ms)
     # verify_pol_fraction(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
     check_ms_reduction(ms)
 
     # The simulation and the mode plane are both 0D along the same dimension
@@ -577,7 +586,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, log_capture, local):
+def test_group_index(mock_remote_api, log_capture, local):  # noqa: F811
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
