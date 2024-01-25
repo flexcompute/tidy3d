@@ -1,7 +1,7 @@
 """Defines jax-compatible mediums."""
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional, Any, List
+from typing import Dict, Tuple, Union, Callable, Optional, Any
 from abc import ABC
 
 import pydantic.v1 as pd
@@ -16,7 +16,7 @@ from ....components.medium import Medium, AnisotropicMedium, CustomMedium, PoleR
 from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
 from ....exceptions import SetupError
-from ....constants import CONDUCTIVITY
+from ....constants import CONDUCTIVITY, EPSILON_0
 
 from .base import JaxObject
 from .types import JaxFloat
@@ -448,6 +448,7 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
 
 @register_pytree_node_class
 class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
+
     _tidy3d_class = PoleResidue
 
     eps_inf_jax: JaxFloat = pd.Field(
@@ -502,9 +503,23 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
     ) -> complex:
         """Eps model of the JaxPoleResidue."""
         eps = eps_inf
-        for a, c in poles:
+        for (a, c) in poles:
             eps += self._eps_model_1_pole(a, c, frequency)
         return eps
+
+    @staticmethod
+    def _eps_complex_to_eps_sigma(eps_complex: complex, freq: float) -> Tuple[float, float]:
+        eps_real = jnp.real(eps_complex)
+        eps_imag = jnp.imag(eps_complex)
+        omega = 2 * np.pi * freq
+        sigma = omega * eps_imag * EPSILON_0
+        return eps_real, sigma
+
+    def to_jax_medium(self, freq: float) -> JaxMedium:
+        """Directly convert a Dispersive model to a :class:`.JaxMedium`."""
+        eps_complex = self._eps_model(eps_inf=self.eps_inf_jax, poles=self.poles_jax, frequency=freq)
+        permittivity, conductivity = self._eps_complex_to_eps_sigma(eps_complex, freq=freq)
+        return JaxMedium(permittivity=permittivity, conductivity=conductivity)
 
     def store_vjp(
         self,
@@ -534,21 +549,60 @@ class JaxPoleResidue(PoleResidue, AbstractJaxMedium):
 
         for freq in d_eps_map.coords["f"]:
             vjp_eps_complex_f = complex(vjp_eps_complex.sel(f=freq))
+            omega = float(freq) * 2 * np.pi
             _vjp_eps, _ = self.eps_complex_to_eps_sigma(vjp_eps_complex_f, freq)
             vjp_eps_inf += _vjp_eps
 
             for pole_i, (a_i, c_i) in enumerate(self.poles):
-                deps_da, deps_dc = eps_model_grad_fn(a_i, c_i, float(freq))
 
-                vjp_a = vjp_eps_complex_f * deps_da
-                vjp_c = vjp_eps_complex_f * deps_dc
+                a_i = a_i
+                c_i = c_i
 
-                vjp_a = vjp_a
-                vjp_c = -jnp.conj(vjp_c)
+                deps_da, deps_dc = eps_model_grad_fn(a_i, c_i, 2 * np.pi * float(freq))
+
+                c = np.real(vjp_eps_complex_f)
+                d = np.imag(vjp_eps_complex_f)
+
+                deps_da_re = np.real(deps_da)
+                deps_da_im = np.imag(deps_da)
+
+                du_dx_a = deps_da_re
+                du_dy_a = deps_da_im
+                dv_dx_a = -du_dy_a
+                dv_dy_a = du_dx_a
+
+                deps_dc_re = np.real(deps_dc)
+                deps_dc_im = np.imag(deps_dc)
+
+                du_dx_c = deps_dc_re
+                du_dy_c = deps_dc_im
+                dv_dx_c = -du_dy_c
+                dv_dy_c = du_dx_c
+
+                vjp_a = (
+                    du_dx_a * c + 
+                    du_dy_a * c * (-1j) +
+                    dv_dx_a * (-d) +
+                    dv_dy_a * (-d) * (-1j)
+                )
+
+                vjp_c = (
+                    du_dx_c * c + 
+                    du_dy_c * c * (-1j) +
+                    dv_dx_c * (-d) +
+                    dv_dy_c * (-d) * (- 1j)
+                )
+
+                # vjp_a = vjp_eps_complex_f * jnp.conj(deps_da)
+                # vjp_c = vjp_eps_complex_f * jnp.conj(deps_dc)
+
+                # # TODO: understand why this is needed ONLY for c
+                # vjp_a = vjp_a
+                # vjp_c = vjp_c
 
                 # update the VJP of each pole for this frequency
-                vjp_poles[pole_i][0] += complex(vjp_a)  # TODO: not sure about conj
-                vjp_poles[pole_i][1] += complex(vjp_c)  # TODO: not sure about conj
+                vjp_poles[pole_i][0] += complex(vjp_a)
+                vjp_poles[pole_i][1] += complex(vjp_c)
 
         return self.updated_copy(
             eps_inf_jax=float(vjp_eps_inf),

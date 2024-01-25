@@ -1842,7 +1842,7 @@ def test_pole_residue_grad():
     ), "Pole residue eps_model adjoint grad doesn't match numerical."
 
 
-def test_pole_residue_grad_sim():
+def test_pole_residue_grad_sim_batch():
     """Numerically test gradient of function involving simulation with JaxPoleResidue"""
 
     OMEGA = 2 * np.pi * FREQ0
@@ -1910,8 +1910,8 @@ def test_pole_residue_grad_sim():
     EPS_INF = 2.0
 
     # in units of OMEGA!
-    a = -0.5 - 1.0j
-    c = +0.001 + 0.001j
+    a = -0.5 + 0.5j
+    c = 0.05 + 0.05j
 
     A_RE = np.real(a)
     A_IM = np.imag(a)
@@ -1969,3 +1969,340 @@ def test_pole_residue_grad_sim():
     assert np.allclose(
         grad_adj, grad_num, rtol=0.2
     ), "Pole residue adjoint grad doesn't match numerical."
+
+def test_pole_residue_grad_sim_tmm():
+    """Test pole residue model gradients against TMM grads."""
+
+    import numpy as np
+    import jax.numpy as jnp
+    import jax
+    import tmm
+    import matplotlib.pyplot as plt
+    from typing import Tuple, List
+
+    import tidy3d as td
+    from tidy3d.web import run as run_sim
+    from tidy3d.plugins.adjoint import (
+        JaxSimulation,
+        JaxBox,
+        JaxMedium,
+        JaxStructure,
+        JaxSimulationData,
+    )
+    import tidy3d.plugins.adjoint as tda
+    from tidy3d.plugins.adjoint.web import run_local as run_adjoint
+
+    # frequency we want to simulate at
+    freq0 = 2.0e14
+    k0 = 2 * np.pi * freq0 / td.C_0
+    freqs = [freq0]
+    wavelength = td.C_0 / freq0
+
+    # background permittivity
+    bck_eps = 1.3**2
+
+    # space between each slab
+    spc = 0.0
+
+    # slab permittivities and thicknesses
+    slab_eps_inf0 = [2.0**2, 1.8**2, 1.5**2, 1.9**2, 1.3**2]
+    slab_as0 = len(slab_eps_inf0) * [-0.5 - 0.5j]
+    slab_cs0 = len(slab_eps_inf0) * [0.05 + 0.05j]
+
+    slab_ds0 = [0.5, 0.25, 0.5, 0.5, 0.75]
+
+    # incidence angle
+    theta = 0 * np.pi / 8
+
+    # resolution
+    dl = 0.01
+
+    def compute_T_tmm(slab_eps_inf=slab_eps_inf0, slab_as=slab_as0, slab_cs=slab_cs0, slab_ds=slab_ds0) -> float:
+        """Get transmission as a function of slab permittivities and thicknesses."""
+
+        # construct lists of permittivities and thicknesses including spaces between
+        new_slab_eps = []
+        new_slab_ds = []
+        for eps_inf, a, c, d in zip(slab_eps_inf, slab_as, slab_cs, slab_ds):
+            pole = (freq0 * 2 * np.pi * a, freq0 * 2 * np.pi * c)
+            med = td.PoleResidue(eps_inf=eps_inf, poles=[pole])
+            freq = td.C_0 / wavelength
+            eps = med.eps_model(freq)
+            new_slab_eps.append(eps)
+            new_slab_eps.append(bck_eps)
+            new_slab_ds.append(d)
+            new_slab_ds.append(spc)
+        slab_eps = new_slab_eps[:-1]
+        slab_ds = new_slab_ds[:-1]
+
+        # add the input and output spaces to the lists
+        eps_list = [bck_eps] + slab_eps + [bck_eps]
+        n_list = np.sqrt(eps_list)
+        d_list = [np.inf] + slab_ds + [np.inf]
+
+        # compute transmission with TMM
+        return tmm.coh_tmm("p", n_list, d_list, theta, wavelength)["T"]
+
+    T_tmm = compute_T_tmm(slab_eps_inf=slab_eps_inf0, slab_as=slab_as0, slab_cs=slab_cs0, slab_ds=slab_ds0)
+    print(f"T (tmm) = {T_tmm:.3f}")
+
+    def compute_grad_tmm(
+        slab_eps_inf=slab_eps_inf0, slab_as=slab_as0, slab_cs=slab_cs0, slab_ds=slab_ds0
+    ) -> Tuple[List[float], List[float]]:
+        """Compute numerical gradient of transmission w.r.t. each of the slab permittivities and thicknesses using TMM."""
+
+        delta = 1e-4
+
+        # set up containers to store gradient and perturbed arguments
+        num_slabs = len(slab_eps_inf)
+        grad_tmm = np.zeros((4, num_slabs), dtype=complex)
+        args = np.stack((slab_eps_inf, slab_as, slab_cs, slab_ds), axis=0)
+
+        # loop through slab index and argument index (eps, d)
+        for arg_index in range(4):
+            for slab_index in range(num_slabs):
+                grad = 0.0
+
+                # perturb the argument by delta in each + and - direction
+                for pm in (-1, +1):
+                    args_num = args.copy()
+                    args_num[arg_index][slab_index] += delta * pm
+                    
+                    # NEW: for slab thickness gradient, need to modify neighboring slabs too
+                    if arg_index == 3 and spc == 0:
+                        if slab_index > 0:
+                            args_num[arg_index][slab_index - 1] -= delta * pm / 2
+                        if slab_index < num_slabs - 1:
+                            args_num[arg_index][slab_index + 1] -= delta * pm / 2
+
+                    # compute argument perturbed T and add to finite difference gradient contribution
+                    T_tmm = compute_T_tmm(slab_eps_inf=args_num[0], slab_as=args_num[1], slab_cs=args_num[2], slab_ds=args_num[3])
+                    
+                    grad += np.real(pm * T_tmm / 2 / delta)
+                    
+                    if arg_index in (1, 2):
+                        args_num = args.copy()
+                        args_num[arg_index][slab_index] += 1j * delta * pm
+                        T_tmm = compute_T_tmm(slab_eps_inf=args_num[0], slab_as=args_num[1], slab_cs=args_num[2], slab_ds=args_num[3])
+                        grad += 1j * np.imag(pm * T_tmm / 2 / (1j * delta))
+
+                grad_tmm[arg_index][slab_index] = grad
+
+        return grad_tmm
+
+    grad_eps_inf_tmm, grad_as_tmm, grad_cs_tmm, grad_ds_tmm = compute_grad_tmm()
+    print(f"gradient w.r.t. eps_inf (tmm)  = {grad_eps_inf_tmm}")
+    print(f"gradient w.r.t. a (tmm)  = {grad_as_tmm}")
+    print(f"gradient w.r.t. c (tmm)  = {grad_cs_tmm}")
+    print(f"gradient w.r.t. ds  (tmm)  = {grad_ds_tmm}")
+
+    def make_sim(slab_eps_inf=slab_eps_inf0, slab_as=slab_as0, slab_cs=slab_cs0, slab_ds=slab_ds0) -> JaxSimulation:
+        """Create a JaxSimulation given the slab permittivities and thicknesses."""
+
+        # frequency setup
+        wavelength = td.C_0 / freq0
+        fwidth = freq0 / 10.0
+        freqs = [freq0]
+
+        # geometry setup
+        bck_medium = td.Medium(permittivity=bck_eps)
+
+        space_above = 2
+        space_below = 2
+
+        length_x = 0.1
+        length_y = 0.1
+        length_z = space_below + sum(slab_ds0) + space_above + (len(slab_ds0) - 1) * spc
+        sim_size = (length_x, length_y, length_z)
+
+        # make structures
+        slabs = []
+        z_start = -length_z / 2 + space_below
+
+        for eps_inf, a, c, d in zip(slab_eps_inf, slab_as, slab_cs, slab_ds):
+
+            pole = (freq0 * 2 * np.pi * a, freq0 * 2 * np.pi * c)
+            med = tda.JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+
+            # dont track the gradient through the center of each slab
+            # as tidy3d doesn't have enough information to properly process the interface between touching JaxBox objects
+            z_center = jax.lax.stop_gradient(z_start + d / 2)
+            slab = JaxStructure(
+                geometry=JaxBox(center=[0, 0, z_center], size=[td.inf, td.inf, d]),
+                medium=med,
+            )
+            slabs.append(slab)
+            z_start += d + spc
+
+        # source setup
+        gaussian = td.GaussianPulse(freq0=freq0, fwidth=fwidth)
+        src_z = -length_z / 2 + space_below / 2.0
+
+        source = td.PlaneWave(
+            center=(0, 0, src_z),
+            size=(td.inf, td.inf, 0),
+            source_time=gaussian,
+            direction="+",
+            angle_theta=theta,
+            angle_phi=0,
+            pol_angle=0,
+        )
+
+        # boundaries
+        boundary_x = td.Boundary.bloch_from_source(
+            source=source, domain_size=sim_size[0], axis=0, medium=bck_medium
+        )
+        boundary_y = td.Boundary.bloch_from_source(
+            source=source, domain_size=sim_size[1], axis=1, medium=bck_medium
+        )
+        boundary_spec = td.BoundarySpec(
+            x=boundary_x, y=boundary_y, z=td.Boundary.pml(num_layers=40)
+        )
+
+        # monitors
+        mnt_z = length_z / 2 - space_above / 2.0
+        monitor_1 = td.DiffractionMonitor(
+            center=[0.0, 0.0, mnt_z],
+            size=[td.inf, td.inf, 0],
+            freqs=freqs,
+            name="diffraction",
+            normal_dir="+",
+        )
+
+        # make simulation
+        return JaxSimulation(
+            size=sim_size,
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=100),
+            input_structures=slabs,
+            sources=[source],
+            output_monitors=[monitor_1],
+            run_time=10 / fwidth,
+            boundary_spec=boundary_spec,
+            medium=bck_medium,
+            subpixel=True,
+            shutoff=1e-8,
+        )
+
+    sim = make_sim()
+
+    def post_process_T(sim_data: JaxSimulationData) -> float:
+        """Given some JaxSimulationData from the run, return the transmission of "p" polarized light."""
+        amps = sim_data.output_monitor_data["diffraction"].amps.sel(polarization="p")
+        return jnp.sum(abs(amps.values) ** 2)
+
+    def compute_T_fdtd(slab_eps_inf=slab_eps_inf0, slab_as=slab_as0, slab_cs=slab_cs0, slab_ds=slab_ds0) -> float:
+        """Given the slab permittivities and thicknesses, compute T, making sure to use `tidy3d.plugins.adjoint.web.run_adjoint`."""
+        sim = make_sim(slab_eps_inf=slab_eps_inf, slab_as=slab_as, slab_cs=slab_cs, slab_ds=slab_ds)
+        sim_data = run_adjoint(sim, task_name="slab", verbose=True)
+        return post_process_T(sim_data)
+
+    compute_T_and_grad_fdtd = jax.value_and_grad(compute_T_fdtd, argnums=(0, 1, 2, 3))
+
+    # set logging level to ERROR to avoid redundant warnings from adjoint run
+    td.config.logging_level = "ERROR"
+    T_fdtd, (grad_eps_inf_fdtd, grad_as_fdtd, grad_cs_fdtd, grad_ds_fdtd) = compute_T_and_grad_fdtd(slab_eps_inf0, slab_as0, slab_cs0, slab_ds0)
+
+    grad_eps_inf_fdtd = np.array(grad_eps_inf_fdtd)
+    grad_as_fdtd = np.array(grad_as_fdtd)
+    grad_cs_fdtd = np.array(grad_cs_fdtd)
+    grad_ds_fdtd = np.array(grad_ds_fdtd)
+
+    print(f"T (tmm)  = {T_tmm:.5f}")
+    print(f"T (FDTD) = {T_fdtd:.5f}")
+
+    print("un-normalized:")
+    print(f"\tgrad_eps (tmm)  = {grad_eps_inf_tmm}")
+    print(f"\tgrad_eps (FDTD)  = {grad_eps_inf_fdtd}")
+    print(80 * "-")
+    print(f"\tgrad_as  (tmm)  = {grad_as_tmm}")
+    print(f"\tgrad_as  (FDTD)  = {grad_as_fdtd}")
+    print(80 * "-")
+    print(f"\tgrad_cs  (tmm)  = {grad_cs_tmm}")
+    print(f"\tgrad_cs  (FDTD)  = {grad_cs_fdtd}")
+    print(80 * "-")
+    print(f"\tgrad_ds  (tmm)  = {grad_ds_tmm}")
+    print(f"\tgrad_ds  (FDTD)  = {grad_ds_fdtd}")
+
+
+    rms_eps_inf = np.linalg.norm(grad_eps_inf_tmm - grad_eps_inf_fdtd) / np.linalg.norm(grad_eps_inf_tmm)
+    rms_as = np.linalg.norm(grad_as_tmm - grad_as_fdtd) / np.linalg.norm(grad_as_tmm)
+    rms_cs = np.linalg.norm(grad_cs_tmm - grad_cs_fdtd) / np.linalg.norm(grad_cs_tmm)
+    rms_ds = np.linalg.norm(grad_ds_tmm - grad_ds_fdtd) / np.linalg.norm(grad_ds_tmm)
+
+    print(f"RMS error = {rms_eps_inf * 100} %")
+    print(f"RMS error = {rms_as * 100} %")
+    print(f"RMS error = {rms_cs * 100} %")
+    print(f"RMS error = {rms_ds * 100} %")
+
+    def normalize(arr):
+        return arr / np.linalg.norm(arr)
+
+
+    grad_eps_inf_tmm_norm = normalize(grad_eps_inf_tmm)
+    grad_as_tmm_norm = normalize(grad_as_tmm)
+    grad_cs_tmm_norm = normalize(grad_cs_tmm)
+    grad_ds_tmm_norm = normalize(grad_ds_tmm)
+
+    grad_eps_inf_fdtd_norm = normalize(grad_eps_inf_fdtd)
+    grad_as_fdtd_norm = normalize(grad_as_fdtd)
+    grad_cs_fdtd_norm = normalize(grad_cs_fdtd)
+    grad_ds_fdtd_norm = normalize(grad_ds_fdtd)
+
+    rms_eps_inf = np.linalg.norm(grad_eps_inf_tmm_norm - grad_eps_inf_fdtd_norm) / np.linalg.norm(
+        grad_eps_inf_tmm_norm
+    )
+    rms_as = np.linalg.norm(grad_as_tmm_norm - grad_as_fdtd_norm) / np.linalg.norm(
+        grad_as_tmm_norm
+    )
+    rms_ds = np.linalg.norm(grad_cs_tmm_norm - grad_cs_fdtd_norm) / np.linalg.norm(
+        grad_cs_tmm_norm
+    )
+    rms_ds = np.linalg.norm(grad_ds_tmm_norm - grad_ds_fdtd_norm) / np.linalg.norm(
+        grad_ds_tmm_norm
+    )
+
+    print("normalized:")
+    print(f"\tgrad_eps (tmm)  = {grad_eps_inf_tmm_norm}")
+    print(f"\tgrad_eps (FDTD)  = {grad_eps_inf_fdtd_norm}")
+    print(f"\tRMS error = {rms_eps_inf * 100} %")
+    print(80 * "-")
+    print(f"\tgrad_as  (tmm)  = {grad_as_tmm_norm}")
+    print(f"\tgrad_as  (FDTD)  = {grad_as_fdtd_norm}")
+    print(f"\tRMS error = {rms_as * 100} %")
+    print(80 * "-")
+    print(f"\tgrad_cs  (tmm)  = {grad_cs_tmm_norm}")
+    print(f"\tgrad_cs  (FDTD)  = {grad_cs_fdtd_norm}")
+    print(f"\tRMS error = {rms_cs * 100} %")
+    print(80 * "-")
+    print(f"\tgrad_ds  (tmm)  = {grad_ds_tmm_norm}")
+    print(f"\tgrad_ds  (FDTD)  = {grad_ds_fdtd_norm}")
+    print(f"\tRMS error = {rms_ds * 100} %")
+
+    assert rms_eps_inf < 0.10
+    assert rms_as < 0.20
+    assert rms_cs < 0.20
+    assert rms_ds < 0.10
+
+def test_pole_residue_to_medium():
+    """Sanity check that jax pole residue model matches analytical and PoleResidue.eps_model."""
+
+    OMEGA = 2 * np.pi * FREQ0
+
+    def f(x: float) -> float:
+        """ Differentiable function through creating jax pole residue and converting to medium."""
+
+        eps_inf = x + 1.0
+
+        a = -x * 0.5 * OMEGA - x * 1.0j * OMEGA
+        c = +x * 1.0 * OMEGA + x * 1.0j * OMEGA
+        pole = (a, c)
+
+        med_aj = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+
+        med = med_aj.to_jax_medium(freq=FREQ0)
+
+        return med.permittivity_jax + med.conductivity_jax
+
+    # ensure some non-zero gradient is computed
+    assert jax.grad(f)(1.0) != 0.0
+
