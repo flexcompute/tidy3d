@@ -168,8 +168,8 @@ class BinaryProjector(Filter):
     ----
     .. math::
 
-        v(x) = vmin + (vmax - vmin) \\frac{tanh(\\beta \\eta) +
-        tanh(\\beta * (x - \\eta))}{tanh(\\beta * \\eta) + tanh(\\beta * (1 - \\eta))}
+        v(x) = v_{min} + (v_{max} - v_{min}) \\frac{\\mathrm{tanh}(\\beta \\eta) +
+        tanh(\\beta (x - \\eta))}{tanh(\\beta \\eta) + tanh(\\beta (1 - \\eta))}
 
     """
 
@@ -191,8 +191,8 @@ class BinaryProjector(Filter):
     strict_binarize: bool = pd.Field(
         False,
         title="Binarize strictly",
-        description="If False, the binarization is still continuous between min and max. "
-        "If false, the values are snapped to the min and max values after projection.",
+        description="If ``False``, the binarization is still continuous between min and max. "
+        "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
     def evaluate(self, spatial_data: jnp.array) -> jnp.array:
