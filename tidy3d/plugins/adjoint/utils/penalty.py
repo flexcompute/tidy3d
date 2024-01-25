@@ -1,10 +1,12 @@
 """Penalty Functions for adjoint plugin."""
 from abc import ABC, abstractmethod
 
+import pydantic.v1 as pd
 import jax.numpy as jnp
 
 from ....components.base import Tidy3dBaseModel
 from ....components.types import ArrayFloat2D
+from ....constants import MICROMETER
 
 # Radius of Curvature Calculation
 
@@ -18,15 +20,54 @@ class Penalty(Tidy3dBaseModel, ABC):
 
 
 class RadiusPenalty(Penalty):
-    """Generates a penalty for radius of curvature of set of points."""
+    """Computes a penalty for small radius of curvature determined by a fit of points in a 2D plane.
 
-    min_radius: float = 0.150
-    alpha: float = 1.0
-    kappa: float = 10.0
-    wrap: bool = False
+    Note
+    ----
+    .. math::
+
+        p(r) = \\frac{exp(-\\mathrm{kappa}(r - r_{min}))}{1 + exp(-\\mathrm{kappa}(r - r_{min}))}
+
+    Note
+    ----
+    This formula was described by A. Micheals et al.
+    "Leveraging continuous material averaging for inverse electromagnetic design",
+    Optics Express (2018).
+
+    """
+
+    min_radius: float = pd.Field(
+        0.150,
+        title="Minimum Radius",
+        description="Radius of curvature value below which the penalty ramps to its maximum value.",
+        units=MICROMETER,
+    )
+
+    alpha: float = pd.Field(
+        1.0,
+        title="Alpha",
+        description="Parameter controlling the strength of the penalty.",
+    )
+
+    kappa: float = pd.Field(
+        10.0,
+        title="Kappa",
+        description="Parameter controlling the steepness of the penalty evaluation.",
+        units=MICROMETER + "^-1",
+    )
+
+    wrap: bool = pd.Field(
+        False,
+        title="Wrap",
+        description="Whether to consider the first set of points as connected to the last.",
+        units="",
+    )
 
     def evaluate(self, points: ArrayFloat2D) -> float:
-        """Get the penalty as a function of supplied (x, y) points."""
+        """Get the average penalty as a function of supplied (x, y) points by
+        fitting a spline to the curve and evaluating local radius of curvature compared to a
+        desired minimum value. If ``wrap``, it is assumed that the points wrap around to form a
+        closed geometry instead of an isolated line segment."""
 
         def quad_fit(p0, pc, p2):
             """Quadratic bezier fit (and derivatives) for three points.
@@ -60,7 +101,7 @@ class RadiusPenalty(Penalty):
             return p, d_p, d2_p
 
         def get_fit_vals(xs, ys):
-            """Get the values of the bezier curve and its derivatives at t=0.5 along the points."""
+            """Get the values of the Bezier curve and its derivatives at t=0.5 along the points."""
 
             ps = jnp.stack((xs, ys), axis=1)
             p0 = ps[:-2]

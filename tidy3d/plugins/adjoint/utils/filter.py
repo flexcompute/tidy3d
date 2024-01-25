@@ -168,8 +168,10 @@ class BinaryProjector(Filter):
     ----
     .. math::
 
-        v(x) = v_{min} + (v_{max} - v_{min}) \\frac{\\mathrm{tanh}(\\beta \\eta) +
-        tanh(\\beta (x - \\eta))}{tanh(\\beta \\eta) + tanh(\\beta (1 - \\eta))}
+        v_{min} + (v_{max} - v_{min})
+        \\frac{\\mathrm{tanh}(\\beta \\eta) + \\mathrm{tanh}(\\beta (x - \\eta))}
+        {\\mathrm{tanh}(\\beta \\eta) + \\mathrm{tanh}(\\beta (1 - \\eta))}
+
 
     """
 
