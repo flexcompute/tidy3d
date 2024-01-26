@@ -415,7 +415,7 @@ def test_validate_plane_wave_boundaries(log_capture):  # noqa: F811
     )
 
     bspec4 = td.BoundarySpec(
-        x=td.Boundary.bloch(bloch_vec=-3 + bspec2.x.plus.bloch_vec),
+        x=td.Boundary.bloch(bloch_vec=-3.1 + bspec2.x.plus.bloch_vec),
         y=td.Boundary.bloch(bloch_vec=1.8 + bspec2.y.plus.bloch_vec),
         z=td.Boundary.stable_pml(),
     )
@@ -437,8 +437,17 @@ def test_validate_plane_wave_boundaries(log_capture):  # noqa: F811
             boundary_spec=bspec1,
         )
 
+    # angled incidence plane wave with periodic boundaries should warn
+    with AssertLogLevel(log_capture, "WARNING", contains_str="incorrectly set"):
+        td.Simulation(
+            size=(1, 1, 1),
+            run_time=1e-12,
+            sources=[src2],
+            boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+        )
+
     # angled incidence plane wave with an integer-offset Bloch vector should warn
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel(log_capture, "WARNING", contains_str="integer reciprocal"):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,
@@ -447,7 +456,7 @@ def test_validate_plane_wave_boundaries(log_capture):  # noqa: F811
         )
 
     # angled incidence plane wave with wrong Bloch vector should warn
-    with AssertLogLevel(log_capture, "WARNING"):
+    with AssertLogLevel(log_capture, "WARNING", contains_str="incorrectly set"):
         td.Simulation(
             size=(1, 1, 1),
             run_time=1e-12,

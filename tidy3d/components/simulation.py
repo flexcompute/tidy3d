@@ -726,7 +726,7 @@ class Simulation(AbstractSimulation):
                     )
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
                 if num_bloch > 0:
                     cls._check_bloch_vec(
                         source=source,
@@ -784,20 +784,14 @@ class Simulation(AbstractSimulation):
             for tan_dir in tan_dirs:
                 boundary = boundaries[tan_dir]
 
-                # if the boundary is periodic, the source is allowed to cross the boundary
-                # so nothing needs to be done
-                num_pbc = sum(isinstance(bnd, Periodic) for bnd in boundary)
-                if num_pbc == 2:
-                    continue
-
-                # crossing may be allowed for Bloch boundaries, but not others
+                # crossing may be allowed for periodic or Bloch boundaries, but not others
                 if (
                     src_bounds[0][tan_dir] <= sim_bounds[0][tan_dir]
                     or src_bounds[1][tan_dir] >= sim_bounds[1][tan_dir]
                 ):
                     # if the boundary is Bloch periodic, crossing is allowed, but check that the
                     # Bloch vector has been correctly set, similar to the check for plane waves
-                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
                     if num_bloch == 2:
                         cls._check_bloch_vec(
                             source=source,

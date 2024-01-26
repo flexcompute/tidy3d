@@ -27,6 +27,14 @@ class BoundaryEdge(ABC, Tidy3dBaseModel):
 class Periodic(BoundaryEdge):
     """Periodic boundary condition class."""
 
+    @property
+    def bloch_vec(self):
+        """Periodic boundaries are effectively Bloch boundaries with ``bloch_vec == 0``.
+        In practice, periodic boundaries do not force the use of complex fields, while Bloch
+        boundaries do, even with ``bloch_vec == 0``. Thus, it is more efficient to use periodic.
+        """
+        return 0
+
 
 # PEC keyword
 class PECBoundary(BoundaryEdge):
