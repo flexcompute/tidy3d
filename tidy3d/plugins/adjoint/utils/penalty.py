@@ -53,14 +53,13 @@ class RadiusPenalty(Penalty):
         10.0,
         title="Kappa",
         description="Parameter controlling the steepness of the penalty evaluation.",
-        units=MICROMETER + "^-1",
+        units="1/" + MICROMETER,
     )
 
     wrap: bool = pd.Field(
         False,
         title="Wrap",
         description="Whether to consider the first set of points as connected to the last.",
-        units="",
     )
 
     def evaluate(self, points: ArrayFloat2D) -> float:

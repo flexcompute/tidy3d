@@ -407,6 +407,9 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         adjoint_sources = []
         for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
+            if jnp.isnan(amp):
+                continue
+
             # select the propagation angles from the data
             angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
             angle_theta = float(theta_data.sel(**angle_sel_kwargs))
