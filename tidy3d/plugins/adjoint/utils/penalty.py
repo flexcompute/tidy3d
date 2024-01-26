@@ -26,7 +26,7 @@ class RadiusPenalty(Penalty):
     ----
     .. math::
 
-        p(r) = \\frac{exp(-\\mathrm{kappa}(r - r_{min}))}{1 + exp(-\\mathrm{kappa}(r - r_{min}))}
+        p(r) = \\frac{\\mathrm{exp}(-\\kappa(r - r_{min}))}{1 + \\mathrm{exp}(-\\kappa(r - r_{min}))}
 
     Note
     ----
