@@ -37,7 +37,8 @@ class EigSolver(Tidy3dBaseModel):
         symmetry=(0, 0),
         direction="+",
     ) -> Tuple[Numpy, Numpy, EpsSpecType]:
-        """Solve for the modes of a waveguide cross section.
+        """
+        Solve for the modes of a waveguide cross-section.
 
         Parameters
         ----------

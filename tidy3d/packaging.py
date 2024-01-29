@@ -63,6 +63,7 @@ def verify_packages_import(modules: list, required: Literal["any", "all"] = "all
 
         """
 
+        @functools.wraps(func)
         def checks_modules_import(*args, **kwargs):
             """
             Checks if the modules are available. If they are not available, it will raise an error depending on the value.

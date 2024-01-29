@@ -32,12 +32,14 @@ iframe {width: 100%;border: unset}
 html[data-theme="light"] {
     --pst-color-primary: #b5445b;
     --pst-color-secondary: #4772ae;
+    --tab-color: var(--pst-color-secondary);
     --pst-color-link: var(--pst-color-muted);
 }
 
 html[data-theme="dark"] {
     --pst-color-primary: #4772ae;
     --pst-color-secondary: #b5445b;
+    --tab-color: #9647AE; /*#1C2E46;*/
     --pst-color-link: var(--pst-color-muted);
     --sd-color-info-bg:  var(--pst-color-primary);
 }
@@ -65,7 +67,7 @@ img {
 }
 
 .sphinx-tabs-tab {
-    background: var(--pst-color-secondary);
+    background: var(--tab-color);
     padding: 0.5em;
     padding-right: 2em;
     padding-left: 2em;

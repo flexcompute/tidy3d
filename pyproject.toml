@@ -85,7 +85,7 @@ trimesh = {version = "3.20.0", optional = true}
 jupyter = {version="*", optional = true}
 jinja2 = {version = ">=3.1.2", optional = true}
 nbconvert = {version = ">=7.11.0", optional = true}
-sphinx = {version=">=6.2.1,<7", optional = true}
+sphinx = {version=">=6", optional = true}
 nbsphinx = {version = ">=0.8.7", optional = true}
 sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-book-theme = {version = ">=1.0.1", optional = true}
