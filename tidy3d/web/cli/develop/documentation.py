@@ -262,10 +262,6 @@ def build_documentation_from_remote_notebooks(args=None):
 #                     click.echo(f"Error converting {md_file}: {e}", err=True)
 
 
-@develop.command(
-    name="replace-in-files",
-    help="Recursively find and replace strings in files based on a JSON configuration.",
-)
 @click.option(
     "--directory",
     "-d",
@@ -288,8 +284,12 @@ def build_documentation_from_remote_notebooks(args=None):
 @click.option(
     "--dry-run",
     type=bool,
-    default=False,
+    default=True,
     help="Dry run the replace in files command.",
+)
+@develop.command(
+    name="replace-in-files",
+    help="Recursively find and replace strings in files based on a JSON configuration.",
 )
 def replace_in_files_command(
     directory: str, json_dictionary: Optional[str], selected_version: Optional[str], dry_run: bool
@@ -319,6 +319,13 @@ def replace_in_files_command(
     - json_file_path (str): The path to the JSON file containing replacement instructions.
     - selected_version (str): The version to select from the JSON file.
     """
+    # Raise helpful errors on missing arguments using the Click API
+    if json_dictionary is None:
+        raise click.BadParameter("JSON dictionary -j is required.")
+
+    if selected_version is None:
+        raise click.BadParameter("Selected version -v is required.")
+
     if directory is None:
         directory = get_install_directory()
 

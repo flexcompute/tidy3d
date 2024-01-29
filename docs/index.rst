@@ -1,5 +1,6 @@
+******************************
 Tidy3D Electromagnetic Solver
-=============================
+******************************
 
 .. role:: raw-html(raw)
     :format: html
@@ -13,44 +14,88 @@ Tidy3D Electromagnetic Solver
 .. image:: https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge
 .. image:: https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/daquinteroflex/4702549574741e87deaadba436218ebd/raw/tidy3d_extension.json
 .. image:: https://img.shields.io/github/license/flexcompute/tidy3d?style=for-the-badge
-.. image:: https://img.shields.io/badge/Demo-Notebooks-8A2BE2?style=for-the-badge
+.. image:: https://img.shields.io/badge/Demo-Notebooks-9647AE?style=for-the-badge
     :target: https://github.com/flexcompute/tidy3d-notebooks
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge
    :target: https://github.com/psf/black
 
 
+Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an `open source python package <https://github.com/flexcompute/tidy3d>`_ or a `web-based graphical user interface <https://tidy3d.simulation.cloud>`_.
+
+Get Started
+===========
+
+.. tabs::
+
+    .. group-tab:: Install on Linux |:penguin:| & MacOS |:apple:|
+
+        Install the latest stable python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations with
+
+        .. code-block:: bash
+
+            pip install --user tidy3d
+
+        Next, configure your ``tidy3d`` package with the API key from your account.
+
+        `Get your free API key <https://tidy3d.simulation.cloud/account?tab=apikey>`_
+
+        .. code-block:: bash
+
+           tidy3d configure --apikey=XXX
+
+        And enter your API key when prompted.
+
+        For more detailed installation instructions, see `this page <./install.html>`_.
+
+    .. group-tab:: Install on Windows |:window:|
+
+        Install the latest stable python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations in your virtual environment with:
+
+        .. code-block:: bash
+
+            pip install --user tidy3d
+
+        Next, configure your ``tidy3d`` package with the API key from your account.
+
+        `Get your free API key <https://tidy3d.simulation.cloud/account?tab=apikey>`_
+
+        To automatically configure the API key, you will need to install the following extra packages:
+
+        .. code-block:: bash
+
+            pip install pipx
+            pipx run tidy3d configure --apikey=XXX
+
+        If you're running into trouble, you may need to manually set the API key directly in the configuration file where Tidy3D looks for it.
+        You need to place the ``$HOME/.tidy3d/config`` file in your home directory such as ``C:\Users\username\`` (where ``username`` is your username).
+
+        The API key must be in a file called ``$HOME/.tidy3d/config`` located in your home directory, with the following contents
+
+        .. code-block:: bash
+
+            apikey = "XXX"
+
+        You can manually set up your file like this, or do it through the command line line:
+
+        .. code-block:: bash
+
+            echo 'apikey = "XXX"' > ~/.tidy3d/config
+
+        Note the quotes around `XXX`.
+
+    .. group-tab:: In the Cloud |:cloud:|
+
+        If you’d rather skip installation and run an example in one of our web-hosted notebooks, `click here <https://tidy3d.simulation.cloud/notebook?file=StartHere.ipynb>`_.
+
+
+
 .. To do items:
 .. * open simple example in colab with API saved as environment variable and `!pip install tidy3d` in the first line.
 .. * toggle between command line - notebook / python instructions in section 1
-Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an `open source python package <https://github.com/flexcompute/tidy3d>`_ or a `web-based graphical user interface <https://tidy3d.simulation.cloud>`_.
 
-If you’d rather skip installation and run an example in one of our web-hosted notebooks, `click here <https://tidy3d.simulation.cloud/notebook?file=StartHere.ipynb>`_.
 
-.. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
-
-1. Set up Tidy3D
-~~~~~~~~~~~~~~~~
-
-Install the python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations with
-
-.. code:: bash
-
-    pip install tidy3d
-
-Next, configure your ``tidy3d`` package with the API key from your account.
-
-`Get your free API key <https://tidy3d.simulation.cloud/account?tab=apikey>`_
-
-.. code-block:: bash
-
-   tidy3d configure
-
-And enter your API key when prompted.
-
-For more detailed installation instructions, see `this page <https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html>`_.
-
-2. Run a Simulation
-~~~~~~~~~~~~~~~~~~~
+Quick Example
+=============
 
 Start running simulations with just a few lines of code. Run this sample code to simulate a 3D dielectric box in Tidy3D and plot the corresponding field pattern.
 
@@ -69,7 +114,7 @@ Start running simulations with just a few lines of code. Run this sample code to
 
    # create structure - a box centered at 0, 0, 0 with a size of 1.5 micron and permittivity of 2
    square = td.Structure(
-       geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)), 
+       geometry=td.Box(center=(0, 0, 0), size=(1.5, 1.5, 1.5)),
        medium=td.Medium(permittivity=2.0)
    )
 
@@ -104,20 +149,22 @@ Start running simulations with just a few lines of code. Run this sample code to
    data = td.web.run(sim, task_name="quickstart", path="data/data.hdf5", verbose=True)
    ax = data.plot_field("fields", "Ey", z=0)
 
+
+
 This will produce the following plot, which visualizes the electromagnetic fields on the central plane.
 
 .. image:: _static/quickstart_fields.png
    :width: 1200
 
-3. Analyze Results
-~~~~~~~~~~~~~~~~~~
-
 a) Postprocess simulation data using the same python session, or
 
 b) View the results of this simulation on our web-based `graphical user interface <https://tidy3d.simulation.cloud>`_.
 
-4. Learn More
-~~~~~~~~~~~~~
+.. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
+
+
+Further Information
+====================
 
 .. toctree::
   :maxdepth: 2
@@ -130,5 +177,25 @@ b) View the results of this simulation on our web-based `graphical user interfac
   development/index
   changelog
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
+
+Github Repositories
+~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+
+   * - Name
+     - Repository
+   * - Source Code
+     - https://github.com/flexcompute/tidy3d
+   * - Example Notebooks
+     - https://github.com/flexcompute/tidy3d-notebooks
+   * - FAQ Source Code
+     - https://github.com/flexcompute/tidy3d-faq
+
+These repositories are the a very good way to interact with the relevant tool developers.
+We encourage you to ask questions or request features through the "Discussions" or "Issues" tabs of each repository accordingly.
+
+
 
 
