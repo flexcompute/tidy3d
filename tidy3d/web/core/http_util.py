@@ -6,6 +6,8 @@ from enum import Enum
 from typing import Dict
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
 import toml
 
 from .constants import (
@@ -25,6 +27,7 @@ from .exceptions import WebError
 from os.path import expanduser
 from . import core_config
 
+REINITIALIZED = False
 
 TIDY3D_DIR = f"{expanduser('~')}"
 if os.access(TIDY3D_DIR, os.W_OK):
@@ -142,26 +145,47 @@ def http_interceptor(func):
     return wrapper
 
 
+class TLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context(ssl_version=Env.current.ssl_version)
+        kwargs["ssl_context"] = context
+        return super().init_poolmanager(*args, **kwargs)
+
+
 class HttpSessionManager:
     """Http util class."""
 
     def __init__(self, session: requests.Session):
         """Initialize the session."""
+        ssl_version = Env.current.ssl_version
+        if ssl_version:
+            session.mount("https://", TLSAdapter())
         self.session = session
+
+    def reinit(self):
+        """Reinitialize the session."""
+        global REINITIALIZED
+        ssl_version = Env.current.ssl_version
+        if ssl_version and not REINITIALIZED:
+            self.session.mount("https://", TLSAdapter())
+            REINITIALIZED = True
 
     @http_interceptor
     def get(self, path: str, json=None):
         """Get the resource."""
+        self.reinit()
         return self.session.get(url=Env.current.get_real_url(path), auth=api_key_auth, json=json)
 
     @http_interceptor
     def post(self, path: str, json=None):
         """Create the resource."""
+        self.reinit()
         return self.session.post(Env.current.get_real_url(path), json=json, auth=api_key_auth)
 
     @http_interceptor
     def put(self, path: str, json=None, files=None):
         """Update the resource."""
+        self.reinit()
         return self.session.put(
             Env.current.get_real_url(path), json=json, auth=api_key_auth, files=files
         )
@@ -169,6 +193,7 @@ class HttpSessionManager:
     @http_interceptor
     def delete(self, path: str):
         """Delete the resource."""
+        self.reinit()
         return self.session.delete(Env.current.get_real_url(path), auth=api_key_auth)
 
 

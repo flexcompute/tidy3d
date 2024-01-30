@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Automatic subdivision of 2D materials with inhomogeneous substrate/superstrate.
 - Mode field profiles can be stored directly from a `ModeMonitor` by setting `store_fields_direction`.
+- Users can toggle https ssl version through `from tidy3d.web.core.environment import Env` and `Env.set_ssl_version(ssl_version: ssl.TLSVersion)`
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.
