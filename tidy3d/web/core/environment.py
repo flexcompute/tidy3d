@@ -3,6 +3,7 @@ import os
 from .core_config import get_logger
 
 from pydantic.v1 import BaseSettings, Field
+import ssl
 
 
 class EnvironmentConfig(BaseSettings):
@@ -16,6 +17,7 @@ class EnvironmentConfig(BaseSettings):
     website_endpoint: str
     s3_region: str
     ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
+    ssl_version: ssl.TLSVersion = None
 
     def active(self) -> None:
         """Activate the environment instance."""
@@ -163,6 +165,16 @@ class Environment:
             The environment to set to current.
         """
         self._current = config
+
+    def set_ssl_version(self, ssl_version: ssl.TLSVersion) -> None:
+        """Set the ssl version.
+
+        Parameters
+        ----------
+        ssl_version : ssl.TLSVersion
+            The ssl version to set.
+        """
+        self._current.ssl_version = ssl_version
 
 
 Env = Environment()
