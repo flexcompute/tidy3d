@@ -109,19 +109,24 @@ class Coords(Tidy3dBaseModel):
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ):
-        if fill_value == "extrapolate":
-            log.warning(
-                "Option 'fill_value=``extrapolate``' is not supported for unstructured data. "
-                "Points without interpolated values will be assigned NaN's."
-            )
-            fill_value = np.nan
-
         if interp_method == "nearest":
             raise DataError(
                 "Option 'interp_method=``nearest``' is not supported for unstructured data."
             )
 
-        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"})
+        if fill_value == "extrapolate":
+            fill_value_actual = np.nan
+        else:
+            fill_value_actual = fill_value
+
+        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, fill_value=fill_value_actual)
+
+        #if fill_value == "extrapolate"
+            # check if there are any nan at all
+
+            # check whether nan are strictly outside rectangular region
+
+            # check
 
         return interp_array
 
