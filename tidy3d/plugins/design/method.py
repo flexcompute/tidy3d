@@ -1,6 +1,7 @@
 """Defines the methods used for parameter sweep."""
 from typing import Union, Tuple, Dict, Any, Callable
 from abc import ABC, abstractmethod
+import asyncio
 
 import numpy as np
 import pydantic.v1 as pd
@@ -26,6 +27,10 @@ class Method(Tidy3dBaseModel, ABC):
     @abstractmethod
     def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
+
+    @abstractmethod
+    def run_async(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+        """Defines the search algorithm (asynchronously)."""
 
     @abstractmethod
     def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
@@ -80,6 +85,22 @@ class MethodIndependent(Method, ABC):
             fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
             fn_output = fn(**fn_kwargs)
             result.append(fn_output)
+
+        return fn_args, result
+
+    async def run_async(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+        """Defines the search algorithm (sequential)."""
+
+        # get all function inputs
+        fn_args, num_points = self._assemble_args(parameters)
+
+        # for each point, construct the function inputs, run it, record output
+        all_kwargs = []
+        for i in range(num_points):
+            fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
+            all_kwargs.append(fn_kwargs)
+
+        result = await asyncio.gather(*(fn(**kwargs) for kwargs in all_kwargs))
 
         return fn_args, result
 

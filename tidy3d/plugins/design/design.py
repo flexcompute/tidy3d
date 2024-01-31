@@ -107,6 +107,11 @@ class DesignSpace(Tidy3dBaseModel):
         # package the result
         return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
 
+    async def run_async(self, function: Callable, **kwargs) -> Result:
+        fn_args, fn_values = await self.method.run_async(parameters=self.parameters, fn=function)
+        fn_source = self.get_fn_source(function)
+        return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
+
     @staticmethod
     def _make_batch_fn_source(fn_source_pre: str, fn_source_post: str) -> str:
         """How to make the full function source from the pre and post functions."""

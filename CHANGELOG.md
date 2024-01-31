@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Automatic subdivision of 2D materials with inhomogeneous substrate/superstrate.
 - Mode field profiles can be stored directly from a `ModeMonitor` by setting `store_fields_direction`.
+- `tidy3d.web.webapi_async.async_run` function uses `asyncio` to define an asynchronous run function that continues function execution while `await`-ing for tasks being monitored.
+- `tidy3d.plugins.design.Design.run_async(f)` that runs asynchronously over an asynchronous function `f` (using `td.web.async_run` internally).
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.

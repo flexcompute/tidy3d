@@ -4,6 +4,7 @@ import pytest
 import responses
 import numpy as np
 from _pytest import monkeypatch
+import asyncio
 
 import tidy3d as td
 from responses import matchers
@@ -13,6 +14,7 @@ from tidy3d.web.core.environment import Env
 from tidy3d.web.api.webapi import delete, delete_old, download, download_json, run, abort
 from tidy3d.web.api.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
 from tidy3d.web.api.webapi import load, load_simulation, start, upload, monitor, real_cost
+from tidy3d.web.api.webapi_async import async_run as async_run
 from tidy3d.web.api.container import Job, Batch
 from tidy3d.web.api.asynchronous import run_async
 
@@ -36,6 +38,7 @@ FILE_SIZE_GB = 4.0
 
 task_core_path = "tidy3d.web.core.task_core"
 api_path = "tidy3d.web.api.webapi"
+api_path_async = "tidy3d.web.api.webapi_async"
 
 Env.dev.active()
 
@@ -214,6 +217,30 @@ def mock_monitor(monkeypatch):
     monkeypatch.setattr(f"{api_path}.RUN_REFRESH_TIME", 0.00001)
     monkeypatch.setattr(f"{api_path}.get_status", mock_get_status)
     monkeypatch.setattr(f"{api_path}.get_run_info", mock_get_run_info)
+
+
+@pytest.fixture
+def mock_monitor_async(monkeypatch):
+    status_count = [0]
+    statuses = ("upload", "running", "running", "running", "running", "running", "success")
+
+    def mock_get_status(task_id):
+        current_count = min(status_count[0], len(statuses) - 1)
+        current_status = statuses[current_count]
+        status_count[0] += 1
+        return current_status
+
+    run_count = [0]
+    perc_dones = (1, 10, 20, 30, 100)
+
+    def mock_get_run_info(task_id):
+        current_count = min(run_count[0], len(perc_dones) - 1)
+        perc_done = perc_dones[current_count]
+        run_count[0] += 1
+        return perc_done, 1
+
+    monkeypatch.setattr("tidy3d.web.api.connect_util.REFRESH_TIME", 0.00001)
+    monkeypatch.setattr(f"{api_path_async}.RUN_REFRESH_TIME", 0.00001)
 
 
 @pytest.fixture
@@ -449,6 +476,27 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
     )
+
+
+@responses.activate
+def test_async_run(mock_webapi, monkeypatch, tmp_path, mock_monitor_async):
+    sim = make_sim()
+    sims = 3 * [sim]
+    monkeypatch.setattr(f"{api_path_async}.load", lambda *args, **kwargs: True)
+
+    async def run_task(sim):
+        return await async_run(
+            sim,
+            task_name=TASK_NAME,
+            folder_name=PROJECT_NAME,
+            path=str(tmp_path / "web_test_tmp.json"),
+            verbose=False,
+        )
+
+    async def main():
+        return await asyncio.gather(*(run_task(sim) for sim in sims))
+
+    asyncio.run(main())
 
 
 @responses.activate

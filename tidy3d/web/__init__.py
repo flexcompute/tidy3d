@@ -27,6 +27,8 @@ from .core import core_config
 from ..log import log, get_logging_console
 from ..version import __version__
 
+from .api.webapi_async import async_run
+
 migrate()
 
 core_config.set_config(log, get_logging_console(), __version__)
@@ -55,4 +57,6 @@ __all__ = [
     "configure",
     "run_async",
     "test",
+    "async_run",
+    "monitor_fn_async",
 ]

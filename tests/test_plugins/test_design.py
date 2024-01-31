@@ -4,8 +4,10 @@ import numpy as np
 import tidy3d as td
 import matplotlib.pyplot as plt
 import scipy.stats.qmc as qmc
+import asyncio
 
 import tidy3d.web as web
+from tidy3d.web.api.webapi_async import to_async
 from tidy3d.components.base import Tidy3dBaseModel
 
 from tidy3d.plugins import design as tdd
@@ -20,6 +22,105 @@ SWEEP_METHODS = dict(
     custom=tdd.MethodRandomCustom(num_points=5, sampler=qmc.Halton(d=3)),
     random=tdd.MethodRandom(num_points=5),  # TODO: remove this if not used
 )
+
+from functools import wraps, partial
+
+
+def make_design_space(sweep_method) -> tdd.DesignSpace:
+    radius_variable = tdd.ParameterFloat(
+        name="radius",
+        span=(0, 1.5),
+        num_points=5,  # note: only used for MethodGrid
+    )
+
+    num_spheres_variable = tdd.ParameterInt(
+        name="num_spheres",
+        span=(0, 3),
+    )
+
+    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
+
+    return tdd.DesignSpace(
+        parameters=[radius_variable, num_spheres_variable, tag_variable],
+        method=sweep_method,
+        name="sphere CS",
+    )
+
+
+def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
+    """Preprocessing function (make simulation)"""
+
+    # set up simulation
+    spheres = []
+
+    for i in range(int(num_spheres)):
+        spheres.append(
+            td.Structure(
+                geometry=td.Sphere(radius=radius),
+                medium=td.PEC,
+            )
+        )
+
+    mnt = td.FieldMonitor(
+        size=(0, 0, 0),
+        center=(0, 0, 0),
+        freqs=[2e14],
+        name="field",
+    )
+
+    return td.Simulation(
+        size=(1, 1, 1),
+        structures=spheres,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        monitors=[mnt],
+    )
+
+
+def scs_post(sim_data: td.SimulationData) -> float:
+    """Postprocessing function (analyze simulation data)"""
+
+    mnt_data = sim_data["field"]
+    ex_values = mnt_data.Ex.values
+
+    # generate a random number to add some variance to data
+    np.random.seed(hash(sim_data) % 1000)
+
+    return np.sum(np.square(np.abs(ex_values))) + np.random.random()
+
+
+def scs_pre_multi(*args, **kwargs):
+    sim = scs_pre(*args, **kwargs)
+
+    return [sim, sim, sim]
+
+
+def scs_post_multi(*sim_datas):
+    vals = [scs_post(sim_data) for sim_data in sim_datas]
+    return np.mean(vals)
+
+
+def scs_pre_dict(*args, **kwargs):
+    sims = scs_pre_multi(*args, **kwargs)
+    keys = "abc"
+    return dict(zip(keys, sims))
+
+
+def scs_post_dict(a=None, b=None, c=None):
+    sims = [a, b, c]
+    return scs_post_multi(*sims)
+
+
+def scs(radius: float, num_spheres: int, tag: str) -> float:
+    """End to end function."""
+
+    sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
+
+    # run simulation
+    sim_data = run_emulated(sim, task_name=f"SWEEP_{tag}")
+
+    # postprocess
+    return scs_post(sim_data=sim_data)
 
 
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values(), ids=SWEEP_METHODS.keys())
@@ -53,96 +154,9 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     monkeypatch.setattr(MethodIndependent, "_run_batch", emulated_batch_run)
 
     # STEP1: define your design function (inputs and outputs)
-
-    def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
-        """Preprocessing function (make simulation)"""
-
-        # set up simulation
-        spheres = []
-
-        for i in range(int(num_spheres)):
-            spheres.append(
-                td.Structure(
-                    geometry=td.Sphere(radius=radius),
-                    medium=td.PEC,
-                )
-            )
-
-        mnt = td.FieldMonitor(
-            size=(0, 0, 0),
-            center=(0, 0, 0),
-            freqs=[2e14],
-            name="field",
-        )
-
-        return td.Simulation(
-            size=(1, 1, 1),
-            structures=spheres,
-            grid_spec=td.GridSpec.auto(wavelength=1.0),
-            run_time=1e-12,
-            monitors=[mnt],
-        )
-
-    def scs_post(sim_data: td.SimulationData) -> float:
-        """Postprocessing function (analyze simulation data)"""
-
-        mnt_data = sim_data["field"]
-        ex_values = mnt_data.Ex.values
-
-        # generate a random number to add some variance to data
-        np.random.seed(hash(sim_data) % 1000)
-
-        return np.sum(np.square(np.abs(ex_values))) + np.random.random()
-
-    def scs_pre_multi(*args, **kwargs):
-        sim = scs_pre(*args, **kwargs)
-
-        return [sim, sim, sim]
-
-    def scs_post_multi(*sim_datas):
-        vals = [scs_post(sim_data) for sim_data in sim_datas]
-        return np.mean(vals)
-
-    def scs_pre_dict(*args, **kwargs):
-        sims = scs_pre_multi(*args, **kwargs)
-        keys = "abc"
-        return dict(zip(keys, sims))
-
-    def scs_post_dict(a=None, b=None, c=None):
-        sims = [a, b, c]
-        return scs_post_multi(*sims)
-
-    def scs(radius: float, num_spheres: int, tag: str) -> float:
-        """End to end function."""
-
-        sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
-
-        # run simulation
-        sim_data = run_emulated(sim, task_name=f"SWEEP_{tag}")
-
-        # postprocess
-        return scs_post(sim_data=sim_data)
-
     # STEP2: define your design problem
 
-    radius_variable = tdd.ParameterFloat(
-        name="radius",
-        span=(0, 1.5),
-        num_points=5,  # note: only used for MethodGrid
-    )
-
-    num_spheres_variable = tdd.ParameterInt(
-        name="num_spheres",
-        span=(0, 3),
-    )
-
-    tag_variable = tdd.ParameterAny(name="tag", allowed_values=("tag1", "tag2", "tag3"))
-
-    design_space = tdd.DesignSpace(
-        parameters=[radius_variable, num_spheres_variable, tag_variable],
-        method=sweep_method,
-        name="sphere CS",
-    )
+    design_space = make_design_space(sweep_method)
 
     # STEP3: Run your design problem
 
@@ -166,7 +180,9 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     plt.close()
 
     design_space2 = tdd.DesignSpace(
-        parameters=[radius_variable, num_spheres_variable, tag_variable],
+        parameters=list(design_space.parameters)[
+            :3
+        ],  # [radius_variable, num_spheres_variable, tag_variable],
         method=tdd.MethodMonteCarlo(num_points=3),
         name="sphere CS",
     )
@@ -303,3 +319,22 @@ def test_method_random_warning(log_capture, monte_carlo_warning, log_level_expec
 def test_random_sampling(parameter):
     """just make sure sample_random still works in case we need it."""
     parameter.sample_random(10)
+
+
+async def scs_async(radius: float, num_spheres: int, tag: str) -> float:
+    """End to end function with async run."""
+
+    sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
+
+    # run simulation
+    sim_data = await to_async(run_emulated)(sim, task_name=f"SWEEP_{tag}")
+
+    # postprocess
+    return scs_post(sim_data=sim_data)
+
+
+def test_design_async():
+    design_space = make_design_space(sweep_method=SWEEP_METHODS["grid"])
+    results = design_space.run_async(scs_async)
+    results = asyncio.run(results)
+    print(results.to_dataframe().head())
