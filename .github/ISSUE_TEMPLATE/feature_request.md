@@ -1,8 +1,8 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest a feature for tidy3d
 title: ''
-labels: ''
+labels: feature
 assignees: ''
 
 ---
@@ -18,3 +18,6 @@ A clear and concise description of any alternative solutions or features you've 
 
 **Additional context**
 Add any other context or screenshots about the feature request here.
+
+**If Flexcompute Team Member**
+Please assign an estimate for the "priority" of the project (tiny, small, medium, large, XL)
