@@ -929,13 +929,13 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return self._from_vtk_obj(clean_clip)
 
-    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: float = 0,
+        fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
+        use_vtk: bool = False,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
 
@@ -960,6 +960,46 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x = np.atleast_1d(x)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
+
+        if fill_value == "extrapolate":
+            fill_value_actual = np.nan
+        else:
+            fill_value_actual = fill_value
+
+        if use_vtk:
+            interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
+        else:
+            interpolated_values = self._interp_py(x=x, y=y, z=z, fill_value=fill_value_actual)
+
+        return SpatialDataArray(interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name)
+
+    @requires_vtk
+    def _interp_vtk(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float = np.nan,
+    ) -> SpatialDataArray:
+        """Interpolate data at provided x, y, and z.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float = 0
+            Value to use when filling points without interpolated values.
+
+        Returns
+        -------
+        SpatialDataArray
+            Interpolated data.
+        """
+
         shape = (len(x), len(y), len(z))
 
         # create a VTK rectilinear grid to sample onto
@@ -990,7 +1030,194 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # VTK arrays are the z-y-x order, reorder interpolation results to x-y-z order
         values_reordered = np.transpose(np.reshape(values_numpy, shape[::-1]), (2, 1, 0))
 
-        return SpatialDataArray(values_reordered, coords=dict(x=x, y=y, z=z), name=self.values.name)
+        return values_reordered
+
+    def _interp_py(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float = np.nan,
+        max_samples_per_step: int = 1e4,
+        max_cells_per_step: int = 1e4,
+        rel_tol: float = 1e-10,
+        axis_ignore: Union[Axis, None] = None,
+    ):
+
+        num_dims = self._point_dims()
+        num_faces = self._cell_num_vertices()
+
+        xyz_grid = [x, y, z]
+
+        if axis_ignore is not None:
+            xyz_grid.pop(xyz_grid)
+
+        # get numpy arrays for points and cells
+        cell_connections = self.cells.values  # (num_cells, num_vertices), num_vertices=num_faces
+        points = self.points.values  # (num_points, num_dims)
+        data_values = self.values.values  # (num_points,)
+
+        num_cells = len(cell_connections)
+        num_points = len(points)
+
+        # compute tolerances based on total size of unstructured grid
+        bounds = self.bounds
+        size = np.subtract(bounds[1], bounds[0])
+        tol = size * rel_tol
+        diag_tol = np.linalg.norm(tol)
+
+        # compute relative position of unstructured points with respect to target grid
+
+        xyz_pos_l = np.zeros((num_dims, num_points), dtype=int)
+        xyz_pos_r = np.zeros((num_dims, num_points), dtype=int)
+
+        for dim in range(num_dims):
+            xyz_pos_l[dim] = np.searchsorted(xyz_grid[dim] + tol[dim], points[:, dim])
+            xyz_pos_r[dim] = np.searchsorted(xyz_grid[dim] - tol[dim], points[:, dim])
+
+        # (3, num_cells, 4)
+        xyz_pos_l_per_cell = xyz_pos_l[:, cell_connections]
+        xyz_pos_r_per_cell = xyz_pos_r[:, cell_connections]
+
+        # (3, num_cells)
+        cell_ind_min = np.min(xyz_pos_l_per_cell, axis=2)
+        cell_ind_max = np.max(xyz_pos_r_per_cell, axis=2)
+
+        # calculate number of candidate samples per cell
+        num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
+
+        # find cells that have non-zero number of samples
+        ne_cells = num_samples_per_cell > 0
+        num_ne_cells = np.sum(ne_cells)
+        ne_cell_inds = np.arange(num_cells)[ne_cells]
+
+        # restrict to non-empty cells only
+        num_samples_per_ne_cell = num_samples_per_cell[ne_cells]
+        cum_num_samples_per_ne_cell = np.cumsum(num_samples_per_ne_cell)
+
+        ne_cell_ind_min = cell_ind_min[:, ne_cells]
+        ne_cell_ind_max = cell_ind_max[:, ne_cells]
+
+        interpolated_values = fill_value + np.zeros([len(xyz_comp) for xyz_comp in xyz_grid])
+
+        processed_samples = 0
+        processed_cells = 0
+
+        while processed_cells < num_ne_cells:
+
+            # how many cells we would like to process by the end of this step
+            target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
+
+            # find next number of cells based on number of samples
+            target_processed_samples = processed_samples + max_samples_per_step
+            target_processed_cells_from_samples = np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
+
+            # take min between the two
+            target_processed_cells = min(target_processed_cells, target_processed_cells_from_samples)
+
+            # select cells and corresponding samples to process
+            step_num_samples_per_ne_cell = num_samples_per_ne_cell[processed_cells:target_processed_cells]
+            step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
+            step_ne_cell_ind_max = ne_cell_ind_max[:, processed_cells:target_processed_cells]
+            step_num_cells = target_processed_cells - processed_cells
+            step_ne_cell_inds = ne_cell_inds[processed_cells:target_processed_cells]
+            step_ne_cell_connections = cell_connections[step_ne_cell_inds]
+            step_num_samples_total = np.sum(step_num_samples_per_ne_cell)
+
+            def vrange(starts, stops):
+                stops = np.asarray(stops)
+                l = stops - starts
+                return np.repeat(stops - l.cumsum(), l) + np.arange(l.sum())
+
+            varr = vrange(step_num_samples_per_ne_cell*0, step_num_samples_per_ne_cell)
+
+            t1lens = np.repeat(step_ne_cell_ind_max[1] - step_ne_cell_ind_min[1], step_num_samples_per_ne_cell)
+
+            if num_dims == 3:
+                t2lens = np.repeat(step_ne_cell_ind_max[2] - step_ne_cell_ind_min[2], step_num_samples_per_ne_cell)
+                varr, t2_inds = np.divmod(varr, t2lens)
+
+            t0_inds, t1_inds = np.divmod(varr, t1lens)
+
+            start_inds = np.repeat(step_ne_cell_ind_min, step_num_samples_per_ne_cell, axis=1)
+            t0_inds = t0_inds + start_inds[0]
+            t1_inds = t1_inds + start_inds[1]
+            if num_dims == 3:
+                t2_inds = t2_inds + start_inds[2]
+
+            step_cell_map = np.repeat(np.arange(step_num_cells), step_num_samples_per_ne_cell)
+
+            step_ne_cell_vertices = points[step_ne_cell_connections, :]  # (step_num_cells, 4, 3)
+            normal = np.zeros((num_faces, step_num_cells, num_dims))
+            dist = np.zeros((num_faces, step_num_cells))
+
+            for face_ind in range(num_faces):
+                face_pinds = list(np.arange(num_faces))
+                face_pinds.pop(face_ind)
+                p0 = step_ne_cell_vertices[:, face_pinds[0]]
+                p01 = step_ne_cell_vertices[:, face_pinds[1]] - p0
+                p0Opp = step_ne_cell_vertices[:, face_ind] - p0
+                if num_dims == 3:
+                    p02 = step_ne_cell_vertices[:, face_pinds[2]] - p0
+                    n = np.cross(p01, p02)
+                else:
+                    n = np.roll(p01, 1, axis=1)
+                    n[:, 0] = -n[:, 0]
+                n = n / np.linalg.norm(n, axis=1)[:, None]
+                d = np.einsum('ij,ij->i', n, p0Opp)
+                to_flip = d > 0
+                d[to_flip] *= -1
+                n[to_flip, :] *= -1
+                normal[face_ind] = n
+                dist[face_ind] = d
+
+            sdf = -1e5 * np.ones(step_num_samples_total)
+            interpolated = np.zeros(step_num_samples_total)
+            p1 = np.zeros((step_num_samples_total, num_dims))
+            p1[:, 0] = xyz_grid[0][t0_inds]
+            p1[:, 1] = xyz_grid[1][t1_inds]
+            if num_dims == 3:
+                p1[:, 2] = xyz_grid[2][t2_inds]
+            vec = np.zeros((step_num_samples_total, num_dims))
+            vec[:, :] = -step_ne_cell_vertices[step_cell_map, 1, :]
+            vec += p1
+
+            for face_ind in range(num_faces):
+                if face_ind == 1:
+                    vec[:, :] = -step_ne_cell_vertices[step_cell_map, 0, :]
+                    vec += p1
+                tmp = normal[face_ind, step_cell_map, :] * vec
+                d = np.sum(tmp, axis=1)
+                sdf = np.maximum(sdf, d)
+                tmp = data_values[step_ne_cell_connections[step_cell_map, face_ind]]
+                tmp *= d
+                tmp /= dist[face_ind, step_cell_map]
+                interpolated += tmp
+
+            valid_samples = sdf < diag_tol
+
+            interpolated_valid = interpolated[valid_samples]
+            t0_inds_valid = t0_inds[valid_samples]
+            t1_inds_valid = t1_inds[valid_samples]
+            if num_dims == 3:
+                t2_inds_valid = t2_inds[valid_samples]
+                interpolated_values[t0_inds_valid, t1_inds_valid, t2_inds_valid] = interpolated_valid
+            else:
+                interpolated_values[t0_inds_valid, t1_inds_valid] = interpolated_valid
+
+            processed_cells = target_processed_cells
+            processed_samples += step_num_samples_total
+
+        if num_dims == 2:
+            orig_shape = [len(x), len(y), len(z)]
+            flat_shape = orig_shape.copy()
+            flat_shape[axis_ignore] = 1
+            interpolated_values = np.reshape(interpolated_values, flat_shape)
+            interpolated_values = np.broadcast_to(
+                interpolated_values, (len(x), len(y), len(z))
+            ).copy()
+
+        return interpolated_values
 
     @abstractmethod
     @requires_vtk
@@ -1703,3 +1930,5 @@ def get_numpy_array(data_array: Union[ArrayLike, SpatialDataType]) -> ArrayLike:
     if isinstance(data_array, SpatialDataArray):
         return data_array.values
     return np.array(data_array)
+
+
