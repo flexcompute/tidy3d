@@ -1044,8 +1044,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         axis_ignore: Union[Axis, None] = None,
     ):
 
+        # get dimensionality of data
         num_dims = self._point_dims()
-        num_faces = self._cell_num_vertices()
+        num_cell_faces = self._cell_num_vertices()
 
         xyz_grid = [x, y, z]
 
@@ -1053,7 +1054,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             xyz_grid.pop(xyz_grid)
 
         # get numpy arrays for points and cells
-        cell_connections = self.cells.values  # (num_cells, num_vertices), num_vertices=num_faces
+        cell_connections = self.cells.values  # (num_cells, num_cell_vertices), num_cell_vertices=num_cell_faces
         points = self.points.values  # (num_points, num_dims)
         data_values = self.values.values  # (num_points,)
 
@@ -1066,8 +1067,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         tol = size * rel_tol
         diag_tol = np.linalg.norm(tol)
 
-        # compute relative position of unstructured points with respect to target grid
-
+        # compute (index) positions of unstructured points w.r.t. target Cartesian grid points
+        # (i.e. between which Cartesian grid points a given unstructured grid point is located)
+        # we perturb grid values in both directions to make sure we don't miss any points
+        # due to numerical precision
         xyz_pos_l = np.zeros((num_dims, num_points), dtype=int)
         xyz_pos_r = np.zeros((num_dims, num_points), dtype=int)
 
@@ -1075,21 +1078,32 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             xyz_pos_l[dim] = np.searchsorted(xyz_grid[dim] + tol[dim], points[:, dim])
             xyz_pos_r[dim] = np.searchsorted(xyz_grid[dim] - tol[dim], points[:, dim])
 
-        # (3, num_cells, 4)
+        # now we transfer this information to each cell. That is, each cell knows how its vertices
+        # positioned relative to Cartesian grid points.
+        # (num_dims, num_cells, num_vertices=num_cell_faces)
         xyz_pos_l_per_cell = xyz_pos_l[:, cell_connections]
         xyz_pos_r_per_cell = xyz_pos_r[:, cell_connections]
 
-        # (3, num_cells)
+        # taking min/max among all cell vertices (per each dimension separately)
+        # we get min and max indices of Cartesian grid points that may receive their values
+        # from a given cell.
+        # (num_dims, num_cells)
         cell_ind_min = np.min(xyz_pos_l_per_cell, axis=2)
         cell_ind_max = np.max(xyz_pos_r_per_cell, axis=2)
 
-        # calculate number of candidate samples per cell
+        # calculate number of Cartesian grid points where we will perform interpolation for a given
+        # cell. Note that this number is much larger than actually needed, because essentially for
+        # each cell we consider all Cartesian grid points that fall into the cell's bounding box.
+        # We use word "sample" to represent such Cartesian grid points.
+        # (num_cells,)
         num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
 
         # find cells that have non-zero number of samples
-        ne_cells = num_samples_per_cell > 0
+        # we use "ne" as a shortcut for "non empty"
+        ne_cells = num_samples_per_cell > 0  # (num_cells,)
         num_ne_cells = np.sum(ne_cells)
-        ne_cell_inds = np.arange(num_cells)[ne_cells]
+        # indices of cells with non-zero number of samples in the original list of cells
+        ne_cell_inds = np.arange(num_cells)[ne_cells]  # (num_cells,)
 
         # restrict to non-empty cells only
         num_samples_per_ne_cell = num_samples_per_cell[ne_cells]
@@ -1098,8 +1112,18 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         ne_cell_ind_min = cell_ind_min[:, ne_cells]
         ne_cell_ind_max = cell_ind_max[:, ne_cells]
 
+        # Next we need to perform actual interpolation at all sample points
+        # this is computationally extensive operation and because we try to do everything
+        # in the vectorized form, it can require a lot of memory, sometimes even causing OOM errors.
+        # To avoid that, we impose restrictions on how many cells/samples can be processed at a time
+        # effectivelly performing these operations in chunks.
+        # Note that currently this is done sequentially, but could be relatively easy to parallelize
+
+        # let's allocate an array for resulting values
+        # every time we process a chunk of samples, we will write into this array
         interpolated_values = fill_value + np.zeros([len(xyz_comp) for xyz_comp in xyz_grid])
 
+        # start counters of how many cells/samples have been processed
         processed_samples = 0
         processed_cells = 0
 
@@ -1108,9 +1132,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             # how many cells we would like to process by the end of this step
             target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
 
-            # find next number of cells based on number of samples
+            # find how many cells we can processed based on number of allowed samples
             target_processed_samples = processed_samples + max_samples_per_step
-            target_processed_cells_from_samples = np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
+            target_processed_cells_from_samples = np.searchsorted(
+                cum_num_samples_per_ne_cell, target_processed_samples
+            ) + 1
 
             # take min between the two
             target_processed_cells = min(target_processed_cells, target_processed_cells_from_samples)
@@ -1124,12 +1150,38 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             step_ne_cell_connections = cell_connections[step_ne_cell_inds]
             step_num_samples_total = np.sum(step_num_samples_per_ne_cell)
 
+            # at this point we know how many samples we need to perform per each cell and we also
+            # know span indices of these samples (in x, y, and z arrays)
+
+            # we would like to perform all interpolations in a vectorized form, however, we have
+            # a different number of interpolation samples for different cells. Thus, we need to
+            # arange all samples in a linear way (flatten). Basically, we want to have data in this
+            # form:
+            # cell_ind | x_ind | y_ind | z_ind
+            # --------------------------------
+            #        0 |    23 |     5 |    11
+            #        0 |    23 |     5 |    12
+            #        0 |    23 |     6 |    11
+            #        0 |    23 |     6 |    12
+            #        1 |    41 |    11 |     0
+            #        1 |    42 |    11 |     0
+            #      ... |   ... |   ... |   ...
+
+            # to do that we start with performing arange for each cell, but in vectorized way
+            # this gives us something like this
+            # [0, 1, 2, 3,   0, 1,   0, 1, 2, 3, 4, 5, 6,   ...]
+            # |<-cell 0->|<-cell 1->|<-     cell 2    ->|<- ...
             def vrange(starts, stops):
                 stops = np.asarray(stops)
                 l = stops - starts
                 return np.repeat(stops - l.cumsum(), l) + np.arange(l.sum())
 
             varr = vrange(step_num_samples_per_ne_cell*0, step_num_samples_per_ne_cell)
+
+            # x_ind = [23, 23, 23, 23,   41, 41,      ...]
+            # y_ind = [ 5,  5,  5,  5,    6,  6,      ...]
+            # z_ind = [11, 12, 11, 12,    0,  0,      ...]
+            #         |<-  cell 0  ->|<- cell 1 ->|<- ...
 
             t1lens = np.repeat(step_ne_cell_ind_max[1] - step_ne_cell_ind_min[1], step_num_samples_per_ne_cell)
 
@@ -1145,15 +1197,38 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             if num_dims == 3:
                 t2_inds = t2_inds + start_inds[2]
 
+            # finally, we repeat cell indices corresponding number of times to obtain how
+            # (x_ind, y_ind, z_ind) map to cell indices. So, now we have four arras:
+            # x_ind    = [23, 23, 23, 23,   41, 41,      ...]
+            # y_ind    = [ 5,  5,  5,  5,    6,  6,      ...]
+            # z_ind    = [11, 12, 11, 12,    0,  0,      ...]
+            # cell_map = [ 0,  0,  0,  0,    1,  1,      ...]
+            #            |<-  cell 0  ->|<- cell 1 ->|<- ...
             step_cell_map = np.repeat(np.arange(step_num_cells), step_num_samples_per_ne_cell)
 
-            step_ne_cell_vertices = points[step_ne_cell_connections, :]  # (step_num_cells, 4, 3)
-            normal = np.zeros((num_faces, step_num_cells, num_dims))
-            dist = np.zeros((num_faces, step_num_cells))
+            # let's put these arrays aside for a moment and perform the second preparatory step
+            # specifically, for each face of each cell we will compute normal vector and distance
+            # to the opposing cell vertex. This will allows us quickly calculate SDF of a cell at
+            # each sample point as well as perform linear interpolation.
 
-            for face_ind in range(num_faces):
-                face_pinds = list(np.arange(num_faces))
+            # first, we collect coordinates of cell vertices into a single array
+            # (step_num_cells, num_cell_vertices, num_dims)
+            step_ne_cell_vertices = points[step_ne_cell_connections, :]
+
+            # array for resulting normals and distances
+            normal = np.zeros((num_cell_faces, step_num_cells, num_dims))
+            dist = np.zeros((num_cell_faces, step_num_cells))
+
+            # loop face by face
+            # note that by face_ind we denote both index of face in a cell and index of the opposing vertex
+            for face_ind in range(num_cell_faces):
+                # select vertices forming the given face
+                face_pinds = list(np.arange(num_cell_faces))
                 face_pinds.pop(face_ind)
+
+                # calculate normal to the face
+                # in 3D: cross product of two vectors lying in the face plane
+                # in 2D: (-ty, tx) for a vector (tx, ty) along the face
                 p0 = step_ne_cell_vertices[:, face_pinds[0]]
                 p01 = step_ne_cell_vertices[:, face_pinds[1]] - p0
                 p0Opp = step_ne_cell_vertices[:, face_ind] - p0
@@ -1164,31 +1239,71 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     n = np.roll(p01, 1, axis=1)
                     n[:, 0] = -n[:, 0]
                 n = n / np.linalg.norm(n, axis=1)[:, None]
+
+                # compute distance to the opposing vertex by taking a dot product between normal
+                # and a vector connecting the opposing vertex and the face
                 d = np.einsum('ij,ij->i', n, p0Opp)
+
+                # obtained normal direction is arbitrary here. We will orient it such that it points
+                # away from the triangle (and distance to the opposing vertex is negative).
                 to_flip = d > 0
                 d[to_flip] *= -1
                 n[to_flip, :] *= -1
+
+                # record obtained info
                 normal[face_ind] = n
                 dist[face_ind] = d
 
+            # now we all set up to proceed with actual interpolation at each sample point
+            # the main idea here is that:
+            # - we use `cell_map` to grab normals and distances
+            #   of cells in which the given sample point is (potentially) located.
+            # - use `x_ind, y_ind, z_ind` to find actual coordinates of a given sample point
+            # - combine the above two to calculate cell SDF and interpolated value at a given sample
+            #   point
+            # - having cell SDF at the sample point actually tells us whether its inside the cell
+            #   (keep value) or outside of it (discard interpolated value)
+
+            # to perform SDF calculation and interpolation we will loop face by face and recording
+            # their contributions. That is,
+            # cell_sdf = max(face0_sdf, face1_sdf, ...)
+            # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
+            # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
             sdf = -1e5 * np.ones(step_num_samples_total)
             interpolated = np.zeros(step_num_samples_total)
-            p1 = np.zeros((step_num_samples_total, num_dims))
-            p1[:, 0] = xyz_grid[0][t0_inds]
-            p1[:, 1] = xyz_grid[1][t1_inds]
-            if num_dims == 3:
-                p1[:, 2] = xyz_grid[2][t2_inds]
-            vec = np.zeros((step_num_samples_total, num_dims))
-            vec[:, :] = -step_ne_cell_vertices[step_cell_map, 1, :]
-            vec += p1
 
-            for face_ind in range(num_faces):
-                if face_ind == 1:
-                    vec[:, :] = -step_ne_cell_vertices[step_cell_map, 0, :]
-                    vec += p1
+            # coordinates of each sample point
+            sample_xyz = np.zeros((step_num_samples_total, num_dims))
+            sample_xyz[:, 0] = xyz_grid[0][t0_inds]
+            sample_xyz[:, 1] = xyz_grid[1][t1_inds]
+            if num_dims == 3:
+                sample_xyz[:, 2] = xyz_grid[2][t2_inds]
+
+            # loop face by face
+            for face_ind in range(num_cell_faces):
+
+                # find a vector connecting sample point and face
+                if face_ind == 0:
+                    vertex_ind = 1  # anythin other than 0
+                    vec = sample_xyz - step_ne_cell_vertices[step_cell_map, vertex_ind, :]
+
+                if face_ind == 1:  # since three faces share a point only do this once
+                    vertex_ind = 0  # it belongs to every face 1, 2, and 3
+                    vec = sample_xyz - step_ne_cell_vertices[step_cell_map, 0, :]
+
+                # compute distance from every sample point to the face of corresponding cell
+                # using dot product
                 tmp = normal[face_ind, step_cell_map, :] * vec
                 d = np.sum(tmp, axis=1)
+
+                # take max between distance to obtain the overall SDF of a cell
                 sdf = np.maximum(sdf, d)
+
+                # perform linear interpolation. Here we use the fact that when computing face SDF
+                # at a given point and dividing it by the distance to the opposing vertex we get
+                # a linear shape function for that vertex. So, we just need to multiply that by
+                # the data value at that vertex to find its contribution into intepolated value.
+                # (decomposed in an attempt to reduce memory consumption)
                 tmp = data_values[step_ne_cell_connections[step_cell_map, face_ind]]
                 tmp *= d
                 tmp /= dist[face_ind, step_cell_map]
