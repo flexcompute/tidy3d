@@ -6,6 +6,7 @@ from typing import Union, Dict, Callable, Any, Tuple
 
 import xarray as xr
 import numpy as np
+from scipy.interpolate import NearestNDInterpolator
 import pydantic.v1 as pd
 from matplotlib.tri import Triangulation
 from matplotlib import pyplot as plt
@@ -24,7 +25,7 @@ from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
 from ...packaging import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
-from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
+from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
 from ...log import log
 
 
@@ -947,8 +948,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : float = 0
-            Value to use when filling points without interpolated values.
+        fill_value : Union[float, Literal["extrapolate"]] = "extrapolate"
+            Value to use when filling points without interpolated values. If ``extrapolate`` then
+            nearest values are used.
+        use_vtk : bool = False
+            Use vtk's interpolationfunctionality or Tidy3D's own implementation.
 
         Returns
         -------
@@ -971,7 +975,51 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         else:
             interpolated_values = self._interp_py(x=x, y=y, z=z, fill_value=fill_value_actual)
 
-        return SpatialDataArray(interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name)
+        if fill_value == "extrapolate":
+            interpolated_values = self._fill_nans_from_nearests(interpolated_values, x=x, y=y, z=z)
+
+        return SpatialDataArray(
+            interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name
+        )
+
+    @requires_vtk
+    def _fill_nans_from_nearests(
+        self,
+        values: ArrayLike,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+    ) -> ArrayLike:
+        """Replace nan's in ``values`` with nearest data points.
+
+        Parameters
+        ----------
+        values : ArrayLike
+            3D array containing nan's
+        x : ArrayLike
+            x-coordinates of sampling points.
+        y : ArrayLike
+            y-coordinates of sampling points.
+        z : ArrayLike
+            z-coordinates of sampling points.
+
+        Returns
+        -------
+        ArrayLike
+            Data without nan's.
+        """
+
+        # locate all nans
+        nans = np.isnan(values)
+
+        if np.sum(nans) > 0:
+            # use scipy's nearest neighbor interpolator
+            X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+            interp = NearestNDInterpolator(self._points_3d_array, self.values.values)
+            values_to_replace_nans = interp(X[nans], Y[nans], Z[nans])
+            values[nans] = values_to_replace_nans
+
+        return values
 
     @requires_vtk
     def _interp_vtk(
@@ -979,9 +1027,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: ArrayLike,
         y: ArrayLike,
         z: ArrayLike,
-        fill_value: float = np.nan,
-    ) -> SpatialDataArray:
-        """Interpolate data at provided x, y, and z.
+        fill_value: float,
+    ) -> ArrayLike:
+        """Interpolate data at provided x, y, and z using vtk package.
 
         Parameters
         ----------
@@ -1037,26 +1085,53 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: ArrayLike,
         y: ArrayLike,
         z: ArrayLike,
-        fill_value: float = np.nan,
+        fill_value: float,
         max_samples_per_step: int = 1e4,
         max_cells_per_step: int = 1e4,
         rel_tol: float = 1e-10,
         axis_ignore: Union[Axis, None] = None,
-    ):
+    ) -> ArrayLike:
+        """Interpolate data at provided x, y, and z using vectorized python implementation.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float
+            Value to use when filling points without interpolated values.
+        max_samples_per_step : int = 1e4
+            Max number of points to interpolate at per iteration.
+        max_cells_per_step : int = 1e4
+            Max number of cells to interpolate from per iteration.
+        rel_tol : float = 1e-10
+            Relative tolerance when comparing coordinates.
+        axis_ignore : Union[Axis, None] = None
+            For interpolati
+
+        Returns
+        -------
+        SpatialDataArray
+            Interpolated data.
+        """
 
         # get dimensionality of data
         num_dims = self._point_dims()
-        num_cell_faces = self._cell_num_vertices()
+
+        if num_dims == 2 and axis_ignore is None:
+            raise DataError("Must porvide 'axis_ignore' when interpolating from a 2d dataset.")
 
         xyz_grid = [x, y, z]
 
         if axis_ignore is not None:
-            xyz_grid.pop(xyz_grid)
+            xyz_grid.pop(axis_ignore)
 
         # get numpy arrays for points and cells
         cell_connections = self.cells.values  # (num_cells, num_cell_vertices), num_cell_vertices=num_cell_faces
         points = self.points.values  # (num_points, num_dims)
-        data_values = self.values.values  # (num_points,)
 
         num_cells = len(cell_connections)
         num_points = len(points)
@@ -1113,7 +1188,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         ne_cell_ind_max = cell_ind_max[:, ne_cells]
 
         # Next we need to perform actual interpolation at all sample points
-        # this is computationally extensive operation and because we try to do everything
+        # this is computationally expensive operation and because we try to do everything
         # in the vectorized form, it can require a lot of memory, sometimes even causing OOM errors.
         # To avoid that, we impose restrictions on how many cells/samples can be processed at a time
         # effectivelly performing these operations in chunks.
@@ -1142,187 +1217,29 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             target_processed_cells = min(target_processed_cells, target_processed_cells_from_samples)
 
             # select cells and corresponding samples to process
-            step_num_samples_per_ne_cell = num_samples_per_ne_cell[processed_cells:target_processed_cells]
             step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
             step_ne_cell_ind_max = ne_cell_ind_max[:, processed_cells:target_processed_cells]
-            step_num_cells = target_processed_cells - processed_cells
             step_ne_cell_inds = ne_cell_inds[processed_cells:target_processed_cells]
-            step_ne_cell_connections = cell_connections[step_ne_cell_inds]
-            step_num_samples_total = np.sum(step_num_samples_per_ne_cell)
 
-            # at this point we know how many samples we need to perform per each cell and we also
-            # know span indices of these samples (in x, y, and z arrays)
-
-            # we would like to perform all interpolations in a vectorized form, however, we have
-            # a different number of interpolation samples for different cells. Thus, we need to
-            # arange all samples in a linear way (flatten). Basically, we want to have data in this
-            # form:
-            # cell_ind | x_ind | y_ind | z_ind
-            # --------------------------------
-            #        0 |    23 |     5 |    11
-            #        0 |    23 |     5 |    12
-            #        0 |    23 |     6 |    11
-            #        0 |    23 |     6 |    12
-            #        1 |    41 |    11 |     0
-            #        1 |    42 |    11 |     0
-            #      ... |   ... |   ... |   ...
-
-            # to do that we start with performing arange for each cell, but in vectorized way
-            # this gives us something like this
-            # [0, 1, 2, 3,   0, 1,   0, 1, 2, 3, 4, 5, 6,   ...]
-            # |<-cell 0->|<-cell 1->|<-     cell 2    ->|<- ...
-            def vrange(starts, stops):
-                stops = np.asarray(stops)
-                l = stops - starts
-                return np.repeat(stops - l.cumsum(), l) + np.arange(l.sum())
-
-            varr = vrange(step_num_samples_per_ne_cell*0, step_num_samples_per_ne_cell)
-
-            # x_ind = [23, 23, 23, 23,   41, 41,      ...]
-            # y_ind = [ 5,  5,  5,  5,    6,  6,      ...]
-            # z_ind = [11, 12, 11, 12,    0,  0,      ...]
-            #         |<-  cell 0  ->|<- cell 1 ->|<- ...
-
-            t1lens = np.repeat(step_ne_cell_ind_max[1] - step_ne_cell_ind_min[1], step_num_samples_per_ne_cell)
+            # process selected cells and points
+            xyz_inds, interpolated = self._interp_py_chunk(
+                xyz_grid=xyz_grid,
+                cell_inds=step_ne_cell_inds,
+                cell_ind_min=step_ne_cell_ind_min,
+                cell_ind_max=step_ne_cell_ind_max,
+                sdf_tol=diag_tol,
+            )
 
             if num_dims == 3:
-                t2lens = np.repeat(step_ne_cell_ind_max[2] - step_ne_cell_ind_min[2], step_num_samples_per_ne_cell)
-                varr, t2_inds = np.divmod(varr, t2lens)
-
-            t0_inds, t1_inds = np.divmod(varr, t1lens)
-
-            start_inds = np.repeat(step_ne_cell_ind_min, step_num_samples_per_ne_cell, axis=1)
-            t0_inds = t0_inds + start_inds[0]
-            t1_inds = t1_inds + start_inds[1]
-            if num_dims == 3:
-                t2_inds = t2_inds + start_inds[2]
-
-            # finally, we repeat cell indices corresponding number of times to obtain how
-            # (x_ind, y_ind, z_ind) map to cell indices. So, now we have four arras:
-            # x_ind    = [23, 23, 23, 23,   41, 41,      ...]
-            # y_ind    = [ 5,  5,  5,  5,    6,  6,      ...]
-            # z_ind    = [11, 12, 11, 12,    0,  0,      ...]
-            # cell_map = [ 0,  0,  0,  0,    1,  1,      ...]
-            #            |<-  cell 0  ->|<- cell 1 ->|<- ...
-            step_cell_map = np.repeat(np.arange(step_num_cells), step_num_samples_per_ne_cell)
-
-            # let's put these arrays aside for a moment and perform the second preparatory step
-            # specifically, for each face of each cell we will compute normal vector and distance
-            # to the opposing cell vertex. This will allows us quickly calculate SDF of a cell at
-            # each sample point as well as perform linear interpolation.
-
-            # first, we collect coordinates of cell vertices into a single array
-            # (step_num_cells, num_cell_vertices, num_dims)
-            step_ne_cell_vertices = points[step_ne_cell_connections, :]
-
-            # array for resulting normals and distances
-            normal = np.zeros((num_cell_faces, step_num_cells, num_dims))
-            dist = np.zeros((num_cell_faces, step_num_cells))
-
-            # loop face by face
-            # note that by face_ind we denote both index of face in a cell and index of the opposing vertex
-            for face_ind in range(num_cell_faces):
-                # select vertices forming the given face
-                face_pinds = list(np.arange(num_cell_faces))
-                face_pinds.pop(face_ind)
-
-                # calculate normal to the face
-                # in 3D: cross product of two vectors lying in the face plane
-                # in 2D: (-ty, tx) for a vector (tx, ty) along the face
-                p0 = step_ne_cell_vertices[:, face_pinds[0]]
-                p01 = step_ne_cell_vertices[:, face_pinds[1]] - p0
-                p0Opp = step_ne_cell_vertices[:, face_ind] - p0
-                if num_dims == 3:
-                    p02 = step_ne_cell_vertices[:, face_pinds[2]] - p0
-                    n = np.cross(p01, p02)
-                else:
-                    n = np.roll(p01, 1, axis=1)
-                    n[:, 0] = -n[:, 0]
-                n = n / np.linalg.norm(n, axis=1)[:, None]
-
-                # compute distance to the opposing vertex by taking a dot product between normal
-                # and a vector connecting the opposing vertex and the face
-                d = np.einsum('ij,ij->i', n, p0Opp)
-
-                # obtained normal direction is arbitrary here. We will orient it such that it points
-                # away from the triangle (and distance to the opposing vertex is negative).
-                to_flip = d > 0
-                d[to_flip] *= -1
-                n[to_flip, :] *= -1
-
-                # record obtained info
-                normal[face_ind] = n
-                dist[face_ind] = d
-
-            # now we all set up to proceed with actual interpolation at each sample point
-            # the main idea here is that:
-            # - we use `cell_map` to grab normals and distances
-            #   of cells in which the given sample point is (potentially) located.
-            # - use `x_ind, y_ind, z_ind` to find actual coordinates of a given sample point
-            # - combine the above two to calculate cell SDF and interpolated value at a given sample
-            #   point
-            # - having cell SDF at the sample point actually tells us whether its inside the cell
-            #   (keep value) or outside of it (discard interpolated value)
-
-            # to perform SDF calculation and interpolation we will loop face by face and recording
-            # their contributions. That is,
-            # cell_sdf = max(face0_sdf, face1_sdf, ...)
-            # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
-            # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
-            sdf = -1e5 * np.ones(step_num_samples_total)
-            interpolated = np.zeros(step_num_samples_total)
-
-            # coordinates of each sample point
-            sample_xyz = np.zeros((step_num_samples_total, num_dims))
-            sample_xyz[:, 0] = xyz_grid[0][t0_inds]
-            sample_xyz[:, 1] = xyz_grid[1][t1_inds]
-            if num_dims == 3:
-                sample_xyz[:, 2] = xyz_grid[2][t2_inds]
-
-            # loop face by face
-            for face_ind in range(num_cell_faces):
-
-                # find a vector connecting sample point and face
-                if face_ind == 0:
-                    vertex_ind = 1  # anythin other than 0
-                    vec = sample_xyz - step_ne_cell_vertices[step_cell_map, vertex_ind, :]
-
-                if face_ind == 1:  # since three faces share a point only do this once
-                    vertex_ind = 0  # it belongs to every face 1, 2, and 3
-                    vec = sample_xyz - step_ne_cell_vertices[step_cell_map, 0, :]
-
-                # compute distance from every sample point to the face of corresponding cell
-                # using dot product
-                tmp = normal[face_ind, step_cell_map, :] * vec
-                d = np.sum(tmp, axis=1)
-
-                # take max between distance to obtain the overall SDF of a cell
-                sdf = np.maximum(sdf, d)
-
-                # perform linear interpolation. Here we use the fact that when computing face SDF
-                # at a given point and dividing it by the distance to the opposing vertex we get
-                # a linear shape function for that vertex. So, we just need to multiply that by
-                # the data value at that vertex to find its contribution into intepolated value.
-                # (decomposed in an attempt to reduce memory consumption)
-                tmp = data_values[step_ne_cell_connections[step_cell_map, face_ind]]
-                tmp *= d
-                tmp /= dist[face_ind, step_cell_map]
-                interpolated += tmp
-
-            valid_samples = sdf < diag_tol
-
-            interpolated_valid = interpolated[valid_samples]
-            t0_inds_valid = t0_inds[valid_samples]
-            t1_inds_valid = t1_inds[valid_samples]
-            if num_dims == 3:
-                t2_inds_valid = t2_inds[valid_samples]
-                interpolated_values[t0_inds_valid, t1_inds_valid, t2_inds_valid] = interpolated_valid
+                interpolated_values[xyz_inds[0], xyz_inds[1], xyz_inds[2]] = interpolated
             else:
-                interpolated_values[t0_inds_valid, t1_inds_valid] = interpolated_valid
+                interpolated_values[xyz_inds[0], xyz_inds[1]] = interpolated
 
             processed_cells = target_processed_cells
-            processed_samples += step_num_samples_total
+            processed_samples = cum_num_samples_per_ne_cell[target_processed_cells - 1]
 
+        # in case of 2d grid broadcast results along normal direction assuming translational
+        # invariance
         if num_dims == 2:
             orig_shape = [len(x), len(y), len(z)]
             flat_shape = orig_shape.copy()
@@ -1333,6 +1250,226 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             ).copy()
 
         return interpolated_values
+
+    def _interp_py_chunk(
+        self,
+        xyz_grid: Tuple[ArrayLike[float], ...],
+        cell_inds: ArrayLike[int],
+        cell_ind_min: ArrayLike[int],
+        cell_ind_max: ArrayLike[int],
+        sdf_tol: float,
+    ) -> Tuple[Tuple[ArrayLike, ...], ArrayLike]:
+        """For each cell listed in ``cell_inds`` perform interpolation at a rectilinear subarray of
+        xyz_grid given by a (3D) index span (cell_ind_min, cell_ind_max).
+
+        Parameters
+        ----------
+        xyz_grid : Tuple[ArrayLike[float], ...]
+            x, y, and z coordiantes defining rectilinear grid.
+        cell_inds : ArrayLike[int]
+            Indices of cells to perfrom interpolation from.
+        cell_ind_min : ArrayLike[int]
+            Starting x, y, and z indices of points for interpolation for each cell.
+        cell_ind_max : ArrayLike[int]
+            End x, y, and z indices of points for interpolation for each cell.
+        sdf_tol : float
+            Effective zero level set value, below which a point is considered to be inside a cell.
+
+        Returns
+        -------
+        Tuple[Tuple[ArrayLike, ...], ArrayLike]
+            x, y, and z indices of interpolated values and values themselves.
+        """
+
+        # get dimensionality of data
+        num_dims = self._point_dims()
+        num_cell_faces = self._cell_num_vertices()
+
+        # get mesh info as numpy arrays
+        points = self.points.values  # (num_points, num_dims)
+        data_values = self.values.values  # (num_points,)
+        cell_connections = self.cells.values[cell_inds]
+
+        # compute number of samples to generate per cell
+        num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
+
+        # at this point we know how many samples we need to perform per each cell and we also
+        # know span indices of these samples (in x, y, and z arrays)
+
+        # we would like to perform all interpolations in a vectorized form, however, we have
+        # a different number of interpolation samples for different cells. Thus, we need to
+        # arange all samples in a linear way (flatten). Basically, we want to have data in this
+        # form:
+        # cell_ind | x_ind | y_ind | z_ind
+        # --------------------------------
+        #        0 |    23 |     5 |    11
+        #        0 |    23 |     5 |    12
+        #        0 |    23 |     6 |    11
+        #        0 |    23 |     6 |    12
+        #        1 |    41 |    11 |     0
+        #        1 |    42 |    11 |     0
+        #      ... |   ... |   ... |   ...
+
+        # to do that we start with performing arange for each cell, but in vectorized way
+        # this gives us something like this
+        # [0, 1, 2, 3,   0, 1,   0, 1, 2, 3, 4, 5, 6,   ...]
+        # |<-cell 0->|<-cell 1->|<-     cell 2    ->|<- ...
+
+        num_cells = len(num_samples_per_cell)
+        num_samples_cumul = num_samples_per_cell.cumsum()
+        num_samples_total = num_samples_cumul[-1]
+
+        # one big arange array
+        inds_flat = np.arange(num_samples_total)
+        # now subtract previous number of samples
+        inds_flat[num_samples_per_cell[0]:] -= np.repeat(num_samples_cumul[:-1], num_samples_per_cell[1:])
+
+        # convert flat indices into 3d/2d indices as:
+        # x_ind = [23, 23, 23, 23,   41, 41,      ...]
+        # y_ind = [ 5,  5,  5,  5,    6,  6,      ...]
+        # z_ind = [11, 12, 11, 12,    0,  0,      ...]
+        #         |<-  cell 0  ->|<- cell 1 ->|<- ...
+        num_samples_y = np.repeat(cell_ind_max[1] - cell_ind_min[1], num_samples_per_cell)
+
+        # note: in 2d x, y correspond to (x, y, z).pop(normal_axis)
+        if num_dims == 3:
+            num_samples_z = np.repeat(cell_ind_max[2] - cell_ind_min[2], num_samples_per_cell)
+            inds_flat, z_inds = np.divmod(inds_flat, num_samples_z)
+
+        x_inds, y_inds = np.divmod(inds_flat, num_samples_y)
+
+        start_inds = np.repeat(cell_ind_min, num_samples_per_cell, axis=1)
+        x_inds = x_inds + start_inds[0]
+        y_inds = y_inds + start_inds[1]
+        if num_dims == 3:
+            z_inds = z_inds + start_inds[2]
+
+        # finally, we repeat cell indices corresponding number of times to obtain how
+        # (x_ind, y_ind, z_ind) map to cell indices. So, now we have four arras:
+        # x_ind    = [23, 23, 23, 23,   41, 41,      ...]
+        # y_ind    = [ 5,  5,  5,  5,    6,  6,      ...]
+        # z_ind    = [11, 12, 11, 12,    0,  0,      ...]
+        # cell_map = [ 0,  0,  0,  0,    1,  1,      ...]
+        #            |<-  cell 0  ->|<- cell 1 ->|<- ...
+        step_cell_map = np.repeat(np.arange(num_cells), num_samples_per_cell)
+
+        # let's put these arrays aside for a moment and perform the second preparatory step
+        # specifically, for each face of each cell we will compute normal vector and distance
+        # to the opposing cell vertex. This will allows us quickly calculate SDF of a cell at
+        # each sample point as well as perform linear interpolation.
+
+        # first, we collect coordinates of cell vertices into a single array
+        # (num_cells, num_cell_vertices, num_dims)
+        cell_vertices = points[cell_connections, :]
+
+        # array for resulting normals and distances
+        normal = np.zeros((num_cell_faces, num_cells, num_dims))
+        dist = np.zeros((num_cell_faces, num_cells))
+
+        # loop face by face
+        # note that by face_ind we denote both index of face in a cell and index of the opposing vertex
+        for face_ind in range(num_cell_faces):
+            # select vertices forming the given face
+            face_pinds = list(np.arange(num_cell_faces))
+            face_pinds.pop(face_ind)
+
+            # calculate normal to the face
+            # in 3D: cross product of two vectors lying in the face plane
+            # in 2D: (-ty, tx) for a vector (tx, ty) along the face
+            p0 = cell_vertices[:, face_pinds[0]]
+            p01 = cell_vertices[:, face_pinds[1]] - p0
+            p0Opp = cell_vertices[:, face_ind] - p0
+            if num_dims == 3:
+                p02 = cell_vertices[:, face_pinds[2]] - p0
+                n = np.cross(p01, p02)
+            else:
+                n = np.roll(p01, 1, axis=1)
+                n[:, 0] = -n[:, 0]
+            n = n / np.linalg.norm(n, axis=1)[:, None]
+
+            # compute distance to the opposing vertex by taking a dot product between normal
+            # and a vector connecting the opposing vertex and the face
+            d = np.einsum('ij,ij->i', n, p0Opp)
+
+            # obtained normal direction is arbitrary here. We will orient it such that it points
+            # away from the triangle (and distance to the opposing vertex is negative).
+            to_flip = d > 0
+            d[to_flip] *= -1
+            n[to_flip, :] *= -1
+
+            # record obtained info
+            normal[face_ind] = n
+            dist[face_ind] = d
+
+        # now we all set up to proceed with actual interpolation at each sample point
+        # the main idea here is that:
+        # - we use `cell_map` to grab normals and distances
+        #   of cells in which the given sample point is (potentially) located.
+        # - use `x_ind, y_ind, z_ind` to find actual coordinates of a given sample point
+        # - combine the above two to calculate cell SDF and interpolated value at a given sample
+        #   point
+        # - having cell SDF at the sample point actually tells us whether its inside the cell
+        #   (keep value) or outside of it (discard interpolated value)
+
+        # to perform SDF calculation and interpolation we will loop face by face and recording
+        # their contributions. That is,
+        # cell_sdf = max(face0_sdf, face1_sdf, ...)
+        # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
+        # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
+        sdf = -1e5 * np.ones(num_samples_total)
+        interpolated = np.zeros(num_samples_total)
+
+        # coordinates of each sample point
+        sample_xyz = np.zeros((num_samples_total, num_dims))
+        sample_xyz[:, 0] = xyz_grid[0][x_inds]
+        sample_xyz[:, 1] = xyz_grid[1][y_inds]
+        if num_dims == 3:
+            sample_xyz[:, 2] = xyz_grid[2][z_inds]
+
+        # loop face by face
+        for face_ind in range(num_cell_faces):
+
+            # find a vector connecting sample point and face
+            if face_ind == 0:
+                vertex_ind = 1  # anythin other than 0
+                vec = sample_xyz - cell_vertices[step_cell_map, vertex_ind, :]
+
+            if face_ind == 1:  # since three faces share a point only do this once
+                vertex_ind = 0  # it belongs to every face 1, 2, and 3
+                vec = sample_xyz - cell_vertices[step_cell_map, 0, :]
+
+            # compute distance from every sample point to the face of corresponding cell
+            # using dot product
+            tmp = normal[face_ind, step_cell_map, :] * vec
+            d = np.sum(tmp, axis=1)
+
+            # take max between distance to obtain the overall SDF of a cell
+            sdf = np.maximum(sdf, d)
+
+            # perform linear interpolation. Here we use the fact that when computing face SDF
+            # at a given point and dividing it by the distance to the opposing vertex we get
+            # a linear shape function for that vertex. So, we just need to multiply that by
+            # the data value at that vertex to find its contribution into intepolated value.
+            # (decomposed in an attempt to reduce memory consumption)
+            tmp = data_values[cell_connections[step_cell_map, face_ind]]
+            tmp *= d
+            tmp /= dist[face_ind, step_cell_map]
+            interpolated += tmp
+
+        # The resulting array of interpolated values contain multiple candidate values for
+        # every Cartesian point because bounding boxes of cells overlap.
+        # Thus, we need to keep only those that come cell actually containing a given point.
+        # This can be easily determined by the sign of the cell SDF sampled at a given point.
+        valid_samples = sdf < sdf_tol
+
+        interpolated_valid = interpolated[valid_samples]
+        xyz_valid_inds = []
+        xyz_valid_inds.append(x_inds[valid_samples])
+        xyz_valid_inds.append(y_inds[valid_samples])
+        if num_dims == 3:
+            xyz_valid_inds.append(z_inds[valid_samples])
+
+        return xyz_valid_inds, interpolated_valid
 
     @abstractmethod
     @requires_vtk
@@ -1359,6 +1496,92 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         Union[TriangularGridDataset, SpatialDataArray]
             Extracted data.
         """
+
+    @requires_vtk
+    def sel_inside(self, bounds: Bound) -> UnstructuredGridDataset:
+        """Return a new UnstructuredGridDataset that contains the minimal amount data necessary to
+        cover a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        SpatialDataArray
+            Extracted spatial data array.
+        """
+
+        data_bounds = self.bounds
+        tol = 1e-6
+
+        # For extracting cells covering target region we use vtk's filter that extract cells based
+        # on provided implicit function. However, when we provide to it the implicit function of
+        # the entire box, it has a couple of issues coming from the fact that the algorithm
+        # eliminates every cells for which the implicit function has positive sign at all vertices.
+        # As result, sometimes there are cells that despite overlaping with the target domain still
+        # being eliminated. Two common cases:
+        # - near corners of the target domain
+        # - target domain is very thin
+        # That's why we perform selection by sequentially eliminating cells on the outer side of
+        # each of the 6 surfaces of the bounding box separately.
+        tmp = self._vtk_obj
+        for direction in range(2):
+            for dim in range(3):
+                sign = -1 + 2 * direction
+                plane_pos = bounds[direction][dim]
+
+                # Dealing with situation when target region does intersect with any cell:
+                # in this case we shift target region so that it barely touches at least some
+                # of cells
+                if sign < 0 and plane_pos > data_bounds[1][dim] - tol:
+                    plane_pos = data_bounds[1][dim] - tol
+                if sign > 0 and plane_pos < data_bounds[0][dim] + tol:
+                    plane_pos = data_bounds[0][dim] + tol
+
+                # if all cells are on the inside side of the plane for a given surface
+                # we don't need to check for intersection
+                if plane_pos <= data_bounds[1][dim] and plane_pos >= data_bounds[0][dim]:
+                    plane = vtk["mod"].vtkPlane()
+                    center = [0, 0, 0]
+                    normal = [0, 0, 0]
+                    center[dim] = plane_pos
+                    normal[dim] = sign
+                    plane.SetOrigin(center)
+                    plane.SetNormal(normal)
+                    extractor = vtk["mod"].vtkExtractGeometry()
+                    extractor.SetImplicitFunction(plane)
+                    extractor.ExtractInsideOn()
+                    extractor.ExtractBoundaryCellsOn()
+                    extractor.SetInputData(tmp)
+                    extractor.Update()
+                    tmp = extractor.GetOutput()
+
+        return self._from_vtk_obj(tmp)
+
+    def does_cover(self, bounds: Bound) -> bool:
+        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
+        only one point along a given direction, then it is assumed the data is constant along that
+        direction and coverage is not checked.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        bool
+            Full cover check outcome.
+        """
+
+        return all(
+            (dmin <= smin and dmax >= smax)
+            for dmin, dmax, smin, smax in zip(self.bounds[0], self.bounds[1], bounds[0], bounds[1])
+        )
 
     @requires_vtk
     def reflect(
@@ -1688,8 +1911,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: float = 0,
-        ignore_normal_pos: bool = True,
+        fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
+        use_vtk: bool = False,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
 
@@ -1701,10 +1924,11 @@ class TriangularGridDataset(UnstructuredGridDataset):
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : float = 0
-            Value to use when filling points without interpolated values.
-        ignore_normal_pos : bool = True
-            Assume data is invariant along the normal direction to the grid plane.
+        fill_value : Union[float, Literal["extrapolate"]] = "extrapolate"
+            Value to use when filling points without interpolated values. If ``extrapolate`` then
+            nearest values are used.
+        use_vtk : bool = False
+            Use vtk's interpolationfunctionality or Tidy3D's own implementation.
 
         Returns
         -------
@@ -1716,19 +1940,62 @@ class TriangularGridDataset(UnstructuredGridDataset):
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
-        if ignore_normal_pos:
-            xyz = [x, y, z]
-            xyz[self.normal_axis] = [self.normal_pos]
-            interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value)
-            interp_broadcasted = np.broadcast_to(
-                interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
-            )
+        xyz = [x, y, z]
+        xyz[self.normal_axis] = [self.normal_pos]
+        interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value, use_vtk=use_vtk)
+        interp_broadcasted = np.broadcast_to(
+            interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
+        )
 
-            return SpatialDataArray(
-                interp_broadcasted, coords=dict(x=x, y=y, z=z), name=self.values.name
-            )
+        return SpatialDataArray(
+            interp_broadcasted, coords=dict(x=x, y=y, z=z), name=self.values.name
+        )
 
-        return super().interp(x=x, y=y, z=z, fill_value=fill_value)
+    def _interp_py(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float,
+        max_samples_per_step: int = 1e4,
+        max_cells_per_step: int = 1e4,
+        rel_tol: float = 1e-10,
+    ) -> ArrayLike:
+        """Interpolate data at provided x, y, and z using vectorized python implementation.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float
+            Value to use when filling points without interpolated values.
+        max_samples_per_step : int = 1e4
+            Max number of points to interpolate at per iteration.
+        max_cells_per_step : int = 1e4
+            Max number of cells to interpolate from per iteration.
+        rel_tol : float = 1e-10
+            Relative tolerance when comparing coordinates.
+
+        Returns
+        -------
+        SpatialDataArray
+            Interpolated data.
+        """
+
+        return super()._interp_py(
+            x=x,
+            y=y,
+            z=z,
+            fill_value=fill_value,
+            max_samples_per_step=max_samples_per_step,
+            max_cells_per_step=max_cells_per_step,
+            rel_tol=rel_tol,
+            axis_ignore=self.normal_axis,
+        )
 
     @requires_vtk
     def sel(
@@ -1813,6 +2080,56 @@ class TriangularGridDataset(UnstructuredGridDataset):
             raise DataError("Reflection in the normal direction to the grid is prohibited.")
 
         return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
+
+    @requires_vtk
+    def sel_inside(self, bounds: Bound) -> TriangularGridDataset:
+        """Return a new ``TriangularGridDataset`` that contains the minimal amount data necessary to
+        cover a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        SpatialDataArray
+            Extracted spatial data array.
+        """
+
+        # expand along normal direction
+        new_bounds = [list(bounds[0]), list(bounds[1])]
+
+        new_bounds[0][self.normal_axis] = -inf
+        new_bounds[1][self.normal_axis] = inf
+
+        return super().sel_inside(new_bounds)
+
+    def does_cover(self, bounds: Bound) -> bool:
+        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
+        only one point along a given direction, then it is assumed the data is constant along that
+        direction and coverage is not checked.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        bool
+            Full cover check outcome.
+        """
+
+        # expand along normal direction
+        new_bounds = [list(bounds[0]), list(bounds[1])]
+
+        new_bounds[0][self.normal_axis] = self.normal_pos
+        new_bounds[1][self.normal_axis] = self.normal_pos
+
+        return super().does_cover(new_bounds)
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):

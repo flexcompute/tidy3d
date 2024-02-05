@@ -105,7 +105,7 @@ class Coords(Tidy3dBaseModel):
 
     def _interp_from_unstructured(
         self,
-        array: Union[SpatialDataArray, ScalarFieldDataArray],
+        array: UnstructuredGridDatasetType,
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ):
@@ -114,19 +114,7 @@ class Coords(Tidy3dBaseModel):
                 "Option 'interp_method=``nearest``' is not supported for unstructured data."
             )
 
-        if fill_value == "extrapolate":
-            fill_value_actual = np.nan
-        else:
-            fill_value_actual = fill_value
-
-        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, fill_value=fill_value_actual)
-
-        #if fill_value == "extrapolate"
-            # check if there are any nan at all
-
-            # check whether nan are strictly outside rectangular region
-
-            # check
+        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, fill_value=fill_value)
 
         return interp_array
 
