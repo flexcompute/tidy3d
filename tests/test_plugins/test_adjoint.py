@@ -2306,3 +2306,97 @@ def test_pole_residue_to_medium():
     # ensure some non-zero gradient is computed
     assert jax.grad(f)(1.0) != 0.0
 
+
+def test_pole_residue_grad_sim_batch2(use_emulated_run):
+    """Numerically test gradient of function involving simulation with JaxPoleResidue"""
+
+    OMEGA = 2 * np.pi * FREQ0
+
+    def make_sim(eps_box, eps_inf, a_re, a_im, c_re, c_im):
+        eps_inf, a_re, a_im, c_re, c_im = map(jnp.array, (eps_inf, a_re, a_im, c_re, c_im))
+
+        a = OMEGA * a_re + 1j * OMEGA * a_im
+        c = OMEGA * c_re + 1j * OMEGA * c_im
+        pole = (a, c)
+
+        # jax pole res
+        jax_med1 = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+        jax_box1 = JaxBox(size=(6, 2, 2), center=(0, 0, 0))
+        jax_struct1 = JaxStructure(geometry=jax_box1, medium=jax_med1)
+
+        jax_med2 = JaxMedium(permittivity=eps_box)
+        jax_box2 = JaxBox(size=(6, 2, 2), center=(0, 0, 0))
+        jax_struct2 = JaxStructure(geometry=jax_box2, medium=jax_med2)
+
+        mode_src = td.ModeSource(
+            center=(-4, 0, 0),
+            size=(0, td.inf, td.inf),
+            mode_index=0,
+            source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+            direction="+",
+            mode_spec=td.ModeSpec(num_modes=1),
+        )
+
+        mnt = td.ModeMonitor(
+            center=(4, 0, 0),
+            size=(0, td.inf, td.inf),
+            freqs=[FREQ0],
+            mode_spec=td.ModeSpec(num_modes=1),
+            name="mnt",
+        )
+
+        return JaxSimulation(
+            size=(10, 5, 0),
+            run_time=100 / FREQ0,
+            grid_spec=td.GridSpec.auto(min_steps_per_wvl=30, wavelength=1.0),
+            input_structures=(jax_struct1, jax_struct2),
+            # structures=(wvg,),
+            output_monitors=(mnt,),
+            sources=[mode_src],
+            boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
+        )
+
+    def post_process(jax_sim_data):
+        return jnp.abs(jnp.sum(jnp.array(jax_sim_data["mnt"].amps.values)))
+        # return jnp.abs(jnp.sum(jax_sim_data.get_intensity("mnt").values))        # return jnp.abs(jnp.sum(jnp.array(jax_sim_data["mnt"].amps.values)))
+
+    def objective(eps_box, eps_inf, a_re, a_im, c_re, c_im):
+        sim = make_sim(eps_box, eps_inf, a_re, a_im, c_re, c_im)
+        data = run_local(sim, task_name="test_pole_residue", verbose=False)
+        res = post_process(data)
+        return res
+
+    EPS_INF = 2.0
+
+    # in units of OMEGA!
+    a = -0.5 + 0.5j
+    c = 0.05 + 0.05j
+
+    A_RE = np.real(a)
+    A_IM = np.imag(a)
+    C_RE = np.real(c)
+    C_IM = np.imag(c)
+
+    # jax pole res
+    jax_med = JaxPoleResidue(eps_inf=EPS_INF, poles=[(a, c)])
+    EPS_BOX =  jax_med.eps_model(FREQ0)
+
+    arguments = (EPS_BOX, EPS_INF, A_RE, A_IM, C_RE, C_IM)
+
+    EPS_INF, A_RE, A_IM, C_RE, C_IM = map(jnp.array, (EPS_INF, A_RE, A_IM, C_RE, C_IM))
+
+    # a = OMEGA * a_re + 1j * OMEGA * a_im
+    # c = OMEGA * c_re + 1j * OMEGA * c_im
+    # pole = (a, c)
+
+    # jax pole res
+    # jax_med1 = JaxPoleResidue(eps_inf=eps_inf, poles=[pole])
+    # jax_box1 = JaxBox(size=(6, 2, 2), center=(0, 0, 0))
+    # jax_struct1 = JaxStructure(geometry=jax_box, medium=jax_med)
+
+    grad_fn = jax.grad(objective, argnums=range(len(arguments)))
+    grad = grad_fn(EPS_BOX, EPS_INF, A_RE, A_IM, C_RE, C_IM)
+    import pdb; pdb.set_trace()
+
+
+
