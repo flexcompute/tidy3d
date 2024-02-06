@@ -135,6 +135,7 @@ class Simulation(AbstractSimulation):
     >>> from tidy3d import FieldMonitor, FluxMonitor
     >>> from tidy3d import GridSpec, AutoGrid
     >>> from tidy3d import BoundarySpec, Boundary
+    >>> from tidy3d import Medium
     >>> sim = Simulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     grid_spec=GridSpec(

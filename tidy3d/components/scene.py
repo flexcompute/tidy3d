@@ -389,12 +389,13 @@ class Scene(Tidy3dBaseModel):
         for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
@@ -801,12 +802,13 @@ class Scene(Tidy3dBaseModel):
 
         if cbar:
             self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
