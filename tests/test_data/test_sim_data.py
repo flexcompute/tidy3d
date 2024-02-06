@@ -163,6 +163,12 @@ def test_plot(phase):
     plt.close()
 
 
+def test_plot_field_missing_derived_data():
+    sim_data = make_sim_data()
+    with pytest.raises(Tidy3dKeyError):
+        sim_data.plot_field(field_monitor_name="field_time", field_name="E", val="int")
+
+
 @pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
 def test_intensity(monitor_name):
     sim_data = make_sim_data()

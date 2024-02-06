@@ -377,6 +377,12 @@ class SimulationData(AbstractSimulationData):
             elif val == "phase":
                 raise Tidy3dKeyError(f"Phase is not defined for complex vector {field_name}")
 
+            else:
+                raise Tidy3dKeyError(
+                    f"'val' of {val} not supported. "
+                    "Must be one of 'real', 'imag', 'abs', 'abs^2', or 'phase'."
+                )
+
             return derived_data
 
         raise Tidy3dKeyError(
