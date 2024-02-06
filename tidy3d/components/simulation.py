@@ -43,7 +43,7 @@ from .viz import PlotParams
 from .viz import plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
 
-from ..constants import C_0, SECOND, fp_eps
+from ..constants import C_0, SECOND, fp_eps, inf
 from ..exceptions import SetupError, ValidationError, Tidy3dError, Tidy3dImportError
 from ..log import log
 from ..updater import Updater
@@ -3262,7 +3262,15 @@ class Simulation(AbstractSimulation):
             return set_bounds(geom, (new_center, new_center), axis)
 
         # Begin volumetric structures grid
-        simulation_background = Structure(geometry=self.geometry, medium=self.medium)
+        # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
+        placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
+        simulation_placeholder_geometry = self.geometry.updated_copy(
+            center=self.geometry.center, size=placeholder_size
+        )
+
+        simulation_background = Structure(
+            geometry=simulation_placeholder_geometry, medium=self.medium
+        )
         background_structures = [simulation_background]
         new_structures = []
         for structure in self.structures:
