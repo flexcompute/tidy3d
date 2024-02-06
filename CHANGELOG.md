@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Add dispersion information to dataframe output when available from mode solver under the column "dispersion (ps/(nm km))".
 - Skip adjoint source for diffraction amplitudes of NaN.
+- Helpful error message if `val` supplied to `SimulationData.plot_field` not supported.
 
 ## [2.6.0rc1] - 2024-01-11
 
