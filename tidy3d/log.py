@@ -351,6 +351,7 @@ def set_logging_file(
     fname: str,
     filemode: str = "w",
     level: LogValue = DEFAULT_LEVEL,
+    log_path: bool = False,
 ) -> None:
     """Set a file to write log to, independently from the stdout and stderr
     output chosen using :meth:`set_logging_level`.
@@ -364,6 +365,8 @@ def set_logging_file(
     level : str
         One of ``{'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}``. This is set for the file
         independently of the console output level set by :meth:`set_logging_level`.
+    log_path : bool = False
+        Whether to log the path to the file that issued the message.
     """
     if filemode not in "wa":
         raise ValueError("filemode must be either 'w' or 'a'")
@@ -383,7 +386,9 @@ def set_logging_file(
         log.error(f"File {fname} could not be opened")
         return
 
-    log.handlers["file"] = LogHandler(Console(file=file, force_jupyter=False), level)
+    log.handlers["file"] = LogHandler(
+        Console(file=file, force_jupyter=False, log_path=log_path), level
+    )
 
 
 # Initialize Tidy3d's logger
