@@ -281,6 +281,12 @@
     "keywords": "gds, import, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+  "GDSExport.ipynb": {
+    "title": "Export to GDS file in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to export a Tidy3D FDTD simulation to GDS files.",
+    "keywords": "gds, export, Tidy3D, FDTD",
+    "feature_image": "./img/export_to_gds.png"
+  },  
   "GeneticAlgorithmReflector.ipynb": {
     "title": "Genetic Algorithm Optimization of a Reflector | Flexcompute",
     "description": "This notebook demonstrates how to use genetic algorithm (GA) to optimize an on-chip reflector.",

@@ -5,6 +5,7 @@ Structures
     :maxdepth: 1
 
     ../../GDSImport
+    ../../GDSExport    
     ../../STLImport
     ../../SelfIntersectingPolyslab
     ../../PICComponents
