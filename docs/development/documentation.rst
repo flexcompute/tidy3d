@@ -81,3 +81,11 @@ The command can be executed using the ``poetry run`` command. It requires specif
     poetry run tidy3d develop replace-in-files -d ./ -j ./docs/versions/test_replace_in_files.json -v 0.18.0 --dry-run True
 
 This example will process files in the current directory (``./``), using the replacement rules specified in ``test_replace_in_files.json`` for version ``0.18.0``. The ``--dry-run`` flag set to ``True`` ensures that changes are not actually applied, allowing for a safe preview of potential modifications.
+
+
+Further Guidance
+-----------------
+
+- The sphinx warnings are OK as long as the build occurs, errors will cause the crash the build.
+- Make sure all your internal API references start with ``tidy3d.<your_reference>``
+- In notebooks, always have absolute links, otherwise the links will break when the user downloads them.
