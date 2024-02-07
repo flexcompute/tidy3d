@@ -659,5 +659,11 @@
     "keywords": "ring resonator, waveguide, phase-shifter, thermo-optic, heat, Tidy3D, FDTD",
     "feature_image": ""
   }
+  "MachZehnderModulator.ipynb": {
+    "title": "Modeling electro-optic Mach-Zehnder modulator using Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to simulate an electro-optic Mach-Zehnder modulator using Tidy3D and a third party charge solver.",
+    "keywords": "Mach-Zehnder, MZI, MZM, waveguide, phase-shifter, electro-optic, charge, Tidy3D, free carrier, carrier injection, carrier depletion, FDTD",
+    "feature_image": ""
+  }
 
 }

@@ -1,5 +1,5 @@
-Photonic Integrated Circuit Components
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Passive Photonic Integrated Circuit Components
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1

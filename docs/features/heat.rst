@@ -5,5 +5,3 @@ HEAT |:fire:|
     :maxdepth: 1
 
     ../../HeatSolver
-    ../../MetalHeaterPhaseShifter
-    ../../ThermallyTunedRingResonator
