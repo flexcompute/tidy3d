@@ -1,0 +1,14 @@
+.. _404:
+
+404
+===
+
+Oops! You've hit a wavelength that doesn't resonate with our server. Try a different frequency!
+
+If you have arrived here from a link in our pre-v2.6 documentation, we apologize for the inconvenience. We have restructured our documentation to make it more user-friendly and informative, and the page links have changed. We recommend you return to the `homepage <index.html>`_ and navigate to the page you were looking for from there.
+
+Please let us know what happened that got you here by raising a `GitHub issue <https://github.com/flexcompute/tidy3d/issues>`_ if not! We'll do our best to help you out.
+
+.. image:: /_static/img/404.png
+   :alt: 404 - Page not found
+   :align: center

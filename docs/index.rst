@@ -22,6 +22,15 @@ Tidy3D Electromagnetic Solver
 
 Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an `open source python package <https://github.com/flexcompute/tidy3d>`_ or a `web-based graphical user interface <https://tidy3d.simulation.cloud>`_.
 
+This python API allows you to:
+
+* Programmatically define FDTD simulations.
+* Submit and manage simulations running on Flexcompute's servers.
+* Download and postprocess the results from the simulations.
+
+
+
+
 Get Started
 ===========
 

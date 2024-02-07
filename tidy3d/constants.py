@@ -14,14 +14,40 @@ import numpy as np
 
 # fundamental constants (https://physics.nist.gov)
 C_0 = 2.99792458e14
+"""
+Speed of light in vacuum [um/s]
+"""
+
 MU_0 = 1.25663706212e-12
+"""
+Vacuum permeability [H/um]
+"""
+
 EPSILON_0 = 1 / (MU_0 * C_0**2)
+"""
+Vacuum permittivity [F/um]
+"""
 
 #: Free space impedance
 ETA_0 = np.sqrt(MU_0 / EPSILON_0)
+"""
+Vacuum impedance in Ohms
+"""
+
 Q_e = 1.602176634e-19
+"""
+Fundamental charge [C]
+"""
+
 HBAR = 6.582119569e-16
+"""
+Reduced Planck constant [eV*s]
+"""
+
 K_B = 8.617333262e-5
+"""
+Boltzmann constant [eV/K]
+"""
 
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
