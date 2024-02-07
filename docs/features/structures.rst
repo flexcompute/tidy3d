@@ -7,6 +7,7 @@ Structures
     ../../GDSImport
     ../../STLImport
     ../../SelfIntersectingPolyslab
+    ../../GeometryTransformations
     ../../PICComponents
     ../../PhotonicCrystalsComponents
     ../../CreatingGeometryUsingTrimesh
