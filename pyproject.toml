@@ -41,6 +41,7 @@ requests = "*"
 pyjwt = "*"
 click = "8.0.3"
 responses = "*"
+multiprocess = "*"
 ### END NOT CORE
 
 ### Optional dependencies ### 

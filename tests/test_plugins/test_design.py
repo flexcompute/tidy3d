@@ -156,6 +156,15 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
 
     sweep_results4 = design_space.run_batch(scs_pre_dict, scs_post_dict)
 
+    # multiprocessing (built in)
+    sweep_results5 = design_space.run_multiprocess(scs, num_processes=2)
+
+    # multiprocessing (user supplied map function)
+    from multiprocess import Pool
+
+    with Pool() as p:
+        sweep_results6 = design_space.run_custom_map(scs, map_fn=p.map)
+
     sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
     sweep_results.sel(**sel_kwargs_0)
 

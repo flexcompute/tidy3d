@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Tuple, Callable, Dict, Any, List, Union
 import inspect
+import multiprocess
 
 import pydantic.v1 as pd
 
@@ -83,6 +84,34 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
+    def run_custom_map(self, function: Callable, map_fn: Callable, **kwargs) -> Result:
+        """Run the design problem on a user defined function of the design parameters. Accepts a
+        user-supplied ``map_fn`` that is called as ``map_fn(function, input_kwargs)``.
+
+        Parameters
+        ----------
+        function : Callable
+            Function accepting arguments that correspond to the ``.name`` fields
+            of the ``DesignSpace.parameters``.
+        map_fn : Callable[[Callable, List], List]
+            A map function (eg. the built in ``map``) that accepts ``(f, input_kwargs)`` and
+            returns the application of ``f`` to each of the ``input_kwargs``.
+
+        Returns
+        -------
+        :class:`.Result`
+            Object containing the results of the design space exploration.
+            Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
+        """
+
+        # run the function from the method
+        fn_args, fn_values = self.method.run(parameters=self.parameters, fn=function, map_fn=map_fn)
+
+        fn_source = self.get_fn_source(function)
+
+        # package the result
+        return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
+
     def run(self, function: Callable, **kwargs) -> Result:
         """Run the design problem on a user defined function of the design parameters.
 
@@ -98,14 +127,29 @@ class DesignSpace(Tidy3dBaseModel):
             Object containing the results of the design space exploration.
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
+        return self.run_custom_map(function=function, map_fn=map, **kwargs)
 
-        # run the function from the method
-        fn_args, fn_values = self.method.run(parameters=self.parameters, fn=function)
+    def run_multiprocess(self, function: Callable, num_processes: int = None, **kwargs):
+        """Run the design problem on a user defined function of the design parameters
+        with multiprocessing. Each data point is processed concurrently.
 
-        fn_source = self.get_fn_source(function)
+        Parameters
+        ----------
+        function : Callable
+            Function accepting arguments that correspond to the ``.name`` fields
+            of the ``DesignSpace.parameters``.
+        num_processes : int = None
+            The number of worker processes to use.
+            If ``None``, then the number returned by ``os.cpu_count()`` is used.
 
-        # package the result
-        return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
+        Returns
+        -------
+        :class:`.Result`
+            Object containing the results of the design space exploration.
+            Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
+        """
+        with multiprocess.Pool(num_processes) as pool:
+            return self.run_custom_map(function=function, map_fn=pool.map, **kwargs)
 
     @staticmethod
     def _make_batch_fn_source(fn_source_pre: str, fn_source_post: str) -> str:

@@ -24,7 +24,9 @@ class Method(Tidy3dBaseModel, ABC):
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
     @abstractmethod
-    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+    def run(
+        self, map_fn: Callable, parameters: Tuple[ParameterType, ...], fn: Callable
+    ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
     @abstractmethod
@@ -68,18 +70,22 @@ class MethodIndependent(Method, ABC):
         num_points = self.get_num_points(fn_args)
         return fn_args, num_points
 
-    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+    def run(
+        self, map_fn: Callable, parameters: Tuple[ParameterType, ...], fn: Callable
+    ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
         fn_args, num_points = self._assemble_args(parameters)
 
-        # for each point, construct the function inputs, run it, record output
-        result = []
+        # for each point, construct the function inputs
+
+        fn_kwargs_list = []
         for i in range(num_points):
             fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-            fn_output = fn(**fn_kwargs)
-            result.append(fn_output)
+            fn_kwargs_list.append(fn_kwargs)
+
+        result = tuple(map_fn(lambda fn_kwargs: fn(**fn_kwargs), fn_kwargs_list))
 
         return fn_args, result
 
