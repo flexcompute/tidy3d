@@ -214,7 +214,8 @@ class JaxSimulation(Simulation, JaxObject):
                         consolidated_logger.warning(
                             f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
                             f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
-                            "overlapping input structures may contain errors."
+                            "overlapping input structures may contain errors.",
+                            log_once=True,
                         )
 
             # check JaxPolySlab intersections with background structures

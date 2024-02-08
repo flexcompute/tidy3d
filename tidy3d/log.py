@@ -3,18 +3,21 @@
 import inspect
 from datetime import datetime
 
-from typing import Union, List
+from typing import Union, List, Callable
 from typing_extensions import Literal
 
 from rich.console import Console
 
-
-LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+# Note: "SUPPORT" and "USER" levels are meant for backend runs only.
+# Logging in frontend code should just use the standard debug/info/warning/error/critical.
+LogLevel = Literal["DEBUG", "SUPPORT", "USER", "INFO", "WARNING", "ERROR", "CRITICAL"]
 LogValue = Union[int, LogLevel]
 
 # Logging levels compatible with logging module
 _level_value = {
     "DEBUG": 10,
+    "SUPPORT": 12,
+    "USER": 15,
     "INFO": 20,
     "WARNING": 30,
     "ERROR": 40,
@@ -27,6 +30,8 @@ DEFAULT_LEVEL = "WARNING"
 
 DEFAULT_LOG_STYLES = {
     "DEBUG": None,
+    "SUPPORT": None,
+    "USER": None,
     "INFO": None,
     "WARNING": "red",
     "ERROR": "red bold",
@@ -35,6 +40,11 @@ DEFAULT_LOG_STYLES = {
 
 # Width of the console used for rich logging (in characters).
 CONSOLE_WIDTH = 80
+
+
+def _default_log_level_format(level: str) -> str:
+    """By default just return unformatted log level string."""
+    return level
 
 
 def _get_level_int(level: LogValue) -> int:
@@ -46,7 +56,7 @@ def _get_level_int(level: LogValue) -> int:
         # We don't want to import ConfigError to avoid a circular dependency
         raise ValueError(
             f"logging level {level} not supported, must be "
-            "'DEBUG', 'INFO', 'WARNING', 'ERROR', or 'CRITICAL'"
+            "'DEBUG', 'SUPPORT', 'USER', 'INFO', 'WARNING', 'ERROR', or 'CRITICAL'"
         )
     return _level_value[level]
 
@@ -54,9 +64,15 @@ def _get_level_int(level: LogValue) -> int:
 class LogHandler:
     """Handle log messages depending on log level"""
 
-    def __init__(self, console: Console, level: LogValue):
+    def __init__(
+        self,
+        console: Console,
+        level: LogValue,
+        log_level_format: Callable = _default_log_level_format,
+    ):
         self.level = _get_level_int(level)
         self.console = console
+        self.log_level_format = log_level_format
 
     def handle(self, level, level_name, message):
         """Output log messages depending on log level"""
@@ -67,7 +83,7 @@ class LogHandler:
                 # We want the calling site for exceptions.py
                 offset += 1
             self.console.log(
-                level_name,
+                self.log_level_format(level_name),
                 message,
                 sep=": ",
                 style=DEFAULT_LOG_STYLES[level_name],
@@ -268,6 +284,14 @@ class Logger:
         """Log (message) % (args) at debug level"""
         self._log(_level_value["DEBUG"], "DEBUG", message, *args, log_once=log_once)
 
+    def support(self, message: str, *args, log_once: bool = False) -> None:
+        """Log (message) % (args) at support level"""
+        self._log(_level_value["SUPPORT"], "SUPPORT", message, *args, log_once=log_once)
+
+    def user(self, message: str, *args, log_once: bool = False) -> None:
+        """Log (message) % (args) at user level"""
+        self._log(_level_value["USER"], "USER", message, *args, log_once=log_once)
+
     def info(self, message: str, *args, log_once: bool = False) -> None:
         """Log (message) % (args) at info level"""
         self._log(_level_value["INFO"], "INFO", message, *args, log_once=log_once)
@@ -306,8 +330,8 @@ def set_logging_level(level: LogValue = DEFAULT_LEVEL) -> None:
     Parameters
     ----------
     level : str
-        The lowest priority level of logging messages to display. One of ``{'DEBUG', 'INFO',
-        'WARNING', 'ERROR', 'CRITICAL'}`` (listed in increasing priority).
+        The lowest priority level of logging messages to display. One of ``{'DEBUG', 'SUPPORT',
+        'USER', INFO', 'WARNING', 'ERROR', 'CRITICAL'}`` (listed in increasing priority).
     """
     if "console" in log.handlers:
         log.handlers["console"].level = _get_level_int(level)
@@ -359,12 +383,13 @@ def set_logging_file(
     Parameters
     ----------
     fname : str
-        Path to file to direct the output to.
+        Path to file to direct the output to. If empty string, a previously set logging file will
+        be closed, if any, but nothing else happens.
     filemode : str
         'w' or 'a', defining if the file should be overwritten or appended.
     level : str
-        One of ``{'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}``. This is set for the file
-        independently of the console output level set by :meth:`set_logging_level`.
+        One of ``{'DEBUG', 'SUPPORT', 'USER', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'}``. This is set
+        for the file independently of the console output level set by :meth:`set_logging_level`.
     log_path : bool = False
         Whether to log the path to the file that issued the message.
     """
@@ -374,11 +399,15 @@ def set_logging_file(
     # Close previous handler, if any
     if "file" in log.handlers:
         try:
-            log.handlers["file"].file.close()
+            log.handlers["file"].console.file.close()
         except Exception:  # TODO: catch specific exception
             log.warning("Log file could not be closed")
         finally:
             del log.handlers["file"]
+
+    if fname == "":
+        # Empty string can be passed to just stop previously opened file handler
+        return
 
     try:
         file = open(fname, filemode)
