@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Users can toggle https ssl version through `from tidy3d.web.core.environment import Env` and `Env.set_ssl_version(ssl_version: ssl.TLSVersion)`
 - Free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) nonlinearities inside `TwoPhotonAbsorption` class.
 - `log_path` argument in `set_logging_file`, set to `False` by default.
-- `design` plugin includes `Design.run_custom_map` and `Design.run_multiprocess` to enable running single measurement functions in a custom or concurrent fashion.
+- `design` plugin includes `Design.run_multiprocess` to enable running single measurement functions in a custom or concurrent fashion. Alternatively, `Design.run` accepts an optional `map_fn` kwarg to allow user-defined `map` functions.
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.

@@ -163,7 +163,7 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     from multiprocess import Pool
 
     with Pool() as p:
-        sweep_results6 = design_space.run_custom_map(scs, map_fn=p.map)
+        sweep_results6 = design_space.run(scs, map_fn=p.map)
 
     sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
     sweep_results.sel(**sel_kwargs_0)
