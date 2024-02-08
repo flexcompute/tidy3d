@@ -99,13 +99,15 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         title="Expanded Grid",
         description=":class:`.Grid` discretization of the associated monitor in the simulation "
         "which created the data. Required if symmetries are present, as "
-        "well as in order to use some functionalities like getting poynting and flux.",
+        "well as in order to use some functionalities like getting Poynting vector and flux.",
     )
 
     @pd.validator("grid_expanded", always=True)
-    def warn_missing_grid_expanded(cls, val):
-        """If ``colocate`` not provided, set to true, but warn that behavior has changed."""
-        if val is None:
+    def warn_missing_grid_expanded(cls, val, values):
+        """If ``grid_expanded`` not provided and fields data is present, warn that some methods
+        will break."""
+        field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
+        if val is None and any(field_comp in values.keys() for field_comp in field_comps):
             log.warning(
                 "Monitor data requires 'grid_expanded' to be defined to compute values like "
                 "flux, Poynting and dot product with other data."
