@@ -70,6 +70,11 @@ class MethodIndependent(Method, ABC):
         num_points = self.get_num_points(fn_args)
         return fn_args, num_points
 
+    def apply_fn_kwargs(self, combined_params):
+        fn = combined_params[0]
+        fn_kwargs = combined_params[1]
+        return fn(**fn_kwargs)
+
     def run(
         self, map_fn: Callable, parameters: Tuple[ParameterType, ...], fn: Callable
     ) -> Tuple[Any]:
@@ -78,14 +83,19 @@ class MethodIndependent(Method, ABC):
         # get all function inputs
         fn_args, num_points = self._assemble_args(parameters)
 
-        # for each point, construct the function inputs
-
-        fn_kwargs_list = []
+        """for each point, construct the combined input list
+        this contains the function (always the same), as well as the parameters for that point
+        this is because multiprocessing.pool.map only accepts one iterable set of arguments, unlike
+        the built-in python map, which can accept (fn, iterable1, iterable2, ...). There is also
+        multiprocessing.starmap which still accepts (fn, iterable) but does the parameter unpacking
+        internally, but since we're expecting a map-like function, I'm not using that and instead
+        I unpack in self.apply_fn_kwargs."""
+        fn_and_kwargs_list = []
         for i in range(num_points):
             fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-            fn_kwargs_list.append(fn_kwargs)
+            fn_and_kwargs_list.append([fn, fn_kwargs])
 
-        result = tuple(map_fn(lambda fn_kwargs: fn(**fn_kwargs), fn_kwargs_list))
+        result = tuple(map_fn(self.apply_fn_kwargs, fn_and_kwargs_list))
 
         return fn_args, result
 
