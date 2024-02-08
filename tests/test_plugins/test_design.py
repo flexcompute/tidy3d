@@ -21,6 +21,77 @@ SWEEP_METHODS = dict(
     random=tdd.MethodRandom(num_points=5),  # TODO: remove this if not used
 )
 
+# STEP1: define your design function (inputs and outputs)
+
+def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
+    """Preprocessing function (make simulation)"""
+
+    # set up simulation
+    spheres = []
+
+    for i in range(int(num_spheres)):
+        spheres.append(
+            td.Structure(
+                geometry=td.Sphere(radius=radius),
+                medium=td.PEC,
+            )
+        )
+
+    mnt = td.FieldMonitor(
+        size=(0, 0, 0),
+        center=(0, 0, 0),
+        freqs=[2e14],
+        name="field",
+    )
+
+    return td.Simulation(
+        size=(1, 1, 1),
+        structures=spheres,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        monitors=[mnt],
+    )
+
+def scs_post(sim_data: td.SimulationData) -> float:
+    """Postprocessing function (analyze simulation data)"""
+
+    mnt_data = sim_data["field"]
+    ex_values = mnt_data.Ex.values
+
+    # generate a random number to add some variance to data
+    np.random.seed(hash(sim_data) % 1000)
+
+    return np.sum(np.square(np.abs(ex_values))) + np.random.random()
+
+def scs_pre_multi(*args, **kwargs):
+    sim = scs_pre(*args, **kwargs)
+
+    return [sim, sim, sim]
+
+def scs_post_multi(*sim_datas):
+    vals = [scs_post(sim_data) for sim_data in sim_datas]
+    return np.mean(vals)
+
+def scs_pre_dict(*args, **kwargs):
+    sims = scs_pre_multi(*args, **kwargs)
+    keys = "abc"
+    return dict(zip(keys, sims))
+
+def scs_post_dict(a=None, b=None, c=None):
+    sims = [a, b, c]
+    return scs_post_multi(*sims)
+
+def scs(radius: float, num_spheres: int, tag: str) -> float:
+    """End to end function."""
+
+    sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
+
+    # run simulation
+    sim_data = run_emulated(sim, task_name=f"SWEEP_{tag}")
+
+    # postprocess
+    return scs_post(sim_data=sim_data)
+
 
 @pytest.mark.parametrize("sweep_method", SWEEP_METHODS.values(), ids=SWEEP_METHODS.keys())
 def test_sweep(sweep_method, monkeypatch, ids=[]):
@@ -51,77 +122,6 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
         return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids)
 
     monkeypatch.setattr(MethodIndependent, "_run_batch", emulated_batch_run)
-
-    # STEP1: define your design function (inputs and outputs)
-
-    def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
-        """Preprocessing function (make simulation)"""
-
-        # set up simulation
-        spheres = []
-
-        for i in range(int(num_spheres)):
-            spheres.append(
-                td.Structure(
-                    geometry=td.Sphere(radius=radius),
-                    medium=td.PEC,
-                )
-            )
-
-        mnt = td.FieldMonitor(
-            size=(0, 0, 0),
-            center=(0, 0, 0),
-            freqs=[2e14],
-            name="field",
-        )
-
-        return td.Simulation(
-            size=(1, 1, 1),
-            structures=spheres,
-            grid_spec=td.GridSpec.auto(wavelength=1.0),
-            run_time=1e-12,
-            monitors=[mnt],
-        )
-
-    def scs_post(sim_data: td.SimulationData) -> float:
-        """Postprocessing function (analyze simulation data)"""
-
-        mnt_data = sim_data["field"]
-        ex_values = mnt_data.Ex.values
-
-        # generate a random number to add some variance to data
-        np.random.seed(hash(sim_data) % 1000)
-
-        return np.sum(np.square(np.abs(ex_values))) + np.random.random()
-
-    def scs_pre_multi(*args, **kwargs):
-        sim = scs_pre(*args, **kwargs)
-
-        return [sim, sim, sim]
-
-    def scs_post_multi(*sim_datas):
-        vals = [scs_post(sim_data) for sim_data in sim_datas]
-        return np.mean(vals)
-
-    def scs_pre_dict(*args, **kwargs):
-        sims = scs_pre_multi(*args, **kwargs)
-        keys = "abc"
-        return dict(zip(keys, sims))
-
-    def scs_post_dict(a=None, b=None, c=None):
-        sims = [a, b, c]
-        return scs_post_multi(*sims)
-
-    def scs(radius: float, num_spheres: int, tag: str) -> float:
-        """End to end function."""
-
-        sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
-
-        # run simulation
-        sim_data = run_emulated(sim, task_name=f"SWEEP_{tag}")
-
-        # postprocess
-        return scs_post(sim_data=sim_data)
 
     # STEP2: define your design problem
 
@@ -160,7 +160,7 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     sweep_results5 = design_space.run_multiprocess(scs, num_processes=2)
 
     # multiprocessing (user supplied map function)
-    from multiprocess import Pool
+    from multiprocessing import Pool
 
     with Pool() as p:
         sweep_results6 = design_space.run(scs, map_fn=p.map)

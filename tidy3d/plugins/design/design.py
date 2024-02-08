@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Tuple, Callable, Dict, Any, List, Union
 import inspect
-import multiprocess
+import multiprocessing
 
 import pydantic.v1 as pd
 
@@ -134,7 +134,7 @@ class DesignSpace(Tidy3dBaseModel):
             Object containing the results of the design space exploration.
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
-        with multiprocess.Pool(num_processes) as pool:
+        with multiprocessing.Pool(num_processes) as pool:
             return self.run(function=function, map_fn=pool.map, **kwargs)
 
     @staticmethod
