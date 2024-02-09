@@ -14,6 +14,7 @@ Geometry
    tidy3d.TriangleMesh
    tidy3d.GeometryGroup
    tidy3d.ClipOperation
+   tidy3d.Transformed
 
 Transformations
 ----------------
