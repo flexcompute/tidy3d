@@ -937,6 +937,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         z: Union[float, ArrayLike],
         fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
         use_vtk: bool = False,
+        method: Literal["linear", "nearest"] = "linear",
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
 
@@ -965,22 +966,56 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
-        if fill_value == "extrapolate":
-            fill_value_actual = np.nan
+        if method == "nearest":
+            interpolated_values = self._interp_nearest(x=x, y=y, z=z)
         else:
-            fill_value_actual = fill_value
+            if fill_value == "extrapolate" and method != "nearest":
+                fill_value_actual = np.nan
+            else:
+                fill_value_actual = fill_value
 
-        if use_vtk:
-            interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
-        else:
-            interpolated_values = self._interp_py(x=x, y=y, z=z, fill_value=fill_value_actual)
+            if use_vtk:
+                interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
+            else:
+                interpolated_values = self._interp_py(x=x, y=y, z=z, fill_value=fill_value_actual)
 
-        if fill_value == "extrapolate":
-            interpolated_values = self._fill_nans_from_nearests(interpolated_values, x=x, y=y, z=z)
+            if fill_value == "extrapolate" and method != "nearest":
+                interpolated_values = self._fill_nans_from_nearests(interpolated_values, x=x, y=y, z=z)
 
         return SpatialDataArray(
             interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name
         )
+
+    @requires_vtk
+    def _interp_nearest(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+    ) -> ArrayLike:
+        """Interpolate data at provided x, y, and z using Scipy's nearest neighbor interpolator.
+
+        Parameters
+        ----------
+        x : ArrayLike
+            x-coordinates of sampling points.
+        y : ArrayLike
+            y-coordinates of sampling points.
+        z : ArrayLike
+            z-coordinates of sampling points.
+
+        Returns
+        -------
+        ArrayLike
+            Interpolated data.
+        """
+
+        # use scipy's nearest neighbor interpolator
+        X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
+        interp = NearestNDInterpolator(self._points_3d_array, self.values.values)
+        values = interp(X, Y, Z)
+
+        return values
 
     @requires_vtk
     def _fill_nans_from_nearests(
@@ -2352,10 +2387,10 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
 
-SpatialDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
 
+CustomDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
 
-def get_numpy_array(data_array: Union[ArrayLike, SpatialDataType]) -> ArrayLike:
+def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
     """Get numpy representation of dataarray/dataset values."""
     if isinstance(data_array, UnstructuredGridDataset):
         return data_array.values.values
@@ -2364,3 +2399,50 @@ def get_numpy_array(data_array: Union[ArrayLike, SpatialDataType]) -> ArrayLike:
     return np.array(data_array)
 
 
+def _zeros_like(
+    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
+) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
+    """Get a zeroed replica of dataarray/dataset."""
+    if isinstance(data_array, UnstructuredGridDataset):
+        return data_array.updated_copy(values=xr.zeros_like(data_array.values))
+    if isinstance(data_array, xr.DataArray):
+        return xr.zeros_like(data_array)
+    return np.zeros_like(data_array)
+
+
+def _ones_like(
+    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
+) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
+    """Get a unity replica of dataarray/dataset."""
+    if isinstance(data_array, UnstructuredGridDataset):
+        return data_array.updated_copy(values=xr.ones_like(data_array.values))
+    if isinstance(data_array, xr.DataArray):
+        return xr.ones_like(data_array)
+    return np.ones_like(data_array)
+
+
+def _check_same_coordinates(
+    a: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
+    b: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
+) -> bool:
+    """Check whether two array are defined at the same coordinates."""
+    if type(a) != type(b):
+        return False
+
+    if isinstance(a, UnstructuredGridDataset):
+        if a.points != b.points or a.cells != b.cells:
+            return False
+
+        if isinstance(a, TriangularGridDataset):
+            if a.normal_axis != b.normal_axis or a.normal_pos != b.normal_pos:
+                return False
+
+    elif isinstance(a, xr.DataArray):
+        if a.coords.keys() != a.coords.keys() or a.coords != b.coords:
+            return False
+
+    else:
+        if np.shape(a) != np.shape(b):
+            return False
+
+    return True

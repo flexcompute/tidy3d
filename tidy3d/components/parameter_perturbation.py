@@ -7,16 +7,16 @@ import functools
 
 import pydantic.v1 as pd
 import numpy as np
-import xarray as xr
 import matplotlib.pyplot as plt
 
-from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray
-from .data.dataset import SpatialDataType, UnstructuredGridDataset, get_numpy_array
+from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray, IndexedDataArray
+from .data.dataset import UnstructuredGridDataset, _get_numpy_array, _zeros_like, _check_same_coordinates, CustomDataType
 from .base import Tidy3dBaseModel, cached_property
 from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
 from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod, TYPE_TAG_STR
 from ..components.viz import add_ax_if_none
+from ..exceptions import DataError
 
 """ Generic perturbation classes """
 
@@ -43,8 +43,8 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def _get_val(
-        field: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType], val: FieldVal
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
+        field: Union[ArrayLike[float], ArrayLike[Complex], CustomDataType], val: FieldVal
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Get specified value from a field."""
 
         if val == "real":
@@ -67,43 +67,32 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
             "'abs^2', or 'phase'."
         )
 
-    @staticmethod
-    def _array_type(value: Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]) -> str:
-        """Check whether variable is scalar, array, or spatial array."""
-        if isinstance(value, SpatialDataArray):
-            return "spatial"
-        if isinstance(value, UnstructuredGridDataset):
-            return "spatial_unstructured"
-        if np.ndim(value) == 0:
-            return "scalar"
-        return "array"
-
 
 """ Elementary heat perturbation classes """
 
 
 def ensure_temp_in_range(
     sample: Callable[
-        Union[ArrayLike[float], SpatialDataType],
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType],
+        Union[ArrayLike[float], CustomDataType],
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
     ]
 ) -> Callable[
-    Union[ArrayLike[float], SpatialDataType],
-    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType],
+    Union[ArrayLike[float], CustomDataType],
+    Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
 ]:
     """Decorate ``sample`` to log warning if temperature supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
+        self, temperature: Union[ArrayLike[float], CustomDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """New sample function."""
 
         if np.iscomplexobj(temperature):
-            raise ValueError("Cannot pass complex 'temperature' to 'sample()'")
+            raise DataError("Cannot pass complex 'temperature' to 'sample()'")
 
         temp_min, temp_max = self.temperature_range
-        temperature_numpy = get_numpy_array(temperature)
+        temperature_numpy = _get_numpy_array(temperature)
         if np.any(temperature_numpy < temp_min) or np.any(temperature_numpy > temp_max):
             log.warning(
                 "Temperature passed to 'HeatPerturbation.sample()'"
@@ -126,18 +115,18 @@ class HeatPerturbation(AbstractPerturbation):
 
     @abstractmethod
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
+        self, temperature: Union[ArrayLike[float], CustomDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], SpatialDataArray]
+        temperature : Union[ArrayLike[float], CustomDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
 
@@ -230,25 +219,24 @@ class LinearHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
+        self, temperature: Union[ArrayLike[float], CustomDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation at temperature points.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], SpatialDataArray]
+        temperature : Union[ArrayLike[float], CustomDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
 
-        # convert to numpy if not spatial data array
-        t_vals = np.array(temperature) if self._array_type(temperature) == "array" else temperature
-
-        return self.coeff * (t_vals - self.temperature_ref)
+        # using np.subtract to automatically convert lists/tuples into np.ndarray
+        # note that xarray and unstructured dataset preserver their types
+        return self.coeff * np.subtract(temperature, self.temperature_ref)
 
     @cached_property
     def is_complex(self) -> bool:
@@ -339,30 +327,35 @@ class CustomHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], SpatialDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataType]:
+        self, temperature: Union[ArrayLike[float], CustomDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation at provided temperature points.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], SpatialDataArray]
+        temperature : Union[ArrayLike[float], CustomDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
 
         t_range = self.temperature_range
-        temperature_clip = np.clip(temperature, t_range[0], t_range[1])
-        data = self.perturbation_values.interp(T=temperature_clip, method=self.interp_method)
+        temp_clip = np.clip(_get_numpy_array(temperature), t_range[0], t_range[1])
+        sampled = self.perturbation_values.interp(T=temp_clip, method=self.interp_method).values
+
         # preserve input type
         if isinstance(temperature, SpatialDataArray):
-            return SpatialDataArray(data.drop_vars("T"))
+            return SpatialDataArray(sampled, coords=temperature.coords)
+        if isinstance(temperature, UnstructuredGridDataset):
+            return temperature.updated_copy(
+                values=IndexedDataArray(sampled, coords=temperature.values.coords)
+            )
         if np.ndim(temperature) == 0:
-            return data.item()
-        return data.data
+            return sampled.item()
+        return sampled
 
     @cached_property
     def is_complex(self) -> bool:
@@ -378,29 +371,29 @@ HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
 
 def ensure_charge_in_range(
     sample: Callable[
-        [Union[ArrayLike[float], SpatialDataArray], Union[ArrayLike[float], SpatialDataArray]],
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+        [Union[ArrayLike[float], CustomDataType], Union[ArrayLike[float], CustomDataType]],
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
     ]
 ) -> Callable[
-    [Union[ArrayLike[float], SpatialDataArray], Union[ArrayLike[float], SpatialDataArray]],
-    Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray],
+    [Union[ArrayLike[float], CustomDataType], Union[ArrayLike[float], CustomDataType]],
+    Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
 ]:
     """Decorate ``sample`` to log warning if charge supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: Union[ArrayLike[float], CustomDataType],
+        hole_density: Union[ArrayLike[float], CustomDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """New sample function."""
 
         # disable complex input
         if np.iscomplexobj(electron_density):
-            raise ValueError("Cannot pass complex 'electron_density' to 'sample()'")
+            raise DataError("Cannot pass complex 'electron_density' to 'sample()'")
 
         if np.iscomplexobj(hole_density):
-            raise ValueError("Cannot pass complex 'hole_density' to 'sample()'")
+            raise DataError("Cannot pass complex 'hole_density' to 'sample()'")
 
         # check ranges
         e_min, e_max = self.electron_range
@@ -444,27 +437,26 @@ class ChargePerturbation(AbstractPerturbation):
     @abstractmethod
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: Union[ArrayLike[float], CustomDataType],
+        hole_density: Union[ArrayLike[float], CustomDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], SpatialDataArray]
+        electron_density : Union[ArrayLike[float], CustomDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], SpatialDataArray]
+        hole_density : Union[ArrayLike[float], CustomDataType]
             Hole density sample point(s).
 
         Note
         ----
-        Cannot provide a :class:`.SpatialDataArray` for one argument and a regular array
-        (``list``, ``tuple``, ``numpy.nd_array``) for the other. Additionally, if both arguments are
-        regular arrays they must be one-dimensional arrays.
+        Provided ``electron_density`` and ``hole_density`` must be of the same type and match
+        shapes/coordinates, unless one of them is a scalar.
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
 
@@ -480,9 +472,9 @@ class ChargePerturbation(AbstractPerturbation):
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], SpatialDataArray]
+        electron_density : Union[ArrayLike[float], CustomDataType]
             Array of electron density sample points.
-        hole_density : Union[ArrayLike[float], SpatialDataArray]
+        hole_density : Union[ArrayLike[float], CustomDataType]
             Array of hole density sample points.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
@@ -495,11 +487,12 @@ class ChargePerturbation(AbstractPerturbation):
             The supplied or created matplotlib axes.
         """
 
-        values = self.sample(electron_density, hole_density)
+        e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
+        values = self.sample(e_mesh, h_mesh)
         values = self._get_val(values, val)
 
         if np.ndim(electron_density) == 0:
-            ax.plot(hole_density, values, label=f"electron density = {electron_density} 1/cm^3")
+            ax.plot(hole_density, values[0, :], label=f"electron density = {electron_density} 1/cm^3")
             ax.set_ylabel(f"{val}(perturbation value)")
             ax.set_xlabel("hole density (1/cm^3)")
             ax.set_title(f"charge dependence of {val}(perturbation value)")
@@ -507,7 +500,7 @@ class ChargePerturbation(AbstractPerturbation):
             ax.legend()
 
         elif np.ndim(hole_density) == 0:
-            ax.plot(electron_density, values, label=f"hole density = {hole_density} 1/cm^3")
+            ax.plot(electron_density, values[:, 0], label=f"hole density = {hole_density} 1/cm^3")
             ax.set_ylabel(f"{val}(perturbation value)")
             ax.set_xlabel("electron density (1/cm^3)")
             ax.set_title(f"charge dependence of {val}(perturbation value)")
@@ -515,7 +508,6 @@ class ChargePerturbation(AbstractPerturbation):
             ax.legend()
 
         else:
-            e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
             pc = ax.pcolormesh(e_mesh, h_mesh, values, shading="gouraud")
             plt.colorbar(pc, ax=ax)
             ax.set_xlabel("electron density (1/cm^3)")
@@ -525,30 +517,6 @@ class ChargePerturbation(AbstractPerturbation):
         ax.set_aspect("auto")
 
         return ax
-
-    @staticmethod
-    def _get_eh_types(electron_density, hole_density):
-        """Get types of provided arguments and check that no mixing between spatial and regular
-        arrays.
-        """
-        e_type = AbstractPerturbation._array_type(electron_density)
-        h_type = AbstractPerturbation._array_type(hole_density)
-
-        one_array = e_type == "array" or h_type == "array"
-        one_spatial = e_type == "spatial" or h_type == "spatial"
-
-        if one_array and one_spatial:
-            raise ValueError(
-                "Cannot mix 'SpatialDataArray' and regular python arrays for 'electron_density'"
-                "'hole_density'."
-            )
-
-        if e_type == "array" and h_type == "array" and (np.ndim(e_type) > 1 or np.ndim(h_type) > 1):
-            raise ValueError(
-                "Cannot mix multidimensional arrays for 'electron_density' and 'hole_density'."
-            )
-
-        return e_type, h_type
 
 
 class LinearChargePerturbation(ChargePerturbation):
@@ -631,43 +599,41 @@ class LinearChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: Union[ArrayLike[float], CustomDataType],
+        hole_density: Union[ArrayLike[float], CustomDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation at electron and hole density points.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], SpatialDataArray]
+        electron_density : Union[ArrayLike[float], CustomDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], SpatialDataArray]
+        hole_density : Union[ArrayLike[float], CustomDataType]
             Hole density sample point(s).
 
         Note
         ----
-        Cannot provide a :class:`.SpatialDataArray` for one argument and a regular array
-        (``list``, ``tuple``, ``numpy.nd_array``) for the other. Additionally, if both arguments are
-        regular arrays they must be one-dimensional arrays.
+        Provided ``electron_density`` and ``hole_density`` must be of the same type and match
+        shapes/coordinates, unless one of them is a scalar.
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
-        e_type, h_type = self._get_eh_types(electron_density, hole_density)
+        no_scalars = np.ndim(electron_density) > 0 and np.ndim(hole_density) > 0
 
-        if e_type == "array" and h_type == "array":
-            e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
-
-            return self.electron_coeff * (e_mesh - self.electron_ref) + self.hole_coeff * (
-                h_mesh - self.hole_ref
+        # we allow combining a scalar with any other type, but is both are arrays
+        # then we require match in shape/coords
+        if no_scalars and not _check_same_coordinates(electron_density, hole_density):
+            raise DataError(
+                "Provided electron and hole density data must be of the same type and shape."
             )
 
-        e_vals = np.array(electron_density) if e_type == "array" else electron_density
-        h_vals = np.array(hole_density) if h_type == "array" else hole_density
-
-        return self.electron_coeff * (e_vals - self.electron_ref) + self.hole_coeff * (
-            h_vals - self.hole_ref
+        # using np.subtract to automatically convert lists/tuples into np.ndarray
+        # note that xarray and unstructured dataset preserver their types
+        return self.electron_coeff * np.subtract(electron_density, self.electron_ref) + self.hole_coeff * np.subtract(
+            hole_density, self.hole_ref
         )
 
     @cached_property
@@ -781,41 +747,52 @@ class CustomChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], SpatialDataArray],
-        hole_density: Union[ArrayLike[float], SpatialDataArray],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]:
+        electron_density: Union[ArrayLike[float], CustomDataType],
+        hole_density: Union[ArrayLike[float], CustomDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
         """Sample perturbation at electron and hole density points.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], SpatialDataArray]
+        electron_density : Union[ArrayLike[float], CustomDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], SpatialDataArray]
+        hole_density : Union[ArrayLike[float], CustomDataType]
             Hole density sample point(s).
 
         Note
         ----
-        Cannot provide a :class:`.SpatialDataArray` for one argument and a regular array
-        (``list``, ``tuple``, ``numpy.nd_array``) for the other. Additionally, if both arguments are
-        regular arrays they must be one-dimensional arrays.
+        Provided ``electron_density`` and ``hole_density`` must be of the same type and match
+        shapes/coordinates, unless one of them is a scalar.
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], SpatialDataArray]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
-        e_type, h_type = self._get_eh_types(electron_density, hole_density)
+        no_scalars = np.ndim(electron_density) > 0 and np.ndim(hole_density) > 0
 
-        e_clip = np.clip(electron_density, self.electron_range[0], self.electron_range[1])
-        h_clip = np.clip(hole_density, self.hole_range[0], self.hole_range[1])
+        # we allow combining a scalar with any other type, but is both are arrays
+        # then we require match in shape/coords
+        if no_scalars and not _check_same_coordinates(electron_density, hole_density):
+            raise DataError(
+                "Provided electron and hole density data must be of the same type and shape."
+            )
 
-        data = self.perturbation_values.interp(n=e_clip, p=h_clip, method=self.interp_method)
+        e_clip = np.clip(_get_numpy_array(electron_density), self.electron_range[0], self.electron_range[1])
+        h_clip = np.clip(_get_numpy_array(hole_density), self.hole_range[0], self.hole_range[1])
 
-        if e_type == "scalar" and h_type == "scalar":
-            return data.item()
-        if e_type == "spatial" or h_type == "spatial":
-            return SpatialDataArray(data.drop_vars(["n", "p"]))
-        return data.data
+        sampled = self.perturbation_values.interp(n=e_clip, p=h_clip, method=self.interp_method).values
+
+        # preserve input type
+        if np.ndim(electron_density) == 0 and np.ndim(hole_density) == 0:
+            return sampled.item()
+        if isinstance(electron_density, SpatialDataArray):
+            return SpatialDataArray(sampled, coords=electron_density.coords)
+        if isinstance(electron_density, UnstructuredGridDataset):
+            return electron_density.updated_copy(
+                values=IndexedDataArray(sampled, coords=electron_density.values.coords)
+            )
+        return sampled
 
     @cached_property
     def is_complex(self) -> bool:
@@ -886,52 +863,51 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
     @staticmethod
     def _zeros_like(
-        T: SpatialDataType = None,
-        n: SpatialDataType = None,
-        p: SpatialDataType = None,
+        T: CustomDataType = None,
+        n: CustomDataType = None,
+        p: CustomDataType = None,
     ):
         """Check that fields have the same coordinates and return an array field with zeros."""
         template = None
         for field in [T, n, p]:
             if field is not None:
-                if template is not None and field.coords != template.coords:
-                    raise ValueError(
+                if template is not None and _check_same_coordinates(field, template):
+                    raise DataError(
                         "'temperature', 'electron_density', and 'hole_density' must have the same "
                         "coordinates if provided."
                     )
                 template = field
 
         if template is None:
-            raise ValueError(
+            raise DataError(
                 "At least one of 'temperature', 'electron_density', or 'hole_density' must be "
                 "provided."
             )
 
-#        return xr.zeros_like(template)
-        return 0 * template
+        return _zeros_like(template)
 
     def apply_data(
         self,
-        temperature: SpatialDataType = None,
-        electron_density: SpatialDataType = None,
-        hole_density: SpatialDataType = None,
-    ) -> SpatialDataType:
+        temperature: CustomDataType = None,
+        electron_density: CustomDataType = None,
+        hole_density: CustomDataType = None,
+    ) -> CustomDataType:
         """Sample perturbations on provided heat and/or charge data. At least one of
         ``temperature``, ``electron_density``, and ``hole_density`` must be not ``None``.
         All provided fields must have identical coords.
 
         Parameters
         ----------
-        temperature : SpatialDataArray = None
+        temperature : CustomDataType = None
             Temperature field data.
-        electron_density : SpatialDataArray = None
+        electron_density : CustomDataType = None
             Electron density field data.
-        hole_density : SpatialDataArray = None
+        hole_density : CustomDataType = None
             Hole density field data.
 
         Returns
         -------
-        SpatialDataArray
+        CustomDataType
             Sampled perturbation field.
         """
 

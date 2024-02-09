@@ -20,7 +20,7 @@ from .medium import AbstractPerturbationMedium
 from .grid.grid import Grid
 from .structure import Structure
 from .data.data_array import SpatialDataArray
-from .data.dataset import get_numpy_array, UnstructuredGridDataset,TetrahedralGridDataset, TriangularGridDataset
+from .data.dataset import _get_numpy_array, UnstructuredGridDataset,TetrahedralGridDataset, TriangularGridDataset
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from .heat_spec import SolidSpec
@@ -851,11 +851,11 @@ class Scene(Tidy3dBaseModel):
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min(np.min(get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                min(np.min(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max(np.max(get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                max(np.max(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
