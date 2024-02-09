@@ -72,11 +72,11 @@ def make_field_data_2d(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldData(
         monitor=FIELD_MONITOR_2D,
-        Ex=make_scalar_field_data_array("Ex", symmetry).interp(y=[0]),
-        Ey=make_scalar_field_data_array("Ey", symmetry).interp(y=[0]),
-        Ez=make_scalar_field_data_array("Ez", symmetry).interp(y=[0]),
-        Hx=make_scalar_field_data_array("Hx", symmetry).interp(y=[0]),
-        Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[0]),
+        Ex=make_scalar_field_data_array("Ex", symmetry).interp(y=[1.0], method="nearest"),
+        Ey=make_scalar_field_data_array("Ey", symmetry).interp(y=[1.0], method="nearest"),
+        Ez=make_scalar_field_data_array("Ez", symmetry).interp(y=[1.0], method="nearest"),
+        Hx=make_scalar_field_data_array("Hx", symmetry).interp(y=[1.0], method="nearest"),
+        Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[1.0], method="nearest"),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_MONITOR_2D),
@@ -87,11 +87,11 @@ def make_field_time_data_2d(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldTimeData(
         monitor=FIELD_TIME_MONITOR_2D,
-        Ex=make_scalar_field_time_data_array("Ex", symmetry).interp(y=[0]),
-        Ey=make_scalar_field_time_data_array("Ey", symmetry).interp(y=[0]),
-        Ez=make_scalar_field_time_data_array("Ez", symmetry).interp(y=[0]),
-        Hx=make_scalar_field_time_data_array("Hx", symmetry).interp(y=[0]),
-        Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[0]),
+        Ex=make_scalar_field_time_data_array("Ex", symmetry).interp(y=[1.0]),
+        Ey=make_scalar_field_time_data_array("Ey", symmetry).interp(y=[1.0]),
+        Ez=make_scalar_field_time_data_array("Ez", symmetry).interp(y=[1.0]),
+        Hx=make_scalar_field_time_data_array("Hx", symmetry).interp(y=[1.0]),
+        Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[1.0]),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_TIME_MONITOR_2D),
@@ -548,3 +548,14 @@ def test_field_data_phase(phase_shift):
     phase2 = get_combined_phase(fld_data2)
 
     assert np.allclose(phase2, np.angle(np.exp(1j * (phase1 + phase_shift))))
+
+
+def test_no_nans():
+    eps_data = make_permittivity_data()
+    eps_nan = eps_data.eps_xx.isel(f=[0])
+    eps_nan[:] = np.nan
+    eps_dataset_nan = td.PermittivityDataset(
+        **{key: eps_nan for key in ["eps_xx", "eps_yy", "eps_zz"]}
+    )
+    with pytest.raises(pydantic.ValidationError):
+        cm = td.CustomMedium(eps_dataset=eps_dataset_nan)

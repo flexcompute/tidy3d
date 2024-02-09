@@ -15,6 +15,7 @@ from ...exceptions import ValidationError, DataError
 from ...constants import fp_eps, inf
 from ..data.dataset import TriangleMeshDataset
 from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
+from ..data.validators import validate_no_nans
 from ...packaging import verify_packages_import
 
 from . import base
@@ -35,6 +36,8 @@ class TriangleMesh(base.Geometry, ABC):
         title="Surface mesh data",
         description="Surface mesh data.",
     )
+
+    _no_nans_mesh = validate_no_nans("mesh_dataset")
 
     @pydantic.root_validator(pre=True)
     @verify_packages_import(["trimesh"])

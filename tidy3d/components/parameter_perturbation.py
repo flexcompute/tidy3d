@@ -16,6 +16,7 @@ from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
 from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod, TYPE_TAG_STR
 from ..components.viz import add_ax_if_none
+from ..components.data.validators import validate_no_nans
 
 """ Generic perturbation classes """
 
@@ -302,6 +303,8 @@ class CustomHeatPerturbation(HeatPerturbation):
         title="Interpolation method",
         description="Interpolation method to obtain perturbation values between sample points.",
     )
+
+    _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
     def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
@@ -733,6 +736,8 @@ class CustomChargePerturbation(ChargePerturbation):
         title="Interpolation method",
         description="Interpolation method to obtain perturbation values between sample points.",
     )
+
+    _no_nans = validate_no_nans("perturbation_values")
 
     @cached_property
     def perturbation_range(self) -> Union[Tuple[float, float], Tuple[complex, complex]]:

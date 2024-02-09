@@ -145,6 +145,9 @@ class SpaceModulation(AbstractSpaceModulation):
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
 
+    # _no_nans_amplitude = validate_no_nans("amplitude")
+    # _no_nans_phase = validate_no_nans("phase")
+
     @pd.validator("amplitude", always=True)
     def _real_amplitude(cls, val):
         """Assert that the amplitude is real."""
