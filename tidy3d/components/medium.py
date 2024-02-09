@@ -17,6 +17,7 @@ from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal, Complex
 from .data.dataset import PermittivityDataset
+from .data.validators import validate_no_nans
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
 from .geometry.base import Geometry
@@ -1331,6 +1332,9 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=CONDUCTIVITY,
     )
 
+    _no_nans_eps = validate_no_nans("permittivity")
+    _no_nans_sigma = validate_no_nans("conductivity")
+
     @pd.validator("permittivity", always=True)
     def _eps_inf_greater_no_less_than_one(cls, val):
         """Assert any eps_inf must be >=1"""
@@ -1485,6 +1489,10 @@ class CustomMedium(AbstractCustomMedium):
         "frequency omega is given by conductivity/omega.",
         units=CONDUCTIVITY,
     )
+
+    _no_nans_eps_dataset = validate_no_nans("eps_dataset")
+    _no_nans_permittivity = validate_no_nans("permittivity")
+    _no_nans_sigma = validate_no_nans("conductivity")
 
     @pd.root_validator(pre=True)
     def _warn_if_none(cls, values):
@@ -2728,6 +2736,8 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         units=(RADPERSEC, RADPERSEC),
     )
 
+    _no_nans_eps_inf = validate_no_nans("eps_inf")
+    _no_nans_poles = validate_no_nans("poles")
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("poles")
 
     @pd.validator("eps_inf", always=True)
@@ -3052,6 +3062,8 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
         units=(None, MICROMETER + "^2"),
     )
+
+    _no_nans = validate_no_nans("coeffs")
 
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
@@ -3410,6 +3422,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         units=(PERMITTIVITY, HERTZ, HERTZ),
     )
 
+    _no_nans_eps_inf = validate_no_nans("eps_inf")
+    _no_nans_coeffs = validate_no_nans("coeffs")
+
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @pd.validator("eps_inf", always=True)
@@ -3676,6 +3691,9 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=(HERTZ, HERTZ),
     )
 
+    _no_nans_eps_inf = validate_no_nans("eps_inf")
+    _no_nans_coeffs = validate_no_nans("coeffs")
+
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
     @pd.validator("eps_inf", always=True)
@@ -3899,6 +3917,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
         units=(PERMITTIVITY, SECOND),
     )
+
+    _no_nans_eps_inf = validate_no_nans("eps_inf")
+    _no_nans_coeffs = validate_no_nans("coeffs")
 
     _warn_if_none = CustomDispersiveMedium._warn_if_data_none("coeffs")
 
