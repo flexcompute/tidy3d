@@ -16,7 +16,10 @@ from .grid.grid import Coords, Grid
 from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal, Complex
-from .data.dataset import PermittivityDataset, TriangularGridDataset, TetrahedralGridDataset, CustomDataType
+from .data.dataset import (
+    PermittivityDataset,
+    CustomDataType,
+)
 from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates, _ones_like
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
@@ -1690,7 +1693,9 @@ class CustomMedium(AbstractCustomMedium):
         modulation = values.get("modulation_spec")
         if values.get("allow_gain") or modulation is None or modulation.conductivity is None:
             return val
-        if val is None or np.any(_get_numpy_array(val) - modulation.conductivity.max_modulation < 0):
+        if val is None or np.any(
+            _get_numpy_array(val) - modulation.conductivity.max_modulation < 0
+        ):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative at any time. "
                 "With conductivity modulation, this medium can sometimes be active. "

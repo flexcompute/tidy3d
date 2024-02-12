@@ -12,7 +12,6 @@ from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry.base import Box
 
 from ...exceptions import SetupError, DataError
-from ...log import log
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
@@ -166,11 +165,17 @@ class Coords(Tidy3dBaseModel):
 
         # interpolation
         if isinstance(array, (SpatialDataArray, ScalarFieldDataArray)):
-            return self._interp_from_xarray(array=array, interp_method=interp_method, fill_value=fill_value)
+            return self._interp_from_xarray(
+                array=array, interp_method=interp_method, fill_value=fill_value
+            )
         elif isinstance(array, UnstructuredGridDataset):
-            return self._interp_from_unstructured(array=array, interp_method=interp_method, fill_value=fill_value)
+            return self._interp_from_unstructured(
+                array=array, interp_method=interp_method, fill_value=fill_value
+            )
 
-        raise DataError(f"Not supported data type '{type(array)}' of 'array' in 'Coords.spatial_interp()'")
+        raise DataError(
+            f"Not supported data type '{type(array)}' of 'array' in 'Coords.spatial_interp()'"
+        )
 
 
 class FieldGrid(Tidy3dBaseModel):

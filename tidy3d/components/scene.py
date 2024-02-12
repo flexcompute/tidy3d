@@ -20,7 +20,12 @@ from .medium import AbstractPerturbationMedium
 from .grid.grid import Grid
 from .structure import Structure
 from .data.data_array import SpatialDataArray
-from .data.dataset import _get_numpy_array, UnstructuredGridDataset,TetrahedralGridDataset, TriangularGridDataset
+from .data.dataset import (
+    _get_numpy_array,
+    UnstructuredGridDataset,
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+)
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from .heat_spec import SolidSpec
@@ -895,10 +900,15 @@ class Scene(Tidy3dBaseModel):
             eps_diag = medium.eps_dataarray_freq(frequency=freq)
 
             if isinstance(eps_diag[0], UnstructuredGridDataset):
-                if isinstance(eps_diag[0], TriangularGridDataset) and eps_diag[0].normal_axis != normal_axis_ind:
+                if (
+                    isinstance(eps_diag[0], TriangularGridDataset)
+                    and eps_diag[0].normal_axis != normal_axis_ind
+                ):
                     eps_diag = list(eps_diag)
                     for dim in range(3):
-                        eps_diag[dim] = eps_diag[dim].plane_slice(axis=normal_axis_ind, pos=normal_position)
+                        eps_diag[dim] = eps_diag[dim].plane_slice(
+                            axis=normal_axis_ind, pos=normal_position
+                        )
                 else:
                     eps_mean = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
                     if isinstance(eps_mean, TetrahedralGridDataset):

@@ -148,6 +148,11 @@ def test_charge_perturbation():
     assert isinstance(sampled, float)
     sampled = perturb.sample(electron_density=[1e17, 1e18, 1e19], hole_density=[2e17, 2e18])
     assert isinstance(sampled, np.ndarray)
+    assert np.shape(sampled) == (3, 2)
+    shape = (3, 4)
+    sampled = perturb.sample(electron_density=np.ones(shape), hole_density=np.zeros(shape))
+    assert isinstance(sampled, np.ndarray)
+    assert np.shape(sampled) == shape
     sampled = perturb.sample(electron_density=1e17, hole_density=[2e17, 2e18])
     assert isinstance(sampled, np.ndarray)
     sampled = perturb.sample(
@@ -168,7 +173,7 @@ def test_charge_perturbation():
     assert isinstance(sampled, td.SpatialDataArray)
 
     # test mixing spatial data array and simple array
-    with pytest.raises(ValueError):
+    with pytest.raises(td.exceptions.DataError):
         _ = perturb.sample(
             electron_density=td.SpatialDataArray(
                 1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
@@ -232,6 +237,11 @@ def test_charge_perturbation():
         assert isinstance(test_value_out, complex)
         sampled = perturb.sample(electron_density=[1e17, 1e18, 1e19], hole_density=[2e17, 2e18])
         assert isinstance(sampled, np.ndarray)
+        assert np.shape(sampled) == (3, 2)
+        #        shape = (3, 4)
+        #        sampled = perturb.sample(electron_density=np.ones(shape), hole_density=np.zeros(shape))
+        #        assert isinstance(sampled, np.ndarray)
+        #        assert np.shape(sampled) == shape
         sampled = perturb.sample(electron_density=1e17, hole_density=[2e17, 2e18])
         assert isinstance(sampled, np.ndarray)
         sampled = perturb.sample(

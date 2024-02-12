@@ -166,17 +166,9 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
                 x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
             )
     else:
-        # default = invariant along normal direction
         invariant = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
         assert np.all(invariant.isel(y=0).data == invariant.isel(y=1).data)
         assert invariant.name == ds_name
-
-        # no invariance
-        out_of_plane = tri_grid.interp(
-            x=0.4, y=[1], z=np.linspace(0.2, 0.6, 10), fill_value=123, ignore_normal_pos=False
-        )
-        assert np.all(out_of_plane.data == 123)
-        assert out_of_plane.name == ds_name
 
         # outside of grid
         invariant_no_intersection = tri_grid.interp(
@@ -405,7 +397,6 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
     else:
-        # default = invariant along normal direction
         result = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
         assert result.name == ds_name
 

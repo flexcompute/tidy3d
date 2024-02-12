@@ -10,7 +10,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray, IndexedDataArray
-from .data.dataset import UnstructuredGridDataset, _get_numpy_array, _zeros_like, _check_same_coordinates, CustomDataType
+from .data.dataset import UnstructuredGridDataset, CustomDataType
+from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates
 from .base import Tidy3dBaseModel, cached_property
 from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
@@ -234,9 +235,11 @@ class LinearHeatPerturbation(HeatPerturbation):
             Sampled perturbation value(s).
         """
 
-        # using np.subtract to automatically convert lists/tuples into np.ndarray
-        # note that xarray and unstructured dataset preserver their types
-        return self.coeff * np.subtract(temperature, self.temperature_ref)
+        temp_vals = temperature
+        if isinstance(temperature, (list, tuple)):
+            temp_vals = np.array(temperature)
+
+        return self.coeff * (temp_vals - self.temperature_ref)
 
     @cached_property
     def is_complex(self) -> bool:
@@ -344,7 +347,10 @@ class CustomHeatPerturbation(HeatPerturbation):
 
         t_range = self.temperature_range
         temp_clip = np.clip(_get_numpy_array(temperature), t_range[0], t_range[1])
-        sampled = self.perturbation_values.interp(T=temp_clip, method=self.interp_method).values
+        sampled = self.perturbation_values.interp(
+            T=temp_clip.ravel(), method=self.interp_method
+        ).values
+        sampled = np.reshape(sampled, np.shape(temp_clip))
 
         # preserve input type
         if isinstance(temperature, SpatialDataArray):
@@ -487,12 +493,11 @@ class ChargePerturbation(AbstractPerturbation):
             The supplied or created matplotlib axes.
         """
 
-        e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
-        values = self.sample(e_mesh, h_mesh)
+        values = self.sample(electron_density, hole_density)
         values = self._get_val(values, val)
 
         if np.ndim(electron_density) == 0:
-            ax.plot(hole_density, values[0, :], label=f"electron density = {electron_density} 1/cm^3")
+            ax.plot(hole_density, values, label=f"electron density = {electron_density} 1/cm^3")
             ax.set_ylabel(f"{val}(perturbation value)")
             ax.set_xlabel("hole density (1/cm^3)")
             ax.set_title(f"charge dependence of {val}(perturbation value)")
@@ -500,7 +505,7 @@ class ChargePerturbation(AbstractPerturbation):
             ax.legend()
 
         elif np.ndim(hole_density) == 0:
-            ax.plot(electron_density, values[:, 0], label=f"hole density = {hole_density} 1/cm^3")
+            ax.plot(electron_density, values, label=f"hole density = {hole_density} 1/cm^3")
             ax.set_ylabel(f"{val}(perturbation value)")
             ax.set_xlabel("electron density (1/cm^3)")
             ax.set_title(f"charge dependence of {val}(perturbation value)")
@@ -508,6 +513,7 @@ class ChargePerturbation(AbstractPerturbation):
             ax.legend()
 
         else:
+            e_mesh, h_mesh = np.meshgrid(electron_density, hole_density, indexing="ij")
             pc = ax.pcolormesh(e_mesh, h_mesh, values, shading="gouraud")
             plt.colorbar(pc, ax=ax)
             ax.set_xlabel("electron density (1/cm^3)")
@@ -614,26 +620,49 @@ class LinearChargePerturbation(ChargePerturbation):
         Note
         ----
         Provided ``electron_density`` and ``hole_density`` must be of the same type and match
-        shapes/coordinates, unless one of them is a scalar.
+        shapes/coordinates, unless one of them is a scalar or both are 1d arrays, in which case
+        values are broadcasted.
 
         Returns
         -------
         Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
-        no_scalars = np.ndim(electron_density) > 0 and np.ndim(hole_density) > 0
+        inputs = [electron_density, hole_density]
 
-        # we allow combining a scalar with any other type, but is both are arrays
-        # then we require match in shape/coords
-        if no_scalars and not _check_same_coordinates(electron_density, hole_density):
+        no_scalars = all(np.ndim(arr) > 0 for arr in inputs)
+        both_1d = all(
+            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(arr) == 1 for arr in inputs
+        )
+
+        # we allow combining a scalar with any other type
+        # or 2 1d arrays (broadcasting)
+        # otherwise we require match in shape/coords
+        if (
+            no_scalars
+            and not both_1d
+            and not _check_same_coordinates(electron_density, hole_density)
+        ):
             raise DataError(
                 "Provided electron and hole density data must be of the same type and shape."
             )
 
-        # using np.subtract to automatically convert lists/tuples into np.ndarray
-        # note that xarray and unstructured dataset preserver their types
-        return self.electron_coeff * np.subtract(electron_density, self.electron_ref) + self.hole_coeff * np.subtract(
-            hole_density, self.hole_ref
+        e_vals = electron_density
+        h_vals = hole_density
+
+        # convert python arrays into numpy
+        if isinstance(electron_density, (list, tuple)):
+            e_vals = np.array(electron_density)
+
+        if isinstance(hole_density, (list, tuple)):
+            h_vals = np.array(hole_density)
+
+        # broadcast if both are 1d arrays
+        if both_1d:
+            e_vals, h_vals = np.meshgrid(e_vals, h_vals, indexing="ij")
+
+        return self.electron_coeff * (e_vals - self.electron_ref) + self.hole_coeff * (
+            h_vals - self.hole_ref
         )
 
     @cached_property
@@ -762,36 +791,65 @@ class CustomChargePerturbation(ChargePerturbation):
         Note
         ----
         Provided ``electron_density`` and ``hole_density`` must be of the same type and match
-        shapes/coordinates, unless one of them is a scalar.
+        shapes/coordinates, unless one of them is a scalar or both are 1d arrays, in which case
+        values are broadcasted.
 
         Returns
         -------
         Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
             Sampled perturbation value(s).
         """
-        no_scalars = np.ndim(electron_density) > 0 and np.ndim(hole_density) > 0
+        inputs = [electron_density, hole_density]
 
-        # we allow combining a scalar with any other type, but is both are arrays
-        # then we require match in shape/coords
-        if no_scalars and not _check_same_coordinates(electron_density, hole_density):
+        no_scalars = all(np.ndim(arr) > 0 for arr in inputs)
+        both_1d = all(
+            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(arr) == 1 for arr in inputs
+        )
+
+        # we allow combining a scalar with any other type
+        # or 2 1d arrays (broadcasting)
+        # otherwise we require match in shape/coords
+        if (
+            no_scalars
+            and not both_1d
+            and not _check_same_coordinates(electron_density, hole_density)
+        ):
             raise DataError(
                 "Provided electron and hole density data must be of the same type and shape."
             )
 
-        e_clip = np.clip(_get_numpy_array(electron_density), self.electron_range[0], self.electron_range[1])
-        h_clip = np.clip(_get_numpy_array(hole_density), self.hole_range[0], self.hole_range[1])
+        # clip to allowed values
+        # (this also implicitly convert python arrays into numpy
+        e_vals = np.clip(electron_density, self.electron_range[0], self.electron_range[1])
+        h_vals = np.clip(hole_density, self.hole_range[0], self.hole_range[1])
 
-        sampled = self.perturbation_values.interp(n=e_clip, p=h_clip, method=self.interp_method).values
+        # we cannot pass UnstructuredGridDataset directly into xarray interp
+        # thus we need to explicitly grad the underlying xarray
+        if isinstance(e_vals, UnstructuredGridDataset):
+            e_vals = e_vals.values
+        if isinstance(h_vals, UnstructuredGridDataset):
+            h_vals = h_vals.values
+
+        # note that the dimensionality of this operation differs depending on whether xarrays
+        # or simple unlabeled arrays are provided:
+        # - for unlabeled arrays, values are broadcasted
+        # - for xarrays, values are considered pairwise based on xarrays' coords
+        sampled = self.perturbation_values.interp(n=e_vals, p=h_vals, method=self.interp_method)
+
+        # grab the result without any labels
+        sampled = sampled.values
 
         # preserve input type
-        if np.ndim(electron_density) == 0 and np.ndim(hole_density) == 0:
+        for arr in inputs:
+            if isinstance(arr, SpatialDataArray):
+                return SpatialDataArray(sampled, coords=arr.coords)
+
+            if isinstance(arr, UnstructuredGridDataset):
+                return arr.updated_copy(values=IndexedDataArray(sampled, coords=arr.values.coords))
+
+        if all(np.ndim(arr) == 0 for arr in inputs):
             return sampled.item()
-        if isinstance(electron_density, SpatialDataArray):
-            return SpatialDataArray(sampled, coords=electron_density.coords)
-        if isinstance(electron_density, UnstructuredGridDataset):
-            return electron_density.updated_copy(
-                values=IndexedDataArray(sampled, coords=electron_density.values.coords)
-            )
+
         return sampled
 
     @cached_property
@@ -871,7 +929,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
         template = None
         for field in [T, n, p]:
             if field is not None:
-                if template is not None and _check_same_coordinates(field, template):
+                if template is not None and not _check_same_coordinates(field, template):
                     raise DataError(
                         "'temperature', 'electron_density', and 'hole_density' must have the same "
                         "coordinates if provided."

@@ -980,7 +980,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 interpolated_values = self._interp_py(x=x, y=y, z=z, fill_value=fill_value_actual)
 
             if fill_value == "extrapolate" and method != "nearest":
-                interpolated_values = self._fill_nans_from_nearests(interpolated_values, x=x, y=y, z=z)
+                interpolated_values = self._fill_nans_from_nearests(
+                    interpolated_values, x=x, y=y, z=z
+                )
 
         return SpatialDataArray(
             interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name
@@ -1165,7 +1167,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             xyz_grid.pop(axis_ignore)
 
         # get numpy arrays for points and cells
-        cell_connections = self.cells.values  # (num_cells, num_cell_vertices), num_cell_vertices=num_cell_faces
+        cell_connections = (
+            self.cells.values
+        )  # (num_cells, num_cell_vertices), num_cell_vertices=num_cell_faces
         points = self.points.values  # (num_points, num_dims)
 
         num_cells = len(cell_connections)
@@ -1244,12 +1248,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
             # find how many cells we can processed based on number of allowed samples
             target_processed_samples = processed_samples + max_samples_per_step
-            target_processed_cells_from_samples = np.searchsorted(
-                cum_num_samples_per_ne_cell, target_processed_samples
-            ) + 1
+            target_processed_cells_from_samples = (
+                np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
+            )
 
             # take min between the two
-            target_processed_cells = min(target_processed_cells, target_processed_cells_from_samples)
+            target_processed_cells = min(
+                target_processed_cells, target_processed_cells_from_samples
+            )
 
             # select cells and corresponding samples to process
             step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
@@ -1357,7 +1363,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # one big arange array
         inds_flat = np.arange(num_samples_total)
         # now subtract previous number of samples
-        inds_flat[num_samples_per_cell[0]:] -= np.repeat(num_samples_cumul[:-1], num_samples_per_cell[1:])
+        inds_flat[num_samples_per_cell[0] :] -= np.repeat(
+            num_samples_cumul[:-1], num_samples_per_cell[1:]
+        )
 
         # convert flat indices into 3d/2d indices as:
         # x_ind = [23, 23, 23, 23,   41, 41,      ...]
@@ -1424,7 +1432,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
             # compute distance to the opposing vertex by taking a dot product between normal
             # and a vector connecting the opposing vertex and the face
-            d = np.einsum('ij,ij->i', n, p0Opp)
+            d = np.einsum("ij,ij->i", n, p0Opp)
 
             # obtained normal direction is arbitrary here. We will orient it such that it points
             # away from the triangle (and distance to the opposing vertex is negative).
@@ -1948,6 +1956,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         z: Union[float, ArrayLike],
         fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
         use_vtk: bool = False,
+        ignore_normal_pos: bool = True,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
 
@@ -1964,6 +1973,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
             nearest values are used.
         use_vtk : bool = False
             Use vtk's interpolationfunctionality or Tidy3D's own implementation.
+        ignore_normal_pos : bool = True
+            (Depreciated) Assume data is invariant along the normal direction to the grid plane.
 
         Returns
         -------
@@ -1971,13 +1982,22 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Interpolated data.
         """
 
+        if not ignore_normal_pos:
+            log.warning(
+                "Parameter 'ignore_normal_pos' is depreciated. It is always assumed that data "
+                "contained in 'TriangularGridDataset' is invariant in the normal direction. "
+                "That is, 'ignore_normal_pos=True' is used."
+            )
+
         x = np.atleast_1d(x)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
         xyz = [x, y, z]
         xyz[self.normal_axis] = [self.normal_pos]
-        interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value, use_vtk=use_vtk)
+        interp_inplane = super().interp(
+            **dict(zip("xyz", xyz)), fill_value=fill_value, use_vtk=use_vtk
+        )
         interp_broadcasted = np.broadcast_to(
             interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
         )
@@ -2390,6 +2410,7 @@ UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDatase
 
 CustomDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
 
+
 def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
     """Get numpy representation of dataarray/dataset values."""
     if isinstance(data_array, UnstructuredGridDataset):
@@ -2426,7 +2447,8 @@ def _check_same_coordinates(
     b: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
 ) -> bool:
     """Check whether two array are defined at the same coordinates."""
-    if type(a) != type(b):
+    both_xarrays = isinstance(a, xr.DataArray) and isinstance(b, xr.DataArray)
+    if (not both_xarrays) and type(a) != type(b):
         return False
 
     if isinstance(a, UnstructuredGridDataset):
@@ -2438,7 +2460,7 @@ def _check_same_coordinates(
                 return False
 
     elif isinstance(a, xr.DataArray):
-        if a.coords.keys() != a.coords.keys() or a.coords != b.coords:
+        if a.coords.keys() != b.coords.keys() or a.coords != b.coords:
             return False
 
     else:
