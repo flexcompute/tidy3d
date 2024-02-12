@@ -15,3 +15,4 @@ Metamaterials, Gratings, and Other Periodic Structures
     ../../BiosensorGrating
     ../../DistributedBraggReflectorCavity
     ../../CMOSRGBSensor
+    ../../PlasmonicNanorodArray

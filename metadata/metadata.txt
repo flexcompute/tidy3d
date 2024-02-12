@@ -449,6 +449,12 @@
     "keywords": "plasmonic nanoparticle, total-field scattered-field, TFSF, Tidy3D, FDTD",
     "feature_image": "./img/plasmonic_nanoparticle_feature_image.png"
   },
+  "PlasmonicNanorodArray.ipynb": {
+    "title": "Plasmonic Nanorod Array Resonator | Flexcompute",
+    "description": "This notebook demonstrates how to model a hexagonal lattice of plasmonic nanorod array in Tidy3D FDTD.",
+    "keywords": "plasmonic, localized surface plasmon resonance, LSPR, hexagonal lattice, trianglar lattice, gold, Tidy3D, FDTD",
+    "feature_image": "./img/nanorod_array.png"
+  },
   "PlasmonicWaveguideCO2Sensor.ipynb": {
     "title": "Plasmonic waveguide CO2 sensor | Flexcompute",
     "description": "This notebook demonstrates how to model a MIM waveguide CO2 sensor in Tidy3D FDTD.",
