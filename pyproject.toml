@@ -90,6 +90,7 @@ sphinx-copybutton = {version=">=0.5.2", optional = true}
 sphinx-book-theme = {version = ">=1.0.1", optional = true}
 pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
+testbook = {version="*", optional = true}
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 sphinx-favicon = {version="*", optional = true}
