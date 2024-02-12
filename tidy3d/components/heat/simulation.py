@@ -70,6 +70,14 @@ class HeatSimulation(AbstractSimulation):
     ...     ],
     ...     monitors=[TemperatureMonitor(size=(1, 2, 3), name="sample")],
     ... )
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
+        * `Thermally tuned ring resonator <../../notebooks/ThermallyTunedRingResonator.html>`_
+
     """
 
     boundary_spec: Tuple[HeatBoundarySpec, ...] = pd.Field(
@@ -225,6 +233,13 @@ class HeatSimulation(AbstractSimulation):
         vlim: Tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+
+        Visualization of [HeatSimulation](./tidy3d.HeatSimulation.html) object displays:
+        - thermal conductivity of structures (in grayscale colors)
+        - specified boundary conditions (colored thick lines: yellow for [TemperatureBC](./tidy3d.TemperatureBC.html),
+         green for [HeatFluxBC](./tidy3d.HeatFluxBC.html), and red for [ConvectionBC](./tidy3d.ConvectionBC.html)),
+        - heat sources (in colored dotted hatching),
+        - and monitors (in transparent yellow color).
 
         Parameters
         ----------

@@ -12,6 +12,7 @@ All Data for a Simulation
 
    tidy3d.SimulationData
 
+
 Collections of Data from single monitor
 ---------------------------------------
 
@@ -30,6 +31,7 @@ Collections of Data from single monitor
    tidy3d.FieldProjectionCartesianData
    tidy3d.FieldProjectionKSpaceData
    tidy3d.DiffractionData
+
 
 Individual Datasets
 -------------------
@@ -51,3 +53,4 @@ Individual Datasets
    tidy3d.FieldProjectionCartesianDataArray
    tidy3d.FieldProjectionKSpaceDataArray
    tidy3d.DiffractionDataArray
+   tidy3d.TimeDataArray

@@ -36,6 +36,12 @@ class UniformHeatSource(HeatSource):
     Example
     -------
     >>> heat_source = UniformHeatSource(rate=1, structures=["box"])
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
     """
 
     rate: Union[float, TimeDataArray] = pd.Field(

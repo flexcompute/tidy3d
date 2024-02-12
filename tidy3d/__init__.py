@@ -67,6 +67,7 @@ from .components.data.data_array import FieldProjectionCartesianDataArray
 from .components.data.data_array import FieldProjectionKSpaceDataArray
 from .components.data.data_array import DiffractionDataArray
 from .components.data.data_array import HeatDataArray, ChargeDataArray
+from .components.data.data_array import TimeDataArray
 from .components.data.dataset import FieldDataset, FieldTimeDataset
 from .components.data.dataset import PermittivityDataset, ModeSolverDataset
 from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
@@ -236,6 +237,7 @@ __all__ = [
     "FieldProjectionAngleDataArray",
     "FieldProjectionCartesianDataArray",
     "FieldProjectionKSpaceDataArray",
+    "TimeDataArray",
     "DiffractionDataArray",
     "HeatDataArray",
     "ChargeDataArray",
