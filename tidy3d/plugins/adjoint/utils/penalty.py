@@ -8,6 +8,8 @@ from ....components.base import Tidy3dBaseModel
 from ....components.types import ArrayFloat2D
 from ....constants import MICROMETER
 
+from .filter import ConicFilter, BinaryProjector
+
 # Radius of Curvature Calculation
 
 
@@ -134,3 +136,112 @@ class RadiusPenalty(Penalty):
 
         # return the average penalty over the points
         return jnp.sum(penalty_fn(rs)) / len(rs)
+
+
+class ErosionDilationPenalty(Penalty):
+    """Computes a penalty for erosion / dilation of a parameter map not being unity.
+    Accepts a parameter array normalized between 0 and 1.
+    Uses filtering and projection methods to erode and dilate the features within this array.
+    Measures the change in the array after eroding and dilating (and also dilating and eroding).
+    Returns a penalty proportional to the magnitude of this change.
+    The amount of change under dilation and erosion is minimized if the structure has large feature
+    sizes and large radius of curvature relative to the length scale.
+
+    Note
+    ----
+    For more details, refer to chapter 4 of Hammond, A., "High-Efficiency Topology Optimization
+    for Very Large-Scale Integrated-Photonics Inverse Design" (2022).
+    """
+
+    length_scale: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Length Scale",
+        description="Length scale of erosion and dilation. "
+        "Corresponds to ``radius`` in the :class:`ConicFilter` used for filtering. "
+        "The parameter array is dilated and eroded by half of this value with each operation. "
+        "Roughly corresponds to the desired minimum feature size and radius of curvature.",
+        units=MICROMETER,
+    )
+
+    pixel_size: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Pixel Size",
+        description="Size of each pixel in the array (must be the same along all dimensions). "
+        "Corresponds to ``design_region_dl`` in the :class:`ConicFilter` used for filtering.",
+        units=MICROMETER,
+    )
+
+    beta: pd.PositiveFloat = pd.Field(
+        100.0,
+        title="Projection Beta",
+        description="Strength of the ``tanh`` projection. "
+        "Corresponds to ``beta`` in the :class:`BinaryProjector. "
+        "Higher values correspond to stronger discretization.",
+    )
+
+    eta0: pd.PositiveFloat = pd.Field(
+        0.5,
+        title="Projection Midpoint",
+        description="Value between 0 and 1 that sets the projection midpoint. In other words, "
+        "for values of ``eta0``, the projected values are halfway between minimum and maximum. "
+        "Corresponds to ``eta`` in the :class:`BinaryProjector`.",
+    )
+
+    delta_eta: pd.PositiveFloat = pd.Field(
+        0.01,
+        title="Delta Eta Cutoff",
+        description="The binarization threshold for erosion and dilation operations "
+        "The thresholds are 0 + `delta_eta` on the low end and `1 - delta_eta` on the high end. "
+        "The default value balances binarization with differentiability so we strongly suggest "
+        "using it unless there is a good reason to set it differently.",
+    )
+
+    def conic_filter(self) -> ConicFilter:
+        """:class:`ConicFilter` associated with this object."""
+        return ConicFilter(radius=self.length_scale, design_region_dl=self.pixel_size)
+
+    def binary_projector(self, eta: float = None) -> BinaryProjector:
+        """:class:`BinaryProjector` associated with this object."""
+
+        if eta is None:
+            eta = self.eta0
+
+        return BinaryProjector(eta=eta, beta=self.beta, vmin=0.0, vmax=1.0, strict_binarize=False)
+
+    def tanh_projection(self, x: jnp.ndarray, eta: float = None) -> jnp.ndarray:
+        """Project an array ``x`` once using ``self.beta`` and ``self.eta0``."""
+        return self.binary_projector(eta=eta).evaluate(x)
+
+    def filter_project(self, x: jnp.ndarray, eta: float = None) -> jnp.ndarray:
+        """Filter an array ``x`` using length scale and dL and then apply a projection."""
+        filter = self.conic_filter()
+        projector = self.binary_projector(eta=eta)
+
+        y = filter.evaluate(x)
+        return projector.evaluate(y)
+
+    def evaluate(self, x: jnp.ndarray) -> float:
+        """
+        Penalty associated with erosion/dilation and dilation/erosion not being identity.
+        Accepts a parameter array with values normalized between 0 and 1.
+        Penalty value is normalized such that the maximum possible penalty is 1.
+        """
+        eta_dilate = 0.0 + self.delta_eta
+        eta_eroded = 1.0 - self.delta_eta
+
+        def fn_dilate(x):
+            return self.filter_project(x, eta=eta_dilate)
+
+        def fn_eroded(x):
+            return self.filter_project(x, eta=eta_eroded)
+
+        params_dilate_erode = fn_eroded(fn_dilate(x))
+        params_erode_dilate = fn_dilate(fn_eroded(x))
+
+        diff = params_dilate_erode - params_erode_dilate
+
+        # edge case: if all diff == 0, then the gradient of sqrt() and norm() is not defined.
+        if jnp.all(diff == 0.0):
+            return 0.0
+
+        return jnp.linalg.norm(diff) / jnp.linalg.norm(jnp.ones_like(diff))
