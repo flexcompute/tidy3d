@@ -51,5 +51,10 @@ class UniformHeatSource(HeatSource):
         units=VOLUMETRIC_HEAT_RATE,
     )
 
+    def plot_rate(self, **kwargs) -> None:
+        """Plot the heat rate."""
+        # TODO extend this to support TimeDataArray and float accordingly.
+        self.rate.plot(**kwargs)
+
 
 HeatSourceType = Union[UniformHeatSource]
