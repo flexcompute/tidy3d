@@ -683,6 +683,8 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Common frequencies to both data arrays
         f = np.array(sorted(set(coords[0]["f"].values).intersection(coords[1]["f"].values)))
+        isel1 = [list(coords[0]["f"].values).index(freq) for freq in f]
+        isel2 = [list(coords[1]["f"].values).index(freq) for freq in f]
 
         # Mode indices, if available
         modes_in_self = "mode_index" in coords[0]
@@ -693,34 +695,45 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         dtype = np.promote_types(arrays[0].dtype, arrays[1].dtype)
         dot = np.empty((f.size, mode_index_0.size, mode_index_1.size), dtype=dtype)
 
-        # Calculate overlap for each common frequency and each mode pair
-        for i, freq in enumerate(f):
-            indexer_self = {"f": freq}
-            indexer_other = {"f": freq}
-            for mi0 in mode_index_0:
-                if modes_in_self:
-                    indexer_self["mode_index"] = mi0
-                e_self_1 = fields_self[e_1].sel(indexer_self, drop=True)
-                e_self_2 = fields_self[e_2].sel(indexer_self, drop=True)
-                h_self_1 = fields_self[h_1].sel(indexer_self, drop=True)
-                h_self_2 = fields_self[h_2].sel(indexer_self, drop=True)
+        keys = (e_1, e_2, h_1, h_2)
+        sel_fields_self = {}
+        sel_fields_other = {}
+        for key in keys:
+            sel_fields_self[key] = fields_self[key].isel(f=isel1).to_numpy()
+            # if mode_index not present, insert it for unified handling
+            if not modes_in_self:
+                sel_fields_self[key] = np.expand_dims(
+                    sel_fields_self[key], axis=len(sel_fields_self[key].shape)
+                )
+            sel_fields_other[key] = fields_other[key].isel(f=isel2).to_numpy()
+            if not modes_in_other:
+                sel_fields_other[key] = np.expand_dims(
+                    sel_fields_other[key], axis=len(sel_fields_other[key].shape)
+                )
 
-                for mi1 in mode_index_1:
-                    if modes_in_other:
-                        indexer_other["mode_index"] = mi1
-                    e_other_1 = fields_other[e_1].sel(indexer_other, drop=True)
-                    e_other_2 = fields_other[e_2].sel(indexer_other, drop=True)
-                    h_other_1 = fields_other[h_1].sel(indexer_other, drop=True)
-                    h_other_2 = fields_other[h_2].sel(indexer_other, drop=True)
+        d_area = self._diff_area.to_numpy()
+
+        # Calculate overlap for each common frequency and each mode pair
+        for i in range(len(f)):
+            for j in range(len(mode_index_0)):
+                e_self_1 = sel_fields_self[e_1][:, :, i, j]
+                e_self_2 = sel_fields_self[e_2][:, :, i, j]
+                h_self_1 = sel_fields_self[h_1][:, :, i, j]
+                h_self_2 = sel_fields_self[h_2][:, :, i, j]
+
+                for k in range(len(mode_index_1)):
+                    e_other_1 = sel_fields_other[e_1][:, :, i, k]
+                    e_other_2 = sel_fields_other[e_2][:, :, i, k]
+                    h_other_1 = sel_fields_other[h_1][:, :, i, k]
+                    h_other_2 = sel_fields_other[h_2][:, :, i, k]
 
                     # Cross products of fields
                     e_self_x_h_other = e_self_1 * h_other_2 - e_self_2 * h_other_1
                     h_self_x_e_other = h_self_1 * e_other_2 - h_self_2 * e_other_1
 
                     # Integrate over plane
-                    d_area = self._diff_area
                     integrand = (e_self_x_h_other - h_self_x_e_other) * d_area
-                    dot[i, mi0, mi1] = 0.25 * integrand.sum(dim=d_area.dims)
+                    dot[i, j, k] = 0.25 * integrand.sum()
 
         coords = {"f": f, "mode_index_0": mode_index_0, "mode_index_1": mode_index_1}
         result = xr.DataArray(dot, coords=coords)

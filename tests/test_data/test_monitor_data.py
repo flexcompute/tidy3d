@@ -527,10 +527,33 @@ def test_mode_solver_numerical_grid_data():
 def test_outer_dot():
     mode_data = make_mode_solver_data()
     field_data = make_field_data_2d()
-    _ = mode_data.outer_dot(mode_data)
-    _ = field_data.outer_dot(mode_data)
-    _ = mode_data.outer_dot(field_data)
-    _ = field_data.outer_dot(field_data)
+    dot = mode_data.outer_dot(mode_data)
+    assert "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
+    dot = field_data.outer_dot(mode_data)
+    assert not "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
+    dot = mode_data.outer_dot(field_data)
+    assert "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+    dot = field_data.outer_dot(field_data)
+    assert not "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+
+    # test that only common freqs are kept
+    inds1 = [0, 1, 3]
+    inds2 = [1, 2, 3, 4]
+
+    def isel(data, freqs):
+        data = data.updated_copy(
+            Ex=data.Ex.isel(f=freqs),
+        )
+        if isinstance(data, td.ModeSolverData):
+            data = data.updated_copy(n_complex=data.n_complex.isel(f=freqs))
+        return data
+
+    mode_data = isel(mode_data, inds1)
+    field_data = isel(field_data, inds2)
+
+    dot = mode_data.outer_dot(field_data)
+
+    assert len(dot.f) == 2
 
 
 @pytest.mark.parametrize("phase_shift", np.linspace(0, 2 * np.pi, 10))
