@@ -287,6 +287,12 @@
     "keywords": "genetic algorithm, optimization, Tidy3D, FDTD",
     "feature_image": "./img/optimized_reflector.png"
   },
+  "GeometryTransformations.ipynb": {
+    "title": "Apply Geometry Transformations in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to apply geometry transformations such as rotation, scaling, and boolean operations.",
+    "keywords": "rotation, scaling, boolean, translation, Tidy3D, FDTD",
+    "feature_image": ""
+  },
   "GradientMetasurfaceReflector.ipynb": {
     "title": "Gradient Metasurface Reflector | Flexcompute",
     "description": "This notebook demonstrates how to model a gradient metasurface reflector in Tidy3D FDTD.",
