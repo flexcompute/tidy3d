@@ -357,11 +357,12 @@ class SimulationData(AbstractSimulationData):
             field_components = (dataset[c] for c in required_components)
 
             # Apply the requested transformation
-            if val == "real":
+            val = val.lower()
+            if val in ("real", "re"):
                 derived_data = sum(f.real**2 for f in field_components) ** 0.5
                 derived_data.name = f"|Re{{{field_name}}}|"
 
-            elif val == "imag":
+            elif val in ("imag", "im"):
                 derived_data = sum(f.imag**2 for f in field_components) ** 0.5
                 derived_data.name = f"|Im{{{field_name}}}|"
 

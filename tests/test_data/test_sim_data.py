@@ -169,6 +169,12 @@ def test_plot_field_missing_derived_data():
         sim_data.plot_field(field_monitor_name="field_time", field_name="E", val="int")
 
 
+def test_plot_field_missing_field_value():
+    sim_data = make_sim_data()
+    with pytest.raises(Tidy3dKeyError):
+        sim_data.plot_field(field_monitor_name="field", field_name="Ex", val="test")
+
+
 @pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
 def test_intensity(monitor_name):
     sim_data = make_sim_data()
@@ -211,7 +217,7 @@ def test_to_json(tmp_path):
 
 @pytest.mark.filterwarnings("ignore:log10")
 @pytest.mark.parametrize("field_name", ["Ex", "Ey", "Ez", "E", "Hx", "Hz", "Sy"])
-@pytest.mark.parametrize("val", ["real", "imag", "abs", "phase"])
+@pytest.mark.parametrize("val", ["real", "re", "imag", "im", "abs", "phase"])
 def test_derived_components(field_name, val):
     sim_data = make_sim_data()
     if len(field_name) == 1 and val == "phase":
