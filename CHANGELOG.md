@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Users can toggle https ssl version through `from tidy3d.web.core.environment import Env` and `Env.set_ssl_version(ssl_version: ssl.TLSVersion)`
 - Free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) nonlinearities inside `TwoPhotonAbsorption` class.
 - `log_path` argument in `set_logging_file`, set to `False` by default.
+- `ErosionDilationPenalty` to `tidy3d.plugins.adjoint.utils.penalty` to penalize parameter arrays that change under erosion and dilation. This is a simple and effective way to penalize features that violate minimum feature size or radius of curvature fabrication constraints in topology optimization.
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.
