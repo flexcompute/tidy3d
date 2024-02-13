@@ -215,8 +215,8 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.Box(
-                size=(1, 1, 1),
-                center=(-1.0, 0.5, 0.5),
+                size=(0.1, 1, 1),
+                center=(-3.0, 0.5, 0.5),
             ),
             medium=td.Medium(
                 nonlinear_spec=td.NonlinearSusceptibility(chi3=0.1, numiters=20),
@@ -224,8 +224,8 @@ SIM_FULL = td.Simulation(
         ),
         td.Structure(
             geometry=td.Box(
-                size=(1, 1, 1),
-                center=(-1.0, 0.5, 0.5),
+                size=(0.1, 1, 1),
+                center=(-3.0, 0.5, 0.5),
             ),
             medium=td.Medium(
                 nonlinear_spec=td.NonlinearSpec(

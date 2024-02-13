@@ -1025,6 +1025,36 @@ class Simulation(AbstractSimulation):
 
         return val
 
+    @pydantic.validator("structures", always=True)
+    def _validate_incompatible_material_intersections(cls, val, values):
+        """Check for intersections of incompatible materials."""
+        structures = val
+        incompatible_indices = []
+        incompatible_structures = []
+        # first just isolate the incompatible structures, to avoid unnecessary double looping
+        # keep track of indices to give helpful error message
+        for i, structure in enumerate(structures):
+            if structure.medium._has_incompatibilities:
+                incompatible_indices.append(i)
+                incompatible_structures.append(structure)
+        for i, (ind1, structure_ind1) in enumerate(
+            zip(incompatible_indices, incompatible_structures)
+        ):
+            for ind2, structure_ind2 in zip(
+                incompatible_indices[i + 1 :], incompatible_structures[i + 1 :]
+            ):
+                if not structure_ind1._compatible_with(structure_ind2):
+                    raise ValidationError(
+                        f"The structure at 'structures[{ind1}]' and the structure at "
+                        f"'structures[{ind2}]' have incompatible medium types "
+                        f"{structure_ind1.medium._incompatible_material_types} and "
+                        f"{structure_ind2.medium._incompatible_material_types} "
+                        "respectively, and so are not allowed to intersect. "
+                        "Please ensure that the bounding boxes of the two geometries "
+                        "do not intersect."
+                    )
+        return val
+
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["sources", "center", "size", "structures"])
     def _structures_not_close_pml(cls, val, values):
@@ -3345,7 +3375,7 @@ class Simulation(AbstractSimulation):
         datasets_medium = [
             mat
             for mat in self.scene.mediums
-            if isinstance(mat, AbstractCustomMedium) or mat.time_modulated
+            if isinstance(mat, AbstractCustomMedium) or mat.is_time_modulated
         ]
         datasets_geometry = []
 

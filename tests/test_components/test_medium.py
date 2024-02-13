@@ -722,3 +722,20 @@ def test_nonlinear_medium(log_capture):
     with pytest.raises(ValidationError):
         structure = structure.updated_copy(medium=medium_active)
         sim.updated_copy(structures=[structure])
+
+    # nonlinear or time-modulation on medium2d
+    # time-modulated
+    FREQ_MODULATE = 1e12
+    AMP_TIME = 1.1
+    PHASE_TIME = 0
+    CW = td.ContinuousWaveTimeModulation(freq0=FREQ_MODULATE, amplitude=AMP_TIME, phase=PHASE_TIME)
+    ST = td.SpaceTimeModulation(
+        time_modulation=CW,
+    )
+    MODULATION_SPEC = td.ModulationSpec()
+    modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
+    modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
+    with pytest.raises(ValidationError):
+        medium2d = td.Medium2D(ss=medium, tt=medium)
+    with pytest.raises(ValidationError):
+        medium2d = td.Medium2D(ss=modulated, tt=modulated)
