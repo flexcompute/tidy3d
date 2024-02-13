@@ -8,10 +8,6 @@ from .documentation import (
     replace_in_files_command,
 )
 
-# Import from tests.py
-from .tests import test_options, test_in_environment_command
-
-
 # Import from install.py
 from .install import (
     activate_correct_poetry_python,
@@ -30,6 +26,10 @@ from .install import (
 
 from .packaging import benchmark_timing_operations, benchmark_timing_operations_command
 
+# Import from tests.py
+from .tests import test_options, test_in_environment_command
+from .notebooks import run_jupyterlab
+
 # Import from utils.py
 from .utils import get_install_directory, echo_and_run_subprocess, echo_and_check_subprocess
 
@@ -46,6 +46,7 @@ __all__ = [
     "commit",
     # "convert_all_markdown_to_rst_command",
     "replace_in_files_command",
+    "run_jupyterlab",
     "test_options",
     "test_in_environment_command",
     "activate_correct_poetry_python",

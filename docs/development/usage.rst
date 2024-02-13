@@ -82,6 +82,9 @@ There are a range of handy development functions that you might want to use to s
     * - Update and replace all the docstrings in the codebase between versions
       -
       - ``poetry run tidy3d develop replace-in-files``
+    * - Run jupyterlab notebooks from the poetry environment
+      - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
+      - ``poetry run tidy3d develop jupyterlab``
 
 
 

@@ -262,16 +262,21 @@ def install_development_environment(args=None):
     return 0
 
 
+def install_in_poetry(env: str):
+    activate_correct_poetry_python()
+    echo_and_run_subprocess(["poetry", "install", "-E", str(env)])
+
+
+@develop.command(
+    name="install-in-poetry", help="Just installs the tidy3d development package in poetry."
+)
 @click.option(
     "--env",
     default="dev",
     help="Poetry environment to install. Defaults to 'dev'.",
     type=str,
 )
-@develop.command(
-    name="install-in-poetry", help="Just installs the tidy3d development package in poetry."
-)
-def install_in_poetry(env: str = "dev"):
+def install_in_poetry_command(env: str):
     """
     Install the tidy3d development package in the poetry environment with the specified extra option, by default 'dev'.
 
@@ -284,8 +289,7 @@ def install_in_poetry(env: str = "dev"):
         The extra option to pass to poetry for installation. Defaults to 'dev'.
     """
     # Runs the documentation build from the poetry environment
-    activate_correct_poetry_python()
-    echo_and_run_subprocess(["poetry", "install", "-E", env])
+    install_in_poetry(env=env)
     return 0
 
 
