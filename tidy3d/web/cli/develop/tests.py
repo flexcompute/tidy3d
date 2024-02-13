@@ -26,7 +26,9 @@ def test_options(options: list):
     if "base" in options:
         echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests"])
     if "notebooks" in options:
-        echo_and_run_subprocess(["poetry", "run", "pytest", "-rA", "tests/full_test_notebooks.py"])
+        echo_and_run_subprocess(
+            ["poetry", "run", "pytest", "-rA", "tests/docs/notebooks/full_test_notebooks.py"]
+        )
 
 
 @click.option(
