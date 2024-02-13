@@ -418,7 +418,7 @@ class Scene(Tidy3dBaseModel):
             plot_params = plot_params.copy(
                 update={"facecolor": "gold", "edgecolor": "k", "linewidth": 1}
             )
-        elif medium.time_modulated:
+        elif medium.is_time_modulated:
             # time modulated medium
             plot_params = plot_params.copy(
                 update={"facecolor": "red", "linewidth": 0, "hatch": "x*"}

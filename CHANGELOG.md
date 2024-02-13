@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed validator that warns if angled plane wave does not match simulation boundaries, which was not warning for periodic boundaries.
 - Validates that no nans are present in `DataArray` values in custom components.
 - Removed nans from Cartesian temperature monitors in thermal simulations by using nearest neighbor interpolation for values outside of heat simulation domain.
+- Validates that certain incompatible material types do not have intersecting bounds.
 
 ## [2.6.0rc1] - 2024-01-11
 

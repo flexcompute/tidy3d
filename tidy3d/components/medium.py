@@ -97,7 +97,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
                 f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
                 f"for medium class '{type(medium).__name__}'."
             )
-        if medium.time_modulated:
+        if medium.is_time_modulated:
             raise ValidationError(
                 f"'NonlinearModel' of class '{type(self).__name__}' is not currently supported "
                 f"for time-modulated medium class '{type(medium).__name__}'."
@@ -601,6 +601,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     def _post_init_validators(self) -> None:
         """Call validators taking ``self`` that get run after init."""
         self._validate_nonlinear_spec()
+        self._validate_modulation_spec_post_init()
 
     def _validate_nonlinear_spec(self):
         """Check compatibility with nonlinear_spec."""
@@ -611,6 +612,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "Nonlinearities are not currently supported for the components "
                 "of an anisotropic medium."
             )
+        if self.__class__.__name__ == "Medium2D" and any(
+            comp.nonlinear_spec is not None for comp in [self.ss, self.tt]
+        ):
+            raise ValidationError(
+                "Nonlinearities are not currently supported for the components " "of a 2D medium."
+            )
+
         if self.nonlinear_spec is None:
             return
         if isinstance(self.nonlinear_spec, NonlinearModel):
@@ -632,6 +640,15 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                     "'NonlinearSusceptibility.numiters' is deprecated. "
                     "Please use 'NonlinearSpec.num_iters' instead."
                 )
+
+    def _validate_modulation_spec_post_init(self):
+        """Check compatibility with nonlinear_spec."""
+        if self.__class__.__name__ == "Medium2D" and any(
+            comp.modulation_spec is not None for comp in [self.ss, self.tt]
+        ):
+            raise ValidationError(
+                "Time modulation is not currently supported for the components " "of a 2D medium."
+            )
 
     heat_spec: Optional[HeatSpecType] = pd.Field(
         None,
@@ -663,9 +680,60 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     _name_validator = validate_name_str()
 
     @cached_property
-    def time_modulated(self) -> bool:
+    def is_time_modulated(self) -> bool:
         """Whether any component of the medium is time modulated."""
         return self.modulation_spec is not None and self.modulation_spec.applied_modulation
+
+    @cached_property
+    def is_nonlinear(self) -> bool:
+        """Whether the medium is nonlinear."""
+        return self.nonlinear_spec is not None
+
+    @cached_property
+    def is_custom(self) -> bool:
+        """Whether the medium is custom."""
+        return isinstance(self, AbstractCustomMedium)
+
+    @cached_property
+    def is_fully_anisotropic(self) -> bool:
+        """Whether the medium is fully anisotropic."""
+        return isinstance(self, FullyAnisotropicMedium)
+
+    @cached_property
+    def _incompatible_material_types(self) -> List[str]:
+        """A list of material properties present which may lead to incompatibilities."""
+        properties = [
+            self.is_time_modulated,
+            self.is_nonlinear,
+            self.is_custom,
+            self.is_fully_anisotropic,
+        ]
+        names = ["time modulated", "nonlinear", "custom", "fully anisotropic"]
+        types = [name for name, prop in zip(names, properties) if prop]
+        return types
+
+    @cached_property
+    def _has_incompatibilities(self) -> bool:
+        """Whether the medium has incompatibilities. Certain medium types are incompatible
+        with certain others, and such pairs are not allowed to intersect in a simulation."""
+        return len(self._incompatible_material_types) > 0
+
+    def _compatible_with(self, other: AbstractMedium) -> bool:
+        """Whether these two media are compatible if in structures that intersect."""
+        if not (self._has_incompatibilities and other._has_incompatibilities):
+            return True
+        for med1, med2 in [(self, other), (other, self)]:
+            if med1.is_custom:
+                # custom and fully_anisotropic is OK
+                if med2.is_nonlinear or med2.is_time_modulated:
+                    return False
+            if med1.is_fully_anisotropic:
+                if med2.is_nonlinear or med2.is_time_modulated:
+                    return False
+            if med1.is_nonlinear:
+                if med2.is_time_modulated:
+                    return False
+        return True
 
     @abstractmethod
     def eps_model(self, frequency: float) -> complex:
@@ -4111,9 +4179,9 @@ class AnisotropicMedium(AbstractMedium):
         return dict(xx=self.xx, yy=self.yy, zz=self.zz)
 
     @cached_property
-    def time_modulated(self) -> bool:
+    def is_time_modulated(self) -> bool:
         """Whether any component of the medium is time modulated."""
-        return any(mat.time_modulated for mat in self.components.values())
+        return any(mat.is_time_modulated for mat in self.components.values())
 
     @cached_property
     def n_cfl(self):
