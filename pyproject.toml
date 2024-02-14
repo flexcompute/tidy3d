@@ -9,7 +9,6 @@ homepage = "https://github.com/flexcompute/tidy3d"
 repository = "https://github.com/flexcompute/tidy3d"
 classifiers = [
     "License :: OSI Approved :: GNU Lesser General Public License v2 or later (LGPLv2+)",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
@@ -68,7 +67,7 @@ gdstk = {version=">=0.9.49", optional = true}
 jaxlib = [
     {version = ">=0.4.1,<=0.4.14", platform = "linux",  source="jaxsource", optional = true},
     {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
-    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource",python = "^3.9", optional = true}
+    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource", python = "^3.9", optional = true}
 ]
 jax = [
     {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", source="jaxsource", optional = true},

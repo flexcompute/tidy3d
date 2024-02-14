@@ -18,12 +18,18 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
+
+    - name: Install Poetry
+      uses: abatilo/actions-poetry@v2
+      with:
+        version: 1.7.1
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: "poetry"
 
     - name: Install Dependencies
       run: |
@@ -47,30 +53,11 @@ jobs:
         python3 --version
         pipx --version
 
-      #----------------------------------------------
-      #  -----  install & configure poetry  -----
-      #----------------------------------------------
-    - name: Install Poetry
-      uses: snok/install-poetry@v1
-      with:
-        version: 1.7.1
-        virtualenvs-create: true
-        virtualenvs-in-project: true
-      #----------------------------------------------
-      #       load cached venv if cache exists
-      #----------------------------------------------
-    - name: Load cached venv
-      id: cached-poetry-dependencies
-      uses: actions/cache@v3
-      with:
-        path: .venv
-        key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
-
     - name: Run install-dev-environment command
       run: |
         # Unsure if this is a valid command since it just guarantees things run on previous dependencies installation
-        # TODO finish debugging installation without previous installation. Tricky on GH Actions on its own.
-        tidy3d develop install-dev-environment
+        # TODO finish debugging installation without previous installation. Tricky on GH Actions on its own since it's interactive.
+        poetry run tidy3d develop install-dev-environment
 
     - name: Run development test commands
       run: |
