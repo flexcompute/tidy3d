@@ -4,7 +4,7 @@ notebooks in order to achieve reproducibility between hardwares.
 """
 
 import click
-from typing import Literal, Optional
+from typing import Literal
 from .utils import echo_and_run_subprocess
 from .index import develop
 from .install import install_in_poetry
@@ -15,10 +15,10 @@ __all__ = [
 ]
 
 section_test_options = Literal["base", "notebooks"]
-option_test_types = Literal["execute_all"]
+option_test_types = Literal[None, "execute_all"]
 
 
-def test_options(section: section_test_options, options: Optional[list] = None):
+def test_options(section: section_test_options, options: option_test_types = None):
     """
     Inclusive rather than exclusive tests in a given set of environments.
 
@@ -27,7 +27,7 @@ def test_options(section: section_test_options, options: Optional[list] = None):
     section : Literal["base", "notebooks"]
         The section of tests to run.
 
-    options : Optional[list]
+    options : Literal[None, "execute_all"]
         A list of options for which tests to run. Defaults to None.
 
     Raises

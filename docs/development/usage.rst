@@ -57,7 +57,7 @@ There are a range of handy development functions that you might want to use to s
       - ``poetry run tidy3d develop build-docs-remote-notebooks``
     * - Complete notebooks + base testing of the ``tidy3d``
       - Make sure you have the notebooks downloaded.
-      - ``poetry run tidy3d develop test-all``
+      - ``poetry run tidy3d develop test -s``
     * - Dual snapshot between the ``tidy3d`` and ``notebooks`` source and submodule repository.
       - Make sure you are on the correct git branches you wish to commit to on both repositories, and all `non-git-ignored` files will be added to the commit.
       - ``tidy3d develop commit <your message>``
@@ -72,7 +72,7 @@ There are a range of handy development functions that you might want to use to s
       - ``poetry run coverage run -m pytest``
     * - Standard testing of the ``tidy3d`` frontend
       - Make sure you have already installed ``tidy3d`` in ``poetry`` and you are in the root directory.
-      - ``poetry run tidy3d develop test-base``
+      - ``poetry run tidy3d develop test -s base``
     * - Using ``tidy3d develop`` commands inside the ``poetry`` environment.
       - Make sure you have already installed ``tidy3d`` in ``poetry``
       - ``poetry run tidy3d develop <your command>``
