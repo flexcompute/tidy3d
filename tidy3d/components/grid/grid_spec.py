@@ -54,8 +54,8 @@ class BenklerConformalMeshSpec(ConformalMeshSpec):
     timestep_reduction: float = pd.Field(
         DEFAULT_COURANT_REDUCTION_BENKLER,
         title="Time Step Size Reduction Rate",
-        description="Reduction factor between 0 and 1 such that the simulation's time step number "
-        "will be '1-courant_reduction_rate' times its default value. "
+        description="Reduction factor between 0 and 1 such that the simulation's time step size "
+        "will be ``1 - timestep_reduction`` times its default value. "
         "Accuracy can be improved with a smaller time step size; but simulation time increased as well.",
         lt=1,
         ge=0,
