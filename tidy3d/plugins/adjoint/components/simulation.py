@@ -36,8 +36,8 @@ FWIDTH_FACTOR = 1.0 / 10
 # bandwidth of adjoint sources in units of the minimum difference between output frequencies
 FWIDTH_FACTOR_MULTIFREQ = 0.1
 
-# the adjoint run time is RUN_TIME_FACTOR / fwidth
-RUN_TIME_FACTOR = 100
+# the adjoint run time is the forward simulation run time + RUN_TIME_FACTOR / fwidth
+RUN_TIME_FACTOR = 10
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1
@@ -350,7 +350,8 @@ class JaxSimulation(Simulation, JaxObject):
         if self.run_time_adjoint is not None:
             return self.run_time_adjoint
 
-        run_time_adjoint = RUN_TIME_FACTOR / self._fwidth_adjoint
+        run_time_fwd = self.run_time
+        run_time_adjoint = run_time_fwd + RUN_TIME_FACTOR / self._fwidth_adjoint
 
         if self._is_multi_freq:
             log.warning(

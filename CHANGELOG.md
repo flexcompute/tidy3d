@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uniaxial medium Lithium niobate to material library.
 
 ### Changed
+- `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
 
 ### Fixed
 
