@@ -98,9 +98,15 @@
     "AdjointPlugin12LightExtractor.ipynb": {
     "title": "How to perform the inverse design of a quantum emitter light extractor in Tidy3D FDTD",
     "description": "This notebook demonstrates how to set up and run a quantum emitter light extractor optimization.",
-    "keywords": "inverse design, adjointt optimization, quantum emitter, light extractor, single-photon source, nanocavity optimization, Tidy3D, FDTD",
+    "keywords": "inverse design, adjoint optimization, quantum emitter, light extractor, single-photon source, nanocavity optimization, Tidy3D, FDTD",
     "feature_image": "N/A"
-  },  
+  },
+    "AdjointPlugin13Metasurface.ipynb": {
+    "title": "How to perform the inverse design of a metasurface in Tidy3D FDTD",
+    "description": "This notebook demonstrates how to optimize a metasurface to give a desired, arbitrary intensity pattern.",
+    "keywords": "inverse design, adjoint optimization, metasurface, intensity light extractor, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },
     "AdjointPlugin14PreFab.ipynb": {
     "title": "Machine learning-based fabrication constraints for inverse design using PreFab and Tidy3D FDTD.",
     "description": "This notebook demonstrates the integration of PreFab into Tidy3D to incorporate advanced fabrication constraints for photonic inverse design..",
