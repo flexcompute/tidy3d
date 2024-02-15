@@ -529,10 +529,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # we redirect name to values.name
         return self.values.name
 
-    @cached_property
-    def coords(self) -> Tuple[PointDataArray, CellDataArray]:
-        """Grid information."""
-        return (self.points, self.cells)
+    @property
+    def is_complex(self) -> bool:
+        """Data type."""
+        return np.iscomplexobj(self.values)
 
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
@@ -721,7 +721,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         grid.SetPoints(self._vtk_points)
         grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
-        point_data_vtk = vtk["numpy_to_vtk"](self.values.data)
+        if self.is_complex:
+            data_values = self.values.values.view("(2,)float")
+        else:
+            data_values = self.values.values
+        point_data_vtk = vtk["numpy_to_vtk"](data_values)
         point_data_vtk.SetName(self.values.name)
         grid.GetPointData().AddArray(point_data_vtk)
 
@@ -797,7 +801,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @classmethod
     @abstractmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj, field=None) -> UnstructuredGridDataset:
+    def _from_vtk_obj(cls, vtk_obj, field: str = None) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
@@ -869,20 +873,26 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
             # currently we assume data is scalar
             num_components = array_vtk.GetNumberOfComponents()
-            if num_components > 1:
+            if num_components > 2:
                 raise DataError(
-                    f"Found point data array in a VTK object is expected to have only 1 component. Found {num_components} components."
+                    "Found point data array in a VTK object is expected to have maximum 2 "
+                    "components (1 is for real data, 2 is for complex data). "
+                    f"Found {num_components} components."
                 )
 
             # check that number of values matches number of grid points
             num_tuples = array_vtk.GetNumberOfTuples()
             if num_tuples != num_points:
                 raise DataError(
-                    f"The length of found point data array ({num_tuples}) does not match the number of grid points ({num_points})."
+                    f"The length of found point data array ({num_tuples}) does not match the number"
+                    f" of grid points ({num_points})."
                 )
 
             values_numpy = vtk["vtk_to_numpy"](array_vtk)
             values_name = array_vtk.GetName()
+
+            if num_components == 2:
+                values_numpy = values_numpy.view("complex")[:, 0]
 
         values = IndexedDataArray(
             values_numpy, coords=dict(index=np.arange(len(values_numpy))), name=values_name
@@ -966,6 +976,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
+        print(method)
         if method == "nearest":
             interpolated_values = self._interp_nearest(x=x, y=y, z=z)
         else:
@@ -1235,14 +1246,13 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # let's allocate an array for resulting values
         # every time we process a chunk of samples, we will write into this array
-        interpolated_values = fill_value + np.zeros([len(xyz_comp) for xyz_comp in xyz_grid])
+        interpolated_values = fill_value + np.zeros([len(xyz_comp) for xyz_comp in xyz_grid], dtype=self.values.dtype)
 
         # start counters of how many cells/samples have been processed
         processed_samples = 0
         processed_cells = 0
 
         while processed_cells < num_ne_cells:
-
             # how many cells we would like to process by the end of this step
             target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
 
@@ -1460,7 +1470,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
         # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
         sdf = -1e5 * np.ones(num_samples_total)
-        interpolated = np.zeros(num_samples_total)
+        interpolated = np.zeros(num_samples_total, dtype=self.values.dtype)
 
         # coordinates of each sample point
         sample_xyz = np.zeros((num_samples_total, num_dims))
@@ -1471,7 +1481,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # loop face by face
         for face_ind in range(num_cell_faces):
-
             # find a vector connecting sample point and face
             if face_ind == 0:
                 vertex_ind = 1  # anythin other than 0
@@ -1956,6 +1965,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         z: Union[float, ArrayLike],
         fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
         use_vtk: bool = False,
+        method: Literal["linear", "nearest"] = "linear",
         ignore_normal_pos: bool = True,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
@@ -1996,7 +2006,7 @@ class TriangularGridDataset(UnstructuredGridDataset):
         xyz = [x, y, z]
         xyz[self.normal_axis] = [self.normal_pos]
         interp_inplane = super().interp(
-            **dict(zip("xyz", xyz)), fill_value=fill_value, use_vtk=use_vtk
+            **dict(zip("xyz", xyz)), fill_value=fill_value, use_vtk=use_vtk, method=method
         )
         interp_broadcasted = np.broadcast_to(
             interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
@@ -2415,7 +2425,7 @@ def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDat
     """Get numpy representation of dataarray/dataset values."""
     if isinstance(data_array, UnstructuredGridDataset):
         return data_array.values.values
-    if isinstance(data_array, SpatialDataArray):
+    if isinstance(data_array, xr.DataArray):
         return data_array.values
     return np.array(data_array)
 
@@ -2452,7 +2462,7 @@ def _check_same_coordinates(
         return False
 
     if isinstance(a, UnstructuredGridDataset):
-        if a.points != b.points or a.cells != b.cells:
+        if not np.allclose(a.points, b.points) or not np.all(a.cells == b.cells):
             return False
 
         if isinstance(a, TriangularGridDataset):

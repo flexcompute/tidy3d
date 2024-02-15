@@ -163,19 +163,27 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     if no_vtk:
         with pytest.raises(Tidy3dImportError):
             invariant = tri_grid.interp(
-                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
             )
     else:
-        invariant = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
-        assert np.all(invariant.isel(y=0).data == invariant.isel(y=1).data)
-        assert invariant.name == ds_name
+        interp = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+        assert np.all(interp.isel(y=0).data == interp.isel(y=1).data)
+        assert interp.name == ds_name
+
+        interp_vtk = tri_grid.interp(
+            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+        )
+        assert np.all(interp_vtk.isel(y=0).data == interp_vtk.isel(y=1).data)
+        assert interp_vtk.name == ds_name
+
+        assert np.allclose(interp_vtk, interp)
 
         # outside of grid
-        invariant_no_intersection = tri_grid.interp(
+        no_intersection = tri_grid.interp(
             x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
         )
-        assert np.all(invariant_no_intersection.data == 909)
-        assert invariant_no_intersection.name == ds_name
+        assert np.all(no_intersection.data == 909)
+        assert no_intersection.name == ds_name
 
     # renaming
     tri_grid_renamed = tri_grid.rename("renamed")
@@ -222,6 +230,12 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         # can't select out of plane
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
+
+    # writing/reading
+    tri_grid.to_file(tmp_path / "tri_grid_test.hdf5")
+
+    tri_grid_loaded = td.TriangularGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    assert tri_grid == tri_grid_loaded
 
     # writing/reading .vtu
     if no_vtk:
@@ -395,10 +409,19 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     # interpolation
     if no_vtk:
         with pytest.raises(Tidy3dImportError):
-            _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+            _ = tet_grid.interp(
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+            )
     else:
         result = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
         assert result.name == ds_name
+
+        result_vtk = tet_grid.interp(
+            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+        )
+        assert result.name == ds_name
+
+        assert np.allclose(result_vtk, result)
 
         # outside of grid
         no_intersection = tet_grid.interp(
@@ -420,6 +443,12 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         # can't do plane slicing with array of values
         with pytest.raises(DataError):
             _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
+
+    # writing/reading
+    tet_grid.to_file(tmp_path / "tri_grid_test.hdf5")
+
+    tet_grid_loaded = td.TetrahedralGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    assert tet_grid == tet_grid_loaded
 
     # writing/reading .vtu
     if no_vtk:

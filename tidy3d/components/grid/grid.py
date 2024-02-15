@@ -56,7 +56,6 @@ class Coords(Tidy3dBaseModel):
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ):
-
         # Check which axes need interpolation or selection
         interp_ax = []
         isel_ax = []
@@ -108,12 +107,7 @@ class Coords(Tidy3dBaseModel):
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ):
-        if interp_method == "nearest":
-            raise DataError(
-                "Option 'interp_method=``nearest``' is not supported for unstructured data."
-            )
-
-        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, fill_value=fill_value)
+        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, method=interp_method, fill_value=fill_value)
 
         return interp_array
 
@@ -164,12 +158,12 @@ class Coords(Tidy3dBaseModel):
             return result
 
         # interpolation
-        if isinstance(array, (SpatialDataArray, ScalarFieldDataArray)):
-            return self._interp_from_xarray(
+        if isinstance(array, UnstructuredGridDataset):
+            return self._interp_from_unstructured(
                 array=array, interp_method=interp_method, fill_value=fill_value
             )
-        elif isinstance(array, UnstructuredGridDataset):
-            return self._interp_from_unstructured(
+        else:
+            return self._interp_from_xarray(
                 array=array, interp_method=interp_method, fill_value=fill_value
             )
 

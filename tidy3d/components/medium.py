@@ -945,7 +945,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return self
 
 
-# FIXME: disallow anisotrpic medium with unstructured data?
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
 
@@ -1017,10 +1016,10 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         """
         eps_spatial = self.eps_dataarray_freq(frequency)
         if self.is_isotropic:
-            eps_interp = coords.spatial_interp(eps_spatial[0], self._interp_method(0)).values
+            eps_interp = _get_numpy_array(coords.spatial_interp(eps_spatial[0], self._interp_method(0)))
             return (eps_interp, eps_interp, eps_interp)
         return tuple(
-            coords.spatial_interp(eps_comp, self._interp_method(comp)).values
+            _get_numpy_array(coords.spatial_interp(eps_comp, self._interp_method(comp)))
             for comp, eps_comp in enumerate(eps_spatial)
         )
 
@@ -1060,9 +1059,9 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued spatially averaged permittivity as a function of frequency."""
         if self.is_isotropic:
-            return np.mean(self.eps_dataarray_freq(frequency)[0].values)
+            return np.mean(_get_numpy_array(self.eps_dataarray_freq(frequency)[0]))
         return np.mean(
-            [np.mean(eps_comp.values) for eps_comp in self.eps_dataarray_freq(frequency)]
+            [np.mean(_get_numpy_array(eps_comp)) for eps_comp in self.eps_dataarray_freq(frequency)]
         )
 
     @ensure_freq_in_range
@@ -1359,7 +1358,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if values["permittivity"].coords != val.coords:
+        if not _check_same_coordinates(values["permittivity"], val):
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
         return val
 
@@ -1675,7 +1674,7 @@ class CustomMedium(AbstractCustomMedium):
                 "and are likely to diverge."
             )
 
-        if values["permittivity"].coords != val.coords:
+        if not _check_same_coordinates(values["permittivity"], val):
             raise SetupError("'permittivity' and 'conductivity' must have the same coordinates.")
 
         return val
@@ -2330,7 +2329,7 @@ class PoleResidue(DispersiveMedium):
     def _causality_validation(cls, val):
         """Assert causal medium."""
         for a, _ in val:
-            if np.any(np.real(a) > 0):
+            if np.any(np.real(_get_numpy_array(a)) > 0):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
 
@@ -2342,12 +2341,12 @@ class PoleResidue(DispersiveMedium):
         """Complex-valued permittivity as a function of frequency."""
 
         omega = 2 * np.pi * frequency
-        eps = self.eps_inf + np.zeros_like(frequency) + 0.0j
+        eps = self.eps_inf + 0 * frequency + 0.0j
         for a, c in self.poles:
             a_cc = np.conj(a)
             c_cc = np.conj(c)
-            eps -= c / (1j * omega + a)
-            eps -= c_cc / (1j * omega + a_cc)
+            eps = eps - c / (1j * omega + a)
+            eps = eps - c_cc / (1j * omega + a_cc)
         return eps
 
     def _pole_residue_dict(self) -> Dict:
@@ -2749,15 +2748,27 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     def _poles_correct_shape(cls, val, values):
         """poles must have the same shape."""
 
-        expected_coords = values["eps_inf"].coords
         for coeffs in val:
             for coeff in coeffs:
-                if coeff.coords != expected_coords:
+                if not _check_same_coordinates(coeff, values["eps_inf"]):
                     raise SetupError(
                         "All pole coefficients 'a' and 'c' must have the same coordinates; "
                         "The coordinates must also be consistent with 'eps_inf'."
                     )
         return val
+
+#    @ensure_freq_in_range
+#    def eps_model(self, frequency: float) -> complex:
+#        """Complex-valued permittivity as a function of frequency."""
+
+#        omega = 2 * np.pi * frequency
+#        eps = self.eps_inf + 0.0j
+#        for a, c in self.poles:
+#            a_cc = np.conj(a)
+#            c_cc = np.conj(c)
+#            eps -= c / (1j * omega + a)
+#            eps -= c_cc / (1j * omega + a_cc)
+#        return eps
 
     def eps_dataarray_freq(
         self, frequency: float
@@ -2792,7 +2803,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """
 
         def fun_interp(input_data: SpatialDataArray) -> ArrayComplex3D:
-            return coords.spatial_interp(input_data, self.interp_method).values
+            return _get_numpy_array(coords.spatial_interp(input_data, self.interp_method))
 
         return tuple((fun_interp(a), fun_interp(c)) for (a, c) in self.poles)
 
@@ -2957,7 +2968,7 @@ class Sellmeier(DispersiveMedium):
         wvl2 = wvl**2
         n_squared = 1.0
         for B, C in self.coeffs:
-            n_squared += B * wvl2 / (wvl2 - C)
+            n_squared = n_squared + B * wvl2 / (wvl2 - C)
         return np.sqrt(n_squared + 0j)
 
     @ensure_freq_in_range
@@ -3065,13 +3076,12 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         """every term in coeffs must have the same shape, and B>=0 and C>0."""
         if len(val) == 0:
             return val
-        expected_coords = val[0][0].coords
         for B, C in val:
-            if B.coords != expected_coords or C.coords != expected_coords:
+            if not _check_same_coordinates(B, val[0][0]) or not _check_same_coordinates(C, val[0][0]):
                 raise SetupError("Every term in 'coeffs' must have the same coordinates.")
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
                 raise SetupError("'B' and 'C' must be real.")
-            if np.any(C <= 0):
+            if np.any(_get_numpy_array(C) <= 0):
                 raise SetupError("'C' must be positive.")
         return val
 
@@ -3270,7 +3280,7 @@ class Lorentz(DispersiveMedium):
 
         eps = self.eps_inf + 0.0j
         for de, f, delta in self.coeffs:
-            eps += (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
+            eps = eps + (de * f**2) / (f**2 - 2j * frequency * delta - frequency**2)
         return eps
 
     def _pole_residue_dict(self) -> Dict:
@@ -3438,12 +3448,11 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape(cls, val, values):
         """coeffs must have consistent shape."""
-        expected_coords = values["eps_inf"].coords
         for de, f, delta in val:
             if (
-                de.coords != expected_coords
-                or f.coords != expected_coords
-                or delta.coords != expected_coords
+                not _check_same_coordinates(de, values["eps_inf"])
+                or not _check_same_coordinates(f, values["eps_inf"])
+                or not _check_same_coordinates(delta, values["eps_inf"])
             ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
@@ -3597,7 +3606,7 @@ class Drude(DispersiveMedium):
 
         eps = self.eps_inf + 0.0j
         for f, delta in self.coeffs:
-            eps -= (f**2) / (frequency**2 + 1j * frequency * delta)
+            eps = eps - (f**2) / (frequency**2 + 1j * frequency * delta)
         return eps
 
     def _pole_residue_dict(self) -> Dict:
@@ -3616,7 +3625,7 @@ class Drude(DispersiveMedium):
             if isinstance(c0, complex):
                 a0 = 0j
             else:
-                a0 = xr.zeros_like(c0)
+                a0 = 0 * c0
 
             poles.extend(((a0, c0), (a1, c1)))
 
@@ -3696,9 +3705,8 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs must have consistent shape and sign."""
-        expected_coords = values["eps_inf"].coords
         for f, delta in val:
-            if f.coords != expected_coords or delta.coords != expected_coords:
+            if not _check_same_coordinates(f, values["eps_inf"]) or not _check_same_coordinates(delta, values["eps_inf"]):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
                     "The coordinates must also be consistent with 'eps_inf'."
@@ -3832,7 +3840,7 @@ class Debye(DispersiveMedium):
 
         eps = self.eps_inf + 0.0j
         for de, tau in self.coeffs:
-            eps += de / (1 - 1j * frequency * tau)
+            eps = eps + de / (1 - 1j * frequency * tau)
         return eps
 
     def _pole_residue_dict(self):
@@ -3920,9 +3928,8 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     @skip_if_fields_missing(["eps_inf"])
     def _coeffs_correct_shape(cls, val, values):
         """coeffs must have consistent shape."""
-        expected_coords = values["eps_inf"].coords
         for de, tau in val:
-            if de.coords != expected_coords or tau.coords != expected_coords:
+            if not _check_same_coordinates(de, values["eps_inf"]) or not _check_same_coordinates(tau, values["eps_inf"]):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
                     "The coordinates must also be consistent with 'eps_inf'."
