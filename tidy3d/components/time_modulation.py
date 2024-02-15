@@ -12,6 +12,7 @@ from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .types import InterpMethod, Bound
 from .time import AbstractTimeDependence
 from .data.data_array import SpatialDataArray
+from .data.validators import validate_no_nans
 from ..exceptions import ValidationError
 from ..constants import HERTZ, RADIAN
 
@@ -145,8 +146,8 @@ class SpaceModulation(AbstractSpaceModulation):
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
 
-    # _no_nans_amplitude = validate_no_nans("amplitude")
-    # _no_nans_phase = validate_no_nans("phase")
+    _no_nans_amplitude = validate_no_nans("amplitude")
+    _no_nans_phase = validate_no_nans("phase")
 
     @pd.validator("amplitude", always=True)
     def _real_amplitude(cls, val):
