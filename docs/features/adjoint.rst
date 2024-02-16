@@ -16,3 +16,4 @@ FDTD Adjoint Optimization
     ../../AdjointPlugin10YBranchLevelSet
     ../../AdjointPlugin11CircuitMZI
     ../../AdjointPlugin12LightExtractor
+    ../../AdjointPlugin14PreFab

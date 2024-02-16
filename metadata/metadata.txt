@@ -95,6 +95,12 @@
     "keywords": "inverse design, adjointt optimization, quantum emitter, light extractor, single-photon source, nanocavity optimization, Tidy3D, FDTD",
     "feature_image": "N/A"
   },  
+    "AdjointPlugin14PreFab.ipynb": {
+    "title": "Advanced fabrication constraints for inverse design using PreFab and Tidy3D FDTD.",
+    "description": "This notebook demonstrates the integration of PreFab into Tidy3D to incorporate advanced fabrication constraints for photonic inverse design..",
+    "keywords": "inverse design, adjoint optimization, prefab, grating coupler, photonics, Tidy3D, FDTD",
+    "feature_image": "N/A"
+  },  
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
