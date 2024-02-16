@@ -47,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Removed spurious warnings realted to reloading simulation containing `PerturbationMedium` with `CustomChargePerturbation`/`CustomHeatPerturbation`
+## [2.5.2] - 2024-01-11
+
+### Fixed
+- Internal storage estimation for 3D surface integration monitors now correctly includes only fields on the surfaces, and not the whole volume.
 
 ## [2.5.1] - 2024-01-08
 
@@ -1101,6 +1105,8 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0rc1...pre/2.6
 [2.6.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.6.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
+[2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/flexcompute/tidy3d/compare/v2.4.3...v2.5.0
 [2.4.3]: https://github.com/flexcompute/tidy3d/compare/v2.4.2...v2.4.3

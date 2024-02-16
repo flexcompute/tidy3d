@@ -1634,11 +1634,19 @@ class Simulation(AbstractSimulation):
         return data_size
 
     def _monitor_num_cells(self, monitor: Monitor) -> int:
-        """Total number of cells included by monitor based on simulation grid."""
-        num_cells = self.discretize_monitor(monitor).num_cells
-        # take monitor downsampling into account
-        num_cells = monitor.downsampled_num_cells(num_cells)
-        return np.prod(np.array(num_cells, dtype=np.int64))
+        """Total number of cells included in monitor based on simulation grid."""
+
+        def num_cells_in_monitor(monitor: Monitor) -> int:
+            """Get the number of measurement cells in a monitor given the simulation grid and
+            downsampling."""
+            num_cells = self.discretize_monitor(monitor).num_cells
+            # take monitor downsampling into account
+            num_cells = monitor.downsampled_num_cells(num_cells)
+            return np.prod(np.array(num_cells, dtype=np.int64))
+
+        if isinstance(monitor, SurfaceIntegrationMonitor):
+            return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
+        return num_cells_in_monitor(monitor)
 
     def _validate_datasets_not_none(self) -> None:
         """Ensures that all custom datasets are defined."""
