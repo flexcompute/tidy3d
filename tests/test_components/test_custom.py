@@ -7,10 +7,13 @@ import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
 import tidy3d as td
-import scipy as sc
 
-from ..utils import assert_log_level, log_capture
-from tidy3d.components.data.dataset import PermittivityDataset, _get_numpy_array, UnstructuredGridDataset
+from ..utils import assert_log_level, log_capture, cartesian_to_unstructured
+from tidy3d.components.data.dataset import (
+    PermittivityDataset,
+    _get_numpy_array,
+    UnstructuredGridDataset,
+)
 from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
 from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye, AbstractCustomMedium
 from tidy3d.components.medium import CustomAnisotropicMedium
@@ -64,9 +67,9 @@ def make_custom_current_source():
 def make_spatial_data(value=0, dx=0, unstructured=False, seed=None):
     """Makes a spatial data array."""
     data = np.random.random((Nx, Ny, Nz)) + value
-    arr = td.SpatialDataArray(data, coords=dict(x=X+dx, y=Y, z=Z))
+    arr = td.SpatialDataArray(data, coords=dict(x=X + dx, y=Y, z=Z))
     if unstructured:
-        return convert_to_ugrid(arr, seed=seed)
+        return cartesian_to_unstructured(arr, seed=seed)
     return arr
 
 
@@ -196,7 +199,6 @@ def make_triangular_grid_custom_medium(permittivity, conductivity=0):
     )
 
     if conductivity != 0:
-
         cond_values = td.IndexedDataArray(
             [conductivity, 1.1 * conductivity, 0.8 * conductivity, 0.9 * conductivity],
             dims=("index"),
@@ -218,11 +220,7 @@ def make_triangular_grid_custom_medium(permittivity, conductivity=0):
 def make_triangular_grid_custom_medium(permittivity, conductivity=0):
     """Make a tetrahedral grid custom medium."""
     tet_grid_points = td.PointDataArray(
-        [[0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [1.0, 1.0, 0.0],
-        [0.0, 0.0, 1.0]],
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
         dims=("index", "axis"),
     )
 
@@ -243,7 +241,6 @@ def make_triangular_grid_custom_medium(permittivity, conductivity=0):
     )
 
     if conductivity != 0:
-
         cond_values = td.IndexedDataArray(
             np.linspace(1.1, 0.9, 5) * conductivity,
             dims=("index"),
@@ -275,72 +272,6 @@ CUSTOM_MEDIUM_LIST = [
 ]
 
 
-def convert_to_ugrid(array, pert=0.1, method="linear", seed=None):
-
-    xyz = [array.x, array.y, array.z]
-    lens = [len(coord) for coord in xyz]
-
-    num_len_zero = sum(l == 1 for l in lens)
-
-    if num_len_zero == 1:
-        normal_axis = lens.index(1)
-        normal_pos = xyz[normal_axis].values.item()
-        xyz.pop(normal_axis)
-
-    dxyz = [np.gradient(coord) for coord in xyz]
-
-    XYZ = np.meshgrid(*xyz, indexing="ij")
-    dXYZ = np.meshgrid(*dxyz, indexing="ij")
-
-    shape = np.shape(XYZ[0])
-
-    XYZp = XYZ.copy()
-    rng = np.random.default_rng(seed=seed)
-    XYZp[0][1:-1, :] += (dXYZ[0] * (1 - 2 * rng.random(shape)) * pert)[1:-1, :]
-    XYZp[1][:, 1:-1] += (dXYZ[1] * (1 - 2 * rng.random(shape)) * pert)[:, 1:-1]
-
-    if num_len_zero == 0:
-
-        XYZp[2][:, :, 1:-1] += (dXYZ[2] * (1 - 2 * rng.random(shape)) * pert)[:, :, 1:-1]
-
-        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel(), XYZp[2].ravel()])
-        grid = sc.spatial.Delaunay(points)
-        values = array.interp(
-            x=xr.DataArray(points[:, 0], dims=["index"]),
-            y=xr.DataArray(points[:, 1], dims=["index"]),
-            z=xr.DataArray(points[:, 2], dims=["index"]),
-            method=method
-        )
-        griddataset = td.TetrahedralGridDataset(
-            points=td.PointDataArray(points, dims=("index", "axis")),
-            cells=td.CellDataArray(grid.simplices, dims=("cell_index", "vertex_index")),
-            values=td.IndexedDataArray(values.values, dims=("index")),
-        )
-        return griddataset
-
-    else:
-
-        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel()])
-        grid = sc.spatial.Delaunay(points)
-        xyz_names = ["x", "y", "z"]
-        normal_name = xyz_names.pop(normal_axis)
-        values = array.isel({normal_name: 0}).interp(
-            {
-                xyz_names[0]: xr.DataArray(points[:, 0], dims=["index"]),
-                xyz_names[1]: xr.DataArray(points[:, 0], dims=["index"])
-            },
-            method=method,
-        )
-        griddataset = td.TriangularGridDataset(
-            points=td.PointDataArray(points, dims=("index", "axis")),
-            cells=td.CellDataArray(grid.simplices, dims=("cell_index", "vertex_index")),
-            values=td.IndexedDataArray(values.values, dims=("index")),
-            normal_axis=normal_axis,
-            normal_pos=normal_pos,
-        )
-        return griddataset
-
-
 def test_medium_components():
     """Get Dictionary of field components and select some data."""
     for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
@@ -369,7 +300,7 @@ def test_medium_raw():
     """Test from a raw permittivity evaluated at center."""
     eps_raw = make_scalar_data().real
     eps_raw_s = td.SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
-    eps_raw_u = convert_to_ugrid(eps_raw_s, pert=0.01, method="nearest")
+    eps_raw_u = cartesian_to_unstructured(eps_raw_s, pert=0.01, method="nearest")
 
     # lossless
     med = CustomMedium.from_eps_raw(eps_raw)
@@ -381,7 +312,7 @@ def test_medium_raw():
     data = np.random.random((Nx, Ny, Nz, 1)) + 1 + 1e-2 * 1j
     eps_raw = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
     eps_raw_s = td.SpatialDataArray(eps_raw.squeeze(dim="f", drop=True))
-    eps_raw_u = convert_to_ugrid(eps_raw_s, pert=0.01, method="nearest")
+    eps_raw_u = cartesian_to_unstructured(eps_raw_s, pert=0.01, method="nearest")
     med = CustomMedium.from_eps_raw(eps_raw)
     for field in [eps_raw_s, eps_raw_u]:
         meds = CustomMedium.from_eps_raw(field, freq=freqs[0])
@@ -406,17 +337,25 @@ def test_medium_interp(unstructured):
     orig_data = make_scalar_data()
 
     if unstructured:
-        orig_data = convert_to_ugrid(orig_data.isel(f=0), pert=0.2, method="linear")
+        orig_data = cartesian_to_unstructured(orig_data.isel(f=0), pert=0.2, method="linear")
 
     data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
     data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
     assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
     assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
     # maximal or minimal values shouldn't exceed that in the supplied data
-    assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(_get_numpy_array(orig_data).ravel())
-    assert min(_get_numpy_array(data_fit_linear).ravel()) >= min(_get_numpy_array(orig_data).ravel())
-    assert max(_get_numpy_array(data_fit_nearest).ravel()) <= max(_get_numpy_array(orig_data).ravel())
-    assert min(_get_numpy_array(data_fit_nearest).ravel()) >= min(_get_numpy_array(orig_data).ravel())
+    assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert min(_get_numpy_array(data_fit_linear).ravel()) >= min(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert max(_get_numpy_array(data_fit_nearest).ravel()) <= max(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert min(_get_numpy_array(data_fit_nearest).ravel()) >= min(
+        _get_numpy_array(orig_data).ravel()
+    )
 
     # single entry along some axis
     Nx = 1
@@ -425,17 +364,25 @@ def test_medium_interp(unstructured):
     orig_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
     if unstructured:
-        orig_data = convert_to_ugrid(orig_data.isel(f=0), pert=0.2, method="linear")
+        orig_data = cartesian_to_unstructured(orig_data.isel(f=0), pert=0.2, method="linear")
 
     data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
     data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
     assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
     assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
     # maximal or minimal values shouldn't exceed that in the supplied data
-    assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(_get_numpy_array(orig_data).ravel())
-    assert min(_get_numpy_array(data_fit_linear).ravel()) >= min(_get_numpy_array(orig_data).ravel())
-    assert max(_get_numpy_array(data_fit_nearest).ravel()) <= max(_get_numpy_array(orig_data).ravel())
-    assert min(_get_numpy_array(data_fit_nearest).ravel()) >= min(_get_numpy_array(orig_data).ravel())
+    assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert min(_get_numpy_array(data_fit_linear).ravel()) >= min(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert max(_get_numpy_array(data_fit_nearest).ravel()) <= max(
+        _get_numpy_array(orig_data).ravel()
+    )
+    assert min(_get_numpy_array(data_fit_nearest).ravel()) >= min(
+        _get_numpy_array(orig_data).ravel()
+    )
 
     if not unstructured:
         # original data are not modified
@@ -453,7 +400,7 @@ def test_medium_smaller_than_one_positive_sigma(unstructured):
     n_dataarray = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
     if unstructured:
-        n_dataarray = convert_to_ugrid(n_dataarray.isel(f=0))
+        n_dataarray = cartesian_to_unstructured(n_dataarray.isel(f=0))
 
     with pytest.raises(pydantic.ValidationError):
         _ = CustomMedium.from_nk(n_dataarray)
@@ -466,8 +413,8 @@ def test_medium_smaller_than_one_positive_sigma(unstructured):
     k_dataarray = td.ScalarFieldDataArray(k_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
 
     if unstructured:
-        n_dataarray = convert_to_ugrid(n_dataarray.isel(f=0), seed=1)
-        k_dataarray = convert_to_ugrid(k_dataarray.isel(f=0), seed=1)
+        n_dataarray = cartesian_to_unstructured(n_dataarray.isel(f=0), seed=1)
+        k_dataarray = cartesian_to_unstructured(k_dataarray.isel(f=0), seed=1)
 
     with pytest.raises(pydantic.ValidationError):
         _ = CustomMedium.from_nk(n_dataarray, k_dataarray, freq=freqs[0])
@@ -493,8 +440,8 @@ def test_medium_nk(unstructured):
     ns = td.SpatialDataArray(n.squeeze(dim="f", drop=True))
     ks = td.SpatialDataArray(k.squeeze(dim="f", drop=True))
     if unstructured:
-        ns = convert_to_ugrid(array=ns, pert=0.01, method="nearest", seed=7546)
-        ks = convert_to_ugrid(array=ks, pert=0.01, method="nearest", seed=7546)
+        ns = cartesian_to_unstructured(array=ns, pert=0.01, method="nearest", seed=7546)
+        ks = cartesian_to_unstructured(array=ks, pert=0.01, method="nearest", seed=7546)
 
     # lossless
     med = CustomMedium.from_nk(n=n)
@@ -668,7 +615,7 @@ def test_custom_isotropic_medium(unstructured):
 
     # some terms in permittivity are complex
     with pytest.raises(pydantic.ValidationError):
-        epstmp = make_spatial_data(value=1+0.1j, unstructured=unstructured, seed=seed)
+        epstmp = make_spatial_data(value=1 + 0.1j, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=epstmp, conductivity=conductivity)
 
     # some terms in permittivity are < 1
@@ -726,7 +673,6 @@ def verify_custom_dispersive_medium_methods(mat, reduced_fields=[]):
         assert c.shape == coord_shape
 
 
-
 @pytest.mark.parametrize("unstructured", [False, True])
 def test_custom_pole_residue(unstructured):
     """Custom pole residue medium."""
@@ -782,7 +728,6 @@ def test_custom_pole_residue(unstructured):
     mat = CustomPoleResidue.from_medium(mat_medium)
     verify_custom_dispersive_medium_methods(mat, ["eps_inf", "poles"])
     assert mat.n_cfl > 1
-
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -1104,10 +1049,10 @@ def test_io_dispersive(tmp_path, unstructured, z_custom):
 
     if unstructured:
         seed = 3232
-        eps_inf_dataset = convert_to_ugrid(eps_inf_dataset, seed=seed)
-        delep_dataset = convert_to_ugrid(delep_dataset, seed=seed)
-        f0_dataset = convert_to_ugrid(f0_dataset, seed=seed)
-        gamma_dataset = convert_to_ugrid(gamma_dataset, seed=seed)
+        eps_inf_dataset = cartesian_to_unstructured(eps_inf_dataset, seed=seed)
+        delep_dataset = cartesian_to_unstructured(delep_dataset, seed=seed)
+        f0_dataset = cartesian_to_unstructured(f0_dataset, seed=seed)
+        gamma_dataset = cartesian_to_unstructured(gamma_dataset, seed=seed)
 
     mat_custom = td.CustomLorentz(
         eps_inf=eps_inf_dataset, coeffs=((delep_dataset, f0_dataset, gamma_dataset),)

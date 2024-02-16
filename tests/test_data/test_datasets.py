@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
+from ..utils import cartesian_to_unstructured
 
 
 np.random.seed(4)
@@ -485,3 +486,39 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     assert np.allclose(result.values, result_values)
     assert result.name == ds_name
+
+
+@pytest.mark.parametrize("fill_value", [0.23123, "extrapolate"])
+@pytest.mark.parametrize("use_vtk", [True, False])
+@pytest.mark.parametrize("nz", [13, 1])
+def test_cartesian_to_unstructured(nz, use_vtk, fill_value):
+
+    import tidy3d as td
+
+    nx = 11
+    ny = 12
+
+    x = np.linspace(0, 0.3, nx)
+    y = np.linspace(-0.4, 0, ny)
+    z = np.linspace(-0.2, 0.15, nz)
+    values = np.sin(x[:, None, None]) * np.cos(y[None, :, None]) * np.exp(z[None, None, :])
+
+    arr_c = td.SpatialDataArray(values, coords=dict(x=x, y=y, z=z))
+
+    arr_u_linear = cartesian_to_unstructured(arr_c, pert=0.1, method="linear", seed=123)
+    arr_c_linear = arr_u_linear.interp(x=x, y=y, z=z, method="linear", use_vtk=use_vtk, fill_value=fill_value)
+
+    print(np.max(np.abs(arr_c.values - arr_c_linear.values)))
+    assert np.allclose(arr_c.values, arr_c_linear.values, atol=1e-4, rtol=1e-4)
+
+    arr_u_nearest = cartesian_to_unstructured(arr_c, pert=0.1, method="nearest", seed=123)
+    arr_c_nearest = arr_u_nearest.interp(x=x, y=y, z=z, method="nearest", use_vtk=use_vtk, fill_value=fill_value)
+
+    assert np.all(arr_c.values == arr_c_nearest.values)
+
+    sample_outside = arr_u_linear.interp(x=-1, y=-1, z=-1, method="linear", use_vtk=use_vtk, fill_value=fill_value)
+
+    if fill_value == "extrapolate":
+        assert sample_outside.values.item() == values[0, 0, 0]
+    else:
+        assert sample_outside.values.item() == fill_value

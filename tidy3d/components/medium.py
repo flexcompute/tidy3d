@@ -8,18 +8,14 @@ from math import isclose
 
 import pydantic.v1 as pd
 import numpy as np
-import xarray as xr
 
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, annotate_type
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal, Complex
-from .data.dataset import (
-    PermittivityDataset,
-    CustomDataType,
-)
+from .data.dataset import PermittivityDataset, CustomSpatialDataType, CustomSpatialDataTypeAnnotated
 from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates, _ones_like
 from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
 from .viz import add_ax_if_none
@@ -979,7 +975,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     @abstractmethod
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1016,7 +1012,9 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         """
         eps_spatial = self.eps_dataarray_freq(frequency)
         if self.is_isotropic:
-            eps_interp = _get_numpy_array(coords.spatial_interp(eps_spatial[0], self._interp_method(0)))
+            eps_interp = _get_numpy_array(
+                coords.spatial_interp(eps_spatial[0], self._interp_method(0))
+            )
             return (eps_interp, eps_interp, eps_interp)
         return tuple(
             _get_numpy_array(coords.spatial_interp(eps_comp, self._interp_method(comp)))
@@ -1079,12 +1077,12 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         return tuple(eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_spatial_array)
 
     @staticmethod
-    def _validate_isreal_dataarray(dataarray: CustomDataType) -> bool:
+    def _validate_isreal_dataarray(dataarray: CustomSpatialDataType) -> bool:
         """Validate that the dataarray is real"""
         return np.all(np.isreal(_get_numpy_array(dataarray)))
 
     @staticmethod
-    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[CustomDataType, ...]) -> bool:
+    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[CustomSpatialDataType, ...]) -> bool:
         """Validate that the dataarray is real"""
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
 
@@ -1320,14 +1318,14 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     >>> eps = dielectric.eps_model(200e12)
     """
 
-    permittivity: CustomDataType = pd.Field(
+    permittivity: CustomSpatialDataTypeAnnotated = pd.Field(
         ...,
         title="Permittivity",
         description="Relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomDataType] = pd.Field(
+    conductivity: Optional[CustomSpatialDataType] = pd.Field(
         None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -1397,7 +1395,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -1474,14 +1472,14 @@ class CustomMedium(AbstractCustomMedium):
         "will be interpolated based on ``interp_method``.",
     )
 
-    permittivity: Optional[CustomDataType] = pd.Field(
+    permittivity: Optional[CustomSpatialDataType] = pd.Field(
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomDataType] = pd.Field(
+    conductivity: Optional[CustomSpatialDataType] = pd.Field(
         None,
         title="Conductivity",
         description="Spatial profile Electric conductivity. Defined such "
@@ -1847,7 +1845,7 @@ class CustomMedium(AbstractCustomMedium):
     @classmethod
     def from_eps_raw(
         cls,
-        eps: Union[ScalarFieldDataArray, CustomDataType],
+        eps: Union[ScalarFieldDataArray, CustomSpatialDataType],
         freq: float = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
@@ -1879,7 +1877,7 @@ class CustomMedium(AbstractCustomMedium):
         :class:`.CustomMedium`
             Medium containing the spatially varying permittivity data.
         """
-        if isinstance(eps, CustomDataType):
+        if isinstance(eps, CustomSpatialDataType.__args__):
             # purely real, not need to know `freq`
             if CustomMedium._validate_isreal_dataarray(eps):
                 return cls(permittivity=eps, interp_method=interp_method, **kwargs)
@@ -1958,7 +1956,7 @@ class CustomMedium(AbstractCustomMedium):
             raise SetupError("'n' and 'k' must be of the same type and must have same coordinates.")
 
         # k is a SpatialDataArray
-        if isinstance(k, CustomDataType):
+        if isinstance(k, CustomSpatialDataType.__args__):
             if freq is None:
                 raise SetupError(
                     "For a lossy medium, must supply 'freq' at which to convert 'n' "
@@ -2401,7 +2399,7 @@ class PoleResidue(DispersiveMedium):
         for a, c in self.poles:
             if abs(a) > fp_eps:
                 raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
-            res += (c + np.conj(c)) / 2
+            res = res + (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
         return Medium(
             permittivity=self.eps_inf,
@@ -2718,14 +2716,14 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomDataType = pd.Field(
+    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[Tuple[CustomDataType, CustomDataType], ...] = pd.Field(
+    poles: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -2757,22 +2755,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     )
         return val
 
-#    @ensure_freq_in_range
-#    def eps_model(self, frequency: float) -> complex:
-#        """Complex-valued permittivity as a function of frequency."""
-
-#        omega = 2 * np.pi * frequency
-#        eps = self.eps_inf + 0.0j
-#        for a, c in self.poles:
-#            a_cc = np.conj(a)
-#            c_cc = np.conj(c)
-#            eps -= c / (1j * omega + a)
-#            eps -= c_cc / (1j * omega + a_cc)
-#        return eps
-
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -2842,7 +2827,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 raise ValidationError(
                     "Cannot convert dispersive 'CustomPoleResidue' to 'CustomMedium'."
                 )
-            res += (c + np.conj(c)) / 2
+            res = res + (c + np.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
 
         self_dict = self.dict(exclude={"type", "eps_inf", "poles"})
@@ -3062,7 +3047,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[Tuple[CustomDataType, CustomDataType], ...] = pd.Field(
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
@@ -3077,7 +3062,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         if len(val) == 0:
             return val
         for B, C in val:
-            if not _check_same_coordinates(B, val[0][0]) or not _check_same_coordinates(C, val[0][0]):
+            if not _check_same_coordinates(B, val[0][0]) or not _check_same_coordinates(
+                C, val[0][0]
+            ):
                 raise SetupError("Every term in 'coeffs' must have the same coordinates.")
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
                 raise SetupError("'B' and 'C' must be real.")
@@ -3133,9 +3120,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
     @classmethod
     def from_dispersion(
         cls,
-        n: CustomDataType,
+        n: CustomSpatialDataType,
         freq: float,
-        dn_dwvl: CustomDataType,
+        dn_dwvl: CustomSpatialDataType,
         interp_method="nearest",
         **kwargs,
     ):
@@ -3314,7 +3301,7 @@ class Lorentz(DispersiveMedium):
     @staticmethod
     def _all_larger(coeff_a, coeff_b) -> bool:
         """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
-        if isinstance(coeff_a, CustomDataType):
+        if isinstance(coeff_a, CustomSpatialDataType.__args__):
             return np.all(_get_numpy_array(coeff_a) > _get_numpy_array(coeff_b))
         return coeff_a > coeff_b
 
@@ -3411,14 +3398,14 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomDataType = pd.Field(
+    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomDataType, CustomDataType, CustomDataType], ...] = pd.Field(
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
@@ -3494,7 +3481,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -3676,14 +3663,14 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomDataType = pd.Field(
+    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomDataType, CustomDataType], ...] = pd.Field(
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model.",
@@ -3706,7 +3693,9 @@ class CustomDrude(CustomDispersiveMedium, Drude):
     def _coeffs_correct_shape_and_sign(cls, val, values):
         """coeffs must have consistent shape and sign."""
         for f, delta in val:
-            if not _check_same_coordinates(f, values["eps_inf"]) or not _check_same_coordinates(delta, values["eps_inf"]):
+            if not _check_same_coordinates(f, values["eps_inf"]) or not _check_same_coordinates(
+                delta, values["eps_inf"]
+            ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
                     "The coordinates must also be consistent with 'eps_inf'."
@@ -3719,7 +3708,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -3899,14 +3888,14 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: CustomDataType = pd.Field(
+    eps_inf: CustomSpatialDataTypeAnnotated = pd.Field(
         ...,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomDataType, CustomDataType], ...] = pd.Field(
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
@@ -3929,7 +3918,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     def _coeffs_correct_shape(cls, val, values):
         """coeffs must have consistent shape."""
         for de, tau in val:
-            if not _check_same_coordinates(de, values["eps_inf"]) or not _check_same_coordinates(tau, values["eps_inf"]):
+            if not _check_same_coordinates(de, values["eps_inf"]) or not _check_same_coordinates(
+                tau, values["eps_inf"]
+            ):
                 raise SetupError(
                     "All terms in 'coeffs' must have the same coordinates; "
                     "The coordinates must also be consistent with 'eps_inf'."
@@ -3957,7 +3948,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -4597,7 +4588,7 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomDataType, CustomDataType, CustomDataType]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -4686,9 +4677,9 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
     @abstractmethod
     def perturbed_copy(
         self,
-        temperature: CustomDataType = None,
-        electron_density: CustomDataType = None,
-        hole_density: CustomDataType = None,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Union[AbstractMedium, AbstractCustomMedium]:
         """Sample perturbations on provided heat and/or charge data and create a custom medium.
@@ -4762,9 +4753,9 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 
     def perturbed_copy(
         self,
-        temperature: CustomDataType = None,
-        electron_density: CustomDataType = None,
-        hole_density: CustomDataType = None,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Union[Medium, CustomMedium]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomMedium'.
@@ -4884,9 +4875,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
     def perturbed_copy(
         self,
-        temperature: CustomDataType = None,
-        electron_density: CustomDataType = None,
-        hole_density: CustomDataType = None,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Union[PoleResidue, CustomPoleResidue]:
         """Sample perturbations on provided heat and/or charge data and return 'CustomPoleResidue'.
@@ -4924,7 +4915,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         eps_inf_field = self.eps_inf + zeros
 
         if self.eps_inf_perturbation is not None:
-            eps_inf_field += self.eps_inf_perturbation.apply_data(
+            eps_inf_field = eps_inf_field + self.eps_inf_perturbation.apply_data(
                 temperature, electron_density, hole_density
             )
 
@@ -4932,9 +4923,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         poles_field = [[a + zeros, c + zeros] for a, c in self.poles]
         for (a_perturb, c_perturb), (a_field, c_field) in zip(self.poles_perturbation, poles_field):
             if a_perturb is not None:
-                a_field += a_perturb.apply_data(temperature, electron_density, hole_density)
+                a_field = a_field + a_perturb.apply_data(temperature, electron_density, hole_density)
             if c_perturb is not None:
-                c_field += c_perturb.apply_data(temperature, electron_density, hole_density)
+                c_field = c_field + c_perturb.apply_data(temperature, electron_density, hole_density)
 
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field

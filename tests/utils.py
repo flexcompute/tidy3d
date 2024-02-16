@@ -6,6 +6,8 @@ import trimesh
 import pytest
 import numpy as np
 import tidy3d as td
+import xarray as xr
+import scipy as sc
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
 from tidy3d.components.base import Tidy3dBaseModel
@@ -754,3 +756,88 @@ def get_test_root_dir():
     """return the root folder of test code"""
 
     return Path(__file__).parent
+
+
+def cartesian_to_unstructured(
+    array: td.SpatialDataArray, pert: float = 0.1, method: str = "linear", seed: int = None
+) -> Union[td.TriangularGridDataset, td.TetrahedralGridDataset]:
+    """Convert a SpatialDataArray into TriangularGridDataset/TetrahedralGridDataset with
+    an optional perturbation of point coordinates.
+
+    Parameters
+    ----------
+    array : td.SpatialDataArray
+        Array to convert.
+    pert : float = 0.1
+        Degree of perturbations of point coordinates.
+    method : Literal["linear", "nearest"] = "linear"
+        Interpolation method for transfering data to unstructured grid.
+    seed : int = None
+        Seed number to use when randomly perturbing point coordinates.
+
+    Returns
+    -------
+    Union[td.TriangularGridDataset, td.TetrahedralGridDataset]
+        Unstructured grid dataset.
+    """
+
+    xyz = [array.x, array.y, array.z]
+    lens = [len(coord) for coord in xyz]
+
+    num_len_zero = sum(l == 1 for l in lens)
+
+    if num_len_zero == 1:
+        normal_axis = lens.index(1)
+        normal_pos = xyz[normal_axis].values.item()
+        xyz.pop(normal_axis)
+
+    dxyz = [np.gradient(coord) for coord in xyz]
+
+    XYZ = np.meshgrid(*xyz, indexing="ij")
+    dXYZ = np.meshgrid(*dxyz, indexing="ij")
+
+    shape = np.shape(XYZ[0])
+
+    XYZp = XYZ.copy()
+    rng = np.random.default_rng(seed=seed)
+    XYZp[0][1:-1, :] = XYZp[0][1:-1, :] + (dXYZ[0] * (1 - 2 * rng.random(shape)) * pert)[1:-1, :]
+    XYZp[1][:, 1:-1] = XYZp[1][:, 1:-1] + (dXYZ[1] * (1 - 2 * rng.random(shape)) * pert)[:, 1:-1]
+
+    if num_len_zero == 0:
+        XYZp[2][:, :, 1:-1] = XYZp[2][:, :, 1:-1] + (dXYZ[2] * (1 - 2 * rng.random(shape)) * pert)[:, :, 1:-1]
+
+        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel(), XYZp[2].ravel()])
+        grid = sc.spatial.Delaunay(points)
+        values = array.interp(
+            x=xr.DataArray(points[:, 0], dims=["index"]),
+            y=xr.DataArray(points[:, 1], dims=["index"]),
+            z=xr.DataArray(points[:, 2], dims=["index"]),
+            method=method,
+        )
+        griddataset = td.TetrahedralGridDataset(
+            points=td.PointDataArray(points, dims=("index", "axis")),
+            cells=td.CellDataArray(grid.simplices, dims=("cell_index", "vertex_index")),
+            values=td.IndexedDataArray(values.values, dims=("index")),
+        )
+        return griddataset
+
+    else:
+        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel()])
+        grid = sc.spatial.Delaunay(points)
+        xyz_names = ["x", "y", "z"]
+        normal_name = xyz_names.pop(normal_axis)
+        values = array.isel({normal_name: 0}).interp(
+            {
+                xyz_names[0]: xr.DataArray(points[:, 0], dims=["index"]),
+                xyz_names[1]: xr.DataArray(points[:, 1], dims=["index"]),
+            },
+            method=method,
+        )
+        griddataset = td.TriangularGridDataset(
+            points=td.PointDataArray(points, dims=("index", "axis")),
+            cells=td.CellDataArray(grid.simplices, dims=("cell_index", "vertex_index")),
+            values=td.IndexedDataArray(values.values, dims=("index")),
+            normal_axis=normal_axis,
+            normal_pos=normal_pos,
+        )
+        return griddataset

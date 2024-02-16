@@ -107,7 +107,9 @@ class Coords(Tidy3dBaseModel):
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
     ):
-        interp_array = array.interp(**{ax: self.to_dict[ax] for ax in "xyz"}, method=interp_method, fill_value=fill_value)
+        interp_array = array.interp(
+            **{ax: self.to_dict[ax] for ax in "xyz"}, method=interp_method, fill_value=fill_value
+        )
 
         return interp_array
 
@@ -116,7 +118,7 @@ class Coords(Tidy3dBaseModel):
         array: Union[SpatialDataArray, ScalarFieldDataArray, UnstructuredGridDatasetType],
         interp_method: InterpMethod,
         fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
-    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+    ) -> Union[SpatialDataArray, ScalarFieldDataArray, UnstructuredGridDatasetType]:
         """
         Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
 

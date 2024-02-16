@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray, IndexedDataArray
-from .data.dataset import UnstructuredGridDataset, CustomDataType
+from .data.dataset import UnstructuredGridDataset, CustomSpatialDataType
 from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates
 from .base import Tidy3dBaseModel, cached_property
 from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
@@ -44,8 +44,8 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
     @staticmethod
     def _get_val(
-        field: Union[ArrayLike[float], ArrayLike[Complex], CustomDataType], val: FieldVal
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        field: Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType], val: FieldVal
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Get specified value from a field."""
 
         if val == "real":
@@ -74,19 +74,19 @@ class AbstractPerturbation(ABC, Tidy3dBaseModel):
 
 def ensure_temp_in_range(
     sample: Callable[
-        Union[ArrayLike[float], CustomDataType],
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
+        Union[ArrayLike[float], CustomSpatialDataType],
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
     ]
 ) -> Callable[
-    Union[ArrayLike[float], CustomDataType],
-    Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
+    Union[ArrayLike[float], CustomSpatialDataType],
+    Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
 ]:
     """Decorate ``sample`` to log warning if temperature supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
-        self, temperature: Union[ArrayLike[float], CustomDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """New sample function."""
 
         if np.iscomplexobj(temperature):
@@ -116,18 +116,18 @@ class HeatPerturbation(AbstractPerturbation):
 
     @abstractmethod
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], CustomDataType]
+        temperature : Union[ArrayLike[float], CustomSpatialDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
 
@@ -220,18 +220,18 @@ class LinearHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation at temperature points.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], CustomDataType]
+        temperature : Union[ArrayLike[float], CustomSpatialDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
 
@@ -330,18 +330,18 @@ class CustomHeatPerturbation(HeatPerturbation):
 
     @ensure_temp_in_range
     def sample(
-        self, temperature: Union[ArrayLike[float], CustomDataType]
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        self, temperature: Union[ArrayLike[float], CustomSpatialDataType]
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation at provided temperature points.
 
         Parameters
         ----------
-        temperature : Union[ArrayLike[float], CustomDataType]
+        temperature : Union[ArrayLike[float], CustomSpatialDataType]
             Temperature sample point(s).
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
 
@@ -377,21 +377,21 @@ HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
 
 def ensure_charge_in_range(
     sample: Callable[
-        [Union[ArrayLike[float], CustomDataType], Union[ArrayLike[float], CustomDataType]],
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
+        [Union[ArrayLike[float], CustomSpatialDataType], Union[ArrayLike[float], CustomSpatialDataType]],
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
     ]
 ) -> Callable[
-    [Union[ArrayLike[float], CustomDataType], Union[ArrayLike[float], CustomDataType]],
-    Union[ArrayLike[float], ArrayLike[Complex], CustomDataType],
+    [Union[ArrayLike[float], CustomSpatialDataType], Union[ArrayLike[float], CustomSpatialDataType]],
+    Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
 ]:
     """Decorate ``sample`` to log warning if charge supplied is out of bounds."""
 
     @functools.wraps(sample)
     def _sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomDataType],
-        hole_density: Union[ArrayLike[float], CustomDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
+        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """New sample function."""
 
         # disable complex input
@@ -443,16 +443,16 @@ class ChargePerturbation(AbstractPerturbation):
     @abstractmethod
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomDataType],
-        hole_density: Union[ArrayLike[float], CustomDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
+        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], CustomDataType]
+        electron_density : Union[ArrayLike[float], CustomSpatialDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], CustomDataType]
+        hole_density : Union[ArrayLike[float], CustomSpatialDataType]
             Hole density sample point(s).
 
         Note
@@ -462,7 +462,7 @@ class ChargePerturbation(AbstractPerturbation):
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
 
@@ -478,9 +478,9 @@ class ChargePerturbation(AbstractPerturbation):
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], CustomDataType]
+        electron_density : Union[ArrayLike[float], CustomSpatialDataType]
             Array of electron density sample points.
-        hole_density : Union[ArrayLike[float], CustomDataType]
+        hole_density : Union[ArrayLike[float], CustomSpatialDataType]
             Array of hole density sample points.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'phase'] = 'real'
             Which part of the field to plot.
@@ -605,16 +605,16 @@ class LinearChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomDataType],
-        hole_density: Union[ArrayLike[float], CustomDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
+        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation at electron and hole density points.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], CustomDataType]
+        electron_density : Union[ArrayLike[float], CustomSpatialDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], CustomDataType]
+        hole_density : Union[ArrayLike[float], CustomSpatialDataType]
             Hole density sample point(s).
 
         Note
@@ -625,12 +625,12 @@ class LinearChargePerturbation(ChargePerturbation):
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
         inputs = [electron_density, hole_density]
 
-        no_scalars = all(np.ndim(arr) > 0 for arr in inputs)
+        no_scalars = all(np.ndim(_get_numpy_array(arr)) > 0 for arr in inputs)
         both_1d = all(
             isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(arr) == 1 for arr in inputs
         )
@@ -776,16 +776,16 @@ class CustomChargePerturbation(ChargePerturbation):
     @ensure_charge_in_range
     def sample(
         self,
-        electron_density: Union[ArrayLike[float], CustomDataType],
-        hole_density: Union[ArrayLike[float], CustomDataType],
-    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]:
+        electron_density: Union[ArrayLike[float], CustomSpatialDataType],
+        hole_density: Union[ArrayLike[float], CustomSpatialDataType],
+    ) -> Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]:
         """Sample perturbation at electron and hole density points.
 
         Parameters
         ----------
-        electron_density : Union[ArrayLike[float], CustomDataType]
+        electron_density : Union[ArrayLike[float], CustomSpatialDataType]
             Electron density sample point(s).
-        hole_density : Union[ArrayLike[float], CustomDataType]
+        hole_density : Union[ArrayLike[float], CustomSpatialDataType]
             Hole density sample point(s).
 
         Note
@@ -796,14 +796,14 @@ class CustomChargePerturbation(ChargePerturbation):
 
         Returns
         -------
-        Union[ArrayLike[float], ArrayLike[Complex], CustomDataType]
+        Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType]
             Sampled perturbation value(s).
         """
         inputs = [electron_density, hole_density]
 
-        no_scalars = all(np.ndim(arr) > 0 for arr in inputs)
+        no_scalars = all(np.ndim(_get_numpy_array(arr)) > 0 for arr in inputs)
         both_1d = all(
-            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(arr) == 1 for arr in inputs
+            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(_get_numpy_array(arr)) == 1 for arr in inputs
         )
 
         # we allow combining a scalar with any other type
@@ -820,8 +820,8 @@ class CustomChargePerturbation(ChargePerturbation):
 
         # clip to allowed values
         # (this also implicitly convert python arrays into numpy
-        e_vals = np.clip(electron_density, self.electron_range[0], self.electron_range[1])
-        h_vals = np.clip(hole_density, self.hole_range[0], self.hole_range[1])
+        e_vals = np.core.umath.clip(electron_density, self.electron_range[0], self.electron_range[1])
+        h_vals = np.core.umath.clip(hole_density, self.hole_range[0], self.hole_range[1])
 
         # we cannot pass UnstructuredGridDataset directly into xarray interp
         # thus we need to explicitly grad the underlying xarray
@@ -847,7 +847,7 @@ class CustomChargePerturbation(ChargePerturbation):
             if isinstance(arr, UnstructuredGridDataset):
                 return arr.updated_copy(values=IndexedDataArray(sampled, coords=arr.values.coords))
 
-        if all(np.ndim(arr) == 0 for arr in inputs):
+        if all(np.ndim(_get_numpy_array(arr)) == 0 for arr in inputs):
             return sampled.item()
 
         return sampled
@@ -921,9 +921,9 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
     @staticmethod
     def _zeros_like(
-        T: CustomDataType = None,
-        n: CustomDataType = None,
-        p: CustomDataType = None,
+        T: CustomSpatialDataType = None,
+        n: CustomSpatialDataType = None,
+        p: CustomSpatialDataType = None,
     ):
         """Check that fields have the same coordinates and return an array field with zeros."""
         template = None
@@ -946,26 +946,26 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
     def apply_data(
         self,
-        temperature: CustomDataType = None,
-        electron_density: CustomDataType = None,
-        hole_density: CustomDataType = None,
-    ) -> CustomDataType:
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
+    ) -> CustomSpatialDataType:
         """Sample perturbations on provided heat and/or charge data. At least one of
         ``temperature``, ``electron_density``, and ``hole_density`` must be not ``None``.
         All provided fields must have identical coords.
 
         Parameters
         ----------
-        temperature : CustomDataType = None
+        temperature : CustomSpatialDataType = None
             Temperature field data.
-        electron_density : CustomDataType = None
+        electron_density : CustomSpatialDataType = None
             Electron density field data.
-        hole_density : CustomDataType = None
+        hole_density : CustomSpatialDataType = None
             Hole density field data.
 
         Returns
         -------
-        CustomDataType
+        CustomSpatialDataType
             Sampled perturbation field.
         """
 

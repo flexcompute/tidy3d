@@ -403,6 +403,65 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         assert n_eff[1] > 4
         assert n_eff[1] < 5
 
+@pytest.mark.parametrize("local", [True, False])
+@pytest.mark.parametrize("nx", [1, 3]])
+@responses.activate
+def test_mode_solver_unstructured_custom_medium(mock_remote_api, local, tmp_path):
+    """Test mode solver can work with custom medium. Consider a waveguide with varying
+    permittivity along x-direction. The value of n_eff at different x position should be
+    different.
+    """
+
+    # waveguide made of custom medium
+    x_custom = np.linspace(-0.6, 0.6, 2)
+    y_custom = np.linspace(-0.3, 0.3, 11)
+    z_custom = np.linspace(-0.3, 0.3, 12)
+    freq0 = td.C_0 / 1.0
+    n = 5 + np.exp(x_custom(np.sin(y_custom[None, :, None]) * np.cos(z_custom[None, None, :]) 
+    n = n[:, None, None, None]
+    n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
+    mat_custom = td.CustomMedium.from_nk(n_data, interp_method="nearest")
+
+    waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
+    simulation = td.Simulation(
+        size=(2, 2, 2),
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[waveguide],
+        run_time=1e-12,
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=1,
+        precision="double" if local else "single",
+    )
+
+    plane_left = td.Box(center=(-0.5, 0, 0), size=(0.9, 0, 0.9))
+    plane_right = td.Box(center=(0.5, 0, 0), size=(0.9, 0, 0.9))
+
+    n_eff = []
+    for plane in [plane_left, plane_right]:
+        ms = ModeSolver(
+            simulation=simulation,
+            plane=plane,
+            mode_spec=mode_spec,
+            freqs=[freq0],
+            direction="+",
+        )
+        modes = ms.solve() if local else msweb.run(ms)
+        n_eff.append(modes.n_eff.values)
+
+        if local:
+            check_ms_reduction(ms)
+
+        fname = str(tmp_path / "ms_custom_medium.hdf5")
+        ms.to_file(fname)
+        m2 = ModeSolver.from_file(fname)
+        assert m2 == ms
+
+    if local:
+        assert n_eff[0] < 1.5
+        assert n_eff[1] > 4
+            assert n_eff[1] < 5
+
 
 def test_mode_solver_straight_vs_angled():
     """Compare results for a straight and angled nominally identical waveguides.

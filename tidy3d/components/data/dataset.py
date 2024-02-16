@@ -22,7 +22,7 @@ from .data_array import PointDataArray, IndexedDataArray, CellDataArray, Spatial
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
 from ..base import skip_if_fields_missing
-from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
+from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal, annotate_type
 from ...packaging import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
 from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
@@ -976,7 +976,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
-        print(method)
         if method == "nearest":
             interpolated_values = self._interp_nearest(x=x, y=y, z=z)
         else:
@@ -1246,7 +1245,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # let's allocate an array for resulting values
         # every time we process a chunk of samples, we will write into this array
-        interpolated_values = fill_value + np.zeros([len(xyz_comp) for xyz_comp in xyz_grid], dtype=self.values.dtype)
+        interpolated_values = fill_value + np.zeros(
+            [len(xyz_comp) for xyz_comp in xyz_grid], dtype=self.values.dtype
+        )
 
         # start counters of how many cells/samples have been processed
         processed_samples = 0
@@ -2416,10 +2417,8 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
-
-
-CustomDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
-
+CustomSpatialDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
+CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])]
 
 def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
     """Get numpy representation of dataarray/dataset values."""
