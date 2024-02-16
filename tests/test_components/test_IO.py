@@ -57,11 +57,10 @@ def set_datasets_to_none(sim):
     return td.Simulation.parse_obj(sim_dict)
 
 
-def test_simulation_load_export(split_string):
+def test_simulation_load_export(split_string, tmp_path):
     major, minor, patch = __version__.split(".")
-    path = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.json")
-    # saving as .h5 since *.hdf5 is git ignored
-    path_hdf5 = os.path.join(SIM_DIR, f"simulation_{major}_{minor}_{patch}.h5")
+    path = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.json")
+    path_hdf5 = os.path.join(tmp_path, f"simulation_{major}_{minor}_{patch}.h5")
     SIM.to_file(path)
     SIM.to_hdf5(path_hdf5)
     SIM2 = td.Simulation.from_file(path)
