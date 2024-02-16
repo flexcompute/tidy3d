@@ -911,7 +911,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             theta and phi coordinates relative to ``local_origin``.
         """
         phi_local = np.arctan2(uy, ux)
-        theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
+        with np.errstate(invalid="ignore"):
+            theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
         # Spherical coordinates rotation matrix reference:
         # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
         if axis == 2:
