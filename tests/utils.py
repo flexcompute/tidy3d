@@ -804,7 +804,9 @@ def cartesian_to_unstructured(
     XYZp[1][:, 1:-1] = XYZp[1][:, 1:-1] + (dXYZ[1] * (1 - 2 * rng.random(shape)) * pert)[:, 1:-1]
 
     if num_len_zero == 0:
-        XYZp[2][:, :, 1:-1] = XYZp[2][:, :, 1:-1] + (dXYZ[2] * (1 - 2 * rng.random(shape)) * pert)[:, :, 1:-1]
+        XYZp[2][:, :, 1:-1] = (
+            XYZp[2][:, :, 1:-1] + (dXYZ[2] * (1 - 2 * rng.random(shape)) * pert)[:, :, 1:-1]
+        )
 
         points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel(), XYZp[2].ravel()])
         grid = sc.spatial.Delaunay(points)

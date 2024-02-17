@@ -12,7 +12,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, log_capture  # noqa: F401
+from ..utils import assert_log_level, log_capture, cartesian_to_unstructured  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
 
@@ -375,8 +375,8 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         precision="double" if local else "single",
     )
 
-    plane_left = td.Box(center=(-0.5, 0, 0), size=(0.9, 0, 0.9))
-    plane_right = td.Box(center=(0.5, 0, 0), size=(0.9, 0, 0.9))
+    plane_left = td.Box(center=(-0.5, 0, 0), size=(0, 0.9, 0.9))
+    plane_right = td.Box(center=(0.5, 0, 0), size=(0, 0.9, 0.9))
 
     n_eff = []
     for plane in [plane_left, plane_right]:
@@ -403,42 +403,48 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         assert n_eff[1] > 4
         assert n_eff[1] < 5
 
-@pytest.mark.parametrize("local", [True, False])
-@pytest.mark.parametrize("nx", [1, 3]])
-@responses.activate
-def test_mode_solver_unstructured_custom_medium(mock_remote_api, local, tmp_path):
-    """Test mode solver can work with custom medium. Consider a waveguide with varying
-    permittivity along x-direction. The value of n_eff at different x position should be
-    different.
+
+@pytest.mark.parametrize("interp,tol", [("linear", 1e-5), ("nearest", 1e-3)])
+@pytest.mark.parametrize("cond_factor", [0, 0.01])
+@pytest.mark.parametrize("nx", [1, 3])
+def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tmp_path):
+    """Test mode solver can work with unstructured custom medium. We compare mode solver results
+    with unstructured custom medium to the results with usual Cartesian custom medium.
     """
 
-    # waveguide made of custom medium
-    x_custom = np.linspace(-0.6, 0.6, 2)
-    y_custom = np.linspace(-0.3, 0.3, 11)
-    z_custom = np.linspace(-0.3, 0.3, 12)
     freq0 = td.C_0 / 1.0
-    n = 5 + np.exp(x_custom(np.sin(y_custom[None, :, None]) * np.cos(z_custom[None, None, :]) 
-    n = n[:, None, None, None]
-    n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
-    mat_custom = td.CustomMedium.from_nk(n_data, interp_method="nearest")
 
-    waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
-    simulation = td.Simulation(
-        size=(2, 2, 2),
-        grid_spec=td.GridSpec(wavelength=1.0),
-        structures=[waveguide],
-        run_time=1e-12,
+    # Cartesian
+    x_custom = np.linspace(-0.6, 0.6, nx)
+    y_custom = np.linspace(-0.3, 0.3, 21)
+    z_custom = np.linspace(-0.3, 0.3, 22)
+    n = 2.5 + (x_custom[:, None, None] + 0.6) / 1.2 * np.sin(y_custom[None, :, None]) * np.cos(
+        z_custom[None, None, :]
     )
-    mode_spec = td.ModeSpec(
-        num_modes=1,
-        precision="double" if local else "single",
-    )
+    n_data = td.SpatialDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom))
 
-    plane_left = td.Box(center=(-0.5, 0, 0), size=(0.9, 0, 0.9))
-    plane_right = td.Box(center=(0.5, 0, 0), size=(0.9, 0, 0.9))
+    # slightly perturbed unstructured grid
+    n_data_u = cartesian_to_unstructured(n_data, pert=0.0001, seed=987)
 
-    n_eff = []
-    for plane in [plane_left, plane_right]:
+    # more perturbed unstructured grid
+    n_data_up = cartesian_to_unstructured(n_data, pert=0.15, seed=987)
+
+    md = []
+
+    for n_arr in [n_data, n_data_u, n_data_up]:
+        mat_custom = td.CustomMedium.from_nk(
+            n=n_arr, k=cond_factor * n_arr, freq=freq0, interp_method=interp
+        )
+        waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
+        simulation = td.Simulation(
+            size=(2, 2, 2),
+            grid_spec=td.GridSpec(wavelength=1.0),
+            structures=[waveguide],
+            run_time=1e-12,
+        )
+        mode_spec = td.ModeSpec(num_modes=1)
+
+        plane = td.Box(center=(0, 0, 0), size=(0.0, 0.9, 0.9))
         ms = ModeSolver(
             simulation=simulation,
             plane=plane,
@@ -446,21 +452,19 @@ def test_mode_solver_unstructured_custom_medium(mock_remote_api, local, tmp_path
             freqs=[freq0],
             direction="+",
         )
-        modes = ms.solve() if local else msweb.run(ms)
-        n_eff.append(modes.n_eff.values)
+        modes = ms.solve()
+        md.append(modes)
 
-        if local:
-            check_ms_reduction(ms)
+    #        ms.plot_field(mode_index=0, f=freq0, field_name="Ez")
+    #        plt.show()
 
-        fname = str(tmp_path / "ms_custom_medium.hdf5")
-        ms.to_file(fname)
-        m2 = ModeSolver.from_file(fname)
-        assert m2 == ms
+    error_u = np.abs(md[0].n_eff - md[1].n_eff).values.item()
+    error_up = np.abs(md[0].n_eff - md[2].n_eff).values.item()
 
-    if local:
-        assert n_eff[0] < 1.5
-        assert n_eff[1] > 4
-            assert n_eff[1] < 5
+    print(nx, cond_factor, interp, tol, error_u, error_up)
+
+    assert error_u < 1e-6
+    assert error_up < tol
 
 
 def test_mode_solver_straight_vs_angled():

@@ -12,7 +12,7 @@ import numpy as np
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
 from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR, annotate_type
+from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal, Complex
 from .data.dataset import PermittivityDataset, CustomSpatialDataType, CustomSpatialDataTypeAnnotated
@@ -1082,7 +1082,9 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         return np.all(np.isreal(_get_numpy_array(dataarray)))
 
     @staticmethod
-    def _validate_isreal_dataarray_tuple(dataarray_tuple: Tuple[CustomSpatialDataType, ...]) -> bool:
+    def _validate_isreal_dataarray_tuple(
+        dataarray_tuple: Tuple[CustomSpatialDataType, ...]
+    ) -> bool:
         """Validate that the dataarray is real"""
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
 
@@ -1225,7 +1227,7 @@ class Medium(AbstractMedium):
         if modulation is None or modulation.permittivity is None:
             return val
 
-        min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
+        min_eps_inf = np.min(_get_numpy_array(val))
         if min_eps_inf - modulation.permittivity.max_modulation <= 0:
             raise ValidationError(
                 "The minimum permittivity value with modulation applied was found to be negative."
@@ -1240,7 +1242,7 @@ class Medium(AbstractMedium):
         if modulation is None or modulation.conductivity is None:
             return val
 
-        min_sigma = val if np.ndim(val) == 0 else np.min(np.array(val))
+        min_sigma = np.min(_get_numpy_array(val))
         if not values.get("allow_gain") and min_sigma - modulation.conductivity.max_modulation < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative at any time."
@@ -1325,7 +1327,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataType] = pd.Field(
+    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
         None,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -1472,14 +1474,14 @@ class CustomMedium(AbstractCustomMedium):
         "will be interpolated based on ``interp_method``.",
     )
 
-    permittivity: Optional[CustomSpatialDataType] = pd.Field(
+    permittivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
         None,
         title="Permittivity",
         description="Spatial profile of relative permittivity.",
         units=PERMITTIVITY,
     )
 
-    conductivity: Optional[CustomSpatialDataType] = pd.Field(
+    conductivity: Optional[CustomSpatialDataTypeAnnotated] = pd.Field(
         None,
         title="Conductivity",
         description="Spatial profile Electric conductivity. Defined such "
@@ -1909,8 +1911,8 @@ class CustomMedium(AbstractCustomMedium):
     @classmethod
     def from_nk(
         cls,
-        n: Union[ScalarFieldDataArray, SpatialDataArray],
-        k: Optional[Union[ScalarFieldDataArray, SpatialDataArray]] = None,
+        n: Union[ScalarFieldDataArray, CustomSpatialDataType],
+        k: Optional[Union[ScalarFieldDataArray, CustomSpatialDataType]] = None,
         freq: float = None,
         interp_method: InterpMethod = "nearest",
         **kwargs,
@@ -2135,7 +2137,7 @@ class DispersiveMedium(AbstractMedium, ABC):
             if modulation is None or modulation.permittivity is None:
                 return val
 
-            min_eps_inf = val if np.ndim(val) == 0 else np.min(np.array(val))
+            min_eps_inf = np.min(_get_numpy_array(val))
             if min_eps_inf - modulation.permittivity.max_modulation <= 0:
                 raise ValidationError(
                     "The minimum permittivity value with modulation applied was found to be negative."
@@ -2723,7 +2725,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
+    poles: Tuple[
+        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
+    ] = pd.Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -2757,7 +2761,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
     def eps_dataarray_freq(
         self, frequency: float
-    ) -> Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated]:
+    ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
         """Permittivity array at ``frequency``.
 
         Parameters
@@ -3047,7 +3051,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
+    coeffs: Tuple[
+        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
+    ] = pd.Field(
         ...,
         title="Coefficients",
         description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
@@ -3405,7 +3411,14 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
+    coeffs: Tuple[
+        Tuple[
+            CustomSpatialDataTypeAnnotated,
+            CustomSpatialDataTypeAnnotated,
+            CustomSpatialDataTypeAnnotated,
+        ],
+        ...,
+    ] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.",
@@ -3670,7 +3683,9 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
+    coeffs: Tuple[
+        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
+    ] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`f_i, \\delta_i`) values for model.",
@@ -3895,7 +3910,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = pd.Field(
+    coeffs: Tuple[
+        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
+    ] = pd.Field(
         ...,
         title="Coefficients",
         description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
@@ -4923,9 +4940,13 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         poles_field = [[a + zeros, c + zeros] for a, c in self.poles]
         for (a_perturb, c_perturb), (a_field, c_field) in zip(self.poles_perturbation, poles_field):
             if a_perturb is not None:
-                a_field = a_field + a_perturb.apply_data(temperature, electron_density, hole_density)
+                a_field = a_field + a_perturb.apply_data(
+                    temperature, electron_density, hole_density
+                )
             if c_perturb is not None:
-                c_field = c_field + c_perturb.apply_data(temperature, electron_density, hole_density)
+                c_field = c_field + c_perturb.apply_data(
+                    temperature, electron_density, hole_density
+                )
 
         new_dict["eps_inf"] = eps_inf_field
         new_dict["poles"] = poles_field

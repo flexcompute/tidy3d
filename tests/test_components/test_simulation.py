@@ -2317,9 +2317,7 @@ def test_sim_subsection(unstructured, nz):
     if unstructured:
         perm = cartesian_to_unstructured(perm, seed=523)
 
-    fine_custom_medium = td.CustomMedium(
-        permittivity=perm
-    )
+    fine_custom_medium = td.CustomMedium(permittivity=perm)
 
     sim = SIM_FULL.updated_copy(
         structures=[

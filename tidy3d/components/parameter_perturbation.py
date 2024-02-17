@@ -377,11 +377,17 @@ HeatPerturbationType = Union[LinearHeatPerturbation, CustomHeatPerturbation]
 
 def ensure_charge_in_range(
     sample: Callable[
-        [Union[ArrayLike[float], CustomSpatialDataType], Union[ArrayLike[float], CustomSpatialDataType]],
+        [
+            Union[ArrayLike[float], CustomSpatialDataType],
+            Union[ArrayLike[float], CustomSpatialDataType],
+        ],
         Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
     ]
 ) -> Callable[
-    [Union[ArrayLike[float], CustomSpatialDataType], Union[ArrayLike[float], CustomSpatialDataType]],
+    [
+        Union[ArrayLike[float], CustomSpatialDataType],
+        Union[ArrayLike[float], CustomSpatialDataType],
+    ],
     Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
 ]:
     """Decorate ``sample`` to log warning if charge supplied is out of bounds."""
@@ -803,7 +809,8 @@ class CustomChargePerturbation(ChargePerturbation):
 
         no_scalars = all(np.ndim(_get_numpy_array(arr)) > 0 for arr in inputs)
         both_1d = all(
-            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(_get_numpy_array(arr)) == 1 for arr in inputs
+            isinstance(arr, (list, tuple, np.ndarray)) and np.ndim(_get_numpy_array(arr)) == 1
+            for arr in inputs
         )
 
         # we allow combining a scalar with any other type
@@ -820,7 +827,9 @@ class CustomChargePerturbation(ChargePerturbation):
 
         # clip to allowed values
         # (this also implicitly convert python arrays into numpy
-        e_vals = np.core.umath.clip(electron_density, self.electron_range[0], self.electron_range[1])
+        e_vals = np.core.umath.clip(
+            electron_density, self.electron_range[0], self.electron_range[1]
+        )
         h_vals = np.core.umath.clip(hole_density, self.hole_range[0], self.hole_range[1])
 
         # we cannot pass UnstructuredGridDataset directly into xarray interp

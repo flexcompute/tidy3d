@@ -2418,7 +2418,10 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
 CustomSpatialDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
-CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])]
+CustomSpatialDataTypeAnnotated = Union[
+    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
+]
+
 
 def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
     """Get numpy representation of dataarray/dataset values."""
