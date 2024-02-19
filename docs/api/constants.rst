@@ -56,30 +56,30 @@ Units
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.HERTZ
-   tidy3d.TERAHERTZ
-   tidy3d.SECOND
-   tidy3d.PICOSECOND
-   tidy3d.METER
-   tidy3d.MICROMETER
-   tidy3d.NANOMETER
-   tidy3d.RADIAN
-   tidy3d.CONDUCTIVITY
-   tidy3d.PERMITTIVITY
-   tidy3d.PML_SIGMA
-   tidy3d.RADPERSEC
-   tidy3d.ELECTRON_VOLT
-   tidy3d.KELVIN
-   tidy3d.PML_SIGMA
-   tidy3d.CMCUBE
-   tidy3d.PERCMCUBE
-   tidy3d.WATT
-   tidy3d.VOLT
-   tidy3d.THERMAL_CONDUCTIVITY
-   tidy3d.SPECIFIC_HEAT_CAPACITY
-   tidy3d.HEAT_FLUX
-   tidy3d.VOLUMETRIC_HEAT_RATE
-   tidy3d.HEAT_TRANSFER_COEFF
+   tidy3d.constants.HERTZ
+   tidy3d.constants.TERAHERTZ
+   tidy3d.constants.SECOND
+   tidy3d.constants.PICOSECOND
+   tidy3d.constants.METER
+   tidy3d.constants.MICROMETER
+   tidy3d.constants.NANOMETER
+   tidy3d.constants.RADIAN
+   tidy3d.constants.CONDUCTIVITY
+   tidy3d.constants.PERMITTIVITY
+   tidy3d.constants.PML_SIGMA
+   tidy3d.constants.RADPERSEC
+   tidy3d.constants.ELECTRON_VOLT
+   tidy3d.constants.KELVIN
+   tidy3d.constants.PML_SIGMA
+   tidy3d.constants.CMCUBE
+   tidy3d.constants.PERCMCUBE
+   tidy3d.constants.WATT
+   tidy3d.constants.VOLT
+   tidy3d.constants.THERMAL_CONDUCTIVITY
+   tidy3d.constants.SPECIFIC_HEAT_CAPACITY
+   tidy3d.constants.HEAT_FLUX
+   tidy3d.constants.VOLUMETRIC_HEAT_RATE
+   tidy3d.constants.HEAT_TRANSFER_COEFF
 
 
 Precision & Comparator Values
@@ -89,8 +89,8 @@ Precision & Comparator Values
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.dp_eps
-   tidy3d.fp_eps
-   tidy3d.pec_val
-   tidy3d.LARGE_NUMBER
-   tidy3d.GLANCING_CUTOFF
+   tidy3d.constants.dp_eps
+   tidy3d.constants.fp_eps
+   tidy3d.constants.pec_val
+   tidy3d.constants.LARGE_NUMBER
+   tidy3d.constants.GLANCING_CUTOFF

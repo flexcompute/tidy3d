@@ -29,7 +29,7 @@ This repository contains the python API to allow you to:
 
 Note that while this front end package is open source, to run simulations on Flexcompute servers requires an account with credits.
 You can sign up for an account [here](https://tidy3d.simulation.cloud/signup).
-After that, you can install the front end with the instructions below, or visit [this page](https://docs.flexcompute.com/projects/tidy3d/en/stable/install.html) in our documentation for more details.
+After that, you can install the front end with the instructions below, or visit [this page](https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html) in our documentation for more details.
 
 ### Quickstart Installation
 
