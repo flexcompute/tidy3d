@@ -935,7 +935,7 @@ def test() -> None:
         console = get_logging_console()
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
-        url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/quickstart.html"
+        url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
 
         raise WebError(
             "Tidy3D not configured correctly. Please refer to our documentation for installation "

@@ -181,4 +181,4 @@ To see some other examples of Tidy3D being used in large scale photonics simulat
 
 To learn more about the many features of Tidy3D, check out our `Feature Walkthrough <./notebooks/Simulation.html>`_.
 
-Or, if you're interested in the API documentation, see `API Reference <./api.html>`_.
+Or, if you're interested in the API documentation, see `API Reference <./api/index.html>`_.
