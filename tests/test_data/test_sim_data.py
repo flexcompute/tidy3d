@@ -410,3 +410,7 @@ def test_loading_non_field_data():
     sim_data = make_sim_data()
     with pytest.raises(DataError):
         sim_data.load_field_monitor("flux")
+
+def test_zbf_output(tmp_path):
+    sim_data = make_sim_data()
+    sim_data.to_zbf("mode_solver", str(tmp_path / "mode_solver.zbf"))

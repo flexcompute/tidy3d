@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) nonlinearities inside `TwoPhotonAbsorption` class.
 - `log_path` argument in `set_logging_file`, set to `False` by default.
 - `ErosionDilationPenalty` to `tidy3d.plugins.adjoint.utils.penalty` to penalize parameter arrays that change under erosion and dilation. This is a simple and effective way to penalize features that violate minimum feature size or radius of curvature fabrication constraints in topology optimization.
+- `SimulationData.to_zbf` and `ElectromagneticFieldData.to_zbf` export fields from 2D monitors to a Zemax Beam File (zbf).
 
 ### Changed
 - `DataArray.to_hdf5()` accepts both file handles and file paths.

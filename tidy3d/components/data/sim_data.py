@@ -779,3 +779,39 @@ class SimulationData(AbstractSimulationData):
         ax.set_ylim(min(y_coord_values), max(y_coord_values))
 
         return ax
+
+    def to_zbf(
+        self,
+        field_monitor_name: str,
+        fname: str = None,
+        refractive_index: float = None,
+        freq: float = None,
+        mode_index: int = 0,
+    ) -> None:
+        """Export the fields from a 2D :class:`FieldMonitor` or :class:`ModeMonitor` to a Zemax
+        Beam File (zbf).
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of :class:`.FieldMonitor` or :class:`.ModeSolverMonitor` to export.
+        fname : str
+            Full path to the .zbf file to be written. If ``None``, the monitor name is used.
+        refractive_index : float
+            Refractive index of the medium surrounding the monitor. If ``None``, the background
+            medium is used.
+        freq : float
+            Field frequency selection. If ``None``, use the central frequency.
+        mode_index : int
+            Mode index selection.
+        """
+        mon_data = self.load_field_monitor(field_monitor_name).grid_corrected_copy
+        if fname is None:
+            fname = field_monitor_name + ".zbf"
+        if refractive_index is None:
+            if freq is None:
+                field = next(iter(mon_data.field_components.values()))
+                freqs = field.coords["f"].values
+                freq = freqs[freqs.size // 2]  # central frequency
+            refractive_index = (self.simulation.medium.eps_model(freq) ** 0.5).real
+        mon_data.to_zbf(fname, refractive_index, freq, mode_index)
