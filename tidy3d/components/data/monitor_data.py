@@ -107,7 +107,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """If ``grid_expanded`` not provided and fields data is present, warn that some methods
         will break."""
         field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-        if val is None and any(field_comp in values.keys() for field_comp in field_comps):
+        if val is None and any(values[comp] is not None for comp in field_comps):
             log.warning(
                 "Monitor data requires 'grid_expanded' to be defined to compute values like "
                 "flux, Poynting and dot product with other data."

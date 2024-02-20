@@ -1194,7 +1194,7 @@ class Simulation(AbstractSimulation):
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["center", "size"])
     def _integration_surfaces_in_bounds(cls, val, values):
-        """Error if any of the integration surfaces are outside of the simulation domain."""
+        """Error if all of the integration surfaces are outside of the simulation domain."""
 
         if val is None:
             return val
@@ -1639,6 +1639,9 @@ class Simulation(AbstractSimulation):
         def num_cells_in_monitor(monitor: Monitor) -> int:
             """Get the number of measurement cells in a monitor given the simulation grid and
             downsampling."""
+            if not self.intersects(monitor):
+                # Monitor is outside of simulation domain; can happen e.g. for integration surfaces
+                return 0
             num_cells = self.discretize_monitor(monitor).num_cells
             # take monitor downsampling into account
             num_cells = monitor.downsampled_num_cells(num_cells)
