@@ -35,7 +35,7 @@ def run_async(
     num_workers: int = None
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
 
     Returns
     ------

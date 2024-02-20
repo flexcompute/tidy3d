@@ -173,8 +173,8 @@ class Environment:
         Parameters
         ----------
         enable_caching: bool = True
-            If `True`, do duplicate checking. Return the previous simulation result if duplicate simulation is found.
-            If `False`, do not duplicate checking. Just run the task directly.
+            If ``True``, do duplicate checking. Return the previous simulation result if duplicate simulation is found.
+            If ``False``, do not duplicate checking. Just run the task directly.
         """
         self._current.enable_caching = enable_caching
 

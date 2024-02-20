@@ -511,7 +511,7 @@ class ComponentModeler(Tidy3dBaseModel):
         return self._construct_smatrix(batch_data=batch_data)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
-        """Load a scattering matrix from saved `BatchData` object."""
+        """Load a scattering matrix from saved :class:`BatchData` object."""
         path_dir = self.get_path_dir(path_dir)
 
         batch_data = BatchData.load(path_dir=path_dir)

@@ -47,7 +47,7 @@ class AbstractCircularFilter(Filter, ABC):
 
     @pd.root_validator(pre=True)
     def _deprecate_feature_size(cls, values):
-        """Extra warning for user using `feature_size` field."""
+        """Extra warning for user using ``feature_size`` field."""
         if "feature_size" in values:
             raise pd.ValidationError(
                 "The 'feature_size' field of circular filters available in 2.4 pre-releases was "
@@ -162,7 +162,7 @@ class CircularFilter(AbstractCircularFilter):
 
 
 class BinaryProjector(Filter):
-    """Projects a grayscale image towards min and max values using a smooth `tanh` function.
+    """Projects a grayscale image towards min and max values using a smooth ``tanh`` function.
 
     Note
     ----

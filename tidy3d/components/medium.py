@@ -74,8 +74,8 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
             return eps_model(self, frequency)
         if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
             log.warning(
-                "frequency passed to `Medium.eps_model()`"
-                f"is outside of `Medium.frequency_range` = {self.frequency_range}",
+                "frequency passed to 'Medium.eps_model()'"
+                f"is outside of 'Medium.frequency_range' = {self.frequency_range}",
                 capture=False,
             )
         return eps_model(self, frequency)
@@ -599,7 +599,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         return self.nonlinear_spec.num_iters
 
     def _post_init_validators(self) -> None:
-        """Call validators taking `self` that get run after init."""
+        """Call validators taking ``self`` that get run after init."""
         self._validate_nonlinear_spec()
 
     def _validate_nonlinear_spec(self):
@@ -1207,7 +1207,7 @@ class Medium(AbstractMedium):
     @pd.validator("conductivity", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         if not values.get("allow_gain") and val < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
@@ -1234,7 +1234,7 @@ class Medium(AbstractMedium):
     @pd.validator("conductivity", always=True)
     @skip_if_fields_missing(["modulation_spec", "allow_gain"])
     def _passivity_modulation_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         modulation = values.get("modulation_spec")
         if modulation is None or modulation.conductivity is None:
             return val
@@ -1365,7 +1365,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     @pd.validator("conductivity", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         if val is None:
             return val
         if not values.get("allow_gain") and np.any(val.values < 0):
@@ -1686,7 +1686,7 @@ class CustomMedium(AbstractCustomMedium):
     @pd.validator("conductivity", always=True)
     @skip_if_fields_missing(["eps_dataset", "modulation_spec", "allow_gain"])
     def _passivity_modulation_validation(cls, val, values):
-        """Assert passive medium at any time during modulation if `allow_gain` is False."""
+        """Assert passive medium at any time during modulation if ``allow_gain`` is False."""
 
         # validated already when the data is supplied through `eps_dataset`
         if values.get("eps_dataset"):
@@ -3255,7 +3255,7 @@ class Lorentz(DispersiveMedium):
     @pd.validator("coeffs", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         if values.get("allow_gain"):
             return val
         for del_ep, _, _ in val:
@@ -3310,7 +3310,7 @@ class Lorentz(DispersiveMedium):
 
     @staticmethod
     def _all_larger(coeff_a, coeff_b) -> bool:
-        """`coeff_a` and `coeff_b` can be either float or SpatialDataArray."""
+        """``coeff_a`` and ``coeff_b`` can be either float or SpatialDataArray."""
         if isinstance(coeff_a, SpatialDataArray):
             return np.all(coeff_a.values > coeff_b.values)
         return coeff_a > coeff_b
@@ -3479,7 +3479,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
     @pd.validator("coeffs", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         allow_gain = values.get("allow_gain")
         for del_ep, _, delta in val:
             if np.any(delta < 0):
@@ -3950,7 +3950,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
     @pd.validator("coeffs", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         allow_gain = values.get("allow_gain")
         for del_ep, tau in val:
             if np.any(tau <= 0):
@@ -4319,7 +4319,7 @@ class FullyAnisotropicMedium(AbstractMedium):
     @pd.validator("conductivity", always=True)
     @skip_if_fields_missing(["allow_gain"])
     def _passivity_validation(cls, val, values):
-        """Assert passive medium if `allow_gain` is False."""
+        """Assert passive medium if ``allow_gain`` is False."""
         if values.get("allow_gain"):
             return val
 

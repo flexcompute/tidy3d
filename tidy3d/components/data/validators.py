@@ -51,8 +51,8 @@ def validate_no_nans(field_name: str):
                     raise ValidationError(
                         f"Found NaN values in '{field_name_display}'. "
                         "If they were not intended, please double check your construction. "
-                        "If intended, to replace these data points with a value `x`,"
-                        " call `values = np.nan_to_num(values, nan=x)`."
+                        "If intended, to replace these data points with a value 'x',"
+                        " call 'values = np.nan_to_num(values, nan=x)'."
                     )
 
         error_if_has_nans(val)

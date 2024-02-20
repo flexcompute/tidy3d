@@ -1268,14 +1268,14 @@ class TriangularGridDataset(UnstructuredGridDataset):
         grid : bool = True
             Whether to plot the unstructured grid.
         cbar : bool = True
-            Display colorbar (only if `field == True`).
+            Display colorbar (only if ``field == True``).
         cmap : str = "viridis"
             Color map to use for plotting.
         vmin : float = None
-            The lower bound of data range that the colormap covers. If `None`, they are
+            The lower bound of data range that the colormap covers. If ``None``, they are
             inferred from the data and other keyword arguments.
         vmax : float = None
-            The upper bound of data range that the colormap covers. If `None`, they are
+            The upper bound of data range that the colormap covers. If ``None``, they are
             inferred from the data and other keyword arguments.
         shading : Literal["gourand", "flat"] = "gourand"
             Type of shading to use when plotting the data field.

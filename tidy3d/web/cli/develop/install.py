@@ -406,6 +406,6 @@ def verify_development_environment(args=None):
     activate_correct_poetry_python()
     echo_and_check_subprocess(["poetry", "install", "-E", "dev", "--dry-run"])
     print(
-        "`poetry install -E dev` dry run on the `poetry.lock` complete.\nManually verify packages are properly installed."
+        "'poetry install -E dev' dry run on the 'poetry.lock' complete.\nManually verify packages are properly installed."
     )
     return 0

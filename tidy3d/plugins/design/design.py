@@ -61,7 +61,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_source: str,
         task_ids: Tuple[str] = None,
     ) -> Result:
-        """How to package results from `method.run` and `method.run_batch`"""
+        """How to package results from ``method.run`` and ``method.run_batch``"""
 
         fn_args_coords = tuple(fn_args.values())
 

@@ -1786,9 +1786,9 @@ class Box(Centered):
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
         of the normal vector of that surface. If a name is provided, each output surface's name
         will be that of the provided name appended with the above symbols. E.g., if the provided
-        name is "box", the x+ surfaces's name will be "box_x+". If `kwargs` contains an
-        `exclude_surfaces` parameter, the returned list of surfaces will not include the excluded
-        surfaces. Otherwise, the behavior is identical to that of `surfaces()`.
+        name is "box", the x+ surfaces's name will be "box_x+". If ``kwargs`` contains an
+        ``exclude_surfaces`` parameter, the returned list of surfaces will not include the excluded
+        surfaces. Otherwise, the behavior is identical to that of ``surfaces()``.
 
         Parameters
         ----------
@@ -2036,7 +2036,7 @@ class Box(Centered):
         bend_radius : float = None
             Radius of curvature for this arrow.
         bend_axis : Axis = None
-            Axis of curvature of `bend_radius`.
+            Axis of curvature of ``bend_radius``.
         both_dirs : bool = False
             If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
