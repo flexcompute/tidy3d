@@ -17,7 +17,7 @@ class TaskStubData(ABC):
         Returns
         -------
         :class:`Stub`
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
 
         """
         pass
@@ -34,7 +34,7 @@ class TaskStubData(ABC):
         Returns
         -------
         :class:`Stub`
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
         """
         pass
 
@@ -52,7 +52,7 @@ class TaskStub(ABC):
         Returns
         -------
         :class:`TaskStubData`
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
         """
         pass
 
@@ -68,7 +68,7 @@ class TaskStub(ABC):
         Returns
         -------
         :class:`Stub`
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
         """
         pass
 

@@ -67,7 +67,7 @@ def run(
     results_file : str = "mode_solver.hdf5"
         Path to download results file (.hdf5).
     verbose : bool = True
-        If `True`, will print status, otherwise, will run silently.
+        If ``True``, will print status, otherwise, will run silently.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
@@ -92,10 +92,10 @@ def run(
 
         if reduce_simulation:
             log.warning(
-                "The associated `Simulation` object contains custom mediums. It will be "
+                "The associated 'Simulation' object contains custom mediums. It will be "
                 "automatically restricted to the mode solver plane to reduce data for uploading. "
-                "To force uploading the original `Simulation` object use `reduce_simulation=False`."
-                " Setting `reduce_simulation=True` will force simulation reduction in all cases and"
+                "To force uploading the original 'Simulation' object use 'reduce_simulation=False'."
+                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
                 " silence this warning."
             )
 

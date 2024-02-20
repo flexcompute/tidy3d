@@ -294,7 +294,7 @@ class ModulationSpec(Tidy3dBaseModel):
 
     @cached_property
     def applied_modulation(self) -> bool:
-        """Check if any modulation has been applied to `permittivity` or `conductivity`."""
+        """Check if any modulation has been applied to ``permittivity`` or ``conductivity``."""
         return self.permittivity is not None or self.conductivity is not None
 
     def sel_inside(self, bounds: Bound) -> ModulationSpec:

@@ -267,15 +267,15 @@ class CustomSourceTime(Pulse):
         values: ArrayComplex1D
             Complex values of the source envelope.
         dt: float
-            Time step for the `values` array. This value should be sufficiently small
+            Time step for the ``values`` array. This value should be sufficiently small
             that the interpolation to simulation time steps does not introduce artifacts.
 
         Returns
         -------
         CustomSourceTime
-            :class:`.CustomSourceTime` with envelope given by `values`, modulated by a complex
-            exponential at frequency `freq0`. The time coordinates are evenly spaced
-            between 0 and dt * (N-1) with a step size of `dt`, where N is the length of
+            :class:`.CustomSourceTime` with envelope given by ``values``, modulated by a complex
+            exponential at frequency ``freq0``. The time coordinates are evenly spaced
+            between ``0`` and ``dt * (N-1)`` with a step size of ``dt``, where ``N`` is the length of
             the values array.
         """
 

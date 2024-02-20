@@ -216,7 +216,7 @@ class Structure(AbstractStructure):
         Return
         ------
         List
-            List of `gdstk.Polygon`
+            List of ``gdstk.Polygon``
         """
 
         polygons = self.geometry.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
@@ -277,7 +277,7 @@ class Structure(AbstractStructure):
         Return
         ------
         List
-            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+            List of ``gdspy.Polygon`` and ``gdspy.PolygonSet``.
         """
 
         if isinstance(self.medium, AbstractCustomMedium):

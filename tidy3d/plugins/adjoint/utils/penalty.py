@@ -191,7 +191,7 @@ class ErosionDilationPenalty(Penalty):
         0.01,
         title="Delta Eta Cutoff",
         description="The binarization threshold for erosion and dilation operations "
-        "The thresholds are 0 + `delta_eta` on the low end and `1 - delta_eta` on the high end. "
+        "The thresholds are ``0 + delta_eta`` on the low end and ``1 - delta_eta`` on the high end. "
         "The default value balances binarization with differentiability so we strongly suggest "
         "using it unless there is a good reason to set it differently.",
     )

@@ -313,7 +313,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         eps_out: complex,
         eps_in: complex,
     ) -> Coordinate2D:
-        """Gradient w.r.t change in `vertex_grad` connected to `vertex_stat`."""
+        """Gradient w.r.t change in ``vertex_grad`` connected to ``vertex_stat``."""
 
         # TODO: (later) compute these grabbing from grad_data_eps at some distance away
         delta_eps_12 = eps_in - eps_out
@@ -354,7 +354,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             return cmp_t, cmp_n, cmp_z
 
         def compute_integrand(s: np.array, z: np.array) -> np.array:
-            """Get integrand at positions `(s, z)` along the edge."""
+            """Get integrand at positions ``(s, z)`` along the edge."""
 
             # grab the position along edge and make dictionary of coords to interp with (s, z)
             x, y = edge_position(s=s)
@@ -521,7 +521,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         eps_out: complex,
         eps_in: complex,
     ) -> tuple:
-        """Generate arguments for `vertex_vjp`."""
+        """Generate arguments for ``vertex_vjp``."""
 
         num_verts = len(self.vertices)
         args = [range(num_verts)]
@@ -620,7 +620,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         eps_in: complex,
         num_proc: int = 1,
     ) -> JaxGeometryGroup:
-        """Returns a `JaxGeometryGroup` where the `.geometries` store the gradient info."""
+        """Returns a ``JaxGeometryGroup`` where the ``.geometries`` store the gradient info."""
 
         map_args = (
             self.geometries,

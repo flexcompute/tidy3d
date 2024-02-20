@@ -47,7 +47,7 @@ MIN_FREQUENCY = 1e5
 
 
 def assert_plane():
-    """makes sure a field's `size` attribute has exactly 1 zero"""
+    """makes sure a field's ``size`` attribute has exactly 1 zero"""
 
     @pydantic.validator("size", allow_reuse=True, always=True)
     def is_plane(cls, val):
@@ -60,7 +60,7 @@ def assert_plane():
 
 
 def assert_volumetric():
-    """makes sure a field's `size` attribute has no zero entry"""
+    """makes sure a field's ``size`` attribute has no zero entry"""
 
     @pydantic.validator("size", allow_reuse=True, always=True)
     def is_volumetric(cls, val):
@@ -124,7 +124,7 @@ def validate_mode_objects_symmetry(field_name: str):
                     ):
                         raise SetupError(
                             f"Mode object '{geometric_object}' "
-                            f"(at `simulation.{field_name}[{position_index}]`) "
+                            f"(at 'simulation.{field_name}[{position_index}]') "
                             "in presence of symmetries must be in the main quadrant, "
                             "or centered on the symmetry axis."
                         )

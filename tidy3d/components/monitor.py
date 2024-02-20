@@ -741,7 +741,7 @@ class FieldProjectionSurface(Tidy3dBaseModel):
 
     @pydantic.validator("monitor", always=True)
     def is_plane(cls, val):
-        """Ensures that the monitor is a plane, i.e., its `size` attribute has exactly 1 zero"""
+        """Ensures that the monitor is a plane, i.e., its ``size`` attribute has exactly 1 zero"""
         size = val.size
         if size.count(0.0) != 1:
             raise ValidationError(f"Monitor '{val.name}' must be planar, given size={size}")
