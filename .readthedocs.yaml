@@ -3,6 +3,7 @@ version: 2
 submodules:
   include:
     - docs/notebooks
+    - docs/faq
   recursive: true
 
 build:
