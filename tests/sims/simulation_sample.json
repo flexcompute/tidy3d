@@ -2223,9 +2223,9 @@
         "type": "GridSpec"
     },
     "version": "2.6.0",
-    "run_time": 1e-12,
+    "courant": 0.8,
+    "normalize_index": 0,
     "shutoff": 0.0001,
     "subpixel": false,
-    "normalize_index": 0,
-    "courant": 0.8
+    "run_time": 1e-12
 }
