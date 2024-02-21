@@ -78,7 +78,17 @@ class SMatrixDataArray(DataArray):
 
 
 class ComponentModeler(Tidy3dBaseModel):
-    """Tool for modeling devices and computing scattering matrix elements."""
+    """
+    Tool for modeling devices and computing scattering matrix elements.
+
+    .. TODO missing basic example
+
+    See Also
+    --------
+
+    **Notebooks**
+        * `Computing the scattering matrix of a device <../../notebooks/SMatrix.html>`_
+    """
 
     simulation: Simulation = pd.Field(
         ...,
@@ -123,6 +133,10 @@ class ComponentModeler(Tidy3dBaseModel):
         "If this option is used, "
         "the data corresponding to other inputs will be missing in the resulting matrix.",
     )
+    """Finally, to exclude some rows of the scattering matrix, one can supply a ``run_only`` parameter to the
+    :class:`ComponentModeler`. ``run_only`` contains the scattering matrix indices that the user wants to run as a
+    source. If any indices are excluded, they will not be run."""
+
     verbose: bool = pd.Field(
         False,
         title="Verbosity",
@@ -497,7 +511,7 @@ class ComponentModeler(Tidy3dBaseModel):
         return self._construct_smatrix(batch_data=batch_data)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> SMatrixDataArray:
-        """Load a scattering matrix from saved `BatchData` object."""
+        """Load a scattering matrix from saved :class:`BatchData` object."""
         path_dir = self.get_path_dir(path_dir)
 
         batch_data = BatchData.load(path_dir=path_dir)

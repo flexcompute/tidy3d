@@ -25,11 +25,13 @@ GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
 class AbstractJaxStructure(Structure, JaxObject):
     """A :class:`.Structure` registered with jax."""
 
-    geometry: Union[JaxGeometryType, GeometryType]
-    medium: Union[JaxMediumType, MediumType]
+    _tidy3d_class = Structure
 
     # which of "geometry" or "medium" is differentiable for this class
     _differentiable_fields = ()
+
+    geometry: Union[JaxGeometryType, GeometryType]
+    medium: Union[JaxMediumType, MediumType]
 
     @pd.validator("medium", always=True)
     def _check_2d_geometry(cls, val, values):

@@ -44,7 +44,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         Returns
         -------
         Union[:class:`.Simulation`, :class:`.HeatSimulation`]
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
 
         Example
         -------
@@ -112,7 +112,7 @@ class Tidy3dStub(BaseModel, TaskStub):
         Returns
         -------
         :class:`TaskType`
-            An instance Type of the component class calling `load`.
+            An instance Type of the component class calling ``load``.
         """
         if isinstance(self.simulation, Simulation):
             return TaskType.FDTD.name
@@ -146,7 +146,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         Returns
         -------
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
         """
         extension = _get_valid_extension(file_path)
         if extension == ".json":
@@ -197,7 +197,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         Returns
         -------
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
-            An instance of the component class calling `load`.
+            An instance of the component class calling ``load``.
         """
         stub_data = Tidy3dStubData.from_file(file_path)
 

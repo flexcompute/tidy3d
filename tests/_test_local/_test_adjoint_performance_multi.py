@@ -1,10 +1,5 @@
 import pytest
-import numpy as np
-import os
-import sys
 from memory_profiler import profile
-import matplotlib.pylab as plt
-import time
 import jax
 
 import jax.numpy as jnp
@@ -29,7 +24,7 @@ surface_area = 6 * (N_SIDE * BOX_LENGTH**2)
 
 
 def make_sim(box_length) -> tda.JaxSimulation:
-    """Construt a simulation out of some input parameters."""
+    """Construct a simulation out of some input parameters."""
 
     num_structures = int(N_SIDE**2)
     sim_length = N_SIDE * (BOX_LENGTH + SPACE)

@@ -48,8 +48,9 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
 ) -> SimulationDataType:
-    """Submits a simulation to the server, starts running, monitors progress,
-    downloads, and loads results as a corresponding data object.
+    """
+    Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
+    and loads results as a :class:`.SimulationDataType` object.
 
     Parameters
     ----------
@@ -65,7 +66,7 @@ def run(
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
@@ -79,6 +80,45 @@ def run(
     -------
     Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
         Object containing solver results for the supplied simulation.
+
+    Notes
+    -----
+
+        Submitting a simulation to our cloud server is very easily done by a simple web API call.
+
+        .. code-block:: python
+
+            sim_data = tidy3d.web.api.webapi.run(simulation, task_name='my_task', path='out/data.hdf5')
+
+        The :meth:`tidy3d.web.api.webapi.run()` method shows the simulation progress by default.  When uploading a
+        simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
+        :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
+        display the progress of your simulation(s).
+
+    Examples
+    --------
+
+        To access the original :class:`.Simulation` object that created the simulation data you can use:
+
+        .. code-block:: python
+
+            # Run the simulation.
+            sim_data = web.run(simulation, task_name='task_name', path='out/sim.hdf5')
+
+            # Get a copy of the original simulation object.
+            sim_copy = sim_data.simulation
+
+    See Also
+    --------
+
+    :meth:`tidy3d.web.api.webapi.monitor`
+        Print the real time task progress until completion.
+
+    :meth:`tidy3d.web.api.container.Job.monitor`
+        Monitor progress of running :class:`Job`.
+
+    :meth:`tidy3d.web.api.container.Batch.monitor`
+        Monitor progress of each of the running tasks.
     """
     task_id = upload(
         simulation=simulation,
@@ -111,7 +151,8 @@ def upload(
     parent_tasks: List[str] = None,
     source_required: bool = True,
 ) -> TaskId:
-    """Upload a simulation to the server, but do not start running.
+    """
+    Upload simulation to server, but do not start running :class:`.Simulation`.
 
     Parameters
     ----------
@@ -125,7 +166,7 @@ def upload(
         Http PUT url to receive simulation finish event. The body content is a json file with
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     simulation_type : str
@@ -140,9 +181,18 @@ def upload(
     str
         Unique identifier of task on server.
 
-    Note
-    ----
-    To start the simulation running, must call :meth:`start` after uploaded.
+
+    Notes
+    -----
+
+        Once you've created a ``job`` object using :class:`tidy3d.web.api.container.Job`, you can upload it to our servers with:
+
+        .. code-block:: python
+
+            web.upload(simulation, task_name="task_name", verbose=verbose)
+
+        It will not run until you explicitly tell it to do so with :meth:`tidy3d.web.api.webapi.start`.
+
     """
     stub = Tidy3dStub(simulation=simulation)
     stub.validate_pre_upload(source_required=source_required)
@@ -183,7 +233,7 @@ def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     Returns
     -------
     :class:`TaskInfo`
@@ -212,7 +262,6 @@ def start(
         target solver version.
     worker_group: str = None
         worker group
-
     Note
     ----
     To monitor progress, can call :meth:`monitor` after starting simulation.
@@ -266,14 +315,24 @@ def get_status(task_id) -> str:
 
 
 def monitor(task_id: TaskId, verbose: bool = True) -> None:
-    """Print the real time task progress until completion.
+    """
+    Print the real time task progress until completion.
+
+    Notes
+    -----
+
+        To monitor the simulation's progress and wait for its completion, use:
+
+        .. code-block:: python
+
+            tidy3d.web.api.webapi.monitor(job.task_id, verbose=verbose).
 
     Parameters
     ----------
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
 
     Note
     ----
@@ -448,7 +507,7 @@ def download(
     path : str = "simulation_data.hdf5"
         Download path to .hdf5 data file (including filename).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
@@ -459,7 +518,7 @@ def download(
 
 @wait_for_connection
 def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
-    """Download the `.json` file associated with the :class:`.Simulation` of a given task.
+    """Download the ``.json`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
@@ -468,7 +527,7 @@ def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = Tr
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
 
     """
 
@@ -483,7 +542,7 @@ def download_hdf5(
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> None:
-    """Download the `.hdf5` file associated with the :class:`.Simulation` of a given task.
+    """Download the ``.hdf5`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
     ----------
@@ -492,7 +551,7 @@ def download_hdf5(
     path : str = "simulation.hdf5"
         Download path to .hdf5 file of simulation (including filename).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
@@ -505,7 +564,7 @@ def download_hdf5(
 def load_simulation(
     task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
 ) -> SimulationType:
-    """Download the `.json` file of a task and load the associated simulation.
+    """Download the ``.json`` file of a task and load the associated simulation.
 
     Parameters
     ----------
@@ -514,7 +573,7 @@ def load_simulation(
     path : str = "simulation.json"
         Download path to .json file of simulation (including filename).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
 
     Returns
     -------
@@ -543,13 +602,13 @@ def download_log(
     path : str = "tidy3d.log"
         Download path to log file (including filename).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
     Note
     ----
-    To load downloaded results into data, call :meth:`load` with option `replace_existing=False`.
+    To load downloaded results into data, call :meth:`load` with option ``replace_existing=False``.
     """
     task = SimulationTask(taskId=task_id)
     task.get_log(path, verbose=verbose, progress_callback=progress_callback)
@@ -563,7 +622,21 @@ def load(
     verbose: bool = True,
     progress_callback: Callable[[float], None] = None,
 ) -> SimulationDataType:
-    """Download and load simulation results into a data object.
+    """
+    Download and Load simulation results into :class:`.SimulationData` object.
+
+    Notes
+    -----
+
+        After the simulation is complete, you can load the results into a :class:`.SimulationData` object by its
+        ``task_id`` using:
+
+        .. code-block:: python py
+
+            sim_data = web.load(task_id, path="outt/sim.hdf5", verbose=verbose)
+
+        The :meth:`tidy3d.web.api.webapi.load` method is very convenient to load and postprocess results from simulations
+        created using Tidy3D GUI.
 
     Parameters
     ----------
@@ -574,7 +647,7 @@ def load(
     replace_existing: bool = True
         Downloads the data even if path exists (overwriting the existing).
     verbose : bool = True
-        If `True`, will print progressbars and status, otherwise, will run silently.
+        If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
 
@@ -725,17 +798,29 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
     the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
     A minimum simulation cost may also apply, which depends on the task details.
 
-    Parameters
-    ----------
-    task_id : str
-        Unique identifier of task on server.  Returned by :meth:`upload`.
+    Notes
+    -----
 
-    Returns
-    -------
-    float
-        Estimated cost of the task in FlexCredits.
+        We can get the cost estimate of running the task before actually running it. This prevents us from
+        accidentally running large jobs that we set up by mistake. The estimated cost is the maximum cost
+        corresponding to running all the time steps.
+
+    Examples
+    --------
+
+    Basic example:
+
+    .. code-block:: python
+
+        # initializes job, puts task on server (but doesn't run it)
+        job = web.Job(simulation=sim, task_name="job", verbose=verbose)
+
+        # estimate the maximum cost
+        estimated_cost = web.estimate_cost(job.task_id)
+
+        print(f'The estimated maximum cost is {estimated_cost:.3f} Flex Credits.')
+
     """
-
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
@@ -793,6 +878,32 @@ def real_cost(task_id: str, verbose=True) -> float:
     ----
         The billed cost may not be immediately available when the task status is set to ``success``,
         but should be available shortly after.
+
+    Examples
+    --------
+
+    To obtain the cost of a simulation, you can use the function ``tidy3d.web.real_cost(task_id)``. In the example
+    below, a job is created, and its cost is estimated. After running the simulation, the real cost can be obtained.
+
+    .. code-block:: python
+
+        import time
+
+        # initializes job, puts task on server (but doesn't run it)
+        job = web.Job(simulation=sim, task_name="job", verbose=verbose)
+
+        # estimate the maximum cost
+        estimated_cost = web.estimate_cost(job.task_id)
+
+        print(f'The estimated maximum cost is {estimated_cost:.3f} Flex Credits.')
+
+        # Runs the simulation.
+        sim_data = job.run(path="data/sim_data.hdf5")
+
+        time.sleep(5)
+
+        # Get the billed FlexCredit cost after a simulation run.
+        cost = web.real_cost(job.task_id)
     """
     task_info = get_info(task_id)
     flex_unit = task_info.realFlexUnit
@@ -824,7 +935,7 @@ def test() -> None:
         console = get_logging_console()
         console.log("Authentication configured successfully!")
     except (WebError, HTTPError) as e:
-        url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/quickstart.html"
+        url = "https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html"
 
         raise WebError(
             "Tidy3D not configured correctly. Please refer to our documentation for installation "

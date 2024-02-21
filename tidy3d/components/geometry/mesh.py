@@ -8,13 +8,15 @@ import pydantic.v1 as pydantic
 import numpy as np
 
 from ..base import cached_property
-from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh, TrimeshType
+from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from ..viz import add_ax_if_none, equal_aspect
 from ...log import log
 from ...exceptions import ValidationError, DataError
 from ...constants import fp_eps, inf
 from ..data.dataset import TriangleMeshDataset
 from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
+from ..data.validators import validate_no_nans
+from ...packaging import verify_packages_import
 
 from . import base
 
@@ -35,8 +37,10 @@ class TriangleMesh(base.Geometry, ABC):
         description="Surface mesh data.",
     )
 
+    _no_nans_mesh = validate_no_nans("mesh_dataset")
+
     @pydantic.root_validator(pre=True)
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def _validate_trimesh_library(cls, values):
         """Check if the trimesh package is imported as a validator."""
         return values
@@ -59,7 +63,8 @@ class TriangleMesh(base.Geometry, ABC):
         if not all(np.array(mesh.area_faces) > fp_eps):
             raise ValidationError(
                 "The provided mesh has triangles with zero area. "
-                "Consider using 'trimesh.Trimesh.remove_degenerate_faces' to fix this."
+                "Consider using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
+                "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
             )
         if not mesh.is_winding_consistent:
             log.warning(
@@ -80,7 +85,7 @@ class TriangleMesh(base.Geometry, ABC):
         return val
 
     @classmethod
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def from_stl(
         cls,
         filename: str,
@@ -114,6 +119,8 @@ class TriangleMesh(base.Geometry, ABC):
         Union[:class:`.TriangleMesh`, :class:`.GeometryGroup`]
             The geometry or geometry group from the file.
         """
+        import trimesh
+        from ..types_extra import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
             """Process a single 'trimesh.Trimesh' using scale and origin."""
@@ -145,7 +152,8 @@ class TriangleMesh(base.Geometry, ABC):
         raise ValidationError("No solid found at 'solid_index' in the stl file.")
 
     @classmethod
-    def from_trimesh(cls, mesh: TrimeshType) -> TriangleMesh:
+    @verify_packages_import(["trimesh"])
+    def from_trimesh(cls, mesh: trimesh.Trimesh) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from a ``trimesh.Trimesh`` object.
 
         Parameters
@@ -194,7 +202,7 @@ class TriangleMesh(base.Geometry, ABC):
         return TriangleMesh(mesh_dataset=mesh_dataset)
 
     @classmethod
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def from_vertices_faces(cls, vertices: np.ndarray, faces: np.ndarray) -> TriangleMesh:
         """Create a :class:`.TriangleMesh` from numpy arrays containing the data
         of a surface mesh. The first array contains the vertices, and the second array contains
@@ -217,6 +225,8 @@ class TriangleMesh(base.Geometry, ABC):
             The custom surface mesh geometry given by the vertices and faces provided.
 
         """
+        import trimesh
+
         vertices = np.array(vertices)
         faces = np.array(faces)
         if len(vertices.shape) != 2 or vertices.shape[1] != 3:
@@ -228,13 +238,20 @@ class TriangleMesh(base.Geometry, ABC):
         return cls.from_triangles(trimesh.Trimesh(vertices, faces).triangles)
 
     @classmethod
-    @base.requires_trimesh
-    def _triangles_to_trimesh(cls, triangles: np.ndarray) -> TrimeshType:
+    @verify_packages_import(["trimesh"])
+    def _triangles_to_trimesh(
+        cls, triangles: np.ndarray
+    ):  # -> TrimeshType: We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
         """Convert an (N, 3, 3) numpy array of triangles to a ``trimesh.Trimesh``."""
+        import trimesh
+
         return trimesh.Trimesh(**trimesh.triangles.to_kwargs(triangles))
 
     @cached_property
-    def trimesh(self) -> TrimeshType:
+    @verify_packages_import(["trimesh"])
+    def trimesh(
+        self,
+    ):  # -> TrimeshType: We need to get this out of the classes and into functional methods operating on a class (maybe still referenced to the class)
         """A ``trimesh.Trimesh`` object representing the custom surface mesh geometry."""
         return self._triangles_to_trimesh(self.triangles)
 
@@ -287,7 +304,7 @@ class TriangleMesh(base.Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         section = self.trimesh.section(plane_origin=origin, plane_normal=normal)
         if section is None:
@@ -298,7 +315,7 @@ class TriangleMesh(base.Geometry, ABC):
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None
     ) -> List[Shapely]:
-        """Returns list of shapely geomtries at plane specified by one non-None value of x,y,z.
+        """Returns list of shapely geometries at plane specified by one non-None value of x,y,z.
 
         Parameters
         ----------

@@ -16,7 +16,7 @@ from matplotlib import patches
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
-from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4, trimesh
+from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4
 from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
 from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
 from ..transformation import RotationAroundAxis
@@ -24,37 +24,10 @@ from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
 from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
-
-try:
-    gdstk_available = True
-    import gdstk
-except ImportError:
-    gdstk_available = False
-
-try:
-    gdspy_available = True
-    import gdspy
-except ImportError:
-    gdspy_available = False
+from ...packaging import verify_packages_import, check_import
 
 
 POLY_GRID_SIZE = 1e-12
-
-
-def requires_trimesh(fn):
-    """When decorating a method, requires that trimesh is available."""
-
-    @functools.wraps(fn)
-    def _fn(*args, **kwargs):
-        if trimesh is None:
-            raise Tidy3dImportError(
-                "The package 'trimesh' is required for this operation, but it was not found. "
-                "Please install the 'trimesh' dependencies using, for example, "
-                "'pip install -r requirements/trimesh.txt'."
-            )
-        return fn(*args, **kwargs)
-
-    return _fn
 
 
 _shapely_operations = {
@@ -204,7 +177,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def intersections_plane(
@@ -226,7 +199,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         origin = self.unpop_axis(position, (0, 0), axis=axis)
@@ -245,7 +218,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         -------
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane. For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         log.warning(
             "'intersections_2dbox()' is deprecated and will be removed in the future. "
@@ -273,7 +246,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         # are all of other's minimum coordinates less than self's maximum coordinate?
         in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))
 
-        # are all of other's maximum coordinates greater than self's minum coordinate?
+        # are all of other's maximum coordinates greater than self's minimum coordinate?
         in_plus = all(o >= s for (s, o) in zip(self_bmin, other_bmax))
 
         # for intersection of bounds, both must be true
@@ -306,7 +279,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         Parameters
         ----------
         axis : int = None
-            Axis nomral to the plane.
+            Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
 
@@ -640,7 +613,7 @@ class Geometry(Tidy3dBaseModel, ABC):
             Index into xyz axis (0,1,2) and position along that axis.
         """
         xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
-        assert len(xyz_filtered) == 1, "exatly one kwarg in [x,y,z] must be specified."
+        assert len(xyz_filtered) == 1, "exactly one kwarg in [x,y,z] must be specified."
         axis_label, position = list(xyz_filtered.items())[0]
         axis = "xyz".index(axis_label)
         return axis, position
@@ -938,7 +911,8 @@ class Geometry(Tidy3dBaseModel, ABC):
             theta and phi coordinates relative to ``local_origin``.
         """
         phi_local = np.arctan2(uy, ux)
-        theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
+        with np.errstate(invalid="ignore"):
+            theta_local = np.arcsin(np.sqrt(ux**2 + uy**2))
         # Spherical coordinates rotation matrix reference:
         # https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula#Matrix_notation
         if axis == 2:
@@ -956,6 +930,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return theta, phi
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdstk(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1004,6 +979,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def load_gds_vertices_gdspy(
         gds_cell, gds_layer: int, gds_dtype: int = None, gds_scale: pydantic.PositiveFloat = 1.0
     ) -> List[ArrayFloat2D]:
@@ -1046,6 +1022,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         return all_vertices
 
     @staticmethod
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def from_gds(
         gds_cell,
         axis: Axis,
@@ -1091,11 +1068,19 @@ class Geometry(Tidy3dBaseModel, ABC):
         :class:`Geometry`
             Geometries created from the 2D data.
         """
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
 
-        if gdstk_available and isinstance(gds_cell, gdstk.Cell):
-            gds_loader_fn = Geometry.load_gds_vertices_gdstk
-        elif gdspy_available and isinstance(gds_cell, gdspy.Cell):
-            gds_loader_fn = Geometry.load_gds_vertices_gdspy
+        if gdstk_available:
+            import gdstk
+
+            if isinstance(gds_cell, gdstk.Cell):
+                gds_loader_fn = Geometry.load_gds_vertices_gdstk
+        elif gdspy_available:
+            import gdspy
+
+            if isinstance(gds_cell, gdspy.Cell):
+                gds_loader_fn = Geometry.load_gds_vertices_gdspy
         elif "gdstk" in gds_cell.__class__ and not gdstk_available:
             raise Tidy3dImportError(
                 "Module 'gdstk' not found. It is required to import gdstk cells."
@@ -1165,6 +1150,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         """
         return from_shapely(shape, axis, slab_bounds, dilation, sidewall_angle, reference_plane)
 
+    @verify_packages_import(["gdstk"])
     def to_gdstk(
         self,
         x: float = None,
@@ -1193,11 +1179,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List
             List of `gdstk.Polygon`.
         """
-        if not gdstk_available:
-            raise Tidy3dImportError(
-                "Python module 'gdstk' not found. Install the module to be able to export shapes "
-                "using it."
-            )
+        import gdstk
 
         shapes = self.intersections_plane(x=x, y=y, z=z)
         polygons = []
@@ -1217,6 +1199,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
+    @verify_packages_import(["gdspy"])
     def to_gdspy(
         self,
         x: float = None,
@@ -1245,11 +1228,7 @@ class Geometry(Tidy3dBaseModel, ABC):
         List
             List of `gdspy.Polygon` and `gdspy.PolygonSet`.
         """
-        if not gdspy_available:
-            raise Tidy3dImportError(
-                "Python module 'gdspy' not found. Install the module to be able to export shapes "
-                "using it."
-            )
+        import gdspy
 
         shapes = self.intersections_plane(x=x, y=y, z=z)
         polygons = []
@@ -1269,6 +1248,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                     )
         return polygons
 
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds(
         self,
         cell,
@@ -1295,15 +1275,24 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_dtype : int = 0
             Data-type index to use for the shapes stored in the .gds file.
         """
-        if gdstk_available and isinstance(cell, gdstk.Cell):
-            polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(*polygons)
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
 
-        elif gdspy_available and isinstance(cell, gdspy.Cell):
-            polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-            if len(polygons) > 0:
-                cell.add(polygons)
+        if gdstk_available:
+            import gdstk
+
+            if isinstance(cell, gdstk.Cell):
+                polygons = self.to_gdstk(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+                if len(polygons) > 0:
+                    cell.add(*polygons)
+
+        elif gdspy_available:
+            import gdspy
+
+            if isinstance(cell, gdspy.Cell):
+                polygons = self.to_gdspy(x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+                if len(polygons) > 0:
+                    cell.add(polygons)
 
         elif "gdstk" in cell.__class__ and not gdstk_available:
             raise Tidy3dImportError(
@@ -1318,6 +1307,7 @@ class Geometry(Tidy3dBaseModel, ABC):
                 "Argument 'cell' must be an instance of 'gdstk.Cell' or 'gdspy.Cell'."
             )
 
+    @verify_packages_import(["gdstk", "gdspy"], required="any")
     def to_gds_file(
         self,
         fname: str,
@@ -1347,15 +1337,25 @@ class Geometry(Tidy3dBaseModel, ABC):
         gds_cell_name : str = 'MAIN'
             Name of the cell created in the .gds file to store the geometry.
         """
+
+        # Fundamental import structure for custom commands depending on which package is available.
+        gdstk_available = check_import("gdstk")
+        gdspy_available = check_import("gdspy")
+
         if gdstk_available:
+            import gdstk
+
             library = gdstk.Library()
         elif gdspy_available:
+            import gdspy
+
             library = gdspy.GdsLibrary()
         else:
             raise Tidy3dImportError(
                 "Python modules 'gdspy' and 'gdstk' not found. To export geometries to .gds "
                 "files, please install one of those those modules."
             )
+
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
         library.write_gds(fname)
@@ -1521,7 +1521,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-        `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -1544,7 +1544,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     @abstractmethod
@@ -1563,7 +1563,7 @@ class Planar(Geometry, ABC):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
     def _order_axis(self, axis: int) -> int:
@@ -1612,7 +1612,7 @@ class Planar(Geometry, ABC):
     def _tanq(self) -> float:
         """Value of ``tan(sidewall_angle)``.
 
-        The (possibliy infinite) geometry offest is given by ``_tanq * length_axis``.
+        The (possibliy infinite) geometry offset is given by ``_tanq * length_axis``.
         """
         return np.tan(self.sidewall_angle)
 
@@ -1786,9 +1786,9 @@ class Box(Centered):
         denote which axis is perpendicular to that surface, while "-" and "+" denote the direction
         of the normal vector of that surface. If a name is provided, each output surface's name
         will be that of the provided name appended with the above symbols. E.g., if the provided
-        name is "box", the x+ surfaces's name will be "box_x+". If `kwargs` contains an
-        `exclude_surfaces` parameter, the returned list of surfaces will not include the excluded
-        surfaces. Otherwise, the behavior is identical to that of `surfaces()`.
+        name is "box", the x+ surfaces's name will be "box_x+". If ``kwargs`` contains an
+        ``exclude_surfaces`` parameter, the returned list of surfaces will not include the excluded
+        surfaces. Otherwise, the behavior is identical to that of ``surfaces()``.
 
         Parameters
         ----------
@@ -1809,7 +1809,7 @@ class Box(Centered):
             surfaces = [surf for surf in surfaces if surf.name[-2:] not in exclude_surfaces]
         return surfaces
 
-    @requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -1829,8 +1829,10 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         (x0, y0, z0), (x1, y1, z1) = self.bounds
         vertices = [
             (x0, y0, z0),  # 0
@@ -1875,7 +1877,7 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -1935,7 +1937,7 @@ class Box(Centered):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect this 2D box.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         # Verify 2D
@@ -2034,9 +2036,9 @@ class Box(Centered):
         bend_radius : float = None
             Radius of curvature for this arrow.
         bend_axis : Axis = None
-            Axis of curvature of `bend_radius`.
+            Axis of curvature of ``bend_radius``.
         both_dirs : bool = False
-            If True, plots an arrow ponting in direction and one in -direction.
+            If True, plots an arrow pointing in direction and one in -direction.
         arrow_base : :class:`.Coordinate` = None
             Custom base of the arrow. Uses the geometry's center if not provided.
 
@@ -2270,7 +2272,7 @@ class Transformed(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return self.geometry.intersections_tilted_plane(
             tuple(np.dot((normal[0], normal[1], normal[2], 0.0), self.transform)[:3]),
@@ -2504,7 +2506,7 @@ class ClipOperation(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         geom_a = Geometry.evaluate_inf_shape(
             shapely.unary_union(self.geometry_a.intersections_tilted_plane(normal, origin, to_2D))
@@ -2688,7 +2690,7 @@ class GeometryGroup(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return [
             intersection
@@ -2715,7 +2717,7 @@ class GeometryGroup(Geometry):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if not self.intersects_plane(x, y, z):
             return []
@@ -2731,7 +2733,7 @@ class GeometryGroup(Geometry):
         Parameters
         ----------
         axis : int = None
-            Axis nomral to the plane.
+            Axis normal to the plane.
         position : float = None
             Position of plane along the normal axis.
 

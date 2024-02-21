@@ -22,6 +22,7 @@ from ..structure import Structure
 from ..geometry.base import Box, GeometryGroup
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
+from ..geometry.mesh import TriangleMesh
 from ..scene import Scene
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
@@ -35,7 +36,7 @@ from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab)
+HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
 
 
 class HeatSimulation(AbstractSimulation):
@@ -433,7 +434,7 @@ class HeatSimulation(AbstractSimulation):
         for name, medium, shape, bounds in shapes:
             # intersect existing boundaries (both structure based and medium based)
             for index, (_bc_spec, _name, _bdry, _bounds) in enumerate(boundaries):
-                # simulation bc is overriden only by StructureSimulationBoundary
+                # simulation bc is overridden only by StructureSimulationBoundary
                 if isinstance(_bc_spec.placement, SimulationBoundary):
                     if name not in struct_to_bc_spec:
                         continue
@@ -483,7 +484,7 @@ class HeatSimulation(AbstractSimulation):
                     background_shapes[index] = (_medium, diff_shape, diff_shape.bounds)
 
                     # in case when there is a bc between two media
-                    # create a new boudnary segment
+                    # create a new boundary segment
                     for bc_spec in med_to_bc_spec[_medium.name]:
                         if medium.name in bc_spec.placement.mediums:
                             bdry = shape.exterior.intersection(_shape)

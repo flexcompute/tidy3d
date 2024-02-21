@@ -42,7 +42,7 @@ MNT_NAME = "mode"
 
 
 def make_sim(eps_values: np.ndarray) -> JaxSimulation:
-    """Construt a simulation out of some input parameters."""
+    """Construct a simulation out of some input parameters."""
 
     Nx, Ny, Nz, Nf = eps_values.shape
 

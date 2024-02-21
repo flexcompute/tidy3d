@@ -33,13 +33,13 @@ ARROW_LENGTH = 0.3
 
 
 def make_ax() -> Ax:
-    """makes an empty `ax`."""
+    """makes an empty ``ax``."""
     _, ax = plt.subplots(1, 1, tight_layout=True)
     return ax
 
 
 def add_ax_if_none(plot):
-    """Decorates `plot(*args, **kwargs, ax=None)` function.
+    """Decorates ``plot(*args, **kwargs, ax=None)`` function.
     if ax=None in the function call, creates an ax and feeds it to rest of function.
     """
 
@@ -212,8 +212,8 @@ def polygon_path(polygon):
 def polygon_patch(polygon, **kwargs):
     """Constructs a matplotlib patch from a geometric object
 
-    The `polygon` may be a Shapely or GeoJSON-like object with or without holes.
-    The `kwargs` are those supported by the matplotlib.patches.Polygon class
+    The ``polygon`` may be a Shapely or GeoJSON-like object with or without holes.
+    The ``kwargs`` are those supported by the matplotlib.patches.Polygon class
     constructor. Returns an instance of matplotlib.patches.PathPatch.
 
     Example

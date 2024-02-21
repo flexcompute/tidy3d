@@ -2,8 +2,7 @@
 
 import pytest
 import responses
-from _pytest import monkeypatch
-
+from botocore.exceptions import ClientError
 import tidy3d as td
 from responses import matchers
 from tidy3d import HeatSimulation
@@ -118,6 +117,7 @@ def mock_start(monkeypatch, set_api_key, mock_get_info):
                     "solverVersion": None,
                     "workerGroup": None,
                     "protocolVersion": td.version.__version__,
+                    "enableCaching": Env.current.enable_caching,
                 }
             )
         ],
@@ -170,9 +170,15 @@ def mock_download(monkeypatch, set_api_key, mock_get_info, tmp_path):
         with open(file_path, "w") as f:
             f.write("0.3,5.7")
 
+    def _mock_download_gz(*args, **kwargs):
+        raise ClientError(
+            error_response={"Error": {"Message": "File not found"}}, operation_name="download"
+        )
+
+    monkeypatch.setattr(f"{task_core_path}.download_gz_file", _mock_download_gz)
     monkeypatch.setattr(f"{task_core_path}.download_file", _mock_download)
     download(TASK_ID, str(tmp_path / "web_test_tmp.json"))
-    with open(str(tmp_path / "web_test_tmp.json"), "r") as f:
+    with open(str(tmp_path / "web_test_tmp.json")) as f:
         assert f.read() == "0.3,5.7"
 
 
@@ -256,7 +262,7 @@ def test_download_json(monkeypatch, mock_get_info, tmp_path):
     def get_str(*args, **kwargs):
         return sim.json().encode("utf-8")
 
-    monkeypatch.setattr(f"{task_core_path}.download_file", mock_download)
+    monkeypatch.setattr(f"{task_core_path}.download_gz_file", mock_download)
     monkeypatch.setattr(f"{task_core_path}.read_simulation_from_hdf5", get_str)
 
     fname_tmp = str(tmp_path / "web_test_tmp.json")

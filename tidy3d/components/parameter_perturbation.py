@@ -16,6 +16,7 @@ from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
 from ..log import log
 from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod, TYPE_TAG_STR
 from ..components.viz import add_ax_if_none
+from ..components.data.validators import validate_no_nans
 
 """ Generic perturbation classes """
 
@@ -117,7 +118,7 @@ class HeatPerturbation(AbstractPerturbation):
     temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, inf),
         title="Temperature range",
-        description="Temparature range in which perturbation model is valid.",
+        description="Temperature range in which perturbation model is valid.",
         units=KELVIN,
     )
 
@@ -178,21 +179,24 @@ class HeatPerturbation(AbstractPerturbation):
 
 class LinearHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a linear function of
-    temperature:
+    temperature.
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+        .. math::
 
-    where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
-    ``temperature_ref`` is the reference temperature point. A temperature range in which such
-    a model is deemed accurate may be provided as a field ``temperature_range``
-    (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+            \\Delta X (T) = \\text{coeff} \\times (T - \\text{temperature\\_ref}),
+
+        where ``coeff`` is the parameter's sensitivity (thermo-optic coefficient) to temperature and
+        ``temperature_ref`` is the reference temperature point. A temperature range in which such
+        a model is deemed accurate may be provided as a field ``temperature_range``
+        (default: ``[0, inf]``). Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
@@ -252,16 +256,23 @@ class LinearHeatPerturbation(HeatPerturbation):
 
 class CustomHeatPerturbation(HeatPerturbation):
     """Specifies parameter's perturbation due to thermal effects as a custom function of
-    temperature defined as an array of perturbation values at sample temperature points. The linear
-    interpolation is used to calculate perturbation values between sample temperature points. For
-    temperature values outside of the provided sample region the perturbation value is extrapolated
-    as a constant.
-    The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
-    accurate is calculated automatically as the minimal and maximal sample temperature points.
-    Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``temperature_range`` due to perturbations and
-    raise a warning if this check fails. A warning is also issued if the perturbation model is
-    evaluated outside of ``temperature_range``.
+    temperature defined as an array of perturbation values at sample temperature points.
+
+     Notes
+     -----
+
+         The linear
+        interpolation is used to calculate perturbation values between sample temperature points. For
+        temperature values outside of the provided sample region the perturbation value is extrapolated
+        as a constant.
+        The temperature range, ``temperature_range``, in which the perturbation model is assumed to be
+        accurate is calculated automatically as the minimal and maximal sample temperature points.
+        Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``temperature_range`` due to perturbations and
+        raise a warning if this check fails. A warning is also issued if the perturbation model is
+        evaluated outside of ``temperature_range``.
+
+        .. TODO link to relevant example new
 
     Example
     -------
@@ -281,7 +292,7 @@ class CustomHeatPerturbation(HeatPerturbation):
     temperature_range: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         None,
         title="Temperature range",
-        description="Temparature range in which perturbation model is valid. For "
+        description="Temperature range in which perturbation model is valid. For "
         ":class:`.CustomHeatPerturbation` this field is computed automatically based on "
         "temperature sample points provided in ``perturbation_values``.",
         units=KELVIN,
@@ -293,6 +304,8 @@ class CustomHeatPerturbation(HeatPerturbation):
         description="Interpolation method to obtain perturbation values between sample points.",
     )
 
+    _no_nans = validate_no_nans("perturbation_values")
+
     @cached_property
     def perturbation_range(self) -> Union[Tuple[float, float], Tuple[Complex, Complex]]:
         """Range of possible parameter perturbation values."""
@@ -301,12 +314,6 @@ class CustomHeatPerturbation(HeatPerturbation):
     @pd.root_validator(skip_on_failure=True)
     def compute_temperature_range(cls, values):
         """Compute and set temperature range based on provided ``perturbation_values``."""
-        if values["temperature_range"] is not None:
-            log.warning(
-                "Temperature range for 'CustomHeatPerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'temperature_range' will be "
-                "overwritten."
-            )
 
         perturbation_values = values["perturbation_values"]
 
@@ -315,6 +322,16 @@ class CustomHeatPerturbation(HeatPerturbation):
             np.min(perturbation_values.coords["T"]).item(),
             np.max(perturbation_values.coords["T"]).item(),
         )
+
+        if (
+            values["temperature_range"] is not None
+            and values["temperature_range"] != temperature_range
+        ):
+            log.warning(
+                "Temperature range for 'CustomHeatPerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'temperature_range' will be "
+                "overwritten."
+            )
 
         values.update({"temperature_range": temperature_range})
 
@@ -538,21 +555,24 @@ class LinearChargePerturbation(ChargePerturbation):
     """Specifies parameter's perturbation due to free carrier effects as a linear function of
     electron and hole densities:
 
-    Note
-    ----
-    .. math::
+    Notes
+    -----
 
-        \\Delta X (T) = \\text{electron\\_coeff} \\times (N_e - \\text{electron\\_ref})
-        + \\text{hole\\_coeff} \\times (N_h - \\text{hole\\_ref}),
+        .. math::
 
-    where ``electron_coeff`` and ``hole_coeff`` are the parameter's sensitivities to electron and
-    hole densities, while ``electron_ref`` and ``hole_ref`` are reference electron and hole density
-    values. Ranges of electron and hole densities in which such
-    a model is deemed accurate may be provided as fields ``electron_range`` and ``hole_range``
-    (default: ``[0, inf]`` each). Wherever is applied, Tidy3D will check that the parameter's value
-    does not go out of its physical bounds within ``electron_range`` x ``hole_range`` due to
-    perturbations and raise a warning if this check fails. A warning is also issued if
-    the perturbation model is evaluated outside of ``electron_range`` x ``hole_range``.
+            \\Delta X (T) = \\text{electron\\_coeff} \\times (N_e - \\text{electron\\_ref})
+            + \\text{hole\\_coeff} \\times (N_h - \\text{hole\\_ref}),
+
+        where ``electron_coeff`` and ``hole_coeff`` are the parameter's sensitivities to electron and
+        hole densities, while ``electron_ref`` and ``hole_ref`` are reference electron and hole density
+        values. Ranges of electron and hole densities in which such
+        a model is deemed accurate may be provided as fields ``electron_range`` and ``hole_range``
+        (default: ``[0, inf]`` each). Wherever is applied, Tidy3D will check that the parameter's value
+        does not go out of its physical bounds within ``electron_range`` x ``hole_range`` due to
+        perturbations and raise a warning if this check fails. A warning is also issued if
+        the perturbation model is evaluated outside of ``electron_range`` x ``hole_range``.
+
+        .. TODO add example here and links
 
     Example
     -------
@@ -659,16 +679,23 @@ class LinearChargePerturbation(ChargePerturbation):
 class CustomChargePerturbation(ChargePerturbation):
     """Specifies parameter's perturbation due to free carrier effects as a custom function of
     electron and hole densities defined as a two-dimensional array of perturbation values at sample
-    electron and hole density points. The linear interpolation is used to calculate perturbation
-    values between sample points. For electron and hole density values outside of the provided
-    sample region the perturbation value is extrapolated as a constant.
-    The electron and hole density ranges, ``electron_range`` and ``hole_range``, in which
-    the perturbation model is assumed to be accurate is calculated automatically as the minimal and
-    maximal density values provided in ``perturbation_values``. Wherever is applied, Tidy3D will
-    check that the parameter's value does not go out of its physical bounds within
-    ``electron_range`` x ``hole_range`` due to perturbations and raise a warning if this check
-    fails. A warning is also issued if the perturbation model is evaluated outside of
-    ``electron_range`` x ``hole_range``.
+    electron and hole density points.
+
+    Notes
+    -----
+
+        The linear interpolation is used to calculate perturbation
+        values between sample points. For electron and hole density values outside of the provided
+        sample region the perturbation value is extrapolated as a constant.
+        The electron and hole density ranges, ``electron_range`` and ``hole_range``, in which
+        the perturbation model is assumed to be accurate is calculated automatically as the minimal and
+        maximal density values provided in ``perturbation_values``. Wherever is applied, Tidy3D will
+        check that the parameter's value does not go out of its physical bounds within
+        ``electron_range`` x ``hole_range`` due to perturbations and raise a warning if this check
+        fails. A warning is also issued if the perturbation model is evaluated outside of
+        ``electron_range`` x ``hole_range``.
+
+        .. TODO add example here and links
 
     Example
     -------
@@ -710,6 +737,8 @@ class CustomChargePerturbation(ChargePerturbation):
         description="Interpolation method to obtain perturbation values between sample points.",
     )
 
+    _no_nans = validate_no_nans("perturbation_values")
+
     @cached_property
     def perturbation_range(self) -> Union[Tuple[float, float], Tuple[complex, complex]]:
         """Range of possible parameter perturbation values."""
@@ -720,19 +749,6 @@ class CustomChargePerturbation(ChargePerturbation):
         """Compute and set electron and hole density ranges based on provided
         ``perturbation_values``.
         """
-        if values["electron_range"] is not None:
-            log.warning(
-                "Electron density range for 'CustomChargePerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'electron_range' will be "
-                "overwritten."
-            )
-
-        if values["hole_range"] is not None:
-            log.warning(
-                "Hole density range for 'CustomChargePerturbation' is calculated automatically "
-                "based on provided 'perturbation_values'. Provided 'hole_range' will be "
-                "overwritten."
-            )
 
         perturbation_values = values["perturbation_values"]
 
@@ -745,6 +761,20 @@ class CustomChargePerturbation(ChargePerturbation):
             np.min(perturbation_values.coords["p"]).item(),
             np.max(perturbation_values.coords["p"]).item(),
         )
+
+        if values["electron_range"] is not None and electron_range != values["electron_range"]:
+            log.warning(
+                "Electron density range for 'CustomChargePerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'electron_range' will be "
+                "overwritten."
+            )
+
+        if values["hole_range"] is not None and hole_range != values["hole_range"]:
+            log.warning(
+                "Hole density range for 'CustomChargePerturbation' is calculated automatically "
+                "based on provided 'perturbation_values'. Provided 'hole_range' will be "
+                "overwritten."
+            )
 
         values.update({"electron_range": electron_range, "hole_range": hole_range})
 

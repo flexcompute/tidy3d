@@ -5,6 +5,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Automatic subdivision of 2D materials with inhomogeneous substrate/superstrate.
+- Mode field profiles can be stored directly from a `ModeMonitor` by setting `store_fields_direction`.
+- Users can toggle https ssl version through `from tidy3d.web.core.environment import Env` and `Env.set_ssl_version(ssl_version: ssl.TLSVersion)`
+- Free-carrier absorption (FCA) and free-carrier plasma dispersion (FCPD) nonlinearities inside `TwoPhotonAbsorption` class.
+- `log_path` argument in `set_logging_file`, set to `False` by default.
+- `ErosionDilationPenalty` to `tidy3d.plugins.adjoint.utils.penalty` to penalize parameter arrays that change under erosion and dilation. This is a simple and effective way to penalize features that violate minimum feature size or radius of curvature fabrication constraints in topology optimization.
+
+### Changed
+- `DataArray.to_hdf5()` accepts both file handles and file paths.
+- `ModeSolverMonitor` is deprecated. Mode field profiles can be retrieved directly from `ModeMonitor` with `store_fields_direction` set.
+- The log file for a simulation run has been modified to include more information including warnings collected during execution.
+
+### Fixed
+- Add dispersion information to dataframe output when available from mode solver under the column "dispersion (ps/(nm km))".
+- Skip adjoint source for diffraction amplitudes of NaN.
+- Helpful error message if `val` supplied to `SimulationData.plot_field` not supported.
+- Fixed validator that warns if angled plane wave does not match simulation boundaries, which was not warning for periodic boundaries.
+- Validates that no nans are present in `DataArray` values in custom components.
+- Removed nans from Cartesian temperature monitors in thermal simulations by using nearest neighbor interpolation for values outside of heat simulation domain.
+
+## [2.6.0rc1] - 2024-01-11
+
+### Added
+- `tidy3d.plugins.design` tool to explore user-defined design spaces.
+- `ModeData.dispersion` and `ModeSolverData.dispersion` are calculated together with the group index.
+- A utility function `td.medium_from_nk()` that automatically constructs a non-dispersive medium when permittivity>=1, and a single-pole Lorentz medium when permittivity<1.
+- Integration of the `documentation` alongside the main codebase repository.
+- Integration of the `tidy3d-notebooks` repository.
+- `tidy3d develop` CLI and development guide on the main documentation.
+- Added a convenience method `Simulation.subsection()` to a create a new simulation based on a subregion of another one.
+- Users can toggle task caching through `from tidy3d.web.core.environment import Env` and `Env.enable_caching(enableCaching: bool = True)`
+
+### Changed
+- `poetry` based installation. Removal of `setup.py` and `requirements.txt`.
+- Upgrade to sphinx 6 for the documentation build, and change of theme.
+- Remote mode solver web api automatically reduces the associated `Simulation` object to the mode solver plane before uploading it to server.
+- All solver output is now compressed. However, it is automatically unpacked to the same `simulation_data.hdf5` by default when loading simulation data from the server.
+- Internal refactor of `adjoint` plugin to separate `jax`-traced fields from regular `tidy3d` fields.
+- Added an optional argument `field` in class method `.from_vtu()` of `TriangularGridDataset` and `TetrahedralGridDataset` for specifying the name of data field to load.
+
+### Fixed
+- Removed spurious warnings realted to reloading simulation containing `PerturbationMedium` with `CustomChargePerturbation`/`CustomHeatPerturbation`
 ## [2.5.2] - 2024-01-11
 
 ### Fixed
@@ -811,12 +854,12 @@ which fields are to be projected is now determined automatically based on the me
 ### Added
 
 - New `grid_spec` Field in `Simulation` that allows more flexibility in defining the mesh.
-- `GridSpec1d` class defining how the meshing along each dimension should be done, with sublcasses `UniformGrid` and `CustomGrid` that cover the functionality 
+- `GridSpec1d` class defining how the meshing along each dimension should be done, with subclasses `UniformGrid` and `CustomGrid` that cover the functionality 
   previously offered by supplying a float or a list of floats to `Simulation.grid_size`. New functionality offered by `AutoGrid` subclass, with the 
   mesh automatically generated based on the minimum required steps per wavelength.
 - New `PointDipole` source.
 - Opacity kwargs for monitor and source in `sim.plot`.
-- Separated `plotly`-based requirements from core requrements file, can be added with `"pip install tidy3d-beta[plotly]"`.
+- Separated `plotly`-based requirements from core requirements file, can be added with `"pip install tidy3d-beta[plotly]"`.
 
 ### Changed
 - `Simulation.grid_spec` uses the default `GridSpec`, which has `AutoGrid(min_steps_per_wvl=10)` in each direction. To initialize a `Simulation` then it is no 
@@ -958,7 +1001,7 @@ which fields are to be projected is now determined automatically based on the me
 - PML parameters and padding Grid with pml pixels by [@momchil-flex](https://github.com/momchil-flex) in #64
 - Documentation by [@tylerflex](https://github.com/tylerflex) in #63
 - Gds import from [@tylerflex](https://github.com/tylerflex) in #69
-- Loggin by [@tylerflex](https://github.com/tylerflex) in #70
+- Logging, by [@tylerflex](https://github.com/tylerflex) in #70
 - Multi-pole Drude medium by [@weiliangjin2021](https://github.com/weiliangjin2021) in #73
 - Mode Solver: from [@tylerflex](https://github.com/tylerflex) in #74
 - Near2Far from [@tylerflex](https://github.com/tylerflex) in #77
@@ -1061,6 +1104,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0rc1...pre/2.6
+[2.6.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.6.0rc1
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...develop
 [2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1

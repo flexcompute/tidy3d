@@ -1,6 +1,7 @@
 """Tests adjoint plugin."""
 
 from typing import Tuple, Dict, List
+import builtins
 
 import pytest
 import pydantic.v1 as pydantic
@@ -34,7 +35,7 @@ from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDatase
 from tidy3d.plugins.adjoint.web import run, run_async
 from tidy3d.plugins.adjoint.web import run_local, run_async_local
 from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
-from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty
+from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty, ErosionDilationPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.api.container import BatchData
 import tidy3d.material_library as material_library
@@ -470,6 +471,8 @@ def test_run_flux(use_emulated_run):
 def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
 
+    td.config.logging_level = "ERROR"
+
     run_fn = run_local if local else run
 
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
@@ -485,6 +488,22 @@ def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
 
     grad_f = grad(f, argnums=(0, 1, 2, 3))
     df_deps, df_dsize, df_dvertices, d_eps_base = grad_f(EPS, SIZE, VERTICES, BASE_EPS_VAL)
+
+    # fail if all gradients close to zero
+    assert not all(
+        np.all(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)
+    ), "No gradients registered"
+
+    # fail if any gradients close to zero
+    assert not any(
+        np.any(np.isclose(x, 0)) for x in (df_deps, df_dsize, df_dvertices, d_eps_base)
+    ), "Some of the gradients are zero unexpectedly."
+
+    # fail if some gradients dont match the pre/2.6 grads (before refactor).
+    if local:
+        assert np.isclose(df_deps, 1284453200000000.0), "local grad doesn't match previous value."
+    else:
+        assert np.isclose(df_deps, 0.031678755), "non-local grad doesn't match previous value."
 
     print("gradient: ", df_deps, df_dsize, df_dvertices, d_eps_base)
 
@@ -1320,11 +1339,18 @@ def _test_polyslab_scale(use_emulated_run):
 
 def test_validate_vertices():
     """Test the maximum number of vertices."""
-    vertices = np.random.rand(MAX_NUM_VERTICES, 2)
-    _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
-    vertices = np.random.rand(MAX_NUM_VERTICES + 1, 2)
+
+    def make_vertices(n: int) -> np.ndarray:
+        """Make circular polygon vertices of shape (n, 2)."""
+        angles = np.linspace(0, 2 * np.pi, n)
+        return np.stack((np.cos(angles), np.sin(angles)), axis=-1)
+
+    vertices_pass = make_vertices(MAX_NUM_VERTICES)
+    _ = JaxPolySlab(vertices=vertices_pass, slab_bounds=(-1, 1))
+
     with pytest.raises(pydantic.ValidationError):
-        _ = JaxPolySlab(vertices=vertices, slab_bounds=(-1, 1))
+        vertices_fail = make_vertices(MAX_NUM_VERTICES + 1)
+        _ = JaxPolySlab(vertices=vertices_fail, slab_bounds=(-1, 1))
 
 
 def _test_custom_medium_3D(use_emulated_run):
@@ -1472,6 +1498,17 @@ def test_adjoint_utils(strict_binarize):
 
     radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
     _ = radius_penalty.evaluate(polyslab.vertices)
+
+    # erosion / dilation
+
+    image_01 = np.random.random(image.shape)
+
+    ed_penalty = ErosionDilationPenalty(
+        length_scale=1.0, beta=10, pixel_size=0.01, eta0=0.45, delta_eta=0.02
+    )
+
+    val = ed_penalty.evaluate(image_01)
+    assert val > 0
 
 
 @pytest.mark.parametrize(
@@ -1623,16 +1660,15 @@ def test_no_adjoint_sources(
     if not has_adj_src:
         monkeypatch.setattr(JaxModeData, "to_adjoint_sources", lambda *args, **kwargs: [])
 
-    def J(x):
-        sim = make_sim(eps=x)
-        data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
-        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
-        power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
-        return power
+    x = 2.0
+    sim = make_sim(eps=x)
+    data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
-    grad_J = grad(J)
-    grad_J(2.0)
-    assert_log_level(log_capture, log_level_expected)
+    # check whether we got a warning for no sources?
+    with AssertLogLevel(log_capture, log_level_expected, contains_str="No adjoint sources"):
+        data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
+
+    power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
 
 def test_nonlinear_warn(log_capture):
@@ -1680,3 +1716,46 @@ def test_nonlinear_warn(log_capture):
     # nonlinear input_structure (warn)
     with AssertLogLevel(log_capture, "WARNING"):
         sim = sim_base.updated_copy(input_structures=[input_struct_nl])
+
+
+@pytest.fixture
+def hide_jax(monkeypatch, request):
+    import_orig = builtins.__import__
+
+    def mocked_import(name, *args, **kwargs):
+        if name in ["jax", "jax.interpreters.ad", "jax.interpreters.ad.JVPTracer"]:
+            raise ImportError()
+        return import_orig(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", mocked_import)
+
+
+def try_tracer_import() -> None:
+    """Try importing `tidy3d.plugins.adjoint.components.types`."""
+    from importlib import reload
+    import tidy3d
+
+    reload(tidy3d.plugins.adjoint.components.types)
+
+
+@pytest.mark.usefixtures("hide_jax")
+def test_jax_tracer_import_fail(tmp_path, log_capture):
+    """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
+    try_tracer_import()
+    assert_log_level(log_capture, "WARNING")
+
+
+def test_jax_tracer_import_pass(tmp_path, log_capture):
+    """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
+    try_tracer_import()
+    assert_log_level(log_capture, None)
+
+
+def test_inf_IO(tmp_path):
+    """test that components can save and load "Infinity" properly in jax fields."""
+    fname = str(tmp_path / "box.json")
+
+    box = JaxBox(size=(td.inf, td.inf, td.inf), center=(0, 0, 0))
+    box.to_file(fname)
+    box2 = JaxBox.from_file(fname)
+    assert box == box2

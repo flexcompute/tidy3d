@@ -47,7 +47,7 @@ MIN_FREQUENCY = 1e5
 
 
 def assert_plane():
-    """makes sure a field's `size` attribute has exactly 1 zero"""
+    """makes sure a field's ``size`` attribute has exactly 1 zero"""
 
     @pydantic.validator("size", allow_reuse=True, always=True)
     def is_plane(cls, val):
@@ -60,7 +60,7 @@ def assert_plane():
 
 
 def assert_volumetric():
-    """makes sure a field's `size` attribute has no zero entry"""
+    """makes sure a field's ``size`` attribute has no zero entry"""
 
     @pydantic.validator("size", allow_reuse=True, always=True)
     def is_volumetric(cls, val):
@@ -77,7 +77,7 @@ def assert_volumetric():
 
 
 def validate_name_str():
-    """make sure the name doesnt include [, ] (used for default names)"""
+    """make sure the name does not include [, ] (used for default names)"""
 
     @pydantic.validator("name", allow_reuse=True, always=True, pre=True)
     def field_has_unique_names(cls, val):
@@ -124,7 +124,7 @@ def validate_mode_objects_symmetry(field_name: str):
                     ):
                         raise SetupError(
                             f"Mode object '{geometric_object}' "
-                            f"(at `simulation.{field_name}[{position_index}]`) "
+                            f"(at 'simulation.{field_name}[{position_index}]') "
                             "in presence of symmetries must be in the main quadrant, "
                             "or centered on the symmetry axis."
                         )
@@ -163,7 +163,7 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
         for position_index, geometric_object in enumerate(val):
             if not sim_box.intersects(geometric_object.geometry):
                 message = (
-                    f"'{geometric_object}' (at `simulation.{field_name}[{position_index}]`) "
+                    f"'simulation.{field_name}[{position_index}]'"
                     "is completely outside of simulation domain."
                 )
                 custom_loc = [field_name, position_index]
@@ -178,7 +178,7 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
 
 
 def enforce_monitor_fields_present():
-    """Make sure all of the fields in the monitor are present in the correponding data."""
+    """Make sure all of the fields in the monitor are present in the corresponding data."""
 
     @pydantic.root_validator(skip_on_failure=True, allow_reuse=True)
     def _contains_fields(cls, values):

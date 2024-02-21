@@ -35,6 +35,9 @@ class AbstractSimulation(Box, ABC):
         description="Background medium of simulation, defaults to vacuum if not specified.",
         discriminator=TYPE_TAG_STR,
     )
+    """
+    Background medium of simulation, defaults to vacuum if not specified.
+    """
 
     structures: Tuple[Structure, ...] = pd.Field(
         (),
@@ -43,17 +46,34 @@ class AbstractSimulation(Box, ABC):
         "Note: Structures defined later in this list override the "
         "simulation material properties in regions of spatial overlap.",
     )
+    """
+    Tuple of structures present in simulation. Structures defined later in this list override the simulation
+    material properties in regions of spatial overlap.
+
+    Example
+    -------
+    Simple application reference:
+
+    .. code-block:: python
+
+        Simulation(
+            ...
+            structures=[
+                 Structure(
+                 geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
+                 medium=Medium(permittivity=2.0),
+                 ),
+            ],
+            ...
+        )
+    """
 
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetries",
         description="Tuple of integers defining reflection symmetry across a plane "
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
-        "at the simulation center of each axis, respectively. "
-        "Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or "
-        "``-1`` (odd, i.e. 'PEC' symmetry). "
-        "Note that the vectorial nature of the fields must be taken into account to correctly "
-        "determine the symmetry value.",
+        "at the simulation center of each axis, respectively. ",
     )
 
     sources: Tuple[None, ...] = pd.Field(
@@ -130,6 +150,10 @@ class AbstractSimulation(Box, ABC):
     def _post_init_validators(self) -> None:
         """Call validators taking z`self` that get run after init."""
         _ = self.scene
+
+    def validate_pre_upload(self) -> None:
+        """Validate the fully initialized simulation is ok for upload to our servers."""
+        pass
 
     """ Accounting """
 

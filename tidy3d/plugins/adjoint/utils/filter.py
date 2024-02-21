@@ -47,7 +47,7 @@ class AbstractCircularFilter(Filter, ABC):
 
     @pd.root_validator(pre=True)
     def _deprecate_feature_size(cls, values):
-        """Extra warning for user using `feature_size` field."""
+        """Extra warning for user using ``feature_size`` field."""
         if "feature_size" in values:
             raise pd.ValidationError(
                 "The 'feature_size' field of circular filters available in 2.4 pre-releases was "
@@ -162,14 +162,16 @@ class CircularFilter(AbstractCircularFilter):
 
 
 class BinaryProjector(Filter):
-    """Projects a grayscale image towards min and max values using a smooth `tanh` function.
+    """Projects a grayscale image towards min and max values using a smooth ``tanh`` function.
 
     Note
     ----
     .. math::
 
-        v(x) = vmin + (vmax - vmin) \\frac{tanh(\\beta \\eta) +
-        tanh(\\beta * (x - \\eta))}{tanh(\\beta * \\eta) + tanh(\\beta * (1 - \\eta))}
+        v(x) = v_{min} + (v_{max} - v_{min})
+        \\frac{\\mathrm{tanh}(\\beta \\eta) + \\mathrm{tanh}(\\beta (x - \\eta))}
+        {\\mathrm{tanh}(\\beta \\eta) + \\mathrm{tanh}(\\beta (1 - \\eta))}
+
 
     """
 
@@ -191,8 +193,8 @@ class BinaryProjector(Filter):
     strict_binarize: bool = pd.Field(
         False,
         title="Binarize strictly",
-        description="If False, the binarization is still continuous between min and max. "
-        "If false, the values are snapped to the min and max values after projection.",
+        description="If ``False``, the binarization is still continuous between min and max. "
+        "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
     def evaluate(self, spatial_data: jnp.array) -> jnp.array:

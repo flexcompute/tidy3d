@@ -1,8 +1,17 @@
+# Linguist-vendored files
 docs/* linguist-vendored
 notebooks/* linguist-vendored
 tests/* linguist-vendored
 
+# Disable linguist detection for IPython notebooks
 *.ipynb linguist-detectable=false
+
+# Mark IPython notebooks as generated files
 *.ipynb linguist-generated=true
 
+# Specify merge attributes for CHANGELOG.md
 CHANGELOG.md merge=union
+
+# Specify diff and merge attributes for IPython notebooks
+*.ipynb diff=jupyternotebook
+*.ipynb merge=jupyternotebook

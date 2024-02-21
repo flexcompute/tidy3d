@@ -214,7 +214,8 @@ class JaxSimulation(Simulation, JaxObject):
                         consolidated_logger.warning(
                             f"'JaxSimulation.input_structures[{i}]' overlaps or touches "
                             f"'JaxSimulation.input_structures[{j}]'. Geometric gradients for "
-                            "overlapping input structures may contain errors."
+                            "overlapping input structures may contain errors.",
+                            log_once=True,
                         )
 
             # check JaxPolySlab intersections with background structures
@@ -251,7 +252,7 @@ class JaxSimulation(Simulation, JaxObject):
     def _warn_nonlinear_medium(cls, val):
         """warn if the jax simulation medium is nonlinear."""
         # hasattr is just an additional check to avoid unnecessary bugs
-        # if a medium is encountered that doesnt support nonlinear spec, or things change.
+        # if a medium is encountered that does not support nonlinear spec, or things change.
         if hasattr(val, "nonlinear_spec") and val.nonlinear_spec:
             log.warning(
                 "Nonlinear background medium detected in the 'JaxSimulation'. " + NL_WARNING
@@ -264,7 +265,7 @@ class JaxSimulation(Simulation, JaxObject):
         for i, struct in enumerate(val):
             medium = struct.medium
             # hasattr is just an additional check to avoid unnecessary bugs
-            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            # if a medium is encountered that does not support nonlinear spec, or things change.
             if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
                 log.warning(f"Nonlinear medium detected in structures[{i}]. " + NL_WARNING)
         return val
@@ -275,7 +276,7 @@ class JaxSimulation(Simulation, JaxObject):
         for i, struct in enumerate(val):
             medium = struct.medium
             # hasattr is just an additional check to avoid unnecessary bugs
-            # if a medium is encountered that doesnt support nonlinear spec, or things change.
+            # if a medium is encountered that does not support nonlinear spec, or things change.
             if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
                 log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val

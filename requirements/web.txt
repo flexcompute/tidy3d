@@ -1,7 +1,0 @@
-# to use the web interface (needed to run tasks)
-
-boto3==1.28.*
-requests==2.31.*
-pyjwt
-click==8.1.*
-responses

@@ -9,9 +9,8 @@ np.random.seed(4)
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(tmp_path, ds_name):
+def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
-    from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
@@ -119,7 +118,7 @@ def test_triangular_dataset(tmp_path, ds_name):
     assert tri_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 0.0, 1.0))
     assert np.all(tri_grid._vtk_offsets == np.array([0, 3, 6]))
 
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid._vtk_cells
         with pytest.raises(Tidy3dImportError):
@@ -132,7 +131,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         _ = tri_grid._vtk_obj
 
     # plane slicing
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.plane_slice(axis=2, pos=0.5)
     else:
@@ -149,7 +148,7 @@ def test_triangular_dataset(tmp_path, ds_name):
             _ = tri_grid.plane_slice(axis=0, pos=2)
 
     # clipping by a box
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
     else:
@@ -161,7 +160,7 @@ def test_triangular_dataset(tmp_path, ds_name):
             _ = tri_grid.box_clip([[0.1, 0.1, 0.3], [0.2, 0.2, 0.9]])
 
     # interpolation
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             invariant = tri_grid.interp(
                 x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
@@ -179,7 +178,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         assert np.all(out_of_plane.data == 123)
         assert out_of_plane.name == ds_name
 
-        # ouside of grid
+        # outside of grid
         invariant_no_intersection = tri_grid.interp(
             x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
         )
@@ -219,7 +218,7 @@ def test_triangular_dataset(tmp_path, ds_name):
         _ = tri_grid.plot(field=False, grid=False)
 
     # generalized selection method
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tri_grid.sel(x=0.2)
     else:
@@ -232,17 +231,31 @@ def test_triangular_dataset(tmp_path, ds_name):
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
 
-    # writting/reading .vtu
-    if vtk["mod"] is None:
+    # writing/reading .vtu
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
             tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
     else:
         tri_grid.to_vtu(tmp_path / "tri_grid_test.vtu")
-        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
 
+        tri_grid_loaded = td.TriangularGridDataset.from_vtu(tmp_path / "tri_grid_test.vtu")
         assert tri_grid == tri_grid_loaded
+
+        custom_name = "newname"
+        tri_grid_renamed = tri_grid.rename(custom_name)
+        tri_grid_renamed.to_vtu(tmp_path / "tri_grid_test.vtu")
+
+        tri_grid_loaded = td.TriangularGridDataset.from_vtu(
+            tmp_path / "tri_grid_test.vtu", field=custom_name
+        )
+        assert tri_grid == tri_grid_loaded
+
+        with pytest.raises(Exception):
+            tri_grid_loaded = td.TriangularGridDataset.from_vtu(
+                tmp_path / "tri_grid_test.vtu", field=custom_name + "blah"
+            )
 
     # test ariphmetic operations
     def operation(arr):
@@ -256,9 +269,8 @@ def test_triangular_dataset(tmp_path, ds_name):
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(tmp_path, ds_name):
+def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
-    from tidy3d.components.types import vtk
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
     # basic create
@@ -352,7 +364,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
     assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8]))
     assert tet_grid.name == ds_name
 
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid._vtk_cells
         with pytest.raises(Tidy3dImportError):
@@ -365,7 +377,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         _ = tet_grid._vtk_obj
 
     # plane slicing
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.plane_slice(axis=2, pos=0.5)
     else:
@@ -377,7 +389,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
             _ = tet_grid.plane_slice(axis=1, pos=2)
 
     # clipping by a box
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.box_clip([[0.1, -0.2, 0.1], [0.2, 0.2, 0.9]])
     else:
@@ -389,7 +401,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
             _ = tet_grid.box_clip([[0.1, 1.1, 0.3], [0.2, 1.2, 0.9]])
 
     # interpolation
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
     else:
@@ -405,7 +417,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         assert no_intersection.name == ds_name
 
     # generalized selection method
-    if vtk["mod"] is None:
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             _ = tet_grid.sel(x=0.2)
     else:
@@ -418,8 +430,8 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         with pytest.raises(DataError):
             _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
 
-    # writting/reading .vtu
-    if vtk["mod"] is None:
+    # writing/reading .vtu
+    if no_vtk:
         with pytest.raises(Tidy3dImportError):
             tet_grid.to_vtu(tmp_path / "tet_grid_test.vtu")
         with pytest.raises(Tidy3dImportError):
@@ -429,6 +441,20 @@ def test_tetrahedral_dataset(tmp_path, ds_name):
         tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(tmp_path / "tet_grid_test.vtu")
 
         assert tet_grid == tet_grid_loaded
+
+        custom_name = "newname"
+        tet_grid_renamed = tet_grid.rename(custom_name)
+        tet_grid_renamed.to_vtu(tmp_path / "tet_grid_test.vtu")
+
+        tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
+            tmp_path / "tet_grid_test.vtu", field=custom_name
+        )
+        assert tet_grid == tet_grid_loaded
+
+        with pytest.raises(Exception):
+            tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
+                tmp_path / "tet_grid_test.vtu", field=custom_name + "blah"
+            )
 
     # test ariphmetic operations
     def operation(arr):

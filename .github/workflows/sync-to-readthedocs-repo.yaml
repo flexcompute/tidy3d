@@ -1,0 +1,101 @@
+name: "sync-to-readthedocs-repo"
+permissions:
+  contents: write
+on:
+  push:
+    branches:
+      - main
+      - latest
+      - 'pre/*'
+      - 'v*'
+
+  workflow_dispatch:
+    inputs:
+      env:
+        description: environment
+        default: dev
+        required: true
+jobs:
+  extract_branch:
+    outputs:
+      branch: ${{ steps.extractbranch.outputs.branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: extractbranch
+        name: Extract branch name
+        shell: bash
+        run: |
+          echo "::set-output name=branch::${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          echo "${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          echo "${{ steps.extractbranch.outputs.branch }}"
+  set_env:
+    needs: extract_branch
+    outputs:
+      env: ${{ steps.setenv.outputs.env }}
+      dest-branch: ${{ steps.dest-branch.outputs.branch }}
+    runs-on: ubuntu-latest
+    steps:
+      - id: setenv
+        run: |
+          if [[ "${{ needs.extract_branch.outputs.branch }}" =~ ^v.*$ ]]
+          then
+            echo "::set-output name=env::version"
+            echo "ENV=version" >> $GITHUB_ENV
+          elif test -n "${{ github.event.inputs.env }}"
+          then
+            echo "::set-output name=env::${{ github.event.inputs.env }}"
+            echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
+          elif test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/latest'
+          then
+            echo "::set-output name=env::dev"
+            echo "ENV=dev" >> $GITHUB_ENV
+          elif test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/main'
+          then
+            echo "::set-output name=env::prod"
+            echo "ENV=prod" >> $GITHUB_ENV
+          else
+            echo "::set-output name=env::dev"
+            echo "ENV=dev" >> $GITHUB_ENV
+          fi
+      - id: dest-branch
+        run: |
+          echo "The destination branch is ${{ needs.extract_branch.outputs.branch }}"
+          case ${{ env.ENV }} in
+            version)
+              new_branch_name="${{ needs.extract_branch.outputs.branch }}"
+              echo "::set-output name=branch::${new_branch_name}"
+              ;;
+            dev)
+              echo "::set-output name=branch::${{ needs.extract_branch.outputs.branch }}"
+              ;;
+            prod)
+              echo "::set-output name=branch::main" 
+              ;;
+          esac
+  build-and-deploy:
+    needs: set_env
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+      - id: clean
+        run: |
+          rm -rf .github/ # removes the further triggered github actions.
+      - name: Create new branch if version pattern
+        uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
+        with:
+          repository_owner: flexcompute-readthedocs
+          repository_name: tidy3d-docs
+          new_branch_name: ${{ needs.set_env.outputs.dest-branch }}
+          access_token: ${{ secrets.GH_PAT }}
+          new_branch_ref: default_clean_sync_branch
+          ignore_branch_exists: true
+      - uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          token: ${{ secrets.GH_PAT }}
+          repository-name: flexcompute-readthedocs/tidy3d-docs
+          target-folder: .
+          branch: ${{ needs.set_env.outputs.dest-branch }}

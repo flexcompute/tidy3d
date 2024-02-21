@@ -89,7 +89,7 @@ def test_get_simulation_json(monkeypatch, set_api_key, tmp_path):
         to_file = kwargs["to_file"]
         sim.to_file(to_file)
 
-    monkeypatch.setattr("tidy3d.web.core.task_core.download_file", mock_download)
+    monkeypatch.setattr("tidy3d.web.core.task_core.download_gz_file", mock_download)
 
     responses.add(
         responses.GET,
@@ -214,6 +214,7 @@ def test_submit(set_api_key):
                     "protocolVersion": http_util.get_version(),
                     "solverVersion": None,
                     "workerGroup": None,
+                    "enableCaching": Env.current.enable_caching,
                 }
             )
         ],
@@ -308,7 +309,7 @@ def test_get_log(monkeypatch, set_api_key, tmp_path):
     task = SimulationTask.get("3eb06d16-208b-487b-864b-e9b1d3e010a7")
     LOG_FNAME = str(tmp_path / "test.log")
     task.get_log(LOG_FNAME)
-    with open(LOG_FNAME, "r") as f:
+    with open(LOG_FNAME) as f:
         assert f.read() == "0.3,5.7"
 
 

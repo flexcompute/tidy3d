@@ -340,7 +340,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         """Build override structures to define the simulation grid."""
 
         # Grid resolution factor applied to the materials (increase for waveguide corners
-        # and decrase for evanescent tail regions).
+        # and decrease for evanescent tail regions).
         scale_factor = 1.5
 
         freqs = C_0 / self.wavelength
@@ -925,14 +925,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         ax: Ax = None,
         **sel_kwargs,
     ) -> Ax:
-        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlayed.
+        """Plot the field for a :class:`.ModeSolverData` with :class:`.Simulation` plot overlaid.
 
         Parameters
         ----------
         field_name : str
-            Name of `field` component to plot (eg. `'Ex'`).
-            Also accepts `'E'` and `'H'` to plot the vector magnitudes of the electric and
-            magnetic fields, and `'S'` for the Poynting vector.
+            Name of ``field`` component to plot (eg. ``'Ex'``).
+            Also accepts ``'E'`` and ``'H'`` to plot the vector magnitudes of the electric and
+            magnetic fields, and ``'S'`` for the Poynting vector.
         val : Literal['real', 'imag', 'abs', 'abs^2', 'dB'] = 'real'
             Which part of the field to plot.
         eps_alpha : float = 0.2

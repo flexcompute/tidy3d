@@ -25,7 +25,7 @@ JAX_DATA_ARRAY_TAG = "<<JaxDataArray>>"
 
 @register_pytree_node_class
 class JaxDataArray(Tidy3dBaseModel):
-    """A :class:`.DataArray`-like class that only wraps xarray for jax compability."""
+    """A :class:`.DataArray`-like class that only wraps xarray for jax compatibility."""
 
     values: Any = pd.Field(
         ...,
@@ -39,6 +39,17 @@ class JaxDataArray(Tidy3dBaseModel):
         title="Coords",
         description="Dictionary storing the coordinates, namely ``(direction, f, mode_index)``.",
     )
+
+    def to_tidy3d(self: JaxDataArray) -> xr.DataArray:
+        """Convert :class:`.JaxDataArray` instance to ``xr.DataArray`` instance."""
+        coords = {k: np.array(v).tolist() for k, v in self.coords.items()}
+        return xr.DataArray(np.array(self.values), coords=coords, dims=self.coords.keys())
+
+    @classmethod
+    def from_tidy3d(cls, tidy3d_obj: xr.DataArray) -> JaxDataArray:
+        """Convert ``xr.DataArray`` instance to :class:`.JaxDataArray`."""
+        coords = {k: np.array(v).tolist() for k, v in tidy3d_obj.coords.items()}
+        return cls(values=tidy3d_obj.data, coords=coords)
 
     @pd.validator("values", always=True)
     def _convert_values_to_np(cls, val):
@@ -254,7 +265,7 @@ class JaxDataArray(Tidy3dBaseModel):
         return self.coords.get(coord_name)
 
     def isel_single(self, coord_name: str, coord_index: int) -> JaxDataArray:
-        """Select a value cooresponding to a single coordinate from the :class:`.JaxDataArray`."""
+        """Select a value corresponding to a single coordinate from the :class:`.JaxDataArray`."""
 
         # select out the proper values and coordinates
         coord_axis = list(self.coords.keys()).index(coord_name)

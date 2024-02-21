@@ -19,19 +19,9 @@ def hide_vtk(monkeypatch, request):
 
 @pytest.mark.usefixtures("hide_vtk")
 def test_triangular_dataset_no_vtk(tmp_path):
-    _test_triangular_dataset(tmp_path, "test_name")
-
-    # double check that vtk was not imported
-    from tidy3d.components.types import vtk
-
-    assert vtk["mod"] is None
+    _test_triangular_dataset(tmp_path, "test_name", no_vtk=True)
 
 
 @pytest.mark.usefixtures("hide_vtk")
 def test_tetrahedral_dataset_no_vtk(tmp_path):
-    _test_tetrahedral_dataset(tmp_path, "test_name")
-
-    # double check that vtk was not imported
-    from tidy3d.components.types import vtk
-
-    assert vtk["mod"] is None
+    _test_tetrahedral_dataset(tmp_path, "test_name", no_vtk=True)

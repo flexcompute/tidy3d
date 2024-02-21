@@ -10,7 +10,7 @@ from tidy3d.exceptions import DataError
 from tidy3d.components.data.data_array import FreqModeDataArray
 from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
 
-from tidy3d.components.data.monitor_data import ModeSolverData, ModeData
+from tidy3d.components.data.monitor_data import ModeData
 from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, DiffractionData
 
 from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
@@ -19,11 +19,12 @@ from .test_data_arrays import make_scalar_mode_field_data_array_smooth
 from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
 from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
 from .test_data_arrays import make_diffraction_data_array
-from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_SOLVE_MONITOR
+from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_MONITOR_WITH_FIELDS
 from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
 from .test_data_arrays import FIELD_MONITOR_2D, FIELD_TIME_MONITOR_2D
 from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level
+from ..utils import log_capture  # noqa: F401
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -71,11 +72,11 @@ def make_field_data_2d(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldData(
         monitor=FIELD_MONITOR_2D,
-        Ex=make_scalar_field_data_array("Ex", symmetry).interp(y=[0]),
-        Ey=make_scalar_field_data_array("Ey", symmetry).interp(y=[0]),
-        Ez=make_scalar_field_data_array("Ez", symmetry).interp(y=[0]),
-        Hx=make_scalar_field_data_array("Hx", symmetry).interp(y=[0]),
-        Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[0]),
+        Ex=make_scalar_field_data_array("Ex", symmetry).interp(y=[1.0], method="nearest"),
+        Ey=make_scalar_field_data_array("Ey", symmetry).interp(y=[1.0], method="nearest"),
+        Ez=make_scalar_field_data_array("Ez", symmetry).interp(y=[1.0], method="nearest"),
+        Hx=make_scalar_field_data_array("Hx", symmetry).interp(y=[1.0], method="nearest"),
+        Hz=make_scalar_field_data_array("Hz", symmetry).interp(y=[1.0], method="nearest"),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_MONITOR_2D),
@@ -86,11 +87,11 @@ def make_field_time_data_2d(symmetry: bool = True):
     sim = SIM_SYM if symmetry else SIM
     return FieldTimeData(
         monitor=FIELD_TIME_MONITOR_2D,
-        Ex=make_scalar_field_time_data_array("Ex", symmetry).interp(y=[0]),
-        Ey=make_scalar_field_time_data_array("Ey", symmetry).interp(y=[0]),
-        Ez=make_scalar_field_time_data_array("Ez", symmetry).interp(y=[0]),
-        Hx=make_scalar_field_time_data_array("Hx", symmetry).interp(y=[0]),
-        Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[0]),
+        Ex=make_scalar_field_time_data_array("Ex", symmetry).interp(y=[1.0]),
+        Ey=make_scalar_field_time_data_array("Ey", symmetry).interp(y=[1.0]),
+        Ez=make_scalar_field_time_data_array("Ez", symmetry).interp(y=[1.0]),
+        Hx=make_scalar_field_time_data_array("Hx", symmetry).interp(y=[1.0]),
+        Hz=make_scalar_field_time_data_array("Hz", symmetry).interp(y=[1.0]),
         symmetry=sim.symmetry,
         symmetry_center=sim.center,
         grid_expanded=sim.discretize_monitor(FIELD_TIME_MONITOR_2D),
@@ -98,8 +99,8 @@ def make_field_time_data_2d(symmetry: bool = True):
 
 
 def make_mode_solver_data():
-    mode_data = ModeSolverData(
-        monitor=MODE_SOLVE_MONITOR,
+    mode_data = ModeData(
+        monitor=MODE_MONITOR_WITH_FIELDS,
         Ex=make_scalar_mode_field_data_array("Ex"),
         Ey=make_scalar_mode_field_data_array("Ey"),
         Ez=make_scalar_mode_field_data_array("Ez"),
@@ -108,10 +109,11 @@ def make_mode_solver_data():
         Hz=make_scalar_mode_field_data_array("Hz"),
         symmetry=SIM_SYM.symmetry,
         symmetry_center=SIM_SYM.center,
-        grid_expanded=SIM_SYM.discretize_monitor(MODE_SOLVE_MONITOR),
+        grid_expanded=SIM_SYM.discretize_monitor(MODE_MONITOR_WITH_FIELDS),
         n_complex=N_COMPLEX.copy(),
         grid_primal_correction=GRID_CORRECTION,
         grid_dual_correction=GRID_CORRECTION,
+        amps=AMPS.copy(),
     )
     # Mode solver data needs to be normalized
     scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
@@ -121,8 +123,8 @@ def make_mode_solver_data():
 
 
 def make_mode_solver_data_smooth():
-    mode_data = ModeSolverData(
-        monitor=MODE_SOLVE_MONITOR,
+    mode_data = ModeData(
+        monitor=MODE_MONITOR_WITH_FIELDS,
         Ex=make_scalar_mode_field_data_array_smooth("Ex", rot=0.13 * np.pi),
         Ey=make_scalar_mode_field_data_array_smooth("Ey", rot=0.26 * np.pi),
         Ez=make_scalar_mode_field_data_array_smooth("Ez", rot=0.39 * np.pi),
@@ -131,10 +133,11 @@ def make_mode_solver_data_smooth():
         Hz=make_scalar_mode_field_data_array_smooth("Hz", rot=0.78 * np.pi),
         symmetry=SIM_SYM.symmetry,
         symmetry_center=SIM_SYM.center,
-        grid_expanded=SIM_SYM.discretize_monitor(MODE_SOLVE_MONITOR),
+        grid_expanded=SIM_SYM.discretize_monitor(MODE_MONITOR_WITH_FIELDS),
         n_complex=N_COMPLEX.copy(),
         grid_primal_correction=GRID_CORRECTION,
         grid_dual_correction=GRID_CORRECTION,
+        amps=AMPS.copy(),
     )
     # Mode solver data needs to be normalized
     scaling = np.sqrt(np.abs(mode_data.symmetry_expanded_copy.flux))
@@ -261,7 +264,7 @@ def test_mode_solver_data():
         _ = data.updated_copy(eps_spec=["diagonal"] * (num_freqs + 1))
     # check monitor direction changes upon time reversal
     data_reversed = data.time_reversed_copy
-    assert data_reversed.monitor.direction == "-"
+    assert data_reversed.monitor.store_fields_direction == "-"
 
 
 def test_permittivity_data():
@@ -407,7 +410,7 @@ def test_empty_io(tmp_path):
 
 
 def test_mode_solver_plot_field():
-    """Ensure we get a helpful error if trying to .plot_field with a ModeSolverData."""
+    """Ensure we get a helpful error if trying to .plot_field with a ModeData."""
     ms_data = make_mode_solver_data()
     with pytest.raises(DeprecationWarning):
         ms_data.plot_field(1, 2, 3, z=5, b=True)
@@ -445,13 +448,13 @@ def test_data_array_attrs():
     assert data.flux.f.attrs, "data coordinates have no attrs"
 
 
-def test_data_array_json_warns(log_capture, tmp_path):
+def test_data_array_json_warns(log_capture, tmp_path):  # noqa F811
     data = make_flux_data()
     data.to_file(str(tmp_path / "flux.json"))
     assert_log_level(log_capture, "WARNING")
 
 
-def test_data_array_hdf5_no_warnings(log_capture, tmp_path):
+def test_data_array_hdf5_no_warnings(log_capture, tmp_path):  # noqa F811
     data = make_flux_data()
     data.to_file(str(tmp_path / "flux.hdf5"))
     assert_log_level(log_capture, None)
@@ -466,7 +469,7 @@ def test_diffraction_data_use_medium():
 def test_mode_solver_data_sort():
     # test basic matching algorithm
     arr = np.array([[1, 2, 3], [6, 5, 4], [7, 9, 8]])
-    pairs, values = ModeSolverData._find_closest_pairs(arr)
+    pairs, values = ModeData._find_closest_pairs(arr)
     assert np.all(pairs == [2, 0, 1])
     assert np.all(values == [3, 6, 9])
 
@@ -524,10 +527,33 @@ def test_mode_solver_numerical_grid_data():
 def test_outer_dot():
     mode_data = make_mode_solver_data()
     field_data = make_field_data_2d()
-    _ = mode_data.outer_dot(mode_data)
-    _ = field_data.outer_dot(mode_data)
-    _ = mode_data.outer_dot(field_data)
-    _ = field_data.outer_dot(field_data)
+    dot = mode_data.outer_dot(mode_data)
+    assert "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
+    dot = field_data.outer_dot(mode_data)
+    assert not "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
+    dot = mode_data.outer_dot(field_data)
+    assert "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+    dot = field_data.outer_dot(field_data)
+    assert not "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+
+    # test that only common freqs are kept
+    inds1 = [0, 1, 3]
+    inds2 = [1, 2, 3, 4]
+
+    def isel(data, freqs):
+        data = data.updated_copy(
+            Ex=data.Ex.isel(f=freqs),
+        )
+        if isinstance(data, td.ModeSolverData):
+            data = data.updated_copy(n_complex=data.n_complex.isel(f=freqs))
+        return data
+
+    mode_data = isel(mode_data, inds1)
+    field_data = isel(field_data, inds2)
+
+    dot = mode_data.outer_dot(field_data)
+
+    assert len(dot.f) == 2
 
 
 @pytest.mark.parametrize("phase_shift", np.linspace(0, 2 * np.pi, 10))
@@ -545,3 +571,14 @@ def test_field_data_phase(phase_shift):
     phase2 = get_combined_phase(fld_data2)
 
     assert np.allclose(phase2, np.angle(np.exp(1j * (phase1 + phase_shift))))
+
+
+def test_no_nans():
+    eps_data = make_permittivity_data()
+    eps_nan = eps_data.eps_xx.isel(f=[0])
+    eps_nan[:] = np.nan
+    eps_dataset_nan = td.PermittivityDataset(
+        **{key: eps_nan for key in ["eps_xx", "eps_yy", "eps_zz"]}
+    )
+    with pytest.raises(pydantic.ValidationError):
+        cm = td.CustomMedium(eps_dataset=eps_dataset_nan)

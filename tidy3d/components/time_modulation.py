@@ -9,9 +9,10 @@ import pydantic.v1 as pd
 import numpy as np
 
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .types import InterpMethod
+from .types import InterpMethod, Bound
 from .time import AbstractTimeDependence
 from .data.data_array import SpatialDataArray
+from .data.validators import validate_no_nans
 from ..exceptions import ValidationError
 from ..constants import HERTZ, RADIAN
 
@@ -145,6 +146,9 @@ class SpaceModulation(AbstractSpaceModulation):
         description="Method of interpolation to use to obtain values at spatial locations on the Yee grids.",
     )
 
+    _no_nans_amplitude = validate_no_nans("amplitude")
+    _no_nans_phase = validate_no_nans("phase")
+
     @pd.validator("amplitude", always=True)
     def _real_amplitude(cls, val):
         """Assert that the amplitude is real."""
@@ -163,6 +167,34 @@ class SpaceModulation(AbstractSpaceModulation):
     def max_modulation(self) -> float:
         """Estimated maximum modulation amplitude."""
         return np.max(abs(np.array(self.amplitude)))
+
+    def sel_inside(self, bounds: Bound) -> SpaceModulation:
+        """Return a new space modulation that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        SpaceModulation
+            SpaceModulation with reduced data.
+        """
+
+        if isinstance(self.amplitude, SpatialDataArray):
+            amp_reduced = self.amplitude.sel_inside(bounds)
+        else:
+            amp_reduced = self.amplitude
+
+        if isinstance(self.phase, SpatialDataArray):
+            phase_reduced = self.phase.sel_inside(bounds)
+        else:
+            phase_reduced = self.phase
+
+        return self.updated_copy(amplitude=amp_reduced, phase=phase_reduced)
 
 
 SpaceModulationType = Union[SpaceModulation]
@@ -210,6 +242,24 @@ class SpaceTimeModulation(Tidy3dBaseModel):
             return True
         return False
 
+    def sel_inside(self, bounds: Bound) -> SpaceTimeModulation:
+        """Return a new space-time modulation that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        SpaceTimeModulation
+            SpaceTimeModulation with reduced data.
+        """
+
+        return self.updated_copy(space_modulation=self.space_modulation.sel_inside(bounds))
+
 
 class ModulationSpec(Tidy3dBaseModel):
     """Specification adding space-time modulation to the non-dispersive part of medium
@@ -244,5 +294,31 @@ class ModulationSpec(Tidy3dBaseModel):
 
     @cached_property
     def applied_modulation(self) -> bool:
-        """Check if any modulation has been applied to `permittivity` or `conductivity`."""
+        """Check if any modulation has been applied to ``permittivity`` or ``conductivity``."""
         return self.permittivity is not None or self.conductivity is not None
+
+    def sel_inside(self, bounds: Bound) -> ModulationSpec:
+        """Return a new modulation specficiation that contains the minimal amount data necessary to cover
+        a spatial region defined by ``bounds``.
+
+
+        Parameters
+        ----------
+        bounds : Tuple[float, float, float], Tuple[float, float float]
+            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
+
+        Returns
+        -------
+        ModulationSpec
+            ModulationSpec with reduced data.
+        """
+
+        perm_reduced = None
+        if self.permittivity is not None:
+            perm_reduced = self.permittivity.sel_inside(bounds)
+
+        cond_reduced = None
+        if self.conductivity is not None:
+            cond_reduced = self.conductivity.sel_inside(bounds)
+
+        return self.updated_copy(permittivity=perm_reduced, conductivity=cond_reduced)

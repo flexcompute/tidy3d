@@ -1,6 +1,7 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 from __future__ import annotations
-from typing import Dict, List
+from typing import Dict, List, Union
+from abc import ABC
 
 import xarray as xr
 import numpy as np
@@ -138,12 +139,24 @@ class DataArray(xr.DataArray):
         """Absolute value of data array."""
         return abs(self)
 
-    def to_hdf5(self, fname: str, group_path: str) -> None:
-        """Save an xr.DataArray to the hdf5 file with a given path to the group."""
-        sub_group = fname.create_group(group_path)
+    def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
+
+        # file name passed
+        if isinstance(fname, str):
+            with h5py.File(fname, "w") as f_handle:
+                self.to_hdf5_handle(f_handle=f_handle, group_path=group_path)
+
+        # file handle passed
+        else:
+            self.to_hdf5_handle(f_handle=fname, group_path=group_path)
+
+    def to_hdf5_handle(self, f_handle: h5py.File, group_path: str) -> None:
+        """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
+
+        sub_group = f_handle.create_group(group_path)
         sub_group[DATA_ARRAY_VALUE_NAME] = self.values
         for key, val in self.coords.items():
-            # sub_group[key] = val
             if val.dtype == "<U1":
                 sub_group[key] = val.values.tolist()
             else:
@@ -240,17 +253,8 @@ class MixedModeDataArray(DataArray):
     _dims = ("f", "mode_index_0", "mode_index_1")
 
 
-class SpatialDataArray(DataArray):
-    """Spatial distribution.
-
-    Example
-    -------
-    >>> x = [1,2]
-    >>> y = [2,3,4]
-    >>> z = [3,4,5,6]
-    >>> coords = dict(x=x, y=y, z=z)
-    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
-    """
+class AbstractSpatialDataArray(DataArray, ABC):
+    """Spatial distribution."""
 
     __slots__ = ()
     _dims = ("x", "y", "z")
@@ -274,30 +278,36 @@ class SpatialDataArray(DataArray):
 
         inds_list = []
 
-        for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1]):
+        coords = (self.x, self.y, self.z)
+
+        for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
             length = len(coord)
 
-            # if data does not cover structure at all take the closest index
-            if smax < coord[0]:  # structure is completely on the left side
-                # take 2 if possible, so that linear iterpolation is possible
-                comp_inds = np.arange(0, max(2, length))
-
-            elif smin > coord[-1]:  # structure is completely on the right side
-                # take 2 if possible, so that linear iterpolation is possible
-                comp_inds = np.arange(min(0, length - 2), length)
-
+            # one point along direction, assume invariance
+            if length == 1:
+                comp_inds = [0]
             else:
-                if smin < coord[0]:
-                    ind_min = 0
-                else:
-                    ind_min = max(0, (coord >= smin).argmax().data - 1)
+                # if data does not cover structure at all take the closest index
+                if smax < coord[0]:  # structure is completely on the left side
+                    # take 2 if possible, so that linear iterpolation is possible
+                    comp_inds = np.arange(0, max(2, length))
 
-                if smax > coord[-1]:
-                    ind_max = length - 1
-                else:
-                    ind_max = (coord >= smax).argmax().data
+                elif smin > coord[-1]:  # structure is completely on the right side
+                    # take 2 if possible, so that linear iterpolation is possible
+                    comp_inds = np.arange(min(0, length - 2), length)
 
-                comp_inds = np.arange(ind_min, ind_max + 1)
+                else:
+                    if smin < coord[0]:
+                        ind_min = 0
+                    else:
+                        ind_min = max(0, (coord >= smin).argmax().data - 1)
+
+                    if smax > coord[-1]:
+                        ind_max = length - 1
+                    else:
+                        ind_max = (coord >= smax).argmax().data
+
+                    comp_inds = np.arange(ind_min, ind_max + 1)
 
             inds_list.append(comp_inds)
 
@@ -320,10 +330,26 @@ class SpatialDataArray(DataArray):
             Full cover check outcome.
         """
 
+        coords = (self.x, self.y, self.z)
         return all(
             (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
-            for coord, smin, smax in zip(self.coords.values(), bounds[0], bounds[1])
+            for coord, smin, smax in zip(coords, bounds[0], bounds[1])
         )
+
+
+class SpatialDataArray(AbstractSpatialDataArray):
+    """Spatial distribution.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> coords = dict(x=x, y=y, z=z)
+    >>> fd = SpatialDataArray((1+1j) * np.random.random((2,3,4)), coords=coords)
+    """
+
+    __slots__ = ()
 
     def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
@@ -377,7 +403,7 @@ class SpatialDataArray(DataArray):
         return SpatialDataArray(new_data, coords=coords_dict)
 
 
-class ScalarFieldDataArray(DataArray):
+class ScalarFieldDataArray(AbstractSpatialDataArray):
     """Spatial distribution in the frequency-domain.
 
     Example
@@ -392,10 +418,9 @@ class ScalarFieldDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "f")
-    _data_attrs = {"long_name": "field value"}
 
 
-class ScalarFieldTimeDataArray(DataArray):
+class ScalarFieldTimeDataArray(AbstractSpatialDataArray):
     """Spatial distribution in the time-domain.
 
     Example
@@ -410,10 +435,9 @@ class ScalarFieldTimeDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "t")
-    _data_attrs = {"long_name": "field value"}
 
 
-class ScalarModeFieldDataArray(DataArray):
+class ScalarModeFieldDataArray(AbstractSpatialDataArray):
     """Spatial distribution of a mode in frequency-domain as a function of mode index.
 
     Example
@@ -429,7 +453,6 @@ class ScalarModeFieldDataArray(DataArray):
 
     __slots__ = ()
     _dims = ("x", "y", "z", "f", "mode_index")
-    _data_attrs = {"long_name": "field value"}
 
 
 class FluxDataArray(DataArray):
@@ -642,13 +665,19 @@ class ChargeDataArray(DataArray):
 
 
 class PointDataArray(DataArray):
-    """Indexed data array.
+    """A two-dimensional array that stores coordinates of a collection of points.
+    Dimension ``index`` denotes the index of a point in the collection, and dimension ``axis``
+    denotes the point's coordinate along that axis.
 
     Example
     -------
     >>> point_array = PointDataArray(
     ...     (1+1j) * np.random.random((5, 3)), coords=dict(index=np.arange(5), axis=np.arange(3)),
     ... )
+    >>> # get coordinates of a point number 3
+    >>> point3 = point_array.sel(index=3)
+    >>> # get x coordinates of all points
+    >>> x_coords = point_array.sel(axis=0)
     """
 
     __slots__ = ()
@@ -656,7 +685,11 @@ class PointDataArray(DataArray):
 
 
 class CellDataArray(DataArray):
-    """Cell connection data array.
+    """A two-dimensional array that stores indices of points composing each cell in a collection of
+    cells of the same type (for example: triangles, tetrahedra, etc). Dimension ``cell_index``
+    denotes the index of a cell in the collection, and dimension ``vertex_index`` denotes placement
+    (index) of a point in a cell (for example: 0, 1, or 2 for triangles; 0, 1, 2, or 3 for
+    tetrahedra).
 
     Example
     -------
@@ -664,6 +697,10 @@ class CellDataArray(DataArray):
     ...     (1+1j) * np.random.random((4, 3)),
     ...     coords=dict(cell_index=np.arange(4), vertex_index=np.arange(3)),
     ... )
+    >>> # get indices of points composing cell number 3
+    >>> cell3 = cell_array.sel(cell_index=3)
+    >>> # get indices of points that represent the first vertex in each cell
+    >>> first_vertices = cell_array.sel(vertex_index=0)
     """
 
     __slots__ = ()
@@ -671,7 +708,9 @@ class CellDataArray(DataArray):
 
 
 class IndexedDataArray(DataArray):
-    """Indexed data array.
+    """Stores a one-dimensional array enumerated by coordinate ``index``. It is typically used
+    in conjuction with a ``PointDataArray`` to store point-associated data or a ``CellDataArray``
+    to store cell-associated data.
 
     Example
     -------

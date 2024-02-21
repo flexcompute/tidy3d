@@ -10,7 +10,7 @@ from tidy3d.exceptions import DataError, Tidy3dKeyError
 from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
-from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
+from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
 
 from .test_monitor_data import make_field_data, make_field_time_data, make_permittivity_data
 from .test_monitor_data import make_mode_data, make_mode_solver_data
@@ -115,7 +115,9 @@ def test_getitem():
 def test_centers():
     sim_data = make_sim_data()
     for mon in sim_data.simulation.monitors:
-        if isinstance(mon, (FieldMonitor, FieldTimeMonitor, ModeSolverMonitor)):
+        if isinstance(mon, (FieldMonitor, FieldTimeMonitor)) or (
+            isinstance(mon, ModeMonitor) and mon.store_fields_direction
+        ):
             _ = sim_data.at_centers(mon.name)
 
 
@@ -161,6 +163,18 @@ def test_plot(phase):
     plt.close()
 
 
+def test_plot_field_missing_derived_data():
+    sim_data = make_sim_data()
+    with pytest.raises(Tidy3dKeyError):
+        sim_data.plot_field(field_monitor_name="field_time", field_name="E", val="int")
+
+
+def test_plot_field_missing_field_value():
+    sim_data = make_sim_data()
+    with pytest.raises(Tidy3dKeyError):
+        sim_data.plot_field(field_monitor_name="field", field_name="Ex", val="test")
+
+
 @pytest.mark.parametrize("monitor_name", ["field", "field_time", "mode_solver"])
 def test_intensity(monitor_name):
     sim_data = make_sim_data()
@@ -203,7 +217,7 @@ def test_to_json(tmp_path):
 
 @pytest.mark.filterwarnings("ignore:log10")
 @pytest.mark.parametrize("field_name", ["Ex", "Ey", "Ez", "E", "Hx", "Hz", "Sy"])
-@pytest.mark.parametrize("val", ["real", "imag", "abs", "phase"])
+@pytest.mark.parametrize("val", ["real", "re", "imag", "im", "abs", "phase"])
 def test_derived_components(field_name, val):
     sim_data = make_sim_data()
     if len(field_name) == 1 and val == "phase":

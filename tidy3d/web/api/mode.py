@@ -10,12 +10,18 @@ import tempfile
 import time
 
 import pydantic.v1 as pydantic
+from botocore.exceptions import ClientError
+
+from ..core.environment import Env
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
+from ...components.medium import AbstractCustomMedium
+from ...components.types import Literal
 from ...exceptions import WebError
 from ...log import log, get_logging_console
+from ..core.core_config import get_logger_console
 from ..core.http_util import http
-from ..core.s3utils import download_file, upload_file
+from ..core.s3utils import download_file, download_gz_file, upload_file
 from ..core.task_core import Folder
 from ..core.types import ResourceLifecycle, Submittable
 
@@ -31,6 +37,7 @@ MODESOLVER_GZ = "mode_solver.hdf5.gz"
 
 MODESOLVER_LOG = "output/result.log"
 MODESOLVER_RESULT = "output/result.hdf5"
+MODESOLVER_RESULT_GZ = "output/mode_solver_data.hdf5.gz"
 
 
 def run(
@@ -42,6 +49,7 @@ def run(
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
+    reduce_simulation: Literal["auto", True, False] = "auto",
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.
@@ -59,12 +67,14 @@ def run(
     results_file : str = "mode_solver.hdf5"
         Path to download results file (.hdf5).
     verbose : bool = True
-        If `True`, will print status, otherwise, will run silently.
+        If ``True``, will print status, otherwise, will run silently.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
         Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
-
+    reduce_simulation : Literal["auto", True, False] = "auto"
+        Restrict simulation to mode solver region. If "auto", then simulation is automatically
+        restricted if it contains custom mediums.
     Returns
     -------
     :class:`.ModeSolverData`
@@ -74,6 +84,23 @@ def run(
     log_level = "DEBUG" if verbose else "INFO"
     if verbose:
         console = get_logging_console()
+
+    if reduce_simulation == "auto":
+        sim_mediums = mode_solver.simulation.scene.mediums
+        contains_custom = any(isinstance(med, AbstractCustomMedium) for med in sim_mediums)
+        reduce_simulation = contains_custom
+
+        if reduce_simulation:
+            log.warning(
+                "The associated 'Simulation' object contains custom mediums. It will be "
+                "automatically restricted to the mode solver plane to reduce data for uploading. "
+                "To force uploading the original 'Simulation' object use 'reduce_simulation=False'."
+                " Setting 'reduce_simulation=True' will force simulation reduction in all cases and"
+                " silence this warning."
+            )
+
+    if reduce_simulation:
+        mode_solver = mode_solver.reduced_simulation_copy
 
     task = ModeSolverTask.create(mode_solver, task_name, mode_solver_name, folder_name)
     if verbose:
@@ -302,7 +329,10 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         The mode solver must be uploaded to the server with the :meth:`ModeSolverTask.upload` method
         before this step.
         """
-        http.post(f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run")
+        http.post(
+            f"{MODESOLVER_API}/{self.task_id}/{self.solver_id}/run",
+            {"enableCaching": Env.current.enable_caching},
+        )
 
     def delete(self):
         """Delete the mode solver and its corresponding task from the server."""
@@ -424,18 +454,36 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
         :class:`.ModeSolverData`
             Mode solver data with the calculated results.
         """
+
+        file = None
         try:
-            download_file(
-                self.solver_id,
-                MODESOLVER_RESULT,
+            file = download_gz_file(
+                resource_id=self.solver_id,
+                remote_filename=MODESOLVER_RESULT_GZ,
                 to_file=to_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-        except Exception:
-            raise WebError(
-                f"Failed to download file '{MODESOLVER_RESULT}' from server. Please confirm that the task was successful."
-            )
+        except ClientError:
+            if verbose:
+                console = get_logger_console()
+                console.log(f"Unable to download '{MODESOLVER_RESULT_GZ}'.")
+
+        if not file:
+            try:
+                file = download_file(
+                    resource_id=self.solver_id,
+                    remote_filename=MODESOLVER_RESULT,
+                    to_file=to_file,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            except Exception as e:
+                raise WebError(
+                    "Failed to download the simulation data file from the server. "
+                    "Please confirm that the task was successfully run."
+                ) from e
+
         data = ModeSolverData.from_hdf5(to_file)
         data = data.copy(
             update={"monitor": self.mode_solver.to_mode_solver_monitor(name=MODE_MONITOR_NAME)}

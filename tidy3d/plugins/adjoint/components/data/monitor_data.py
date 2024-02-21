@@ -26,13 +26,13 @@ from ..base import JaxObject
 
 
 class JaxMonitorData(MonitorData, JaxObject, ABC):
-    """A :class:`.MonitorData` that we regsiter with jax."""
+    """A :class:`.MonitorData` that we register with jax."""
 
     @classmethod
     def from_monitor_data(cls, mnt_data: MonitorData) -> JaxMonitorData:
         """Construct a :class:`.JaxMonitorData` instance from a :class:`.MonitorData`."""
         self_dict = mnt_data.dict(exclude={"type"}).copy()
-        for field_name in cls.get_jax_field_names():
+        for field_name in cls.get_jax_field_names_all():
             data_array = self_dict[field_name]
             if data_array is not None:
                 coords = {
@@ -407,6 +407,9 @@ class JaxDiffractionData(JaxMonitorData, DiffractionData):
 
         adjoint_sources = []
         for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
+            if jnp.isnan(amp):
+                continue
+
             # select the propagation angles from the data
             angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
             angle_theta = float(theta_data.sel(**angle_sel_kwargs))

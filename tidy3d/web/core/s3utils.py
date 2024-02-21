@@ -1,5 +1,8 @@
 """handles filesystem, storage
 """
+import os
+import tempfile
+
 import pathlib
 import urllib
 from datetime import datetime
@@ -12,8 +15,10 @@ from pydantic.v1 import BaseModel, Field
 from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
 from rich.progress import TransferSpeedColumn, TimeRemainingColumn
 from .http_util import http
+from .file_util import extract_gzip_file
 from .environment import Env
 from .core_config import get_logger_console
+from .exceptions import WebError
 
 
 class _UserCredential(BaseModel):
@@ -283,8 +288,8 @@ def download_file(
     ----------
     resource_id : str
         The resource id, e.g. task id.
-    content : str
-        The content of the file
+    remote_filename : str
+        Path to the remote file.
     to_file : str = None
         Local filename to save to, if not specified, use the remote_filename.
     verbose : bool = True
@@ -345,4 +350,59 @@ def download_file(
         else:
             _download(lambda bytes_in_chunk: None)
 
+    return to_file
+
+
+def download_gz_file(
+    resource_id: str,
+    remote_filename: str,
+    to_file: str = None,
+    verbose: bool = True,
+    progress_callback: Callable[[float], None] = None,
+) -> pathlib.Path:
+    """Download a ``.gz`` file and unzip it into ``to_file``, unless ``to_file`` itself
+    ends in .gz
+
+    Parameters
+    ----------
+    resource_id : str
+        The resource id, e.g. task id.
+    remote_filename : str
+        Path to the remote file.
+    to_file : str = None
+        Local filename to save to, if not specified, use the remote_filename.
+    verbose : bool = True
+        Whether to display a progressbar for the upload
+    progress_callback : Callable[[float], None] = None
+        User-supplied callback function with ``bytes_in_chunk`` as argument.
+    """
+
+    # If to_file is a gzip extension, just download
+    if to_file.lower().endswith(".gz"):
+        return download_file(
+            resource_id,
+            remote_filename,
+            to_file=to_file,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
+
+    # Otherwise, download and unzip
+    # The tempfile is set as ``hdf5.gz`` so that the mock download in the webapi tests works
+    tmp_file, tmp_file_path = tempfile.mkstemp(".hdf5.gz")
+    os.close(tmp_file)
+    try:
+        download_file(
+            resource_id,
+            remote_filename,
+            to_file=tmp_file_path,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
+        if os.path.exists(tmp_file_path):
+            extract_gzip_file(tmp_file_path, to_file)
+        else:
+            raise WebError(f"Failed to download and extract '{remote_filename}'.")
+    finally:
+        os.unlink(tmp_file_path)
     return to_file

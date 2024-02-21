@@ -175,7 +175,7 @@ def vertices_from_shapely(shape: Shapely) -> ArrayFloat2D:
     Returns
     -------
     List[Tuple[ArrayFloat2D]]
-        List of tuples `(exterior, *interiors)`.
+        List of tuples ``(exterior, *interiors)``.
     """
     if shape.geom_type == "LinearRing":
         return [(shape.coords[:-1],)]

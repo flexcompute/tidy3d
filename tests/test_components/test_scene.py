@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
-from ..utils import assert_log_level, log_capture, SIM_FULL
+from ..utils import SIM_FULL
 
 SCENE = td.Scene()
 

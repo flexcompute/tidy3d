@@ -351,7 +351,7 @@ def test_n_cfl():
     assert med.n_cfl >= 2
 
 
-def verify_custom_medium_methods(mat):
+def verify_custom_medium_methods(mat, reduced_fields=[]):
     """Verify that the methods in custom medium is producing expected results."""
     freq = 1.0
     assert isinstance(mat, AbstractCustomMedium)
@@ -361,6 +361,41 @@ def verify_custom_medium_methods(mat):
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
     for i in range(3):
         assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+
+    # check reducing data
+    subsection = td.Box(size=(0.3, 0.4, 0.35), center=(0.4, 0.4, 0.4))
+
+    mat_reduced = mat.sel_inside(subsection.bounds)
+
+    for field in reduced_fields:
+        original = getattr(mat, field)
+        reduced = getattr(mat_reduced, field)
+
+        if original is None:
+            assert reduced is None
+            continue
+
+        # data fields in medium classes could be SpatialArrays or 2d tuples of spatial arrays
+        # lets convert everything into 2d tuples of spatial arrays for uniform handling
+        if isinstance(original, td.SpatialDataArray):
+            original = [
+                [
+                    original,
+                ],
+            ]
+            reduced = [
+                [
+                    reduced,
+                ],
+            ]
+
+        for or_set, re_set in zip(original, reduced):
+            assert len(or_set) == len(re_set)
+
+            for ind in range(len(or_set)):
+                diff = (or_set[ind] - re_set[ind]).abs
+                assert diff.does_cover(subsection.bounds)
+                assert np.allclose(diff, 0)
 
     # construct sim
     struct = td.Structure(
@@ -375,6 +410,8 @@ def verify_custom_medium_methods(mat):
         structures=(struct,),
     )
     _ = sim.grid
+    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=False)
+    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=True)
 
     # bkg
     sim = td.Simulation(
@@ -384,6 +421,8 @@ def verify_custom_medium_methods(mat):
         medium=mat,
     )
     _ = sim.grid
+    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=False)
+    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=True)
 
 
 def test_anisotropic_custom_medium():
@@ -438,7 +477,7 @@ def test_custom_isotropic_medium():
     with pytest.raises(pydantic.ValidationError):
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
     mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp, allow_gain=True)
-    verify_custom_medium_methods(mat)
+    verify_custom_medium_methods(mat, ["permittivity", "conductivity"])
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
@@ -448,15 +487,15 @@ def test_custom_isotropic_medium():
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
 
     mat = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    verify_custom_medium_methods(mat)
+    verify_custom_medium_methods(mat, ["permittivity", "conductivity"])
 
     mat = CustomMedium(permittivity=permittivity)
-    verify_custom_medium_methods(mat)
+    verify_custom_medium_methods(mat, ["permittivity", "conductivity"])
 
 
-def verify_custom_dispersive_medium_methods(mat):
+def verify_custom_dispersive_medium_methods(mat, reduced_fields=[]):
     """Verify that the methods in custom dispersive medium is producing expected results."""
-    verify_custom_medium_methods(mat)
+    verify_custom_medium_methods(mat, reduced_fields)
     freq = 1.0
     for i in range(3):
         assert mat.eps_dataarray_freq(freq)[i].shape == (Nx, Ny, Nz)
@@ -515,7 +554,7 @@ def test_custom_pole_residue():
 
     eps_inf = td.SpatialDataArray(np.random.random((Nx, Ny, Nz)) + 1, coords=dict(x=X, y=Y, z=Z))
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "poles"])
     assert mat.n_cfl > 1
 
     # to custom non-dispersive medium
@@ -529,12 +568,12 @@ def test_custom_pole_residue():
         mat_medium = mat.to_medium()
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c - 0.1),), allow_gain=True)
     mat_medium = mat.to_medium()
-    verify_custom_medium_methods(mat_medium)
+    verify_custom_medium_methods(mat_medium, ["permittivity", "conductivity"])
     assert mat_medium.n_cfl > 1
 
     # custom medium to pole residue
     mat = CustomPoleResidue.from_medium(mat_medium)
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "poles"])
     assert mat.n_cfl > 1
 
 
@@ -578,14 +617,14 @@ def test_custom_sellmeier():
         mat = CustomSellmeier(coeffs=((b1, c2), (btmp, c2)))
 
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["coeffs"])
     assert mat.n_cfl == 1
 
     # from dispersion
     n = td.SpatialDataArray(2 + np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     dn_dwvl = td.SpatialDataArray(-np.random.random((Nx, Ny, Nz)), coords=dict(x=X, y=Y, z=Z))
     mat = CustomSellmeier.from_dispersion(n=n, dn_dwvl=dn_dwvl, freq=2, interp_method="linear")
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["coeffs"])
     assert mat.n_cfl == 1
 
 
@@ -638,13 +677,13 @@ def test_custom_lorentz():
     mat = CustomLorentz(
         eps_inf=eps_inf, coeffs=((de1, f1, delta1), (detmp, f2, delta2)), allow_gain=True
     )
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
 
     mat = CustomLorentz(
         eps_inf=eps_inf, coeffs=((de1, f1, delta1), (de2, f2, delta2)), subpixel=True
     )
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
     assert mat.pole_residue.subpixel
 
@@ -681,7 +720,7 @@ def test_custom_drude():
         mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (ftmp, delta2)))
 
     mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
 
 
@@ -728,11 +767,11 @@ def test_custom_debye():
         )
         mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)))
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (epstmp, tau2)), allow_gain=True)
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
 
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
-    verify_custom_dispersive_medium_methods(mat)
+    verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
 
 

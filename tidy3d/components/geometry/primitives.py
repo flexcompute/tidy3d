@@ -9,10 +9,10 @@ import numpy as np
 import shapely
 
 from ..base import cached_property, skip_if_fields_missing
-from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, trimesh
+from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, LARGE_NUMBER
-
+from ...packaging import verify_packages_import
 from . import base
 
 # for sampling conical frustum in visualization
@@ -77,7 +77,7 @@ class Sphere(base.Centered, base.Circular):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         normal = np.array(normal)
         unit_normal = normal / (np.sum(normal**2) ** 0.5)
@@ -116,7 +116,7 @@ class Sphere(base.Centered, base.Circular):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
         if not self.intersects_axis_position(axis, position):
@@ -173,6 +173,14 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     Example
     -------
     >>> c = Cylinder(center=(1,2,3), radius=2, length=5, axis=2)
+
+    See Also
+    --------
+
+    **Notebooks**
+
+    * `THz integrated demultiplexer/filter based on a ring resonator <../../../notebooks/THzDemultiplexerFilter.html>`_
+    * `Photonic crystal waveguide polarization filter <../../../notebooks/PhotonicCrystalWaveguidePolarizationFilter.html>`_
     """
 
     # Provide more explanations on where radius is defined
@@ -224,7 +232,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
             raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
         return self.axis
 
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -244,8 +252,10 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
 
         angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
@@ -285,7 +295,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         # radius at z
@@ -315,7 +325,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         # position in the local coordinate of the cylinder
         position_local = position - self.center[axis]

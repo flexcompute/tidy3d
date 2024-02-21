@@ -54,7 +54,7 @@ def test_logging_upper():
 
 
 def test_logging_unrecognized():
-    """If unrecognized option, raise validation errorr."""
+    """If unrecognized option, raise validation error."""
     with pytest.raises(pd.ValidationError):
         td.config.logging_level = "blah"
 

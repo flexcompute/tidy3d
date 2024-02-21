@@ -22,7 +22,7 @@ from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
 
 from .base import JaxObject
-from .types import JaxFloat, validate_jax_tuple, validate_jax_tuple_tuple
+from .types import JaxFloat
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 50
@@ -89,13 +89,6 @@ class JaxGeometry(Geometry, ABC):
         )
         return field_mnt, eps_mnt
 
-    def to_tidy3d(self) -> Geometry:
-        """Convert :class:`.JaxGeometry` instance to :class:`.Geometry`"""
-        self_dict = self.dict(exclude={"type"})
-        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
-        tidy3d_type = map_reverse[type(self)]
-        return tidy3d_type.parse_obj(self_dict)
-
     @staticmethod
     def compute_dotted_e_d_fields(
         grad_data_fwd: FieldData, grad_data_adj: FieldData, grad_data_eps: PermittivityData
@@ -130,36 +123,23 @@ class JaxGeometry(Geometry, ABC):
 class JaxBox(JaxGeometry, Box, JaxObject):
     """A :class:`.Box` registered with jax."""
 
-    size: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
-        ...,
-        title="Size",
-        description="Size of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-        jax_field=True,
+    _tidy3d_class = Box
+
+    center_jax: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+        (0.0, 0.0, 0.0),
+        title="Center (Jax)",
+        description="Jax traced value for the center of the box in (x, y, z).",
+        units=MICROMETER,
+        stores_jax_for="center",
     )
 
-    center: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
+    size_jax: Tuple[JaxFloat, JaxFloat, JaxFloat] = pd.Field(
         ...,
-        title="Center",
-        description="Center of the box in (x,y,z). May contain ``jax`` ``Array`` instances.",
-        jax_field=True,
+        title="Size (Jax)",
+        description="Jax-traced value for the size of the box in (x, y, z).",
+        units=MICROMETER,
+        stores_jax_for="size",
     )
-
-    _sanitize_size = validate_jax_tuple("size")
-    _sanitize_center = validate_jax_tuple("center")
-
-    @cached_property
-    def bounds(self):
-        """Bounds of this box."""
-        size = jax.lax.stop_gradient(self.size)
-        center = jax.lax.stop_gradient(self.center)
-        coord_min = tuple(c - s / 2 for (s, c) in zip(size, center))
-        coord_max = tuple(c + s / 2 for (s, c) in zip(size, center))
-        return (coord_min, coord_max)
-
-    @pd.validator("center", always=True)
-    def _center_not_inf(cls, val):
-        """Overrides validator enforing that val is not inf."""
-        return val
 
     def store_vjp(
         self,
@@ -278,88 +258,38 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         # convert surface vjps to center, size vjps. Note, convert these to jax types w/ np.sum()
         vjp_center = tuple(np.sum(vjp_surfs[dim][1] - vjp_surfs[dim][0]) for dim in "xyz")
         vjp_size = tuple(np.sum(0.5 * (vjp_surfs[dim][1] + vjp_surfs[dim][0])) for dim in "xyz")
-        return self.copy(update=dict(center=vjp_center, size=vjp_size))
+        return self.copy(update=dict(center_jax=vjp_center, size_jax=vjp_size))
 
 
 @register_pytree_node_class
 class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
     """A :class:`.PolySlab` registered with jax."""
 
-    vertices: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
+    _tidy3d_class = PolySlab
+
+    vertices_jax: Tuple[Tuple[JaxFloat, JaxFloat], ...] = pd.Field(
         ...,
-        title="Vertices",
-        description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
-        "face vertices at the ``reference_plane``. "
+        title="Vertices (Jax)",
+        description="Jax-traced list of (d1, d2) defining the 2 dimensional positions of the "
+        "polygon face vertices at the ``reference_plane``. "
         "The index of dimension should be in the ascending order: e.g. if "
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
-        jax_field=True,
+        stores_jax_for="vertices",
     )
-
-    @pd.validator("vertices", pre=True, always=True)
-    def convert_to_numpy(cls, val):
-        """Overwrite to not convert vertices to numpy."""
-        return val
-
-    @pd.validator("vertices", pre=True, always=True)
-    def to_list(cls, val):
-        """Convert any numpy to list."""
-        if isinstance(val, np.ndarray):
-            return val.tolist()
-        return val
-
-    _sanitize_vertices = validate_jax_tuple_tuple("vertices")
-
-    @cached_property
-    def bounds(self) -> Bound:
-        """Returns bounding box min and max coordinates. The dilation and slant angle are not
-        taken into account exactly for speed. Instead, the polygon may be slightly smaller than
-        the returned bounds, but it should always be fully contained.
-
-        Returns
-        -------
-        Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-        """
-
-        xmin, ymin = np.amin(jax.lax.stop_gradient(self.vertices), axis=0)
-        xmax, ymax = np.amax(jax.lax.stop_gradient(self.vertices), axis=0)
-
-        # get bounds in (local) z
-        zmin, zmax = self.slab_bounds
-
-        # rearrange axes
-        coords_min = self.unpop_axis(zmin, (xmin, ymin), axis=self.axis)
-        coords_max = self.unpop_axis(zmax, (xmax, ymax), axis=self.axis)
-        return (tuple(coords_min), tuple(coords_max))
 
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
-        """Overrides validator enforcing that val is not inf."""
+        """Don't allow sidewall."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support slanted sidewall.")
         return val
 
     @pd.validator("dilation", always=True)
     def no_dilation(cls, val):
-        """Overrides validator enforcing that val is not inf."""
+        """Don't allow dilation."""
         if not np.isclose(val, 0.0):
             raise AdjointError("'JaxPolySlab' does not support dilation.")
-        return val
-
-    @pd.validator("vertices", always=True)
-    def correct_shape(cls, val):
-        """Overrides validator enforcing that val is not inf."""
-        return val
-
-    @pd.validator("vertices", always=True)
-    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
-        """Overrides validator enforcing that val is not inf."""
-        return val
-
-    @pd.validator("vertices", always=True)
-    def no_complex_self_intersecting_polygon_at_reference_plane(cls, val, values):
-        """Overrides validator enforcing that val is not inf."""
         return val
 
     @pd.validator("vertices", always=True)
@@ -370,12 +300,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'."
             )
         return val
-
-    @cached_property
-    def is_ccw(self) -> bool:
-        """Is this PolySlab CCW oriented?"""
-        vertices = np.array(jax.lax.stop_gradient(self.vertices))
-        return PolySlab._area(vertices) > 0
 
     def edge_contrib(
         self,
@@ -389,7 +313,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         eps_out: complex,
         eps_in: complex,
     ) -> Coordinate2D:
-        """Gradient w.r.t change in `vertex_grad` connected to `vertex_stat`."""
+        """Gradient w.r.t change in ``vertex_grad`` connected to ``vertex_stat``."""
 
         # TODO: (later) compute these grabbing from grad_data_eps at some distance away
         delta_eps_12 = eps_in - eps_out
@@ -430,7 +354,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             return cmp_t, cmp_n, cmp_z
 
         def compute_integrand(s: np.array, z: np.array) -> np.array:
-            """Get integrand at positions `(s, z)` along the edge."""
+            """Get integrand at positions ``(s, z)`` along the edge."""
 
             # grab the position along edge and make dictionary of coords to interp with (s, z)
             x, y = edge_position(s=s)
@@ -467,7 +391,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             contrib_d_n = -delta_eps_inv_12 * d_n_edge
             contrib_total = contrib_e_t + contrib_d_n + contrib_e_z
 
-            # scale the gradient contribution by the normalized distange from the static edge
+            # scale the gradient contribution by the normalized distance from the static edge
             # make broadcasting work with both 2D and 3D simulation domains
             return (s * contrib_total.T).T
 
@@ -597,7 +521,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         eps_out: complex,
         eps_in: complex,
     ) -> tuple:
-        """Generate arguments for `vertex_vjp`."""
+        """Generate arguments for ``vertex_vjp``."""
 
         num_verts = len(self.vertices)
         args = [range(num_verts)]
@@ -620,8 +544,10 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         # Construct arguments to pass to the parallel vertices_vjp computation
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-        vertices_vjp = list(map(self.vertex_vjp, *args))
-        return self.copy(update=dict(vertices=vertices_vjp))
+        vertices_vjp = tuple(map(self.vertex_vjp, *args))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
+
+        return self.updated_copy(vertices_jax=vertices_vjp)
 
     def store_vjp_parallel(
         self,
@@ -638,7 +564,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
         with Pool(num_proc) as pool:
             vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
-        return self.copy(update=dict(vertices=vertices_vjp))
+        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
+        return self.updated_copy(vertices_jax=vertices_vjp)
 
 
 JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
@@ -647,6 +574,8 @@ JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
 @register_pytree_node_class
 class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
     """A collection of Geometry objects that can be called as a single geometry object."""
+
+    _tidy3d_class = GeometryGroup
 
     geometries: Tuple[JaxPolySlab, ...] = pd.Field(
         ...,
@@ -657,33 +586,6 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         "is supported.",
         jax_field=True,
     )
-
-    def to_tidy3d(self) -> GeometryGroup:
-        """Convert :class:`.JaxGeometryGroup` instance to :class:`.GeometryGroup`"""
-        self_dict = self.dict(exclude={"type"})
-        self_dict["geometries"] = [geo.to_tidy3d() for geo in self.geometries]
-        map_reverse = {v: k for k, v in JAX_GEOMETRY_MAP.items()}
-        tidy3d_type = map_reverse[type(self)]
-        return tidy3d_type.parse_obj(self_dict)
-
-    @classmethod
-    def from_tidy3d(cls, tidy3d_obj: GeometryGroup) -> JaxGeometryGroup:
-        """Convert :class:`.GeometryGroup` instance to :class:`.GeometryGroup`"""
-        obj_dict = tidy3d_obj.dict(exclude={"type"})
-        jax_geometries = []
-
-        tidy3d_type_map = {k.__name__: k for k, v in JAX_GEOMETRY_MAP.items()}
-        jax_type_map = {k.__name__: v for k, v in JAX_GEOMETRY_MAP.items()}
-
-        for geo in obj_dict["geometries"]:
-            type_str = geo["type"]
-            tidy3d_type = tidy3d_type_map[type_str]
-            jax_type = jax_type_map[type_str]
-            geo_tidy3d = tidy3d_type.parse_obj(geo)
-            geo_jax = jax_type.from_tidy3d(geo_tidy3d)
-            jax_geometries.append(geo_jax)
-        obj_dict["geometries"] = jax_geometries
-        return cls.parse_obj(obj_dict)
 
     @staticmethod
     def _store_vjp_geometry(
@@ -718,7 +620,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         eps_in: complex,
         num_proc: int = 1,
     ) -> JaxGeometryGroup:
-        """Returns a `JaxGeometryGroup` where the `.geometries` store the gradient info."""
+        """Returns a ``JaxGeometryGroup`` where the ``.geometries`` store the gradient info."""
 
         map_args = (
             self.geometries,

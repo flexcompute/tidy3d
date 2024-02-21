@@ -45,7 +45,7 @@ This signifies that the class is an "abstract base class".
 For all intents and purposes, this means that the class exists to give some organizational structure, but is not intended to be used directly.
 For example, `AbstractMedium(Tidy3dBaseModel, ABC)` is used to define common characteristics of both dispersive and non-dispersive media, but isn't intemded to be used in a simulation.
 
-The `@abstractmethod` decorator is similarly used to indicate that the method is indended to be implemented in the subclasses of the `ABC`, but not used or defined directly in the base class.
+The `@abstractmethod` decorator is similarly used to indicate that the method is intended to be implemented in the subclasses of the `ABC`, but not used or defined directly in the base class.
 
 ## Component Structure
 
@@ -125,11 +125,11 @@ The keys of these dictionaries are the names of the components and the values ar
 - `sources`, a dictionary of `Source()` objects, defining the current sources in the simulation domain.
 - `monitors`, a dictionary of `Monitor()` objects, defining what data is being measured and where.
 
-![Call Structure](../../docs/img/diagram_Simulation.png)
+![Call Structure](../../docs/_static/img/diagram_Simulation.png)
 
 #### Validations
 
-Upon intialization, the simulation checks whether any of the objects are completely outside of the simulation bounding box, at which point it will error.
+Upon initialization, the simulation checks whether any of the objects are completely outside of the simulation bounding box, at which point it will error.
 Other checks may be added in future development.
 
 #### JSON Operations
@@ -172,7 +172,7 @@ Note that there is an extensive library of pre-defined dispersive materials, all
 
 `Structure()` objects simply combine a shape definition through `Geometry()` with a medium definition through `Medium()`.
 
-![Call Structure](../../docs/img/diagram_Structure.png)
+![Call Structure](../../docs/_static/img/diagram_Structure.png)
 
 ## Modes
 
@@ -198,7 +198,7 @@ The three types of `DirectionalSources` are:
 - `GaussianBeam(waist_size)` (Gaussian Beam (tbd))
 - `ModeSource(mode)` (which defines modal injection with mode solver parameters specified in `mode`.
 
-![Call Structure](../../docs/img/diagram_Stource.png)
+![Call Structure](../../docs/_static/img/diagram_Source.png)
 
 ### Source Time-Dependence
 
@@ -221,13 +221,13 @@ There are three types of usable monitors, each stores different types of data:
 - `FluxMonitors()` store the flux through their (planar only) geometry
 - `ModeMonitors(mode)` store the mode amplitudes found by decomposition on their (planar only) geometry.
 
-![Call Structure](../../docs/img/diagram_Monitor.png)
+![Call Structure](../../docs/_static/img/diagram_Monitor.png)
 
 ### Samplers
 
 All monitors must be told how to sample the data in either time or frequency domain.
 For this, the `Sampler()` object is supplied to each `Monitor()`, which can either be:
 - `TimeSampler(times)` (defines the time steps to sample the data at)
-- `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier tranform).
+- `FreqSampler(freqs)` (defines the frequencies to sample the data at using running time discrete Fourier transform).
 Note that `ModeMonitors()` can only accept `FreqSamplers()` as the modes are only defined at a specific frequency.
 The functions `uniform_times()` and `uniform_freqs()` allow one to easily make evenly spaced samplers.

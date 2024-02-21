@@ -111,7 +111,7 @@ def skip_if_fields_missing(fields: List[str]):
 class Tidy3dBaseModel(pydantic.BaseModel):
     """Base pydantic model that all Tidy3d components inherit from.
     Defines configuration for handling data structures
-    as well as methods for imporing, exporting, and hashing tidy3d objects.
+    as well as methods for importing, exporting, and hashing tidy3d objects.
     For more details on pydantic base models, see:
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
@@ -832,7 +832,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         def make_json_compatible(json_string: str) -> str:
-            """Makes the string compatiable with json standards, notably for infinity."""
+            """Makes the string compatible with json standards, notably for infinity."""
 
             tmp_string = "<<TEMPORARY_INFINITY_STRING>>"
             json_string = json_string.replace("-Infinity", tmp_string)

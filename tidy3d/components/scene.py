@@ -119,7 +119,7 @@ class Scene(Tidy3dBaseModel):
     @cached_property
     def bounds(self) -> Bound:
         """Automatically defined scene's bounds based on present structures. Infinite dimensions
-        are ignored. If the scene contains no strucutres, the bounds are set to
+        are ignored. If the scene contains no structures, the bounds are set to
         (-1, -1, -1), (1, 1, 1). Similarly, if along a given axis all structures extend infinitely,
         the bounds along that axis are set from -1 to 1.
 
@@ -389,12 +389,13 @@ class Scene(Tidy3dBaseModel):
         for medium, shape in medium_shapes:
             mat_index = medium_map[medium]
             ax = self._plot_shape_structure(medium=medium, mat_index=mat_index, shape=shape, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
@@ -801,12 +802,13 @@ class Scene(Tidy3dBaseModel):
 
         if cbar:
             self._add_cbar_eps(eps_min=eps_min, eps_max=eps_max, ax=ax)
-        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         # clean up the axis display
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         ax = self.box.add_ax_labels_lims(axis=axis, ax=ax)
         ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+
+        ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
         return ax
 
@@ -1269,7 +1271,6 @@ class Scene(Tidy3dBaseModel):
 
         scene_dict = self.dict()
         structures = self.structures
-        scene_bounds = self.bounds
         array_dict = {
             "temperature": temperature,
             "electron_density": electron_density,
@@ -1284,12 +1285,7 @@ class Scene(Tidy3dBaseModel):
             med = structure.medium
             if isinstance(med, AbstractPerturbationMedium):
                 # get structure's bounding box
-                s_bounds = structure.geometry.bounds
-
-                bounds = [
-                    np.max([scene_bounds[0], s_bounds[0]], axis=0),
-                    np.min([scene_bounds[1], s_bounds[1]], axis=0),
-                ]
+                bounds = structure.geometry.bounds
 
                 # for each structure select a minimal subset of data that covers it
                 restricted_arrays = {}
@@ -1315,22 +1311,6 @@ class Scene(Tidy3dBaseModel):
         # do the same for background medium if it a medium with perturbation models.
         med = self.medium
         if isinstance(med, AbstractPerturbationMedium):
-            # get scene's bounding box
-            bounds = scene_bounds
-
-            # for each structure select a minimal subset of data that covers it
-            restricted_arrays = {}
-
-            for name, array in array_dict.items():
-                if array is not None:
-                    restricted_arrays[name] = array.sel_inside(bounds)
-
-                    # check provided data fully cover scene
-                    if not array.does_cover(bounds):
-                        log.warning(f"Provided '{name}' does not fully cover scene domain.")
-
-            scene_dict["medium"] = med.perturbed_copy(
-                **restricted_arrays, interp_method=interp_method
-            )
+            scene_dict["medium"] = med.perturbed_copy(**array_dict, interp_method=interp_method)
 
         return Scene.parse_obj(scene_dict)

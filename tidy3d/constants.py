@@ -14,53 +14,189 @@ import numpy as np
 
 # fundamental constants (https://physics.nist.gov)
 C_0 = 2.99792458e14
+"""
+Speed of light in vacuum [um/s]
+"""
+
 MU_0 = 1.25663706212e-12
+"""
+Vacuum permeability [H/um]
+"""
+
 EPSILON_0 = 1 / (MU_0 * C_0**2)
+"""
+Vacuum permittivity [F/um]
+"""
 
 #: Free space impedance
 ETA_0 = np.sqrt(MU_0 / EPSILON_0)
+"""
+Vacuum impedance in Ohms
+"""
+
 Q_e = 1.602176634e-19
+"""
+Fundamental charge [C]
+"""
+
 HBAR = 6.582119569e-16
+"""
+Reduced Planck constant [eV*s]
+"""
+
 K_B = 8.617333262e-5
+"""
+Boltzmann constant [eV/K]
+"""
 
 # floating point precisions
 dp_eps = np.finfo(np.float64).eps
+"""
+Double floating point precision.
+"""
+
 fp_eps = np.finfo(np.float32).eps
+"""
+Floating point precision.
+"""
 
 # values of PEC for mode solver
 pec_val = -1e8
+"""
+PEC values for mode solver
+"""
 
 # unit labels
 HERTZ = "Hz"
+"""
+One cycle per second.
+"""
+
 TERAHERTZ = "THz"
+"""
+One trillion (10^12) cycles per second.
+"""
+
 SECOND = "sec"
+"""
+SI unit of time.
+"""
+
 PICOSECOND = "ps"
+"""
+One trillionth (10^-12) of a second.
+"""
+
 METER = "m"
+"""
+SI unit of length.
+"""
+
 MICROMETER = "um"
+"""
+One millionth (10^-6) of a meter.
+"""
+
 NANOMETER = "nm"
+"""
+One billionth (10^-9) of a meter.
+"""
+
 RADIAN = "rad"
+"""
+SI unit of angle.
+"""
+
 CONDUCTIVITY = "S/um"
+"""
+Siemens per micrometer.
+"""
+
 PERMITTIVITY = "None (relative permittivity)"
+"""
+Relative permittivity.
+"""
+
 PML_SIGMA = "2*EPSILON_0/dt"
+"""
+2 times vacuum permittivity over time differential step.
+"""
+
 RADPERSEC = "rad/sec"
+"""
+One radian per second.
+"""
+
 ELECTRON_VOLT = "eV"
+"""
+Unit of energy.
+"""
+
 KELVIN = "K"
+"""
+SI unit of temperature.
+"""
+
 CMCUBE = "cm^3"
+"""
+Cubic centimeter unit of volume.
+"""
+
 PERCMCUBE = "1/cm^3"
+"""
+Unit per centimeter cube.
+"""
+
 WATT = "W"
+"""
+SI unit of power.
+"""
+
 VOLT = "V"
+"""
+SI unit of electric potential.
+"""
+
 PICOSECOND_PER_NANOMETER_PER_KILOMETER = "ps/(nm km)"
+"""
+Picosecond per (nanometer kilometer).
+"""
 
 THERMAL_CONDUCTIVITY = "W/(um*K)"
-SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"
-HEAT_FLUX = "W/um^2"
-VOLUMETRIC_HEAT_RATE = "W/um^3"
-HEAT_TRANSFER_COEFF = "W/(um^2*K)"
+"""
+Watts per (micrometer Kelvin).
+"""
 
-# large number used for comparing infinity
+SPECIFIC_HEAT_CAPACITY = "J/(kg*K)"
+"""
+Joules per (kilogram Kelvin).
+"""
+
+HEAT_FLUX = "W/um^2"
+"""
+Watts per square micrometer.
+"""
+
+VOLUMETRIC_HEAT_RATE = "W/um^3"
+"""
+Watts per cube micrometer.
+"""
+
+HEAT_TRANSFER_COEFF = "W/(um^2*K)"
+"""
+Watts per (square micrometer Kelvin).
+"""
+
+
 LARGE_NUMBER = 1e10
+"""
+Large number used for comparing infinity.
+"""
 
 inf = np.inf
 
 # if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning
 GLANCING_CUTOFF = 0.1
+"""
+if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning.
+"""

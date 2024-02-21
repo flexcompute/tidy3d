@@ -232,7 +232,9 @@ SIM_FULL = td.Simulation(
                     num_iters=10,
                     models=[
                         td.NonlinearSusceptibility(chi3=0.1),
-                        td.TwoPhotonAbsorption(beta=1),
+                        td.TwoPhotonAbsorption(
+                            beta=1, sigma=1, tau=1, e_e=1, e_h=0.8, c_e=1, c_h=1
+                        ),
                         td.KerrNonlinearity(n2=1),
                     ],
                 )
@@ -424,13 +426,6 @@ SIM_FULL = td.Simulation(
             freqs=[2e14, 2.5e14],
             mode_spec=td.ModeSpec(),
         ),
-        td.ModeSolverMonitor(
-            size=(1, 1, 0),
-            center=(0, 0, 0),
-            name="mode_solver",
-            freqs=[2e14, 2.5e14],
-            mode_spec=td.ModeSpec(),
-        ),
         td.FieldProjectionAngleMonitor(
             center=(0, 0, 0),
             size=(0, 2, 2),
@@ -583,7 +578,12 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         coords_amps = dict(direction=["+", "-"])
         coords_amps.update(coords_ind)
         amps = make_data(coords=coords_amps, data_array_type=td.ModeAmpsDataArray, is_complex=True)
-        return td.ModeData(monitor=monitor, n_complex=n_complex, amps=amps)
+        return td.ModeData(
+            monitor=monitor,
+            n_complex=n_complex,
+            amps=amps,
+            grid_expanded=simulation.discretize_monitor(monitor),
+        )
 
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,

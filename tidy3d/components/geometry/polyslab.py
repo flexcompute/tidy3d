@@ -13,10 +13,11 @@ from matplotlib import path
 from ..base import cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
-from ..types import MatrixReal4x4, Shapely, trimesh
+from ..types import MatrixReal4x4, Shapely
 from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, fp_eps
+from ...packaging import verify_packages_import
 
 from . import base
 from . import triangulation
@@ -117,7 +118,7 @@ class PolySlab(base.Planar):
         For 1), we issue an error since it is yet to be supported;
         For 2), we heal the polygon, and warn that the polygon has been cleaned up.
         """
-        # no need to valiate anything here
+        # no need to validate anything here
         if isclose(values["dilation"], 0):
             return val
 
@@ -172,7 +173,7 @@ class PolySlab(base.Planar):
         of polygons/holes, and changes in vertices number.
         """
 
-        # no need to valiate anything here
+        # no need to validate anything here
         if isclose(values["sidewall_angle"], 0):
             return val
 
@@ -327,7 +328,7 @@ class PolySlab(base.Planar):
 
         else:
             raise ValueError(
-                f"argumeent 'gds_cell' of type '{gds_cell_class_name}' "
+                f"validate 'gds_cell' of type '{gds_cell_class_name}' "
                 "does not seem to be associated with 'gdstk' or 'gdspy' packages "
                 "and therefore can't be loaded by Tidy3D."
             )
@@ -428,6 +429,11 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
+    @cached_property
+    def is_ccw(self) -> bool:
+        """Is this ``PolySlab`` CCW-oriented?"""
+        return PolySlab._area(self.vertices) > 0
+
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
     ) -> np.ndarray[bool]:
@@ -525,7 +531,7 @@ class PolySlab(base.Planar):
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
 
-    @base.requires_trimesh
+    @verify_packages_import(["trimesh"])
     def intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
@@ -545,8 +551,10 @@ class PolySlab(base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
+        import trimesh
+
         if len(self.base_polygon) > _MAX_POLYSLAB_VERTICES_FOR_TRIANGULATION:
             log.warning(
                 "Processing of PolySlabs with large numbers of vertices can be slow.", log_once=True
@@ -591,7 +599,7 @@ class PolySlab(base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if isclose(self.sidewall_angle, 0):
             return [shapely.Polygon(self.reference_polygon)]
@@ -633,7 +641,7 @@ class PolySlab(base.Planar):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
 
         # find out all z_i where the plane will intersect the vertex
@@ -763,7 +771,7 @@ class PolySlab(base.Planar):
         axis : int
             Integer index into 'xyz' (0,1,2).
         exclude_on_vertices : bool = False
-            Whehter to exclude those intersecting directly with the vertices.
+            Whether to exclude those intersecting directly with the vertices.
 
         Returns
         -------
@@ -1108,7 +1116,7 @@ class PolySlab(base.Planar):
             if offset_vertices.shape[0] != num_vertices:
                 return True
 
-            # 3) some splitted polygon might fully disappear after the offset, but they
+            # 3) some split polygon might fully disappear after the offset, but they
             # can be detected if we offset back.
             poly_offset_back = shapely.make_valid(
                 shapely.Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
@@ -1434,7 +1442,7 @@ class ComplexPolySlabBase(PolySlab):
             return [PolySlab.parse_obj(sub_polyslab_dict)]
 
         sub_polyslab_dict.update({"dilation": 0})  # dilation accounted in setup
-        # initalize offset distance
+        # initialize offset distance
         offset_distance = 0
 
         for dist_val in self._dilation_length:
@@ -1544,7 +1552,7 @@ class ComplexPolySlabBase(PolySlab):
         List[shapely.geometry.base.BaseGeometry]
             List of 2D shapes that intersect plane.
             For more details refer to
-            `Shapely's Documentaton <https://shapely.readthedocs.io/en/stable/project.html>`_.
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         return [
             shapely.unary_union(

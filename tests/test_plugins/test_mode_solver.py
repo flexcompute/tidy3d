@@ -12,7 +12,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
 
@@ -38,7 +38,7 @@ def mock_remote_api(monkeypatch):
     def void(*args, **kwargs):
         return None
 
-    def mock_download(task_id, remote_path, to_file, *args, **kwargs):
+    def mock_download(resource_id, remote_filename, to_file, *args, **kwargs):
         simulation = td.Simulation(
             size=SIM_SIZE,
             grid_spec=td.GridSpec(wavelength=1.0),
@@ -68,6 +68,7 @@ def mock_remote_api(monkeypatch):
     monkeypatch.setattr(httputil, "api_key", lambda: "api_key")
     monkeypatch.setattr(httputil, "get_version", lambda: td.version.__version__)
     monkeypatch.setattr("tidy3d.web.api.mode.upload_file", void)
+    monkeypatch.setattr("tidy3d.web.api.mode.download_gz_file", mock_download)
     monkeypatch.setattr("tidy3d.web.api.mode.download_file", mock_download)
 
     responses.add(
@@ -212,6 +213,17 @@ def verify_dtype(ms):
         assert dtype == field.dtype
 
 
+def check_ms_reduction(ms):
+    ms_red = ms.reduced_simulation_copy
+    grids_1d = ms._solver_grid.boundaries
+    grids_1d_red = ms_red._solver_grid.boundaries
+    assert np.allclose(grids_1d.x, grids_1d_red.x)
+    assert np.allclose(grids_1d.y, grids_1d_red.y)
+    assert np.allclose(grids_1d.z, grids_1d_red.z)
+    modes_red = ms.solve()
+    assert np.allclose(ms.data.n_eff.values, modes_red.n_eff.values)
+
+
 def test_mode_solver_validation():
     """Test invalidate mode solver setups."""
 
@@ -256,7 +268,7 @@ def test_mode_solver_validation():
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
-def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
+def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):  # noqa: F811
     """Test mode solver setups issuing warnings."""
 
     simulation = td.Simulation(
@@ -269,7 +281,7 @@ def test_mode_solver_group_index_warning(group_index_step, log_level, log_captur
         group_index_step=group_index_step,
     )
 
-    ms = ModeSolver(
+    _ = ModeSolver(
         simulation=simulation,
         plane=PLANE,
         mode_spec=mode_spec,
@@ -316,7 +328,8 @@ def test_mode_solver_simple(mock_remote_api, local):
         compare_colocation(ms)
         verify_pol_fraction(ms)
         verify_dtype(ms)
-        dataframe = ms.data.to_dataframe()
+        _ = ms.data.to_dataframe()
+        check_ms_reduction(ms)
 
     else:
         _ = msweb.run(ms)
@@ -376,6 +389,9 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         )
         modes = ms.solve() if local else msweb.run(ms)
         n_eff.append(modes.n_eff.values)
+
+        if local:
+            check_ms_reduction(ms)
 
         fname = str(tmp_path / "ms_custom_medium.hdf5")
         ms.to_file(fname)
@@ -443,13 +459,25 @@ def test_mode_solver_straight_vs_angled():
         direction="-",
     )
 
+    check_ms_reduction(ms)
+    check_ms_reduction(ms_angled)
+
     for key, val in ms.data.modes_info.items():
         tol = 1e-2
-        if key == "mode area":
-            tol = 2.5e-2  # mode area has higher error
-        # print(val, ms_angled.data.modes_info[key])
-        print(np.amax(np.abs(val - ms_angled.data.modes_info[key])))
-        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol, atol=tol)
+        if key == "TE (Ex) fraction":
+            tol = 0.1
+        elif key == "wg TE fraction":
+            tol = 1.3e-2
+        elif key == "mode area":
+            tol = 2.1e-2
+        elif key == "dispersion (ps/(nm km))":
+            tol = 0.7
+        # print(
+        #     key,
+        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(val)).values.max(),
+        #     (np.abs(val - ms_angled.data.modes_info[key]) / np.abs(ms_angled.data.modes_info[key])).values.max(),
+        # )
+        assert np.allclose(val, ms_angled.data.modes_info[key], rtol=tol)
 
 
 def test_mode_solver_angle_bend():
@@ -480,7 +508,8 @@ def test_mode_solver_angle_bend():
     compare_colocation(ms)
     verify_pol_fraction(ms)
     verify_dtype(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     # Plot field
     _, ax = plt.subplots(1)
@@ -516,7 +545,8 @@ def test_mode_solver_2D():
     compare_colocation(ms)
     verify_pol_fraction(ms)
     verify_dtype(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     mode_spec = td.ModeSpec(
         num_modes=3,
@@ -537,7 +567,8 @@ def test_mode_solver_2D():
     )
     compare_colocation(ms)
     # verify_pol_fraction(ms)
-    dataframe = ms.data.to_dataframe()
+    _ = ms.data.to_dataframe()
+    check_ms_reduction(ms)
 
     # The simulation and the mode plane are both 0D along the same dimension
     simulation = td.Simulation(
@@ -550,11 +581,12 @@ def test_mode_solver_2D():
     ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
     compare_colocation(ms)
     verify_pol_fraction(ms)
+    check_ms_reduction(ms)
 
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, log_capture, local):
+def test_group_index(mock_remote_api, log_capture, local):  # noqa: F811
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
@@ -603,6 +635,7 @@ def test_group_index(mock_remote_api, log_capture, local):
         assert len(log_capture) == 2
         _ = modes.dispersion
         assert len(log_capture) == 2
+        check_ms_reduction(ms)
 
     # Group index calculated
     ms = ModeSolver(
@@ -621,6 +654,7 @@ def test_group_index(mock_remote_api, log_capture, local):
         assert (modes.dispersion.sel(mode_index=0).values < 1500).all()
         assert (modes.dispersion.sel(mode_index=1).values > -16500).all()
         assert (modes.dispersion.sel(mode_index=1).values < -15000).all()
+        check_ms_reduction(ms)
 
 
 def test_pml_params():
@@ -683,6 +717,7 @@ def test_mode_solver_nan_pol_fraction():
     )
 
     md = ms.solve()
+    check_ms_reduction(ms)
 
     assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]
 

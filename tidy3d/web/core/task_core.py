@@ -8,21 +8,22 @@ from datetime import datetime
 from typing import List, Optional, Callable, Tuple
 import pydantic.v1 as pd
 from pydantic.v1 import Extra, Field, parse_obj_as
+from botocore.exceptions import ClientError
 
 from . import http_util
 from .core_config import get_logger_console
+from .environment import Env
 from .exceptions import WebError
 
 from .cache import FOLDER_CACHE
 from .http_util import http
-from .s3utils import download_file, upload_file
+from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
 from .types import Queryable, ResourceLifecycle, Submittable
 from .types import Tidy3DResource
 
-
-from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIM_LOG_FILE
-from .file_util import extract_gzip_file, read_simulation_from_hdf5
+from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIMULATION_DATA_HDF5_GZ, SIM_LOG_FILE
+from .file_util import read_simulation_from_hdf5
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):
@@ -416,6 +417,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
                 "solverVersion": solver_version,
                 "workerGroup": worker_group,
                 "protocolVersion": protocol_version,
+                "enableCaching": Env.current.enable_caching,
             },
         )
 
@@ -453,7 +455,7 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
     def get_sim_data_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
     ) -> pathlib.Path:
-        """Get output/monitor_data.hdf5 file from Server.
+        """Get simulation data file from Server.
 
         Parameters
         ----------
@@ -472,18 +474,36 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
 
+        file = None
         try:
-            return download_file(
-                self.task_id,
-                SIMULATION_DATA_HDF5,
+            file = download_gz_file(
+                resource_id=self.task_id,
+                remote_filename=SIMULATION_DATA_HDF5_GZ,
                 to_file=to_file,
                 verbose=verbose,
                 progress_callback=progress_callback,
             )
-        except Exception:
-            raise WebError(
-                f"Failed to download file '{SIMULATION_DATA_HDF5}' from server. Please confirm that the task was successful."
-            )
+        except ClientError:
+            if verbose:
+                console = get_logger_console()
+                console.log(f"Unable to download '{SIMULATION_DATA_HDF5_GZ}'.")
+
+        if not file:
+            try:
+                file = download_file(
+                    resource_id=self.task_id,
+                    remote_filename=SIMULATION_DATA_HDF5,
+                    to_file=to_file,
+                    verbose=verbose,
+                    progress_callback=progress_callback,
+                )
+            except Exception as e:
+                raise WebError(
+                    "Failed to download the simulation data file from the server. "
+                    "Please confirm that the task was successfully run."
+                ) from e
+
+        return file
 
     def get_simulation_hdf5(
         self, to_file: str, verbose: bool = True, progress_callback: Callable[[float], None] = None
@@ -507,31 +527,13 @@ class SimulationTask(ResourceLifecycle, Submittable, extra=Extra.allow):
         if not self.task_id:
             raise WebError("Expected field 'task_id' is unset.")
 
-        if to_file.lower().endswith(".gz"):
-            download_file(
-                self.task_id,
-                SIM_FILE_HDF5_GZ,
-                to_file=to_file,
-                verbose=verbose,
-                progress_callback=progress_callback,
-            )
-        else:
-            hdf5_gz_file, hdf5_gz_file_path = tempfile.mkstemp(".hdf5.gz")
-            os.close(hdf5_gz_file)
-            try:
-                download_file(
-                    self.task_id,
-                    SIM_FILE_HDF5_GZ,
-                    to_file=hdf5_gz_file_path,
-                    verbose=verbose,
-                    progress_callback=progress_callback,
-                )
-                if os.path.exists(hdf5_gz_file_path):
-                    extract_gzip_file(hdf5_gz_file_path, to_file)
-                else:
-                    raise WebError("Failed to download simulation.hdf5")
-            finally:
-                os.unlink(hdf5_gz_file_path)
+        return download_gz_file(
+            resource_id=self.task_id,
+            remote_filename=SIM_FILE_HDF5_GZ,
+            to_file=to_file,
+            verbose=verbose,
+            progress_callback=progress_callback,
+        )
 
     def get_running_info(self) -> Tuple[float, float]:
         """Gets the % done and field_decay for a running task.

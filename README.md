@@ -1,23 +1,25 @@
 # Tidy3D
+[![PyPI
+Name](https://img.shields.io/badge/pypi-tidy3d-blue?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d)
+[![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg?style=for-the-badge)](https://pypi.python.org/pypi/tidy3d/)
+[![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest&style=for-the-badge)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest)
+![Tests](https://img.shields.io/github/actions/workflow/status/flexcompute/tidy3d/run_tests.yml?style=for-the-badge)
+![License](https://img.shields.io/github/license/flexcompute/tidy3d?style=for-the-badge)
+[![Black](https://img.shields.io/badge/code%20style-black-000000.svg?style=for-the-badge)](https://github.com/psf/black)
+![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/daquinteroflex/4702549574741e87deaadba436218ebd/raw/tidy3d_extension.json)
 
-[![Notebooks](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/flexcompute-readthedocs/tidy3d-docs/readthedocs?labpath=docs%2Fsource%2Fnotebooks)
-![tests](https://github.com/flexcompute/tidy3d/actions/workflows//run_tests.yml/badge.svg)
-[![Documentation Status](https://readthedocs.com/projects/flexcompute-tidy3ddocumentation/badge/?version=latest)](https://flexcompute-tidy3ddocumentation.readthedocs-hosted.com/?badge=latest)
-[![PyPI version shields.io](https://img.shields.io/pypi/v/tidy3d.svg)](https://pypi.python.org/pypi/tidy3d/)
+[![Notebooks](https://img.shields.io/badge/Demo-Live%20notebooks-8A2BE2?style=for-the-badge)](https://github.com/flexcompute/tidy3d-notebooks)
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/Tidy3D-logo.svg)
 
-Tidy3D is a software product from Flexcompute that enables large scale electromagnetic simulation using the finite-difference time-domain (FDTD) method.
+Tidy3D is a software package for solving extremely large electrodynamics problems using the finite-difference time-domain (FDTD) method. It can be controlled through either an [open source python package](https://github.com/flexcompute/tidy3d) or a [web-based graphical user interface](https://tidy3d.simulation.cloud).
 
-This repository stores the python interface for Tidy3d.
+This repository contains the python API to allow you to:
 
-This code allows you to:
 * Programmatically define FDTD simulations.
-* Submit and magange simulations running on Flexcompute's servers.
+* Submit and manage simulations running on Flexcompute's servers.
 * Download and postprocess the results from the simulations.
 
-You can find a detailed documentation and API reference [here](https://docs.flexcompute.com/projects/tidy3d/en/stable/).
-The source code for our documentation is [here](https://github.com/flexcompute-readthedocs/tidy3d-docs).
 
 ![](https://raw.githubusercontent.com/flexcompute/tidy3d/main/img/snippet.png)
 
@@ -27,9 +29,9 @@ The source code for our documentation is [here](https://github.com/flexcompute-r
 
 Note that while this front end package is open source, to run simulations on Flexcompute servers requires an account with credits.
 You can sign up for an account [here](https://tidy3d.simulation.cloud/signup).
-After that, you can install the front end with the instructions below, or visit [this page](https://docs.flexcompute.com/projects/tidy3d/en/stable/quickstart.html) in our documentation for more details.
+After that, you can install the front end with the instructions below, or visit [this page](https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html) in our documentation for more details.
 
-### Installing the front end 
+### Quickstart Installation
 
 To install the Tidy3D Python API locally, the following instructions should work for most users.
 
@@ -48,124 +50,38 @@ import tidy3d.web as web
 web.configure("XXX")
 ```
 
-If those commands did not work, advanced installation instructions are below, which should help solve the issue.
+**Advanced installation instructions for all platforms is available in the [documentation installation guides](https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html).**
 
-### Advanced Installation Instructions
-
-Some users might require more a specialized installation, which we cover below.
-
-#### Using pip (recommended)
-
-The easiest way to install the tidy3d python interface is through [pip](https://pypi.org/project/tidy3d/).
-
-```
-pip install tidy3d
-```
-
-This will install the latest stable version.
-
-To get a specific version `x.y.z`, including the "pre-release" versions, you may specify the version in the command as:
-
-```
-pip install tidy3d==x.y.z
-```
-
-### Installing from source
-
-Alternatively, for development purposes, eg. developing your own features, you may download and install the package from source as:
-
-```
-git clone https://github.com/flexcompute/tidy3d.git
-cd tidy3d
-pip install -e .
-```
-
-### Configuring and authentication
-
-With the front end installed, it must now be configured with your account information, which is done via an "API key".
-
-You can find your API key in the [web interface](http://tidy3d.simulation.cloud). After signing in and navigating to the account page by clicking the "Account Center" icon on the left-hand side. Then, click on the "API key" tab on the right hand side of the menu and copy your API key.
-
-Note: We refer to your API specific API key value as `XXX` below.
-
-To link your API key with Tidy3D, you may use one of three following options:
-
-#### Command line (recommended)
-
-The easiest way is through the command line via the `tidy3d configure` command. Run:
-
-```
-tidy3d configure
-```
-
-and then enter your API key `XXX` when prompted.
-
-Note that Windows users must run the following instead (ideally in an anaconda prompt):
-
-```
-pip install pipx
-pipx run tidy3d configure
-```
-
-You can also specify your API key directly as an option to this command using the `api-key` argument, for example:
-
-```
-tidy3d configure --apikey=XXX
-```
-
-#### Manually
-
-Alternatively, you can manually set up the config file where Tidy3D looks for the API key. The API key must be in a file called `.tidy3d/config` located in your home directory, containing the following
-
-```
-apikey = "XXX"
-```
-
-You can manually set up your file like this, or do it through the command line line:
-
-``echo 'apikey = "XXX"' > ~/.tidy3d/config``
-
-Note the quotes around `XXX`.
-
-Note that Windows users will most likely need to place the `.tidy3d/config` file in their `C:\Users\username\` directory (where `username` is your username).
-
-#### Environment Variable
-
-Lastly, you may set the API key as an environment variable named `SIMCLOUD_APIKEY`.
-
-This can be set up using
-
-``export SIMCLOUD_APIKEY="XXX"``
-
-Note the quotes around `XXX`.
-
-### Testing the installation and authentication
-
-#### Front end package
-
-You can verify the front end installation worked by running:
-
-```
-python -c "import tidy3d as td; print(td.__version__)"
-```
-
-and it should print out the version number, for example:
-
-```
-2.0.0
-```
-
-#### Authentication
+### Authentication Verification
 
 To test the authentication, you may try importing the web interface via.
 
 ```
-python -c "import tidy3d.web"
+python -c "import tidy3d; tidy3d.web.test()"
 ```
 
 It should pass without any errors if the API key is set up correctly.
 
-To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/examples.html) for inspiration.
+To get started, our documentation has a lot of [examples](https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/index.html) for inspiration.
+
+## Common Documentation References
+
+| API Resource       | URL                                                                              |
+|--------------------|----------------------------------------------------------------------------------|
+| Installation Guide | https://docs.flexcompute.com/projects/tidy3d/en/latest/install.html              |
+| Documentation      | https://docs.flexcompute.com/projects/tidy3d/en/latest/index.html                |
+| Example Library    | https://docs.flexcompute.com/projects/tidy3d/en/latest/notebooks/docs/index.html |
+| FAQ                | https://docs.flexcompute.com/projects/tidy3d/en/latest/faq/docs/index.html       |
+
+
+## Related Source Repositories
+
+| Name              | Repository                                      |
+|-------------------|-------------------------------------------------|
+| Source Code       | https://github.com/flexcompute/tidy3d           |
+| Notebooks Source  | https://github.com/flexcompute/tidy3d-notebooks |
+| FAQ Source Code   | https://github.com/flexcompute/tidy3d-faq       |
+
 
 ## Issues / Feedback / Bug Reporting
 
