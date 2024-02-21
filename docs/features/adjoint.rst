@@ -4,6 +4,7 @@ FDTD Adjoint Optimization
 .. toctree::
     :maxdepth: 1
 
+    ../../AdjointPlugin0Quickstart
     ../../AdjointPlugin1Intro
     ../../AdjointPlugin2GradientChecking
     ../../AdjointPlugin3InverseDesign

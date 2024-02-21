@@ -23,6 +23,12 @@
     "keywords": "LN, lithium niobate, coupler, Tidy3D, FDTD",
     "feature_image": "./img/LN_adiabatic_coupler.png"
   },
+  "AdjointPlugin0Quickstart.ipynb": {
+    "title": "FDTD Adjoint Optimization Quickstart | Flexcompute",
+    "description": "A simple walkthrough performing inverse design and adjoint optimization for a photonics problem.",
+    "keywords": "adjoint optimization, Jax, automatic differentiation, Tidy3D, FDTD, inverse design, quickstart",
+    "feature_image": ""
+  },
   "AdjointPlugin1Intro.ipynb": {
     "title": "FDTD Adjoint Optimization Basics | Flexcompute",
     "description": "This notebook introduces the basics of Jax, automatic differentiation, and the adjoint plugin in Tidy3D FDTD.",
@@ -197,6 +203,12 @@
     "keywords": "custom medium, spatially-varying dielectric structures, Tidy3D, FDTD",
     "feature_image": ""
   },
+  "Design.ipynb": {
+      "title": "Design Space Exploration Tool | Flexcompute",
+      "description": "This notebook provides a deep dive tutorial on the "design" tool in Tidy3D.",
+      "keywords": "design space, parameter sweep, parameter scan, batch, parallel Tidy3D, FDTD",
+      "feature_image": "N/A"
+    },  
   "DielectricMetasurfaceAbsorber.ipynb": {
     "title": "Dielectric Metasurface Absorber | Flexcompute",
     "description": "This notebook demonstrates how to model a dielectric metasurface absorber in Tidy3D FDTD.",
@@ -269,11 +281,23 @@
     "keywords": "gds, import, Tidy3D, FDTD",
     "feature_image": "N/A"
   },
+  "GDSExport.ipynb": {
+    "title": "Export to GDS file in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to export a Tidy3D FDTD simulation to GDS files.",
+    "keywords": "gds, export, Tidy3D, FDTD",
+    "feature_image": "./img/export_to_gds.png"
+  },  
   "GeneticAlgorithmReflector.ipynb": {
     "title": "Genetic Algorithm Optimization of a Reflector | Flexcompute",
     "description": "This notebook demonstrates how to use genetic algorithm (GA) to optimize an on-chip reflector.",
     "keywords": "genetic algorithm, optimization, Tidy3D, FDTD",
     "feature_image": "./img/optimized_reflector.png"
+  },
+  "GeometryTransformations.ipynb": {
+    "title": "Apply Geometry Transformations in Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to apply geometry transformations such as rotation, scaling, and boolean operations.",
+    "keywords": "rotation, scaling, boolean, translation, Tidy3D, FDTD",
+    "feature_image": ""
   },
   "GradientMetasurfaceReflector.ipynb": {
     "title": "Gradient Metasurface Reflector | Flexcompute",
@@ -424,6 +448,12 @@
     "description": "This notebook demonstrates how to model the scattering of a plasmonic nanoparticle in Tidy3D FDTD.",
     "keywords": "plasmonic nanoparticle, total-field scattered-field, TFSF, Tidy3D, FDTD",
     "feature_image": "./img/plasmonic_nanoparticle_feature_image.png"
+  },
+  "PlasmonicNanorodArray.ipynb": {
+    "title": "Plasmonic Nanorod Array Resonator | Flexcompute",
+    "description": "This notebook demonstrates how to model a hexagonal lattice of plasmonic nanorod array in Tidy3D FDTD.",
+    "keywords": "plasmonic, localized surface plasmon resonance, LSPR, hexagonal lattice, trianglar lattice, gold, Tidy3D, FDTD",
+    "feature_image": "./img/nanorod_array.png"
   },
   "PlasmonicWaveguideCO2Sensor.ipynb": {
     "title": "Plasmonic waveguide CO2 sensor | Flexcompute",
@@ -639,6 +669,12 @@
     "title": "Modeling thermo-optic phase-shift in a ring resonator using Tidy3D | Flexcompute",
     "description": "This notebook investigates how temperature distribution affects the response of a ring resonator using Tidy3D thermal and optic solvers.",
     "keywords": "ring resonator, waveguide, phase-shifter, thermo-optic, heat, Tidy3D, FDTD",
+    "feature_image": ""
+  }
+  "MachZehnderModulator.ipynb": {
+    "title": "Modeling electro-optic Mach-Zehnder modulator using Tidy3D | Flexcompute",
+    "description": "This notebook demonstrates how to simulate an electro-optic Mach-Zehnder modulator using Tidy3D and a third party charge solver.",
+    "keywords": "Mach-Zehnder, MZI, MZM, waveguide, phase-shifter, electro-optic, charge, Tidy3D, free carrier, carrier injection, carrier depletion, FDTD",
     "feature_image": ""
   }
 
