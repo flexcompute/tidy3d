@@ -17,7 +17,7 @@ class EnvironmentConfig(BaseSettings):
     website_endpoint: str
     s3_region: str
     ssl_verify: bool = Field(True, env="TIDY3D_SSL_VERIFY")
-    enable_caching: bool = True
+    enable_caching: bool = None
     ssl_version: ssl.TLSVersion = None
 
     def active(self) -> None:
