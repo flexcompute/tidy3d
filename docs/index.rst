@@ -165,9 +165,8 @@ This will produce the following plot, which visualizes the electromagnetic field
 .. image:: _static/quickstart_fields.png
    :width: 1200
 
-a) Postprocess simulation data using the same python session, or
 
-b) View the results of this simulation on our web-based `graphical user interface <https://tidy3d.simulation.cloud>`_.
+You can now postprocess simulation data using the same python session, or view the results of this simulation on our web-based `graphical user interface <https://tidy3d.simulation.cloud>`_.
 
 .. `TODO: open example in colab <https://github.com/flexcompute/tidy3d>`_
 
