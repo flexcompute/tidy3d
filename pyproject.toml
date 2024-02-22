@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.6.0rc1"  # Thinking about bump2version
+version = "2.6.0"  # Thinking about bump2version
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
