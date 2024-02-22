@@ -3137,6 +3137,11 @@ class Simulation(AbstractSimulation):
         # Discretize without extension for now
         span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
 
+        if any(ind[0] >= ind[1] for ind in span_inds):
+            # At least one dimension has no indexes inside the grid, e.g. monitor is entirely
+            # outside of the grid
+            return span_inds
+
         # Now add extensions, which are specific for monitors and are determined such that data
         # colocated to grid boundaries can be interpolated anywhere inside the monitor.
         # We always need to expand on the right.
