@@ -18,7 +18,7 @@ jobs:
       uses: everlytic/branch-merge@1.1.2
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        source_ref: "develop"
+        source_ref: ${{ github.ref }}
         target_branch: "latest"
         commit_message_template: 'RELEASE: :shipit: :boom: :tada: Merged {source_ref} into target {target_branch}'
     - name: Release
