@@ -15,12 +15,15 @@ from ...exceptions import SetupError
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
 
+# keys to exclude from dict in grid operations
+DICT_EXCLUDE_KEYS = {TYPE_TAG_STR, "attrs"}
+
 
 class Coords(Tidy3dBaseModel):
     """Holds data about a set of x,y,z positions on a grid.
 
     Example
-    -------
+    -------tests/test_web/test_webapi_heat.py
     >>> x = np.linspace(-1, 1, 10)
     >>> y = np.linspace(-1, 1, 11)
     >>> z = np.linspace(-1, 1, 12)
@@ -42,7 +45,7 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_dict(self):
         """Return a dict of the three Coord1D objects as numpy arrays."""
-        return {key: np.array(value) for key, value in self.dict(exclude={TYPE_TAG_STR}).items()}
+        return {key: np.array(value) for key, value in self.dict(exclude=DICT_EXCLUDE_KEYS).items()}
 
     @property
     def to_list(self):
@@ -300,7 +303,8 @@ class Grid(Tidy3dBaseModel):
         >>> Nx, Ny, Nz = grid.num_cells
         """
         return [
-            len(coords1d) - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
+            len(coords1d) - 1
+            for coords1d in self.boundaries.dict(exclude=DICT_EXCLUDE_KEYS).values()
         ]
 
     @property
@@ -325,7 +329,7 @@ class Grid(Tidy3dBaseModel):
             applied.
         """
 
-        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
+        primal_steps = self._primal_steps.dict(exclude=DICT_EXCLUDE_KEYS)
         dsteps = {key: (psteps + np.roll(psteps, 1)) / 2 for (key, psteps) in primal_steps.items()}
 
         return Coords(**dsteps)
