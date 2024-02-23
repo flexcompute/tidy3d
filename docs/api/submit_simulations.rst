@@ -24,7 +24,7 @@ Through python API
    tidy3d.web.api.webapi.download_log
    tidy3d.web.api.webapi.download_json
    tidy3d.web.api.webapi.load_simulation
-   tidy3d.web.api.webapi.run_async
+   tidy3d.web.api.asynchronous.run_async
 
 Convenience for Single and Batch
 --------------------------------
