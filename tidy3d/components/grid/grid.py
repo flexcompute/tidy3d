@@ -8,7 +8,7 @@ import pydantic.v1 as pd
 from ..base import Tidy3dBaseModel
 from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
 from ..data.dataset import UnstructuredGridDatasetType, UnstructuredGridDataset
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
+from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
 from ..geometry.base import Box
 
 from ...exceptions import SetupError
@@ -43,7 +43,7 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_dict(self):
         """Return a dict of the three Coord1D objects as numpy arrays."""
-        return {key: np.array(value) for key, value in self.dict(exclude={TYPE_TAG_STR}).items()}
+        return {key: self.dict()[key] for key in "xyz"}
 
     @property
     def to_list(self):
@@ -386,9 +386,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> Nx, Ny, Nz = grid.num_cells
         """
-        return [
-            len(coords1d) - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
-        ]
+        return [len(self.boundaries.dict()[dim]) - 1 for dim in "xyz"]
 
     @property
     def _primal_steps(self) -> Coords:
@@ -412,7 +410,7 @@ class Grid(Tidy3dBaseModel):
             applied.
         """
 
-        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
+        primal_steps = {dim: self._primal_steps.dict()[dim] for dim in "xyz"}
         dsteps = {key: (psteps + np.roll(psteps, 1)) / 2 for (key, psteps) in primal_steps.items()}
 
         return Coords(**dsteps)

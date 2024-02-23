@@ -95,7 +95,7 @@ class PlotParams(Tidy3dBaseModel):
     def to_kwargs(self) -> dict:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
         kwarg_dict = self.dict()
-        for ignore_key in ("type",):
+        for ignore_key in ("type", "attrs"):
             kwarg_dict.pop(ignore_key)
         return kwarg_dict
 

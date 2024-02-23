@@ -178,3 +178,51 @@ def test_special_characters_in_name():
     """Test error if special characters are in a component's name."""
     with pytest.raises(ValueError):
         mnt = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="mnt/flux")
+
+
+def test_attrs(tmp_path):
+    """Test the ``.attrs`` metadata feature."""
+
+    # attrs initialize to empty dict
+    obj = td.Medium()
+    assert obj.attrs == {}
+
+    # or they can be initialized directly
+    obj = td.Medium(attrs={"foo": "attr"})
+    assert obj.attrs == {"foo": "attr"}
+
+    # this is still not allowed though
+    with pytest.raises(TypeError):
+        obj.attrs = {}
+
+    # attrs can be modified
+    obj.attrs["foo"] = "bar"
+    assert obj.attrs == {"foo": "bar"}
+
+    # attrs persist with regular copies
+    obj2 = obj.copy()
+    assert obj2.attrs == obj.attrs
+
+    # attrs persist with updated copies
+    obj3 = obj2.updated_copy(permittivity=2.0)
+    assert obj3.attrs == obj2.attrs
+
+    # attrs are in the json strings
+    obj_json = obj3.json()
+    assert '{"foo": "bar"}' in obj_json
+
+    # attrs are in the dict()
+    obj_dict = obj3.dict()
+    assert obj_dict["attrs"] == {"foo": "bar"}
+
+    # objects saved and loaded from file still have attrs
+    for extension in ("hdf5", "json"):
+        path = str(tmp_path / ("obj." + extension))
+        obj.to_file(path)
+        obj4 = obj.from_file(path)
+        assert obj4.attrs == obj.attrs
+
+    # test attrs that can't be serialized
+    obj.attrs["not_serializable"] = type
+    with pytest.raises(TypeError):
+        obj.json()

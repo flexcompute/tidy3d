@@ -192,6 +192,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     )
         return values
 
+    attrs: dict = pydantic.Field(
+        {},
+        title="Attributes",
+        description="Dictionary storing arbitrary metadata for a Tidy3D object. "
+        "This dictionary can be freely used by the user for storing data without affecting the "
+        "operation of Tidy3D as it is not used internally. "
+        "Note that, unlike regular Tidy3D fields, ``attrs`` are mutable. "
+        "For example, the following is allowed for setting an ``attr`` ``obj.attrs['foo'] = bar``. "
+        "Also note that `Tidy3D`` will raise a ``TypeError`` if ``attrs`` contain objects "
+        "that can not be serialized. One can check if ``attrs`` are serializable "
+        "by calling ``obj.json()``.",
+    )
+
     def copy(self, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
         if "deep" in kwargs and kwargs["deep"] is False:
