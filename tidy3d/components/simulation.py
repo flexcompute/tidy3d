@@ -1912,7 +1912,13 @@ class Simulation(AbstractSimulation):
         # contribution from field decay out of the simulation
         propagation_lengths = np.array(self.bounds[1]) - np.array(self.bounds[0])
         max_propagation_length = np.max(propagation_lengths)
-        propagation_time = run_time_spec.quality_factor * self.n_max * max_propagation_length / C_0
+
+        # get the maximum refractive index evaluated over each of all the source central frequencies
+        all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
+        avg_ref_inds = [np.mean(n) for n in all_ref_inds]
+        max_ref_ind = np.max(avg_ref_inds)
+
+        propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
 
         return source_time + propagation_time
 
@@ -3043,17 +3049,13 @@ class Simulation(AbstractSimulation):
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
 
-    @cached_property
-    def freq_max(self) -> float:
-        """Maximum frequency in the ``Simulation``."""
-        return max(source.source_time.freq0 for source in self.sources)
+    def get_refractive_indices(self, freq: float) -> list[float]:
+        """List of refractive indices in the simulation at a given frequency."""
 
-    @cached_property
-    def n_max(self) -> float:
-        """Maximum refractive index in the ``Simulation``."""
-        eps_max = max(abs(struct.medium.eps_model(self.freq_max)) for struct in self.structures)
-        n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
-        return n_max
+        eps_values = [structure.medium.eps_model(freq) for structure in self.structures]
+        eps_values.append(self.medium.eps_model(freq))
+
+        return [AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_values]
 
     @cached_property
     def wvl_mat_min(self) -> float:
@@ -3064,8 +3066,12 @@ class Simulation(AbstractSimulation):
         float
             Minimum wavelength in the material (microns).
         """
-        wvl_min = C_0 / self.freq_max
-        return wvl_min / self.n_max
+        freq_max = max(source.source_time.freq0 for source in self.sources)
+        wvl_min = C_0 / freq_max
+
+        n_values = self.get_refractive_indices(freq_max)
+        n_max = max(n_values)
+        return wvl_min / n_max
 
     @cached_property
     def complex_fields(self) -> bool:
