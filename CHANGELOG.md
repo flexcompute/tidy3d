@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Uniaxial medium Lithium niobate to material library.
+- Tidy3D objects may store arbitrary metadata in an `.attrs` dictionary.
 
 ### Changed
 

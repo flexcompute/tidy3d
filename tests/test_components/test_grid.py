@@ -3,8 +3,7 @@ import pytest
 import numpy as np
 
 import tidy3d as td
-from tidy3d.components.grid.grid import Coords, FieldGrid, Grid
-from tidy3d.components.types import TYPE_TAG_STR
+from tidy3d.components.grid.grid import Coords, FieldGrid, Grid, DICT_EXCLUDE_KEYS
 from tidy3d.exceptions import SetupError
 
 
@@ -42,7 +41,7 @@ def test_grid():
     assert np.all(g.centers.y == np.array([-1.5, -0.5, 0.5, 1.5]))
     assert np.all(g.centers.z == np.array([-2.5, -1.5, -0.5, 0.5, 1.5, 2.5]))
 
-    for s in g.sizes.dict(exclude={TYPE_TAG_STR}).values():
+    for s in g.sizes.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(np.array(s) == 1.0)
 
     assert np.all(g.yee.E.x.x == np.array([-0.5, 0.5]))
@@ -211,9 +210,9 @@ def test_sim_grid():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
     )
 
-    for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
+    for c in sim.grid.centers.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(c == np.array([-1.5, -0.5, 0.5, 1.5]))
-    for b in sim.grid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
+    for b in sim.grid.boundaries.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(b == np.array([-2, -1, 0, 1, 2]))
 
 
@@ -261,9 +260,9 @@ def test_sim_pml_grid():
         run_time=1e-12,
     )
 
-    for c in sim.grid.centers.dict(exclude={TYPE_TAG_STR}).values():
+    for c in sim.grid.centers.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(c == np.array([-3.5, -2.5, -1.5, -0.5, 0.5, 1.5, 2.5, 3.5]))
-    for b in sim.grid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
+    for b in sim.grid.boundaries.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(b == np.array([-4, -3, -2, -1, 0, 1, 2, 3, 4]))
 
 
@@ -279,10 +278,10 @@ def test_sim_discretize_vol():
 
     subgrid = sim.discretize(vol)
 
-    for b in subgrid.boundaries.dict(exclude={TYPE_TAG_STR}).values():
+    for b in subgrid.boundaries.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(b == np.array([-1, 0, 1]))
 
-    for c in subgrid.centers.dict(exclude={TYPE_TAG_STR}).values():
+    for c in subgrid.centers.dict(exclude=DICT_EXCLUDE_KEYS).values():
         assert np.all(c == np.array([-0.5, 0.5]))
 
     _ = td.Box(size=(6, 6, 0))
