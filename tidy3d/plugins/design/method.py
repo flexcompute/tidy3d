@@ -161,7 +161,7 @@ class MethodIndependent(Method, ABC):
 
             result.append(val)
 
-        return fn_args, result, task_ids
+        return fn_args, result, task_ids, batch_data
 
 
 class MethodGrid(MethodIndependent):
