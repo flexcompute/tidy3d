@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 
 ### Changed
 

@@ -9,6 +9,7 @@ import pydantic.v1 as pd
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
+from ...web.api.container import BatchData
 
 from .method import MethodType
 from .parameter import ParameterType
@@ -60,6 +61,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_values: List[Any],
         fn_source: str,
         task_ids: Tuple[str] = None,
+        batch_data: BatchData = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
@@ -73,6 +75,7 @@ class DesignSpace(Tidy3dBaseModel):
             coords=fn_args_coords_T,
             fn_source=fn_source,
             task_ids=task_ids,
+            batch_data=batch_data,
         )
 
     @staticmethod
@@ -153,7 +156,7 @@ class DesignSpace(Tidy3dBaseModel):
         """
 
         # run the functions using the `method.run_batch`
-        fn_args, fn_values, task_ids = self.method.run_batch(
+        fn_args, fn_values, task_ids, batch_data = self.method.run_batch(
             parameters=self.parameters,
             fn_pre=fn_pre,
             fn_post=fn_post,
@@ -168,5 +171,9 @@ class DesignSpace(Tidy3dBaseModel):
 
         # package the result
         return self._package_run_results(
-            fn_args=fn_args, fn_values=fn_values, fn_source=fn_source, task_ids=task_ids
+            fn_args=fn_args,
+            fn_values=fn_values,
+            fn_source=fn_source,
+            task_ids=task_ids,
+            batch_data=batch_data,
         )
