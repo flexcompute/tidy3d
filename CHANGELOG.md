@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Support for `.gz` files in `Simulation` version updater.
 - Warning if a nonuniform custom medium is intersecting `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`, `FieldProjectionCartesianMonitor`, `FieldProjectionAngleMonitor`, `FieldProjectionKSpaceMonitor`, and `DiffractionMonitor`.
+- Tidy3D objects may store arbitrary metadata in an `.attrs` dictionary.
 
 ### Changed
 
