@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fix to 3D surface integration monitors with some surfaces completely outside of the simulation domain which would sometimes still record fields.
+- Better error handling if remote `ModeSolver` creation gives response of `None`.
 
 ## [2.6.0] - 2024-01-21
 
