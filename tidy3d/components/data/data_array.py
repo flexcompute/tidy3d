@@ -168,11 +168,11 @@ class DataArray(xr.DataArray):
         with h5py.File(fname, "r") as f:
             sub_group = f[group_path]
             values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims}
+            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
             for key, val in coords.items():
                 if val.dtype == "O":
                     coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords)
+            return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:

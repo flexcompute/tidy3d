@@ -37,7 +37,7 @@ from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .lumped_element import LumpedElementType, LumpedResistor
-from .data.dataset import Dataset
+from .data.dataset import Dataset, CustomSpatialDataType
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene, MAX_NUM_MEDIUMS
@@ -3672,9 +3672,9 @@ class Simulation(AbstractSimulation):
 
     def perturbed_mediums_copy(
         self,
-        temperature: SpatialDataArray = None,
-        electron_density: SpatialDataArray = None,
-        hole_density: SpatialDataArray = None,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Simulation:
         """Return a copy of the simulation with heat and/or charge data applied to all mediums
@@ -3685,11 +3685,23 @@ class Simulation(AbstractSimulation):
 
         Parameters
         ----------
-        temperature : SpatialDataArray = None
+        temperature : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Temperature field data.
-        electron_density : SpatialDataArray = None
+        electron_density : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Electron density field data.
-        hole_density : SpatialDataArray = None
+        hole_density : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied

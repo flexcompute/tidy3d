@@ -7,7 +7,7 @@ import tidy3d as td
 from tidy3d.constants import fp_eps
 from tidy3d.components.grid.mesher import GradedMesher
 
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, log_capture, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -707,7 +707,9 @@ def test_shapely_strtree_warnings():
         )
 
 
-def test_anisotropic_material_meshing():
+@pytest.mark.parametrize("z", [[0, 1], [0]])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_anisotropic_material_meshing(unstructured, z):
     """Make sure the largest propagation index defines refinement in all directions."""
     perm_diag = [3, 2, 1]
     cond_diag = [0.2, 0.15, 0.1]
@@ -731,18 +733,21 @@ def test_anisotropic_material_meshing():
         ),
     )
 
-    coords = dict(x=[0], y=[0], z=[0])
+    coords = dict(x=[0, 1], y=[0, 1], z=z)
+    ones = td.SpatialDataArray(np.ones((2, 2, len(z))), coords=coords)
+    if unstructured:
+        ones = cartesian_to_unstructured(ones, seed=951)
     custom_medium_xx = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[0] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[0] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[0] * ones,
+        conductivity=cond_diag[0] * ones,
     )
     custom_medium_yy = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[1] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[1] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[1] * ones,
+        conductivity=cond_diag[1] * ones,
     )
     custom_medium_zz = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[2] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[2] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[2] * ones,
+        conductivity=cond_diag[2] * ones,
     )
     box_diag_custom = td.Structure(
         geometry=box,
