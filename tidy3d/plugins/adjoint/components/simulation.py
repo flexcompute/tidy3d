@@ -357,7 +357,7 @@ class JaxSimulation(Simulation, JaxObject):
         if self.run_time_adjoint is not None:
             return self.run_time_adjoint
 
-        run_time_fwd = self.run_time
+        run_time_fwd = self._run_time
         run_time_adjoint = run_time_fwd + RUN_TIME_FACTOR / self._fwidth_adjoint
 
         if self._is_multi_freq:
@@ -368,7 +368,7 @@ class JaxSimulation(Simulation, JaxObject):
                 f"this value = {self._fwidth_adjoint:.3e} (Hz) to avoid spectral overlap. "
                 "To account for this, the corresponding 'run_time' in the adjoint simulation is "
                 f"will be set to {run_time_adjoint:3e} "
-                f"compared to {self.run_time:3e} in the forward simulation. "
+                f"compared to {self._run_time:3e} in the forward simulation. "
                 "If the adjoint 'run_time' is large due to small frequency spacing, "
                 "it could be better to instead run one simulation per frequency, "
                 "which can be done in parallel using 'tidy3d.plugins.adjoint.web.run_async'."

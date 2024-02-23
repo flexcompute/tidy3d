@@ -55,11 +55,13 @@ from .components.monitor import DiffractionMonitor
 # lumped elements
 from .components.lumped_element import LumpedResistor
 
+# run time spec
+from .components.run_time_spec import RunTimeSpec
+
 # simulation
 from .components.simulation import Simulation
 
 # field projection
-
 from .components.field_projection import FieldProjector
 
 # data
@@ -243,6 +245,7 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "DiffractionMonitor",
+    "RunTimeSpec",
     "Simulation",
     "FieldProjector",
     "ScalarFieldDataArray",

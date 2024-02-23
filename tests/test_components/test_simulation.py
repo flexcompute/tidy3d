@@ -2805,3 +2805,11 @@ def test_suggested_mesh_overrides():
     _ = sim.updated_copy(
         grid_spec=grid_spec,
     )
+
+
+def test_run_time_spec():
+    run_time_spec = td.RunTimeSpec(quality_factor=3.0)
+
+    sim = SIM_FULL.updated_copy(run_time=run_time_spec)
+
+    assert sim._run_time > 0
