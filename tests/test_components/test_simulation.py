@@ -11,7 +11,7 @@ from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
 from ..utils import assert_log_level, SIM_FULL, run_emulated, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
+from ..utils import cartesian_to_unstructured, log_capture  # noqa: F401
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
@@ -2193,7 +2193,9 @@ def test_allow_gain():
     assert sim.allow_gain
 
 
-def test_perturbed_mediums_copy():
+@pytest.mark.parametrize("z", [[5, 6], [5.5]])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_perturbed_mediums_copy(unstructured, z):
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(
@@ -2219,10 +2221,16 @@ def test_perturbed_mediums_copy():
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
-    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
-    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
-    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+    coords = dict(x=[1, 2], y=[3, 4], z=z)
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)
+
+    if unstructured:
+        seed = 654
+        temperature = cartesian_to_unstructured(temperature, seed=seed)
+        electron_density = cartesian_to_unstructured(electron_density, seed=seed)
+        hole_density = cartesian_to_unstructured(hole_density, seed=seed)
 
     pmed1 = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_real)
 
@@ -2336,7 +2344,9 @@ def test_to_gds(tmp_path):
     assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
 
 
-def test_sim_subsection():
+@pytest.mark.parametrize("nz", [13, 1])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_sim_subsection(unstructured, nz):
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
     region_yz = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
@@ -2360,16 +2370,19 @@ def test_sim_subsection():
     assert sim_red.structures == SIM_FULL.structures
     sim_red = SIM_FULL.subsection(region=region, remove_outside_custom_mediums=True)
 
-    fine_custom_medium = td.CustomMedium(
-        permittivity=td.SpatialDataArray(
-            1 + np.random.random((11, 12, 13)),
-            coords=dict(
-                x=np.linspace(-0.51, 0.52, 11),
-                y=np.linspace(-1.02, 1.04, 12),
-                z=np.linspace(-1.51, 1.51, 13),
-            ),
-        )
+    perm = td.SpatialDataArray(
+        1 + np.random.random((11, 12, nz)),
+        coords=dict(
+            x=np.linspace(-0.51, 0.52, 11),
+            y=np.linspace(-1.02, 1.04, 12),
+            z=np.linspace(-1.51, 1.51, nz),
+        ),
     )
+
+    if unstructured:
+        perm = cartesian_to_unstructured(perm, seed=523)
+
+    fine_custom_medium = td.CustomMedium(permittivity=perm)
 
     sim = SIM_FULL.updated_copy(
         structures=[

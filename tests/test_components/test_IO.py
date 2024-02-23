@@ -48,6 +48,11 @@ def set_datasets_to_none(sim):
                 if geometry["type"] == "TriangleMesh":
                     geometry["mesh_dataset"] = None
         if "Custom" in structure["medium"]["type"]:
+            # all UnstructuredGridDataset will be converted into SpatialDataArray (vacuum)
+            for field_name in ["permittivity", "conductivity", "eps_inf"]:
+                if field_name in structure["medium"]:
+                    if isinstance(structure["medium"][field_name], dict):
+                        structure["medium"][field_name] = "SpatialDataArray"
             if structure["medium"]["type"] == "CustomMedium":
                 structure["medium"]["eps_dataset"] = None
             elif structure["medium"]["type"] == "CustomPoleResidue":

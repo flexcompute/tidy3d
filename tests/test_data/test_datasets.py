@@ -3,6 +3,7 @@ import pytest
 import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
+from ..utils import cartesian_to_unstructured
 
 
 np.random.seed(4)
@@ -163,27 +164,27 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     if no_vtk:
         with pytest.raises(Tidy3dImportError):
             invariant = tri_grid.interp(
-                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
             )
     else:
-        # default = invariant along normal direction
-        invariant = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
-        assert np.all(invariant.isel(y=0).data == invariant.isel(y=1).data)
-        assert invariant.name == ds_name
+        interp = tri_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+        assert np.all(interp.isel(y=0).data == interp.isel(y=1).data)
+        assert interp.name == ds_name
 
-        # no invariance
-        out_of_plane = tri_grid.interp(
-            x=0.4, y=[1], z=np.linspace(0.2, 0.6, 10), fill_value=123, ignore_normal_pos=False
+        interp_vtk = tri_grid.interp(
+            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
         )
-        assert np.all(out_of_plane.data == 123)
-        assert out_of_plane.name == ds_name
+        assert np.all(interp_vtk.isel(y=0).data == interp_vtk.isel(y=1).data)
+        assert interp_vtk.name == ds_name
+
+        assert np.allclose(interp_vtk, interp)
 
         # outside of grid
-        invariant_no_intersection = tri_grid.interp(
+        no_intersection = tri_grid.interp(
             x=[1.5, 2], y=2, z=np.linspace(0.2, 0.6, 10), fill_value=909
         )
-        assert np.all(invariant_no_intersection.data == 909)
-        assert invariant_no_intersection.name == ds_name
+        assert np.all(no_intersection.data == 909)
+        assert no_intersection.name == ds_name
 
     # renaming
     tri_grid_renamed = tri_grid.rename("renamed")
@@ -230,6 +231,12 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         # can't select out of plane
         with pytest.raises(DataError):
             _ = tri_grid.sel(x=np.linspace(0, 1, 3), y=1.2, z=[0.3, 0.4, 0.5])
+
+    # writing/reading
+    tri_grid.to_file(tmp_path / "tri_grid_test.hdf5")
+
+    tri_grid_loaded = td.TriangularGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    assert tri_grid == tri_grid_loaded
 
     # writing/reading .vtu
     if no_vtk:
@@ -403,11 +410,19 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     # interpolation
     if no_vtk:
         with pytest.raises(Tidy3dImportError):
-            _ = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
+            _ = tet_grid.interp(
+                x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+            )
     else:
-        # default = invariant along normal direction
         result = tet_grid.interp(x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333)
         assert result.name == ds_name
+
+        result_vtk = tet_grid.interp(
+            x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
+        )
+        assert result.name == ds_name
+
+        assert np.allclose(result_vtk, result)
 
         # outside of grid
         no_intersection = tet_grid.interp(
@@ -429,6 +444,12 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         # can't do plane slicing with array of values
         with pytest.raises(DataError):
             _ = tet_grid.sel(x=0.2, z=[0.3, 0.4, 0.5])
+
+    # writing/reading
+    tet_grid.to_file(tmp_path / "tri_grid_test.hdf5")
+
+    tet_grid_loaded = td.TetrahedralGridDataset.from_file(tmp_path / "tri_grid_test.hdf5")
+    assert tet_grid == tet_grid_loaded
 
     # writing/reading .vtu
     if no_vtk:
@@ -465,3 +486,44 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     assert np.allclose(result.values, result_values)
     assert result.name == ds_name
+
+
+@pytest.mark.parametrize("fill_value", [0.23123, "extrapolate"])
+@pytest.mark.parametrize("use_vtk", [True, False])
+@pytest.mark.parametrize("nz", [13, 1])
+def test_cartesian_to_unstructured(nz, use_vtk, fill_value):
+    import tidy3d as td
+
+    nx = 11
+    ny = 12
+
+    x = np.linspace(0, 0.3, nx)
+    y = np.linspace(-0.4, 0, ny)
+    z = np.linspace(-0.2, 0.15, nz)
+    values = np.sin(x[:, None, None]) * np.cos(y[None, :, None]) * np.exp(z[None, None, :])
+
+    arr_c = td.SpatialDataArray(values, coords=dict(x=x, y=y, z=z))
+
+    arr_u_linear = cartesian_to_unstructured(arr_c, pert=0.1, method="linear", seed=123)
+    arr_c_linear = arr_u_linear.interp(
+        x=x, y=y, z=z, method="linear", use_vtk=use_vtk, fill_value=fill_value
+    )
+
+    print(np.max(np.abs(arr_c.values - arr_c_linear.values)))
+    assert np.allclose(arr_c.values, arr_c_linear.values, atol=1e-4, rtol=1e-4)
+
+    arr_u_nearest = cartesian_to_unstructured(arr_c, pert=0.1, method="nearest", seed=123)
+    arr_c_nearest = arr_u_nearest.interp(
+        x=x, y=y, z=z, method="nearest", use_vtk=use_vtk, fill_value=fill_value
+    )
+
+    assert np.all(arr_c.values == arr_c_nearest.values)
+
+    sample_outside = arr_u_linear.interp(
+        x=-1, y=-1, z=-1, method="linear", use_vtk=use_vtk, fill_value=fill_value
+    )
+
+    if fill_value == "extrapolate":
+        assert sample_outside.values.item() == values[0, 0, 0]
+    else:
+        assert sample_outside.values.item() == fill_value
