@@ -657,7 +657,7 @@
     "title": "Modeling thermally tuned waveguide in Tidy3D | Flexcompute",
     "description": "This notebook demonstrate how to couple heat and optic simulations in Tidy3D using thermally tuned waveguide as an example.",
     "keywords": "waveguide, tuning, thermo-optic, heat, Tidy3D, FDTD",
-    "feature_image": ""
+    "feature_image": "./img/thermally_tuned_waveguide.png"
   }
   "TimeModulationTutorial.ipynb": {
     "title": "How to apply time modulation to materials in Tidy3D FDTD | Flexcompute",
@@ -669,7 +669,7 @@
     "title": "Modeling thermo-optic phase-shift in a ring resonator using Tidy3D | Flexcompute",
     "description": "This notebook investigates how temperature distribution affects the response of a ring resonator using Tidy3D thermal and optic solvers.",
     "keywords": "ring resonator, waveguide, phase-shifter, thermo-optic, heat, Tidy3D, FDTD",
-    "feature_image": ""
+    "feature_image": "./img/thermally_tuned_ring.png"
   }
   "MachZehnderModulator.ipynb": {
     "title": "Modeling electro-optic Mach-Zehnder modulator using Tidy3D | Flexcompute",
