@@ -717,7 +717,7 @@ class Simulation(AbstractSimulation):
     .. TODO maybe resize?
     """
 
-    run_time: pydantic.PositiveFloat | RunTimeSpec = pydantic.Field(
+    run_time: Union[pydantic.PositiveFloat, RunTimeSpec] = pydantic.Field(
         RunTimeSpec(),
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
