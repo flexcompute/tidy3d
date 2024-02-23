@@ -96,7 +96,7 @@
     "feature_image": "N/A"
   },  
     "AdjointPlugin14PreFab.ipynb": {
-    "title": "Advanced fabrication constraints for inverse design using PreFab and Tidy3D FDTD.",
+    "title": "Machine learning-based fabrication constraints for inverse design using PreFab and Tidy3D FDTD.",
     "description": "This notebook demonstrates the integration of PreFab into Tidy3D to incorporate advanced fabrication constraints for photonic inverse design..",
     "keywords": "inverse design, adjoint optimization, prefab, grating coupler, photonics, Tidy3D, FDTD",
     "feature_image": "N/A"
