@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - main
-      - latest
       - develop
   workflow_dispatch:
     inputs:
@@ -18,14 +17,6 @@ jobs:
       dest-branch: ${{ steps.dest-branch.outputs.branch }}
     runs-on: ubuntu-latest
     steps:
-      - name: Update latest from develop to upload to dev environment
-        if: contains(${{ github.ref }}, 'develop') == false
-        uses: everlytic/branch-merge@1.1.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          source_ref: ${{ github.ref }}
-          target_branch: "latest"
-          commit_message_template: 'UPLOAD: :shipit: :boom: :tada: Merged {source_ref} into target {target_branch}'
       - id: setenv
         run: |
           if test -n "${{ github.event.inputs.env }}"
@@ -33,7 +24,7 @@ jobs:
             echo "::set-output name=env::${{ github.event.inputs.env }}"
             echo "ENV=${{ github.event.inputs.env }}" >> $GITHUB_ENV
           fi
-          if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/latest'
+           if test "${{ github.event_name }}" = 'push' -a "${{ github.ref }}" = 'refs/heads/develop'
           then
             echo "::set-output name=env::dev"
             echo "ENV=dev" >> $GITHUB_ENV
