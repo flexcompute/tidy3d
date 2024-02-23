@@ -52,6 +52,18 @@ Spatially varying
    tidy3d.CustomDrude
    tidy3d.CustomDebye
 
+
+Medium Perturbations
+--------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.PerturbationMedium
+   tidy3d.PerturbationPoleResidue
+
+
 General Mediums (can be both dispersive and non-dispersive)
 -----------------------------------------------------------
 

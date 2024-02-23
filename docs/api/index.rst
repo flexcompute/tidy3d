@@ -20,6 +20,7 @@ API |:computer:|
     logging
     submit_simulations
     heat/index
+    charge/index
     plugins/index
     constants
     abstract_base
