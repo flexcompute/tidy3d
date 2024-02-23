@@ -50,11 +50,13 @@ from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCart
 from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from .components.monitor import DiffractionMonitor
 
+# run time spec
+from .components.run_time_spec import RunTimeSpec
+
 # simulation
 from .components.simulation import Simulation
 
 # field projection
-
 from .components.field_projection import FieldProjector
 
 # data
@@ -223,6 +225,7 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "DiffractionMonitor",
+    "RunTimeSpec",
     "Simulation",
     "FieldProjector",
     "ScalarFieldDataArray",
