@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - latest
+      - develop
   workflow_dispatch:
     inputs:
       env:
