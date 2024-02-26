@@ -116,6 +116,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     `Pydantic Models <https://pydantic-docs.helpmanual.io/usage/models/>`_
     """
 
+    custom_documentation_list: list[str] = ["from_file"]
+
     def __hash__(self) -> int:
         """Hash method."""
         try:
