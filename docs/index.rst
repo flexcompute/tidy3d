@@ -36,7 +36,7 @@ Get Started
 
 .. tabs::
 
-    .. group-tab:: Install on Linux |:penguin:| & MacOS |:apple:|
+    .. group-tab:: On Linux |:penguin:| & MacOS |:apple:|
 
         Install the latest stable python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations with
 
@@ -56,7 +56,7 @@ Get Started
 
         For more detailed installation instructions, see `this page <./install.html>`_.
 
-    .. group-tab:: Install on Windows |:window:|
+    .. group-tab:: On Windows |:window:|
 
         Install the latest stable python library `tidy3d <https://github.com/flexcompute/tidy3d>`_ for creating, managing, and postprocessing simulations in your virtual environment with:
 
