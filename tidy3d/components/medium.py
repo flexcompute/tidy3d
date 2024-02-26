@@ -1205,6 +1205,7 @@ class PECMedium(AbstractMedium):
             )
         return val
 
+    @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         # return something like frequency with value of pec_val + 0j
         return 0j * frequency + pec_val
