@@ -120,15 +120,15 @@ htmlhelp_basename = "tidy3ddoc"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
 html_sourcelink_suffix = ""
 html_static_path = [
-    "_static",
+    "./_static",
     # divparams.get_static_path() # TODO FIX
 ]
 html_theme = "sphinx_book_theme"
 html_title = "Tidy3D Electromagnetic Solver"
 html_theme_options = {
     "logo": {
-        "image_light": "_static/img/Tidy3D-logo.svg",
-        "image_dark": "_static/img/Tidy3D-logo-white.svg",
+        "image_light": "./_static/img/Tidy3D-logo.svg",
+        "image_dark": "./_static/img/Tidy3D-logo-white.svg",
     },
     "path_to_docs": "docs",
     "repository_url": "https://github.com/flexcompute/tidy3d",
@@ -174,7 +174,7 @@ sitemap_url_scheme = "{lang}{version}{link}"
 sphinx_tabs_disable_css_loading = True
 source_suffix = [".rst", ".md"]
 templates_path = [
-    "_templates",
+    "./_templates",
     # divparams.get_templates_path() # TODO FIX
 ]
 texinfo_documents = [
