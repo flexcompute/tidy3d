@@ -717,8 +717,9 @@ class Simulation(AbstractSimulation):
     .. TODO maybe resize?
     """
 
+    # TODO: at a later time (once well tested) we could consider making default of RunTimeSpec()
     run_time: Union[pydantic.PositiveFloat, RunTimeSpec] = pydantic.Field(
-        RunTimeSpec(),
+        ...,
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
         "Note: If simulation 'shutoff' is specified, "

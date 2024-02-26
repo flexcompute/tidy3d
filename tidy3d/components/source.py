@@ -174,8 +174,10 @@ class GaussianPulse(Pulse):
 
     def end_time(self) -> float | None:
         """Time after which the source is effectively turned off / close to zero amplitude."""
-        if not self.remove_dc_component:
-            return None
+
+        # TODO: decide if we should continue to return an end_time if the DC component remains
+        # if not self.remove_dc_component:
+        #     return None
 
         return self.offset * self.twidth + END_TIME_FACTOR_GAUSSIAN * self.twidth
 
