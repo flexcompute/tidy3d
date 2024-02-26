@@ -2507,3 +2507,11 @@ def test_2d_material_subdivision():
         np.imag(eps_centers.sel(x=plane_pos, y=0, z=bottom_center[2], method="nearest").values),
         3492562622979.975,
     )
+
+
+def test_run_time_spec():
+    run_time_spec = td.RunTimeSpec()
+
+    sim = SIM_FULL.updated_copy(run_time=run_time_spec)
+
+    assert sim._run_time > 0

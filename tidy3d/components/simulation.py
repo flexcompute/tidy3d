@@ -39,7 +39,7 @@ from .data.dataset import Dataset
 from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene
-
+from .run_time_spec import RunTimeSpec
 from .viz import PlotParams
 from .viz import plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
@@ -717,12 +717,16 @@ class Simulation(AbstractSimulation):
     .. TODO maybe resize?
     """
 
-    run_time: pydantic.PositiveFloat = pydantic.Field(
+    # TODO: at a later time (once well tested) we could consider making default of RunTimeSpec()
+    run_time: Union[pydantic.PositiveFloat, RunTimeSpec] = pydantic.Field(
         ...,
         title="Run Time",
         description="Total electromagnetic evolution time in seconds. "
         "Note: If simulation 'shutoff' is specified, "
-        "simulation will terminate early when shutoff condition met. ",
+        "simulation will terminate early when shutoff condition met. "
+        "Alternatively, user may supply a :class:`RunTimeSpec` to this field, which will auto-"
+        "compute the ``run_time`` based on the contents of the spec. If this option is used, "
+        "the evaluated ``run_time`` value is available in the ``Simulation._run_time`` property.",
         units=SECOND,
     )
     """
@@ -1874,13 +1878,50 @@ class Simulation(AbstractSimulation):
         """
         with log as consolidated_logger:
             for monitor in self.monitors:
-                if isinstance(monitor, TimeMonitor) and monitor.start > self.run_time:
+                if isinstance(monitor, TimeMonitor) and monitor.start > self._run_time:
                     consolidated_logger.warning(
                         f"Monitor {monitor.name} has a start time {monitor.start:1.2e}s exceeding"
-                        f"the simulation run time {self.run_time:1.2e}s. No data will be recorded."
+                        f"the simulation run time {self._run_time:1.2e}s. No data will be recorded."
                     )
 
     """ Accounting """
+
+    @cached_property
+    def _run_time(self) -> float:
+        """Run time evaluated based on self.run_time."""
+
+        if not isinstance(self.run_time, RunTimeSpec):
+            return self.run_time
+
+        run_time_spec = self.run_time
+
+        # contribution from the time of of the source pulses
+        if not self.sources:
+            source_time = 0.0
+        else:
+            source_times = [src.source_time.end_time() for src in self.sources]
+            source_times = [x for x in source_times if x is not None]
+            if not source_times:
+                raise SetupError(
+                    "Could not compute source contributions to run time from 'RunTimeSpec'."
+                    "Please check all of your 'Source.source_time' and ensure that at least one "
+                    "has a decaying (non-DC) pulse profile to be able to compute the 'run_time'."
+                )
+            source_time_max = np.max(source_times)
+            source_time = run_time_spec.source_factor * source_time_max
+
+        # contribution from field decay out of the simulation
+        propagation_lengths = np.array(self.bounds[1]) - np.array(self.bounds[0])
+        max_propagation_length = np.max(propagation_lengths)
+
+        # get the maximum refractive index evaluated over each of all the source central frequencies
+        all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
+        avg_ref_inds = [np.mean(n) for n in all_ref_inds]
+        max_ref_ind = np.max(avg_ref_inds)
+
+        propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
+
+        return source_time + propagation_time
 
     # candidate for removal in 3.0
     @cached_property
@@ -2910,7 +2951,7 @@ class Simulation(AbstractSimulation):
             Times (seconds) that the simulation time steps through.
         """
         dt = self.dt
-        return np.arange(0.0, self.run_time + dt, dt)
+        return np.arange(0.0, self._run_time + dt, dt)
 
     @cached_property
     def num_time_steps(self) -> int:
@@ -3009,6 +3050,14 @@ class Simulation(AbstractSimulation):
 
         return np.prod(self.grid.num_cells, dtype=np.int64)
 
+    def get_refractive_indices(self, freq: float) -> list[float]:
+        """List of refractive indices in the simulation at a given frequency."""
+
+        eps_values = [structure.medium.eps_model(freq) for structure in self.structures]
+        eps_values.append(self.medium.eps_model(freq))
+
+        return [AbstractMedium.eps_complex_to_nk(eps)[0] for eps in eps_values]
+
     @cached_property
     def wvl_mat_min(self) -> float:
         """Minimum wavelength in the material.
@@ -3020,8 +3069,9 @@ class Simulation(AbstractSimulation):
         """
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / freq_max
-        eps_max = max(abs(structure.medium.eps_model(freq_max)) for structure in self.structures)
-        n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
+
+        n_values = self.get_refractive_indices(freq_max)
+        n_max = max(n_values)
         return wvl_min / n_max
 
     @cached_property
