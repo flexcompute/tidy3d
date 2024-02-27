@@ -1,4 +1,4 @@
-name: test-develop-cli
+name: "test-develop-cli"
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
     workflows: [ "tidy3d-frontend-tests" ]
     types:
       - completed
-
 
 jobs:
   test-dev-commands:
