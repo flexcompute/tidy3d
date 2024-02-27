@@ -9,3 +9,15 @@ Material Thermal Specification
 
    tidy3d.FluidSpec
    tidy3d.SolidSpec
+
+
+Thermal Perturbation Specification
+------------------------------------
+
+.. autosummary::
+   :toctree: ../_autosummary/
+   :template: module.rst
+
+   tidy3d.LinearHeatPerturbation
+   tidy3d.CustomHeatPerturbation
+

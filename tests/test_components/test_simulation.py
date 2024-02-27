@@ -6,7 +6,7 @@ import gdstk
 
 import numpy as np
 import tidy3d as td
-from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
@@ -2535,3 +2535,91 @@ def test_2d_material_subdivision():
         np.imag(eps_centers.sel(x=plane_pos, y=0, z=bottom_center[2], method="nearest").values),
         3492562622979.975,
     )
+
+
+def test_advanced_material_intersection():
+    src_time = td.GaussianPulse(freq0=td.C_0, fwidth=0.1e12)
+    source = td.PlaneWave(center=(0, 0, -1.9), size=[1, 1, 0], source_time=src_time, direction="+")
+
+    # custom
+    Nx, Ny, Nz = 10, 9, 8
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = np.linspace(-1, 1, Nz)
+    data = np.ones((Nx, Ny, Nz, 1))
+    eps_diagonal_data = td.ScalarFieldDataArray(data, coords=dict(x=X, y=Y, z=Z, f=[td.C_0]))
+    eps_components = {f"eps_{d}{d}": eps_diagonal_data for d in "xyz"}
+    eps_dataset = td.PermittivityDataset(**eps_components)
+    custom_medium = td.CustomMedium(eps_dataset=eps_dataset, name="my_medium")
+
+    # nonlinear
+    nonlinear_medium = td.Medium(
+        nonlinear_spec=td.NonlinearSpec(models=[td.KerrNonlinearity(n2=1)])
+    )
+
+    # time-modulated
+    FREQ_MODULATE = 1e12
+    AMP_TIME = 1.1
+    PHASE_TIME = 0
+    CW = td.ContinuousWaveTimeModulation(freq0=FREQ_MODULATE, amplitude=AMP_TIME, phase=PHASE_TIME)
+    ST = td.SpaceTimeModulation(
+        time_modulation=CW,
+    )
+    MODULATION_SPEC = td.ModulationSpec()
+    modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
+    time_modulated_medium = td.Medium(permittivity=2, modulation_spec=modulation_spec)
+
+    # fully anisotropic
+    perm_diag = [[1, 0, 0], [0, 2, 0], [0, 0, 3]]
+    cond_diag = [[4, 0, 0], [0, 5, 0], [0, 0, 6]]
+
+    rot = td.RotationAroundAxis(axis=(1, 2, 3), angle=1.23)
+    rot2 = td.RotationAroundAxis(axis=(3, 2, 1), angle=1.23)
+
+    perm = rot.rotate_tensor(perm_diag)
+    cond = rot.rotate_tensor(cond_diag)
+    cond2 = rot2.rotate_tensor(cond_diag)
+
+    fully_anisotropic_medium = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
+
+    # compatible and incompatible media
+    media = [custom_medium, nonlinear_medium, time_modulated_medium, fully_anisotropic_medium]
+    compatible_pairs = [(custom_medium, fully_anisotropic_medium)]
+    for medium in media:
+        compatible_pairs.append((medium, medium))
+    incompatible_pairs = [(custom_medium, med) for med in media[1:3]]
+    incompatible_pairs += [(nonlinear_medium, med) for med in media[2:]]
+    incompatible_pairs += [(time_modulated_medium, fully_anisotropic_medium)]
+    # check in other order
+    compatible_pairs += [(pair[1], pair[0]) for pair in compatible_pairs if pair[0] != pair[1]]
+    incompatible_pairs += [(pair[1], pair[0]) for pair in incompatible_pairs if pair[0] != pair[1]]
+
+    # base sim
+    sim = td.Simulation(
+        size=(4.0, 4.0, 4.0),
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        run_time=1e-12,
+        sources=[source],
+        structures=[],
+    )
+
+    for pair in compatible_pairs:
+        struct1 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0.5)), medium=pair[0])
+        struct2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(0, 0, -0.5)), medium=pair[1])
+        # this pair can intersect
+        sim = sim.updated_copy(structures=[struct1, struct2])
+
+    for pair in incompatible_pairs:
+        struct1 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0.5)), medium=pair[0])
+        struct2 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(0, 0, -0.5)), medium=pair[1])
+        # this pair cannot intersect
+        with pytest.raises(pydantic.ValidationError):
+            sim = sim.updated_copy(structures=[struct1, struct2])
+
+    for pair in incompatible_pairs:
+        struct1 = td.Structure(geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0.75)), medium=pair[0])
+        struct2 = td.Structure(
+            geometry=td.Box(size=(1, 1, 1), center=(0, 0, -0.75)), medium=pair[1]
+        )
+        # it's ok if these are both present as long as they don't intersect
+        sim = sim.updated_copy(structures=[struct1, struct2])

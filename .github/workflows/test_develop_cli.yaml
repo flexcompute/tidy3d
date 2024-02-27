@@ -2,12 +2,11 @@ name: test-develop-cli
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ develop ]
-  pull_request:
-    branches:
-      - develop
-      - 'pre/*' # We should reduce the frequency of these builds to save resources since it tests the docs build which is pretty long.
+  workflow_run:
+    workflows: [ "tidy3d-frontend-tests" ]
+    types:
+      - completed
+
 
 jobs:
   test-dev-commands:

@@ -34,12 +34,14 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     def emulated_batch_run(self, simulations, path_dir: str = None, **kwargs):
         data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
         task_ids = dict(zip(simulations.keys(), data_dict.keys()))
+        task_paths = dict(zip(simulations.keys(), simulations.keys()))
 
-        class BatchDataEmulated(Tidy3dBaseModel):
+        class BatchDataEmulated(web.BatchData):
             """Emulated BatchData object that just returns stored emulated data."""
 
             data_dict: dict
-            task_ids: dict
+            # task_ids: dict
+            # task_paths: dict
 
             def items(self):
                 for task_name, sim_data in self.data_dict.items():
@@ -48,7 +50,7 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
             def __getitem__(self, task_name):
                 return self.data_dict[task_name]
 
-        return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids)
+        return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids, task_paths=task_paths)
 
     monkeypatch.setattr(MethodIndependent, "_run_batch", emulated_batch_run)
 
@@ -149,8 +151,14 @@ def test_sweep(sweep_method, monkeypatch, ids=[]):
     # either supply generic function and run one by one
     sweep_results = design_space.run(scs)
 
+    assert sweep_results.batch_data is None
+
     # or supply function factored into pre and post and run in batch
     sweep_results2 = design_space.run_batch(scs_pre, scs_post)
+
+    bd = sweep_results2.batch_data
+    for task_name, data in bd.items():
+        continue
 
     sweep_results3 = design_space.run_batch(scs_pre_multi, scs_post_multi)
 

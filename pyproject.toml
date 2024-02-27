@@ -93,6 +93,7 @@ pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
+sphinx-notfound-page = {version="*", optional = true}
 sphinx-tabs = {version="*", optional = true}
 nbdime = {version="*", optional = true}
 myst-parser = {version="*", optional = true}
@@ -109,9 +110,9 @@ cma = {version="*", optional = true}
 dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'myst-parser', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
-  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
+  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-notfound-page', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
     'vtk', 'devsim', 'cma']
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "myst-parser", "devsim", "cma"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", 'sphinx-notfound-page', "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "myst-parser", "devsim", "cma"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]

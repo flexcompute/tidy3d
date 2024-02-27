@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
 
 ### Fixed
+- `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
+
+### Changed
+
+### Fixed
+- Fix to 3D surface integration monitors with some surfaces completely outside of the simulation domain which would sometimes still record fields.
+- Better error handling if remote `ModeSolver` creation gives response of `None`.
+- Validates that certain incompatible material types do not have intersecting bounds.
+- Fixed handling of the `frequency` argument in PEC medium.
 
 ## [2.6.0] - 2024-01-21
 
