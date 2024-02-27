@@ -64,7 +64,6 @@ autodoc_class_signature = "separated"
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
-    "special-members": "__init__",
     "undoc-members": True,
 }
 autodoc_typehints = "none"
@@ -94,6 +93,7 @@ extensions = [
     "sphinx.ext.todo",
     "sphinx.ext.viewcode",  # Add a link to the Python source code for classes, functions etc.
     "sphinx_copybutton",
+    "sphinx_favicon",
     "sphinx_sitemap",
     "sphinx_tabs.tabs",
     "sphinxemoji.sphinxemoji",
@@ -102,6 +102,12 @@ extensions = [
     "custom-robots",  # In _ext, these need to be at the end of the extensions list
 ]
 extlinks = {}
+favicons = [
+    {
+        "sizes": "16x16",
+        "href": "logo.svg",
+    }
+]
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
@@ -114,7 +120,6 @@ html_css_files = [
     "css/custom.css",
 ]
 html_extra_path = ["./_static/robots.txt", "./_static/"]
-html_favicon = "_static/logo.ico"
 html_js_files = ["js/custom-download.js"]
 htmlhelp_basename = "tidy3ddoc"
 html_show_sourcelink = True  # Remove 'view source code' from top of page (for html, not python)
@@ -217,6 +222,7 @@ latex_elements = {
     \usepackage{cmap}
     """
 }
+
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
 #     # The paper size ('letterpaper' or 'a4paper').
