@@ -113,6 +113,12 @@
     "keywords": "inverse design, adjoint optimization, prefab, grating coupler, photonics, Tidy3D, FDTD",
     "feature_image": "N/A"
   },  
+    "AllDielectricStructuralColor.ipynb": {
+    "title": "How to build and simulate an all-dielectric structural color device using Tidy3D | FDTD",
+    "description": "How to build and simulate an all-dielectric structural color device using Tidy3D | FDTD.",
+    "keywords": "structural color, all-dielectric, color filter, design, parameter sweep, Tidy3D, FDTD",
+    "feature_image": "./img/all_dielectric.png"
+  },  
     "AndersonLocalization.ipynb": {
     "title": "Anderson Localization of EM Waves in 3D | Flexcompute",
     "description": "This notebook computes light scattering in random media using FDTD code and demonstrates 3D Anderson localization of light.",
@@ -365,6 +371,12 @@
     "keywords": "frequency selective surface, FSS, microwave, Tidy3D, FDTD",
     "feature_image": "./img/frequency_selective_surface.png"
   },
+  "MIMResonator.ipynb": {
+    "title": "How to build a metal-insulator-metal (MIM) color filter using Tidy3D | FDTD",
+    "description": "How to build a metal-insulator-metal (MIM) color filter using Tidy3D | FDTD",
+    "keywords": "metal-insulator-metal, MIM, resonator, color filter, structural color, Tidy3D, FDTD",
+    "feature_image": "./img/mim.png"
+  },  
   "MMI1x4.ipynb": {
     "title": "MMI Power Splitter Modeling in Tidy3D | Flexcompute",
     "description": "This notebook demonstrates how to simulate an MMI device in Tidy3D FDTD.",
