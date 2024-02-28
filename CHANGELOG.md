@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better error handling if remote `ModeSolver` creation gives response of `None`.
 - Validates that certain incompatible material types do not have intersecting bounds.
 - Fixed handling of the `frequency` argument in PEC medium.
+- Corrected plotting cmap if `val='re'` passed to `SimulationData.plot_field`.
 
 ## [2.6.0] - 2024-01-21
 
