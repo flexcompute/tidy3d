@@ -123,7 +123,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
 
         else:
             raise Tidy3dKeyError(
-                f"Couldn't find 'val={val}'. Must be one of 'real', 're', imag', 'im', 'abs', 'abs^2', 'phase'."
+                f"Couldn't find 'val={val}'. Must be one of 'real', 're', 'imag', 'im', 'abs', 'abs^2', 'phase'."
             )
 
         return field_value
