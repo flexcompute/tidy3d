@@ -152,6 +152,20 @@ class JaxSimulation(Simulation, JaxObject):
         units=SECOND,
     )
 
+    # @pd.root_validator
+    # def _copy_input_structures(cls, values):
+    #     """Copy input structures to `structures`."""
+
+    #     structures = list(values.get("structures"))
+    #     input_structures = list(values.get("input_structures"))
+
+    #     for input_structure in input_structures:
+    #         new_structure = input_structure.to_structure()
+    #         structures.append(structures[0])
+
+    #     values["structures"] = structures
+    #     return values
+
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
         """Make sure server-side colocation is off."""
@@ -388,7 +402,7 @@ class JaxSimulation(Simulation, JaxObject):
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures) + [js.to_structure() for js in self.input_structures]
+        all_structures = list(self.structures)# + [js.to_structure() for js in self.input_structures]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)
