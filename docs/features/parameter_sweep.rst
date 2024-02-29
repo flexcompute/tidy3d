@@ -6,3 +6,4 @@ Design Space Exploration
 
     ../../ParameterScan
     ../../Design
+    ../../AllDielectricStructuralColor    

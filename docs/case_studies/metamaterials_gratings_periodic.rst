@@ -16,3 +16,5 @@ Metamaterials, Gratings, and Other Periodic Structures
     ../../DistributedBraggReflectorCavity
     ../../CMOSRGBSensor
     ../../PlasmonicNanorodArray
+    ../../AllDielectricStructuralColor
+    ../../MIMResonator  
