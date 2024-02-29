@@ -2,11 +2,10 @@ name: "tidy3d-coverage"
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ develop ]
-  pull_request:
-    branches:
-      - develop
+  workflow_run:
+    workflows: [ "tidy3d-frontend-tests" ]
+    types:
+      - completed
 
 defaults:
   run:

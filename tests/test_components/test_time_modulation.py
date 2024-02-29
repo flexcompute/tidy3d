@@ -156,12 +156,12 @@ def test_modulated_medium():
     # unmodulated
     medium = td.Medium()
     assert medium.modulation_spec is None
-    assert medium.time_modulated == False
+    assert medium.is_time_modulated == False
     reduce(medium)
 
     assert MODULATION_SPEC.applied_modulation == False
     medium = medium.updated_copy(modulation_spec=MODULATION_SPEC)
-    assert medium.time_modulated == False
+    assert medium.is_time_modulated == False
     reduce(medium)
 
     # permittivity modulated
@@ -241,7 +241,7 @@ def test_supported_modulated_medium_types():
     mat_p = td.PoleResidue(
         eps_inf=2.0, poles=[((-1 + 2j), (3 + 4j))], modulation_spec=modulation_spec
     )
-    assert mat_p.time_modulated
+    assert mat_p.is_time_modulated
     assert isclose(mat_p.n_cfl, np.sqrt(2 - AMP_TIME))
     # too much modulation resulting in eps_inf < 0
     with pytest.raises(pydantic.ValidationError):
@@ -256,7 +256,7 @@ def test_supported_modulated_medium_types():
     # custom
     permittivity = td.SpatialDataArray(np.ones((1, 1, 1)) * 2, coords=dict(x=[1], y=[1], z=[1]))
     mat_c = td.CustomMedium(permittivity=permittivity, modulation_spec=modulation_spec)
-    assert mat_c.time_modulated
+    assert mat_c.is_time_modulated
     assert isclose(mat_c.n_cfl, np.sqrt(2 - AMP_TIME))
     # too much modulation resulting in eps_inf < 0
     with pytest.raises(pydantic.ValidationError):
@@ -270,13 +270,13 @@ def test_supported_modulated_medium_types():
 
     # anisotropic medium component
     mat = td.AnisotropicMedium(xx=td.Medium(), yy=mat_p, zz=td.Medium())
-    assert mat.time_modulated
+    assert mat.is_time_modulated
     assert isclose(mat.n_cfl, np.sqrt(2 - AMP_TIME))
     check_ani_med_reduction(mat)
 
     # custom anistropic medium component
     mat_uc = td.CustomMedium(permittivity=permittivity)
     mat = td.CustomAnisotropicMedium(xx=mat_uc, yy=mat_c, zz=mat_uc)
-    assert mat.time_modulated
+    assert mat.is_time_modulated
     assert isclose(mat.n_cfl, np.sqrt(2 - AMP_TIME))
     check_ani_med_reduction(mat)

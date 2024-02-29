@@ -583,7 +583,7 @@ class SimulationData(AbstractSimulationData):
                 if val == "phase"
                 else (
                     "divergent"
-                    if len(field_name) == 2 and val in ("real", "imag")
+                    if len(field_name) == 2 and val in ("real", "imag", "re", "im")
                     else "sequential"
                 )
             )

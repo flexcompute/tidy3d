@@ -212,17 +212,28 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
 
         mode_solver.validate_pre_upload()
         mode_solver.simulation.validate_pre_upload(source_required=False)
-        resp = http.post(
-            MODESOLVER_API,
-            {
-                "projectId": folder.folder_id,
-                "taskName": task_name,
-                "protocolVersion": __version__,
-                "modeSolverName": mode_solver_name,
-                "fileType": "Gz",
-                "source": "Python",
-            },
-        )
+
+        response_body = {
+            "projectId": folder.folder_id,
+            "taskName": task_name,
+            "protocolVersion": __version__,
+            "modeSolverName": mode_solver_name,
+            "fileType": "Gz",
+            "source": "Python",
+        }
+
+        resp = http.post(MODESOLVER_API, response_body)
+
+        # TODO: actually fix the root cause later.
+        # sometimes POST for mode returns None and crashes the log.info call.
+        # For now this catches it and raises a better error that we can debug.
+        if resp is None:
+            raise WebError(
+                "'ModeSolver' POST request returned 'None'. If you received this error, please "
+                "raise an issue on the Tidy3D front end GitHub repository referencing the following"
+                f"response body '{response_body}'."
+            )
+
         log.info(
             "Mode solver created with task_id='%s', solver_id='%s'.", resp["refId"], resp["id"]
         )
