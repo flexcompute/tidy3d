@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Validates that certain incompatible material types do not have intersecting bounds.
 - Fixed handling of the `frequency` argument in PEC medium.
 - Corrected plotting cmap if `val='re'` passed to `SimulationData.plot_field`.
+- Bug when converting point `FieldMonitor` data to scalar amplitude for adjoint source in later jax versions.
 
 ## [2.6.0] - 2024-01-21
 
