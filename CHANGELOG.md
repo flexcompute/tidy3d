@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `Simulation` now accepts `LumpedElementType`, which currently only supports the `LumpedResistor` type. `LumpedPort` together with `LumpedResistor` make up the new `TerminalComponentModeler` in the `smatrix` plugin.
+- Uniaxial medium Lithium niobate to material library.
+- Added support for conformal mesh methods near PEC structures that can be specified through the field `pec_conformal_mesh_spec` in the `Simulation` class.
+
+### Changed
+- `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
+
+### Fixed
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 
 ### Changed
@@ -1111,7 +1119,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...pre/2.7
 [2.6.0]: https://github.com/flexcompute/tidy3d/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1

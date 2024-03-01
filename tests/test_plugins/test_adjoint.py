@@ -55,7 +55,7 @@ VERTICES = ((-1.0, -1.0), (0.0, 0.0), (-1.0, 0.0))
 POLYSLAB_AXIS = 2
 FREQ0 = 2e14
 BASE_EPS_VAL = 2.0
-
+SIM_RUN_TIME = 1e-12
 # name of the output monitor used in tests
 MNT_NAME = "mode"
 
@@ -308,7 +308,7 @@ def make_sim(
 
     sim = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=4.0),
         monitors=(extraneous_field_monitor,),
         structures=(extraneous_structure,),
@@ -600,7 +600,7 @@ def test_multiple_freqs():
 
     _ = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(),
         structures=(),
@@ -626,7 +626,7 @@ def test_different_freqs():
     )
     _ = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(),
         structures=(),
@@ -640,7 +640,7 @@ def test_get_freq_adjoint():
 
     sim = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(),
         structures=(),
@@ -668,7 +668,7 @@ def test_get_freq_adjoint():
     )
     sim = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(),
         structures=(),
@@ -699,7 +699,7 @@ def test_get_fwidth_adjoint():
         """Make a sim with given sources and fwidth_adjoint specified."""
         return JaxSimulation(
             size=(10, 10, 10),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=(),
             structures=(),
@@ -850,7 +850,7 @@ def test_intersect_structures(log_capture):
             size=(2, 2, 2),
             input_structures=(struct1, struct2),
             grid_spec=td.GridSpec(wavelength=1.0),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             sources=(src,),
             boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=True),
         )
@@ -878,7 +878,7 @@ def test_structure_overlaps():
         size=(2, 0, 2),
         input_structures=(struct,),
         grid_spec=td.GridSpec(wavelength=1.0),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         sources=(src,),
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.pml(),
@@ -893,7 +893,7 @@ def test_validate_subpixel():
     with pytest.raises(pydantic.ValidationError):
         _ = JaxSimulation(
             size=(10, 10, 10),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             grid_spec=td.GridSpec(wavelength=1.0),
             subpixel=False,
         )
@@ -921,7 +921,7 @@ def test_plot_sims():
 
     sim = JaxSimulation(
         size=(10, 10, 10),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
     )
     sim.plot(x=0)
@@ -1000,7 +1000,7 @@ def _test_polyslab_box(use_emulated_run):
 
         sim = JaxSimulation(
             size=(10, 10, 10),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             grid_spec=td.GridSpec(wavelength=1.0),
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             output_monitors=(output_mnt1, output_mnt2),
@@ -1096,7 +1096,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
 
         sim = JaxSimulation(
             size=(10, 10, sim_size_axis),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             grid_spec=td.GridSpec(wavelength=1.0),
             boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
             output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
@@ -1302,7 +1302,7 @@ def _test_polyslab_scale(use_emulated_run):
 
             sim = JaxSimulation(
                 size=(10, 10, 10),
-                run_time=1e-12,
+                run_time=SIM_RUN_TIME,
                 grid_spec=td.GridSpec(wavelength=1.0),
                 boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
                 output_monitors=(output_mnt1, output_mnt2),
@@ -1445,7 +1445,7 @@ def test_jax_sim_io(tmp_path):
     sim = JaxSimulation(
         size=(2, 2, 2),
         input_structures=[struct],
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec.auto(wavelength=1.0),
     )
 
@@ -1588,7 +1588,7 @@ def test_pytreedef_errors(use_emulated_run):
             size=(2.0, 2.0, 2.0),
             structures=[ps, gg, ggg, gggg, stl_struct, custom_medium],
             input_structures=[js],
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             output_monitors=[mnt],
             monitors=[flux_mnt],
             grid_spec=td.GridSpec.uniform(dl=0.1),
@@ -1604,8 +1604,16 @@ def test_pytreedef_errors(use_emulated_run):
 
 fwidth_run_time_expected = [
     (FREQ0 / 10, 1e-11, 1e-11),  # run time supplied explicitly, use that
-    (FREQ0 / 10, None, RUN_TIME_FACTOR / (FREQ0 / 10)),  # no run_time, use fwidth supplied
-    (FREQ0 / 20, None, RUN_TIME_FACTOR / (FREQ0 / 20)),  # no run_time, use fwidth supplied
+    (
+        FREQ0 / 10,
+        None,
+        SIM_RUN_TIME + RUN_TIME_FACTOR / (FREQ0 / 10),
+    ),  # no run_time, use fwidth supplied
+    (
+        FREQ0 / 20,
+        None,
+        SIM_RUN_TIME + RUN_TIME_FACTOR / (FREQ0 / 20),
+    ),  # no run_time, use fwidth supplied
 ]
 
 
@@ -1648,7 +1656,7 @@ def test_no_adjoint_sources(
 
         return JaxSimulation(
             size=(10, 10, 10),
-            run_time=1e-12,
+            run_time=SIM_RUN_TIME,
             grid_spec=td.GridSpec(wavelength=1.0),
             monitors=(),
             structures=(),
@@ -1686,7 +1694,7 @@ def test_nonlinear_warn(log_capture):
 
     sim_base = JaxSimulation(
         size=(10, 10, 0),
-        run_time=1e-12,
+        run_time=SIM_RUN_TIME,
         grid_spec=td.GridSpec(wavelength=1.0),
         monitors=(),
         structures=(struct_static,),

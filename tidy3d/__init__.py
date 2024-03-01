@@ -3,6 +3,8 @@
 # grid
 from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
+from .components.grid.grid_spec import BenklerConformalMeshSpec, StaircasingConformalMeshSpec
+from .components.grid.grid_spec import HeuristicConformalMeshSpec
 
 # geometry
 from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
@@ -49,6 +51,9 @@ from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMoni
 from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
 from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
 from .components.monitor import DiffractionMonitor
+
+# lumped elements
+from .components.lumped_element import LumpedResistor
 
 # simulation
 from .components.simulation import Simulation
@@ -298,6 +303,7 @@ __all__ = [
     "config",
     "__version__",
     "Updater",
+    "LumpedResistor",
     "Scene",
     "StructureStructureInterface",
     "StructureBoundary",
@@ -327,4 +333,7 @@ __all__ = [
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",
+    "BenklerConformalMeshSpec",
+    "StaircasingConformalMeshSpec",
+    "HeuristicConformalMeshSpec",
 ]

@@ -212,8 +212,8 @@ References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
 
-Amorphous Silicon ("aSi")
-=========================
+Silicon (Amorphous) ("aSi")
+===========================
 
 .. table::
    :widths: auto
@@ -375,8 +375,8 @@ References:
 
 #. \A. D. Rakic, A. B. Djurisic, J. M. Elazar, and M. L. Majewski. Optical properties of metallic films for vertical-cavity optoelectronic devices, Appl. Opt. 37, 5271-5283 (1998) `[doi] <https://doi.org/10.1364/AO.37.005271>`__
 
-Crystalline Silicon ("cSi")
-===========================
+Silicon (Crystalline) ("cSi")
+=============================
 
 .. table::
    :widths: auto
@@ -673,6 +673,26 @@ Examples:
 References:
 
 #. \Horiba Technical Note 08: Lorentz Dispersion Model `[url] <http://www.horiba.com/fileadmin/uploads/Scientific/Downloads/OpticalSchool_CN/TN/ellipsometer/Lorentz_Dispersion_Model.pdf>`__
+
+Lithium niobate ("LiNbO3")
+==========================
+
+.. table::
+   :widths: auto
+
+   ========================== ======================== ========================== =============================================================================================================
+   Variant                    Valid for                Model Info                 Reference                                                                                                    
+   ========================== ======================== ========================== =============================================================================================================
+   ``'Zelmon1997'`` (default) 0.4 - 5.0 :math:`{\mu}m` :class:`AnisotropicMedium` [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/LiNbO3/Zelmon-e.yml>`__
+   ========================== ======================== ========================== =============================================================================================================
+
+Examples:
+
+>>> medium = material_library['LiNbO3']['Zelmon1997'](optical axis) # 'optical axis' can take value 0/1/2 for x/y/z axis.
+
+References:
+
+#. \D. E. Zelmon, D. L. Small and D. Jundt. Infrared corrected Sellmeier coefficients for congruently grown lithium niobate and 5 mol.% magnesium oxide-doped lithium niobate, J. Opt. Soc. Am. B 14, 3319-3322 (1997) `[doi] <https://doi.org/10.1364/JOSAB.14.003319>`__
 
 Magnesium Fluoride ("MgF2")
 ===========================

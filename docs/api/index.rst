@@ -14,6 +14,7 @@ API |:computer:|
     sources
     monitors
     mode
+    lumped_elements
     discretization
     output_data
     scene
@@ -34,6 +35,7 @@ API |:computer:|
 .. include:: /api/sources.rst
 .. include:: /api/monitors.rst
 .. include:: /api/mode.rst
+.. include:: /api/lumped_elements.rst
 .. include:: /api/discretization.rst
 .. include:: /api/output_data.rst
 .. include:: /api/scene.rst

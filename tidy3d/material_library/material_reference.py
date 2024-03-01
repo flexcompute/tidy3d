@@ -144,6 +144,12 @@ material_refs = dict(
         "Jpn. J. Appl. Phys. 7, 404-408 (1968)",
         doi="https://doi.org/10.1143/JJAP.7.404",
     ),
+    Zelmon1997=ReferenceData(
+        journal="D. E. Zelmon, D. L. Small and D. Jundt. Infrared corrected Sellmeier "
+        "coefficients for congruently grown lithium niobate and 5 mol.% magnesium oxide-doped "
+        "lithium niobate, J. Opt. Soc. Am. B 14, 3319-3322 (1997)",
+        doi="https://doi.org/10.1364/JOSAB.14.003319",
+    ),
     Zelmon1998=ReferenceData(
         journal="D. E. Zelmon, D. L. Small and R. Page. Refractive-index measurements "
         "of undoped yttrium aluminum garnet from 0.4 to 5.0 μm, Appl. Opt. 37, 4933-4935 (1998)",

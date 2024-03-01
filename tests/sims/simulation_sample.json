@@ -1015,14 +1015,14 @@
                 },
                 "transform": [
                     [
-                        0.9659258262890683,
-                        -0.25881904510252074,
+                        0.9659258262890684,
+                        -0.2588190451025208,
                         0.0,
                         0.0
                     ],
                     [
-                        0.25881904510252074,
-                        0.9659258262890683,
+                        0.2588190451025208,
+                        0.9659258262890684,
                         0.0,
                         0.0
                     ],
@@ -1084,6 +1084,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         },
         {
@@ -1109,6 +1110,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Ex"
         },
         {
@@ -1302,6 +1304,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "current_dataset": {
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
@@ -1366,6 +1369,7 @@
                 }
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         }
     ],
@@ -1510,7 +1514,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 200000000000000.0,
                 250000000000000.0
@@ -1542,7 +1546,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "start": 0.0,
             "stop": null,
             "interval": 1,
@@ -1644,7 +1648,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1794,7 +1798,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1851,7 +1855,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -1905,7 +1909,7 @@
                 1,
                 1
             ],
-            "colocate": true,
+            "colocate": 1,
             "freqs": [
                 250000000000000.0,
                 300000000000000.0
@@ -2225,6 +2229,7 @@
     "version": "2.6.0",
     "courant": 0.8,
     "normalize_index": 0,
+    "lumped_elements": [],
     "shutoff": 0.0001,
     "subpixel": false,
     "run_time": 1e-12

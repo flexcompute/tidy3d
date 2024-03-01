@@ -15,3 +15,14 @@ Discretization
    tidy3d.FieldGrid
    tidy3d.YeeGrid
    tidy3d.Grid
+
+PEC Conformal Mesh Spec
+-----------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+   
+   tidy3d.StaircasingConformalMeshSpec
+   tidy3d.HeuristicConformalMeshSpec
+   tidy3d.BenklerConformalMeshSpec
