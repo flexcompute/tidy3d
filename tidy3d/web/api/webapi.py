@@ -310,7 +310,10 @@ def get_status(task_id) -> str:
     if status == "visualize":
         return "success"
     if status == "error":
-        raise WebError("Error running task!")
+        raise WebError(
+            f"Error running task {task_id}! Use 'web.download_log(task_id)' to "
+            "download and examine the solver log, and/or contact customer support for help."
+        )
     return status
 
 
@@ -358,9 +361,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 prev_status = status
             time.sleep(0.5)
             status = get_status(task_id)
-
-        if status == "error":
-            raise WebError(f"Error running {solver_name} solver.")
 
         log.log(log_level, f"{solver_name} solver status: {status}")
         if verbose:

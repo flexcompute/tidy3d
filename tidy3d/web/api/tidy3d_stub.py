@@ -201,13 +201,24 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         """
         stub_data = Tidy3dStubData.from_file(file_path)
 
+        check_log_msg = "For more information, check 'SimulationData.log' or use "
+        check_log_msg += "'web.download_log(task_id)'."
+        warned_about_warnings = False
+
         if isinstance(stub_data, SimulationData):
             final_decay_value = stub_data.final_decay_value
             shutoff_value = stub_data.simulation.shutoff
-            if (shutoff_value != 0) and (final_decay_value > shutoff_value):
+            if stub_data.diverged:
+                log.warning("The simulation has diverged! " + check_log_msg)
+                warned_about_warnings = True
+            elif (shutoff_value != 0) and (final_decay_value > shutoff_value):
                 log.warning(
                     f"Simulation final field decay value of {final_decay_value} is greater than "
                     f"the simulation shutoff threshold of {shutoff_value}. Consider running the "
                     "simulation again with a larger 'run_time' duration for more accurate results."
                 )
+
+        if "WARNING" in stub_data.log and not warned_about_warnings:
+            log.warning("Warning messages were found in the solver log. " + check_log_msg)
+
         return stub_data
