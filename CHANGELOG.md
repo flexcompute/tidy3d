@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed handling of the `frequency` argument in PEC medium.
 - Corrected plotting cmap if `val='re'` passed to `SimulationData.plot_field`.
 - Bug when converting point `FieldMonitor` data to scalar amplitude for adjoint source in later jax versions.
+- Handle special case when vertices overlap in `JaxPolySlab` to give 0 grad contribution from edge.
 
 ## [2.6.0] - 2024-01-21
 

@@ -325,6 +325,10 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         edge = vertex_stat - vertex_grad
         length_edge = np.linalg.norm(edge)
 
+        # if the edge length is 0 (overlapping vertices), there is no gradient contrib for this edge
+        if np.isclose(length_edge, 0.0):
+            return 0.0
+
         # get normalized vectors tangent to and perpendicular to edge in global caresian basis
         tx, ty = edge / length_edge
         normal_vector = np.array((+ty, -tx))
