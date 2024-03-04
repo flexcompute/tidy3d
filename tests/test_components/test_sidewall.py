@@ -544,14 +544,11 @@ def test_normal_intersection_with_inside_cylinder():
 def test_side_intersection_cylinder():
     """Make sure intersection_side produces correct result"""
 
-    radius = 1.0
-    length = 1.0
-
     # a list of cylinders
     cyl = td.Cylinder(
         center=(0, 0, 0),
-        radius=radius,
-        length=length,
+        radius=1,
+        length=1,
         axis=2,
         sidewall_angle=np.pi / 4,
         reference_plane="middle",
@@ -564,6 +561,19 @@ def test_side_intersection_cylinder():
     shape_intersect = cyl.intersections_plane(x=np.sqrt(3) / 2)
     assert not shape_intersect[0].covers(Point(1.25, -0.4))
     assert shape_intersect[0].covers(Point(0.7, -0.4))
+
+    # a cylinder along x-axis
+    cyl = td.Cylinder(
+        center=(0, 0, 0),
+        radius=4,
+        length=6,
+        axis=0,
+        sidewall_angle=-0.2,
+        reference_plane="top",
+    )
+    shape_intersect = cyl.intersections_plane(z=0)
+    assert shape_intersect[0].covers(Point(3, -4))
+    assert not shape_intersect[0].covers(Point(-3, -4))
 
 
 def test_slanted_infinite_cylinder():
