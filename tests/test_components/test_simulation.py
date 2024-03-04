@@ -1810,30 +1810,44 @@ def test_warn_large_mode_source(log_capture, dl, log_level):  # noqa F811
     assert_log_level(log_capture, log_level)
 
 
-def test_error_large_monitors():
+mnt_size = (td.inf, 0, td.inf)
+mnt_test = [
+    td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+    td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
+    td.FluxTimeMonitor(size=mnt_size, name="test"),
+    td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
+    td.FieldProjectionAngleMonitor(size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]),
+    td.FieldMonitor(size=mnt_size, freqs=[1e12], name="test", fields=["Ex", "Hx"]),
+    td.FieldTimeMonitor(size=mnt_size, stop=1e-17, name="test", fields=["Ex", "Hx"]),
+]
+
+
+@pytest.mark.parametrize("monitor", mnt_test)
+def test_error_large_monitors(monitor):
     """Test if various large monitors cause pre-upload validation to error."""
 
-    sim = td.Simulation(
-        size=(2.0, 2.0, 2.0),
-        grid_spec=td.GridSpec.uniform(dl=0.005),
+    sim_large = td.Simulation(
+        size=(40.0, 0, 40.0),
+        grid_spec=td.GridSpec.uniform(dl=0.001),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[
+            td.ModeSource(
+                size=(0.1, 0.1, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
+            )
+        ],
+        monitors=[monitor],
     )
-    mnt_size = (td.inf, 0, td.inf)
-    mnt_test = [
-        td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
-        td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
-        td.FluxTimeMonitor(size=mnt_size, name="test"),
-        td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
-        td.FieldProjectionAngleMonitor(
-            size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]
-        ),
-    ]
 
-    for monitor in mnt_test:
-        with pytest.raises(SetupError):
-            s = sim.updated_copy(monitors=[monitor])
-            s.validate_pre_upload()
+    # small sim should not error
+    sim_small = sim_large.updated_copy(size=(4.0, 0, 4.0))
+    sim_small.validate_pre_upload()
+
+    # large sim should error
+    with pytest.raises(SetupError):
+        sim_large.validate_pre_upload()
 
 
 def test_monitor_num_cells():
