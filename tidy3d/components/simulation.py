@@ -3554,6 +3554,8 @@ class Simulation(AbstractSimulation):
             # When 2 dls are requested the 2D geometry should have been snapped to grid,
             # so this represents the exact adjacent grid spacing
             if len(dls) != num_dls:
+                if len(dls) == 1 and num_dls == 2:
+                    return np.array([dls[0], dls[0]])
                 raise Tidy3dError(
                     "Failed to detect grid size around the 2D material. "
                     "Can't generate volumetric equivalent for this simulation. "
@@ -3638,10 +3640,10 @@ class Simulation(AbstractSimulation):
                 temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
 
-                if structure.medium.is_pec:
-                    pec_plus = increment_float(snapped_center, 1.0)
-                    pec_minus = increment_float(snapped_center, -1.0)
-                    new_bounds = (pec_minus, pec_plus)
+                # if structure.medium.is_pec:
+                pec_plus = increment_float(snapped_center, 1.0)
+                pec_minus = increment_float(snapped_center, -1.0)
+                new_bounds = (pec_minus, pec_plus)
                 new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
