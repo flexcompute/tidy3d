@@ -550,7 +550,8 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         The definition of the local: y=0 lies at the base if ``sidewall_angle>=0``,
         and at the top if ``sidewall_angle<0``; x=0 aligns with the corresponding
-        ``self.center``.
+        ``self.center``. In both cases, y-axis is pointing towards the narrowing
+        direction of cylinder.
 
         Parameters
         ----------
@@ -566,10 +567,15 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
 
         """
 
-        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
+        # For negative sidewall angle, quantities along axis direction usually needs a flipped sign
+        axis_sign = 1
+        if self.sidewall_angle < 0:
+            axis_sign = -1
+
         lx_offset, ly_offset = self._order_by_axis(
-            plane_val=coords[0], axis_val=-self.finite_length_axis / 2 + coords[1], axis=axis
+            plane_val=coords[0],
+            axis_val=axis_sign * (-self.finite_length_axis / 2 + coords[1]),
+            axis=axis,
         )
-        if not isclose(self.sidewall_angle, 0):
-            ly_offset *= (-1) ** (self.sidewall_angle < 0)
+        _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
         return [x_center + lx_offset, y_center + ly_offset]
