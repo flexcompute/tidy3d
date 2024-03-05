@@ -1,4 +1,5 @@
 """Concrete primitive geometrical objects."""
+
 from __future__ import annotations
 
 from typing import List
@@ -257,23 +258,70 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         import trimesh
 
         z0, (x0, y0) = self.pop_axis(self.center, self.axis)
+        half_length = self.finite_length_axis / 2
 
-        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)[:-1]
-        x = (x0 + self.radius * np.cos(angles)).tolist()
-        y = (y0 + self.radius * np.sin(angles)).tolist()
-        n = len(x)
-        x.append(x0)
-        y.append(y0)
-        x = np.array(x * 2)
-        y = np.array(y * 2)
-        z = np.hstack((np.full(n + 1, z0 - self.length / 2), np.full(n + 1, z0 + self.length / 2)))
+        z_top = z0 + half_length
+        z_bot = z0 - half_length
+
+        if np.isclose(self.sidewall_angle, 0):
+            r_top = self.radius
+            r_bot = self.radius
+        else:
+            r_top = self.radius_top
+            r_bot = self.radius_bottom
+            if r_top < 0 or np.isclose(r_top, 0):
+                r_top = 0
+                z_top = z0 + self._radius_z(z0) / self._tanq
+            elif r_bot < 0 or np.isclose(r_bot, 0):
+                r_bot = 0
+                z_bot = z0 + self._radius_z(z0) / self._tanq
+
+        angles = np.linspace(0, 2 * np.pi, _N_SHAPELY_QUAD_SEGS * 4 + 1)
+
+        if r_bot > 0:
+            x_bot = x0 + r_bot * np.cos(angles)
+            y_bot = y0 + r_bot * np.sin(angles)
+            x_bot[-1] = x0
+            y_bot[-1] = y0
+        else:
+            x_bot = np.array([x0])
+            y_bot = np.array([y0])
+
+        if r_top > 0:
+            x_top = x0 + r_top * np.cos(angles)
+            y_top = y0 + r_top * np.sin(angles)
+            x_top[-1] = x0
+            y_top[-1] = y0
+        else:
+            x_top = np.array([x0])
+            y_top = np.array([y0])
+
+        x = np.hstack((x_bot, x_top))
+        y = np.hstack((y_bot, y_top))
+        z = np.hstack((np.full_like(x_bot, z_bot), np.full_like(x_top, z_top)))
         vertices = np.vstack(self.unpop_axis(z, (x, y), self.axis)).T
-        faces = (
-            [(n, (i + 1) % n, i) for i in range(n)]
-            + [(1 + 2 * n, 1 + n + i, 1 + n + ((i + 1) % n)) for i in range(n)]
-            + [(i, (i + 1) % n, 1 + n + i) for i in range(n)]
-            + [((i + 1) % n, 1 + n + ((i + 1) % n), 1 + n + i) for i in range(n)]
-        )
+
+        if x_bot.shape[0] == 1:
+            m = 1
+            n = x_top.shape[0] - 1
+            faces_top = [(m + n, m + i, m + (i + 1) % n) for i in range(n)]
+            faces_side = [(m + (i + 1) % n, m + i, 0) for i in range(n)]
+            faces = faces_top + faces_side
+        elif x_top.shape[0] == 1:
+            m = x_bot.shape[0]
+            n = m - 1
+            faces_bot = [(n, (i + 1) % n, i) for i in range(n)]
+            faces_side = [(i, (i + 1) % n, m) for i in range(n)]
+            faces = faces_bot + faces_side
+        else:
+            m = x_bot.shape[0]
+            n = m - 1
+            faces_bot = [(n, (i + 1) % n, i) for i in range(n)]
+            faces_top = [(m + n, m + i, m + (i + 1) % n) for i in range(n)]
+            faces_side_bot = [(i, (i + 1) % n, m + (i + 1) % n) for i in range(n)]
+            faces_side_top = [(m + (i + 1) % n, m + i, i) for i in range(n)]
+            faces = faces_bot + faces_top + faces_side_bot + faces_side_top
+
         mesh = trimesh.Trimesh(vertices, faces)
 
         section = mesh.section(plane_origin=origin, plane_normal=normal)
