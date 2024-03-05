@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug when converting point `FieldMonitor` data to scalar amplitude for adjoint source in later jax versions.
 - Handle special case when vertices overlap in `JaxPolySlab` to give 0 grad contribution from edge.
 - Corrected some mistakes in the estimation of the solver data size for each monitor type, which affects the restrictions on the maximum monitor size that can be submitted.
+- Bug in visualizing a slanted cylinder along certain axes in 2D.
 
 ## [2.6.0] - 2024-01-21
 
