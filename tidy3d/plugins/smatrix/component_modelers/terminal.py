@@ -1,4 +1,5 @@
 """Tool for generating an S matrix automatically from a Tidy3d simulation and lumped port definitions."""
+
 from __future__ import annotations
 
 from typing import Tuple, Dict
@@ -193,16 +194,26 @@ class TerminalComponentModeler(AbstractComponentModeler):
             e_component = "xyz"[port.voltage_axis]
             field_data = sim_data[f"{port.name}_E{e_component}"]
             e_field = field_data.field_components[f"E{e_component}"]
+            # Get the boundaries of the port along the voltage axis
+            min_port_bound = port.bounds[0][port.voltage_axis]
+            max_port_bound = port.bounds[1][port.voltage_axis]
+            # Remove E field outside the port region
+            e_field = e_field.sel({e_component: slice(min_port_bound, max_port_bound)})
+            # Ignore values on the port boundary, which are likely considered within the conductor
+            e_field = e_field.drop_sel(
+                {e_component: (min_port_bound, max_port_bound)}, errors="ignore"
+            )
             e_coords = [e_field.x, e_field.y, e_field.z]
-            # interpolate E locations to coincide with port bounds along the integration path
-            e_coords_interp = {
-                e_component: np.linspace(
-                    port.bounds[0][port.voltage_axis],
-                    port.bounds[1][port.voltage_axis],
-                    len(e_coords[port.voltage_axis]),
-                )
-            }
-            e_field = e_field.interp(**e_coords_interp)
+            # Integration is along the original coordinates plus two additional
+            # endpoints corresponding to the precise bounds of the port
+            e_coords_interp = np.array([min_port_bound])
+            e_coords_interp = np.concatenate((e_coords_interp, e_coords[port.voltage_axis].values))
+            e_coords_interp = np.concatenate((e_coords_interp, [max_port_bound]))
+            e_coords_interp = {e_component: e_coords_interp}
+            # Use extrapolation for the 2 additional endpoints
+            e_field = e_field.interp(
+                **e_coords_interp, method="linear", kwargs={"fill_value": "extrapolate"}
+            )
             voltage = -e_field.integrate(coord=e_component).squeeze(drop=True)
             # Return data array of voltage with coordinates of frequency
             return voltage
