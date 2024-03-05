@@ -5,4 +5,4 @@ Design Space Exploration
     :maxdepth: 1
 
     ../../ParameterScan
-    ../../Design
+    ../../Design   

@@ -1,0 +1,22 @@
+{
+    "name": null,
+    "frequency_range": null,
+    "allow_gain": false,
+    "nonlinear_spec": null,
+    "modulation_spec": null,
+    "heat_spec": null,
+    "type": "PoleResidue",
+    "eps_inf": 3.3946193815572663,
+    "poles": [
+        [
+            {
+                "real": -1667817350156709.8,
+                "imag": -206849778477666.2
+            },
+            {
+                "real": 1.0047082751084586e+16,
+                "imag": -2.307684527442218e+16
+            }
+        ]
+    ]
+}

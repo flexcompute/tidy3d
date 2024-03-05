@@ -19,7 +19,7 @@
     "PlasmonicYagiUdaNanoantenna.ipynb": ["McPeak.csv"],
     "STLImport.ipynb": ["box.stl", "box_with_hole.stl", "box_with_indent.stl", "icecream_nonunionized.stl", "icecream_unionized.stl", "two_boxes.stl"],
     "RadiativeCoolingGlass.ipynb": ["mat_SiO2.csv", "mat_Al2O3.csv"],
-    "XarrayTutorial.ipynb": ["gaussian_beam_data.hdf5", "mmi_simulation_data.hdf5", "waveguide_mode_data.hdf5"],
+    "XarrayTutorial.ipynb": ["gaussian_beam_data.h5", "mmi_simulation_data.h5", "waveguide_mode_data.h5"],
     "TunableChiralMetasurface.ipynb": ["GST_A_nk.csv", "GST_C_nk.csv"],
     "MoS2Waveguide.ipynb": ["MoS2_nk.csv"],
 }
