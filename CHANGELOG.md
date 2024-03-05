@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
 
 ### Changed
+- Slightly reorganized `web.run` logging when `verbose=True` to make it clearer.
 
 ### Fixed
 - Fix to 3D surface integration monitors with some surfaces completely outside of the simulation domain which would sometimes still record fields.
