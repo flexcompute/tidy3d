@@ -5118,7 +5118,7 @@ class Medium2D(AbstractMedium):
                 return med
             else:
                 raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
-            poles += [(a, weight * c) for (a, c) in pole_res.poles]
+            poles += [(a, weight * c) for (a, c) in pole_res.poles if c != 0.0]
         return PoleResidue(eps_inf=np.real(eps_inf), poles=poles)
 
     def volumetric_equivalent(
