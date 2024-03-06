@@ -184,6 +184,10 @@ class UniformGrid(GridSpec1d):
 
         center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
 
+        # to be consistent with AutoGrid behavior in case of 0-size dimensions
+        if size == 0:
+            return np.array([center - self.dl / 2, center + self.dl / 2])
+
         # Take a number of steps commensurate with the size; make dl a bit smaller if needed
         num_cells = int(np.ceil(size / self.dl))
 
@@ -191,7 +195,7 @@ class UniformGrid(GridSpec1d):
         num_cells = max(num_cells, 1)
 
         # Adjust step size to fit simulation size exactly
-        dl_snapped = size / num_cells if size > 0 else self.dl
+        dl_snapped = size / num_cells
 
         return center - size / 2 + np.arange(num_cells + 1) * dl_snapped
 
