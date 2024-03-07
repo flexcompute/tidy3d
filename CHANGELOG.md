@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.1] - 2024-03-07
+
 ### Added
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
@@ -27,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in `CustomGrid` that was causing an error when using for zero-size dimensions.
 - When downloading gzip-ed solver data, automatically create the parent folder of the `to_file` path if it does not exist.
 
-## [2.6.0] - 2024-01-21
+## [2.6.0] - 2024-02-21
 
 ### Added
 - Automatic subdivision of 2D materials with inhomogeneous substrate/superstrate.
@@ -1121,7 +1123,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...develop
+[2.6.1]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/flexcompute/tidy3d/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/flexcompute/tidy3d/compare/v2.5.0...v2.5.1
