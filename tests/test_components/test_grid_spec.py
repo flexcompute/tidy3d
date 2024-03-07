@@ -1,7 +1,6 @@
 """Tests GridSpec."""
 import pytest
 import numpy as np
-import pydantic.v1 as pydantic
 
 import tidy3d as td
 from tidy3d.exceptions import SetupError
@@ -194,11 +193,26 @@ def test_zerosize_dimensions():
         run_time=1e-12,
     )
 
-    assert np.allclose(sim.grid.boundaries.y, [-dl / 2, dl / 2])
+    assert np.allclose(sim.grid.boundaries.y, [0, dl])
 
     # custom grid
     custom_grid = td.CustomGrid(dl=tuple([0.25] * 40))
-    with pytest.raises(pydantic.ValidationError):
+    sim = td.Simulation(
+        size=(5, 0, 10),
+        boundary_spec=td.BoundarySpec.pec(
+            x=True,
+            y=True,
+            z=True,
+        ),
+        grid_spec=td.GridSpec(
+            grid_x=custom_grid, grid_y=td.CustomGrid(dl=(dl,)), grid_z=custom_grid
+        ),
+        run_time=1e-12,
+    )
+
+    assert np.allclose(sim.grid.boundaries.y, [-dl / 2, dl / 2])
+
+    with pytest.raises(SetupError):
         sim = td.Simulation(
             size=(5, 0, 10),
             boundary_spec=td.BoundarySpec.pec(
@@ -206,6 +220,26 @@ def test_zerosize_dimensions():
                 y=True,
                 z=True,
             ),
-            grid_spec=td.GridSpec(grid_x=custom_grid, grid_y=custom_grid, grid_z=custom_grid),
+            grid_spec=td.GridSpec(
+                grid_x=custom_grid,
+                grid_y=td.CustomGrid(dl=(dl,), custom_offset=10),
+                grid_z=custom_grid,
+            ),
+            run_time=1e-12,
+        )
+
+    with pytest.raises(SetupError):
+        sim = td.Simulation(
+            size=(5, 3, 10),
+            boundary_spec=td.BoundarySpec.pec(
+                x=True,
+                y=True,
+                z=True,
+            ),
+            grid_spec=td.GridSpec(
+                grid_x=custom_grid.updated_copy(custom_offset=20),
+                grid_y=custom_grid,
+                grid_z=custom_grid,
+            ),
             run_time=1e-12,
         )
