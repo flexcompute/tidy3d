@@ -24,7 +24,7 @@ from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
 from .medium import MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium2D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
-from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
+from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic, Boundary
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
@@ -1566,7 +1566,7 @@ class Simulation(AbstractSimulation):
     @pydantic.validator("grid_spec", always=True)
     @skip_if_fields_missing(["size"])
     def _no_custom_grid_along_zero_dims(cls, val, values):
-        """Check that wavelength can be defined if there is auto grid spec."""
+        """Check that a custom grid is not assigned for a zero-size dimension."""
 
         size = values["size"]
 
@@ -3719,21 +3719,16 @@ class Simulation(AbstractSimulation):
             aux_box = Box(center=center, size=size)
             grid_inds = self.grid.discretize_inds(box=aux_box)
 
-            new_bounds = [
-                [grids_1d[dim][grid_inds[dim][0]] for dim in range(3)],
-                [grids_1d[dim][grid_inds[dim][1]] for dim in range(3)],
-            ]
-
             new_grids = []
 
-            # preserve zero size dimensions
             for dim in range(3):
-                if self.size[dim] == 0:
-                    new_bounds[0][dim] = self.center[dim]
-                    new_bounds[1][dim] = self.center[dim]
+                if new_bounds[0][dim] == new_bounds[1][dim]:  # preserve zero size dimensions
                     # custom grid + zero-size dimension causes errors, so do a uniform instead
                     new_grids.append(UniformGrid(dl=np.diff(grids_1d[dim])[0]))
                 else:
+                    # adjust boundaries only in non-zero-size dimensions
+                    new_bounds[0][dim] = grids_1d[dim][grid_inds[dim][0]]
+                    new_bounds[1][dim] = grids_1d[dim][grid_inds[dim][1]]
                     new_grids.append(
                         CustomGrid(dl=tuple(np.diff(grids_1d[dim])), custom_offset=grids_1d[dim][0])
                     )
@@ -3786,6 +3781,18 @@ class Simulation(AbstractSimulation):
 
         if boundary_spec is None:
             boundary_spec = self.boundary_spec
+
+        # set boundary conditions in zero-size dimension to periodic
+        for dim in range(3):
+            if new_bounds[0][dim] == new_bounds[1][dim] and not isinstance(
+                boundary_spec.to_list[dim][0], Periodic
+            ):
+                axis_name = "xyz"[dim]
+                log.warning(
+                    f"The resulting simulation subsection has size zero along axis '{axis_name}'. "
+                    "Periodic boundary conditions are automatically set along this dimension."
+                )
+                boundary_spec = boundary_spec.updated_copy(**{"xyz"[dim]: Boundary.periodic()})
 
         # reduction of custom medium data
         new_sim_medium = self.medium
