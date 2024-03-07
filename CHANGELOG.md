@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in visualizing a slanted cylinder along certain axes in 2D.
 - Bug in `ModeSolver.reduced_simulation_copy` that was causing mode profiles to be all `NaN`.
 - Bug in `Simulation.subsection()` that was causing zero-size dimensions not to be preserved.
-- Behavior of `UniformGrid` is made consistent with `AutoGrid` in case of zero-size dimensions.
+- Bug in `CustomGrid` that was causing an error when using for zero-size dimensions.
 
 ## [2.6.0] - 2024-01-21
 

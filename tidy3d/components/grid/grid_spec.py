@@ -184,10 +184,6 @@ class UniformGrid(GridSpec1d):
 
         center, size = structures[0].geometry.center[axis], structures[0].geometry.size[axis]
 
-        # to be consistent with AutoGrid behavior in case of 0-size dimensions
-        if size == 0:
-            return np.array([center - self.dl / 2, center + self.dl / 2])
-
         # Take a number of steps commensurate with the size; make dl a bit smaller if needed
         num_cells = int(np.ceil(size / self.dl))
 
@@ -195,7 +191,7 @@ class UniformGrid(GridSpec1d):
         num_cells = max(num_cells, 1)
 
         # Adjust step size to fit simulation size exactly
-        dl_snapped = size / num_cells
+        dl_snapped = size / num_cells if size > 0 else self.dl
 
         return center - size / 2 + np.arange(num_cells + 1) * dl_snapped
 
@@ -270,26 +266,44 @@ class CustomGrid(GridSpec1d):
         buffer = fp_eps * size
         bound_min = center - size / 2 - buffer
         bound_max = center + size / 2 + buffer
-        bound_coords = bound_coords[bound_coords <= bound_max]
-        bound_coords = bound_coords[bound_coords >= bound_min]
 
-        # if not extending to simulation bounds, repeat beginning and end
-        dl_min = dl[0]
-        dl_max = dl[-1]
-        while bound_coords[0] - dl_min >= bound_min:
-            bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-        while bound_coords[-1] + dl_max <= bound_max:
-            bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+        if bound_max < bound_coords[0] or bound_min > bound_coords[-1]:
+            axis_name = "xyz"[axis]
+            raise SetupError(
+                f"Simulation domain does not overlap with the provided custom grid in '{axis_name}' direction."
+            )
 
-        # in case a `custom_offset` is provided, it's possible the bounds were numerically within
-        # the simulation bounds but were still chopped off, which is fixed here
-        if self.custom_offset is not None:
-            if np.isclose(bound_coords[0] - dl_min, bound_min):
+        if size == 0:
+            # in case of zero-size dimension return the boundaries between which simulation falls
+            ind = np.searchsorted(bound_coords, center, side="right")
+
+            # in case when the center coincides with the right most boundary
+            if ind >= len(bound_coords):
+                ind = len(bound_coords) - 1
+
+            return bound_coords[ind - 1 : ind + 1]
+
+        else:
+            bound_coords = bound_coords[bound_coords <= bound_max]
+            bound_coords = bound_coords[bound_coords >= bound_min]
+
+            # if not extending to simulation bounds, repeat beginning and end
+            dl_min = dl[0]
+            dl_max = dl[-1]
+            while bound_coords[0] - dl_min >= bound_min:
                 bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
-            if np.isclose(bound_coords[-1] + dl_max, bound_max):
+            while bound_coords[-1] + dl_max <= bound_max:
                 bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
 
-        return bound_coords
+            # in case a `custom_offset` is provided, it's possible the bounds were numerically within
+            # the simulation bounds but were still chopped off, which is fixed here
+            if self.custom_offset is not None:
+                if np.isclose(bound_coords[0] - dl_min, bound_min):
+                    bound_coords = np.insert(bound_coords, 0, bound_coords[0] - dl_min)
+                if np.isclose(bound_coords[-1] + dl_max, bound_max):
+                    bound_coords = np.append(bound_coords, bound_coords[-1] + dl_max)
+
+            return bound_coords
 
 
 class AutoGrid(GridSpec1d):
