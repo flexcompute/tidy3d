@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in `ModeSolver.reduced_simulation_copy` that was causing mode profiles to be all `NaN`.
 - Bug in `Simulation.subsection()` that was causing zero-size dimensions not to be preserved.
 - Bug in `CustomGrid` that was causing an error when using for zero-size dimensions.
+- When downloading gzip-ed solver data, automatically create the parent folder of the `to_file` path if it does not exist.
 
 ## [2.6.0] - 2024-01-21
 
