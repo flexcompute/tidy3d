@@ -10,6 +10,7 @@ import xarray as xr
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d import ModeIndexDataArray
 
 """ utilities shared between all tests """
 np.random.seed(4)
@@ -78,7 +79,7 @@ def cartesian_to_unstructured(
     xyz = [array.x, array.y, array.z]
     lens = [len(coord) for coord in xyz]
 
-    num_len_zero = sum(l == 1 for l in lens)
+    num_len_zero = sum(length == 1 for length in lens)
 
     if num_len_zero == 1:
         normal_axis = lens.index(1)
@@ -245,7 +246,7 @@ def cartesian_to_unstructured(
 def make_spatial_data(
     size,
     bounds,
-    lims=[0, 1],
+    lims=(0, 1),
     seed_data=None,
     unstructured=False,
     perturbation=0.1,
@@ -875,6 +876,72 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             **field_cmps,
         )
 
+    def make_field_time_data(monitor: td.FieldTimeMonitor) -> td.FieldTimeData:
+        """make a random FieldTimeData from a FieldTimeMonitor."""
+        field_cmps = {}
+        coords = {}
+        grid = simulation.discretize_monitor(monitor)
+        tmesh = simulation.tmesh
+        for field_name in monitor.fields:
+            spatial_coords_dict = grid[field_name].dict()
+
+            for axis, dim in enumerate("xyz"):
+                if monitor.size[axis] == 0:
+                    coords[dim] = [monitor.center[axis]]
+                else:
+                    coords[dim] = np.array(spatial_coords_dict[dim])
+
+            (idx_begin, idx_end) = monitor.time_inds(tmesh)
+            tcoords = tmesh[idx_begin:idx_end]
+            coords["t"] = tcoords
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarFieldTimeDataArray, is_complex=False
+            )
+
+        return td.FieldTimeData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            **field_cmps,
+        )
+
+    def make_mode_solver_data(monitor: td.ModeSolverMonitor) -> td.ModeSolverData:
+        """make a random ModeSolverData from a ModeSolverMonitor."""
+        field_cmps = {}
+        coords = {}
+        grid = simulation.discretize_monitor(monitor)
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
+        index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
+        index_data = ModeIndexDataArray(
+            (1 + 1j) * np.random.random(index_data_shape), coords=index_coords
+        )
+        for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+            spatial_coords_dict = grid[field_name].dict()
+
+            for axis, dim in enumerate("xyz"):
+                if monitor.size[axis] == 0:
+                    coords[dim] = [monitor.center[axis]]
+                else:
+                    coords[dim] = np.array(spatial_coords_dict[dim])
+
+            coords["f"] = list(monitor.freqs)
+            coords["mode_index"] = index_coords["mode_index"]
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+            )
+
+        return td.ModeSolverData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            n_complex=index_data,
+            **field_cmps,
+        )
+
     def make_eps_data(monitor: td.PermittivityMonitor) -> td.PermittivityData:
         """make a random PermittivityData from a PermittivityMonitor."""
         field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
@@ -920,6 +987,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
+        td.FieldTimeMonitor: make_field_time_data,
+        td.ModeSolverMonitor: make_mode_solver_data,
         td.ModeMonitor: make_mode_data,
         td.PermittivityMonitor: make_eps_data,
         td.DiffractionMonitor: make_diff_data,
