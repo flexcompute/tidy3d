@@ -1,10 +1,12 @@
 """Class and custom data array for representing a scattering matrix port based on lumped circuit elements."""
+
 import pydantic.v1 as pd
 import numpy as np
 from typing import Optional
 
 from ....constants import OHM
 from ....components.geometry.base import Box
+from ....components.geometry.utils_2d import increment_float
 from ....components.types import Complex, FreqArray, Axis
 from ....components.base import cached_property
 from ....components.lumped_element import LumpedResistor
@@ -159,8 +161,9 @@ class LumpedPort(Box):
         h_cap_component = "xyz"[self.injection_axis]
         # Size of current monitor needs to encompass the current carrying 2D sheet
         # Needs to have a nonzero thickness so a closed loop of gridpoints around the 2D sheet can be formed
+        dl = 2 * (increment_float(center[self.injection_axis], 1.0) - center[self.injection_axis])
         current_mon_size = list(self.size)
-        current_mon_size[self.injection_axis] = 1e-10
+        current_mon_size[self.injection_axis] = dl
         current_mon_size[self.voltage_axis] = 0.0
         # Create a current monitor
         return FieldMonitor(

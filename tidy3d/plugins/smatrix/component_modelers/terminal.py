@@ -23,6 +23,8 @@ from ....web.api.container import BatchData
 from .base import AbstractComponentModeler, FWIDTH_FRAC
 from ..ports.lumped import LumpedPortDataArray, LumpedPort
 
+from ...microwave import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
+
 
 class TerminalComponentModeler(AbstractComponentModeler):
     """Tool for modeling two-terminal multiport devices and computing port parameters
@@ -194,40 +196,33 @@ class TerminalComponentModeler(AbstractComponentModeler):
         b_matrix = a_matrix.copy(deep=True)
 
         def select_within_bounds(coords: np.array, min, max):
-            """Helper to slice coordinates within min and max bounds, including a tolerance."""
-            """xarray does not have this functionality yet. """
-            np_idx = np.logical_and(coords > min, coords < max)
-            np_idx = np.logical_or(np_idx, np.isclose(coords, min, rtol=fp_eps, atol=fp_eps))
-            np_idx = np.logical_or(np_idx, np.isclose(coords, max, rtol=fp_eps, atol=fp_eps))
-            coords = coords[np_idx]
-            return coords
+            """Helper to return indices of coordinates within min and max bounds,"""
+            """including a tolerance. xarray does not have this functionality yet. """
+            min_idx = np.searchsorted(coords, min, "left")
+            # If a coordinate is close enough, it is considered included
+            if min_idx > 0 and np.isclose(coords[min_idx - 1], min, rtol=fp_eps, atol=fp_eps):
+                min_idx -= 1
+            max_idx = np.searchsorted(coords, max, "left")
+            if max_idx < len(coords) and np.isclose(coords[max_idx], max, rtol=fp_eps, atol=fp_eps):
+                max_idx += 1
+
+            return (min_idx, max_idx - 1)
 
         def port_voltage(port: LumpedPort, sim_data: SimulationData) -> xr.DataArray:
             """Helper to compute voltage across the port."""
             e_component = "xyz"[port.voltage_axis]
             field_data = sim_data[f"{port.name}_E{e_component}"]
-            e_field = field_data.field_components[f"E{e_component}"]
-            # Get the boundaries of the port along the voltage axis
-            min_port_bound = port.bounds[0][port.voltage_axis]
-            max_port_bound = port.bounds[1][port.voltage_axis]
-            # Remove E field outside the port region
-            e_field = e_field.sel({e_component: slice(min_port_bound, max_port_bound)})
-            # Ignore values on the port boundary, which are likely considered within the conductor
-            e_field = e_field.drop_sel(
-                {e_component: (min_port_bound, max_port_bound)}, errors="ignore"
+
+            size = list(port.size)
+            size[port.current_axis] = 0
+            voltage_integral = VoltageIntegralAxisAligned(
+                center=port.center,
+                size=size,
+                extrapolate_to_endpoints=True,
+                snap_path_to_grid=True,
+                sign="+",
             )
-            e_coords = [e_field.x, e_field.y, e_field.z]
-            # Integration is along the original coordinates plus two additional
-            # endpoints corresponding to the precise bounds of the port
-            e_coords_interp = np.array([min_port_bound])
-            e_coords_interp = np.concatenate((e_coords_interp, e_coords[port.voltage_axis].values))
-            e_coords_interp = np.concatenate((e_coords_interp, [max_port_bound]))
-            e_coords_interp = {e_component: e_coords_interp}
-            # Use extrapolation for the 2 additional endpoints
-            e_field = e_field.interp(
-                **e_coords_interp, method="linear", kwargs={"fill_value": "extrapolate"}
-            )
-            voltage = -e_field.integrate(coord=e_component).squeeze(drop=True)
+            voltage = voltage_integral.compute_voltage(field_data)
             # Return data array of voltage with coordinates of frequency
             return voltage
 
@@ -246,83 +241,64 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
             # Get h field tangent to resistive sheet
             h_component = "xyz"[port.current_axis]
-            orth_component = "xyz"[port.injection_axis]
-            field_data = sim_data[f"{port.name}_H{h_component}"]
-            h_field = field_data.field_components[f"H{h_component}"]
-            h_coords = [h_field.x, h_field.y, h_field.z]
+            inject_component = "xyz"[port.injection_axis]
+            monitor_data = sim_data[f"{port.name}_H{h_component}"]
+            field_data = monitor_data.field_components
+            h_field = field_data[f"H{h_component}"]
+            # Coordinates as numpy array for h_field along curren and injection axis
+            h_coords_along_current = h_field.coords[h_component].values
+            h_coords_along_injection = h_field.coords[inject_component].values
             # h_cap represents the very short section (single cell) of the H contour that
             # is in the injection_axis direction. It is needed to fully enclose the sheet.
-            h_cap_field = field_data.field_components[f"H{orth_component}"]
-            h_cap_coords = [h_cap_field.x, h_cap_field.y, h_cap_field.z]
+            h_cap_field = field_data[f"H{inject_component}"]
+            # Coordinates of h_cap field as numpy arrays
+            h_cap_coords_along_current = h_cap_field.coords[h_component].values
+            h_cap_coords_along_injection = h_cap_field.coords[inject_component].values
 
             # Use the coordinates of h_cap since it lies on the same grid that the
             # lumped resistor is snapped to
             orth_index = np.argmin(
-                np.abs(h_cap_coords[port.injection_axis].values - port.center[port.injection_axis])
+                np.abs(h_cap_coords_along_injection - port.center[port.injection_axis])
             )
+            inject_center = h_cap_coords_along_injection[orth_index]
             # Some sanity checks, tangent H field coordinates should be directly above
             # and below the coordinates of the resistive sheet
             assert orth_index > 0
-            assert (
-                h_cap_coords[port.injection_axis].values[orth_index]
-                < h_coords[port.injection_axis].values[orth_index]
-            )
-            assert (
-                h_coords[port.injection_axis].values[orth_index - 1]
-                < h_cap_coords[port.injection_axis].values[orth_index]
-            )
+            assert inject_center < h_coords_along_injection[orth_index]
+            assert h_coords_along_injection[orth_index - 1] < inject_center
+            # Distance between the h1_field and h2_field, a single cell size
+            dcap = h_coords_along_injection[orth_index] - h_coords_along_injection[orth_index - 1]
 
-            # Extract field just below and just above sheet
-            h1_field = h_field.isel({orth_component: orth_index - 1})
-            h2_field = h_field.isel({orth_component: orth_index})
-            h_field = h1_field - h2_field
-
+            # Next find the size in the current_axis direction
             # Find exact bounds of port taking into consideration the Yee grid
-            np_coords = h_coords[port.current_axis].values
+            # Select bounds carefully and allow for h_cap very close to the port bounds
             port_min = port.bounds[0][port.current_axis]
             port_max = port.bounds[1][port.current_axis]
-            np_coords = select_within_bounds(np_coords, port_min, port_max)
-            coord_low = np_coords[0]
-            coord_high = np_coords[-1]
-            # Extract cap field which is coincident with sheet
-            h_cap = h_cap_field.isel({orth_component: orth_index})
 
-            # Need to make sure to use the nearest coordinate that is
-            # at least greater than the port bounds
-            hcap_minus = h_cap.sel({h_component: slice(-np.inf, coord_low)})
-            hcap_plus = h_cap.sel({h_component: slice(coord_high, np.inf)})
-            hcap_minus = hcap_minus.isel({h_component: -1})
-            hcap_plus = hcap_plus.isel({h_component: 0})
-            # Length of integration along the h_cap contour is a single cell width
-            dcap = (
-                h_coords[port.injection_axis].values[orth_index]
-                - h_coords[port.injection_axis].values[orth_index - 1]
+            (idx_min, idx_max) = select_within_bounds(h_coords_along_current, port_min, port_max)
+            # Use these indices to select the exact positions of the h_cap field
+            h_min_bound = h_cap_coords_along_current[idx_min - 1]
+            h_max_bound = h_cap_coords_along_current[idx_max]
+
+            # Setup axis aligned contour integral, which is defined by a plane
+            # The path integral is snapped to the grid, so center and size will
+            # be slightly modified when compared to the original port.
+            center = list(port.center)
+            center[port.injection_axis] = inject_center
+            center[port.current_axis] = (h_max_bound + h_min_bound) / 2
+            size = [0, 0, 0]
+            size[port.current_axis] = h_max_bound - h_min_bound
+            size[port.injection_axis] = dcap
+
+            # H field is continuous at integral bounds, so extrapolation is turned off
+            I_integral = CurrentIntegralAxisAligned(
+                center=center,
+                size=size,
+                sign="+",
+                extrapolate_to_endpoints=False,
+                snap_contour_to_grid=True,
             )
-
-            h_min_bound = hcap_minus.coords[h_component].values
-            h_max_bound = hcap_plus.coords[h_component].values
-            h_coords_interp = {
-                h_component: np.linspace(
-                    h_min_bound,
-                    h_max_bound,
-                    len(h_coords[port.current_axis] + 2),
-                )
-            }
-            # Integration that corresponds to the tangent H field
-            h_field = h_field.interp(**h_coords_interp)
-            current = h_field.integrate(coord=h_component).squeeze(drop=True)
-
-            # Integration that corresponds with the contribution to current from cap contours
-            hcap_current = (
-                ((hcap_plus - hcap_minus) * dcap).squeeze(drop=True).reset_coords(drop=True)
-            )
-            # Add the contribution from the hcap integral
-            current = current + hcap_current
-            # Make sure we compute current flowing from plus to minus voltage
-            if port.current_axis != (port.voltage_axis + 1) % 3:
-                current *= -1
-            # Return data array of current with coordinates of frequency
-            return current
+            return I_integral.compute_current(monitor_data)
 
         def port_ab(port: LumpedPort, sim_data: SimulationData):
             """Helper to compute the port incident and reflected power waves."""
