@@ -928,7 +928,9 @@ def real_cost(task_id: str, verbose=True) -> float:
 
 @wait_for_connection
 def test() -> None:
-    """Confirm whether Tidy3D authentication is configured. Raises exception if not."""
+    """
+    Confirm whether Tidy3D authentication is configured. Raises exception if not.
+    """
     try:
         # note, this is a little slow, but the only call that doesn't require providing a task id.
         get_tasks(num_tasks=0)
