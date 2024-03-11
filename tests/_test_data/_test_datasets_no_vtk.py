@@ -1,8 +1,8 @@
 """Tests tidy3d/components/data/dataset.py"""
 import pytest
 import builtins
-from .test_datasets import test_triangular_dataset as _test_triangular_dataset
-from .test_datasets import test_tetrahedral_dataset as _test_tetrahedral_dataset
+from ..test_data.test_datasets import test_triangular_dataset as _test_triangular_dataset
+from ..test_data.test_datasets import test_tetrahedral_dataset as _test_tetrahedral_dataset
 
 
 @pytest.fixture

@@ -74,8 +74,10 @@ class Environment:
 
     Example
     -------
+    >>> from tidy3d.web.core.environment import Env
     >>> Env.dev.active()
-    >>> Env.current.name == "dev"
+    >>> assert Env.current.name == "dev"
+    ...
     """
 
     env_map = dict(

@@ -391,6 +391,10 @@ def download_gz_file(
     # The tempfile is set as ``hdf5.gz`` so that the mock download in the webapi tests works
     tmp_file, tmp_file_path = tempfile.mkstemp(".hdf5.gz")
     os.close(tmp_file)
+
+    # make the leading directories in the 'to_file', if any
+    to_file = pathlib.Path(to_file)
+    to_file.parent.mkdir(parents=True, exist_ok=True)
     try:
         download_file(
             resource_id,

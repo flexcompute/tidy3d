@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.6.0"  # Thinking about bump2version
+version = "2.6.1"  # Thinking about bump2version
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -124,13 +124,13 @@ vtk = ["vtk"]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
 
 [[tool.poetry.source]]
-name = "PyPI"
-priority = "default"
+name = "pypi"
+priority = "primary"
 
 [[tool.poetry.source]]
 name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
-priority = "primary"
+priority = "supplemental"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

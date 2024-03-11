@@ -1810,30 +1810,44 @@ def test_warn_large_mode_source(log_capture, dl, log_level):  # noqa F811
     assert_log_level(log_capture, log_level)
 
 
-def test_error_large_monitors():
+mnt_size = (td.inf, 0, td.inf)
+mnt_test = [
+    td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
+    td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
+    td.FluxTimeMonitor(size=mnt_size, name="test"),
+    td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
+    td.FieldProjectionAngleMonitor(size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]),
+    td.FieldMonitor(size=mnt_size, freqs=[1e12], name="test", fields=["Ex", "Hx"]),
+    td.FieldTimeMonitor(size=mnt_size, stop=1e-17, name="test", fields=["Ex", "Hx"]),
+]
+
+
+@pytest.mark.parametrize("monitor", mnt_test)
+def test_error_large_monitors(monitor):
     """Test if various large monitors cause pre-upload validation to error."""
 
-    sim = td.Simulation(
-        size=(2.0, 2.0, 2.0),
-        grid_spec=td.GridSpec.uniform(dl=0.005),
+    sim_large = td.Simulation(
+        size=(40.0, 0, 40.0),
+        grid_spec=td.GridSpec.uniform(dl=0.001),
         run_time=1e-12,
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[
+            td.ModeSource(
+                size=(0.1, 0.1, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
+            )
+        ],
+        monitors=[monitor],
     )
-    mnt_size = (td.inf, 0, td.inf)
-    mnt_test = [
-        td.ModeMonitor(size=mnt_size, freqs=[1e12], name="test", mode_spec=td.ModeSpec()),
-        td.FluxMonitor(size=mnt_size, freqs=[1e12], name="test"),
-        td.FluxTimeMonitor(size=mnt_size, name="test"),
-        td.DiffractionMonitor(size=mnt_size, freqs=[1e12], name="test"),
-        td.FieldProjectionAngleMonitor(
-            size=mnt_size, freqs=[1e12], name="test", theta=[0], phi=[0]
-        ),
-    ]
 
-    for monitor in mnt_test:
-        with pytest.raises(SetupError):
-            s = sim.updated_copy(monitors=[monitor])
-            s.validate_pre_upload()
+    # small sim should not error
+    sim_small = sim_large.updated_copy(size=(4.0, 0, 4.0))
+    sim_small.validate_pre_upload()
+
+    # large sim should error
+    with pytest.raises(SetupError):
+        sim_large.validate_pre_upload()
 
 
 def test_monitor_num_cells():
@@ -2296,6 +2310,8 @@ def test_to_gds(tmp_path):
 
 def test_sim_subsection():
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
+    region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
+    region_yz = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
 
     sim_red = SIM_FULL.subsection(region=region)
     assert sim_red.structures != SIM_FULL.structures
@@ -2361,6 +2377,47 @@ def test_sim_subsection():
         ind = np.argmax(np.logical_and(full_grid >= start - tol, full_grid <= start + tol))
         # compare
         assert np.allclose(red_grid, full_grid[ind : ind + len(red_grid)])
+
+    sim_red = SIM_FULL.subsection(
+        region=region_xy,
+        grid_spec="identical",
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+    )
+    assert sim_red.size[2] == 0
+    assert isinstance(sim_red.boundary_spec.z.minus, td.Periodic)
+    assert isinstance(sim_red.boundary_spec.z.plus, td.Periodic)
+
+    # check behavior for zero-size dimensions
+    sim_2d = SIM.updated_copy(
+        size=(SIM.size[0], 0, SIM.size[2]),
+        boundary_spec=td.BoundarySpec.pml(x=True, z=True),
+    )
+    sim_2d_red = sim_2d.subsection(
+        region=region, remove_outside_structures=True, remove_outside_custom_mediums=True
+    )
+    assert sim_2d_red.size[1] == 0
+
+    sim_red = sim_2d.subsection(
+        region=region_xy,
+        grid_spec="identical",
+        boundary_spec=td.BoundarySpec.all_sides(td.Periodic()),
+    )
+    assert sim_red.size[1] == 0
+    assert sim_red.size[2] == 0
+    assert isinstance(sim_red.boundary_spec.y.minus, td.Periodic)
+    assert isinstance(sim_red.boundary_spec.y.plus, td.Periodic)
+    assert isinstance(sim_red.boundary_spec.z.minus, td.Periodic)
+    assert isinstance(sim_red.boundary_spec.z.plus, td.Periodic)
+
+    sim_1d = SIM.updated_copy(
+        size=(0, SIM.size[1], 0),
+        boundary_spec=td.BoundarySpec.pml(y=True),
+    )
+    sim_1d_red = sim_1d.subsection(
+        region=region, remove_outside_structures=True, remove_outside_custom_mediums=True
+    )
+    assert sim_1d_red.size[0] == 0
+    assert sim_1d_red.size[2] == 0
 
 
 def test_2d_material_subdivision():
