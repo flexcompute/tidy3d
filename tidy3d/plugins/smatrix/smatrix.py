@@ -63,8 +63,8 @@ class SMatrixDataArray(DataArray):
     >>> mode_index_out = [0, 1]
     >>> f = [2e14]
     >>> coords = dict(
-    ...     port_in=ports_in,
-    ...     port_out=ports_out,
+    ...     port_in=port_in,
+    ...     port_out=port_out,
     ...     mode_index_in=mode_index_in,
     ...     mode_index_out=mode_index_out,
     ...     f=f
