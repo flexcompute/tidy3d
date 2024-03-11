@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.6.0"  # Thinking about bump2version
+version = "2.6.1"  # Thinking about bump2version
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -92,6 +92,7 @@ pydata-sphinx-theme = {version = ">=0.13.3", optional = true}
 # divparams = {optional = true, git = "https://github.com/daquinteroflex/sphinxcontrib-divparams.git"} # TODO FIX
 tmm = {version="*", optional = true}
 grcwa = {version="*", optional = true}
+sphinx-favicon = {version="*", optional = true}
 sphinx-sitemap = {version=">=2.5.1", optional = true}
 sphinx-notfound-page = {version="*", optional = true}
 sphinx-tabs = {version="*", optional = true}
@@ -110,9 +111,9 @@ cma = {version="*", optional = true}
 dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'myst-parser', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
-  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-notfound-page', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
+  'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-favicon', 'sphinx-notfound-page', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
     'vtk', 'devsim', 'cma']
-docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", 'sphinx-notfound-page', "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "myst-parser", "devsim", "cma"]
+docs = ["jupyter", "jinja2", "nbconvert", "sphinx", "nbsphinx", "ipython", "divparams", "sphinx-copybutton", 'sphinx-favicon', "sphinx-book-theme", "pydata-sphinx-theme", "tmm", "gdstk", "grcwa", "sphinx-sitemap", 'sphinx-notfound-page', "nbdime", "optax", "signac", "sax", "pylint", "jupyterblack", "sphinx-tabs", "sphinxemoji", "myst-parser", "devsim", "cma"]
 gdspy = ["gdspy"]
 gdstk = ["gdstk"]
 jax = ["jaxlib", "jax"]
@@ -123,13 +124,13 @@ vtk = ["vtk"]
 tidy3d = "tidy3d.web.cli:tidy3d_cli"
 
 [[tool.poetry.source]]
-name = "PyPI"
-priority = "default"
+name = "pypi"
+priority = "primary"
 
 [[tool.poetry.source]]
 name = "jaxsource"
 url = "https://storage.googleapis.com/jax-releases/jax_releases.html"
-priority = "primary"
+priority = "supplemental"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

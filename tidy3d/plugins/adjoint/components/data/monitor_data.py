@@ -241,7 +241,7 @@ class JaxFieldData(JaxMonitorData, FieldData):
                     omega0 = 2 * np.pi * freq0
                     scaling_factor = 1 / (MU_0 * omega0)
 
-                    forward_amp = complex(field_component.sel(f=freq0).values)
+                    forward_amp = complex(jnp.squeeze(field_component.sel(f=freq0).values))
 
                     adj_phase = 3 * np.pi / 2 + np.angle(forward_amp)
 

@@ -142,15 +142,15 @@ class ModeSolver(Tidy3dBaseModel):
         return solver_sym
 
     def _get_solver_grid(
-        self, preserve_layer_behind: bool = False, truncate_symmetry: bool = True
+        self, keep_additional_layers: bool = False, truncate_symmetry: bool = True
     ) -> Grid:
         """Grid for the mode solver, not snapped to plane or simulation zero dims, and optionally
         corrected for symmetries.
 
         Parameters
         ----------
-        preserve_layer_behind : bool = False
-            Do not discard the layer of cells behind the main layer of cells. Together they
+        keep_additional_layers : bool = False
+            Do not discard layers of cells in front and behind the main layer of cells. Together they
             represent the region where custom medium data is needed for proper subpixel.
         truncate_symmetry : bool = True
             Truncate to symmetry quadrant if symmetry present.
@@ -166,9 +166,9 @@ class ModeSolver(Tidy3dBaseModel):
         span_inds = self.simulation._discretize_inds_monitor(monitor)
 
         # Remove extension along monitor normal
-        if not preserve_layer_behind:
+        if not keep_additional_layers:
             span_inds[self.normal_axis, 0] += 1
-        span_inds[self.normal_axis, 1] -= 1
+            span_inds[self.normal_axis, 1] -= 1
 
         # Do not extend if simulation has a single pixel along a dimension
         for dim, num_cells in enumerate(self.simulation.grid.num_cells):
@@ -192,7 +192,7 @@ class ModeSolver(Tidy3dBaseModel):
         plane normal dimension and dimensions where the simulation domain is 2D will be correctly
         set after the solve."""
 
-        return self._get_solver_grid(preserve_layer_behind=False, truncate_symmetry=True)
+        return self._get_solver_grid(keep_additional_layers=False, truncate_symmetry=True)
 
     @cached_property
     def _num_cells_freqs_modes(self) -> Tuple[int, int, int]:
@@ -1008,7 +1008,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         # we preserve extra cells along the normal direction to ensure there is enough data for
         # subpixel
-        extended_grid = self._get_solver_grid(preserve_layer_behind=True, truncate_symmetry=False)
+        extended_grid = self._get_solver_grid(keep_additional_layers=True, truncate_symmetry=False)
         grids_1d = extended_grid.boundaries
         new_sim_box = Box.from_bounds(
             rmin=(grids_1d.x[0], grids_1d.y[0], grids_1d.z[0]),
@@ -1020,7 +1020,7 @@ class ModeSolver(Tidy3dBaseModel):
 
         new_bspec_dict = {}
         for axis in "xyz":
-            bcomp = bspec["x"]
+            bcomp = bspec[axis]
             for bside, sign in zip([bcomp.plus, bcomp.minus], "+-"):
                 if isinstance(bside, (PML, StablePML, Absorber)):
                     new_bspec_dict[axis + sign] = PECBoundary()

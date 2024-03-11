@@ -59,7 +59,7 @@ class SimulationData(AbstractSimulationData):
     ...     fields=['Ex'],
     ...     colocate=True,
     ... )
-    >>> sim = Simulation(
+    >>> sim = td.Simulation(
     ...     size=(2, 4, 6),
     ...     grid_spec=td.GridSpec(wavelength=1.0),
     ...     monitors=[field_monitor],
@@ -429,7 +429,7 @@ class SimulationData(AbstractSimulationData):
 
         Example
         -------
-        >>> field_data = SimulationData.from_file(fname='folder/data.hdf5', mnt_name="field") # doctest: +SKIP
+        >>> field_data = your_simulation_data.from_file(fname='folder/data.hdf5', mnt_name="field") # doctest: +SKIP
         """
 
         if pathlib.Path(fname).suffix != ".hdf5":
@@ -583,7 +583,7 @@ class SimulationData(AbstractSimulationData):
                 if val == "phase"
                 else (
                     "divergent"
-                    if len(field_name) == 2 and val in ("real", "imag")
+                    if len(field_name) == 2 and val in ("real", "imag", "re", "im")
                     else "sequential"
                 )
             )

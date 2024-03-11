@@ -3,9 +3,10 @@ name: "tidy3d-frontend-tests"
 on:
   workflow_dispatch:
   push:
-    branches: [ develop ]
+    branches: [ develop, latest ]
   pull_request:
     branches:
+      - latest
       - develop
       - 'pre/*'
 
@@ -143,4 +144,4 @@ jobs:
         poetry run black . --check --diff
         poetry run ruff check tidy3d --fix --exit-non-zero-on-fix
         poetry run pytest -rA tests
-        poetry run pytest -rA tests/test_data/_test_datasets_no_vtk.py
+        poetry run pytest -rA tests/_test_data/_test_datasets_no_vtk.py

@@ -233,6 +233,23 @@ class AbstractFieldMonitor(Monitor, ABC):
         "primal grid nodes).",
     )
 
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        final_data_size = self.storage_size(num_cells=num_cells, tmesh=tmesh)
+        if len(self.fields) == 0:
+            return 0
+
+        # internally solver stores all E components if any one is requested, and same for H
+        field_components_factor = 0
+        if any(comp[0] == "E" for comp in self.fields):
+            field_components_factor += 3
+        if any(comp[0] == "H" for comp in self.fields):
+            field_components_factor += 3
+
+        # take out the stored field components factor and use the solver factor instead
+        solver_data_size = final_data_size / len(self.fields) * field_components_factor
+        return solver_data_size
+
 
 class PlanarMonitor(Monitor, ABC):
     """:class:`Monitor` that has a planar geometry."""
@@ -1371,6 +1388,10 @@ class DiffractionMonitor(PlanarMonitor, FreqMonitor):
         """Size of monitor storage given the number of points after discretization."""
         # assumes 1 diffraction order per frequency; actual size will be larger
         return BYTES_COMPLEX * len(self.freqs)
+
+    def _storage_size_solver(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of intermediate data recorded by the monitor during a solver run."""
+        return BYTES_COMPLEX * num_cells * len(self.freqs) * 6
 
 
 # types of monitors that are accepted by simulation

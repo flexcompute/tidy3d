@@ -68,8 +68,8 @@ class ResonanceFinder(Tidy3dBaseModel):
     >>> sig = 2*np.exp(-1j*f1*t) + 3*1j*np.exp(-1j*f2*t)
     >>> resfinder = ResonanceFinder(freq_window=(0.05, 0.25))
     >>> resdata = resfinder.run_raw_signal(signal=sig, time_step=1)
-    >>> resdata.to_dataframe()
-
+    >>> data = resdata.to_dataframe()
+    ... # A given dataframe
     """
 
     freq_window: Tuple[float, float] = Field(

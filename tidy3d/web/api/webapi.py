@@ -310,7 +310,10 @@ def get_status(task_id) -> str:
     if status == "visualize":
         return "success"
     if status == "error":
-        raise WebError("Error running task!")
+        raise WebError(
+            f"Error running task {task_id}! Use 'web.download_log(task_id)' to "
+            "download and examine the solver log, and/or contact customer support for help."
+        )
     return status
 
 
@@ -358,9 +361,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 prev_status = status
             time.sleep(0.5)
             status = get_status(task_id)
-
-        if status == "error":
-            raise WebError(f"Error running {solver_name} solver.")
 
         log.log(log_level, f"{solver_name} solver status: {status}")
         if verbose:
@@ -422,7 +422,12 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         # preprocessing
         if verbose:
-            with console.status(f"[bold green]Starting '{task_name}'...", spinner="runner"):
+            console.log(
+                "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
+                "or abort/delete the task in the web "
+                "UI. Terminating the Python script will not stop the job running on the cloud."
+            )
+            with console.status(f"[bold green]Waiting for '{task_name}'...", spinner="runner"):
                 monitor_preprocess()
         else:
             monitor_preprocess()
@@ -440,11 +445,6 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
         if verbose:
             # verbose case, update progressbar
             console.log("running solver")
-            console.log(
-                "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
-                "or abort/delete the task in the web "
-                "UI. Terminating the Python script will not stop the job running on the cloud."
-            )
             with Progress(console=console) as progress:
                 pbar_pd = progress.add_task("% done", total=100)
                 perc_done, _ = get_run_info(task_id)
@@ -930,7 +930,9 @@ def real_cost(task_id: str, verbose=True) -> float:
 
 @wait_for_connection
 def test() -> None:
-    """Confirm whether Tidy3D authentication is configured. Raises exception if not."""
+    """
+    Confirm whether Tidy3D authentication is configured. Raises exception if not.
+    """
     try:
         # note, this is a little slow, but the only call that doesn't require providing a task id.
         get_tasks(num_tasks=0)

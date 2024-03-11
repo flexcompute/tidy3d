@@ -11,6 +11,8 @@ class ComplexPolySlab(ComplexPolySlabBase):
 
     Example
     -------
+    >>> import tidy3d as td
+    >>> from tidy3d.plugins.polyslab import ComplexPolySlab
     >>> vertices = ((0, 0), (1, 0), (1, 1), (0, 1), (0, 0.9), (0, 0.11))
     >>> p = ComplexPolySlab(vertices=vertices, axis=2, slab_bounds=(0, 1), sidewall_angle=0.785)
     >>> # To obtain the divided polyslabs, there are two approaches:
@@ -21,6 +23,7 @@ class ComplexPolySlab(ComplexPolySlabBase):
     >>> # Or directly obtain the structure with a user-specified medium
     >>> mat = td.Medium(permittivity=2)
     >>> structure = p.to_structure(mat)
+    ...
 
     Note
     ----

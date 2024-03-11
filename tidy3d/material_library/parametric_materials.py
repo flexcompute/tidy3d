@@ -249,7 +249,7 @@ class Graphene(ParametricVariantItem2D):
             raise ImportError(
                 "The package 'scipy' was not found. Please install the 'core' "
                 "dependencies to calculate the interband term of graphene. For example: "
-                "pip install -r requirements/core.txt"
+                "pip install tidy3d"
             )
 
         omegas = 2 * np.pi * np.array(freqs)
