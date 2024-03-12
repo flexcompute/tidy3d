@@ -53,7 +53,7 @@ pre-commit = {version="*", optional = true}
 pylint = {version="*", optional = true}
 pytest = {version="*", optional = true}
 pytest-timeout = {version="*", optional = true}
-ruff = {version="*", optional = true}
+ruff = {version="0.3.2", optional = true}
 tox = {version="*", optional = true}
 
 
