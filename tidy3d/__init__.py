@@ -32,7 +32,7 @@ from .components.time_modulation import ContinuousWaveTimeModulation, Modulation
 from .components.structure import Structure, MeshOverrideStructure
 
 # modes
-from .components.mode import ModeSpec
+from .components.mode_spec import ModeSpec
 
 # apodization
 from .components.apodization import ApodizationSpec

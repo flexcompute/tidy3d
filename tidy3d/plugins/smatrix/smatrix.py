@@ -10,7 +10,7 @@ import numpy as np
 from ...constants import HERTZ
 from ...components.simulation import Simulation
 from ...components.geometry.base import Box
-from ...components.mode import ModeSpec
+from ...components.mode_spec import ModeSpec
 from ...components.monitor import ModeMonitor
 from ...components.source import ModeSource, GaussianPulse
 from ...components.data.sim_data import SimulationData

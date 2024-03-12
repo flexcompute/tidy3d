@@ -20,7 +20,7 @@ from .data.dataset import FieldDataset, TimeDataset
 from .data.validators import validate_no_nans
 from .data.data_array import TimeDataArray
 from .geometry.base import Box
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .viz import add_ax_if_none, PlotParams, plot_params_source
 from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
 from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF

@@ -9,7 +9,7 @@ from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
 from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
 from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_min
 from .base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .apodization import ApodizationSpec
 from .medium import MediumType
 from .viz import ARROW_COLOR_MONITOR, ARROW_ALPHA

@@ -11,6 +11,7 @@ import pydantic.v1 as pydantic
 import xarray as xr
 
 from ...log import log
+from ...components.base_sim.simulation import AbstractSimulation
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import PECBoundary, BoundarySpec, Boundary, PML, StablePML, Absorber
 from ...components.geometry.base import Box
@@ -53,7 +54,7 @@ FIELD_DECAY_CUTOFF = 1e-2
 MAX_MODES_DATA_SIZE_GB = 20
 
 
-class ModeSolver(Tidy3dBaseModel):
+class ModeSolver(AbstractSimulation):
     """
     Interface for solving electromagnetic eigenmodes in a 2D plane with translational
     invariance in the third dimension.
@@ -71,10 +72,6 @@ class ModeSolver(Tidy3dBaseModel):
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
-
-    simulation: Simulation = pydantic.Field(
-        ..., title="Simulation", description="Simulation defining all structures and mediums."
-    )
 
     plane: Box = pydantic.Field(
         ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
