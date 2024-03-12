@@ -1,4 +1,5 @@
 """ Container holding all information about simulation and its components"""
+
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
@@ -23,8 +24,8 @@ from .types import Literal, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
 from .grid.grid_spec import ConformalMeshSpecType, StaircasingConformalMeshSpec
-from .medium import MediumType, AbstractMedium
-from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D
+from .medium import AnisotropicMediumFromMedium2D, MediumType, AbstractMedium, PoleResidue
+from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D, PECMedium
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
@@ -3571,6 +3572,41 @@ class Simulation(AbstractSimulation):
             snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
             return set_bounds(geom, (snapped_center, snapped_center), axis)
 
+        def is_normal_volumetric_equivalent_accurate(
+            adjacent_media: MediumType3D, axis: Axis
+        ) -> bool:
+            """For conductor intersections in microwave simulations, averaging the normal component is inaccurate."""
+
+            def get_component(med: MediumType3D, comp: Axis):
+                """Extract the ``comp`` component of ``med``."""
+                if isinstance(med, AnisotropicMedium):
+                    dim = "xyz"[comp]
+                    element_name = dim + dim
+                    return med.elements[element_name]
+                return med
+
+            media_below = get_component(adjacent_media[0], axis)
+            media_above = get_component(adjacent_media[1], axis)
+
+            if isinstance(media_below, PECMedium) or isinstance(media_above, PECMedium):
+                return False
+
+            if isinstance(media_below, PoleResidue):
+                media_below = media_below.to_medium()
+
+            if isinstance(media_above, PoleResidue):
+                media_above = media_above.to_medium()
+
+            # Good conductor limit
+            good_conductivity = 0.1  # corresponds to 1E5 S/m which is about graphite
+            if isinstance(media_below, Medium):
+                if media_below.conductivity > good_conductivity:
+                    return False
+            if isinstance(media_above, PoleResidue):
+                if media_above.conductivity > good_conductivity:
+                    return False
+            return True
+
         lumped_structures = []
         for lumped_element in self.lumped_elements:
             _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
@@ -3640,12 +3676,16 @@ class Simulation(AbstractSimulation):
                 temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
 
-                # new_bounds = ((1.0+100*fp_eps)*snapped_center - dls[0] / 2, (1.0-100*fp_eps)*snapped_center + dls[1] / 2)
-                # if structure.medium.is_pec:
-                # pec_plus = increment_float(snapped_center, 1.0)
-                # pec_minus = increment_float(snapped_center, -1.0)
-                # new_bounds = (pec_minus, pec_plus)
-                new_bounds = (snapped_center, snapped_center)
+                if structure.medium.is_pec:
+                    new_bounds = (snapped_center, snapped_center)
+                    new_medium = AnisotropicMediumFromMedium2D(
+                        xx=PECMedium(), yy=PECMedium(), zz=PECMedium()
+                    )
+                elif is_normal_volumetric_equivalent_accurate(adjacent_media, axis):
+                    new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
+                else:
+                    new_bounds = (snapped_center, snapped_center)
+
                 new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 

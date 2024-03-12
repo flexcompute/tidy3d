@@ -5168,8 +5168,8 @@ class Medium2D(AbstractMedium):
             meds = [get_component(med=med, comp=comp) for med in adjacent_media]
             # the Yee site for the E field in the normal direction is fully contained
             # in the medium on the + side
-            if comp == axis:
-                return meds[1]
+            # if comp == axis:
+            #     return meds[1]
             weights = np.array(adjacent_dls) / np.sum(adjacent_dls)
             return self._weighted_avg(meds, weights)
 
