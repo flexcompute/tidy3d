@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Tuple, List, Dict
 from matplotlib import cm
+import numpy as np
 
 import pydantic.v1 as pd
 
@@ -132,10 +133,20 @@ class HeatSimulation(AbstractSimulation):
     def check_zero_dim_domain(cls, val, values):
         """Error if heat domain have zero dimensions."""
 
-        if any(length == 0 for length in val):
-            raise SetupError(
-                "'HeatSimulation' does not currently support domains with dimensions of zero size."
-            )
+        dim_names = ["x", "y", "z"]
+        zero_dimensions = [False, False, False]
+        zero_dim_str = ""
+        for n, v in enumerate(val):
+            if v == 0:
+                zero_dimensions[n] = True
+                zero_dim_str += f"{dim_names[n]}- "
+
+        num_zero_dims = np.sum(zero_dimensions)
+
+        if num_zero_dims > 1:
+            mssg = f"Your current HeatSimulation has zero size along the {zero_dim_str}dimensions. "
+            mssg += "Only 2- and 3-D simulations are currently supported."
+            raise SetupError(mssg)
 
         return val
 
