@@ -16,7 +16,6 @@ from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
 from ..base_sim.simulation import AbstractSimulation
 from ..base import cached_property, skip_if_fields_missing
-from ..data.data_array import TimeDataArray
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
@@ -760,13 +759,10 @@ class HeatSimulation(AbstractSimulation):
 
         rate_list = list()
         for source in self.sources:
-            # We need to handle both constant and time-dependent sources
+            # We need to handle both constant and variable sources eventually
             if isinstance(source, UniformHeatSource):
-                if isinstance(source.rate, TimeDataArray):
-                    rate_list.extend(source.rate.data)
-                else:
-                    rate_list.append(source.rate)
-                    rate_list.append(0)
+                rate_list.append(source.rate)
+                rate_list.append(0)
         rate_min = min(rate_list)
         rate_max = max(rate_list)
         print(rate_min, rate_max)

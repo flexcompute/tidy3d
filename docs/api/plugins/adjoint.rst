@@ -3,9 +3,9 @@
 Adjoint
 -------
 
-.. toctree::
+.. include:: ../../../tidy3d/plugins/adjoint/README.md
+   :parser: myst_parser.sphinx_
 
-    ../../../tidy3d/plugins/adjoint/README
 
 .. autosummary::
    :toctree: ../_autosummary/

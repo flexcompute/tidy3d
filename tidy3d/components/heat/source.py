@@ -10,7 +10,6 @@ from .viz import plot_params_heat_source
 
 from ..base import cached_property
 from ..base_sim.source import AbstractSource
-from ..data.data_array import TimeDataArray
 from ..viz import PlotParams
 
 from ...constants import VOLUMETRIC_HEAT_RATE
@@ -44,17 +43,12 @@ class UniformHeatSource(HeatSource):
         * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
     """
 
-    rate: Union[float, TimeDataArray] = pd.Field(
+    rate: Union[float] = pd.Field(
         title="Volumetric Heat Rate",
         description="Volumetric rate of heating or cooling (if negative) in units of "
         f"{VOLUMETRIC_HEAT_RATE}.",
         units=VOLUMETRIC_HEAT_RATE,
     )
-
-    def plot_rate(self, **kwargs) -> None:
-        """Plot the heat rate."""
-        # TODO extend this to support TimeDataArray and float accordingly.
-        self.rate.plot(**kwargs)
 
 
 HeatSourceType = Union[UniformHeatSource]
