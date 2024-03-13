@@ -1,6 +1,5 @@
 """Abstract base classes for geometry."""
 
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -2198,6 +2197,16 @@ class Transformed(Geometry):
     def _transform_is_invertible(cls, val):
         # If the transform is not invertible, this will raise an error
         _ = np.linalg.inv(val)
+        return val
+
+    @pydantic.validator("geometry")
+    def _geometry_is_finite(cls, val):
+        if not np.isfinite(val.bounds).all():
+            raise ValidationError(
+                "Transformations are only supported on geometries with finite dimensions. "
+                "Try using a large value instead of 'inf' when creating geometries that undergo "
+                "transformations."
+            )
         return val
 
     @pydantic.root_validator(skip_on_failure=True)
