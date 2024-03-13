@@ -31,6 +31,7 @@ INDENT = None  # default indentation of json string used internally
 JSON_TAG = "JSON_STRING"
 # If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
 MAX_STRING_LENGTH = 1e9
+FORBID_SPECIAL_CHARACTERS = ["/", '"']
 
 
 def cache(prop):
@@ -179,6 +180,17 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         copy_on_model_validation = "none"
 
     _cached_properties = pydantic.PrivateAttr({})
+
+    @pydantic.root_validator(skip_on_failure=True)
+    def _special_characters_not_in_name(cls, values):
+        name = values.get("name")
+        if name:
+            for character in FORBID_SPECIAL_CHARACTERS:
+                if character in name:
+                    raise ValueError(
+                        f"Special character '{character}' not allowed in component name {name}."
+                    )
+        return values
 
     def copy(self, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
