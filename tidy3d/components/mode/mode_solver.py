@@ -15,8 +15,12 @@ from ...components.base_sim.simulation import AbstractSimulation
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import PECBoundary, BoundarySpec, Boundary, PML, StablePML, Absorber
 from ...components.geometry.base import Box
+from ...components.structure import Structure
 from ...components.simulation import Simulation
-from ...components.grid.grid import Grid
+from ...components.grid.grid import Coords1D, Grid, Coords
+from ...components.boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic, Boundary
+from ...components.medium import AbstractCustomMedium, Medium2D
+from ...components.grid.grid_spec import GridSpec
 from ...components.mode_spec import ModeSpec
 from ...components.monitor import ModeSolverMonitor, ModeMonitor
 from ...components.medium import FullyAnisotropicMedium
@@ -27,10 +31,79 @@ from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDat
 from ...components.data.data_array import FreqModeDataArray
 from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
+from ...components.viz import add_ax_if_none, equal_aspect
+
+from ...components.simulation import Simulation
+
+from ...components.base import cached_property
+from ...components.base import skip_if_fields_missing
+from ...components.validators import assert_objects_in_sim_bounds
+from ...components.validators import validate_mode_objects_symmetry
+from ...components.geometry.base import Geometry, Box
+from ...components.geometry.mesh import TriangleMesh
+from ...components.geometry.utils import flatten_groups, traverse_geometries
+from ...components.geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom, subdivide
+from ...components.types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
+from ...components.types import Literal, TYPE_TAG_STR
+from ...components.grid.grid import Coords1D, Grid, Coords
+from ...components.grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
+from ...components.medium import MediumType, AbstractMedium
+from ...components.medium import AbstractCustomMedium, Medium2D
+from ...components.medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
+from ...components.boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic, Boundary
+from ...components.boundary import PML, StablePML, Absorber, AbsorberSpec
+from ...components.structure import Structure
+from ...components.source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
+from ...components.source import CustomCurrentSource, CustomSourceTime, ContinuousWave
+from ...components.source import TFSF, Source, ModeSource
+from ...components.medium import Medium, MediumType3D
+from ...components.monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
+from ...components.monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
+from ...components.monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
+from ...components.monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
+from ...components.data.dataset import Dataset
+from ...components.data.data_array import SpatialDataArray
+from ...components.viz import add_ax_if_none, equal_aspect
+from ...components.scene import Scene
+
+from ...components.viz import PlotParams
+from ...components.viz import plot_params_pml, plot_params_override_structures
+from ...components.viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
+
 
 from ...components.validators import validate_freqs_min, validate_freqs_not_empty
 from ...exceptions import ValidationError, SetupError
-from ...constants import C_0
+from ...constants import C_0, fp_eps
+
+
+# TODO: dont need all of these
+
+# minimum number of grid points allowed per central wavelength in a medium
+MIN_GRIDS_PER_WVL = 6.0
+
+# maximum number of sources
+MAX_NUM_SOURCES = 1000
+
+# maximum numbers of simulation parameters
+MAX_TIME_STEPS = 1e7
+WARN_TIME_STEPS = 1e6
+MAX_GRID_CELLS = 20e9
+MAX_CELLS_TIMES_STEPS = 1e16
+WARN_MONITOR_DATA_SIZE_GB = 10
+MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
+MAX_SIMULATION_DATA_SIZE_GB = 50
+WARN_MODE_NUM_CELLS = 1e5
+
+# number of grid cells at which we warn about slow Simulation.epsilon()
+NUM_CELLS_WARN_EPSILON = 100_000_000
+# number of structures at which we warn about slow Simulation.epsilon()
+NUM_STRUCTURES_WARN_EPSILON = 10_000
+
+# height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
+PML_HEIGHT_FOR_0_DIMS = 0.02
+
+# END todo
+
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed
@@ -54,7 +127,7 @@ FIELD_DECAY_CUTOFF = 1e-2
 MAX_MODES_DATA_SIZE_GB = 20
 
 
-class ModeSolver(AbstractSimulation):
+class ModeSolver(Simulation):
     """
     Interface for solving electromagnetic eigenmodes in a 2D plane with translational
     invariance in the third dimension.
@@ -72,6 +145,21 @@ class ModeSolver(AbstractSimulation):
     **Lectures:**
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
+
+    # TODO: copied from simulation
+    grid_spec: GridSpec = pydantic.Field(
+        GridSpec(),
+        title="Grid Specification",
+        description="Specifications for the simulation grid along each of the three directions.",
+    )
+
+    # TODO: copied from simulation
+    boundary_spec: BoundarySpec = pydantic.Field(
+        BoundarySpec(),
+        title="Boundaries",
+        description="Specification of boundary conditions along each dimension. If ``None``, "
+        "PML boundary conditions are applied on all sides.",
+    )
 
     plane: Box = pydantic.Field(
         ..., title="Plane", description="Cross-sectional plane in which the mode will be computed."
@@ -111,17 +199,36 @@ class ModeSolver(AbstractSimulation):
     _freqs_not_empty = validate_freqs_not_empty()
     _freqs_lower_bound = validate_freqs_min()
 
-    @pydantic.validator("plane", always=True)
-    @skip_if_fields_missing(["simulation"])
-    def plane_in_sim_bounds(cls, val, values):
-        """Check that the plane is at least partially inside the simulation bounds."""
-        sim_center = values.get("simulation").center
-        sim_size = values.get("simulation").size
-        sim_box = Box(size=sim_size, center=sim_center)
+    # TODO: add validator back
 
-        if not sim_box.intersects(val):
-            raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
-        return val
+    # @pydantic.validator("plane", always=True)
+    # @skip_if_fields_missing(["simulation"])
+    # def plane_in_sim_bounds(cls, val, values):
+    #     """Check that the plane is at least partially inside the simulation bounds."""
+    #     sim_center = values.get("simulation").center
+    #     sim_size = values.get("simulation").size
+    #     sim_box = Box(size=sim_size, center=sim_center)
+
+    #     if not sim_box.intersects(val):
+    #         raise SetupError("'ModeSolver.plane' must intersect 'ModeSolver.simulation'.")
+    #     return val
+
+    # TODO: fix this up
+    @property
+    def simulation(self) -> Simulation:
+        kwargs = self.dict(exclude={"type"})
+        return Simulation(**kwargs)
+
+
+    # TODO: fix this up
+    @classmethod
+    def from_simulation(cls, simulation: Simulation, **kwargs):
+        kwargs.update(simulation.dict())
+        kwargs = {key: val for key, val in kwargs.items() if key in cls.__fields__}
+        for key in ('type', 'sources'):
+            kwargs.pop(key)
+
+        return cls(**kwargs)
 
     @cached_property
     def normal_axis(self) -> Axis:
@@ -131,12 +238,337 @@ class ModeSolver(AbstractSimulation):
     @cached_property
     def solver_symmetry(self) -> Tuple[Symmetry, Symmetry]:
         """Get symmetry for solver for propagation along self.normal axis."""
-        mode_symmetry = list(self.simulation.symmetry)
+        mode_symmetry = list(self.symmetry)
         for dim in range(3):
-            if self.simulation.center[dim] != self.plane.center[dim]:
+            if self.center[dim] != self.plane.center[dim]:
                 mode_symmetry[dim] = 0
         _, solver_sym = self.plane.pop_axis(mode_symmetry, axis=self.normal_axis)
         return solver_sym
+
+
+    # TODO: copied from Simulation, fix
+    @cached_property
+    def _periodic(self) -> Tuple[bool, bool, bool]:
+        """For each dimension, ``True`` if periodic/Bloch boundaries and ``False`` otherwise.
+        We check on both sides but in practice there should be no cases in which a periodic/Bloch
+        BC is on one side only. This is explicitly validated for Bloch, and implicitly done for
+        periodic, in which case we allow PEC/PMC on the other side, but we replace the periodic
+        boundary with another PEC/PMC plane upon initialization."""
+        periodic = []
+        for bcs_1d in self.boundary_spec.to_list:
+            periodic.append(all(isinstance(bcs, (Periodic, BlochBoundary)) for bcs in bcs_1d))
+        return periodic
+
+    # TODO: copied from Simulation, fix
+    def _discretize_inds_monitor(self, monitor: Monitor):
+        """Start and stopping indexes for the cells where data needs to be recorded to fully cover
+        a ``monitor``. This is used during the solver run. The final grid on which a monitor data
+        lives is computed in ``discretize_monitor``, with the difference being that 0-sized
+        dimensions of the monitor or the simulation are snapped in post-processing."""
+
+        # Expand monitor size slightly to break numerical precision in favor of always having
+        # enough data to span the full monitor.
+        expand_size = [size + fp_eps if size > fp_eps else size for size in monitor.size]
+        box_expanded = Box(center=monitor.center, size=expand_size)
+        # Discretize without extension for now
+        span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
+
+        if any(ind[0] >= ind[1] for ind in span_inds):
+            # At least one dimension has no indexes inside the grid, e.g. monitor is entirely
+            # outside of the grid
+            return span_inds
+
+        # Now add extensions, which are specific for monitors and are determined such that data
+        # colocated to grid boundaries can be interpolated anywhere inside the monitor.
+        # We always need to expand on the right.
+        span_inds[:, 1] += 1
+        # Non-colocating monitors also need to expand on the left.
+        if not monitor.colocate:
+            span_inds[:, 0] -= 1
+        return span_inds
+
+    # TODO: copied from simulation
+    def _subgrid(self, span_inds: np.ndarray, grid: Grid = None):
+        """Take a subgrid of the simulation grid with cell span defined by ``span_inds`` along the
+        three dimensions. Optionally, a grid different from the simulation grid can be provided.
+        The ``span_inds`` can also extend beyond the grid, in which case the grid is padded based
+        on the boundary conditions of the simulation along the different dimensions."""
+
+        if not grid:
+            grid = self.grid
+
+        boundary_dict = {}
+        for idim, (dim, periodic) in enumerate(zip("xyz", self._periodic)):
+            ind_beg, ind_end = span_inds[idim]
+            # ind_end + 1 because we are selecting cell boundaries not cells
+            boundary_dict[dim] = grid.extended_subspace(idim, ind_beg, ind_end + 1, periodic)
+        return Grid(boundaries=Coords(**boundary_dict))
+
+
+    # TODO: copied from simulation
+    @cached_property
+    def num_pml_layers(self) -> List[Tuple[float, float]]:
+        """Number of absorbing layers in all three axes and directions (-, +).
+
+        Returns
+        -------
+        List[Tuple[float, float]]
+            List containing the number of absorber layers in - and + boundaries.
+        """
+        num_layers = [[0, 0], [0, 0], [0, 0]]
+
+        for idx_i, boundary1d in enumerate(self.boundary_spec.to_list):
+            for idx_j, boundary in enumerate(boundary1d):
+                if isinstance(boundary, (PML, StablePML, Absorber)):
+                    num_layers[idx_i][idx_j] = boundary.num_layers
+
+        return num_layers
+
+    # TODO: copied from simulation
+    def _volumetric_structures_grid(self, grid: Grid) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents, using ``grid`` as the simulation grid."""
+
+        if not any(isinstance(medium, Medium2D) for medium in self.scene.mediums):
+            return self.structures
+
+        def get_dls(geom: Geometry, axis: Axis, num_dls: int) -> List[float]:
+            """Get grid size around the 2D material."""
+            dls = self._discretize_grid(Box.from_bounds(*geom.bounds), grid=grid).sizes.to_list[
+                axis
+            ]
+            # When 1 dl is requested it is assumed that only an approximate value is needed
+            # before the 2D material has been snapped to the grid
+            if num_dls == 1:
+                return [np.mean(dls)]
+
+            # When 2 dls are requested the 2D geometry should have been snapped to grid,
+            # so this represents the exact adjacent grid spacing
+            if len(dls) != num_dls:
+                raise Tidy3dError(
+                    "Failed to detect grid size around the 2D material. "
+                    "Can't generate volumetric equivalent for this simulation. "
+                    "If you received this error, please create an issue in the Tidy3D "
+                    "github repository."
+                )
+            return dls
+
+        def snap_to_grid(geom: Geometry, axis: Axis) -> Geometry:
+            """Snap a 2D material to the Yee grid."""
+            new_centers = self._discretize_grid(
+                Box.from_bounds(*geom.bounds), grid=grid
+            ).boundaries.to_list[axis]
+            new_center = new_centers[np.argmin(abs(new_centers - get_bounds(geom, axis)[0]))]
+            return set_bounds(geom, (new_center, new_center), axis)
+
+        # Begin volumetric structures grid
+        # For 1D and 2D simulations, a nonzero size is needed for the polygon operations in subdivide
+        placeholder_size = tuple(i if i > 0 else inf for i in self.geometry.size)
+        simulation_placeholder_geometry = self.geometry.updated_copy(
+            center=self.geometry.center, size=placeholder_size
+        )
+
+        simulation_background = Structure(
+            geometry=simulation_placeholder_geometry, medium=self.medium
+        )
+        background_structures = [simulation_background]
+        new_structures = []
+        for structure in self.structures:
+            if not isinstance(structure.medium, Medium2D):
+                # found a 3D material; keep it
+                background_structures.append(structure)
+                new_structures.append(structure)
+                continue
+            # otherwise, found a 2D material; replace it with volumetric equivalent
+            axis = structure.geometry._normal_2dmaterial
+            geometry = structure.geometry
+
+            # subdivide
+            avg_axis_dl = get_dls(geometry, axis, 1)[0]
+            subdivided_geometries = subdivide(geometry, axis, avg_axis_dl, background_structures)
+            # Create and add volumetric equivalents
+            background_structures_temp = []
+            for subdivided_geometry in subdivided_geometries:
+                # Snap to the grid and create volumetric equivalent
+                snapped_geometry = snap_to_grid(subdivided_geometry[0], axis)
+                snapped_center = get_bounds(snapped_geometry, axis)[0]
+                dls = get_dls(get_thickened_geom(snapped_geometry, axis, avg_axis_dl), axis, 2)
+                adjacent_media = [subdivided_geometry[1].medium, subdivided_geometry[2].medium]
+
+                # Create the new volumetric medium
+                new_medium = structure.medium.volumetric_equivalent(
+                    axis=axis, adjacent_media=adjacent_media, adjacent_dls=dls
+                )
+
+                new_bounds = (snapped_center - dls[0] / 2, snapped_center + dls[1] / 2)
+                temp_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                temp_structure = structure.updated_copy(geometry=temp_geometry, medium=new_medium)
+
+                if structure.medium.is_pec:
+                    pec_delta = fp_eps * max(np.abs(snapped_center), 1.0)
+                    new_bounds = (snapped_center - pec_delta, snapped_center + pec_delta)
+                new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
+
+                new_structures.append(new_structure)
+                background_structures_temp.append(temp_structure)
+
+            background_structures += background_structures_temp
+
+        return tuple(new_structures)
+
+    # TODO: copied from simulation
+    @cached_property
+    def volumetric_structures(self) -> Tuple[Structure]:
+        """Generate a tuple of structures wherein any 2D materials are converted to 3D
+        volumetric equivalents."""
+        return self._volumetric_structures_grid(self.grid)
+
+    # TODO: copied from simulation
+    def epsilon_on_grid(
+        self,
+        grid: Grid,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at a given freq on a given grid.
+
+        Parameters
+        ----------
+        grid : :class:`.Grid`
+            Grid specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+        """
+
+        grid_cells = np.prod(grid.num_cells)
+        num_structures = len(self.structures)
+        if grid_cells > NUM_CELLS_WARN_EPSILON:
+            log.warning(
+                f"Requested grid contains {int(grid_cells):.2e} grid cells. "
+                "Epsilon calculation may be slow."
+            )
+        if num_structures > NUM_STRUCTURES_WARN_EPSILON:
+            log.warning(
+                f"Simulation contains {num_structures:.2e} structures. "
+                "Epsilon calculation may be slow."
+            )
+
+        def get_eps(structure: Structure, frequency: float, coords: Coords):
+            """Select the correct epsilon component if field locations are requested."""
+            if coord_key[0] != "E":
+                return np.mean(structure.eps_diagonal(frequency, coords), axis=0)
+            row = ["x", "y", "z"].index(coord_key[1])
+            if len(coord_key) == 2:  # diagonal component in case of Ex, Ey, and Ez
+                col = row
+            else:  # off-diagonal component in case of Exy, Exz, Eyx, etc
+                col = ["x", "y", "z"].index(coord_key[2])
+            return structure.eps_comp(row, col, frequency, coords)
+
+        def make_eps_data(coords: Coords):
+            """returns epsilon data on grid of points defined by coords"""
+            arrays = (np.array(coords.x), np.array(coords.y), np.array(coords.z))
+            eps_background = get_eps(
+                structure=self.scene.background_structure, frequency=freq, coords=coords
+            )
+            shape = tuple(len(array) for array in arrays)
+            eps_array = eps_background * np.ones(shape, dtype=complex)
+            # replace 2d materials with volumetric equivalents
+            with log as consolidated_logger:
+                for structure in self.volumetric_structures:
+                    # Indexing subset within the bounds of the structure
+
+                    inds = structure.geometry._inds_inside_bounds(*arrays)
+
+                    # Get permittivity on meshgrid over the reduced coordinates
+                    coords_reduced = tuple(arr[ind] for arr, ind in zip(arrays, inds))
+                    if any(coords.size == 0 for coords in coords_reduced):
+                        continue
+
+                    red_coords = Coords(**dict(zip("xyz", coords_reduced)))
+                    eps_structure = get_eps(structure=structure, frequency=freq, coords=red_coords)
+
+                    if structure.medium.nonlinear_spec is not None:
+                        consolidated_logger.warning(
+                            "Evaluating permittivity of a nonlinear "
+                            "medium ignores the nonlinearity."
+                        )
+
+                    if isinstance(structure.geometry, TriangleMesh):
+                        consolidated_logger.warning(
+                            "Client-side permittivity of a 'TriangleMesh' may be "
+                            "inaccurate if the mesh is not unionized. We recommend unionizing "
+                            "all meshes before import. A 'PermittivityMonitor' can be used to "
+                            "obtain the true permittivity and check that the surface mesh is "
+                            "loaded correctly."
+                        )
+
+                    # Update permittivity array at selected indexes within the geometry
+                    is_inside = structure.geometry.inside_meshgrid(*coords_reduced)
+                    eps_array[inds][is_inside] = (eps_structure * is_inside)[is_inside]
+
+            coords = dict(zip("xyz", arrays))
+            return xr.DataArray(eps_array, coords=coords, dims=("x", "y", "z"))
+
+        # combine all data into dictionary
+        if coord_key[0] == "E":
+            # off-diagonal components are sampled at respective locations (eg. `eps_xy` at `Ex`)
+            coords = grid[coord_key[0:2]]
+        else:
+            coords = grid[coord_key]
+        return make_eps_data(coords)
+
+    # TODO: copied from simulation
+    def _snap_zero_dim(self, grid: Grid):
+        """Snap a grid to the simulation center along any dimension along which simulation is
+        effectively 0D, defined as having a single pixel. This is more general than just checking
+        size = 0."""
+        size_snapped = [
+            size if num_cells > 1 else 0 for num_cells, size in zip(self.grid.num_cells, self.size)
+        ]
+        return grid.snap_to_box_zero_dim(Box(center=self.center, size=size_snapped))
+
+    # TODO: copied from simulation
+    @cached_property
+    def grid(self) -> Grid:
+        """FDTD grid spatial locations and information.
+
+        Returns
+        -------
+        :class:`.Grid`
+            :class:`.Grid` storing the spatial locations relevant to the simulation.
+        """
+
+        # Add a simulation Box as the first structure
+        structures = [Structure(geometry=self.geometry, medium=self.medium)]
+        structures += self.structures
+
+        grid = self.grid_spec.make_grid(
+            structures=structures,
+            symmetry=self.symmetry,
+            periodic=self._periodic,
+            sources=self.sources,
+            num_pml_layers=self.num_pml_layers,
+        )
+
+        # This would AutoGrid the in-plane directions of the 2D materials
+        # return self._grid_corrections_2dmaterials(grid)
+        return grid
 
     def _get_solver_grid(
         self, keep_additional_layers: bool = False, truncate_symmetry: bool = True
@@ -160,7 +592,7 @@ class ModeSolver(AbstractSimulation):
 
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
 
-        span_inds = self.simulation._discretize_inds_monitor(monitor)
+        span_inds = self._discretize_inds_monitor(monitor)
 
         # Remove extension along monitor normal
         if not keep_additional_layers:
@@ -168,7 +600,7 @@ class ModeSolver(AbstractSimulation):
             span_inds[self.normal_axis, 1] -= 1
 
         # Do not extend if simulation has a single pixel along a dimension
-        for dim, num_cells in enumerate(self.simulation.grid.num_cells):
+        for dim, num_cells in enumerate(self.grid.num_cells):
             if num_cells <= 1:
                 span_inds[dim] = [0, 1]
 
@@ -179,7 +611,7 @@ class ModeSolver(AbstractSimulation):
                 if sym != 0:
                     span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
 
-        return self.simulation._subgrid(span_inds=span_inds)
+        return self._subgrid(span_inds=span_inds)
 
     @cached_property
     def _solver_grid(self) -> Grid:
@@ -252,7 +684,7 @@ class ModeSolver(AbstractSimulation):
     def grid_snapped(self) -> Grid:
         """The solver grid snapped to the plane normal and to simulation 0-sized dims if any."""
         grid_snapped = self._solver_grid.snap_to_box_zero_dim(self.plane)
-        return self.simulation._snap_zero_dim(grid_snapped)
+        return self._snap_zero_dim(grid_snapped)
 
     @cached_property
     def data_raw(self) -> ModeSolverData:
@@ -327,7 +759,6 @@ class ModeSolver(AbstractSimulation):
 
         # finite grid corrections
         grid_factors = self._grid_correction(
-            simulation=self.simulation,
             plane=self.plane,
             mode_spec=self.mode_spec,
             n_complex=index_data,
@@ -336,11 +767,11 @@ class ModeSolver(AbstractSimulation):
 
         # make mode solver data on the Yee grid
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME, colocate=False)
-        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+        grid_expanded = self.discretize_monitor(mode_solver_monitor)
         mode_solver_data = ModeSolverData(
             monitor=mode_solver_monitor,
-            symmetry=self.simulation.symmetry,
-            symmetry_center=self.simulation.center,
+            symmetry=self.symmetry,
+            symmetry_center=self.center,
             grid_expanded=grid_expanded,
             grid_primal_correction=grid_factors[0],
             grid_dual_correction=grid_factors[1],
@@ -371,7 +802,7 @@ class ModeSolver(AbstractSimulation):
 
         # Update data
         mode_solver_monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-        grid_expanded = self.simulation.discretize_monitor(mode_solver_monitor)
+        grid_expanded = self.discretize_monitor(mode_solver_monitor)
         data_dict_colocated.update({"monitor": mode_solver_monitor, "grid_expanded": grid_expanded})
         mode_solver_data = mode_solver_data._updated(update=data_dict_colocated)
 
@@ -433,15 +864,15 @@ class ModeSolver(AbstractSimulation):
             :class:`.SimulationData` object containing the effective index and mode fields.
         """
         monitor_data = self.data
-        new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
-        new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
+        new_monitors = list(self.monitors) + [monitor_data.monitor]
+        new_simulation = self.copy(update=dict(monitors=new_monitors))
         return SimulationData(simulation=new_simulation, data=(monitor_data,))
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
         """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
         eps_keys = ["Ex", "Exy", "Exz", "Eyx", "Ey", "Eyz", "Ezx", "Ezy", "Ez"]
         eps_tensor = [
-            self.simulation.epsilon_on_grid(self._solver_grid, key, freq) for key in eps_keys
+            self.epsilon_on_grid(self._solver_grid, key, freq) for key in eps_keys
         ]
         return np.stack(eps_tensor, axis=0)
 
@@ -591,9 +1022,8 @@ class ModeSolver(AbstractSimulation):
                         "not decay at the plane boundaries."
                     )
 
-    @staticmethod
     def _grid_correction(
-        simulation: Simulation,
+        self,
         plane: Box,
         mode_spec: ModeSpec,
         n_complex: ModeIndexDataArray,
@@ -623,7 +1053,7 @@ class ModeSolver(AbstractSimulation):
 
         # Primal and dual grid along the normal direction,
         # i.e. locations of the tangential E-field and H-field components, respectively
-        grid = simulation.grid
+        grid = self.grid
         normal_primal = grid.boundaries.to_list[normal_axis]
         normal_primal = xr.DataArray(normal_primal, coords={normal_dim: normal_primal})
         normal_dual = grid.centers.to_list[normal_axis]
@@ -663,15 +1093,15 @@ class ModeSolver(AbstractSimulation):
     @cached_property
     def _intersecting_media(self) -> List:
         """List of media (including simulation background) intersecting the mode plane."""
-        total_structures = [self.simulation.scene.background_structure]
-        total_structures += list(self.simulation.structures)
-        return self.simulation.scene.intersecting_media(self.plane, total_structures)
+        total_structures = [self.scene.background_structure]
+        total_structures += list(self.structures)
+        return self.scene.intersecting_media(self.plane, total_structures)
 
     @cached_property
     def _has_fully_anisotropic_media(self) -> bool:
         """Check if there are any fully anisotropic media in the plane of the mode."""
         if np.any(
-            [isinstance(mat, FullyAnisotropicMedium) for mat in self.simulation.scene.mediums]
+            [isinstance(mat, FullyAnisotropicMedium) for mat in self.scene.mediums]
         ):
             for int_mat in self._intersecting_media:
                 if isinstance(int_mat, FullyAnisotropicMedium):
@@ -796,6 +1226,7 @@ class ModeSolver(AbstractSimulation):
             name=name,
         )
 
+    # TODO: fix this method
     def sim_with_source(
         self,
         source_time: SourceTime,
@@ -826,8 +1257,9 @@ class ModeSolver(AbstractSimulation):
         mode_source = self.to_source(
             mode_index=mode_index, direction=direction, source_time=source_time
         )
-        new_sources = list(self.simulation.sources) + [mode_source]
-        new_sim = self.simulation.updated_copy(sources=new_sources)
+        new_sources = list(self.sources) + [mode_source]
+        # new_sim = self.updated_copy(sources=new_sources)
+        new_sim = self.copy()
         return new_sim
 
     def sim_with_monitor(
@@ -855,8 +1287,8 @@ class ModeSolver(AbstractSimulation):
         """
 
         mode_monitor = self.to_monitor(freqs=freqs, name=name)
-        new_monitors = list(self.simulation.monitors) + [mode_monitor]
-        new_sim = self.simulation.updated_copy(monitors=new_monitors)
+        new_monitors = list(self.monitors) + [mode_monitor]
+        new_sim = self.updated_copy(monitors=new_monitors)
         return new_sim
 
     def sim_with_mode_solver_monitor(
@@ -879,9 +1311,136 @@ class ModeSolver(AbstractSimulation):
             from the ModeSolver instance and ``name``.
         """
         mode_solver_monitor = self.to_mode_solver_monitor(name=name)
-        new_monitors = list(self.simulation.monitors) + [mode_solver_monitor]
-        new_sim = self.simulation.updated_copy(monitors=new_monitors)
+        new_monitors = list(self.monitors) + [mode_solver_monitor]
+        new_sim = self.updated_copy(monitors=new_monitors)
         return new_sim
+
+    # TODO: this is just copied from Simulation
+    def discretize_monitor(self, monitor: Monitor) -> Grid:
+        """Grid on which monitor data corresponding to a given monitor will be computed."""
+        span_inds = self._discretize_inds_monitor(monitor)
+        grid_snapped = self._subgrid(span_inds=span_inds).snap_to_box_zero_dim(monitor)
+        grid_snapped = self._snap_zero_dim(grid=grid_snapped)
+        return grid_snapped
+
+    # TODO: this is just copied from Simulation. Where should it go?
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_boundaries(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        ax: Ax = None,
+        **kwargs,
+    ) -> Ax:
+        """Plot the simulation boundary conditions as lines on a plane
+           defined by one nonzero x,y,z coordinate.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        **kwargs
+            Optional keyword arguments passed to the matplotlib ``LineCollection``.
+            For details on accepted values, refer to
+            `Matplotlib's documentation <https://tinyurl.com/2p97z4cn>`_.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        def set_plot_params(boundary_edge, lim, side, thickness):
+            """Return the line plot properties such as color and opacity based on the boundary"""
+            if isinstance(boundary_edge, PECBoundary):
+                plot_params = plot_params_pec.copy(deep=True)
+            elif isinstance(boundary_edge, PMCBoundary):
+                plot_params = plot_params_pmc.copy(deep=True)
+            elif isinstance(boundary_edge, BlochBoundary):
+                plot_params = plot_params_bloch.copy(deep=True)
+            else:
+                plot_params = PlotParams(alpha=0)
+
+            # expand axis limit so that the axis ticks and labels aren't covered
+            new_lim = lim
+            if plot_params.alpha != 0:
+                if side == -1:
+                    new_lim = lim - thickness
+                elif side == 1:
+                    new_lim = lim + thickness
+
+            return plot_params, new_lim
+
+        boundaries = self.boundary_spec.to_list
+
+        normal_axis, _ = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        _, (dim_u, dim_v) = self.pop_axis([0, 1, 2], axis=normal_axis)
+
+        umin, umax = ax.get_xlim()
+        vmin, vmax = ax.get_ylim()
+
+        size_factor = 1.0 / 35.0
+        thickness_u = (umax - umin) * size_factor
+        thickness_v = (vmax - vmin) * size_factor
+
+        # boundary along the u axis, minus side
+        plot_params, ulim_minus = set_plot_params(boundaries[dim_u][0], umin, -1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umin - thickness_u, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the u axis, plus side
+        plot_params, ulim_plus = set_plot_params(boundaries[dim_u][1], umax, 1, thickness_u)
+        rect = mpl.patches.Rectangle(
+            xy=(umax, vmin),
+            width=thickness_u,
+            height=(vmax - vmin),
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, minus side
+        plot_params, vlim_minus = set_plot_params(boundaries[dim_v][0], vmin, -1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmin - thickness_v),
+            width=(umax - umin),
+            height=thickness_v,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # boundary along the v axis, plus side
+        plot_params, vlim_plus = set_plot_params(boundaries[dim_v][1], vmax, 1, thickness_v)
+        rect = mpl.patches.Rectangle(
+            xy=(umin, vmax),
+            width=(umax - umin),
+            height=thickness_v,
+            **plot_params.to_kwargs(),
+            **kwargs,
+        )
+        ax.add_patch(rect)
+
+        # ax = self._set_plot_bounds(ax=ax, x=x, y=y, z=z)
+        ax.set_xlim([ulim_minus, ulim_plus])
+        ax.set_ylim([vlim_minus, vlim_plus])
+
+        return ax
 
     def plot_field(
         self,
@@ -950,7 +1509,7 @@ class ModeSolver(AbstractSimulation):
     def _validate_modes_size(self):
         """Make sure that the total size of the modes fields is not too large."""
         monitor = self.to_mode_solver_monitor(name=MODE_MONITOR_NAME)
-        num_cells = self.simulation._monitor_num_cells(monitor)
+        num_cells = self._monitor_num_cells(monitor)
         # size in GB
         total_size = monitor._storage_size_solver(num_cells=num_cells, tmesh=[]) / 1e9
         if total_size > MAX_MODES_DATA_SIZE_GB:
@@ -980,7 +1539,7 @@ class ModeSolver(AbstractSimulation):
         )
 
         # remove PML, Absorers, etc, to avoid unnecessary cells
-        bspec = self.simulation.boundary_spec
+        bspec = self.boundary_spec
 
         new_bspec_dict = {}
         for axis in "xyz":
@@ -998,7 +1557,7 @@ class ModeSolver(AbstractSimulation):
         )
 
         # extract sub-simulation removing everything irrelevant
-        new_sim = self.simulation.subsection(
+        new_sim = self.subsection(
             region=new_sim_box,
             monitors=[],
             sources=[],
@@ -1008,4 +1567,4 @@ class ModeSolver(AbstractSimulation):
             remove_outside_structures=True,
         )
 
-        return self.updated_copy(simulation=new_sim)
+        return new_sim#self.updated_copy(simulation=new_sim)
