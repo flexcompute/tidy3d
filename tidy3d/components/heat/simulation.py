@@ -70,6 +70,14 @@ class HeatSimulation(AbstractSimulation):
     ...     ],
     ...     monitors=[TemperatureMonitor(size=(1, 2, 3), name="sample")],
     ... )
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
+        * `Thermally tuned ring resonator <../../notebooks/ThermallyTunedRingResonator.html>`_
+
     """
 
     boundary_spec: Tuple[HeatBoundarySpec, ...] = pd.Field(
@@ -225,6 +233,13 @@ class HeatSimulation(AbstractSimulation):
         vlim: Tuple[float, float] = None,
     ) -> Ax:
         """Plot each of simulation's components on a plane defined by one nonzero x,y,z coordinate.
+
+        Visualization of [HeatSimulation](./tidy3d.HeatSimulation.html) object displays:
+        - thermal conductivity of structures (in grayscale colors)
+        - specified boundary conditions (colored thick lines: yellow for [TemperatureBC](./tidy3d.TemperatureBC.html),
+         green for [HeatFluxBC](./tidy3d.HeatFluxBC.html), and red for [ConvectionBC](./tidy3d.ConvectionBC.html)),
+        - heat sources (in colored dotted hatching),
+        - and monitors (in transparent yellow color).
 
         Parameters
         ----------
@@ -742,12 +757,15 @@ class HeatSimulation(AbstractSimulation):
     def source_bounds(self) -> Tuple[float, float]:
         """Compute range of heat sources present in the simulation."""
 
-        rate_list = [
-            source.rate for source in self.sources if isinstance(source, UniformHeatSource)
-        ]
-        rate_list.append(0)
+        rate_list = list()
+        for source in self.sources:
+            # We need to handle both constant and variable sources eventually
+            if isinstance(source, UniformHeatSource):
+                rate_list.append(source.rate)
+                rate_list.append(0)
         rate_min = min(rate_list)
         rate_max = max(rate_list)
+        print(rate_min, rate_max)
         return rate_min, rate_max
 
     def _get_structure_source_plot_params(

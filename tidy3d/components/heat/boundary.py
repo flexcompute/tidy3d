@@ -22,6 +22,13 @@ class TemperatureBC(HeatBC):
     Example
     -------
     >>> bc = TemperatureBC(temperature=300)
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
+
     """
 
     temperature: pd.PositiveFloat = pd.Field(

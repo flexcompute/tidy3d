@@ -15,7 +15,15 @@ class HeatMonitor(AbstractMonitor, ABC):
 
 
 class TemperatureMonitor(HeatMonitor):
-    """Temperature monitor."""
+    """
+    Temperature monitor.
+
+    See Also
+    --------
+
+    **Notebooks:**
+        * `Heat Solver <../../notebooks/HeatSolver.html>`_: Basic simulation flow.
+    """
 
     unstructured: bool = pd.Field(
         False,
