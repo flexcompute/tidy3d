@@ -1,5 +1,5 @@
-Photonic Design Optimization
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Global Optimization
+~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1

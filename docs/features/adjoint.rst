@@ -1,5 +1,5 @@
-FDTD Adjoint Optimization
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Inverse Design / Adjoint Optimization
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. toctree::
     :maxdepth: 1
