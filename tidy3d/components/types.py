@@ -230,7 +230,7 @@ Ax = Axes
 PlotVal = Literal["real", "imag", "abs"]
 FieldVal = Literal["real", "imag", "abs", "abs^2", "phase"]
 RealFieldVal = Literal["real", "abs", "abs^2"]
-PlotScale = Literal["lin", "dB"]
+PlotScale = Literal["lin", "dB", False]
 ColormapType = Literal["divergent", "sequential", "cyclic"]
 
 """ mode solver """

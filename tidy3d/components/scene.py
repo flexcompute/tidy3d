@@ -708,6 +708,7 @@ class Scene(Tidy3dBaseModel):
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
         grid: Grid = None,
+        plot_kwargs: dict = None,
     ) -> Ax:
         """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.

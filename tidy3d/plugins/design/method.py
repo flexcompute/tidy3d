@@ -7,7 +7,7 @@ import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
 
 from ...components.base import Tidy3dBaseModel
-from ...components.simulation import Simulation
+from ...components.simulation import AbstractSimulation
 from ...log import log
 from ... import web
 from ...web.api.container import BatchData
@@ -84,7 +84,7 @@ class MethodIndependent(Method, ABC):
         return fn_args, result
 
     def _run_batch(
-        self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
+        self, simulations: Dict[str, AbstractSimulation], path_dir: str = None, **kwargs
     ) -> BatchData:
         """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
         batch = web.Batch(simulations=simulations, **kwargs)
@@ -122,7 +122,7 @@ class MethodIndependent(Method, ABC):
         for i in range(num_points):
             fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
             sim = fn_pre(**fn_kwargs)
-            if isinstance(sim, Simulation):
+            if isinstance(sim, AbstractSimulation):
                 task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
                 simulations[task_name] = sim
                 task_name_mappings.append([task_name])

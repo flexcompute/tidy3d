@@ -19,7 +19,6 @@ from ..base import JSON_TAG
 
 from ..base_sim.data.sim_data import AbstractSimulationData
 
-
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 
 # maps monitor type (string) to the class of the corresponding data
@@ -491,6 +490,7 @@ class SimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
+        plot_kwargs: dict = None,  # Not happy with this but we should make sel_kwargs consistent
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -673,6 +673,7 @@ class SimulationData(AbstractSimulationData):
             vmax=vmax,
             cmap_type=cmap_type,
             ax=ax,
+            plot_kwargs=plot_kwargs,
         )
 
     @equal_aspect
@@ -689,6 +690,7 @@ class SimulationData(AbstractSimulationData):
         vmax: float = None,
         cmap_type: ColormapType = "divergent",
         ax: Ax = None,
+        plot_kwargs: dict = None,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -760,6 +762,7 @@ class SimulationData(AbstractSimulationData):
             robust=robust,
             center=center,
             cbar_kwargs={"label": field_data.name},
+            **plot_kwargs,
         )
 
         # plot the simulation epsilon
@@ -769,6 +772,7 @@ class SimulationData(AbstractSimulationData):
             alpha=eps_alpha,
             reverse=eps_reverse,
             ax=ax,
+            plot_kwargs=plot_kwargs,
             **interp_kwarg,
         )
 

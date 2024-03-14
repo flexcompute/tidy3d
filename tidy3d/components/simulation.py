@@ -2497,6 +2497,7 @@ class Simulation(AbstractSimulation):
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
+        plot_kwargs: dict = None,
     ) -> Ax:
         """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
         The permittivity is plotted in grayscale based on its value at the specified frequency.
@@ -2549,6 +2550,7 @@ class Simulation(AbstractSimulation):
             vlim=vlim,
             grid=self.grid,
             reverse=reverse,
+            plot_kwargs=plot_kwargs,
         )
 
     # candidate for removal in 3.0

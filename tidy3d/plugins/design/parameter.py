@@ -160,7 +160,7 @@ class ParameterInt(ParameterNumeric):
 
 
 class ParameterAny(Parameter):
-    """Parameter containing a set of of anything.
+    """Parameter containing a set of anything.
 
     Example
     -------
