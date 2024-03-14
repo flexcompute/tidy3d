@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
+- Bug in PolySlab intersection if slab bounds are `inf` on one side.
 
 ### Changed
 - Slightly reorganized `web.run` logging when `verbose=True` to make it clearer.
