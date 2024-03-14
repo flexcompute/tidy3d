@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Characters `"` and `/` not allowed in component names.
 
 ### Fixed
-
+- Compute time stepping speed shown `tidy3d.log` using only the number of time steps that was run in the case of early shutoff. Previously, it was using the total number of time steps.
 
 ## [2.6.1] - 2024-03-07
 
