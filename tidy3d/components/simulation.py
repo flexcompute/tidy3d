@@ -30,6 +30,7 @@ from .structure import Structure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
+from .simulation_spec import SimulationSpec
 from .medium import Medium, MediumType3D
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
@@ -2947,6 +2948,12 @@ class Simulation(AbstractSimulation):
         """Number of time steps in simulation."""
 
         return len(self.tmesh)
+
+    def spec(self, **kwargs) -> SimulationSpec:
+        """Export this simulation to a spec that can be used by the solver."""
+        grid = self.grid
+        # ...
+        raise NotImplementedError("")
 
     def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
         """Correct the grid if 2d materials are present, using their volumetric equivalents."""
