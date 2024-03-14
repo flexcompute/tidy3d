@@ -11,6 +11,7 @@ import trimesh
 import warnings
 
 import tidy3d as td
+from tidy3d.constants import LARGE_NUMBER
 from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
@@ -708,6 +709,22 @@ def test_polyslab_axis(axis):
     assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
     plane_coord[axis] = -3
     assert not ps.intersects_plane(x=plane_coord[0], y=plane_coord[1], z=plane_coord[2])
+
+
+def test_polyslab_intersection_inf_bounds():
+    """Test if intersection returns correct shapes when one of the slab_bounds is Inf."""
+    # 1) [0, inf]
+    poly = td.PolySlab(
+        vertices=[[2, -1], [-2, -1], [-2, 1], [2, 1]],
+        slab_bounds=[0, td.inf],
+    )
+    assert len(poly.intersections_plane(x=0)) == 1
+    assert poly.intersections_plane(x=0)[0] == shapely.box(-1, 0.0, 1, LARGE_NUMBER)
+
+    # 2) [-inf, 0]
+    poly = poly.updated_copy(slab_bounds=[-td.inf, 0])
+    assert len(poly.intersections_plane(x=0)) == 1
+    assert poly.intersections_plane(x=0)[0] == shapely.box(-1, -LARGE_NUMBER, 1, 0)
 
 
 def test_from_shapely():
