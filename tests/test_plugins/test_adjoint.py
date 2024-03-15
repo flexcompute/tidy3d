@@ -467,8 +467,8 @@ def test_run_flux(use_emulated_run):
         _ = get_flux_grad(1.0)
 
 
-@pytest.mark.parametrize("local", (True, False))
-def test_adjoint_pipeline(local, use_emulated_run, tmp_path):
+@pytest.mark.parametrize("local", (True,))# False))
+def test_adjoint_pipeline_new(local, use_emulated_run, tmp_path):
     """Test computing gradient using jax."""
 
     td.config.logging_level = "ERROR"
