@@ -33,7 +33,7 @@ from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam,
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
 from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
-from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor
+from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor, FieldTimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .lumped_element import LumpedElementType, LumpedResistor
@@ -71,11 +71,14 @@ MIN_GRIDS_PER_WVL = 6.0
 # maximum number of sources
 MAX_NUM_SOURCES = 1000
 
-# maximum numbers of simulation parameters
+# restrictions on simulation number of cells and number of time steps
 MAX_TIME_STEPS = 1e7
 WARN_TIME_STEPS = 1e6
 MAX_GRID_CELLS = 20e9
 MAX_CELLS_TIMES_STEPS = 1e16
+
+# monitor warnings and restrictions
+MAX_TIME_MONITOR_STEPS = 5000  # does not apply to 0D monitors
 WARN_MONITOR_DATA_SIZE_GB = 10
 MAX_MONITOR_INTERNAL_DATA_SIZE_GB = 50
 MAX_SIMULATION_DATA_SIZE_GB = 50
@@ -1743,6 +1746,7 @@ class Simulation(AbstractSimulation):
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
         self._warn_time_monitors_outside_run_time()
+        self._validate_time_monitors_num_steps()
         _ = self.volumetric_structures
         log.end_capture(self)
         if source_required and len(self.sources) == 0:
@@ -1853,6 +1857,21 @@ class Simulation(AbstractSimulation):
                     msg_header = f"Mode monitor '{monitor.name}' "
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
+
+    def _validate_time_monitors_num_steps(self) -> None:
+        """Raise an error if non-0D time monitors have too many time steps."""
+        for monitor in self.monitors:
+            if not isinstance(monitor, FieldTimeMonitor) or len(monitor.zero_dims) == 3:
+                continue
+            num_time_steps = monitor.num_steps(self.tmesh)
+            if num_time_steps > MAX_TIME_MONITOR_STEPS:
+                raise SetupError(
+                    f"Time monitor '{monitor.name}' records at {num_time_steps} time steps, which "
+                    f"is larger than the maximum allowed value of {MAX_TIME_MONITOR_STEPS} when "
+                    "the monitor is not zero-dimensional. Change the geometry to a point monitor, "
+                    "or use 'start', 'stop', and 'interval' to reduce the number of time steps "
+                    "at which the monitor stores data."
+                )
 
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
+- `FieldTimeMonitor` restriction to record at a maximum of 5000 time steps if the monitor is not zero-dimensional, to avoid creating unnecessarily large amounts of data.
 
 ### Fixed
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
