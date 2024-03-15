@@ -25,7 +25,7 @@ freq_start = 1e8
 freq_stop = 10e9
 
 
-def make_simulation(planar_pec: bool, length: float = None):
+def make_simulation(planar_pec: bool, length: float = None, auto_grid: bool = True):
     if length:
         strip_length = length
     else:
@@ -45,7 +45,10 @@ def make_simulation(planar_pec: bool, length: float = None):
     run_time = 60 / fwidth
 
     # Spatial grid specification
-    grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=td.C_0 / freq_stop)
+    if auto_grid:
+        grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=td.C_0 / freq_stop)
+    else:
+        grid_spec = td.GridSpec.uniform(wavelength0 / 11)
 
     # Make structures
     strip = td.Structure(
@@ -98,14 +101,19 @@ def make_simulation(planar_pec: bool, length: float = None):
 
 
 def make_component_modeler(
-    planar_pec: bool, reference_impedance: complex = 50, length: float = None, **kwargs
+    planar_pec: bool,
+    reference_impedance: complex = 50,
+    length: float = None,
+    port_refinement: bool = True,
+    auto_grid: bool = True,
+    **kwargs
 ):
     if length:
         strip_length = length
     else:
         strip_length = default_strip_length
 
-    sim = make_simulation(planar_pec, length=length)
+    sim = make_simulation(planar_pec, length=length, auto_grid=auto_grid)
 
     if planar_pec:
         height = 0
@@ -118,7 +126,9 @@ def make_component_modeler(
     center_src2 = [strip_length / 2, 0, height + gap / 2]
     size_src2 = [0, strip_width, gap]
 
-    port_cells = np.ceil(gap / (metal_thickness / 1))
+    port_cells = None
+    if port_refinement:
+        port_cells = np.ceil(gap / (metal_thickness / 1))
 
     port_1 = LumpedPort(
         center=center_src1,

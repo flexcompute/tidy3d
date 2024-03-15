@@ -6,10 +6,11 @@ import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
+    LumpedPort,
     LumpedPortDataArray,
     TerminalComponentModeler,
 )
-from tidy3d.exceptions import Tidy3dKeyError
+from tidy3d.exceptions import Tidy3dKeyError, SetupError
 from ..utils import run_emulated
 from .terminal_component_modeler_def import make_component_modeler
 
@@ -55,8 +56,11 @@ def test_plot_sim_eps(tmp_path):
     plt.close()
 
 
-def test_make_component_modeler(tmp_path):
-    _ = make_component_modeler(planar_pec=False, path_dir=str(tmp_path))
+@pytest.mark.parametrize("port_refinement", [False, True])
+def test_make_component_modeler(tmp_path, port_refinement):
+    _ = make_component_modeler(
+        planar_pec=False, path_dir=str(tmp_path), port_refinement=port_refinement
+    )
 
 
 def test_run(monkeypatch, tmp_path):
@@ -138,3 +142,24 @@ def test_ab_to_s_component_modeler():
     b_matrix = LumpedPortDataArray(data=b_values, coords=coords)
     S_matrix = AbstractComponentModeler.ab_to_s(a_matrix, b_matrix)
     assert np.isclose(S_matrix, b_matrix).all()
+
+
+def test_port_snapping(monkeypatch, tmp_path):
+    modeler = make_component_modeler(
+        planar_pec=True, path_dir=str(tmp_path), port_refinement=False, auto_grid=False
+    )
+    # Without port refinement the grid is much too coarse for these port sizes
+    with pytest.raises(SetupError):
+        _ = run_component_modeler(monkeypatch, modeler)
+
+
+def test_coarse_grid_at_port(monkeypatch, tmp_path):
+    modeler = make_component_modeler(planar_pec=True, path_dir=str(tmp_path), port_refinement=False)
+    # Without port refinement the grid is much too coarse for these port sizes
+    with pytest.raises(SetupError):
+        _ = run_component_modeler(monkeypatch, modeler)
+
+
+def test_validate_port_voltage_axis():
+    with pytest.raises(pydantic.ValidationError):
+        LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)

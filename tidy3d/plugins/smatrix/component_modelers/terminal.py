@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 
 from ....constants import C_0, fp_eps
+from ....exceptions import SetupError
 from ....components.simulation import Simulation
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.data.sim_data import SimulationData
@@ -148,7 +149,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 list(self.simulation.monitors) + port_voltage_monitors + port_current_monitors
             )
             for port, center in zip(self.ports, snap_centers):
-                port_source = self.to_source(self._source_time, port=port, snap_center=center)
+                port_source = port.to_source(self._source_time, snap_center=center)
                 update_dict = dict(
                     sources=[port_source],
                     monitors=new_mnts,
@@ -160,6 +161,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 task_name = self._task_name(port=port)
                 sim_dict[task_name] = sim_copy
 
+        # Check final simulations for grid size at ports
+        for _, sim in sim_dict.items():
+            TerminalComponentModeler._check_grid_size_at_ports(sim, self.ports)
         return sim_dict
 
     @cached_property
@@ -188,6 +192,15 @@ class TerminalComponentModeler(AbstractComponentModeler):
         )
         a_matrix = LumpedPortDataArray(values, coords=coords)
         b_matrix = a_matrix.copy(deep=True)
+
+        def select_within_bounds(coords: np.array, min, max):
+            """Helper to slice coordinates within min and max bounds, including a tolerance."""
+            """xarray does not have this functionality yet. """
+            np_idx = np.logical_and(coords > min, coords < max)
+            np_idx = np.logical_or(np_idx, np.isclose(coords, min, rtol=fp_eps, atol=fp_eps))
+            np_idx = np.logical_or(np_idx, np.isclose(coords, max, rtol=fp_eps, atol=fp_eps))
+            coords = coords[np_idx]
+            return coords
 
         def port_voltage(port: LumpedPort, sim_data: SimulationData) -> xr.DataArray:
             """Helper to compute voltage across the port."""
@@ -263,13 +276,21 @@ class TerminalComponentModeler(AbstractComponentModeler):
             h1_field = h_field.isel({orth_component: orth_index - 1})
             h2_field = h_field.isel({orth_component: orth_index})
             h_field = h1_field - h2_field
+
+            # Find exact bounds of port taking into consideration the Yee grid
+            np_coords = h_coords[port.current_axis].values
+            port_min = port.bounds[0][port.current_axis]
+            port_max = port.bounds[1][port.current_axis]
+            np_coords = select_within_bounds(np_coords, port_min, port_max)
+            coord_low = np_coords[0]
+            coord_high = np_coords[-1]
             # Extract cap field which is coincident with sheet
             h_cap = h_cap_field.isel({orth_component: orth_index})
 
             # Need to make sure to use the nearest coordinate that is
             # at least greater than the port bounds
-            hcap_minus = h_cap.sel({h_component: slice(-np.inf, port.bounds[0][port.current_axis])})
-            hcap_plus = h_cap.sel({h_component: slice(port.bounds[1][port.current_axis], np.inf)})
+            hcap_minus = h_cap.sel({h_component: slice(-np.inf, coord_low)})
+            hcap_plus = h_cap.sel({h_component: slice(coord_high, np.inf)})
             hcap_minus = hcap_minus.isel({h_component: -1})
             hcap_plus = hcap_plus.isel({h_component: 0})
             # Length of integration along the h_cap contour is a single cell width
@@ -344,3 +365,21 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 f"'{cls.__name__}' must be setup with a 3D simulation with all sizes greater than 0."
             )
         return val
+
+    @staticmethod
+    def _check_grid_size_at_ports(simulation: Simulation, ports: list[LumpedPort]):
+        """Raises :class:`SetupError` if the grid is too coarse at port locations"""
+        yee_grid = simulation.grid.yee
+        for port in ports:
+            e_component = "xyz"[port.voltage_axis]
+            e_yee_grid = yee_grid.grid_dict[f"E{e_component}"]
+            coords = e_yee_grid.to_dict[e_component]
+            min_bound = port.bounds[0][port.voltage_axis]
+            max_bound = port.bounds[1][port.voltage_axis]
+            coords_within_port = np.any(np.logical_and(coords > min_bound, coords < max_bound))
+            if not coords_within_port:
+                raise SetupError(
+                    f"Grid is too coarse along '{e_component}' direction for the lumped port "
+                    f"at location {port.center}. Either set the port's 'num_grid_cells' to "
+                    f"a nonzero integer or modify the 'GridSpec'. "
+                )
