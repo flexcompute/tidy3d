@@ -1850,6 +1850,39 @@ def test_error_large_monitors(monitor):
         sim_large.validate_pre_upload()
 
 
+def test_error_max_time_monitor_steps():
+    """Test if a time monitor with too many time steps causes pre upload error."""
+
+    sim = td.Simulation(
+        size=(5, 5, 5),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.uniform(dl=0.01),
+        sources=[
+            td.ModeSource(
+                size=(0.1, 0.1, 0),
+                direction="+",
+                source_time=td.GaussianPulse(freq0=2e14, fwidth=0.1e14),
+            )
+        ],
+    )
+
+    # simulation with a 0D time monitor should not error
+    monitor = td.FieldTimeMonitor(center=(0, 0, 0), size=(0, 0, 0), name="time")
+    sim = sim.updated_copy(monitors=[monitor])
+    sim.validate_pre_upload()
+
+    # 1D monitor should error
+    with pytest.raises(SetupError):
+        monitor = monitor.updated_copy(size=(1, 0, 0))
+        sim = sim.updated_copy(monitors=[monitor])
+        sim.validate_pre_upload()
+
+    # setting a large enough interval should again not error
+    monitor = monitor.updated_copy(interval=20)
+    sim = sim.updated_copy(monitors=[monitor])
+    sim.validate_pre_upload()
+
+
 def test_monitor_num_cells():
     """Test the computation of number of cells in monitor."""
     sim = td.Simulation(
