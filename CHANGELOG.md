@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Compute time stepping speed shown `tidy3d.log` using only the number of time steps that was run in the case of early shutoff. Previously, it was using the total number of time steps.
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
 - Divergence in the simultaneous presence of PML, absorber, and symmetry.
+- Fixed validator for `ModeSpec.bend_radius == 0`, which was not raising an error.
 
 ## [2.6.1] - 2024-03-07
 
