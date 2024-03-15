@@ -350,6 +350,7 @@ class ComponentModeler(Tidy3dBaseModel):
             folder_name=self.folder_name,
             callback_url=self.callback_url,
             verbose=self.verbose,
+            simulation_type="tidy3d_smatrix",
         )
 
     @cached_property
