@@ -152,19 +152,13 @@ class JaxSimulation(Simulation, JaxObject):
         units=SECOND,
     )
 
-    # @pd.root_validator
-    # def _copy_input_structures(cls, values):
-    #     """Copy input structures to `structures`."""
+    input_structures_copied : bool = pd.Field(
+        False,
+        title="Input Structures Copied",
+        description="Have the input structures been coped to ``self.structures``? Used internally."
 
-    #     structures = list(values.get("structures"))
-    #     input_structures = list(values.get("input_structures"))
+    )
 
-    #     for input_structure in input_structures:
-    #         new_structure = input_structure.to_structure()
-    #         structures.append(structures[0])
-
-    #     values["structures"] = structures
-    #     return values
 
     @pd.validator("output_monitors", always=True)
     def _output_monitors_colocate_false(cls, val):
@@ -295,6 +289,24 @@ class JaxSimulation(Simulation, JaxObject):
                 log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val
 
+    @pd.root_validator
+    def _copy_input_structures(cls, values):
+        """Copy input structures to `structures`."""
+
+        if not values.get("input_structures_copied"):
+            return values
+
+        structures = list(values.get("structures"))
+        input_structures = list(values.get("input_structures"))
+
+        for input_structure in input_structures:
+            new_structure = input_structure.to_structure()
+            structures.append(structures[0])
+
+        values["structures"] = structures
+        values["input_structures_copied"] = True
+        return values
+
     @staticmethod
     def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
         """Return sorted list of unique frequencies stripped from a collection of monitors."""
@@ -397,12 +409,13 @@ class JaxSimulation(Simulation, JaxObject):
                 "input_structures",
                 "fwidth_adjoint",
                 "run_time_adjoint",
+                "input_structures_copied",
             }
         )
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures)# + [js.to_structure() for js in self.input_structures]
+        all_structures = list(self.structures) #+ [js.to_structure() for js in self.input_structures]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)
@@ -643,7 +656,7 @@ class JaxSimulation(Simulation, JaxObject):
             input_structures.append(new_structure)
 
         # return a dictionary containing these split structures
-        return dict(structures=structures, input_structures=input_structures)
+        return dict(structures=all_structures, input_structures=input_structures)
 
     @classmethod
     def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
@@ -836,6 +849,7 @@ class JaxSimulation(Simulation, JaxObject):
         input_structures_vjp = [None] * len(self.input_structures)
         for index, vjp in zip(inds_par_internal + inds_par_external, vjps_all):
             input_structures_vjp[index] = vjp
+
 
         return self.copy(
             update=dict(

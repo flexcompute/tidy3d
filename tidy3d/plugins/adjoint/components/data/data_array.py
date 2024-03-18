@@ -43,7 +43,17 @@ class JaxDataArray(Tidy3dBaseModel):
     def to_tidy3d(self: JaxDataArray) -> xr.DataArray:
         """Convert :class:`.JaxDataArray` instance to ``xr.DataArray`` instance."""
         coords = {k: np.array(v).tolist() for k, v in self.coords.items()}
-        return xr.DataArray(np.array(self.values), coords=coords, dims=self.coords.keys())
+        try:
+            values = jax.lax.stop_gradient(self.values)
+        except TypeError:
+            shape = tuple(len(c) for c in coords.values())
+            values = np.ones(shape)
+            # values = np.array(self.values).reshape(tuple(len(c) for c in coords.values()))
+
+        try:
+            return xr.DataArray(np.array(values), coords=coords, dims=self.coords.keys())
+        except:
+            import pdb; pdb.set_trace()
 
     @classmethod
     def from_tidy3d(cls, tidy3d_obj: xr.DataArray) -> JaxDataArray:
