@@ -38,7 +38,6 @@ from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProje
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
 from .lumped_element import LumpedElementType, LumpedResistor
 from .data.dataset import Dataset, CustomSpatialDataType
-from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene, MAX_NUM_MEDIUMS
 
