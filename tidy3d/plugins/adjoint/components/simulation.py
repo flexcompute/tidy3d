@@ -415,7 +415,7 @@ class JaxSimulation(Simulation, JaxObject):
         sim = Simulation.parse_obj(sim_dict)
 
         # put all structures and monitors in one list
-        all_structures = list(self.structures) #+ [js.to_structure() for js in self.input_structures]
+        # all_structures = list(self.structures) #+ [js.to_structure() for js in self.input_structures]
         all_monitors = (
             list(self.monitors)
             + list(self.output_monitors)
@@ -423,7 +423,7 @@ class JaxSimulation(Simulation, JaxObject):
             + list(self.grad_eps_monitors)
         )
 
-        sim = sim.updated_copy(structures=all_structures, monitors=all_monitors)
+        sim = sim.updated_copy(monitors=all_monitors)
 
         # information about the state of the original JaxSimulation to stash for reconstruction
         jax_info = JaxInfo(
@@ -437,160 +437,6 @@ class JaxSimulation(Simulation, JaxObject):
         )
 
         return sim, jax_info
-
-    def plot(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        **patch_kwargs,
-    ) -> Ax:
-        """Wrapper around regular :class:`.Simulation` structure plotting."""
-        sim, _ = self.to_simulation()
-        return sim.plot(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            source_alpha=source_alpha,
-            monitor_alpha=monitor_alpha,
-            hlim=hlim,
-            vlim=vlim,
-            **patch_kwargs,
-        )
-
-    def plot_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        source_alpha: float = None,
-        monitor_alpha: float = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-        ax: Ax = None,
-    ) -> Ax:
-        """Wrapper around regular :class:`.Simulation` permittivity plotting."""
-        sim, _ = self.to_simulation()
-        return sim.plot_eps(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            source_alpha=source_alpha,
-            monitor_alpha=monitor_alpha,
-            hlim=hlim,
-            vlim=vlim,
-        )
-
-    def plot_structures(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        sim, _ = self.to_simulation()
-        return sim.plot_structures(
-            x=x,
-            y=y,
-            z=z,
-            ax=ax,
-            hlim=hlim,
-            vlim=vlim,
-        )
-
-    def plot_structures_eps(
-        self,
-        x: float = None,
-        y: float = None,
-        z: float = None,
-        freq: float = None,
-        alpha: float = None,
-        cbar: bool = True,
-        reverse: bool = False,
-        ax: Ax = None,
-        hlim: Tuple[float, float] = None,
-        vlim: Tuple[float, float] = None,
-    ) -> Ax:
-        """Plot each of simulation's structures on a plane defined by one nonzero x,y,z coordinate.
-        The permittivity is plotted in grayscale based on its value at the specified frequency.
-
-        Parameters
-        ----------
-        x : float = None
-            position of plane in x direction, only one of x, y, z must be specified to define plane.
-        y : float = None
-            position of plane in y direction, only one of x, y, z must be specified to define plane.
-        z : float = None
-            position of plane in z direction, only one of x, y, z must be specified to define plane.
-        freq : float = None
-            Frequency to evaluate the relative permittivity of all mediums.
-            If not specified, evaluates at infinite frequency.
-        reverse : bool = False
-            If ``False``, the highest permittivity is plotted in black.
-            If ``True``, it is plotteed in white (suitable for black backgrounds).
-        cbar : bool = True
-            Whether to plot a colorbar for the relative permittivity.
-        alpha : float = None
-            Opacity of the structures being plotted.
-            Defaults to the structure default alpha.
-        ax : matplotlib.axes._subplots.Axes = None
-            Matplotlib axes to plot on, if not specified, one is created.
-        hlim : Tuple[float, float] = None
-            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-        vlim : Tuple[float, float] = None
-            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-
-        Returns
-        -------
-        matplotlib.axes._subplots.Axes
-            The supplied or created matplotlib axes.
-        """
-        sim, _ = self.to_simulation()
-        return sim.plot_structures_eps(
-            x=x,
-            y=y,
-            z=z,
-            freq=freq,
-            alpha=alpha,
-            cbar=cbar,
-            reverse=reverse,
-            ax=ax,
-            hlim=hlim,
-            vlim=vlim,
-        )
 
     def __eq__(self, other: JaxSimulation) -> bool:
         """Are two JaxSimulation objects equal?"""
@@ -640,7 +486,6 @@ class JaxSimulation(Simulation, JaxObject):
         num_structs = len(structures) - num_input_structures
 
         # split the list based on these numbers
-        structures = all_structures[:num_structs]
         structure_type_map = dict(
             JaxStructure=JaxStructure,
             JaxStructureStaticMedium=JaxStructureStaticMedium,
@@ -656,7 +501,7 @@ class JaxSimulation(Simulation, JaxObject):
             input_structures.append(new_structure)
 
         # return a dictionary containing these split structures
-        return dict(structures=all_structures, input_structures=input_structures)
+        return dict(structures=all_structures, input_structures=input_structures, input_structures_copied=True)
 
     @classmethod
     def from_simulation(cls, simulation: Simulation, jax_info: JaxInfo) -> JaxSimulation:
@@ -793,7 +638,7 @@ class JaxSimulation(Simulation, JaxObject):
 
         return self.copy(
             update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
+                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=(), input_structures_copied=False
             )
         )
 
@@ -853,6 +698,6 @@ class JaxSimulation(Simulation, JaxObject):
 
         return self.copy(
             update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
+                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=(), input_structures_copied=False
             )
         )
