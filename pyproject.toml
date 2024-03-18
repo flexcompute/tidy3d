@@ -78,7 +78,7 @@ jax = [
 # trimesh
 networkx = {version = "^2.6.3", optional = true}
 rtree = {version = "1.0.1", optional = true}
-trimesh = {version = "3.20.0", optional = true}
+trimesh = {version = ">=4,<4.2", optional = true}
 
 # docs
 jupyter = {version="*", optional = true}
