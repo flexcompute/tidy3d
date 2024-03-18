@@ -29,8 +29,9 @@ from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
 from ...log import log
 
 
-DEFAULT_MAX_SAMPLES_PER_STEP = 1e4
-DEFAULT_MAX_CELLS_PER_STEP = 1e4
+DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
+DEFAULT_MAX_CELLS_PER_STEP = 10_000
+DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -981,11 +982,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
+        fill_value: Union[float, Literal["extrapolate"]] = None,
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
         max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
+        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
 
@@ -997,23 +999,38 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = "extrapolate"
-            Value to use when filling points without interpolated values. If ``extrapolate`` then
-            nearest values are used.
+        fill_value : Union[float, Literal["extrapolate"]] = 0
+            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
+            nearest values are used. Note: in a future version the default value will be changed
+            to ``"extrapolate"``.
         use_vtk : bool = False
-            Use vtk's interpolationfunctionality or Tidy3D's own implementation.
+            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
+            option will be removed in a future version.
         method: Literal["linear", "nearest"] = "linear"
             Interpolation method to use.
         max_samples_per_step : int = 1e4
             Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
         max_cells_per_step : int = 1e4
             Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float = 1e-6
+            Relative tolerance when determining whether a point belongs to a cell.
 
         Returns
         -------
         SpatialDataArray
             Interpolated data.
         """
+
+        if fill_value is None:
+            log.warning(
+                "Default parameter setting 'fill_value=0' will be changed to "
+                "'fill_value=``extrapolate``' in a future version."
+            )
+            fill_value = 0
 
         # calculate the resulting array shape
         x = np.atleast_1d(x)
@@ -1023,12 +1040,13 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         if method == "nearest":
             interpolated_values = self._interp_nearest(x=x, y=y, z=z)
         else:
-            if fill_value == "extrapolate" and method != "nearest":
+            if fill_value == "extrapolate":
                 fill_value_actual = np.nan
             else:
                 fill_value_actual = fill_value
 
             if use_vtk:
+                log.warning("Note that option 'use_vtk=True' will be removed in future versions.")
                 interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
             else:
                 interpolated_values = self._interp_py(
@@ -1038,6 +1056,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     fill_value=fill_value_actual,
                     max_samples_per_step=max_samples_per_step,
                     max_cells_per_step=max_cells_per_step,
+                    rel_tol=rel_tol,
                 )
 
             if fill_value == "extrapolate" and method != "nearest":
@@ -1176,18 +1195,19 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return values_reordered
 
+    @abstractmethod
     def _interp_py(
         self,
         x: ArrayLike,
         y: ArrayLike,
         z: ArrayLike,
         fill_value: float,
-        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
-        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
-        rel_tol: float = 1e-10,
-        axis_ignore: Union[Axis, None] = None,
+        max_samples_per_step: int,
+        max_cells_per_step: int,
+        rel_tol: float,
     ) -> ArrayLike:
-        """Interpolate data at provided x, y, and z using vectorized python implementation.
+        """Dimensionality-specific function (2D and 3D) to interpolate data at provided x, y, and z
+        using vectorized python implementation.
 
         Parameters
         ----------
@@ -1199,14 +1219,59 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             z-coordinates of sampling points.
         fill_value : float
             Value to use when filling points without interpolated values.
-        max_samples_per_step : int = 1e4
-            Max number of points to interpolate at per iteration.
-        max_cells_per_step : int = 1e4
-            Max number of cells to interpolate from per iteration.
-        rel_tol : float = 1e-10
-            Relative tolerance when comparing coordinates.
-        axis_ignore : Union[Axis, None] = None
-            For interpolati
+        max_samples_per_step : int
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float
+            Relative tolerance when determining whether a point belongs to a cell.
+
+        Returns
+        -------
+        ArrayLike
+            Interpolated data.
+        """
+
+    def _interp_py_general(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float,
+        max_samples_per_step: int,
+        max_cells_per_step: int,
+        rel_tol: float,
+        axis_ignore: Union[Axis, None],
+    ) -> ArrayLike:
+        """A general function (2D and 3D) to interpolate data at provided x, y, and z using
+        vectorized python implementation.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float
+            Value to use when filling points without interpolated values.
+        max_samples_per_step : int
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float
+            Relative tolerance when determining whether a point belongs to a cell.
+        axis_ignore : Union[Axis, None]
+            When interpolating from a 2D dataset, must specify normal axis.
 
         Returns
         -------
@@ -1246,51 +1311,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # due to numerical precision
         xyz_pos_l = np.zeros((num_dims, num_points), dtype=int)
         xyz_pos_r = np.zeros((num_dims, num_points), dtype=int)
-
         for dim in range(num_dims):
             xyz_pos_l[dim] = np.searchsorted(xyz_grid[dim] + tol[dim], points[:, dim])
             xyz_pos_r[dim] = np.searchsorted(xyz_grid[dim] - tol[dim], points[:, dim])
-
-        # now we transfer this information to each cell. That is, each cell knows how its vertices
-        # positioned relative to Cartesian grid points.
-        # (num_dims, num_cells, num_vertices=num_cell_faces)
-        xyz_pos_l_per_cell = xyz_pos_l[:, cell_connections]
-        xyz_pos_r_per_cell = xyz_pos_r[:, cell_connections]
-
-        # taking min/max among all cell vertices (per each dimension separately)
-        # we get min and max indices of Cartesian grid points that may receive their values
-        # from a given cell.
-        # (num_dims, num_cells)
-        cell_ind_min = np.min(xyz_pos_l_per_cell, axis=2)
-        cell_ind_max = np.max(xyz_pos_r_per_cell, axis=2)
-
-        # calculate number of Cartesian grid points where we will perform interpolation for a given
-        # cell. Note that this number is much larger than actually needed, because essentially for
-        # each cell we consider all Cartesian grid points that fall into the cell's bounding box.
-        # We use word "sample" to represent such Cartesian grid points.
-        # (num_cells,)
-        num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
-
-        # find cells that have non-zero number of samples
-        # we use "ne" as a shortcut for "non empty"
-        ne_cells = num_samples_per_cell > 0  # (num_cells,)
-        num_ne_cells = np.sum(ne_cells)
-        # indices of cells with non-zero number of samples in the original list of cells
-        ne_cell_inds = np.arange(num_cells)[ne_cells]  # (num_cells,)
-
-        # restrict to non-empty cells only
-        num_samples_per_ne_cell = num_samples_per_cell[ne_cells]
-        cum_num_samples_per_ne_cell = np.cumsum(num_samples_per_ne_cell)
-
-        ne_cell_ind_min = cell_ind_min[:, ne_cells]
-        ne_cell_ind_max = cell_ind_max[:, ne_cells]
-
-        # Next we need to perform actual interpolation at all sample points
-        # this is computationally expensive operation and because we try to do everything
-        # in the vectorized form, it can require a lot of memory, sometimes even causing OOM errors.
-        # To avoid that, we impose restrictions on how many cells/samples can be processed at a time
-        # effectivelly performing these operations in chunks.
-        # Note that currently this is done sequentially, but could be relatively easy to parallelize
 
         # let's allocate an array for resulting values
         # every time we process a chunk of samples, we will write into this array
@@ -1298,46 +1321,104 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             [len(xyz_comp) for xyz_comp in xyz_grid], dtype=self.values.dtype
         )
 
-        # start counters of how many cells/samples have been processed
-        processed_samples = 0
-        processed_cells = 0
+        processed_cells_global = 0
 
-        while processed_cells < num_ne_cells:
-            # how many cells we would like to process by the end of this step
-            target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
-
-            # find how many cells we can processed based on number of allowed samples
-            target_processed_samples = processed_samples + max_samples_per_step
-            target_processed_cells_from_samples = (
-                np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
+        # to ovoid OOM for large datasets, we process only certain number of cells at a time
+        while processed_cells_global < num_cells:
+            target_processed_cells_global = min(
+                num_cells, processed_cells_global + max_cells_per_step
             )
 
-            # take min between the two
-            target_processed_cells = min(
-                target_processed_cells, target_processed_cells_from_samples
-            )
+            connections_to_process = cell_connections[
+                processed_cells_global:target_processed_cells_global
+            ]
 
-            # select cells and corresponding samples to process
-            step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
-            step_ne_cell_ind_max = ne_cell_ind_max[:, processed_cells:target_processed_cells]
-            step_ne_cell_inds = ne_cell_inds[processed_cells:target_processed_cells]
+            # now we transfer this information to each cell. That is, each cell knows how its vertices
+            # positioned relative to Cartesian grid points.
+            # (num_dims, num_cells, num_vertices=num_cell_faces)
+            xyz_pos_l_per_cell = xyz_pos_l[:, connections_to_process]
+            xyz_pos_r_per_cell = xyz_pos_r[:, connections_to_process]
 
-            # process selected cells and points
-            xyz_inds, interpolated = self._interp_py_chunk(
-                xyz_grid=xyz_grid,
-                cell_inds=step_ne_cell_inds,
-                cell_ind_min=step_ne_cell_ind_min,
-                cell_ind_max=step_ne_cell_ind_max,
-                sdf_tol=diag_tol,
-            )
+            # taking min/max among all cell vertices (per each dimension separately)
+            # we get min and max indices of Cartesian grid points that may receive their values
+            # from a given cell.
+            # (num_dims, num_cells)
+            cell_ind_min = np.min(xyz_pos_l_per_cell, axis=2)
+            cell_ind_max = np.max(xyz_pos_r_per_cell, axis=2)
 
-            if num_dims == 3:
-                interpolated_values[xyz_inds[0], xyz_inds[1], xyz_inds[2]] = interpolated
-            else:
-                interpolated_values[xyz_inds[0], xyz_inds[1]] = interpolated
+            # calculate number of Cartesian grid points where we will perform interpolation for a given
+            # cell. Note that this number is much larger than actually needed, because essentially for
+            # each cell we consider all Cartesian grid points that fall into the cell's bounding box.
+            # We use word "sample" to represent such Cartesian grid points.
+            # (num_cells,)
+            num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
 
-            processed_cells = target_processed_cells
-            processed_samples = cum_num_samples_per_ne_cell[target_processed_cells - 1]
+            # find cells that have non-zero number of samples
+            # we use "ne" as a shortcut for "non empty"
+            ne_cells = num_samples_per_cell > 0  # (num_cells,)
+            num_ne_cells = np.sum(ne_cells)
+            # indices of cells with non-zero number of samples in the original list of cells
+            # (num_cells,)
+            ne_cell_inds = np.arange(processed_cells_global, target_processed_cells_global)[
+                ne_cells
+            ]
+
+            # restrict to non-empty cells only
+            num_samples_per_ne_cell = num_samples_per_cell[ne_cells]
+            cum_num_samples_per_ne_cell = np.cumsum(num_samples_per_ne_cell)
+
+            ne_cell_ind_min = cell_ind_min[:, ne_cells]
+            ne_cell_ind_max = cell_ind_max[:, ne_cells]
+
+            # Next we need to perform actual interpolation at all sample points
+            # this is computationally expensive operation and because we try to do everything
+            # in the vectorized form, it can require a lot of memory, sometimes even causing OOM errors.
+            # To avoid that, we impose restrictions on how many cells/samples can be processed at a time
+            # effectivelly performing these operations in chunks.
+            # Note that currently this is done sequentially, but could be relatively easy to parallelize
+
+            # start counters of how many cells/samples have been processed
+            processed_samples = 0
+            processed_cells = 0
+
+            while processed_cells < num_ne_cells:
+                # how many cells we would like to process by the end of this step
+                target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
+
+                # find how many cells we can processed based on number of allowed samples
+                target_processed_samples = processed_samples + max_samples_per_step
+                target_processed_cells_from_samples = (
+                    np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
+                )
+
+                # take min between the two
+                target_processed_cells = min(
+                    target_processed_cells, target_processed_cells_from_samples
+                )
+
+                # select cells and corresponding samples to process
+                step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
+                step_ne_cell_ind_max = ne_cell_ind_max[:, processed_cells:target_processed_cells]
+                step_ne_cell_inds = ne_cell_inds[processed_cells:target_processed_cells]
+
+                # process selected cells and points
+                xyz_inds, interpolated = self._interp_py_chunk(
+                    xyz_grid=xyz_grid,
+                    cell_inds=step_ne_cell_inds,
+                    cell_ind_min=step_ne_cell_ind_min,
+                    cell_ind_max=step_ne_cell_ind_max,
+                    sdf_tol=diag_tol,
+                )
+
+                if num_dims == 3:
+                    interpolated_values[xyz_inds[0], xyz_inds[1], xyz_inds[2]] = interpolated
+                else:
+                    interpolated_values[xyz_inds[0], xyz_inds[1]] = interpolated
+
+                processed_cells = target_processed_cells
+                processed_samples = cum_num_samples_per_ne_cell[target_processed_cells - 1]
+
+            processed_cells_global = target_processed_cells_global
 
         # in case of 2d grid broadcast results along normal direction assuming translational
         # invariance
@@ -1719,7 +1800,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
-    """Dataset for storing triangular grid data.
+    """Dataset for storing triangular grid data. Data values are associated with the nodes of
+    the grid.
 
     Note
     ----
@@ -2002,20 +2084,21 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
-    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = "extrapolate",
+        fill_value: Union[float, Literal["extrapolate"]] = None,
         use_vtk: bool = False,
         method: Literal["linear", "nearest"] = "linear",
         ignore_normal_pos: bool = True,
         max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
         max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
+        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
     ) -> SpatialDataArray:
-        """Interpolate data at provided x, y, and z.
+        """Interpolate data at provided x, y, and z. Note that data is assumed to be invariant along
+        the dataset's normal direction.
 
         Parameters
         ----------
@@ -2025,25 +2108,40 @@ class TriangularGridDataset(UnstructuredGridDataset):
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = "extrapolate"
-            Value to use when filling points without interpolated values. If ``extrapolate`` then
-            nearest values are used.
+        fill_value : Union[float, Literal["extrapolate"]] = 0
+            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
+            nearest values are used. Note: in a future version the default value will be changed
+            to ``"extrapolate"``.
         use_vtk : bool = False
-            Use vtk's interpolationfunctionality or Tidy3D's own implementation.
+            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
+            option will be removed in a future version.
         method: Literal["linear", "nearest"] = "linear"
             Interpolation method to use.
         ignore_normal_pos : bool = True
             (Depreciated) Assume data is invariant along the normal direction to the grid plane.
         max_samples_per_step : int = 1e4
             Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
         max_cells_per_step : int = 1e4
             Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float = 1e-6
+            Relative tolerance when determining whether a point belongs to a cell.
 
         Returns
         -------
         SpatialDataArray
             Interpolated data.
         """
+
+        if fill_value is None:
+            log.warning(
+                "Default parameter setting 'fill_value=0' will be changed to "
+                "'fill_value=``extrapolate``' in a future version."
+            )
+            fill_value = 0
 
         if not ignore_normal_pos:
             log.warning(
@@ -2080,11 +2178,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
         y: ArrayLike,
         z: ArrayLike,
         fill_value: float,
-        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
-        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
-        rel_tol: float = 1e-10,
+        max_samples_per_step: int,
+        max_cells_per_step: int,
+        rel_tol: float,
     ) -> ArrayLike:
-        """Interpolate data at provided x, y, and z using vectorized python implementation.
+        """2D-specific function to interpolate data at provided x, y, and z
+        using vectorized python implementation.
 
         Parameters
         ----------
@@ -2096,20 +2195,24 @@ class TriangularGridDataset(UnstructuredGridDataset):
             z-coordinates of sampling points.
         fill_value : float
             Value to use when filling points without interpolated values.
-        max_samples_per_step : int = 1e4
-            Max number of points to interpolate at per iteration.
-        max_cells_per_step : int = 1e4
-            Max number of cells to interpolate from per iteration.
-        rel_tol : float = 1e-10
-            Relative tolerance when comparing coordinates.
+        max_samples_per_step : int
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float
+            Relative tolerance when determining whether a point belongs to a cell.
 
         Returns
         -------
-        SpatialDataArray
+        ArrayLike
             Interpolated data.
         """
 
-        return super()._interp_py(
+        return self._interp_py_general(
             x=x,
             y=y,
             z=z,
@@ -2256,7 +2359,8 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
-    """Dataset for storing tetrahedral grid data.
+    """Dataset for storing tetrahedral grid data. Data values are associated with the nodes of
+    the grid.
 
     Note
     ----
@@ -2472,12 +2576,61 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         if num_provided == 3:
             return self.interp(x=x, y=y, z=z)
 
+    def _interp_py(
+        self,
+        x: ArrayLike,
+        y: ArrayLike,
+        z: ArrayLike,
+        fill_value: float,
+        max_samples_per_step: int,
+        max_cells_per_step: int,
+        rel_tol: float,
+    ) -> ArrayLike:
+        """3D-specific function to interpolate data at provided x, y, and z
+        using vectorized python implementation.
+
+        Parameters
+        ----------
+        x : Union[float, ArrayLike]
+            x-coordinates of sampling points.
+        y : Union[float, ArrayLike]
+            y-coordinates of sampling points.
+        z : Union[float, ArrayLike]
+            z-coordinates of sampling points.
+        fill_value : float
+            Value to use when filling points without interpolated values.
+        max_samples_per_step : int
+            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        max_cells_per_step : int
+            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
+            Using a higher number may speed up calculations but, at the same time, it increases
+            RAM usage.
+        rel_tol : float
+            Relative tolerance when determining whether a point belongs to a cell.
+
+        Returns
+        -------
+        ArrayLike
+            Interpolated data.
+        """
+
+        return self._interp_py_general(
+            x=x,
+            y=y,
+            z=z,
+            fill_value=fill_value,
+            max_samples_per_step=max_samples_per_step,
+            max_cells_per_step=max_cells_per_step,
+            rel_tol=rel_tol,
+            axis_ignore=None,
+        )
+
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
-CustomSpatialDataType = Union[SpatialDataArray, TriangularGridDataset, TetrahedralGridDataset]
-CustomSpatialDataTypeAnnotated = Union[
-    SpatialDataArray, annotate_type(Union[TriangularGridDataset, TetrahedralGridDataset])
-]
+CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
+CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
 
 
 def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
