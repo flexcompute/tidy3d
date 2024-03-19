@@ -1,12 +1,11 @@
 """Defines 'types' that various fields can be"""
 
-from typing import Tuple, Union
+from typing import (
+    Literal,  # We support py3.9+, so direct typing import is fine.
+    Tuple,
+    Union,
+)
 
-# Literal only available in python 3.8 + so try import otherwise use extensions
-try:
-    from typing import Literal
-except ImportError:
-    from typing_extensions import Literal
 import autograd.numpy as np
 import pydantic.v1 as pydantic
 
