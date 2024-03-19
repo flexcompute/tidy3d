@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
@@ -22,7 +22,7 @@ from ..bc_placement import (
     StructureStructureInterface,
 )
 from ..geometry.base import Box
-from ..heat_charge_spec import ConductorSpec, SolidSpec
+from ..heat_charge_spec import ConductorSpec, SemiConductorSpec, SolidSpec
 from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely, annotate_type
@@ -37,6 +37,7 @@ from .boundary import (
     TemperatureBC,
     VoltageBC,
 )
+from .devsim_settings import DevsimSettingsType
 from .grid import DistanceUnstructuredGrid, UniformUnstructuredGrid, UnstructuredGridType
 from .monitor import HeatChargeMonitorType, TemperatureMonitor, VoltageMonitor
 from .source import (
@@ -46,6 +47,7 @@ from .source import (
     HeatSource,
     UniformHeatSource,
 )
+from .time_spec import SteadySpec, TimeSpecType, UnsteadySpec
 from .viz import (
     CHARGE_BC_INSULATOR,
     HEAT_BC_COLOR_CONVECTION,
@@ -69,6 +71,7 @@ class HeatChargeSimulationType(str, Enum):
 
     HEAT = "HEAT"
     CONDUCTION = "CONDUCTION"
+    DEVSIM = "DEVSIM"
 
 
 class HeatChargeSimulation(AbstractSimulation):
@@ -85,17 +88,37 @@ class HeatChargeSimulation(AbstractSimulation):
                 BCs, etc.
             * Conduction simulations: the conduction equation, div(sigma*grad(psi))=0,
                 (with sigma being the electric conductivity) is solved for specified BCs.
+            * Unsteady heat simulations: by defining an 'UnsteadySpec' with an intial value
+                for temperature one can run an unsteady heat simulation.
+            * Electro-Quasistatic (EQS) simulation can be run by specifying an 'UnsteadySpec'
+                in a conduction simulation with an initial value for voltage.
 
+        COUPLING
         Coupling between these simulations is currently limited to 1-way coupling between
         heat and conduction simulations. Coupling is specified by defining a heat source of
         type 'HeatFromElectricSource'. With this coupling, joule heating is calculated as part
         of the solution to a CONDUCTION simulation and then read in to the HEAT simulation.
-        When using coupling we anticipate the following scenario:
-            * BCs and sources are specified for both HEAT and CONDUCTION simulations.
+        When using coupling we anticipate two scenarios:
+            1. one in which BCs and sources are specified for both HEAT and CONDUCTION simulations.
                 In this case one mesh will be generated and used for both the CONDUCTION and HEAT
                 simulations.
-        Note also that additional heat sources can be applied, in which case, they will be added on
+            2. only heat BCs/sources are provided. In this case, only the HEAT equation will be solved.
+                Before the simulation starts, it will try to load the heat source from file so a
+                previously run CONDUCTION simulations must have run previously. Since the CONDUCTION
+                and HEAT meshes may differ, an interpolation between them will be performed prior to
+                starting the HEAT simulation.
+        Additional heat sources can be defined, in which case, they will be added on
         top of the coupling heat source.
+
+        UNSTEADY SIMULATIONS.
+        Unsteady simulations are defined with a 'time_spec' of type 'UnsteadySpec'. When specified one can
+        also specify either an 'initial_temperature' and/or 'initial_voltage'. These last entries tell the
+        solver whether HEAT and/or CONDUCTION unsteady simulations are to be run.
+        NOTE ON COUPLING UNSTEADY RUNS. When using 'HeatFromElectricSource' along with 'UnsteadySpec' in simulations
+        where both UNSTEADY HEAT and CONDUCTION simulations will be run, the coupling does not happen at each time-
+        step. Once the CONDUCTION simulation has finished the electric potential field at the last step will be
+        taken for the heat source calculation used in the unsteady HEAT case.
+
 
     Example
     -------
@@ -152,6 +175,15 @@ class HeatChargeSimulation(AbstractSimulation):
         discriminator=TYPE_TAG_STR,
     )
 
+    time_spec: Optional[TimeSpecType] = pd.Field(
+        SteadySpec(),
+        title="Time specification",
+        description="Determines the type of time integration. This can be steady or unsteady, "
+        "which are determined by the 'SteadySpec' and 'UnsteadySpec' classes of 'Tidy3d'. "
+        "If not specified the simulation will be assumed to be steady.",
+        discriminator=TYPE_TAG_STR,
+    )
+
     symmetry: Tuple[ScalarSymmetry, ScalarSymmetry, ScalarSymmetry] = pd.Field(
         (0, 0, 0),
         title="Symmetries",
@@ -159,6 +191,10 @@ class HeatChargeSimulation(AbstractSimulation):
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
         "at the simulation center of each axis, respectively. "
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
+    )
+
+    devsim_settings: Optional[Tuple[DevsimSettingsType, ...]] = pd.Field(
+        None, title="Devsim setttings.", description="Some Devsim settings."
     )
 
     @pd.validator("structures", always=True)
@@ -284,7 +320,7 @@ class HeatChargeSimulation(AbstractSimulation):
         num_zero_dims = np.sum(zero_dimensions)
 
         if num_zero_dims > 1:
-            mssg = f"Your current 'HeatChargeSimulation' has zero size along the {zero_dim_str}dimensions. "
+            mssg = f"The current 'HeatChargeSimulation' has zero size along the {zero_dim_str}dimensions. "
             mssg += "Only 2- and 3-D simulations are currently supported."
             raise SetupError(mssg)
 
@@ -325,6 +361,29 @@ class HeatChargeSimulation(AbstractSimulation):
                             f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
                             "is not found among simulation mediums."
                         )
+        return val
+
+    @pd.validator("boundary_spec", always=True)
+    def check_only_one_voltage_array_provided(cls, val, values):
+        """Issue error if more than one voltage array is provided.
+        Currently we only allow to sweep over one voltage array.
+        """
+
+        array_already_provided = False
+
+        for bc in val:
+            if isinstance(bc.condition, VoltageBC):
+                voltages = bc.condition.voltage
+
+                if isinstance(voltages, tuple):
+                    if len(voltages) > 1:
+                        if not array_already_provided:
+                            array_already_provided = True
+                        else:
+                            raise SetupError(
+                                "More than one voltage array has been provided. "
+                                "Currently voltage arrays are supported only for one of the BCs."
+                            )
         return val
 
     @pd.root_validator(skip_on_failure=True)
@@ -497,10 +556,46 @@ class HeatChargeSimulation(AbstractSimulation):
                 raise SetupError(
                     f"Using 'HeatFromElectricSource' requires the definition of both "
                     f"{HeatChargeSimulationType.CONDUCTION.name} and {HeatChargeSimulationType.HEAT.name}. "
-                    f"Your simulation setup contains only conditions of type {simulation_types[0].name}"
+                    f"The current simulation setup contains only conditions of type {simulation_types[0].name}"
                 )
 
         return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_1way_coupling_with_unsteay_spec(cls, values):
+        """Throw warning when 1 way coupling is defined along with unsteady sepc"""
+
+        temporal_spec = values["time_spec"]
+        sources = values["sources"]
+
+        if any(isinstance(source, HeatFromElectricSource) for source in sources):
+            if isinstance(temporal_spec, UnsteadySpec):
+                log.warning(
+                    "'UnsteadySpec' is being used in a simulation with a source of type "
+                    "'HeatFromElectricSource'. Currently, only a steady state heat source is "
+                    "supported. This means that if an electro-quasistatic (EQS) simulation has been defined "
+                    "the Joule heating considered will be that of the final time-step."
+                )
+        return values
+
+    @pd.validator("time_spec", always=True)
+    @skip_if_fields_missing(["structures"])
+    def check_time_spec(cls, val, values):
+        """Check that at least one initial value has been provided."""
+
+        if isinstance(val, UnsteadySpec):
+            initialVolt = False
+            initialTemp = False
+            if val.initial_temperature is not None:
+                initialTemp = True
+            if val.initial_voltage is not None:
+                initialVolt = True
+            if not initialVolt and not initialTemp:
+                log.warning(
+                    "'time_spec' has been defined as 'UnsteadySpec' but no initial values "
+                    "have been defined for either voltage or temperature."
+                )
+        return val
 
     @equal_aspect
     @add_ax_if_none
@@ -1215,12 +1310,28 @@ class HeatChargeSimulation(AbstractSimulation):
             **kwargs,
         )
 
+    def _is_semiconductor_simulation(self) -> bool:
+        """
+        Checks whether semiconductor materials have been defined
+        """
+        is_semiconductor = any(
+            isinstance(structure.medium.electric_spec, SemiConductorSpec)
+            for structure in self.structures
+        )
+
+        return is_semiconductor
+
     def _get_simulation_types(self) -> list[HeatChargeSimulationType]:
         """
         Checks through BCs and sources and returns the
         types of simulations.
         """
         simulation_types = []
+
+        # NOTE: for the time being, if a simulation has SemiConductorSpec
+        # then we consider it of being a 'HeatChargeSimulationType.DEVSIM'
+        if self._is_semiconductor_simulation():
+            return [HeatChargeSimulationType.DEVSIM]
 
         heat_source_present = any(isinstance(s, HeatSourceTypes) for s in self.sources)
 
@@ -1256,3 +1367,65 @@ class HeatChargeSimulation(AbstractSimulation):
         """Returns True if 'HeatFromElectricSource' has been defined."""
 
         return any(isinstance(source, HeatFromElectricSource) for source in self.sources)
+
+    def _runHeatTransient(self) -> bool:
+        """Returns True if an heat transient simulation is to be run"""
+        simulation_types = self._get_simulation_types()
+        transient = False
+        if (
+            isinstance(self.time_spec, UnsteadySpec)
+            and HeatChargeSimulationType.HEAT in simulation_types
+        ):
+            if self.time_spec.initial_temperature is not None:
+                transient = True
+
+        return transient
+
+    def _runEQS(self) -> bool:
+        """Returns True if an Electro-quasistatic simulation is to be run"""
+        simulation_types = self._get_simulation_types()
+        isEQS = False
+        if (
+            isinstance(self.time_spec, UnsteadySpec)
+            and HeatChargeSimulationType.CONDUCTION in simulation_types
+        ):
+            if self.time_spec.initial_voltage is not None:
+                isEQS = True
+
+        return isEQS
+
+    def _useInitialTemp(self) -> float:
+        """Returns the initial temperature to be used."""
+
+        simulation_types = self._get_simulation_types()
+        T0 = 300
+        if (
+            isinstance(self.time_spec, UnsteadySpec)
+            and HeatChargeSimulationType.HEAT in simulation_types
+        ):
+            if self.time_spec.initial_temperature is not None:
+                T0 = self.time_spec.initial_temperature
+        return T0
+
+    def _useInitialVoltage(self) -> float:
+        """Returns the initial voltage to be used."""
+
+        simulation_types = self._get_simulation_types()
+        V0 = 0
+        if (
+            isinstance(self.time_spec, UnsteadySpec)
+            and HeatChargeSimulationType.CONDUCTION in simulation_types
+        ):
+            if self.time_spec.initial_voltage is not None:
+                V0 = self.time_spec.initial_voltage
+        return V0
+
+    def _initialValue(self, sim_type: str) -> float:
+        """Return the initial value that's appropriate for the given simulation time."""
+
+        if sim_type == HeatChargeSimulationType.HEAT.name:
+            return self._useInitialTemp()
+        elif sim_type == HeatChargeSimulationType.CONDUCTION.name:
+            return self._useInitialVoltage()
+        else:
+            return None

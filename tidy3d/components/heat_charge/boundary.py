@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union
+from typing import Tuple, Union
 
 import pydantic.v1 as pd
 
@@ -77,7 +77,7 @@ class VoltageBC(HeatChargeBC):
     >>> bc = VoltageBC(voltage=2)
     """
 
-    voltage: pd.FiniteFloat = pd.Field(
+    voltage: Union[pd.FiniteFloat, Tuple[pd.FiniteFloat, ...]] = pd.Field(
         title="Voltage",
         description="Electric potential to be applied at the specified boundary.",
         units=VOLT,
