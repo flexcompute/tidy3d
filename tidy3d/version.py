@@ -1,4 +1,2 @@
-"""Defines the front end version of tidy3d"""
-import importlib.metadata
-
-__version__ = importlib.metadata.version(__package__)
+"""DO NOT EDIT: Modified automatically with .bump2version.cfg"""
+__version__ = "2.6.1"
