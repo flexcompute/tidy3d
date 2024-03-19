@@ -173,6 +173,10 @@ class ErosionDilationPenalty(Penalty):
     ----
     For more details, refer to chapter 4 of Hammond, A., "High-Efficiency Topology Optimization
     for Very Large-Scale Integrated-Photonics Inverse Design" (2022).
+
+
+    .. image:: ../../_static/img/erosion_dilation.png
+
     """
 
     length_scale: pd.NonNegativeFloat = pd.Field(

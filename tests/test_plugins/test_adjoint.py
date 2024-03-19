@@ -117,9 +117,12 @@ def run_emulated_bwd(
     folder_name: str,
     callback_url: str,
     verbose: bool,
-    num_proc: int = NUM_PROC_PARALLEL,
+    num_proc: int = None,
 ) -> JaxSimulation:
     """Runs adjoint simulation on our servers, grabs the gradient data from fwd for processing."""
+
+    if num_proc is None:
+        num_proc = NUM_PROC_PARALLEL
 
     # Forward data
     sim_data_fwd = JaxSimulationData.from_file(str(TMP_PATH / FWD_SIM_DATA_FILE))
@@ -200,7 +203,7 @@ def run_async_emulated_bwd(
             folder_name=folder_name,
             callback_url=callback_url,
             verbose=verbose,
-            num_proc=NUM_PROC_PARALLEL,
+            num_proc=None,
         )
         sim_vjps_orig.append(sim_vjp)
 
@@ -410,6 +413,7 @@ def use_emulated_run(monkeypatch, tmp_path_factory):
 
     TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
+    monkeypatch.setattr(td.web, "run", run_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
 
@@ -422,6 +426,7 @@ def use_emulated_run_async(monkeypatch, tmp_path_factory):
 
     TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
+    monkeypatch.setattr(td.web, "run_async", run_async_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
