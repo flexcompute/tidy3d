@@ -29,7 +29,10 @@ def parse_arguments(args):
     )
 
     parser.add_argument(
-        "script_file", type=str, default="simulation.py", help="path to the .py script to write to."
+        "script_file",
+        type=str,
+        default="simulation.py",
+        help="path to the .py script to write to.",
     )
 
     return parser.parse_args(args)

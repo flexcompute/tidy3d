@@ -27,6 +27,7 @@ API |:computer:|
     charge/index
     eme/index
     plugins/index
+    spice
     constants
     abstract_base
     abstract_models
