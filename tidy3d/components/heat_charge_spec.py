@@ -88,5 +88,23 @@ class ConductorSpec(ChargeSpec):
     )
 
 
+class DopedConductorSpec(ConductorSpec):
+    """
+    ADD DOCSTRING
+    """
+
+    doping_p: pd.NonNegativeFloat = pd.Field(
+        title="Acceptor concentration",
+        description="Units of 1/cm^3????????",
+        units="1/cm^3????????",
+    )
+
+    doping_n: pd.NonNegativeFloat = pd.Field(
+        title="Donor concentration",
+        description="Units of 1/cm^3????????",
+        units="1/cm^3????????",
+    )
+
+
 ThermalSpecType = Union[FluidSpec, SolidSpec]
-ElectricSpecType = Union[InsulatorSpec, ConductorSpec]
+ElectricSpecType = Union[InsulatorSpec, ConductorSpec, DopedConductorSpec]

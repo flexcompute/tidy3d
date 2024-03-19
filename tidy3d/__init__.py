@@ -148,7 +148,7 @@ from .components.heat_charge.time_spec import UnsteadySpec, SteadySpec
 
 # heat
 # heat
-from .components.heat_charge_spec import ConductorSpec, FluidSpec, InsulatorSpec, SolidSpec
+from .components.heat_charge_spec import ConductorSpec, FluidSpec, InsulatorSpec, SolidSpec, DopedConductorSpec
 
 # lumped elements
 from .components.lumped_element import CoaxialLumpedResistor, LumpedResistor
@@ -466,6 +466,7 @@ __all__ = [
     "FluidSpec",
     "SolidSpec",
     "ConductorSpec",
+    "DopedConductorSpec",
     "InsulatorSpec",
     "SteadySpec",
     "UnsteadySpec",
