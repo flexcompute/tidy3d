@@ -4,7 +4,7 @@ Output Data
 -------------
 
 
-Heat Simulation Data
+Heat/Charge Simulation Data
 ^^^^^^^^^^^^^^^^^^^^
 
 .. autosummary::
@@ -12,6 +12,7 @@ Heat Simulation Data
    :template: module.rst
 
    tidy3d.HeatSimulationData
+   tidy3d.HeatChargeSimulationData
 
 
 Monitor Data
@@ -22,6 +23,7 @@ Monitor Data
    :template: module.rst
 
    tidy3d.TemperatureData
+   tidy3d.VoltageData
 
 
 Unstructured Data Classes

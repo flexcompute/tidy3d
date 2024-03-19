@@ -1,10 +1,11 @@
 .. currentmodule:: tidy3d
 
-Simulation
------------
+Monitors
+----------
 
 .. autosummary::
    :toctree: ../_autosummary/
    :template: module.rst
 
-   tidy3d.HeatSimulation
+   tidy3d.TemperatureMonitor
+   tidy3d.VoltageMonitor
