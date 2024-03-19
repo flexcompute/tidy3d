@@ -827,7 +827,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         return hash(self) >= hash(other)
 
     def __eq__(self, other):
-        """Define == for two Tidy3DBaseModels."""
+        """Define == for two Tidy3dBaseModels."""
         if other is None:
             return False
 
