@@ -714,3 +714,35 @@ def test_sim_data():
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_unsteady_spec():
+    """Make sure the unsteady spec is working appropriately."""
+
+    heat_sim = make_heat_charge_heat_sim()
+    cond_sim = make_heat_charge_cond_sim()
+
+    time_spec = td.UnsteadySpec(time_step=1, total_time_steps=2, initial_temperature=1)
+
+    # normal case, shouldn't raise error
+    _ = heat_sim.updated_copy(time_spec=time_spec)
+
+    # negative time-step
+    with pytest.raises(pd.ValidationError):
+        _ = time_spec.updated_copy(time_step=-0.1)
+
+    # negative total number of time-steps
+    with pytest.raises(pd.ValidationError):
+        _ = time_spec.updated_copy(total_time_steps=-1)
+
+    # EQS
+    time_spec2 = time_spec.updated_copy(initial_voltage=2, initial_temperature=None)
+    _ = cond_sim.updated_copy(time_spec=time_spec2)
+
+    # check with mixed simulation
+    bc = list(heat_sim.boundary_spec)
+    bc.extend(cond_sim.boundary_spec)
+    structures = list(heat_sim.structures)
+    structures.extend(list(cond_sim.structures))
+    heat_sim2 = heat_sim.updated_copy(structures=list(set(structures)), boundary_spec=bc)
+    _ = heat_sim2.updated_copy(time_spec=time_spec)
