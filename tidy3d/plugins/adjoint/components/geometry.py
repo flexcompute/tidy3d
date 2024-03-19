@@ -582,9 +582,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-
         vertices_vjp = Parallel(n_jobs=num_proc)(delayed(self.vertex_vjp)(*arg) for arg in args)
-
         vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
         return self.updated_copy(vertices_jax=vertices_vjp)
 

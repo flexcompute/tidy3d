@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Tuple, Union, List, Dict, Literal
 from joblib import Parallel, delayed
 
+
 import pydantic.v1 as pd
 import numpy as np
 import xarray as xr
@@ -56,6 +57,9 @@ NL_WARNING = (
     "error will increase as the strength of the nonlinearity is increased. "
     "We strongly recommend using linear simulations only with the adjoint plugin."
 )
+
+OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
+OutputMonitorType = Tuple[annotate_type(Union[OutputMonitorTypes]), ...]
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -120,9 +124,7 @@ class JaxSimulation(Simulation, JaxObject):
         jax_field=True,
     )
 
-    output_monitors: Tuple[
-        annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...
-    ] = pd.Field(
+    output_monitors: OutputMonitorType = pd.Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
