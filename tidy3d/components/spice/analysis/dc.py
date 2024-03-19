@@ -20,17 +20,13 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
     abs_tol: pd.PositiveFloat = pd.Field(
         default=1e10,
         title="Absolute tolerance.",
-        description="Absolute tolerance used as stop criteria when converging towards a solution. Should be "
-        "equivalent to the"
-        "SPICE ABSTOL DC transfer parameter. TODO MARC units, TODO check equivalence. TODO what does this mean?",
+        description="Absolute tolerance used as stop criteria when converging towards a solution.",
     )
 
     rel_tol: pd.PositiveFloat = pd.Field(
         default=1e-10,
         title="Relative tolerance.",
-        description="Relative tolerance used as stop criteria when converging towards a solution.  Should be equivalent to the"
-        "SPICE RELTOL DC transfer parameter. TODO MARC units, TODO check equivalence. TODO what does this "
-        "mean?",
+        description="Relative tolerance used as stop criteria when converging towards a solution.",
     )
 
     max_iters: pd.PositiveInt = pd.Field(
@@ -38,8 +34,7 @@ class ChargeToleranceSpec(Tidy3dBaseModel):
         title="Maximum number of iterations.",
         description="Indicates the maximum number of iterations to be run. "
         "The solver will stop either when this maximum of iterations is met "
-        "or when the tolerance criteria has been met. Should be equivalent to the ngspice ITL1 parameter. TODO units, "
-        "TODO devsim ngspice equivalence",
+        "or when the tolerance criteria has been met.",
     )
 
 

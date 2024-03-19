@@ -19,7 +19,7 @@ class VoltageBC(HeatChargeBC):
 
         In charge simulations it also accepts an array of voltages.
         In this case, a solution for each of these voltages will
-        be computed. TODO DEPRECIATE?
+        be computed.
 
     Example
     -------

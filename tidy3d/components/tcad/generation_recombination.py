@@ -60,7 +60,7 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
 
     Notes
     -----
-        TODO verify mid gap limitations or not.
+
         The recombination rate parameter from this model is defined from [1]_ as follows:
 
         .. math::
@@ -79,7 +79,8 @@ class ShockleyReedHallRecombination(Tidy3dBaseModel):
     ----
     Important considerations when using this model:
 
-    - Currently, lifetimes are considered constant (not dependent on temperature or doping)
+    - Currently, lifetimes are considered constant (not dependent on temperature or doping).
+    - This model represents mid-gap traps Shockley-Reed-Hall recombination.
     - Default values are those appropriate for Silicon.
     """
 
