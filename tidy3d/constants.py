@@ -192,6 +192,10 @@ HEAT_TRANSFER_COEFF = "W/(um^2*K)"
 Watts per (square micrometer Kelvin).
 """
 
+CURRENT_DENSITY = "A/um^2"
+"""
+Amperes per square micrometer
+"""
 
 LARGE_NUMBER = 1e10
 """

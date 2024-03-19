@@ -1,6 +1,6 @@
 .. currentmodule:: tidy3d
 
-Material Thermal Specification
+Material Thermal/Charge Specification
 -------------------------------
 
 .. autosummary::
@@ -9,6 +9,8 @@ Material Thermal Specification
 
    tidy3d.FluidSpec
    tidy3d.SolidSpec
+   tidy3d.ConductorSpec
+   tidy3d.InsulatorSpec
 
 
 Thermal Perturbation Specification

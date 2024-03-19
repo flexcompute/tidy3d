@@ -7,34 +7,33 @@ from typing import Tuple
 import numpy as np
 import pydantic.v1 as pd
 
-from ....exceptions import DataError
-from ...base_sim.data.sim_data import AbstractSimulationData
-from ...data.data_array import SpatialDataArray
-from ...data.dataset import TetrahedralGridDataset, TriangularGridDataset, UnstructuredGridDataset
-from ...types import Ax, Literal, RealFieldVal
-from ...viz import add_ax_if_none, equal_aspect
-from ..simulation import HeatSimulation
-from .monitor_data import HeatMonitorDataType, TemperatureData
+from ...exceptions import DataError
+from ...log import log
+from ..base_sim.data.sim_data import AbstractSimulationData
+from ..data.data_array import SpatialDataArray
+from ..data.dataset import TetrahedralGridDataset, TriangularGridDataset, UnstructuredGridDataset
+from ..types import Ax, Literal, RealFieldVal
+from ..viz import add_ax_if_none, equal_aspect
+from .heat.simulation import HeatSimulation
+from .monitor_data import HeatChargeMonitorDataType, TemperatureData, VoltageData
+from .simulation import HeatChargeSimulation
 
 
-class HeatSimulationData(AbstractSimulationData):
-    """Stores results of a heat simulation.
+class HeatChargeSimulationData(AbstractSimulationData):
+    """Stores results of a heat-charge simulation.
 
     Example
     -------
-    >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, SpatialDataArray
-    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformHeatSource
-    >>> from tidy3d import StructureBoundary, TemperatureBC, TemperatureMonitor, TemperatureData
-    >>> from tidy3d import HeatBoundarySpec
+    >>> import tidy3d as td
     >>> import numpy as np
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
-    >>> heat_sim = HeatSimulation(
+    >>> temp_mnt = td.TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> heat_sim = HeatChargeSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
-    ...         Structure(
-    ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(
-    ...                 permittivity=2.0, heat_spec=SolidSpec(
+    ...         td.Structure(
+    ...             geometry=td.Box(size=(1, 1, 1), center=(0, 0, 0)),
+    ...             medium=td.Medium(
+    ...                 permittivity=2.0, heat_spec=td.SolidSpec(
     ...                     conductivity=1,
     ...                     capacity=1,
     ...                 )
@@ -42,13 +41,13 @@ class HeatSimulationData(AbstractSimulationData):
     ...             name="box",
     ...         ),
     ...     ],
-    ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
-    ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
-    ...     sources=[UniformHeatSource(rate=1, structures=["box"])],
+    ...     medium=td.Medium(permittivity=3.0, heat_spec=td.FluidSpec()),
+    ...     grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+    ...     sources=[td.HeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
-    ...         HeatBoundarySpec(
-    ...             placement=StructureBoundary(structure="box"),
-    ...             condition=TemperatureBC(temperature=500),
+    ...         td.HeatChargeBoundarySpec(
+    ...             placement=td.StructureBoundary(structure="box"),
+    ...             condition=td.TemperatureBC(temperature=500),
     ...         )
     ...     ],
     ...     monitors=[temp_mnt],
@@ -57,19 +56,19 @@ class HeatSimulationData(AbstractSimulationData):
     >>> y = [2,3,4]
     >>> z = [3,4,5,6]
     >>> coords = dict(x=x, y=y, z=z)
-    >>> temp_array = SpatialDataArray(300 * np.abs(np.random.random((2,3,4))), coords=coords)
-    >>> temp_mnt_data = TemperatureData(monitor=temp_mnt, temperature=temp_array)
-    >>> heat_sim_data = HeatSimulationData(
+    >>> temp_array = td.SpatialDataArray(300 * np.abs(np.random.random((2,3,4))), coords=coords)
+    >>> temp_mnt_data = td.TemperatureData(monitor=temp_mnt, temperature=temp_array)
+    >>> heat_sim_data = td.HeatChargeSimulationData(
     ...     simulation=heat_sim, data=[temp_mnt_data],
     ... )
     """
 
-    simulation: HeatSimulation = pd.Field(
-        title="Heat Simulation",
-        description="Original :class:`.HeatSimulation` associated with the data.",
+    simulation: HeatChargeSimulation = pd.Field(
+        title="Heat-Charge Simulation",
+        description="Original :class:`.HeatChargeSimulation` associated with the data.",
     )
 
-    data: Tuple[HeatMonitorDataType, ...] = pd.Field(
+    data: Tuple[HeatChargeMonitorDataType, ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -129,22 +128,27 @@ class HeatSimulationData(AbstractSimulationData):
         """
 
         monitor_data = self[monitor_name]
+        property_to_plot = None
 
-        if not isinstance(monitor_data, TemperatureData):
+        if isinstance(monitor_data, TemperatureData):
+            if monitor_data.temperature is None:
+                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+            field_data = self._field_component_value(monitor_data.temperature, val)
+            property_to_plot = "heat_conductivity"
+
+        elif isinstance(monitor_data, VoltageData):
+            if monitor_data.voltage is None:
+                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+            field_data = self._field_component_value(monitor_data.voltage, val)
+            property_to_plot = "electric_conductivity"
+
+        else:
             raise DataError(
                 f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
-                f"'TemperatureMonitor'."
+                f"supported monitor. Supported monitors are 'TemperatureData', 'VoltageData'."
             )
 
-        if monitor_data.temperature is None:
-            raise DataError(f"No data to plot for monitor '{monitor_name}'.")
-
-        field_data = self._field_component_value(monitor_data.temperature, val)
-
-        if val == "abs^2":
-            field_name = "|T|², K²"
-        else:
-            field_name = "T, K"
+        field_name = monitor_data.field_name(val)
 
         if scale == "log":
             field_data = np.log10(np.abs(field_data))
@@ -255,16 +259,37 @@ class HeatSimulationData(AbstractSimulationData):
 
         # select the cross section data
         interp_kwarg = {"xyz"[axis]: position}
-        # plot the simulation heat conductivity
-        ax = self.simulation.scene.plot_structures_heat_conductivity(
-            cbar=False,
-            alpha=structures_alpha,
-            ax=ax,
-            **interp_kwarg,
-        )
+        # plot the simulation heat/electric conductivity
+        if property_to_plot is not None:
+            ax = self.simulation.scene.plot_heat_charge_property(
+                cbar=False,
+                alpha=structures_alpha,
+                ax=ax,
+                property=property_to_plot,
+                **interp_kwarg,
+            )
 
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
         ax.set_ylim(min_bounds[1], max_bounds[1])
 
         return ax
+
+
+class HeatSimulationData(HeatChargeSimulationData):
+    """Wrapper for Heat simulation data. 'HeatSimulationData' is deprecated.
+    Consider using 'HeatChargeSimulationData' instead."""
+
+    simulation: HeatSimulation = pd.Field(
+        title="Heat Simulation",
+        description="Original :class:`.HeatSimulation` associated with the data.",
+    )
+
+    @pd.root_validator(skip_on_failure=True)
+    def issue_warning_deprecated(cls, values):
+        """Issue warning for 'HeatSimulations'."""
+        log.warning(
+            "'HeatSimulationData' is deprecated and will be discontinued. You can use "
+            "'HeatChargeSimulationData' instead"
+        )
+        return values

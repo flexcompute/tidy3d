@@ -10,7 +10,7 @@ import matplotlib.pylab as plt
 import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from ..constants import THERMAL_CONDUCTIVITY, inf
+from ..constants import CONDUCTIVITY, THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
@@ -24,7 +24,7 @@ from .data.dataset import (
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
 from .grid.grid import Coords, Grid
-from .heat_spec import SolidSpec
+from .heat_charge_spec import ConductorSpec, SolidSpec
 from .medium import (
     AbstractCustomMedium,
     AbstractPerturbationMedium,
@@ -1087,13 +1087,14 @@ class Scene(Tidy3dBaseModel):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_heat_conductivity(
+    def plot_heat_charge_property(
         self,
         x: float = None,
         y: float = None,
         z: float = None,
         alpha: float = None,
         cbar: bool = True,
+        property: str = "heat_conductivity",
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
@@ -1114,6 +1115,9 @@ class Scene(Tidy3dBaseModel):
             Defaults to the structure default alpha.
         cbar : bool = True
             Whether to plot a colorbar for the thermal conductivity.
+        property : str = "heat_conductivity"
+            The heat-charge siimulation property to plot. The options are
+            ["heat_conductivity", "electric_conductivity"]
         ax : matplotlib.axes._subplots.Axes = None
             Matplotlib axes to plot on, if not specified, one is created.
         hlim : Tuple[float, float] = None
@@ -1129,8 +1133,8 @@ class Scene(Tidy3dBaseModel):
 
         hlim, vlim = Scene._get_plot_lims(bounds=self.bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        ax = self.plot_structures_heat_conductivity(
-            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
+        ax = self.plot_structures_heat_charge_property(
+            cbar=cbar, alpha=alpha, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim, property=property
         )
         ax = self._set_plot_bounds(bounds=self.bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
         return ax
@@ -1144,6 +1148,72 @@ class Scene(Tidy3dBaseModel):
         z: float = None,
         alpha: float = None,
         cbar: bool = True,
+        reverse: bool = False,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ) -> Ax:
+        """Plot each of scene's structures on a plane defined by one nonzero x,y,z coordinate.
+        The thermal conductivity is plotted in grayscale based on its value.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        reverse : bool = False
+            If ``False``, the highest permittivity is plotted in black.
+            If ``True``, it is plotteed in white (suitable for black backgrounds).
+        cbar : bool = True
+            Whether to plot a colorbar for the relative permittivity.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        log.warning(
+            "This function 'plot_structures_heat_conductivity' is deprecated and "
+            "will be discontinued. In its place you can use "
+            'plot_structures_heat_charge_property(property="heat_conductivity")'
+        )
+
+        return self.plot_structures_heat_charge_property(
+            x=x,
+            y=y,
+            z=z,
+            alpha=alpha,
+            cbar=cbar,
+            property="heat_conductivity",
+            reverse=reverse,
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+        )
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_structures_heat_charge_property(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        property: str = "heat_conductivity",
         reverse: bool = False,
         ax: Ax = None,
         hlim: Tuple[float, float] = None,
@@ -1202,23 +1272,29 @@ class Scene(Tidy3dBaseModel):
                 structures=structures, x=x, y=y, z=z, hlim=hlim, vlim=vlim
             )
 
-        heat_cond_min, heat_cond_max = self.heat_conductivity_bounds()
+        property_val_min, property_val_max = self.heat_charge_property_bounds(property=property)
         for medium, shape in medium_shapes:
-            ax = self._plot_shape_structure_heat_cond(
+            ax = self._plot_shape_structure_heat_charge_property(
                 alpha=alpha,
                 medium=medium,
-                heat_cond_min=heat_cond_min,
-                heat_cond_max=heat_cond_max,
+                property_val_min=property_val_min,
+                property_val_max=property_val_max,
                 reverse=reverse,
                 shape=shape,
                 ax=ax,
+                property=property,
             )
 
         if cbar:
+            label = ""
+            if property == "heat_conductivity":
+                label = f"Thermal conductivity ({THERMAL_CONDUCTIVITY})"
+            elif property == "electric_conductivity":
+                label = f"Electric conductivity ({CONDUCTIVITY})"
             self._add_cbar(
-                vmin=heat_cond_min,
-                vmax=heat_cond_max,
-                label=f"Thermal conductivity ({THERMAL_CONDUCTIVITY})",
+                vmin=property_val_min,
+                vmax=property_val_max,
+                label=label,
                 cmap=STRUCTURE_HEAT_COND_CMAP,
                 ax=ax,
             )
@@ -1231,8 +1307,8 @@ class Scene(Tidy3dBaseModel):
 
         return ax
 
-    def heat_conductivity_bounds(self) -> Tuple[float, float]:
-        """Compute range of thermal conductivities present in the scene.
+    def heat_charge_property_bounds(self, property) -> Tuple[float, float]:
+        """Compute range of the heat-charge simulation property present in the scene.
 
         Returns
         -------
@@ -1241,33 +1317,65 @@ class Scene(Tidy3dBaseModel):
         """
 
         medium_list = [self.medium] + list(self.mediums)
-        medium_list = [medium for medium in medium_list if isinstance(medium.heat_spec, SolidSpec)]
-        cond_list = [medium.heat_spec.conductivity for medium in medium_list]
+        if property == "heat_conductivity":
+            medium_list = [
+                medium for medium in medium_list if isinstance(medium.heat_spec, SolidSpec)
+            ]
+            cond_list = [medium.heat_spec.conductivity for medium in medium_list]
+        elif property == "electric_conductivity":
+            medium_list = [
+                medium for medium in medium_list if isinstance(medium.electric_spec, ConductorSpec)
+            ]
+            cond_list = [medium.electric_spec.conductivity for medium in medium_list]
+
         cond_min = min(cond_list)
         cond_max = max(cond_list)
         return cond_min, cond_max
 
-    def _get_structure_heat_cond_plot_params(
+    def heat_conductivity_bounds(self) -> Tuple[float, float]:
+        """Compute range of thermal conductivities present in the scene.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Minimal and maximal values of thermal conductivity in scene.
+        """
+        log.warning(
+            "This function 'heat_conductivity_bounds()' is deprecated and will be "
+            "discontinued in the future. In it's place, you can now use this "
+            "'heat_charge_property_bounds(property=\"heat_conductivity\")'"
+        )
+
+        return self.heat_charge_property_bounds(property="heat_conductivity")
+
+    def _get_structure_heat_charge_property_plot_params(
         self,
         medium: Medium,
-        heat_cond_min: float,
-        heat_cond_max: float,
+        property_val_min: float,
+        property_val_max: float,
         reverse: bool = False,
         alpha: float = None,
+        property: str = "heat_conductivity",
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in
-        scene.plot_heat_conductivity().
+        scene.plot_heat_charge_property().
         """
 
         plot_params = plot_params_structure.copy(update={"linewidth": 0})
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
-        if isinstance(medium.heat_spec, SolidSpec):
-            # regular medium
+        cond_medium = None
+        if property == "heat_conductivity" and isinstance(medium.heat_spec, SolidSpec):
             cond_medium = medium.heat_spec.conductivity
-            delta_cond = cond_medium - heat_cond_min
-            delta_cond_max = heat_cond_max - heat_cond_min + 1e-5 * heat_cond_min
+        elif property == "electric_conductivity" and isinstance(
+            medium.electric_spec, ConductorSpec
+        ):
+            cond_medium = medium.electric_spec.conductivity
+
+        if cond_medium is not None:
+            delta_cond = cond_medium - property_val_min
+            delta_cond_max = property_val_max - property_val_min + 1e-5 * property_val_min
             cond_fraction = delta_cond / delta_cond_max
             color = cond_fraction if reverse else 1 - cond_fraction
             plot_params = plot_params.copy(update={"facecolor": str(color)})
@@ -1278,12 +1386,13 @@ class Scene(Tidy3dBaseModel):
 
         return plot_params
 
-    def _plot_shape_structure_heat_cond(
+    def _plot_shape_structure_heat_charge_property(
         self,
         medium: Medium,
         shape: Shapely,
-        heat_cond_min: float,
-        heat_cond_max: float,
+        property_val_min: float,
+        property_val_max: float,
+        property: str,
         ax: Ax,
         reverse: bool = False,
         alpha: float = None,
@@ -1291,15 +1400,76 @@ class Scene(Tidy3dBaseModel):
         """Plot a structure's cross section shape for a given medium, grayscale for thermal
         conductivity.
         """
-        plot_params = self._get_structure_heat_cond_plot_params(
+        plot_params = self._get_structure_heat_charge_property_plot_params(
             medium=medium,
-            heat_cond_min=heat_cond_min,
-            heat_cond_max=heat_cond_max,
+            property_val_min=property_val_min,
+            property_val_max=property_val_max,
             alpha=alpha,
             reverse=reverse,
+            property=property,
         )
         ax = self.box.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
+
+    @equal_aspect
+    @add_ax_if_none
+    def plot_heat_conductivity(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        alpha: float = None,
+        cbar: bool = True,
+        ax: Ax = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+    ):
+        """Plot each of scebe's components on a plane defined by one nonzero x,y,z coordinate.
+        The thermal conductivity is plotted in grayscale based on its value.
+
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        alpha : float = None
+            Opacity of the structures being plotted.
+            Defaults to the structure default alpha.
+        cbar : bool = True
+            Whether to plot a colorbar for the thermal conductivity.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
+
+        log.warning(
+            "The function 'plot_heat_conductivity' is deprecated and will be "
+            "discontinued. In its place you can use "
+            'plot_heat_charge_property(property="heat_conductivity")'
+        )
+
+        return self.plot_heat_charge_property(
+            x=x,
+            y=y,
+            z=z,
+            alpha=alpha,
+            cbar=cbar,
+            property="heat_conductivity",
+            ax=ax,
+            hlim=hlim,
+            vlim=vlim,
+        )
 
     """ Misc """
 
