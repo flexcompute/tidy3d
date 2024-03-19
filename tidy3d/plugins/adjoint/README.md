@@ -148,7 +148,7 @@ Unfortunately, all `Tidy3D` components are not handled so simply. It turns out t
 
 The `JaxDataArray` may freely store `jax` values and tracers and implements a few basic emulations of `xarray.DataArray` objects, such as `.sel` and `.isel`. Note that at this time `.interp` is not supported, but I think we could consider implementing it later. A user could, in principle, wrap `.sel` to do the interpolation themselves, but it was not considered at this stage because some trials to implement it myself ended badly.
 
-The `JaxDataArray` inherits directly from `Tidy3DBaseModel` alone and therefore implements its own pytree flattening and unflattening operations. Luckily, these operations are quite trivial. There are also a set of custom validations in the `JaxDataArray` to ensure it is set up and used properly as it does not natively provide nearly as strict argument checking as its `xarray.DataArray` counterparts.
+The `JaxDataArray` inherits directly from `Tidy3dBaseModel` alone and therefore implements its own pytree flattening and unflattening operations. Luckily, these operations are quite trivial. There are also a set of custom validations in the `JaxDataArray` to ensure it is set up and used properly as it does not natively provide nearly as strict argument checking as its `xarray.DataArray` counterparts.
 
 ## Adjoint Method
 
