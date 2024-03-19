@@ -121,9 +121,9 @@ class DesignSpace(Tidy3dBaseModel):
 
     def run_batch(
         self,
-        fn_pre: Callable[Any, Union[Simulation, List[Simulation], Dict[str, Simulation]]],
+        fn_pre: Callable[[Any], Union[Simulation, List[Simulation], Dict[str, Simulation]]],
         fn_post: Callable[
-            Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any
+            [Union[SimulationData, List[SimulationData], Dict[str, SimulationData]]], Any
         ],
         path_dir: str = None,
         **batch_kwargs,

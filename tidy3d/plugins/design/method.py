@@ -109,6 +109,7 @@ class MethodIndependent(Method, ABC):
             """Get task name for 'index'-th set of function kwargs."""
             try:
                 kwarg_str = str(fn_kwargs)
+                print(kwarg_str)
                 if sim_index is not None:
                     return f"{kwarg_str}_{sim_index}"
                 return kwarg_str
