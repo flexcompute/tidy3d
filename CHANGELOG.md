@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.7.0] - 2024-06-17
 
 ### Added
+- `HeatSimulation` is now under the more generic class `HeatChargeSimulation`. This new class sallows for imulations of both HEAT and electric CONDUCTION types. One-way coupling between these is possible in which the CONDUCTION simulation is used to compute Joule heating which is subsequently used as a source in the HEAT simulation.
 - EME solver through `EMESimulation` class.
 - 2D heat simulations are now fully supported. 
 - `tidy3d.plugins.adjoint.web.run_local` used in place of `run` will skip validators that restrict the size or number of `input_structures`.

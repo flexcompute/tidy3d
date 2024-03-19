@@ -122,17 +122,27 @@ from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
 from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
 from .components.grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
-from .components.heat.boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
-from .components.heat.data.monitor_data import TemperatureData
-from .components.heat.data.sim_data import HeatSimulationData
-from .components.heat.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
-from .components.heat.monitor import TemperatureMonitor
-from .components.heat.simulation import HeatSimulation
-from .components.heat.source import UniformHeatSource
+from .components.heat_charge.boundary import (
+    ConvectionBC,
+    CurrentBC,
+    HeatBoundarySpec,
+    HeatChargeBoundarySpec,
+    HeatFluxBC,
+    InsulatingBC,
+    TemperatureBC,
+    VoltageBC,
+)
+from .components.heat_charge.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from .components.heat_charge.heat.simulation import HeatSimulation
+from .components.heat_charge.monitor import TemperatureMonitor, VoltageMonitor
+from .components.heat_charge.monitor_data import TemperatureData, VoltageData
+from .components.heat_charge.sim_data import HeatChargeSimulationData, HeatSimulationData
+from .components.heat_charge.simulation import HeatChargeSimulation
+from .components.heat_charge.source import HeatFromElectricSource, HeatSource, UniformHeatSource
 
 # heat
 # heat
-from .components.heat_spec import FluidSpec, SolidSpec
+from .components.heat_charge_spec import ConductorSpec, FluidSpec, InsulatorSpec, SolidSpec
 
 # lumped elements
 from .components.lumped_element import CoaxialLumpedResistor, LumpedResistor
@@ -449,17 +459,29 @@ __all__ = [
     "SimulationBoundary",
     "FluidSpec",
     "SolidSpec",
+    "ConductorSpec",
+    "InsulatorSpec",
     "HeatSimulation",
     "HeatSimulationData",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
     "HeatBoundarySpec",
+    "VoltageBC",
+    "CurrentBC",
+    "InsulatingBC",
     "UniformHeatSource",
+    "HeatSource",
+    "HeatFromElectricSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
+    "HeatChargeSimulation",
+    "HeatChargeSimulationData",
+    "VoltageData",
+    "HeatChargeBoundarySpec",
+    "VoltageMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
