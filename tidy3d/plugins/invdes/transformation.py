@@ -1,4 +1,5 @@
-# define transformations applied to parameters from design region
+# where we define transformations applied to parameters from design region
+
 import typing
 import abc
 
@@ -11,6 +12,8 @@ import tidy3d.plugins.adjoint.utils.filter as adjoint_filters
 CircularFilter = adjoint_filters.CircularFilter
 ConicFilter = adjoint_filters.ConicFilter
 BinaryProjector = adjoint_filters.BinaryProjector
+
+# TODO: some of these values (eg pixel size) must be set by the design region, need to override them?
 
 
 # template for user to define transformations

@@ -390,6 +390,7 @@ def use_emulated_run(monkeypatch, tmp_path_factory):
 
     TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
+    monkeypatch.setattr(td.web, "run", run_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
 

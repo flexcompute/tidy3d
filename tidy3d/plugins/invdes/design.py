@@ -2,6 +2,7 @@
 
 import pydantic.v1 as pd
 import typing
+import dill
 
 import jax.numpy as jnp
 import jax
@@ -48,12 +49,19 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         ..., title="Initial Parameters", description="Nested list of Initial parameters."
     )
 
+    history_save_fname: str = pd.Field(
+        None,
+        title="History Storage File",
+        description="If specified, will save the optimization state to a local ``.pkl`` file "
+        "using ``dill.dump()``.",
+    )
+
     def display_fn_default(self, **display_kwargs) -> None:
         """Default display function while optimizing."""
         step_index = display_kwargs.pop("step_index")
 
         print(f"step ({step_index + 1}/{self.optimizer.num_steps})")
-        print(f"\tval = {display_kwargs['val']:.3e}")
+        print(f"\tobjective_fn_val = {display_kwargs['objective_fn_val']:.3e}")
         print(f"\tgrad_norm = {jnp.linalg.norm(display_kwargs['grad']):.3e}")
         print(f"\tpost_process_val = {display_kwargs['post_process_val']:.3e}")
         print(f"\tpenalty = {display_kwargs['penalty']:.3e}")
@@ -76,6 +84,8 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
 
             # construct the jax simulation from the simulation + design region
             design_region_structure = self.design_region.make_structure(params)
+
+            # TODO: do we want to add mesh override structure if the pixels are large / low res?
             mesh_override_structure = td.MeshOverrideStructure(
                 geometry=design_region_structure.geometry,
                 dl=self.design_region.step_sizes,
@@ -115,7 +125,7 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             aux_data = dict(
                 penalty=penalty_value,
                 post_process_val=post_process_val,
-                simulation=jax_sim.to_simulation(),
+                simulation=jax_sim.to_simulation()[0],
             )
             return objective_fn_val, aux_data
 
@@ -126,7 +136,7 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         history = dict(
             params=[],
             opt_state=[],
-            val=[],
+            objective_fn_val=[],
             grad=[],
             penalty=[],
             post_process_val=[],
@@ -151,11 +161,15 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             # save history
             history["params"].append(params)
             history["opt_state"].append(opt_state)
-            history["val"].append(val)
+            history["objective_fn_val"].append(val)
             history["grad"].append(grad)
             history["penalty"].append(penalty)
             history["post_process_val"].append(post_process_val)
             history["simulation"].append(simulation)
+
+            if self.history_save_fname:
+                with open(self.history_save_fname, "wb") as f_handle:
+                    dill.dump(history, f_handle)
 
             # print stuff
             display_kwargs = {key: val[-1] for key, val in history.items()}
