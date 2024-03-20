@@ -4,19 +4,22 @@ import typing
 
 import jax.numpy as jnp
 import numpy as np
+import jax
 
 import tidy3d as td
 from tidy3d.components.types import annotate_type, Symmetry
 import tidy3d.plugins.adjoint as tda
 
-from .transformation import TransformationType, BinaryProjector, ConicFilter, CircularFilter, Transformation
-from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, RadiusPenalty, Penalty
+from .transformation import (
+    TransformationType,
+)
+from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
+
 
 class DesignRegion(td.Box, abc.ABC):
-
     params_shape: typing.Tuple[int, int, int]
     symmetry: typing.Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
-    eps_bounds : typing.Tuple[float, float]
+    eps_bounds: typing.Tuple[float, float]
     transformations: typing.Tuple[annotate_type(TransformationType), ...] = ()
     penalties: typing.Tuple[annotate_type(PenaltyType), ...] = ()
     penalty_weights: typing.Tuple[float, ...] = None
@@ -67,10 +70,8 @@ class DesignRegion(td.Box, abc.ABC):
 
 
 class TopologyDesignRegion(DesignRegion):
-    
     transformations: typing.Tuple[annotate_type(TransformationType), ...] = ()
     penalties: typing.Tuple[annotate_type(typing.Union[ErosionDilationPenalty, Penalty]), ...] = ()
-
 
     @property
     def step_sizes(self) -> typing.Tuple[float, float, float]:
@@ -86,15 +87,14 @@ class TopologyDesignRegion(DesignRegion):
 
         coords = dict()
 
-        for coord_key, ptmin, ptmax, num_pts in zip('xyz', rmin, rmax, self.params_shape):
-
+        for coord_key, ptmin, ptmax, num_pts in zip("xyz", rmin, rmax, self.params_shape):
             size = ptmax - ptmin
             step_size = size / num_pts
 
-            coord_vals = np.linspace(ptmin + step_size/2, ptmax - step_size/2, num_pts).tolist()
+            coord_vals = np.linspace(ptmin + step_size / 2, ptmax - step_size / 2, num_pts).tolist()
             coords[coord_key] = coord_vals
 
-        coords["f"] = [td.C_0] # TODO: is this a safe choice?
+        coords["f"] = [td.C_0]  # TODO: is this a safe choice?
         return coords
 
     def eps_values(self, params: jnp.ndarray) -> jnp.ndarray:
@@ -102,6 +102,7 @@ class TopologyDesignRegion(DesignRegion):
         material_density = self.material_density(params)
         eps_min, eps_max = self.eps_bounds
         arr_3d = eps_min + material_density * (eps_max - eps_min)
+        arr_3d = jax.lax.stop_gradient(arr_3d)
         return jnp.expand_dims(arr_3d, axis=-1)
 
     def make_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
@@ -114,12 +115,13 @@ class TopologyDesignRegion(DesignRegion):
         medium = tda.JaxCustomMedium(eps_dataset=eps_dataset)
         return tda.JaxStructureStaticGeometry(geometry=self.geometry, medium=medium)
 
-class ShapeDesignRegion(DesignRegion):
 
+class ShapeDesignRegion(DesignRegion):
     transformations: typing.Literal[()] = ()
     penalties: typing.Tuple[annotate_type(typing.Union[RadiusPenalty, Penalty]), ...] = ()
 
 
 class LevelSetDesignRegion(DesignRegion):
     """Implement later"""
+
     pass

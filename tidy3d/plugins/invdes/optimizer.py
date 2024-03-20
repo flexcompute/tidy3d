@@ -2,9 +2,7 @@
 
 import typing
 
-import optax
 
-import jax.numpy as jnp
 import pydantic.v1 as pd
 
 import tidy3d as td
