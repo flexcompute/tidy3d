@@ -11,6 +11,7 @@ import tidy3d.plugins.adjoint.utils.penalty as adjoint_penalties
 RadiusPenalty = adjoint_penalties.RadiusPenalty
 ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
 
+
 # template for user to define penalty
 class Penalty(td.components.base.Tidy3dBaseModel, abc.ABC):
     """Arbitrary penalty that a user can define."""
@@ -18,6 +19,7 @@ class Penalty(td.components.base.Tidy3dBaseModel, abc.ABC):
     @abc.abstractmethod
     def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the penalty on some material density data."""
+
 
 # define the allowable penalties types for the `DesignRegion.transformations` field
 PenaltyType = typing.Union[RadiusPenalty, ErosionDilationPenalty, Penalty]

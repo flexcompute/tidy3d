@@ -2,7 +2,6 @@
 
 import typing
 
-import jax.numpy as jnp
 
 import tidy3d as td
 
@@ -10,7 +9,7 @@ import tidy3d as td
 class OptimizeResult(td.components.base.Tidy3dBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
-    history : typing.Dict[str, typing.Any]
+    history: typing.Dict[str, typing.Any]
 
     @property
     def final(self) -> typing.Dict[str, typing.Any]:

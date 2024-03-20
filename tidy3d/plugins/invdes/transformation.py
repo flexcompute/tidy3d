@@ -12,6 +12,7 @@ CircularFilter = adjoint_filters.CircularFilter
 ConicFilter = adjoint_filters.ConicFilter
 BinaryProjector = adjoint_filters.BinaryProjector
 
+
 # template for user to define transformations
 class Transformation(td.components.base.Tidy3dBaseModel, abc.ABC):
     """Arbitrary transformation that a user can define."""
@@ -19,6 +20,7 @@ class Transformation(td.components.base.Tidy3dBaseModel, abc.ABC):
     @abc.abstractmethod
     def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
         """Evaluate some parameter data."""
+
 
 # define the allowable transformation types for the `DesignRegion.transformations` field
 TransformationType = typing.Union[CircularFilter, ConicFilter, BinaryProjector, Transformation]

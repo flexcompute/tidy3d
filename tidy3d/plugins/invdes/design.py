@@ -16,7 +16,6 @@ from .design_region import DesignRegion
 from .optimizer import Optimizer
 from .result import OptimizeResult
 
-ObjFnType = typing.Callable[[tda.JaxSimulationData], float]
 
 class InverseDesign(td.components.base.Tidy3dBaseModel):
     """Container for an inverse design problem."""
@@ -46,13 +45,31 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
     )
 
     params0: list = pd.Field(
-        ...,
-        title="Initial Parameters",
-        description="Nested list of Initial parameters."
+        ..., title="Initial Parameters", description="Nested list of Initial parameters."
     )
 
-    def run(self, post_process_fn: ObjFnType, **run_kwargs) -> OptimizeResult:
+    def display_fn_default(self, **display_kwargs) -> None:
+        """Default display function while optimizing."""
+        step_index = display_kwargs.pop("step_index")
+
+        print(f"step ({step_index + 1}/{self.optimizer.num_steps})")
+        print(f"\tval = {display_kwargs['val']:.3e}")
+        print(f"\tgrad_norm = {jnp.linalg.norm(display_kwargs['grad']):.3e}")
+        print(f"\tpost_process_val = {display_kwargs['post_process_val']:.3e}")
+        print(f"\tpenalty = {display_kwargs['penalty']:.3e}")
+
+    def run(
+        self,
+        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
+        display_fn: typing.Callable[[typing.Any, ...], None] = None,
+        callback_fn: typing.Callable[[typing.Any, ...], typing.Any] = lambda **kwargs: None,
+        **run_kwargs,
+    ) -> OptimizeResult:
         """Run this inverse design problem."""
+
+        # turn off verbosity by default unless otherwise specified
+        if "verbose" not in run_kwargs:
+            run_kwargs["verbose"] = False
 
         def objective_fn(params: jnp.ndarray, **post_proc_kwargs) -> float:
             """Full objective function."""
@@ -65,7 +82,8 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
                 enforce=True,
             )
             grid_spec = self.simulation.grid_spec.updated_copy(
-                override_structures=list(self.simulation.grid_spec.override_structures) + [mesh_override_structure]
+                override_structures=list(self.simulation.grid_spec.override_structures)
+                + [mesh_override_structure]
             )
             jax_info = JaxInfo(
                 num_input_structures=0,
@@ -97,7 +115,7 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             aux_data = dict(
                 penalty=penalty_value,
                 post_process_val=post_process_val,
-                simulation=jax_sim.to_simulation()
+                simulation=jax_sim.to_simulation(),
             )
             return objective_fn_val, aux_data
 
@@ -122,7 +140,6 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
 
         # main optimization loop
         for step_index in range(self.optimizer.num_steps):
-
             # evaluate gradient
             (val, aux_data), grad = val_and_grad_fn(params)
 
@@ -140,9 +157,14 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             history["post_process_val"].append(post_process_val)
             history["simulation"].append(simulation)
 
+            # print stuff
+            display_kwargs = {key: val[-1] for key, val in history.items()}
+            display_kwargs["step_index"] = step_index
+            _display_fn = display_fn or self.display_fn_default
+            _display_fn(**display_kwargs)
+
             # update optimizer and parameters
             updates, opt_state = optimizer.update(-grad, opt_state, params)
             params = optax.apply_updates(params, updates)
 
         return OptimizeResult(history=history)
-
