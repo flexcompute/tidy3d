@@ -7,8 +7,10 @@ import jax.numpy as jnp
 import tidy3d as td
 import tidy3d.plugins.adjoint as tda
 import tidy3d.plugins.invdes as tdi
+import matplotlib.pyplot as plt
 
 from .test_adjoint import use_emulated_run
+from ..utils import run_emulated
 
 FREQ0 = 1e14
 L_SIM = 2.0
@@ -17,32 +19,35 @@ PARAMS_SHAPE = (18, 19, 20)
 PARAMS_0 = np.random.random(PARAMS_SHAPE)
 
 
-def test_pipeline(use_emulated_run):
-    """Test a full run with all of the possible objects."""
+td.config.logging_level = "ERROR"
 
-    td.config.logging_level = "ERROR"
+simulation = td.Simulation(
+    size=(L_SIM, L_SIM, L_SIM),
+    grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FREQ0),
+    sources=[
+        td.PointDipole(
+            center=(0, 0, 0),
+            source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
+            polarization="Ez",
+        )
+    ],
+    run_time=1e-12,
+)
 
-    simulation = td.Simulation(
-        size=(L_SIM, L_SIM, L_SIM),
-        grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FREQ0),
-        sources=[
-            td.PointDipole(
-                center=(0, 0, 0),
-                source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
-                polarization="Ez",
-            )
-        ],
-        run_time=1e-12,
-    )
+mnt = td.FieldMonitor(
+    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
+)
 
-    class custom_transformation(tdi.Transformation):
-        def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
-            return data / jnp.mean(data)
+# class custom_transformation(tdi.Transformation):
+#     def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
+#         return data / jnp.mean(data)
 
-    class custom_penalty(tdi.Penalty):
-        def evaluate(self, data: jnp.ndarray) -> float:
-            return jnp.mean(data)
+# class custom_penalty(tdi.Penalty):
+#     def evaluate(self, data: jnp.ndarray) -> float:
+#         return jnp.mean(data)
 
+
+def test_design_region():
     design_region = tdi.TopologyDesignRegion(
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
@@ -71,29 +76,55 @@ def test_pipeline(use_emulated_run):
         design_region_no_penalties._penalty_weights
     assert design_region_no_penalties.penalty_value(PARAMS_0) == 0.0
 
-    mnt = td.FieldMonitor(
-        center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
-    )
+    return design_region
 
+
+def test_optimizer():
     optimizer = tdi.Optimizer(
         learning_rate=0.2,
         num_steps=10,
     )
+    return optimizer
 
+
+def test_invdes():
     invdes = tdi.InverseDesign(
         simulation=simulation,
-        design_region=design_region,
+        design_region=test_design_region(),
         output_monitors=[mnt],
-        optimizer=optimizer,
+        optimizer=test_optimizer(),
         params0=np.random.random(PARAMS_SHAPE).tolist(),
+        history_save_fname="tests/data/invdes_history.pkl",
     )
+    return invdes
 
-    def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
-        intensity = sim_data.get_intensity(MNT_NAME)
-        return scale * jnp.sum(intensity.values)
 
-    result = invdes.run(post_process_fn, task_name="blah")
+def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
+    intensity = sim_data.get_intensity(MNT_NAME)
+    return scale * jnp.sum(intensity.values)
+
+
+def test_run(use_emulated_run):
+    """Test running the optimization defined in the ``InverseDesign`` object."""
+    invdes = test_invdes()
+    return invdes.run(post_process_fn, task_name="blah")
+
+
+def test_result(use_emulated_run, tmp_path):
+    """Test methods of the ``OptimizeResult`` object."""
+    result = test_run(use_emulated_run)
+
+    with pytest.raises(KeyError):
+        _ = result.get_final("blah")
 
     val_final1 = result.final["params"]
     val_final2 = result.get_final("params")
     assert np.allclose(val_final1, val_final2)
+
+    result.plot_optimization()
+
+    gds_fname = str(tmp_path / "sim_final.gds")
+    gds_layer_dtype_map = {td.Medium(permittivity=4.0): (2, 1), td.Medium(): (1, 0)}
+    result.to_gds_file(gds_fname, z=0, gds_layer_dtype_map=gds_layer_dtype_map)
+
+    sim_data_final = result.sim_data_final(task_name="final")
