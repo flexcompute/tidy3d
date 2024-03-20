@@ -3,6 +3,7 @@
 import pydantic.v1 as pd
 import typing
 import dill
+from copy import deepcopy
 
 import jax.numpy as jnp
 import jax
@@ -46,7 +47,11 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
     )
 
     params0: list = pd.Field(
-        ..., title="Initial Parameters", description="Nested list of Initial parameters."
+        None,
+        title="Initial Parameters",
+        description="Nested list of Initial parameters. Only "
+        "optional when running an ``InverseDesign.continue_run()`` "
+        "from a previous ``OptimizeResult``. ",
     )
 
     history_save_fname: str = pd.Field(
@@ -56,24 +61,22 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         "using ``dill.dump()``.",
     )
 
-    def display_fn_default(self, **display_kwargs) -> None:
+    def display_fn_default(self, history: dict, num_steps: int, loop_index: int = None) -> None:
         """Default display function while optimizing."""
-        step_index = display_kwargs.pop("step_index")
+        step_index = len(history["params"])
+        if loop_index:
+            steps_done_previously = step_index - loop_index
+            num_steps += steps_done_previously
+        print(f"step ({step_index + 1}/{num_steps})")
+        print(f"\tobjective_fn_val = {history['objective_fn_val'][-1]:.3e}")
+        print(f"\tgrad_norm = {jnp.linalg.norm(history['grad'][-1]):.3e}")
+        print(f"\tpost_process_val = {history['post_process_val'][-1]:.3e}")
+        print(f"\tpenalty = {history['penalty'][-1]:.3e}")
 
-        print(f"step ({step_index + 1}/{self.optimizer.num_steps})")
-        print(f"\tobjective_fn_val = {display_kwargs['objective_fn_val']:.3e}")
-        print(f"\tgrad_norm = {jnp.linalg.norm(display_kwargs['grad']):.3e}")
-        print(f"\tpost_process_val = {display_kwargs['post_process_val']:.3e}")
-        print(f"\tpenalty = {display_kwargs['penalty']:.3e}")
-
-    def run(
-        self,
-        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
-        display_fn: typing.Callable[[typing.Any, ...], None] = None,
-        callback_fn: typing.Callable[[typing.Any, ...], typing.Any] = lambda **kwargs: None,
-        **run_kwargs,
-    ) -> OptimizeResult:
-        """Run this inverse design problem."""
+    def make_objective_fn(
+        self, post_process_fn: typing.Callable[[tda.JaxSimulationData], float], **run_kwargs
+    ) -> typing.Callable[[jnp.ndarray], float]:
+        """construct the objective function for this ``InverseDesign`` object."""
 
         # turn off verbosity by default unless otherwise specified
         if "verbose" not in run_kwargs:
@@ -129,13 +132,25 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             )
             return objective_fn_val, aux_data
 
-        # use jax to grad the objective function
-        val_and_grad_fn = jax.value_and_grad(objective_fn, has_aux=True)
+        return objective_fn
+
+    def run(
+        self,
+        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
+        display_fn: typing.Callable[[typing.Dict, int], None] = None,
+        **run_kwargs,
+    ) -> OptimizeResult:
+        """Run this inverse design problem."""
+
+        # initialize optimizer
+        params = jnp.array(self.params0)
+        optax_optimizer = self.optimizer.optax_optimizer
+        opt_state = optax_optimizer.init(params)
 
         # initialize history
         history = dict(
-            params=[],
-            opt_state=[],
+            params=[params],
+            opt_state=[opt_state],
             objective_fn_val=[],
             grad=[],
             penalty=[],
@@ -143,13 +158,66 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             simulation=[],
         )
 
-        # initialize optimizer
-        params = jnp.array(self.params0)
-        optimizer = optax.adam(learning_rate=self.optimizer.learning_rate)
-        opt_state = optimizer.init(params)
+        result = OptimizeResult(history=history)
+
+        return self._run_optimizer(
+            post_process_fn=post_process_fn,
+            result=result,
+            display_fn=display_fn,
+            **run_kwargs,
+        )
+
+    def continue_run(
+        self,
+        result: OptimizeResult,
+        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
+        display_fn: typing.Callable[[typing.Dict, int], None] = None,
+        num_steps: int = None,
+        suppress_params_warning: bool = False,
+        **run_kwargs,
+    ) -> OptimizeResult:
+        """Continue running an ``OptimizeResult``."""
+
+        if not suppress_params_warning and self.params0 is not None:
+            td.log.warning(
+                "'InverseDesign.params0' is defined, note that this initial condition will be "
+                "ignored when continuing an optimization run. You can suppress this warning by "
+                "updating 'params0=None' or by passing 'suppress_params_warning=True' to "
+                "'InverseDesign.continue_run'. "
+            )
+
+        return self._run_optimizer(
+            post_process_fn=post_process_fn,
+            result=result,
+            display_fn=display_fn,
+            num_steps=num_steps,
+            **run_kwargs,
+        )
+
+    def _run_optimizer(
+        self,
+        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
+        result: OptimizeResult,
+        display_fn: typing.Callable[[typing.Dict, int], None] = None,
+        num_steps: int = None,
+        **run_kwargs,
+    ) -> OptimizeResult:
+        """Run optimizer for a series of steps with an initialized state. Used internally."""
+
+        num_steps = num_steps if num_steps else self.optimizer.num_steps
+
+        opt_state = result.get_final("opt_state")
+        params = result.get_final("params")
+        history = deepcopy(result.history)
+
+        # use jax to grad the objective function
+        objective_fn = self.make_objective_fn(post_process_fn=post_process_fn, **run_kwargs)
+        val_and_grad_fn = jax.value_and_grad(objective_fn, has_aux=True)
+
+        optax_optimizer = self.optimizer.optax_optimizer
 
         # main optimization loop
-        for step_index in range(self.optimizer.num_steps):
+        for loop_index in range(num_steps):
             # evaluate gradient
             (val, aux_data), grad = val_and_grad_fn(params)
 
@@ -159,8 +227,6 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             simulation = aux_data["simulation"]
 
             # save history
-            history["params"].append(params)
-            history["opt_state"].append(opt_state)
             history["objective_fn_val"].append(val)
             history["grad"].append(grad)
             history["penalty"].append(penalty)
@@ -171,14 +237,14 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
                 with open(self.history_save_fname, "wb") as f_handle:
                     dill.dump(history, f_handle)
 
-            # print stuff
-            display_kwargs = {key: val[-1] for key, val in history.items()}
-            display_kwargs["step_index"] = step_index
+            # display informations
             _display_fn = display_fn or self.display_fn_default
-            _display_fn(**display_kwargs)
+            _display_fn(history, loop_index=loop_index, num_steps=num_steps)
 
             # update optimizer and parameters
-            updates, opt_state = optimizer.update(-grad, opt_state, params)
+            updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
             params = optax.apply_updates(params, updates)
+            history["params"].append(params)
+            history["opt_state"].append(opt_state)
 
         return OptimizeResult(history=history)

@@ -10,7 +10,7 @@ import tidy3d as td
 class OptimizeResult(td.components.base.Tidy3dBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
-    history: typing.Dict[str, typing.Any]
+    history: typing.Dict[str, typing.Any]  # TODO: replace this with the actual fields.
 
     @property
     def keys(self) -> typing.List[str]:
@@ -26,7 +26,7 @@ class OptimizeResult(td.components.base.Tidy3dBaseModel):
         """Get the final value of a field in the ``self.history`` by key."""
         if key not in self.keys:
             raise KeyError(f"'{key}' not present in ``Result.history`` dict with: {self.keys}.")
-        return self.final.get(key)
+        return self.history.get(key)[-1]
 
     @property
     def sim_final(self) -> td.Simulation:

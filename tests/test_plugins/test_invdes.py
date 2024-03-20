@@ -1,4 +1,5 @@
 # Test the inverse design plugin
+
 import pytest
 
 import numpy as np
@@ -48,6 +49,7 @@ mnt = td.FieldMonitor(
 
 
 def test_design_region():
+    """make a design region and test some functions."""
     design_region = tdi.TopologyDesignRegion(
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
@@ -80,14 +82,16 @@ def test_design_region():
 
 
 def test_optimizer():
+    """Make an optimizer"""
     optimizer = tdi.Optimizer(
         learning_rate=0.2,
-        num_steps=10,
+        num_steps=3,
     )
     return optimizer
 
 
 def test_invdes():
+    """make an inverse design"""
     invdes = tdi.InverseDesign(
         simulation=simulation,
         design_region=test_design_region(),
@@ -100,6 +104,7 @@ def test_invdes():
 
 
 def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
+    """Define a postprocessing function"""
     intensity = sim_data.get_intensity(MNT_NAME)
     return scale * jnp.sum(intensity.values)
 
@@ -107,12 +112,24 @@ def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> floa
 def test_run(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
     invdes = test_invdes()
-    return invdes.run(post_process_fn, task_name="blah")
+    result = invdes.run(post_process_fn, task_name="blah")
+    return invdes, result
+
+
+def test_continue_run(use_emulated_run):
+    """Test continuing an already run inverse design."""
+    invdes, result_orig = test_run(use_emulated_run)
+    result_full = invdes.continue_run(result_orig, post_process_fn, task_name="blah")
+    num_steps_orig = len(result_orig.history["params"])
+    num_steps_full = len(result_full.history["params"])
+    assert (
+        num_steps_full == num_steps_orig + invdes.optimizer.num_steps
+    ), "wrong number of elements in the combined run history."
 
 
 def test_result(use_emulated_run, tmp_path):
     """Test methods of the ``OptimizeResult`` object."""
-    result = test_run(use_emulated_run)
+    _, result = test_run(use_emulated_run)
 
     with pytest.raises(KeyError):
         _ = result.get_final("blah")
