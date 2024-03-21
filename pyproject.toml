@@ -156,11 +156,11 @@ exclude = '''
 
 
 [tool.ruff]
-ignore-init-module-imports = true
-typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
+lint.ignore-init-module-imports = true
+lint.typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
 line-length = 100
 fix = true
-ignore = [
+lint.ignore = [
   "E501",  # line too long, handled by black
   "B008",  # do not perform function calls in argument defaults
   "C901",  # too complex
@@ -174,13 +174,14 @@ ignore = [
   "UP035", # TODO decide what to do here
 ]
 
-select = [
+lint.select = [
   "E",  # pycodestyle errors
   "W",  # pycodestyle warnings
   "F",  # pyflakes
   "C",  # flake8-comprehensions
   "B",  # flake8-bugbear
-  "UP"
+  "UP",
+  "NPY201", # numpy 2.* compatibility check
 ]
 
 [tool.bumpversion]
