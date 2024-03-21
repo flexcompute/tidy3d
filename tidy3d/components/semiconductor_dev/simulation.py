@@ -18,7 +18,7 @@ from ..viz import PlotParams
 # heat related imports
 from ..heat.grid import HeatGridType
 from ..heat.simulation import HeatSimulation
-from ..heat.source import HeatSource
+from ..heat.source import UniformHeatSource
 from ..heat_spec import SolidSpec
 from ..heat.boundary import HeatBoundarySpec, TemperatureBC, HeatFluxBC
 from ..heat.monitor import TemperatureMonitor
@@ -130,7 +130,12 @@ class ElectrostaticSimulation(AbstractSimulation):
 
         sources = []
         for charge in self.charge_distributions:
-            sources.append(HeatSource(rate=-charge.charge_density * Q_e))
+            # 1e-12 to transform to 1/um^3
+            sources.append(
+                UniformHeatSource(
+                    rate=-charge.charge_density * Q_e * 1e-12, structures=charge.structures
+                )
+            )
 
         structures = []
         for n, struct in enumerate(self.structures):
