@@ -5,6 +5,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+## [2.6.2] - 2024-03-21
+
+### Changed
+- Characters `"` and `/` not allowed in component names.
+- Change error when `JaxPolySlab.sidewall_angle != 0.0` to a warning, enabling optimization with slanted sidewalls if a lower accuracy gradient is acceptable.
+
+### Fixed
+- Compute time stepping speed shown `tidy3d.log` using only the number of time steps that was run in the case of early shutoff. Previously, it was using the total number of time steps.
+- Bug in PolySlab intersection if slab bounds are `inf` on one side.
+- Divergence in the simultaneous presence of PML, absorber, and symmetry.
+- Fixed validator for `ModeSpec.bend_radius == 0`, which was not raising an error.
+
 ## [2.6.1] - 2024-03-07
 
 ### Added
@@ -1123,7 +1141,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...develop
+[2.6.2]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/flexcompute/tidy3d/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2

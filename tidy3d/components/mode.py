@@ -157,7 +157,7 @@ class ModeSpec(Tidy3dBaseModel):
     @pd.validator("bend_radius", always=True)
     def bend_radius_not_zero(cls, val, values):
         """Check that ``bend_raidus`` magnitude is not close to zero.`"""
-        if val and isclose(val, 0):
+        if val is not None and isclose(val, 0):
             raise SetupError("The magnitude of 'bend_radius' must be larger than 0.")
         return val
 

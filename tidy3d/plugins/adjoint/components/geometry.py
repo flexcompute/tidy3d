@@ -20,6 +20,7 @@ from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
+from ....log import log
 
 from .base import JaxObject
 from .types import JaxFloat
@@ -280,9 +281,17 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
 
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
-        """Don't allow sidewall."""
+        """Warn if sidewall angle present."""
         if not np.isclose(val, 0.0):
-            raise AdjointError("'JaxPolySlab' does not support slanted sidewall.")
+            log.warning(
+                "'JaxPolySlab' does not yet perform the full adjoint gradient treatment "
+                "for slanted sidewalls. "
+                "A straight sidewall angle is assumed when computing the gradient with respect "
+                "to shifting boundaries of the geometry. Therefore, as 'sidewall_angle' becomes "
+                "further from '0.0', the gradient error can be significant. "
+                "If high gradient accuracy is needed, please either reduce your 'sidewall_angle' "
+                "or wait until this feature is supported fully in a later version."
+            )
         return val
 
     @pd.validator("dilation", always=True)

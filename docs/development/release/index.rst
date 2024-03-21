@@ -10,9 +10,11 @@ Currently most of our release development flow is made under the latest ``pre/*`
     :hidden:
 
     flow
+    version
     requirements
     notebooks
 
 .. include:: /development/release/flow.rst
+.. include:: /development/release/version.rst
 .. include:: /development/release/requirements.rst
 .. include:: /development/release/notebooks.rst
