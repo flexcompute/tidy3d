@@ -116,9 +116,7 @@ def test_autogrid_2dmaterials():
     )
     assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.center[2], 1, rtol=RTOL)
     grid_dl = sim.discretize(box.geometry).sizes.z[0]
-    assert np.isclose(
-        sim.volumetric_structures[0].geometry.bounding_box.size[2], grid_dl, rtol=RTOL
-    )
+    assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.size[2], 0, rtol=RTOL)
 
     # now if we increase conductivity, the in-plane grid size should decrease
     sigma2 = 4.5
