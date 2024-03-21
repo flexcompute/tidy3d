@@ -17,7 +17,12 @@ from ....exceptions import DataError
 
 # heat related imports
 from ...heat.data.sim_data import HeatSimulationData
+from ...heat.boundary import TemperatureBC, HeatFluxBC
+from ..charge_distributions import UniformChargeSource
+from ..boundary import PotentialBC, InsulatingBC, ElectricBoundarySpec
 from ..monitor import PotentialMonitor
+# from ...medium import Medium
+from ....constants import Q_e
 
 
 class ElectrostaticSimulationData(AbstractSimulationData):
@@ -81,14 +86,62 @@ class ElectrostaticSimulationData(AbstractSimulationData):
     )
 
     @classmethod
-    def from_HeatSimulationData(
-        self, electrostatic_sim_orig: ElectrostaticSimulation, heat_sim_data: HeatSimulationData
-    ):
+    def from_HeatSimulationData(self, heat_sim_data: HeatSimulationData):
         """This function transforms the equivalent heat simulation data to
         Electrostatic data"""
 
+        heat_sim = heat_sim_data.simulation
+
         # recover the Electrostatic simulation
-        simulation = electrostatic_sim_orig
+        charges = []
+        for s in heat_sim.sources:
+            charges.append(
+                UniformChargeSource(
+                    structures=s.structures,
+                    charge_density=-s.rate * 1e12 / Q_e,
+                )
+            )
+
+        new_bcs = []
+        for bc in heat_sim.boundary_spec:
+            if isinstance(bc, TemperatureBC):
+                new_bcs.append(
+                    ElectricBoundarySpec(
+                        placement=bc.placement,
+                        condition=PotentialBC(
+                            potential=bc.condition.temperature
+                            - ElectrostaticSimulation.offset_for_heat_sim
+                        ),
+                    )
+                )
+            elif isinstance(bc, HeatFluxBC):
+                new_bcs.append(
+                    ElectricBoundarySpec(placement=bc.placement, condition=InsulatingBC())
+                )
+
+        new_mnt = []
+        for mnt in heat_sim.monitors:
+            new_mnt.append(
+                PotentialMonitor(
+                    size=mnt.size,
+                    center=mnt.center,
+                    unstructured=mnt.unstructured,
+                    conformal=mnt.conformal,
+                    name=mnt.name,
+                )
+            )
+
+        simulation = ElectrostaticSimulation(
+            medium=heat_sim.medium,
+            structures=heat_sim.structures,
+            size=heat_sim.size,
+            center=heat_sim.center,
+            grid_spec=heat_sim.grid_spec,
+            charge_distributions=charges,
+            boundary_spec=new_bcs,
+            symmetry=heat_sim.symmetry,
+            monitors=new_mnt,
+        )
 
         # transform the data
         dataSets = []

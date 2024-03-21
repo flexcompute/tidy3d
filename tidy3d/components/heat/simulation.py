@@ -106,6 +106,8 @@ class HeatSimulation(AbstractSimulation):
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
     )
 
+    is_electrostatic_equivalent: bool
+
     @pd.validator("structures", always=True)
     def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""

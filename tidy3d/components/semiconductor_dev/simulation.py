@@ -138,7 +138,7 @@ class ElectrostaticSimulation(AbstractSimulation):
             )
 
         structures = []
-        for n, struct in enumerate(self.structures):
+        for struct in self.structures:
             eps = struct.medium.permittivity  # relative permitivity
             heat_medium = Medium(
                 permittivity=eps,  # not relevant
@@ -162,7 +162,7 @@ class ElectrostaticSimulation(AbstractSimulation):
                 )
             elif isinstance(bc.condition, InsulatingBC):
                 heat_bc = HeatBoundarySpec(condition=HeatFluxBC(flux=0), placement=bc.placement)
-            if heat_bc != None:
+            if heat_bc is not None:
                 boundary_specs.append(heat_bc)
 
         monitors = []
@@ -178,7 +178,7 @@ class ElectrostaticSimulation(AbstractSimulation):
                     conformal=mnt.conformal,
                     name=mnt.name,
                 )
-            if heat_monitor != None:
+            if heat_monitor is not None:
                 monitors.append(heat_monitor)
 
         heat_sim = HeatSimulation(
@@ -191,7 +191,9 @@ class ElectrostaticSimulation(AbstractSimulation):
             boundary_spec=boundary_specs,
             symmetry=self.symmetry,
             monitors=monitors,
+            is_electrostatic_equivalent=True,
         )
+
         return heat_sim
 
     @pd.validator("structures", always=True)

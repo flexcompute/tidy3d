@@ -23,6 +23,11 @@ from ...components.types import Literal
 from ...log import log, get_logging_console
 from ...exceptions import WebError
 
+# handling of electrostatic simulation
+from ...components.semiconductor_dev.simulation import ElectrostaticSimulation
+from ...components.semiconductor_dev.data.sim_data import ElectrostaticSimulationData
+from ...components.heat.data.sim_data import HeatSimulationData
+
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
 
@@ -120,8 +125,12 @@ def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
+    new_simulation = simulation
+    if isinstance(simulation, ElectrostaticSimulation):
+        new_simulation = simulation.equivalent_heat_simulation()
+
     task_id = upload(
-        simulation=simulation,
+        simulation=new_simulation,
         task_name=task_name,
         folder_name=folder_name,
         callback_url=callback_url,
@@ -664,6 +673,10 @@ def load(
         console.log(f"loading simulation from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path)
+
+    if isinstance(stub_data, HeatSimulationData):
+        if stub_data.simulation.is_electrostatic_equivalent:
+            stub_data = ElectrostaticSimulationData.from_HeatSimulationData(stub_data)
     return stub_data
 
 
