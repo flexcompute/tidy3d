@@ -27,6 +27,7 @@ importlib-metadata = "^6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
 rich = "<12.6.0"
+numpy = "<2"
 matplotlib = "*"
 shapely = "^2.0"
 pydantic = "^2.0"
@@ -196,7 +197,7 @@ parse = """(?x)
     )?                                # pre-release section is optional
 """
 serialize = [
-    "{major}.{minor}.{patch}-{pre_l}{pre_n}",
+    "{major}.{minor}.{patch}{pre_l}{pre_n}",
     "{major}.{minor}.{patch}",
 ]
 search = "{current_version}"
