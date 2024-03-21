@@ -22,9 +22,11 @@ from ...components.simulation import Simulation
 from ...plugins.mode.mode_solver import ModeSolver
 from ...components.heat.simulation import HeatSimulation
 from ...components.heat.data.sim_data import HeatSimulationData
+from ...components.semiconductor_dev.simulation import ElectrostaticSimulation
+from ...components.semiconductor_dev.data.sim_data import ElectrostaticSimulationData
 
-SimulationType = Union[Simulation, HeatSimulation]
-SimulationDataType = Union[SimulationData, HeatSimulationData]
+SimulationType = Union[Simulation, HeatSimulation, ElectrostaticSimulation]
+SimulationDataType = Union[SimulationData, HeatSimulationData, ElectrostaticSimulationData]
 
 
 class Tidy3dStub(BaseModel, TaskStub):
@@ -66,6 +68,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             sim = ModeSolver.from_file(file_path)
         elif "HeatSimulation" == type_:
             sim = HeatSimulation.from_file(file_path)
+        elif "ElectrostaticSimulation" == type_:
+            sim = ElectrostaticSimulation.from_file(file_path)
 
         return sim
 
@@ -120,6 +124,8 @@ class Tidy3dStub(BaseModel, TaskStub):
             return TaskType.MODE_SOLVER.name
         elif isinstance(self.simulation, HeatSimulation):
             return TaskType.HEAT.name
+        elif isinstance(self.simulation, ElectrostaticSimulation):
+            return TaskType.SEMICONDEVICE.name
 
     def validate_pre_upload(self, source_required) -> None:
         """Perform some pre-checks on instances of component"""

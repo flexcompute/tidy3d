@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 from ..base import Tidy3dBaseModel
 from ..bc_placement import BCPlacementType
 
-#from ...constants import KELVIN, HEAT_FLUX, HEAT_TRANSFER_COEFF
+# from ...constants import KELVIN, HEAT_FLUX, HEAT_TRANSFER_COEFF
 
 
 class ElectricBC(ABC, Tidy3dBaseModel):
@@ -25,7 +25,7 @@ class PotentialBC(ElectricBC):
     >>> bc = PotentialBC(potential=2)
     """
 
-    potential: pd.PositiveFloat = pd.Field(
+    potential: pd.FiniteFloat = pd.Field(
         title="Potential",
         description="Electric potential to be applied at the specified boundary.",
         units="Volt",
