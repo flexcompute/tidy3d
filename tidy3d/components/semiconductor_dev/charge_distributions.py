@@ -37,7 +37,7 @@ class UniformChargeSource(ChargeDistribution):
 
     Example
     -------
-    >>> heat_source = UniformHeatSource(rate=1, structures=["box"])
+    >>> charge_distribution = UniformChargeSource(charge_density=-1e12, structures=["box"])
     """
 
     charge_density: Union[float, TimeDataArray] = pd.Field(

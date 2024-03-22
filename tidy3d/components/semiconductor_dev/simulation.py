@@ -3,14 +3,15 @@ from __future__ import annotations
 
 from typing import Tuple, List, Dict
 import numpy as np
+from matplotlib import cm
 
 import pydantic.v1 as pd
 
 from .boundary import PotentialBC, InsulatingBC
 from .boundary import ElectricBoundarySpec
-from .charge_distributions import ChargeDistributionType
+from .charge_distributions import ChargeDistributionType, UniformChargeSource
 from .monitor import SemiConDevMonitorType, PotentialMonitor, ChargeDensityMonitor
-from .viz import CHARGE_BC_COLOR_POTENTIAL
+from .viz import CHARGE_BC_COLOR_POTENTIAL, CHARGE_DIST_CMAP, plot_params_charge_distribution
 
 # from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 from ..viz import PlotParams
@@ -26,7 +27,7 @@ from ..medium import Medium
 from ...constants import EPSILON_0, Q_e
 
 from ..base_sim.simulation import AbstractSimulation
-from ..base import skip_if_fields_missing
+from ..base import skip_if_fields_missing, cached_property
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
@@ -41,7 +42,7 @@ from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
 from ..bc_placement import MediumMediumInterface
 
 from ...exceptions import SetupError
-from ...constants import inf
+from ...constants import inf, PERCMCUBE
 
 from ...log import log
 
@@ -129,11 +130,14 @@ class ElectrostaticSimulation(AbstractSimulation):
         """Creates an equivalent heat simulation."""
 
         sources = []
+        # 1e-12 to transform to 1/um^3
+        # also dividing by eps_0 here so that the equivalent
+        # conductivity is order 1, which helps convergence
+        charge_scaling_factor = -Q_e / EPSILON_0 * 1e-12
         for charge in self.charge_distributions:
-            # 1e-12 to transform to 1/um^3
             sources.append(
                 UniformHeatSource(
-                    rate=-charge.charge_density * Q_e * 1e-12, structures=charge.structures
+                    rate=charge.charge_density * charge_scaling_factor, structures=charge.structures
                 )
             )
 
@@ -143,7 +147,7 @@ class ElectrostaticSimulation(AbstractSimulation):
             heat_medium = Medium(
                 permittivity=eps,  # not relevant
                 heat_spec=SolidSpec(
-                    conductivity=eps * EPSILON_0,
+                    conductivity=eps,
                     capacity=1,  # irrelevant in steady-state simulations
                 ),
                 name=struct.medium.name,
@@ -344,9 +348,8 @@ class ElectrostaticSimulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
-        colorbar: str = "conductivity"
-            Display colorbar for thermal conductivity ("conductivity") or heat source rate
-            ("source").
+        colorbar: str = ["Relative permittivity" (default), "ChargeDist"]
+            Display colorbar for relative permittivity
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
@@ -362,13 +365,11 @@ class ElectrostaticSimulation(AbstractSimulation):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        cbar_cond = colorbar == "Relative permittivity"
+        # cbar_cond = colorbar == "Relative permittivity"
 
-        ax = self.scene.plot_heat_conductivity(
-            ax=ax, x=x, y=y, z=z, cbar=cbar_cond, alpha=alpha, hlim=hlim, vlim=vlim
-        )
+        ax = self.scene.plot_eps(ax=ax, x=x, y=y, z=z, alpha=alpha, hlim=hlim, vlim=vlim)
         # TODO: plot source. Do I need an equivalent for charges? How would it work?
-        # ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
+        ax = self.plot_charges(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         ax = Scene._set_plot_bounds(
@@ -376,8 +377,9 @@ class ElectrostaticSimulation(AbstractSimulation):
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        # if colorbar == "source":
-        #     self._add_heat_source_cbar(ax=ax)
+        # NOTE: note sure this makes a lot of sense.
+        if colorbar == "ChargeDist":
+            self._add_charge_dist_cbar(ax=ax)
         return ax
 
     @equal_aspect
@@ -748,155 +750,157 @@ class ElectrostaticSimulation(AbstractSimulation):
 
         return boundaries + struct_struct_boundaries
 
-    # @equal_aspect
-    # @add_ax_if_none
-    # def plot_sources(
-    #     self,
-    #     x: float = None,
-    #     y: float = None,
-    #     z: float = None,
-    #     hlim: Tuple[float, float] = None,
-    #     vlim: Tuple[float, float] = None,
-    #     alpha: float = None,
-    #     ax: Ax = None,
-    # ) -> Ax:
-    #     """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
+    @equal_aspect
+    @add_ax_if_none
+    def plot_charges(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        hlim: Tuple[float, float] = None,
+        vlim: Tuple[float, float] = None,
+        alpha: float = None,
+        ax: Ax = None,
+    ) -> Ax:
+        """Plot each of simulation's charges on a plane defined by one nonzero x,y,z coordinate.
 
-    #     Parameters
-    #     ----------
-    #     x : float = None
-    #         position of plane in x direction, only one of x, y, z must be specified to define plane.
-    #     y : float = None
-    #         position of plane in y direction, only one of x, y, z must be specified to define plane.
-    #     z : float = None
-    #         position of plane in z direction, only one of x, y, z must be specified to define plane.
-    #     hlim : Tuple[float, float] = None
-    #         The x range if plotting on xy or xz planes, y range if plotting on yz plane.
-    #     vlim : Tuple[float, float] = None
-    #         The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
-    #     alpha : float = None
-    #         Opacity of the sources, If ``None`` uses Tidy3d default.
-    #     ax : matplotlib.axes._subplots.Axes = None
-    #         Matplotlib axes to plot on, if not specified, one is created.
+        Parameters
+        ----------
+        x : float = None
+            position of plane in x direction, only one of x, y, z must be specified to define plane.
+        y : float = None
+            position of plane in y direction, only one of x, y, z must be specified to define plane.
+        z : float = None
+            position of plane in z direction, only one of x, y, z must be specified to define plane.
+        hlim : Tuple[float, float] = None
+            The x range if plotting on xy or xz planes, y range if plotting on yz plane.
+        vlim : Tuple[float, float] = None
+            The z range if plotting on xz or yz planes, y plane if plotting on xy plane.
+        alpha : float = None
+            Opacity of the sources, If ``None`` uses Tidy3d default.
+        ax : matplotlib.axes._subplots.Axes = None
+            Matplotlib axes to plot on, if not specified, one is created.
 
-    #     Returns
-    #     -------
-    #     matplotlib.axes._subplots.Axes
-    #         The supplied or created matplotlib axes.
-    #     """
+        Returns
+        -------
+        matplotlib.axes._subplots.Axes
+            The supplied or created matplotlib axes.
+        """
 
-    #     # background can't have source, so no need to add background structure
-    #     structures = self.structures
+        # background can't have source, so no need to add background structure
+        structures = self.structures
 
-    #     # alpha is None just means plot without any transparency
-    #     if alpha is None:
-    #         alpha = 1
+        # alpha is None just means plot without any transparency
+        if alpha is None:
+            alpha = 1
 
-    #     if alpha <= 0:
-    #         return ax
+        if alpha <= 0:
+            return ax
 
-    #     # distribute source where there are assigned
-    #     structure_source_map = {}
-    #     for source in self.sources:
-    #         for name in source.structures:
-    #             structure_source_map[name] = source
+        # distribute source where there are assigned
+        structure_charge_map = {}
+        for charge in self.charge_distributions:
+            for name in charge.structures:
+                structure_charge_map[name] = charge
 
-    #     source_list = [structure_source_map.get(structure.name, None) for structure in structures]
+        charge_list = [structure_charge_map.get(structure.name, None) for structure in structures]
 
-    #     axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
-    #     center = Box.unpop_axis(position, (0, 0), axis=axis)
-    #     size = Box.unpop_axis(0, (inf, inf), axis=axis)
-    #     plane = Box(center=center, size=size)
+        axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
+        center = Box.unpop_axis(position, (0, 0), axis=axis)
+        size = Box.unpop_axis(0, (inf, inf), axis=axis)
+        plane = Box(center=center, size=size)
 
-    #     source_shapes = self.scene._filter_structures_plane(
-    #         structures=structures, plane=plane, property_list=source_list
-    #     )
+        charge_shapes = self.scene._filter_structures_plane(
+            structures=structures, plane=plane, property_list=charge_list
+        )
 
-    #     source_min, source_max = self.source_bounds
-    #     for source, shape in source_shapes:
-    #         if source is not None:
-    #             ax = self._plot_shape_structure_source(
-    #                 alpha=alpha,
-    #                 source=source,
-    #                 source_min=source_min,
-    #                 source_max=source_max,
-    #                 shape=shape,
-    #                 ax=ax,
-    #             )
+        charge_min, charge_max = self.charge_bounds
+        for charge, shape in charge_shapes:
+            if charge is not None:
+                ax = self._plot_shape_structure_charge(
+                    alpha=alpha,
+                    charge=charge,
+                    charge_min=charge_min,
+                    charge_max=charge_max,
+                    shape=shape,
+                    ax=ax,
+                )
 
-    #     # clean up the axis display
-    #     axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
-    #     ax = self.add_ax_labels_lims(axis=axis, ax=ax)
-    #     ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
+        # clean up the axis display
+        axis, position = self.parse_xyz_kwargs(x=x, y=y, z=z)
+        ax = self.add_ax_labels_lims(axis=axis, ax=ax)
+        ax.set_title(f"cross section at {'xyz'[axis]}={position:.2f}")
 
-    #     ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
-    #     return ax
+        ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
+        return ax
 
-    # def _add_heat_source_cbar(self, ax: Ax):
-    #     """Add colorbar for heat sources."""
-    #     source_min, source_max = self.source_bounds
-    #     self.scene._add_cbar(
-    #         vmin=source_min,
-    #         vmax=source_max,
-    #         label=f"Volumetric heat rate ({VOLUMETRIC_HEAT_RATE})",
-    #         cmap=HEAT_SOURCE_CMAP,
-    #         ax=ax,
-    #     )
+    def _add_charge_dist_cbar(self, ax: Ax):
+        """Add colorbar for charge distributions."""
+        source_min, source_max = self.charge_bounds
+        self.scene._add_cbar(
+            vmin=source_min,
+            vmax=source_max,
+            label=f"Charge density ({PERCMCUBE})",
+            cmap=CHARGE_DIST_CMAP,
+            ax=ax,
+        )
 
-    # @cached_property
-    # def source_bounds(self) -> Tuple[float, float]:
-    #     """Compute range of heat sources present in the simulation."""
+    @cached_property
+    def charge_bounds(self) -> Tuple[float, float]:
+        """Compute range of charge distributions present in the simulation."""
 
-    #     rate_list = [
-    #         source.rate for source in self.sources if isinstance(source, UniformHeatSource)
-    #     ]
-    #     rate_list.append(0)
-    #     rate_min = min(rate_list)
-    #     rate_max = max(rate_list)
-    #     return rate_min, rate_max
+        density_list = [
+            charge.charge_density
+            for charge in self.charge_distributions
+            if isinstance(charge, UniformChargeSource)
+        ]
+        density_list.append(0)
+        rate_min = min(density_list)
+        rate_max = max(density_list)
+        return rate_min, rate_max
 
-    # def _get_structure_source_plot_params(
-    #     self,
-    #     source: HeatSourceType,
-    #     source_min: float,
-    #     source_max: float,
-    #     alpha: float = None,
-    # ) -> PlotParams:
-    #     """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
+    def _get_structure_charge_plot_params(
+        self,
+        charge: ChargeDistributionType,
+        charge_min: float,
+        charge_max: float,
+        alpha: float = None,
+    ) -> PlotParams:
+        """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
-    #     plot_params = plot_params_heat_source
-    #     if alpha is not None:
-    #         plot_params = plot_params.copy(update={"alpha": alpha})
+        plot_params = plot_params_charge_distribution
+        if alpha is not None:
+            plot_params = plot_params.copy(update={"alpha": alpha})
 
-    #     if isinstance(source, UniformHeatSource):
-    #         rate = source.rate
-    #         delta_rate = rate - source_min
-    #         delta_rate_max = source_max - source_min + 1e-5
-    #         rate_fraction = delta_rate / delta_rate_max
-    #         cmap = cm.get_cmap(HEAT_SOURCE_CMAP)
-    #         rgba = cmap(rate_fraction)
-    #         plot_params = plot_params.copy(update={"edgecolor": rgba})
+        if isinstance(charge, UniformChargeSource):
+            charge_density = charge.charge_density
+            delta_rate = charge_density - charge_min
+            delta_rate_max = charge_max - charge_min + 1e-5
+            rate_fraction = delta_rate / delta_rate_max
+            cmap = cm.get_cmap(CHARGE_DIST_CMAP)
+            rgba = cmap(rate_fraction)
+            plot_params = plot_params.copy(update={"edgecolor": rgba})
 
-    #     return plot_params
+        return plot_params
 
-    # def _plot_shape_structure_source(
-    #     self,
-    #     source: HeatSourceType,
-    #     shape: Shapely,
-    #     source_min: float,
-    #     source_max: float,
-    #     ax: Ax,
-    #     alpha: float = None,
-    # ) -> Ax:
-    #     """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-    #     plot_params = self._get_structure_source_plot_params(
-    #         source=source,
-    #         source_min=source_min,
-    #         source_max=source_max,
-    #         alpha=alpha,
-    #     )
-    #     ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
-    #     return ax
+    def _plot_shape_structure_charge(
+        self,
+        charge: ChargeDistributionType,
+        shape: Shapely,
+        charge_min: float,
+        charge_max: float,
+        ax: Ax,
+        alpha: float = None,
+    ) -> Ax:
+        """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
+        plot_params = self._get_structure_charge_plot_params(
+            charge=charge,
+            charge_min=charge_min,
+            charge_max=charge_max,
+            alpha=alpha,
+        )
+        ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
+        return ax
 
     @classmethod
     def from_scene(cls, scene: Scene, **kwargs) -> ElectrostaticSimulation:
@@ -921,7 +925,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         ...     structures=[box],
         ...     medium=Medium(permittivity=3),
         ... )
-        >>> sim = HeatSimulation.from_scene(
+        >>> sim = ElectrostaticSimulation.from_scene(
         ...     scene=scene,
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),

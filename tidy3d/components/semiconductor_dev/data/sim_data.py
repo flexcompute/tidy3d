@@ -21,55 +21,50 @@ from ...heat.boundary import TemperatureBC, HeatFluxBC
 from ..charge_distributions import UniformChargeSource
 from ..boundary import PotentialBC, InsulatingBC, ElectricBoundarySpec
 from ..monitor import PotentialMonitor
+
 # from ...medium import Medium
-from ....constants import Q_e
+from ....constants import Q_e, EPSILON_0
 
 
 class ElectrostaticSimulationData(AbstractSimulationData):
     """Stores results of an electrostatic simulation.
 
-    # TODO: provide example!
     Example
     -------
     >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, SpatialDataArray
-    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformHeatSource
-    >>> from tidy3d import StructureBoundary, TemperatureBC, TemperatureMonitor, TemperatureData
-    >>> from tidy3d import HeatBoundarySpec
+    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformChargeSource
+    >>> from tidy3d import StructureBoundary, PotentialBC, PotentialMonitor, PotentialData
+    >>> from tidy3d import ElectricBoundarySpec, ElectrostaticSimulation, ElectrostaticSimulationData
     >>> import numpy as np
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
-    >>> heat_sim = HeatSimulation(
+    >>> potential_mnt = PotentialMonitor(size=(1, 2, 3), name="sample")
+    >>> electrostatic_sim = ElectrostaticSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
     ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(
-    ...                 permittivity=2.0, heat_spec=SolidSpec(
-    ...                     conductivity=1,
-    ...                     capacity=1,
-    ...                 )
-    ...             ),
+    ...             medium=Medium(permittivity=2.0),
     ...             name="box",
     ...         ),
     ...     ],
-    ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
+    ...     medium=Medium(permittivity=3.0),
     ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
-    ...     sources=[UniformHeatSource(rate=1, structures=["box"])],
+    ...     sources=[UniformChargeSource(charge_density=1e15, structures=["box"])],
     ...     boundary_spec=[
-    ...         HeatBoundarySpec(
+    ...         ElectricBoundarySpec(
     ...             placement=StructureBoundary(structure="box"),
-    ...             condition=TemperatureBC(temperature=500),
+    ...             condition=PotentialBC(potential=5),
     ...         )
     ...     ],
-    ...     monitors=[temp_mnt],
+    ...     monitors=[potential_mnt],
     ... )
     >>> x = [1,2]
     >>> y = [2,3,4]
     >>> z = [3,4,5,6]
     >>> coords = dict(x=x, y=y, z=z)
-    >>> temp_array = SpatialDataArray(300 * np.abs(np.random.random((2,3,4))), coords=coords)
-    >>> temp_mnt_data = TemperatureData(monitor=temp_mnt, temperature=temp_array)
-    >>> heat_sim_data = HeatSimulationData(
-    ...     simulation=heat_sim, data=[temp_mnt_data],
+    >>> potential_array = SpatialDataArray(5 * np.abs(np.random.random((2,3,4))), coords=coords)
+    >>> potential_mnt_data = PotentialData(monitor=potential_mnt, potential=potential_array)
+    >>> electrostatic_sim_data = ElectrostaticSimulationData(
+    ...     simulation=electrostatic_sim, data=[potential_mnt_data],
     ... )
     """
 
@@ -94,11 +89,12 @@ class ElectrostaticSimulationData(AbstractSimulationData):
 
         # recover the Electrostatic simulation
         charges = []
+        charge_scaling_factor = -EPSILON_0 * 1e12 / Q_e
         for s in heat_sim.sources:
             charges.append(
                 UniformChargeSource(
                     structures=s.structures,
-                    charge_density=-s.rate * 1e12 / Q_e,
+                    charge_density=s.rate * charge_scaling_factor,
                 )
             )
 
@@ -183,7 +179,7 @@ class ElectrostaticSimulationData(AbstractSimulationData):
         Parameters
         ----------
         field_monitor_name : str
-            Name of :class:`.TemperatureMonitorData` to plot.
+            Name of :class:`.PotentialMonitor` to plot.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
             Which part of the field to plot.
         scale : Literal['lin', 'log']
@@ -242,7 +238,7 @@ class ElectrostaticSimulationData(AbstractSimulationData):
         if scale == "log":
             field_data = np.log10(np.abs(field_data))
 
-        cmap = "coolwarm"
+        cmap = "viridis"
 
         # do sel on unstructured data
         # it could produce either SpatialDataArray or UnstructuredGridDatasetType

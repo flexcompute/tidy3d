@@ -47,19 +47,18 @@ class SemiConDevMonitorData(AbstractMonitorData, ABC):
 class PotentialData(SemiConDevMonitorData):
     """Data associated with a :class:`PotentialMonitor`: spatial temperature field.
 
-    # TODO: provide example!
     Example
     -------
-    >>> from tidy3d import TemperatureMonitor, SpatialDataArray
+    >>> from tidy3d import PotentialMonitor, SpatialDataArray
     >>> import numpy as np
-    >>> temp_data = SpatialDataArray(
+    >>> potential_data = SpatialDataArray(
     ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
     ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="temperature")
-    >>> temp_mnt_data = TemperatureData(
-    ...     monitor=temp_mnt, temperature=temp_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
+    >>> potential_mnt = PotentialMonitor(size=(1, 2, 3), name="potential")
+    >>> potential_mnt_data = PotentialData(
+    ...     monitor=potential_mnt, potential=potential_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
     ... )
-    >>> temp_mnt_data_expanded = temp_mnt_data.symmetry_expanded_copy
+    >>> potential_mnt_data_expanded = potential_mnt_data.symmetry_expanded_copy
     """
 
     monitor: PotentialMonitor = pd.Field(
@@ -114,19 +113,18 @@ class PotentialData(SemiConDevMonitorData):
 class ChargeDensityData(SemiConDevMonitorData):
     """Data associated with a :class:`ChargeDensityMonitor`: spatial temperature field.
 
-    # TODO: provide example!
     Example
     -------
-    >>> from tidy3d import TemperatureMonitor, SpatialDataArray
+    >>> from tidy3d import ChargeDensityMonitor, SpatialDataArray, ChargeDensityData
     >>> import numpy as np
-    >>> temp_data = SpatialDataArray(
+    >>> charge_data = SpatialDataArray(
     ...     np.ones((2, 3, 4)), coords={"x": [0, 1], "y": [0, 1, 2], "z": [0, 1, 2, 3]}
     ... )
-    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="temperature")
-    >>> temp_mnt_data = TemperatureData(
-    ...     monitor=temp_mnt, temperature=temp_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
+    >>> charge_mnt = ChargeDensityMonitor(size=(1, 2, 3), name="charge")
+    >>> charge_mnt_data = ChargeDensityData(
+    ...     monitor=charge_mnt, charge_density=charge_data, symmetry=(0, 1, 0), symmetry_center=(0, 0, 0)
     ... )
-    >>> temp_mnt_data_expanded = temp_mnt_data.symmetry_expanded_copy
+    >>> charge_mnt_data_expanded = charge_mnt_data.symmetry_expanded_copy
     """
 
     monitor: ChargeDensityMonitor = pd.Field(
