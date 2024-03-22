@@ -85,6 +85,8 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         def objective_fn(params: jnp.ndarray, **post_proc_kwargs) -> float:
             """Full objective function."""
 
+            # TODO: I dont think post_proc_kwargs is ever exposed to the user
+
             # construct the jax simulation from the simulation + design region
             design_region_structure = self.design_region.make_structure(params)
 
