@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Better error message when trying to transform a geometry with infinite bounds.
 
+### Changed
+- Bumped `trimesh` version to `>=4,<4.2`.
+
 ## [2.6.1] - 2024-03-07
 
 ### Added

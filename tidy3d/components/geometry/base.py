@@ -1857,7 +1857,7 @@ class Box(Centered):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full.tolist()
+        return path.polygons_full
 
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
