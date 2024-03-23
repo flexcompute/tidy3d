@@ -95,7 +95,8 @@ class EigSolver(Tidy3dBaseModel):
         if mu_cross is not None:
             mu_formated = cls.format_medium_data(mu_cross)
 
-        Nx, Ny = eps_xx.shape
+        Nxy = eps_xx.shape
+        Nx, Ny = Nxy
         N = eps_xx.size
 
         if len(coords[0]) != Nx + 1 or len(coords[1]) != Ny + 1:
@@ -166,6 +167,12 @@ class EigSolver(Tidy3dBaseModel):
         mu_tensor = np.einsum("ij...,pj...->ip...", mu_tensor, jac_h)
         mu_tensor /= jac_h_det
 
+        # # Uncomment block to force eps and mu to be translationally invariant into the PML.
+        # # This may be important for bends as the jacobian transformation breaks the invariance, but
+        # # tests reveal that it has little effect.
+        # eps_tensor = cls.make_pml_invariant(Nxy, eps_tensor, mode_spec.num_pml)
+        # mu_tensor = cls.make_pml_invariant(Nxy, mu_tensor, mode_spec.num_pml)
+
         """ Boundaries are imposed through the derivative matrices. The forward derivative matrices
         always impose PEC boundary at the xmax and ymax interfaces, and on the xmin and ymin
         interfaces unless PMC symmetry is present. If so, the PMC boundary is imposed through the
@@ -177,13 +184,14 @@ class EigSolver(Tidy3dBaseModel):
         # Dual grid steps for H-field derivatives
         dl_tmp = [(dl[:-1] + dl[1:]) / 2 for dl in dl_f]
         dl_b = [np.hstack((d1[0], d2)) for d1, d2 in zip(dl_f, dl_tmp)]
+        dls = (dl_f, dl_b)
 
         # Derivative matrices with PEC boundaries by default and optional PMC at the near end
-        der_mats_tmp = d_mats((Nx, Ny), dl_f, dl_b, dmin_pmc)
+        der_mats_tmp = d_mats(Nxy, dls, dmin_pmc)
 
         # PML matrices; do not impose PML on the bottom when symmetry present
         dmin_pml = np.array(symmetry) == 0
-        pml_mats = s_mats(omega, (Nx, Ny), mode_spec.num_pml, dl_f, dl_b, dmin_pml)
+        pml_mats = s_mats(omega, Nxy, mode_spec.num_pml, dls, eps_tensor, mu_tensor, dmin_pml)
 
         # Add the PML on top of the derivatives; normalize by k0 to match the EM-possible notation
         der_mats = [Smat.dot(Dmat) / k0 for Smat, Dmat in zip(pml_mats, der_mats_tmp)]
@@ -813,6 +821,20 @@ class EigSolver(Tidy3dBaseModel):
         E *= outside_pec[:, :, :, np.newaxis]
         E = E.reshape(field_shape)
         return E
+
+    @staticmethod
+    def make_pml_invariant(Nxy, tensor, num_pml):
+        """For a given epsilon or mu tensor of shape ``(3, 3, Nx, Ny)``, and ``num_pml`` pml layers
+        along ``x`` and ``y``, make all the tensor values in the PML equal by replicating the first
+        pixel into the PML."""
+
+        Nx, Ny = Nxy
+        new_ten = tensor.reshape((3, 3, Nx, Ny))
+        new_ten[:, :, : num_pml[0], :] = new_ten[:, :, num_pml[0], :][:, :, None, :]
+        new_ten[:, :, Nx - num_pml[0] + 1 :, :] = new_ten[:, :, Nx - num_pml[0], :][:, :, None, :]
+        new_ten[:, :, :, : num_pml[1]] = new_ten[:, :, :, num_pml[1]][:, :, :, None]
+        new_ten[:, :, :, Ny - num_pml[1] + 1 :] = new_ten[:, :, :, Ny - num_pml[1]][:, :, :, None]
+        return new_ten.reshape((3, 3, -1))
 
 
 def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:

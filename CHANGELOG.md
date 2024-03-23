@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FieldTimeMonitor` restriction to record at a maximum of 5000 time steps if the monitor is not zero-dimensional, to avoid creating unnecessarily large amounts of data.
 - Bumped `trimesh` version to `>=4,<4.2`.
 - Make directories in path passed to `.to_gds_file()` methods, if they don't exist.
+- Changed sign of mode solver PML conductivity to match the `exp(-1j * omega * t)` convention used everywhere else. Previously, loss due to PML was coming out as negative `k_eff` of the mode, while now it comes out as positive `k_eff`, in line with material loss.
+- Augmented the PML mode solver profile to the form `s(x) = kappa(x) + 1j * sigma(x) / (omega * EPSILON_0)`. Previously, `kappa` was not used. The parameters are currently set to `kappa_min = 1`, `kappa_max = 3`, `sigma_max = 2`. These are not yet exposed to the user.
+- Also scaling `sigma_max` by the average relative impedance in the mode solver PML region.
 
 ### Fixed
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
