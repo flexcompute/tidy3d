@@ -179,7 +179,7 @@ def run_bwd(
         verbose=verbose,
     )
 
-    sim_vjp = sim_data_vjp.simulation.updated_copy(input_structures=sim_vjp.input_structures)
+    sim_vjp = sim_data_vjp.simulation.updated_copy(input_structures=sim_vjp.input_structures, input_structures_copied=True)
 
     return (sim_vjp,)
 
@@ -505,7 +505,7 @@ def run_async_bwd(
     sims_vjp_updated = []
     for sim_vjp, sim_data_vjp in zip(sims_vjp, batch_data_vjp):
         sim_vjp_orig = sim_data_vjp.simulation
-        sim_vjp_updated = sim_vjp_orig.updated_copy(input_structures=sim_vjp.input_structures)
+        sim_vjp_updated = sim_vjp_orig.updated_copy(input_structures=sim_vjp.input_structures, input_structures_copied=True)
         sims_vjp_updated.append(sim_vjp_updated)
 
     return (sims_vjp_updated,)

@@ -216,6 +216,7 @@ class JaxSimulationData(SimulationData, JaxObject):
                 input_structures=sim_fwd.input_structures,
                 freqs_adjoint=sim_fwd.freqs_adjoint,
                 include_eps_mnts=False,
+                input_structures_copied=True,
             )
         )
 
