@@ -148,42 +148,37 @@ design_region = tdi.TopologyDesignRegion(
 design_region.material_density(PARAMS_0)
 design_region.penalty_value(PARAMS_0)
 
-"""Make an optimizer"""
-optimizer = tdi.Optimizer(
-    learning_rate=0.2,
-    num_steps=3,
-)
-return optimizer
-
-
 """make an inverse design"""
-invdes = tdi.InverseDesign(
+design = tdi.InverseDesign(
     simulation=simulation,
     design_region=test_design_region(),
     output_monitors=[mnt],
-    optimizer=test_optimizer(),
     params0=np.random.random(PARAMS_SHAPE).tolist(),
     history_save_fname="tests/data/invdes_history.pkl",
 )
-return invdes
 
-
+"""Define the post processing function."""
 def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
     """Define a postprocessing function"""
     intensity = sim_data.get_intensity(MNT_NAME)
     return scale * jnp.sum(intensity.values)
 
+"""Make an optimizer"""
+optimizer = tdi.Optimizer(
+    params0=PARAMS_0,
+    learning_rate=0.2,
+    num_steps=3,
+)
+
 """running the inverse design"""
-result = invdes.run(post_process_fn, task_name="blah")
+result = optimizer.run(design=design, post_process_fn=post_process_fn, task_name="blah")
 
 """continuing an already run inverse design."""
-invdes, result_orig = test_run(use_emulated_run)
-result_full = invdes.continue_run(result_orig, post_process_fn, task_name="blah")
-
+result_continued = optimizer.continue_run(result=result, post_process_fn=post_process_fn, task_name="blah")
 
 """Grabbing information from a result and exporting."""
-val_final1 = result.final["params"]
-val_final2 = result.get_final("params")
+final_params = result.params
+final_simulation = result.get_final("simulation")
 
 result.plot_optimization()
 
@@ -194,3 +189,111 @@ sim_data_final = result.sim_data_final(task_name="final")
 ```
 
 let me know if there's any feedback!
+
+
+## Notes / Testing ground
+
+
+### Packaging results
+
+#### Option 1: like `SimulationData`
+
+```py
+class InverseDesign:
+    pass
+
+class Result:
+    data : ...
+    design : InverseDesign
+
+def run(design: InverseDesign) -> Result:
+    pass
+
+```
+
+Pros:
+* `Result` has `InverseDesign` information
+
+Cons:
+* Need an external `run()` function.
+* Unnecessary coupling between design and result (what if not 1->1?)
+* What about a changing design? eg step size? which one goes in the result?
+
+#### Option 2: like `Design`
+
+```py
+class InverseDesign:
+    pass
+    
+    def run() -> Result:
+        pass
+
+class Result:
+    data : ...
+
+```
+
+#### Option 3: optimizer that captures running stuff.
+
+```py
+class InverseDesign:
+    pass
+
+class Result:
+    data: ...
+    design: InverseDesign
+
+class Optimizer:
+    num_steps : int
+
+    def run(design: InverseDesign) -> Result:
+        pass
+
+    def continue_run(result: Result) -> Result:
+        pass
+
+Pro:
+* Cleanest for continuing run
+* Reduces coupling
+
+Cons:
+* Still doesnt 100 handle changing design
+```
+Some use cases:
+
+### single run
+
+```py
+results = run(design)
+results = design.run()
+results = optimizer.run(design)
+```
+
+### continue running
+
+```py
+results = run_continue(design, results) <- X do we put both results in?
+results = design.continue_run(results)
+results = optimizer.continue_run(results) <- cleanest, re-use the design
+```
+
+### change the design and continue running
+
+```py
+ff
+```
+
+### plot the design with the results?
+
+```py
+ff
+```
+
+## Design QUestions
+* separate `optimizer` with a `.run(design) -> result`? 
+    seems like a good way to go
+* make `history` explicit in the result?
+    would be better
+* put penalties in optimizer?
+    probably not, penalties are more specific to the type of DesignRegion.
+
