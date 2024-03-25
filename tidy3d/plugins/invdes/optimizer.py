@@ -19,13 +19,7 @@ from .result import OptimizeResult
 class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
     """Specification for an optimization."""
 
-    params0: list = pd.Field(
-        ...,
-        title="Initial Parameters",
-        description="Nested list of Initial parameters. Only "
-        "optional when running an ``InverseDesign.continue_run()`` "
-        "from a previous ``OptimizeResult``. ",
-    )
+    design: InverseDesign = pd.Field(...)
 
     history_save_fname: str = pd.Field(
         None,
@@ -60,27 +54,27 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self, design: InverseDesign) -> OptimizeResult:
+    def initialize_result(self, params0: jnp.ndarray) -> OptimizeResult:
         """Create an initially empty ``OptimizeResult`` from the starting parameters."""
 
         # initialize optimizer
-        params0 = jnp.array(self.params0)
+        params0 = jnp.array(params0)
         optax_optimizer = self.optax_optimizer
         opt_state = optax_optimizer.init(params0)
 
         # initialize empty result
-        return OptimizeResult(design=design, opt_state=[opt_state], params=[params0])
+        return OptimizeResult(design=self.design, opt_state=[opt_state], params=[params0])
 
     def run(
         self,
-        design: InverseDesign,
         post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
+        params0: jnp.ndarray,
         display_fn: typing.Callable[[typing.Dict, int], None] = None,
         **run_kwargs,
     ) -> OptimizeResult:
         """Run this inverse design problem."""
 
-        starting_result = self.initialize_result(design=design)
+        starting_result = self.initialize_result(params0)
 
         return self._run_optimizer(
             post_process_fn=post_process_fn,

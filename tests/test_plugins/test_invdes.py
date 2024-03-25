@@ -93,8 +93,9 @@ def test_invdes():
 
 def test_optimizer():
     """Make an optimizer"""
+    design = test_invdes()
     optimizer = tdi.Optimizer(
-        params0=PARAMS_0.tolist(),
+        design=design,
         history_save_fname="tests/data/invdes_history.pkl",
         learning_rate=0.2,
         num_steps=3,
@@ -110,9 +111,8 @@ def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> floa
 
 def test_run(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
-    invdes = test_invdes()
     optimizer = test_optimizer()
-    result = optimizer.run(design=invdes, post_process_fn=post_process_fn, task_name="blah")
+    result = optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn, task_name="blah")
     return result
 
 
