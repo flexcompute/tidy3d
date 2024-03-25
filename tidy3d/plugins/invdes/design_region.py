@@ -87,11 +87,14 @@ class TopologyDesignRegion(DesignRegion):
 
         coords = dict()
 
-        for coord_key, ptmin, ptmax, num_pts in zip("xyz", rmin, rmax, self.params_shape):
+        # for i, (coord_key, ptmin, ptmax, num_pts) in enumerate(zip("xyz", rmin, rmax, self.params_shape)):
+        for (center, coord_key, ptmin, ptmax, num_pts) in zip(self.center, "xyz", rmin, rmax, self.params_shape):
             size = ptmax - ptmin
-            step_size = size / num_pts
-
-            coord_vals = np.linspace(ptmin + step_size / 2, ptmax - step_size / 2, num_pts).tolist()
+            if np.isinf(size):
+                coord_vals = num_pts * [center]
+            else:
+                step_size = size / num_pts
+                coord_vals = np.linspace(ptmin + step_size / 2, ptmax - step_size / 2, num_pts).tolist()
             coords[coord_key] = coord_vals
 
         coords["f"] = [td.C_0]  # TODO: is this a safe choice?
@@ -103,6 +106,7 @@ class TopologyDesignRegion(DesignRegion):
         eps_min, eps_max = self.eps_bounds
         arr_3d = eps_min + material_density * (eps_max - eps_min)
         arr_3d = jax.lax.stop_gradient(arr_3d)
+        arr_3d = arr_3d.reshape(params.shape)
         return jnp.expand_dims(arr_3d, axis=-1)
 
     def make_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
