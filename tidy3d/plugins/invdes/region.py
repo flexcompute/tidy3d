@@ -17,6 +17,7 @@ from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
+
     size: Size = pd.Field(
         ...,
         title="Size",
