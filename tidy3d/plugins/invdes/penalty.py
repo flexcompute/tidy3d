@@ -4,17 +4,30 @@ import typing
 import abc
 
 import jax.numpy as jnp
-
+import pydantic.v1 as pd
 
 import tidy3d.plugins.adjoint.utils.penalty as adjoint_penalties
 
 
 from .base import InvdesBaseModel
 
+# TODO: actually inherit these and export them to original types
+
+# class ErosionDilationPenalty(adjoint_penalties.ErosionDilationPenalty):
+#     """``invdes`` plugin version of ``tda.ErosionDilationPenalty``."""
+
+#     pixel_size : float = None
+
+#     def _to_tda(self, pixel_size: float) -> adjoint_penalties.ErosionDilationPenalty:
+#         """Export this to a tidy3d adjoint version."""
+#         fields = self.dict(exclude={'type'})
+#         fields['pixel_size'] = pixel_size
+#         return adjoint_penalties.ErosionDilationPenalty(**fields)
+
 
 # make these classes importable through `tidy3d.plugins.invdes`
 RadiusPenalty = adjoint_penalties.RadiusPenalty
-ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
+# ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
 
 
 # template for user to define penalty
