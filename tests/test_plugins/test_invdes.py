@@ -151,3 +151,21 @@ def test_result(use_emulated_run, tmp_path):
     result.to_gds_file(gds_fname, z=0, gds_layer_dtype_map=gds_layer_dtype_map)
 
     sim_data_final = result.sim_data_final(task_name="final")
+
+
+def test_invdes_io(tmp_path, use_emulated_run):
+    """Test saving a loading invdes instances to file."""
+
+    result = test_run(use_emulated_run)
+    optimizer = test_optimizer()
+    design = optimizer.design
+
+    for obj in (design, optimizer, result):
+        obj.json()
+
+        path = str(tmp_path / "obj.pkl")
+        obj.to_file(path)
+
+        obj2 = obj.from_file(path)
+
+        assert obj2.json() == obj.json()

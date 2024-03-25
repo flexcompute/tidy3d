@@ -10,10 +10,16 @@ from tidy3d.plugins.adjoint.components.simulation import JaxInfo
 
 import tidy3d.plugins.adjoint as tda
 
-from .region import DesignRegion
+from .base import InvdesBaseModel
+from .region import DesignRegionType
 
 
-class InverseDesign(td.components.base.Tidy3dBaseModel):
+# TODO: expose optimization step_num to the postprocess fn kwargs?
+
+PostProcessFnType = typing.Callable[[tda.JaxSimulationData], float]
+
+
+class InverseDesign(InvdesBaseModel):
     """Container for an inverse design problem."""
 
     simulation: td.Simulation = pd.Field(
@@ -22,7 +28,7 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         description="Simulation without the design regions or monitors used in the objective fn.",
     )
 
-    design_region: DesignRegion = pd.Field(
+    design_region: DesignRegionType = pd.Field(
         ...,
         title="Design Region",
         description="Region within which we will optimize the simulation.",
@@ -34,9 +40,45 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         description="Name of monitors whose data the differentiable output depends on.",
     )
 
-    post_process_fn: typing.Callable[[tda.JaxSimulationData], float] = pd.Field(...)
+    post_process_fn: PostProcessFnType = pd.Field(
+        ...,
+        title="Post-Process Function",
+        description="Function of ``JaxSimulationData`` that returns a ``float`` contribution "
+        "to the objective function",
+    )
 
-    task_name: str = pd.Field(...)
+    task_name: str = pd.Field(
+        ...,
+        title="Task Name",
+        description="Task name to use in the objective function when running the ``JaxSimulation``.",
+    )
+
+    # @pd.validator("post_process_fn", always=True)
+    # def _error_if_none(cls, val):
+    #     """Error if the post process function is None."""
+    #     if val is None:
+    #         raise ValueError("Trying to initialize an 'InverseDesign' with a 'post_process_fn' "
+    #             "of 'None'. The 'post_process_fn' must be defined as a function that accepts a "
+    #             "'JaxSimulationData' object and returns a float. If you loaded this "
+    #             "'InverseDesign' or 'Optimizer' object '.from_file()', then it must be "
+    #             "initialized using an alternate constructor, specifically "
+    #             "'InverseDesign.from_file_postprocess(fname, post_process_fn)' or "
+    #             "'Optimizer.from_file_postprocess(fname, post_process_fn)', respectively. "
+    #         )
+    #     return val
+
+    # @classmethod
+    # def from_file_post_process(cls, post_process_fn: PostProcessFnType, fname: str, group_path: str = None, **parse_obj_kwargs):
+    #     model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
+    #     model_dict["post_process_fn"] = post_process_fn
+    #     return cls.parse_obj(model_dict, **parse_obj_kwargs)
+
+    # @property
+    # def _post_process_fn(self) -> typing.Callable[[tda.JaxSimulationData], float]:
+    #     """Post-process function used internally, returns ``0.0`` if not defined in the instance."""
+    #     if self.post_process_fn is None:
+    #         return lambda x: 0.0
+    #     return self.post_process_fn
 
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
@@ -87,8 +129,6 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
 
         def objective_fn(params: jnp.ndarray) -> float:
             """Full objective function."""
-
-            # TODO: I dont think post_proc_kwargs is ever exposed to the user
 
             jax_sim = self.to_jax_simulation(params=params)
 

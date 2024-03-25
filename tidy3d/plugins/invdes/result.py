@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 import jax.numpy as jnp
 
 import tidy3d as td
+
+from .base import InvdesBaseModel
 from .design import InverseDesign
 
 
-class InverseDesignResult(td.components.base.Tidy3dBaseModel):
+class InverseDesignResult(InvdesBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
     design: InverseDesign

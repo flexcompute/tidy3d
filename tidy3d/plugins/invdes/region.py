@@ -5,18 +5,34 @@ import typing
 import jax.numpy as jnp
 import numpy as np
 import jax
+import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import annotate_type, Symmetry
+from tidy3d.components.types import annotate_type, Symmetry, Size, Coordinate
 import tidy3d.plugins.adjoint as tda
 
 from .transformation import (
     TransformationType,
 )
+from .base import InvdesBaseModel
 from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
 
 
-class DesignRegion(td.Box, abc.ABC):
+class DesignRegion(InvdesBaseModel, abc.ABC):
+    size: Size = pd.Field(
+        ...,
+        title="Size",
+        description="Size in x, y, and z directions.",
+        # units=MICROMETER,
+    )
+
+    center: Coordinate = pd.Field(
+        (0.0, 0.0, 0.0),
+        title="Center",
+        description="Center of object in x, y, and z.",
+        # units=MICROMETER,
+    )
+
     params_shape: typing.Tuple[int, int, int]
     symmetry: typing.Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
     eps_bounds: typing.Tuple[float, float]
@@ -76,14 +92,14 @@ class TopologyDesignRegion(DesignRegion):
     @property
     def step_sizes(self) -> typing.Tuple[float, float, float]:
         """Step sizes along x, y, z."""
-        bounds = np.array(self.bounds)
+        bounds = np.array(self.geometry.bounds)
         return tuple((bounds[1] - bounds[0]).tolist())
 
     @property
     def coords(self) -> typing.Dict[str, typing.List[float]]:
         """Coordinates for the custom medium corresponding to this design region."""
 
-        rmin, rmax = self.bounds
+        rmin, rmax = self.geometry.bounds
 
         coords = dict()
 
@@ -133,3 +149,6 @@ class LevelSetDesignRegion(DesignRegion):
     """Implement later"""
 
     pass
+
+
+DesignRegionType = typing.Union[TopologyDesignRegion]

@@ -2,7 +2,6 @@
 import abc
 from copy import deepcopy
 
-import dill
 import pydantic.v1 as pd
 import optax
 import jax.numpy as jnp
@@ -10,11 +9,15 @@ import jax
 
 import tidy3d as td
 
+from .base import InvdesBaseModel
 from .design import InverseDesign
 from .result import InverseDesignResult
 
+# TODO: beta schedule
+# TODO: penalty schedule
 
-class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
+
+class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     """Specification for an optimization."""
 
     design: InverseDesign = pd.Field(...)
@@ -95,14 +98,13 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
             history["post_process_val"].append(post_process_val)
             history["simulation"].append(simulation)
 
-            # TODO: need to be able to load this somehow
-            if self.history_save_fname:
-                with open(self.history_save_fname, "wb") as f_handle:
-                    dill.dump(history, f_handle)
-
-            # display informations
+            # display information
             result = InverseDesignResult(design=result.design, **history)
             self.display_fn(result, loop_index=loop_index)
+
+            # TODO: need to be able to load this somehow
+            if self.history_save_fname:
+                result.to_file(self.history_save_fname)
 
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
@@ -111,6 +113,11 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
             history["opt_state"].append(opt_state)
 
         return InverseDesignResult(design=result.design, **history)
+
+    @td.components.base.cached_property
+    @abc.abstractmethod
+    def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
+        """The optimizer used by ``optax`` corresponding to this spec."""
 
 
 class AdamOptimizer(AbstractOptimizer):
@@ -143,9 +150,3 @@ class AdamOptimizer(AbstractOptimizer):
             b2=self.b2,
             eps=self.eps,
         )
-
-    # TODO: beta schedule
-    # TODO: penalty schedule
-
-
-# TODO: Saving and loading with Callable fields
