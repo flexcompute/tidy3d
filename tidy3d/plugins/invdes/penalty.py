@@ -4,7 +4,6 @@ import typing
 import abc
 
 import jax.numpy as jnp
-import pydantic.v1 as pd
 
 import tidy3d.plugins.adjoint.utils.penalty as adjoint_penalties
 
@@ -27,7 +26,7 @@ from .base import InvdesBaseModel
 
 # make these classes importable through `tidy3d.plugins.invdes`
 RadiusPenalty = adjoint_penalties.RadiusPenalty
-# ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
+ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
 
 
 # template for user to define penalty

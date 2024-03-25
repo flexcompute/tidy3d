@@ -56,7 +56,7 @@ def test_design_region():
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
         eps_bounds=(1.0, 4.0),
-        symmetry=(0, 1, -1),
+        # symmetry=(0, 1, -1),
         params_shape=PARAMS_SHAPE,
         transformations=[
             tdi.CircularFilter(radius=0.2, design_region_dl=0.1),

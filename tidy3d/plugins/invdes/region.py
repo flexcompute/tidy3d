@@ -8,7 +8,7 @@ import jax
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import annotate_type, Symmetry, Size, Coordinate
+from tidy3d.components.types import annotate_type, Size, Coordinate
 import tidy3d.plugins.adjoint as tda
 
 from .transformation import TransformationType
@@ -17,42 +17,79 @@ from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
-
     size: Size = pd.Field(
         ...,
         title="Size",
         description="Size in x, y, and z directions.",
-        # units=MICROMETER,
+        units=td.constants.MICROMETER,
     )
 
     center: Coordinate = pd.Field(
-        (0.0, 0.0, 0.0),
+        ...,
         title="Center",
         description="Center of object in x, y, and z.",
-        # units=MICROMETER,
+        units=td.constants.MICROMETER,
     )
 
-    params_shape: typing.Tuple[int, int, int]
-    symmetry: typing.Tuple[Symmetry, Symmetry, Symmetry] = (0, 0, 0)
-    eps_bounds: typing.Tuple[float, float]
-    transformations: typing.Tuple[annotate_type(TransformationType), ...] = ()
-    penalties: typing.Tuple[annotate_type(PenaltyType), ...] = ()
-    penalty_weights: typing.Tuple[float, ...] = None
+    params_shape: typing.Tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
+        ...,
+        title="Parameters Shape",
+        description="Shape of the parameters array in (x, y, z) directions.",
+    )
+
+    eps_bounds: typing.Tuple[float, float] = pd.Field(
+        ...,
+        title="",
+        description="",
+    )
+
+    # TODO: support symmetry
+    # symmetry: typing.Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
+    #     (0, 0, 0),
+    #     title="Symmetry",
+    #     description="Symmetry of the design region. If specified, values on the '-' side of the "
+    #     "central axes will be filled in using the values on the '+' side of the axis.",
+    # )
+
+    transformations: typing.Tuple[annotate_type(TransformationType), ...] = pd.Field(
+        (),
+        title="Transformations",
+        description="Transformations that get applied from first to last on the parameter array."
+        "The end result of the transformations should be the material density of the design region "
+        ". With floating point values between (0, 1), where 0 corresponds to the minimum relative "
+        "permittivity and 1 corresponds to the maximum relative permittivity. "
+        "Set 'eps_bounds' to determine what permittivity values are evaluated given this density.",
+    )
+
+    # TODO: instead of penalty_weights, add `weight` to the `tdi.Penalty` instead.
+    penalties: typing.Tuple[annotate_type(PenaltyType), ...] = pd.Field(
+        (),
+        title="Penalties",
+        description="Set of penalties that get evaluated on the material density. Note that the "
+        "penalties are applied after 'transformations' are applied. To set the weights of the "
+        "penalties, set 'penalty_weights'. ",
+    )
+
+    penalty_weights: typing.Tuple[float, ...] = pd.Field(
+        None,
+        title="Penalty Weights",
+        description="Sets the weight of each penalty in '.penalties'. If not 'None'.",
+    )
 
     @property
     def geometry(self) -> td.Box:
-        """Geometry for this design region."""
+        """``Box`` corresponding to this design region."""
         return td.Box(center=self.center, size=self.size)
 
     def material_density(self, data: jnp.ndarray) -> jnp.ndarray:
-        """Evaluate the transformations on a dataset."""
+        """Evaluate the transformations on a parameter array to give the material density (0,1)."""
         for transformation in self.transformations:
             data = transformation.evaluate(data)
         return data
 
     @property
     def _num_penalties(self) -> int:
-        """How many penalties present?"""
+        """How many penalties are present."""
         return len(self.penalties)
 
     @property
@@ -81,10 +118,12 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 
     @abc.abstractmethod
     def to_jax_structure(self) -> tda.JaxStructure:
-        """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
+        """Convert this ``DesignRegion`` into a custom ``JaxStructure``. Implement in subclass."""
 
 
 class TopologyDesignRegion(DesignRegion):
+    """Design region as a pixellated permittivity grid."""
+
     transformations: typing.Tuple[annotate_type(TransformationType), ...] = ()
     penalties: typing.Tuple[annotate_type(typing.Union[ErosionDilationPenalty, Penalty]), ...] = ()
 
@@ -102,7 +141,6 @@ class TopologyDesignRegion(DesignRegion):
 
         coords = dict()
 
-        # for i, (coord_key, ptmin, ptmax, num_pts) in enumerate(zip("xyz", rmin, rmax, self.params_shape)):
         for center, coord_key, ptmin, ptmax, num_pts in zip(
             self.center, "xyz", rmin, rmax, self.params_shape
         ):
