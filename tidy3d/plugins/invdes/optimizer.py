@@ -113,10 +113,8 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         return InverseDesignResult(design=result.design, **history)
 
 
-class Optimizer(AbstractOptimizer):
+class AdamOptimizer(AbstractOptimizer):
     """Specification for an optimization."""
-
-    # optional kwargs passed to ``optax.adam()``
 
     b1: float = pd.Field(
         0.9,
