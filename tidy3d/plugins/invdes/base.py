@@ -5,7 +5,7 @@ import abc
 import dill
 from types import FunctionType
 import jax.numpy as jnp
-
+import inspect
 import numpy as np
 import typing
 import jax
@@ -25,6 +25,14 @@ except ImportError:
 
 class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
     """Base class for ``invdes`` components, with special function serialization and file IO."""
+
+    @staticmethod
+    def _get_fn_source(function: FunctionType) -> str:
+        """Get a function source as a string, return ``None`` if not available."""
+        try:
+            return inspect.getsource(function)
+        except (TypeError, OSError):
+            return None
 
     @staticmethod
     def _make_np_array(arr: typing.Any) -> np.ndarray:
@@ -59,5 +67,5 @@ class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
 
 # set the json encoder for function types to None
 invdes_encoders = InvdesBaseModel.__config__.json_encoders
-invdes_encoders[FunctionType] = lambda x: None
+invdes_encoders[FunctionType] = InvdesBaseModel._get_fn_source
 invdes_encoders[ArrayImpl] = InvdesBaseModel._make_np_array
