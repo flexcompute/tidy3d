@@ -81,6 +81,16 @@ def test_design_region():
     return design_region
 
 
+def test_invdes():
+    """make an inverse design"""
+    invdes = tdi.InverseDesign(
+        simulation=simulation,
+        design_region=test_design_region(),
+        output_monitors=[mnt],
+    )
+    return invdes
+
+
 def test_optimizer():
     """Make an optimizer"""
     optimizer = tdi.Optimizer(
@@ -92,18 +102,8 @@ def test_optimizer():
     return optimizer
 
 
-def test_invdes():
-    """make an inverse design"""
-    invdes = tdi.InverseDesign(
-        simulation=simulation,
-        design_region=test_design_region(),
-        output_monitors=[mnt],
-    )
-    return invdes
-
-
 def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
-    """Define a postprocessing function"""
+    """Define a post-processing function"""
     intensity = sim_data.get_intensity(MNT_NAME)
     return scale * jnp.sum(intensity.values)
 

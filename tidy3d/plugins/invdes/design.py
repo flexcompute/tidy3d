@@ -34,11 +34,11 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         description="Tuple of monitors whose data the differentiable output depends on.",
     )
 
-    def make_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
+    def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
 
         # construct the jax simulation from the simulation + design region
-        design_region_structure = self.design_region.make_structure(params)
+        design_region_structure = self.design_region.to_jax_structure(params)
 
         # TODO: do we want to add mesh override structure if the pixels are large / low res?
         mesh_override_structure = td.MeshOverrideStructure(
@@ -82,7 +82,7 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
 
             # TODO: I dont think post_proc_kwargs is ever exposed to the user
 
-            jax_sim = self.make_jax_simulation(params=params)
+            jax_sim = self.to_jax_simulation(params=params)
 
             # run the jax simulation
             jax_sim_data = tda.web.run(jax_sim, **run_kwargs)
