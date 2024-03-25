@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 import abc
-import dill
 from types import FunctionType
-import jax.numpy as jnp
 import inspect
-import numpy as np
 import typing
 import jax
+
+import numpy as np
+import dill
+import jax.numpy as jnp
+
 import tidy3d as td
 
 # TODO: below is a little sketchy

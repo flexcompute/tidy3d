@@ -11,9 +11,7 @@ import tidy3d as td
 from tidy3d.components.types import annotate_type, Symmetry, Size, Coordinate
 import tidy3d.plugins.adjoint as tda
 
-from .transformation import (
-    TransformationType,
-)
+from .transformation import TransformationType
 from .base import InvdesBaseModel
 from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
 

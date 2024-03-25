@@ -6,8 +6,6 @@ import typing
 import jax.numpy as jnp
 
 import tidy3d as td
-from tidy3d.plugins.adjoint.components.simulation import JaxInfo
-
 import tidy3d.plugins.adjoint as tda
 
 from .base import InvdesBaseModel
@@ -96,7 +94,7 @@ class InverseDesign(InvdesBaseModel):
             override_structures=list(self.simulation.grid_spec.override_structures)
             + [mesh_override_structure]
         )
-        jax_info = JaxInfo(
+        jax_info = tda.components.simulation.JaxInfo(
             num_input_structures=0,
             num_output_monitors=0,
             num_grad_monitors=0,
