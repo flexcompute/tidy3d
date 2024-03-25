@@ -9,7 +9,7 @@ from .region import (
     LevelSetDesignRegion,
     ShapeDesignRegion,
 )
-from .optimizer import Optimizer
+from .optimizer import AdamOptimizer
 from .result import InverseDesignResult
 
 __all__ = (
@@ -25,6 +25,6 @@ __all__ = (
     "TopologyDesignRegion",
     "LevelSetDesignRegion",
     "ShapeDesignRegion",
-    "Optimizer",
+    "AdamOptimizer",
     "InverseDesignResult",
 )

@@ -5,8 +5,9 @@ import abc
 
 import jax.numpy as jnp
 
-import tidy3d as td
 import tidy3d.plugins.adjoint.utils.filter as adjoint_filters
+
+from .base import InvdesBaseModel
 
 # make these classes importable through `tidy3d.plugins.invdes`
 CircularFilter = adjoint_filters.CircularFilter
@@ -17,7 +18,7 @@ BinaryProjector = adjoint_filters.BinaryProjector
 
 
 # template for user to define transformations
-class Transformation(td.components.base.Tidy3dBaseModel, abc.ABC):
+class Transformation(InvdesBaseModel, abc.ABC):
     """Arbitrary transformation that a user can define."""
 
     @abc.abstractmethod

@@ -5,8 +5,12 @@ import abc
 
 import jax.numpy as jnp
 
-import tidy3d as td
+
 import tidy3d.plugins.adjoint.utils.penalty as adjoint_penalties
+
+
+from .base import InvdesBaseModel
+
 
 # make these classes importable through `tidy3d.plugins.invdes`
 RadiusPenalty = adjoint_penalties.RadiusPenalty
@@ -14,7 +18,7 @@ ErosionDilationPenalty = adjoint_penalties.ErosionDilationPenalty
 
 
 # template for user to define penalty
-class Penalty(td.components.base.Tidy3dBaseModel, abc.ABC):
+class Penalty(InvdesBaseModel, abc.ABC):
     """Arbitrary penalty that a user can define."""
 
     @abc.abstractmethod
