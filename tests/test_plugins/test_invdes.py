@@ -104,7 +104,7 @@ def test_invdes():
 def test_optimizer():
     """Make an optimizer"""
     design = test_invdes()
-    optimizer = tdi.Optimizer(
+    optimizer = tdi.AdamOptimizer(
         design=design,
         history_save_fname="tests/data/invdes_history.pkl",
         learning_rate=0.2,
