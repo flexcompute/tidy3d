@@ -18,7 +18,7 @@ L_SIM = 2.0
 MNT_NAME = "mnt_name"
 PARAMS_SHAPE = (18, 19, 20)
 PARAMS_0 = np.random.random(PARAMS_SHAPE)
-
+HISTORY_FNAME = "tests/data/invdes_history.pkl"
 
 td.config.logging_level = "ERROR"
 
@@ -106,7 +106,7 @@ def test_optimizer():
     design = test_invdes()
     optimizer = tdi.AdamOptimizer(
         design=design,
-        history_save_fname="tests/data/invdes_history.pkl",
+        history_save_fname=HISTORY_FNAME,
         learning_rate=0.2,
         num_steps=3,
     )
@@ -130,6 +130,18 @@ def test_continue_run(use_emulated_run):
     num_steps_full = len(result_full.history["params"])
     assert (
         num_steps_full == num_steps_orig + optimizer.num_steps
+    ), "wrong number of elements in the combined run history."
+
+def test_complete_run_from_file(use_emulated_run):
+    """Test continuing an already run inverse design from file."""
+    result_orig = test_run(use_emulated_run)
+    optimizer_orig = test_optimizer()
+    optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 10)
+    result_full = optimizer.complete_run_from_file(HISTORY_FNAME)
+
+    num_steps_full = len(result_full.history["params"])
+    assert (
+        num_steps_full == optimizer_orig.num_steps + optimizer.num_steps
     ), "wrong number of elements in the combined run history."
 
 

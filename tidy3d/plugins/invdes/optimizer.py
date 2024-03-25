@@ -26,7 +26,12 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         None,
         title="History Storage File",
         description="If specified, will save the optimization state to a local ``.pkl`` file "
-        "using ``dill.dump()``.",
+        "using ``dill.dump()``. This file stores an ``InverseDesignResult`` corresponding "
+        "to the latest state of the optimization. To continue this run from the file using the same"
+        " optimizer instance, call ``optimizer.complete_run_from_file(fname)``. "
+        "Alternatively, the latest results can then be loaded with "
+        "``td.InverseDesignResult.from_file(fname)`` and then continued using "
+        "``optimizer.continue_run(result)``. "
     )
 
     learning_rate: pd.NonNegativeFloat = pd.Field(
@@ -40,6 +45,11 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         title="Number of Steps",
         description="Number of steps in the gradient descent optimizer.",
     )
+
+    @td.components.base.cached_property
+    @abc.abstractmethod
+    def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
+        """The optimizer used by ``optax`` corresponding to this spec."""
 
     def display_fn(self, result: InverseDesignResult, loop_index: int) -> None:
         """Default display function while optimizing."""
@@ -102,22 +112,22 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             result = InverseDesignResult(design=result.design, **history)
             self.display_fn(result, loop_index=loop_index)
 
-            # TODO: need to be able to load this somehow
-            if self.history_save_fname:
-                result.to_file(self.history_save_fname)
-
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
             params = optax.apply_updates(params, updates)
             history["params"].append(params)
             history["opt_state"].append(opt_state)
 
+            # save current results to file
+            if self.history_save_fname:
+                result.to_file(self.history_save_fname)
+
         return InverseDesignResult(design=result.design, **history)
 
-    @td.components.base.cached_property
-    @abc.abstractmethod
-    def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
-        """The optimizer used by ``optax`` corresponding to this spec."""
+    def complete_run_from_file(self, fname: str) -> InverseDesignResult:
+        """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
+        result = InverseDesignResult.from_file(fname)
+        return self.continue_run(result)
 
 
 class AdamOptimizer(AbstractOptimizer):
