@@ -4,7 +4,8 @@
 from typing import Tuple, List, Optional
 import csv
 import codecs
-import requests
+
+# import requests
 
 import scipy.optimize as opt
 import numpy as np
@@ -19,7 +20,8 @@ from ...components.viz import add_ax_if_none
 from ...components.types import Ax, ArrayFloat1D
 from ...constants import C_0, HBAR, MICROMETER
 from ...exceptions import ValidationError, WebError, SetupError
-from tidy3d.web.core.environment import Env
+
+# from tidy3d.web.core.environment import Env
 
 
 class DispersionFitter(Tidy3dBaseModel):

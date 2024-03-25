@@ -11,7 +11,8 @@ import functools
 import pydantic.v1 as pydantic
 import numpy as np
 import shapely
-from matplotlib import patches
+
+# from matplotlib import patches
 
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type

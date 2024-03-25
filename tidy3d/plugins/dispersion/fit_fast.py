@@ -716,94 +716,91 @@ class FastDispersionFitter(DispersionFitter):
 
         configs = make_configs()
 
-        with Progress(console=get_logging_console()) as progress:
-            task = progress.add_task(
-                f"Fitting to weighted RMS of {tolerance_rms}...",
-                total=len(configs),
-                visible=init_model.show_progress,
+        # with Progress(console=get_logging_console()) as progress:
+        #     task = progress.add_task(
+        #         f"Fitting to weighted RMS of {tolerance_rms}...",
+        #         total=len(configs),
+        #         visible=init_model.show_progress,
+        #     )
+
+        #     while not progress.finished:
+        # try different initial pole configurations
+        for num_poles, relaxed, smooth, logspacing, optimize_eps_inf in configs:
+            model = init_model.updated_copy(
+                num_poles=num_poles,
+                relaxed=relaxed,
+                smooth=smooth,
+                logspacing=logspacing,
+                optimize_eps_inf=optimize_eps_inf,
             )
+            model = self._fit_fixed_parameters((min_num_poles, max_num_poles), model)
 
-            while not progress.finished:
-                # try different initial pole configurations
-                for num_poles, relaxed, smooth, logspacing, optimize_eps_inf in configs:
-                    model = init_model.updated_copy(
-                        num_poles=num_poles,
-                        relaxed=relaxed,
-                        smooth=smooth,
-                        logspacing=logspacing,
-                        optimize_eps_inf=optimize_eps_inf,
+            if model.rms_error < best_model.rms_error:
+                log.debug(
+                    f"Fitter: possible improved fit with "
+                    f"rms_error={model.rms_error:.3g} found using "
+                    f"relaxed={model.relaxed}, "
+                    f"smooth={model.smooth}, "
+                    f"logspacing={model.logspacing}, "
+                    f"optimize_eps_inf={model.optimize_eps_inf}, "
+                    f"loss_in_bounds={model.loss_in_bounds}, "
+                    f"passivity_optimized={model.passivity_optimized}, "
+                    f"sellmeier_passivity={model.sellmeier_passivity}."
+                )
+                if model.loss_in_bounds and model.sellmeier_passivity:
+                    best_model = model
+                else:
+                    if not warned_about_passivity_num_iters and model.passivity_num_iters_too_small:
+                        warned_about_passivity_num_iters = True
+                        log.warning(
+                            "Did not finish enforcing passivity in dispersion fitter. "
+                            "If the fit is not good enough, consider increasing "
+                            "'AdvancedFastFitterParam.passivity_num_iters'."
+                        )
+                    if (
+                        not warned_about_slsqp_constraint_scale
+                        and model.slsqp_constraint_scale_too_small
+                    ):
+                        warned_about_slsqp_constraint_scale = True
+                        log.warning(
+                            "SLSQP constraint scale may be too small. "
+                            "If the fit is not good enough, consider increasing "
+                            "'AdvancedFastFitterParam.slsqp_constraint_scale'."
+                        )
+            # progress.update(
+            #     task,
+            #     advance=1,
+            #     description=f"Best weighted RMS error so far: {best_model.rms_error:.3g}",
+            #     refresh=True,
+            # )
+
+            # if below tolerance, return
+            if best_model.rms_error < tolerance_rms:
+                # progress.update(
+                #     task,
+                #     completed=len(configs),
+                #     description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
+                #     refresh=True,
+                # )
+                log.info(
+                    "Found optimal fit with weighted RMS error %.3g",
+                    best_model.rms_error,
+                )
+                if best_model.show_unweighted_rms:
+                    log.info(
+                        "Unweighted RMS error %.3g",
+                        best_model.unweighted_rms_error,
                     )
-                    model = self._fit_fixed_parameters((min_num_poles, max_num_poles), model)
 
-                    if model.rms_error < best_model.rms_error:
-                        log.debug(
-                            f"Fitter: possible improved fit with "
-                            f"rms_error={model.rms_error:.3g} found using "
-                            f"relaxed={model.relaxed}, "
-                            f"smooth={model.smooth}, "
-                            f"logspacing={model.logspacing}, "
-                            f"optimize_eps_inf={model.optimize_eps_inf}, "
-                            f"loss_in_bounds={model.loss_in_bounds}, "
-                            f"passivity_optimized={model.passivity_optimized}, "
-                            f"sellmeier_passivity={model.sellmeier_passivity}."
-                        )
-                        if model.loss_in_bounds and model.sellmeier_passivity:
-                            best_model = model
-                        else:
-                            if (
-                                not warned_about_passivity_num_iters
-                                and model.passivity_num_iters_too_small
-                            ):
-                                warned_about_passivity_num_iters = True
-                                log.warning(
-                                    "Did not finish enforcing passivity in dispersion fitter. "
-                                    "If the fit is not good enough, consider increasing "
-                                    "'AdvancedFastFitterParam.passivity_num_iters'."
-                                )
-                            if (
-                                not warned_about_slsqp_constraint_scale
-                                and model.slsqp_constraint_scale_too_small
-                            ):
-                                warned_about_slsqp_constraint_scale = True
-                                log.warning(
-                                    "SLSQP constraint scale may be too small. "
-                                    "If the fit is not good enough, consider increasing "
-                                    "'AdvancedFastFitterParam.slsqp_constraint_scale'."
-                                )
-                    progress.update(
-                        task,
-                        advance=1,
-                        description=f"Best weighted RMS error so far: {best_model.rms_error:.3g}",
-                        refresh=True,
-                    )
-
-                    # if below tolerance, return
-                    if best_model.rms_error < tolerance_rms:
-                        progress.update(
-                            task,
-                            completed=len(configs),
-                            description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
-                            refresh=True,
-                        )
-                        log.info(
-                            "Found optimal fit with weighted RMS error %.3g",
-                            best_model.rms_error,
-                        )
-                        if best_model.show_unweighted_rms:
-                            log.info(
-                                "Unweighted RMS error %.3g",
-                                best_model.unweighted_rms_error,
-                            )
-
-                        return best_model.pole_residue, best_model.rms_error
+                return best_model.pole_residue, best_model.rms_error
 
         # if exited loop, did not reach tolerance (warn)
-        progress.update(
-            task,
-            completed=len(configs),
-            description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
-            refresh=True,
-        )
+        # progress.update(
+        #     task,
+        #     completed=len(configs),
+        #     description=f"Best weighted RMS error: {best_model.rms_error:.3g}",
+        #     refresh=True,
+        # )
 
         log.warning(
             "Unable to fit with weighted RMS error under 'tolerance_rms' of %.3g", tolerance_rms

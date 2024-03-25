@@ -5,9 +5,10 @@ from typing import Dict, Tuple, List, Set, Union
 
 import pydantic.v1 as pd
 import numpy as np
-import matplotlib.pylab as plt
-import matplotlib as mpl
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+# import matplotlib.pylab as plt
+# import matplotlib as mpl
+# from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from .base import cached_property, Tidy3dBaseModel
 from .validators import assert_unique_names
