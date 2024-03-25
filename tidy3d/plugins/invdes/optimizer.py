@@ -1,6 +1,5 @@
 # specification for running the optimizer
 import abc
-import typing
 from copy import deepcopy
 
 import dill
@@ -10,7 +9,6 @@ import jax.numpy as jnp
 import jax
 
 import tidy3d as td
-import tidy3d.plugins.adjoint as tda
 
 from .design import InverseDesign
 from .result import InverseDesignResult
@@ -40,15 +38,9 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         description="Number of steps in the gradient descent optimizer.",
     )
 
-    def display_fn_default(
-        self, result: InverseDesignResult, num_steps: int, loop_index: int = None
-    ) -> None:
+    def display_fn(self, result: InverseDesignResult, loop_index: int) -> None:
         """Default display function while optimizing."""
-        step_index = len(result.params)
-        if loop_index:
-            steps_done_previously = step_index - loop_index
-            num_steps += steps_done_previously
-        print(f"step ({step_index + 1}/{num_steps})")
+        print(f"step ({loop_index + 1}/{self.num_steps})")
         print(f"\tobjective_fn_val = {result.objective_fn_val[-1]:.3e}")
         print(f"\tgrad_norm = {jnp.linalg.norm(result.grad[-1]):.3e}")
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
@@ -65,54 +57,14 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         # initialize empty result
         return InverseDesignResult(design=self.design, opt_state=[opt_state], params=[params0])
 
-    def run(
-        self,
-        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
-        params0: jnp.ndarray,
-        display_fn: typing.Callable[[typing.Dict, int], None] = None,
-        **run_kwargs,
-    ) -> InverseDesignResult:
-        """Run this inverse design problem."""
+    def run(self, params0: jnp.ndarray) -> InverseDesignResult:
+        """Run this inverse design problem from an initial set of parameters."""
 
         starting_result = self.initialize_result(params0)
+        return self.continue_run(result=starting_result)
 
-        return self._run_optimizer(
-            post_process_fn=post_process_fn,
-            result=starting_result,
-            display_fn=display_fn,
-            **run_kwargs,
-        )
-
-    def continue_run(
-        self,
-        result: InverseDesignResult,
-        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
-        display_fn: typing.Callable[[typing.Dict, int], None] = None,
-        num_steps: int = None,
-        suppress_params_warning: bool = False,
-        **run_kwargs,
-    ) -> InverseDesignResult:
-        """Continue running an ``InverseDesignResult``."""
-
-        return self._run_optimizer(
-            post_process_fn=post_process_fn,
-            result=result,
-            display_fn=display_fn,
-            num_steps=num_steps,
-            **run_kwargs,
-        )
-
-    def _run_optimizer(
-        self,
-        post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
-        result: InverseDesignResult,
-        display_fn: typing.Callable[[InverseDesignResult, int], None] = None,
-        num_steps: int = None,
-        **run_kwargs,
-    ) -> InverseDesignResult:
-        """Run optimizer for a series of steps with an initialized state. Used internally."""
-
-        num_steps = num_steps if num_steps else self.num_steps
+    def continue_run(self, result: InverseDesignResult) -> InverseDesignResult:
+        """Run optimizer for a series of steps with an initialized state."""
 
         # get the last state of the optimizer and the last number of params
         opt_state = result.get_final("opt_state")
@@ -120,15 +72,14 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         history = deepcopy(result.history)
 
         # use jax to grad the objective function
-        objective_fn = result.design.make_objective_fn(
-            post_process_fn=post_process_fn, **run_kwargs
-        )
+        # objective_fn = result.design.make_objective_fn(post_process_fn=post_process_fn)
+        objective_fn = self.design.objective_fn
         val_and_grad_fn = jax.value_and_grad(objective_fn, has_aux=True)
 
         optax_optimizer = self.optax_optimizer
 
         # main optimization loop
-        for loop_index in range(num_steps):
+        for loop_index in range(self.num_steps):
             # evaluate gradient
             (val, aux_data), grad = val_and_grad_fn(params)
 
@@ -150,9 +101,8 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
                     dill.dump(history, f_handle)
 
             # display informations
-            _display_fn = display_fn or self.display_fn_default
             result = InverseDesignResult(design=result.design, **history)
-            _display_fn(result, loop_index=loop_index, num_steps=num_steps)
+            self.display_fn(result, loop_index=loop_index)
 
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
@@ -186,7 +136,7 @@ class Optimizer(AbstractOptimizer):
         description="Epsilon parameter in the Adam optimization method.",
     )
 
-    @property
+    @td.components.base.cached_property
     def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
         """The optimizer used by ``optax`` corresponding to this spec."""
         return optax.adam(
@@ -198,3 +148,6 @@ class Optimizer(AbstractOptimizer):
 
     # TODO: beta schedule
     # TODO: penalty schedule
+
+
+# TODO: Saving and loading with Callable fields
