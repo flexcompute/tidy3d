@@ -65,7 +65,7 @@ class DesignRegion(td.Box, abc.ABC):
         return jnp.sum(penalties_weighted)
 
     @abc.abstractmethod
-    def make_structure(self) -> tda.JaxStructure:
+    def to_jax_structure(self) -> tda.JaxStructure:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
 
 
@@ -109,7 +109,7 @@ class TopologyDesignRegion(DesignRegion):
         arr_3d = arr_3d.reshape(params.shape)
         return jnp.expand_dims(arr_3d, axis=-1)
 
-    def make_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
+    def to_jax_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
         coords = self.coords
         eps_values = self.eps_values(params)
