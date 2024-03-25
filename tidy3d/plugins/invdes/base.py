@@ -51,6 +51,7 @@ class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
 
     @staticmethod
     def _make_np_array(arr: typing.Any) -> np.ndarray:
+        """Turn any array into a ``numpy`` array."""
         jax_arr = jnp.array(arr)
         untraced_arr = jax.lax.stop_gradient(jax_arr)
         return np.array(untraced_arr)
@@ -80,7 +81,7 @@ class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
         return cls(**self_dict)
 
 
-# set the json encoder for function types to None
+# set the json encoders for function types and for jax arrays
 invdes_encoders = InvdesBaseModel.__config__.json_encoders
 invdes_encoders[FunctionType] = InvdesBaseModel._get_fn_source
 invdes_encoders[ArrayImpl] = InvdesBaseModel._make_np_array
