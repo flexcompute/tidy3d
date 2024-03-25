@@ -10,19 +10,32 @@ import jax
 import numpy as np
 import dill
 import jax.numpy as jnp
-
+import jaxlib
 import tidy3d as td
 
-# TODO: below is a little sketchy
+"""
+Notes on the code block below:
+
+'ArrayImpl' type needed to tell pydantic how to serialize jax arrays. See bottom of file for detail.
+We try to import this type, but these imports can sometimes change with jax versions.
+So if that fails, we can warn the user to file an issue, and use a standin instead of erroring.
+The code will still work, but users wont be able to write jax-containing objects to file until it's
+properly fixed.
+"""
 try:
     from jaxlib.xla_extension import ArrayImpl
 except ImportError:
     td.log.warning(
         "Could not import 'ArrayImpl' in this version of 'jax'. "
         "If you encountered this error, please file an 'Issue' on the 'tidy3d' front end github "
-        "repository at 'https://github.com/flexcompute/tidy3d/issues'."
+        "repository at 'https://github.com/flexcompute/tidy3d/issues'. To help us fix the issue, "
+        "please mention the version of 'tidy3d', 'jax', and 'jaxlib', printed below: \n"
+        f"\ttidy3d=={td.__version__}\n"
+        f"\tjax=={jax.__version__}\n"
+        f"\tjaxlib=={jaxlib.__version__}\n"
     )
     ArrayImpl = jnp.ndarray
+    # TODO: test this condition
 
 
 class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):

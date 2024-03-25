@@ -51,49 +51,46 @@ class InverseDesign(InvdesBaseModel):
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
     )
 
-    # @pd.validator("post_process_fn", always=True)
-    # def _error_if_none(cls, val):
-    #     """Error if the post process function is None."""
-    #     if val is None:
-    #         raise ValueError("Trying to initialize an 'InverseDesign' with a 'post_process_fn' "
-    #             "of 'None'. The 'post_process_fn' must be defined as a function that accepts a "
-    #             "'JaxSimulationData' object and returns a float. If you loaded this "
-    #             "'InverseDesign' or 'Optimizer' object '.from_file()', then it must be "
-    #             "initialized using an alternate constructor, specifically "
-    #             "'InverseDesign.from_file_postprocess(fname, post_process_fn)' or "
-    #             "'Optimizer.from_file_postprocess(fname, post_process_fn)', respectively. "
-    #         )
-    #     return val
-
-    # @classmethod
-    # def from_file_post_process(cls, post_process_fn: PostProcessFnType, fname: str, group_path: str = None, **parse_obj_kwargs):
-    #     model_dict = cls.dict_from_file(fname=fname, group_path=group_path)
-    #     model_dict["post_process_fn"] = post_process_fn
-    #     return cls.parse_obj(model_dict, **parse_obj_kwargs)
-
-    # @property
-    # def _post_process_fn(self) -> typing.Callable[[tda.JaxSimulationData], float]:
-    #     """Post-process function used internally, returns ``0.0`` if not defined in the instance."""
-    #     if self.post_process_fn is None:
-    #         return lambda x: 0.0
-    #     return self.post_process_fn
+    # TODO: test all of the options
+    override_structure_dl: typing.Union[td.components.types.Size, typing.Literal[False]] = pd.Field(
+        None,
+        title="Design Region Override Structure Grid Sizes",
+        description="Defines grid size when adding an ``override_structure`` to the "
+        "``JaxSimulation.grid_spec`` corresponding to this design region. "
+        "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
+        "pixel resolution defined by the parameter array within the design region. "
+        "This is advised if the pixel size is relatively close to the FDTD grid size. "
+        "Specifying a ``tuple`` of 3 grid sizes for x, y, z will override this setting "
+        "with the supplied values. Supplying ``False`` will completely leave out the "
+        " override structure. We recommend setting this to ``False`` or specifying your own values "
+        "if the pixel size of your design region is much larger than your simulation grid cell size"
+        " as in that case, the mesh may create too low of a resolution in the design region. ",
+    )
 
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
 
         # construct the jax simulation from the simulation + design region
         design_region_structure = self.design_region.to_jax_structure(params)
+        grid_spec = self.simulation.grid_spec
 
-        # TODO: do we want to add mesh override structure if the pixels are large / low res?
-        mesh_override_structure = td.MeshOverrideStructure(
-            geometry=design_region_structure.geometry,
-            dl=self.design_region.step_sizes,
-            enforce=True,
-        )
-        grid_spec = self.simulation.grid_spec.updated_copy(
-            override_structures=list(self.simulation.grid_spec.override_structures)
-            + [mesh_override_structure]
-        )
+        # add override structure to grid spec, if specified
+        if self.override_structure_dl is not False:
+            if self.override_structure_dl is None:
+                dl_mesh_override = self.design_region.step_sizes
+            else:
+                dl_mesh_override = self.override_structure_dl
+
+            mesh_override_structure = td.MeshOverrideStructure(
+                geometry=design_region_structure.geometry,
+                dl=dl_mesh_override,
+                enforce=True,
+            )
+            grid_spec = grid_spec.updated_copy(
+                override_structures=list(self.simulation.grid_spec.override_structures)
+                + [mesh_override_structure]
+            )
+
         jax_info = tda.components.simulation.JaxInfo(
             num_input_structures=0,
             num_output_monitors=0,
