@@ -6,11 +6,11 @@ import typing
 import jax.numpy as jnp
 
 import tidy3d as td
-from tidy3d.plugins.adjoint.components.simulation import OutputMonitorType, JaxInfo
+from tidy3d.plugins.adjoint.components.simulation import JaxInfo
 
 import tidy3d.plugins.adjoint as tda
 
-from .design_region import DesignRegion
+from .region import DesignRegion
 
 
 class InverseDesign(td.components.base.Tidy3dBaseModel):
@@ -28,11 +28,15 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
         description="Region within which we will optimize the simulation.",
     )
 
-    output_monitors: OutputMonitorType = pd.Field(
+    output_monitor_names: typing.Tuple[str, ...] = pd.Field(
         (),
-        title="Output Monitors",
-        description="Tuple of monitors whose data the differentiable output depends on.",
+        title="Output Monitor Names",
+        description="Name of monitors whose data the differentiable output depends on.",
     )
+
+    post_process_fn: typing.Callable[[tda.JaxSimulationData], float] = pd.Field(...)
+
+    task_name: str = pd.Field(...)
 
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
@@ -62,22 +66,26 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             jax_info=jax_info,
         )
 
+        monitors = []
+        output_monitors = []
+        for mnt in jax_sim.monitors:
+            if mnt.name in self.output_monitor_names:
+                output_monitors.append(mnt)
+            else:
+                monitors.append(mnt)
+
         return jax_sim.updated_copy(
             input_structures=[design_region_structure],
-            output_monitors=self.output_monitors,
+            output_monitors=output_monitors,
+            monitors=monitors,
             grid_spec=grid_spec,
         )
 
-    def make_objective_fn(
-        self, post_process_fn: typing.Callable[[tda.JaxSimulationData], float], **run_kwargs
-    ) -> typing.Callable[[jnp.ndarray], float]:
+    @property
+    def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
-        # turn off verbosity by default unless otherwise specified
-        if "verbose" not in run_kwargs:
-            run_kwargs["verbose"] = False
-
-        def objective_fn(params: jnp.ndarray, **post_proc_kwargs) -> float:
+        def objective_fn(params: jnp.ndarray) -> float:
             """Full objective function."""
 
             # TODO: I dont think post_proc_kwargs is ever exposed to the user
@@ -85,10 +93,10 @@ class InverseDesign(td.components.base.Tidy3dBaseModel):
             jax_sim = self.to_jax_simulation(params=params)
 
             # run the jax simulation
-            jax_sim_data = tda.web.run(jax_sim, **run_kwargs)
+            jax_sim_data = tda.web.run(jax_sim, task_name=self.task_name, verbose=False)
 
             # construct objective function values
-            post_process_val = post_process_fn(jax_sim_data, **post_proc_kwargs)
+            post_process_val = self.post_process_fn(jax_sim_data)
             penalty_value = self.design_region.penalty_value(params)
             objective_fn_val = post_process_val - penalty_value
 

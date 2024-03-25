@@ -22,6 +22,10 @@ PARAMS_0 = np.random.random(PARAMS_SHAPE)
 
 td.config.logging_level = "ERROR"
 
+mnt = td.FieldMonitor(
+    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
+)
+
 simulation = td.Simulation(
     size=(L_SIM, L_SIM, L_SIM),
     grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FREQ0),
@@ -33,11 +37,9 @@ simulation = td.Simulation(
         )
     ],
     run_time=1e-12,
+    monitors=[mnt],
 )
 
-mnt = td.FieldMonitor(
-    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
-)
 
 # class custom_transformation(tdi.Transformation):
 #     def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
@@ -81,12 +83,20 @@ def test_design_region():
     return design_region
 
 
+def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
+    """Define a post-processing function"""
+    intensity = sim_data.get_intensity(MNT_NAME)
+    return scale * jnp.sum(intensity.values)
+
+
 def test_invdes():
     """make an inverse design"""
     invdes = tdi.InverseDesign(
         simulation=simulation,
         design_region=test_design_region(),
-        output_monitors=[mnt],
+        output_monitor_names=[MNT_NAME],
+        post_process_fn=post_process_fn,
+        task_name="test",
     )
     return invdes
 
@@ -103,16 +113,10 @@ def test_optimizer():
     return optimizer
 
 
-def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
-    """Define a post-processing function"""
-    intensity = sim_data.get_intensity(MNT_NAME)
-    return scale * jnp.sum(intensity.values)
-
-
 def test_run(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
     optimizer = test_optimizer()
-    result = optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn, task_name="blah")
+    result = optimizer.run(params0=PARAMS_0)
     return result
 
 
@@ -120,9 +124,8 @@ def test_continue_run(use_emulated_run):
     """Test continuing an already run inverse design."""
     result_orig = test_run(use_emulated_run)
     optimizer = test_optimizer()
-    result_full = optimizer.continue_run(
-        result=result_orig, post_process_fn=post_process_fn, task_name="blah"
-    )
+    result_full = optimizer.continue_run(result=result_orig)
+
     num_steps_orig = len(result_orig.history["params"])
     num_steps_full = len(result_full.history["params"])
     assert (
