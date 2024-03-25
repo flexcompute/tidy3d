@@ -13,7 +13,7 @@ import tidy3d as td
 import tidy3d.plugins.adjoint as tda
 
 from .design import InverseDesign
-from .result import OptimizeResult
+from .result import InverseDesignResult
 
 
 class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
@@ -41,7 +41,7 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
     )
 
     def display_fn_default(
-        self, result: OptimizeResult, num_steps: int, loop_index: int = None
+        self, result: InverseDesignResult, num_steps: int, loop_index: int = None
     ) -> None:
         """Default display function while optimizing."""
         step_index = len(result.params)
@@ -54,8 +54,8 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self, params0: jnp.ndarray) -> OptimizeResult:
-        """Create an initially empty ``OptimizeResult`` from the starting parameters."""
+    def initialize_result(self, params0: jnp.ndarray) -> InverseDesignResult:
+        """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
 
         # initialize optimizer
         params0 = jnp.array(params0)
@@ -63,7 +63,7 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         opt_state = optax_optimizer.init(params0)
 
         # initialize empty result
-        return OptimizeResult(design=self.design, opt_state=[opt_state], params=[params0])
+        return InverseDesignResult(design=self.design, opt_state=[opt_state], params=[params0])
 
     def run(
         self,
@@ -71,7 +71,7 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
         params0: jnp.ndarray,
         display_fn: typing.Callable[[typing.Dict, int], None] = None,
         **run_kwargs,
-    ) -> OptimizeResult:
+    ) -> InverseDesignResult:
         """Run this inverse design problem."""
 
         starting_result = self.initialize_result(params0)
@@ -85,14 +85,14 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
 
     def continue_run(
         self,
-        result: OptimizeResult,
+        result: InverseDesignResult,
         post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
         display_fn: typing.Callable[[typing.Dict, int], None] = None,
         num_steps: int = None,
         suppress_params_warning: bool = False,
         **run_kwargs,
-    ) -> OptimizeResult:
-        """Continue running an ``OptimizeResult``."""
+    ) -> InverseDesignResult:
+        """Continue running an ``InverseDesignResult``."""
 
         return self._run_optimizer(
             post_process_fn=post_process_fn,
@@ -105,11 +105,11 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
     def _run_optimizer(
         self,
         post_process_fn: typing.Callable[[tda.JaxSimulationData], float],
-        result: OptimizeResult,
-        display_fn: typing.Callable[[OptimizeResult, int], None] = None,
+        result: InverseDesignResult,
+        display_fn: typing.Callable[[InverseDesignResult, int], None] = None,
         num_steps: int = None,
         **run_kwargs,
-    ) -> OptimizeResult:
+    ) -> InverseDesignResult:
         """Run optimizer for a series of steps with an initialized state. Used internally."""
 
         num_steps = num_steps if num_steps else self.num_steps
@@ -151,7 +151,7 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
 
             # display informations
             _display_fn = display_fn or self.display_fn_default
-            result = OptimizeResult(design=result.design, **history)
+            result = InverseDesignResult(design=result.design, **history)
             _display_fn(result, loop_index=loop_index, num_steps=num_steps)
 
             # update optimizer and parameters
@@ -160,7 +160,7 @@ class AbstractOptimizer(abc.ABC, td.components.base.Tidy3dBaseModel):
             history["params"].append(params)
             history["opt_state"].append(opt_state)
 
-        return OptimizeResult(design=result.design, **history)
+        return InverseDesignResult(design=result.design, **history)
 
 
 class Optimizer(AbstractOptimizer):

@@ -9,7 +9,7 @@ import tidy3d as td
 from .design import InverseDesign
 
 
-class OptimizeResult(td.components.base.Tidy3dBaseModel):
+class InverseDesignResult(td.components.base.Tidy3dBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
     design: InverseDesign
