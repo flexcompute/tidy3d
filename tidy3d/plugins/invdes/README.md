@@ -88,7 +88,7 @@ If the user runs an optimization and then wants to continue the process, they ca
 InverseDesign.continue_run(res, f_pp)
 ```
 
-, passing the `OptimizeResult`. It will then pick up where it was before using the history stored in `res`.
+, passing the `InverseDesignResult`. It will then pick up where it was before using the history stored in `res`.
 
 ## API example
 

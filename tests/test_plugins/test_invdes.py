@@ -131,7 +131,7 @@ def test_continue_run(use_emulated_run):
 
 
 def test_result(use_emulated_run, tmp_path):
-    """Test methods of the ``OptimizeResult`` object."""
+    """Test methods of the ``InverseDesignResult`` object."""
     result = test_run(use_emulated_run)
 
     with pytest.raises(KeyError):
