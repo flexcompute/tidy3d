@@ -107,7 +107,7 @@ class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
         """If ``grid_expanded`` not provided and fields data is present, warn that some methods
         will break."""
         field_comps = ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]
-        if val is None and any(values[comp] is not None for comp in field_comps):
+        if val is None and any(values.get(comp) is not None for comp in field_comps):
             log.warning(
                 "Monitor data requires 'grid_expanded' to be defined to compute values like "
                 "flux, Poynting and dot product with other data."
@@ -690,9 +690,7 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
 
         # Mode indices, if available
         modes_in_self = "mode_index" in coords[0]
-        coords[0]["mode_index"].values if modes_in_self else np.zeros(1, dtype=int)
         modes_in_other = "mode_index" in coords[1]
-        coords[1]["mode_index"].values if modes_in_other else np.zeros(1, dtype=int)
 
         keys = (e_1, e_2, h_1, h_2)
         for key in keys:

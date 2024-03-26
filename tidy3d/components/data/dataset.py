@@ -18,6 +18,7 @@ from .data_array import ModeIndexDataArray, GroupIndexDataArray, ModeDispersionD
 from .data_array import TriangleMeshDataArray
 from .data_array import TimeDataArray
 from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
+from .data_array import EMEScalarFieldDataArray, EMEScalarModeFieldDataArray
 
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
@@ -136,7 +137,13 @@ class AbstractFieldDataset(Dataset, ABC):
         return self.package_colocate_results(centered_fields)
 
 
-EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+EMScalarFieldType = Union[
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    EMEScalarModeFieldDataArray,
+    EMEScalarFieldDataArray,
+]
 
 
 class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
