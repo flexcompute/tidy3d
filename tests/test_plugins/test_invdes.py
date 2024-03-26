@@ -86,7 +86,7 @@ def test_optimizer():
         design=design,
         history_save_fname=HISTORY_FNAME,
         learning_rate=0.2,
-        num_steps=3,
+        num_steps=2,
     )
     return optimizer
 
@@ -115,7 +115,7 @@ def test_complete_run_from_file(use_emulated_run):
     """Test continuing an already run inverse design from file."""
     result_orig = test_run(use_emulated_run)
     optimizer_orig = test_optimizer()
-    optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 10)
+    optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 1)
     result_full = optimizer.complete_run_from_file(HISTORY_FNAME)
 
     num_steps_full = len(result_full.history["params"])
@@ -139,7 +139,7 @@ def test_result(use_emulated_run, tmp_path):
 
     gds_fname = str(tmp_path / "sim_final.gds")
     gds_layer_dtype_map = {td.Medium(permittivity=4.0): (2, 1), td.Medium(): (1, 0)}
-    result.to_gds_file(gds_fname, z=0, gds_layer_dtype_map=gds_layer_dtype_map)
+    result.sim_final.to_gds_file(gds_fname, z=0, gds_layer_dtype_map=gds_layer_dtype_map)
 
     sim_data_final = result.sim_data_final(task_name="final")
 

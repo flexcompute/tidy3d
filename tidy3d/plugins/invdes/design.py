@@ -30,11 +30,15 @@ class InverseDesign(InvdesBaseModel):
         description="Region within which we will optimize the simulation.",
     )
 
-    # output_monitor_names: typing.Tuple[str, ...] = pd.Field(
-    #     (),
-    #     title="Output Monitor Names",
-    #     description="Name of monitors whose data the differentiable output depends on.",
-    # )
+    output_monitor_names: typing.Tuple[str, ...] = pd.Field(
+        None,
+        title="Output Monitor Names",
+        description="Optional names of monitors whose data the differentiable output depends on."
+        "If this field is left ``None``, the plugin will try to add all compatible monitors to "
+        "``JaxSimulation.output_monitors``. While this will work, there may be warnings if the "
+        "monitors are not compatible with the ``adjoint`` plugin, for example if there are "
+        "``FieldMonitor`` instances with ``.colocate != False``.",
+    )
 
     post_process_fn: PostProcessFnType = pd.Field(
         ...,
@@ -47,6 +51,12 @@ class InverseDesign(InvdesBaseModel):
         ...,
         title="Task Name",
         description="Task name to use in the objective function when running the ``JaxSimulation``.",
+    )
+
+    verbose: bool = pd.Field(
+        False,
+        title="Task Verbosity",
+        description="If ``True``, will print the regular output from ``web.run(...)``.",
     )
 
     # TODO: test all of the options
@@ -76,6 +86,30 @@ class InverseDesign(InvdesBaseModel):
                 return val(*args)
 
         return post_process_fn_with_kwargs
+
+    def is_output_monitor(self, monitor: td.Monitor) -> bool:
+        """Whether a monitor is added to the ``JaxSimulation`` as an ``output_monitor``."""
+
+        output_mnt_types = tda.components.simulation.OutputMonitorTypes
+
+        if self.output_monitor_names is None:
+            return any(isinstance(monitor, mnt_type) for mnt_type in output_mnt_types)
+
+        return monitor.name in self.output_monitor_names
+
+    def separate_monitors(self, monitors: typing.Tuple[td.Monitor]) -> dict:
+        """Separate monitors into output_monitors and regular monitors."""
+
+        monitor_dict = dict(
+            monitors=[],
+            output_monitors=[],
+        )
+
+        for monitor in monitors:
+            key = "output_monitors" if self.is_output_monitor(monitor) else "monitors"
+            monitor_dict[key].append(monitor)
+
+        return monitor_dict
 
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
@@ -114,21 +148,40 @@ class InverseDesign(InvdesBaseModel):
         )
 
         # separate regular monitors from output monitors
-        monitors = []
-        output_monitors = []
-        for mnt in jax_sim.monitors:
-            output_mnt_types = tda.components.simulation.OutputMonitorTypes
-            if any(isinstance(mnt, mnt_type) for mnt_type in output_mnt_types):
-                output_monitors.append(mnt)
-            else:
-                monitors.append(mnt)
+        monitor_dict = self.separate_monitors(monitors=jax_sim.monitors)
+        # monitors = []
+        # output_monitors = []
+        # for mnt in jax_sim.monitors:
+        #     output_mnt_types = tda.components.simulation.OutputMonitorTypes
+
+        #     is_output_monitor_type = any(isinstance(mnt, mnt_type) for mnt_type in output_mnt_types)
+        #     is_output_monitor_specified = (
+        #         self.output_monitor_names is not None and mnt.name in self.output_monitor_names
+        #     )
+
+        #     if is_output_monitor_type and is_output_monitor_specified:
+        #         output_monitors.append(mnt)
+        #     else:
+        #         monitors.append(mnt)
 
         return jax_sim.updated_copy(
             input_structures=[design_region_structure],
-            output_monitors=output_monitors,
-            monitors=monitors,
             grid_spec=grid_spec,
+            **monitor_dict,
         )
+
+    def to_simulation(self, params: jnp.ndarray) -> td.Simulation:
+        """Convert the ``InverseDesign`` to a corresponding ``td.Simulation`` given params."""
+        jax_sim = self.to_jax_simulation(params=params)
+        return jax_sim.to_simulation()[0]
+
+    def to_simulation_data(
+        self, params: jnp.ndarray, task_name: str, **kwargs
+    ) -> td.SimulationData:
+        """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
+        sim = self.to_simulation(params=params)
+        sim_data = td.web.run(sim, task_name=task_name, verbose=self.verbose, **kwargs)
+        return sim_data
 
     @property
     def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
@@ -140,7 +193,7 @@ class InverseDesign(InvdesBaseModel):
             jax_sim = self.to_jax_simulation(params=params)
 
             # run the jax simulation
-            jax_sim_data = tda.web.run(jax_sim, task_name=self.task_name, verbose=False)
+            jax_sim_data = tda.web.run(jax_sim, task_name=self.task_name, verbose=self.verbose)
 
             # construct objective function values
             post_process_val = self.post_process_fn(jax_sim_data, **kwargs_postprocess)
@@ -151,7 +204,6 @@ class InverseDesign(InvdesBaseModel):
             aux_data = dict(
                 penalty=penalty_value,
                 post_process_val=post_process_val,
-                simulation=jax_sim.to_simulation()[0],
             )
             return objective_fn_val, aux_data
 

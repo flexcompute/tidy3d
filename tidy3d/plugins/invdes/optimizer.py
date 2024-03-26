@@ -102,7 +102,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             # strip out auxiliary data
             penalty = aux_data["penalty"]
             post_process_val = aux_data["post_process_val"]
-            simulation = aux_data["simulation"]
+            simulation = self.design.to_simulation(params)
 
             # save history
             history["objective_fn_val"].append(val)

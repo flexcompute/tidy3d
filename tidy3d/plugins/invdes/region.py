@@ -4,7 +4,6 @@ import typing
 
 import jax.numpy as jnp
 import numpy as np
-import jax
 import pydantic.v1 as pd
 
 import tidy3d as td
@@ -107,6 +106,10 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     def to_jax_structure(self) -> tda.JaxStructure:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``. Implement in subclass."""
 
+    def to_structure(self) -> td.Structure:
+        """Convert this ``DesignRegion`` into a ``Structure``. Implement in subclass."""
+        return self.to_jax_structure.to_structure()
+
 
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
@@ -157,7 +160,7 @@ class TopologyDesignRegion(DesignRegion):
         material_density = self.material_density(params)
         eps_min, eps_max = self.eps_bounds
         arr_3d = eps_min + material_density * (eps_max - eps_min)
-        arr_3d = jax.lax.stop_gradient(arr_3d)
+        # arr_3d = jax.lax.stop_gradient(arr_3d)
         arr_3d = arr_3d.reshape(params.shape)
         return jnp.expand_dims(arr_3d, axis=-1)
 
