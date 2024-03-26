@@ -8,15 +8,17 @@ import jax
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import annotate_type, Size, Coordinate
+from tidy3d.components.types import Size, Coordinate
 import tidy3d.plugins.adjoint as tda
 
-from .transformation import TransformationType
 from .base import InvdesBaseModel
-from .penalty import PenaltyType, ErosionDilationPenalty, RadiusPenalty, Penalty
+from .transformation import FilterProject, TransformationType
+from .penalty import ErosionDilationPenalty, PenaltyType
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
+    """Base class for design regions in the ``invdes`` plugin."""
+
     size: Size = pd.Field(
         ...,
         title="Size",
@@ -51,7 +53,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
     #     "central axes will be filled in using the values on the '+' side of the axis.",
     # )
 
-    transformations: typing.Tuple[annotate_type(TransformationType), ...] = pd.Field(
+    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -61,8 +63,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "Set 'eps_bounds' to determine what permittivity values are evaluated given this density.",
     )
 
-    # TODO: instead of penalty_weights, add `weight` to the `tdi.Penalty` instead.
-    penalties: typing.Tuple[annotate_type(PenaltyType), ...] = pd.Field(
+    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -70,39 +71,21 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "penalties, set 'penalty_weights'. ",
     )
 
-    penalty_weights: typing.Tuple[float, ...] = pd.Field(
-        None,
-        title="Penalty Weights",
-        description="Sets the weight of each penalty in '.penalties'. If not 'None'.",
-    )
-
     @property
     def geometry(self) -> td.Box:
         """``Box`` corresponding to this design region."""
         return td.Box(center=self.center, size=self.size)
 
-    def material_density(self, data: jnp.ndarray) -> jnp.ndarray:
+    def material_density(self, params: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the transformations on a parameter array to give the material density (0,1)."""
         for transformation in self.transformations:
-            data = transformation.evaluate(data)
-        return data
+            params = self.evaluate_transformation(transformation=transformation, params=params)
+        return params
 
     @property
     def _num_penalties(self) -> int:
         """How many penalties are present."""
         return len(self.penalties)
-
-    @property
-    def _penalty_weights(self) -> jnp.ndarray:
-        """Penalty weights as an array."""
-
-        if not self._num_penalties:
-            raise ValueError("Can't get penalty weights because `penalties` are not defined.")
-
-        if self.penalty_weights is None:
-            return jnp.ones(self._num_penalties)
-
-        return jnp.array(self.penalty_weights)
 
     def penalty_value(self, data: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the transformations on a dataset."""
@@ -112,9 +95,19 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 
         # sum the penalty values scaled by their weights (optional)
         material_density = self.material_density(data)
-        penalty_values = [penalty.evaluate(material_density) for penalty in self.penalties]
-        penalties_weighted = self._penalty_weights * jnp.array(penalty_values)
-        return jnp.sum(penalties_weighted)
+        penalty_values = [
+            self.evaluate_penalty(penalty=penalty, material_density=material_density)
+            for penalty in self.penalties
+        ]
+        return jnp.sum(jnp.array(penalty_values))
+
+    @abc.abstractmethod
+    def evaluate_transformation(self, transformation: TransformationType) -> float:
+        """How this design region evaluates a transformation given some passed information."""
+
+    @abc.abstractmethod
+    def evaluate_penalty(self, penalty: PenaltyType) -> float:
+        """How this design region evaluates a penalty given some passed information."""
 
     @abc.abstractmethod
     def to_jax_structure(self) -> tda.JaxStructure:
@@ -124,14 +117,22 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
 
-    transformations: typing.Tuple[annotate_type(TransformationType), ...] = ()
-    penalties: typing.Tuple[annotate_type(typing.Union[ErosionDilationPenalty, Penalty]), ...] = ()
+    transformations: typing.Tuple[FilterProject, ...] = ()
+    penalties: typing.Tuple[ErosionDilationPenalty, ...] = ()
+    pixel_size: pd.PositiveFloat = None
 
     @property
     def step_sizes(self) -> typing.Tuple[float, float, float]:
         """Step sizes along x, y, z."""
         bounds = np.array(self.geometry.bounds)
         return tuple((bounds[1] - bounds[0]).tolist())
+
+    @property
+    def _pixel_size(self) -> float:
+        """If not specified, The average pixel size of this design region along 3 dimensions."""
+        if self.pixel_size is None:
+            return np.mean(self.step_sizes)
+        return self.pixel_size
 
     @property
     def coords(self) -> typing.Dict[str, typing.List[float]]:
@@ -176,16 +177,17 @@ class TopologyDesignRegion(DesignRegion):
         medium = tda.JaxCustomMedium(eps_dataset=eps_dataset)
         return tda.JaxStructureStaticGeometry(geometry=self.geometry, medium=medium)
 
+    def evaluate_transformation(
+        self, transformation: TransformationType, params: jnp.ndarray
+    ) -> jnp.ndarray:
+        """Evaluate a transformation, passing in design_region_dl."""
+        return transformation.evaluate(spatial_data=params, design_region_dl=self._pixel_size)
 
-class ShapeDesignRegion(DesignRegion):
-    transformations: typing.Literal[()] = ()
-    penalties: typing.Tuple[annotate_type(typing.Union[RadiusPenalty, Penalty]), ...] = ()
-
-
-class LevelSetDesignRegion(DesignRegion):
-    """Implement later"""
-
-    pass
+    def evaluate_penalty(
+        self, penalty: ErosionDilationPenalty, material_density: jnp.ndarray
+    ) -> float:
+        """Evaluate an erosion-dilation penalty, passing in pixel_size."""
+        return penalty.evaluate(x=material_density, pixel_size=self._pixel_size)
 
 
 DesignRegionType = typing.Union[TopologyDesignRegion]
