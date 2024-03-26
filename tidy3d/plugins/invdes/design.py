@@ -30,11 +30,11 @@ class InverseDesign(InvdesBaseModel):
         description="Region within which we will optimize the simulation.",
     )
 
-    output_monitor_names: typing.Tuple[str, ...] = pd.Field(
-        (),
-        title="Output Monitor Names",
-        description="Name of monitors whose data the differentiable output depends on.",
-    )
+    # output_monitor_names: typing.Tuple[str, ...] = pd.Field(
+    #     (),
+    #     title="Output Monitor Names",
+    #     description="Name of monitors whose data the differentiable output depends on.",
+    # )
 
     post_process_fn: PostProcessFnType = pd.Field(
         ...,
@@ -113,10 +113,12 @@ class InverseDesign(InvdesBaseModel):
             jax_info=jax_info,
         )
 
+        # separate regular monitors from output monitors
         monitors = []
         output_monitors = []
         for mnt in jax_sim.monitors:
-            if mnt.name in self.output_monitor_names:
+            output_mnt_types = tda.components.simulation.OutputMonitorTypes
+            if any(isinstance(mnt, mnt_type) for mnt_type in output_mnt_types):
                 output_monitors.append(mnt)
             else:
                 monitors.append(mnt)
