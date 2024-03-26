@@ -136,7 +136,6 @@ design_region = tdi.TopologyDesignRegion(
     transformations=[
         tdi.CircularFilter(radius=0.2, design_region_dl=0.1),
         tdi.BinaryProjector(beta=2.0, vmin=0.0, vmax=1.0),
-        # custom_transformation, # TODO: fix these
         tdi.ConicFilter(radius=0.2, design_region_dl=0.1),
     ],
     penalties=[

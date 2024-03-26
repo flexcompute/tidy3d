@@ -41,29 +41,14 @@ simulation = td.Simulation(
 )
 
 
-# class custom_transformation(tdi.Transformation):
-#     def evaluate(self, data: jnp.ndarray) -> jnp.ndarray:
-#         return data / jnp.mean(data)
-
-# class custom_penalty(tdi.Penalty):
-#     def evaluate(self, data: jnp.ndarray) -> float:
-#         return jnp.mean(data)
-
-
 def test_design_region():
     """make a design region and test some functions."""
     design_region = tdi.TopologyDesignRegion(
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
         eps_bounds=(1.0, 4.0),
-        # symmetry=(0, 1, -1),
         params_shape=PARAMS_SHAPE,
         pixel_size=0.1,
-        # transformations=[
-        #     tdi.CircularFilter(radius=0.2, design_region_dl=0.1),
-        #     tdi.BinaryProjector(beta=2.0, vmin=0.0, vmax=1.0),
-        #     tdi.ConicFilter(radius=0.2, design_region_dl=0.1),
-        # ],
         transformations=[tdi.FilterProject(radius=0.2, beta=2.0)],
         penalties=[
             tdi.ErosionDilationPenalty(length_scale=0.2),
@@ -76,10 +61,10 @@ def test_design_region():
     return design_region
 
 
-def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
+def post_process_fn(sim_data: tda.JaxSimulationData, **kwargs) -> float:
     """Define a post-processing function"""
     intensity = sim_data.get_intensity(MNT_NAME)
-    return scale * jnp.sum(intensity.values)
+    return jnp.sum(intensity.values)
 
 
 def test_invdes():

@@ -11,6 +11,11 @@ from .base import InvdesBaseModel
 from .design import InverseDesign
 
 
+# TODO: implement more convenience methods for exporting to figures, gds, etc.
+# TODO: convenience methods for all of these GDS methods? or just refer to ``self.sim_final``?
+# TODO: implement way to continue optimization if you want more
+
+
 class InverseDesignResult(InvdesBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
@@ -66,7 +71,6 @@ class InverseDesignResult(InvdesBaseModel):
         """Run the final simulation and return its data."""
         return td.web.run(self.sim_final, **run_kwargs)
 
-    # TODO: convenience methods for all of these GDS methods? or just refer to ``self.sim_final``?
     def to_gds_file(self, fname, **to_gds_file_kwargs) -> None:
         """Export the final simulation to GDS using ``Simulation.to_gds``."""
         sim_final = self.sim_final
@@ -80,7 +84,3 @@ class InverseDesignResult(InvdesBaseModel):
         plt.xlabel("iteration number")
         plt.ylabel("value")
         plt.legend()
-
-    # TODO: implement more convenience methods for exporting to figures, gds, etc.
-
-    # TODO: implement way to continue optimization if you want more

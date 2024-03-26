@@ -35,7 +35,6 @@ except ImportError:
         f"\tjaxlib=={jaxlib.__version__}\n"
     )
     ArrayImpl = jnp.ndarray
-    # TODO: test this condition
 
 
 class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
