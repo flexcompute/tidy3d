@@ -13,7 +13,6 @@ from .design import InverseDesign
 
 # TODO: implement more convenience methods for exporting to figures, gds, etc.
 # TODO: convenience methods for all of these GDS methods? or just refer to ``self.sim_final``?
-# TODO: implement way to continue optimization if you want more
 
 
 class InverseDesignResult(InvdesBaseModel):
@@ -44,7 +43,7 @@ class InverseDesignResult(InvdesBaseModel):
     @property
     def keys(self) -> typing.List[str]:
         """Keys stored in the history."""
-        return self.history.keys()
+        return list(self.history.keys())
 
     @property
     def final(self) -> typing.Dict[str, typing.Any]:
@@ -67,14 +66,14 @@ class InverseDesignResult(InvdesBaseModel):
         """The final simulation."""
         return self.get_final("simulation")
 
-    def sim_data_final(self, **run_kwargs) -> td.SimulationData:
+    def sim_data_final(self, task_name: str, **run_kwargs) -> td.SimulationData:
         """Run the final simulation and return its data."""
-        return td.web.run(self.sim_final, **run_kwargs)
+        return td.web.run(self.sim_final, task_name=task_name, **run_kwargs)
 
-    def to_gds_file(self, fname, **to_gds_file_kwargs) -> None:
-        """Export the final simulation to GDS using ``Simulation.to_gds``."""
-        sim_final = self.sim_final
-        return sim_final.to_gds_file(fname, **to_gds_file_kwargs)
+    # def to_gds_file(self, fname, **to_gds_file_kwargs) -> None:
+    #     """Export the final simulation to GDS using ``Simulation.to_gds``."""
+    #     sim_final = self.sim_final
+    #     return sim_final.to_gds_file(fname, **to_gds_file_kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

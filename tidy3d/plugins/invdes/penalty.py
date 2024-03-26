@@ -16,7 +16,7 @@ from .validators import ignore_inherited_field
 class AbstractPenalty(InvdesBaseModel, abc.ABC):
     """Base class for penalties added to ``invdes.DesignRegion`` objects."""
 
-    weight: pd.PositiveFloat = pd.Field(
+    weight: pd.NonNegativeFloat = pd.Field(
         1.0,
         title="Weight",
         description="When this penalty is evaluated, it will be weighted by this "
