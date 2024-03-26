@@ -96,11 +96,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         for step_index in range(self.num_steps):
             # evaluate gradient
 
-            (val, aux_data), grad = val_and_grad_fn(
-                params,
-                step_index=step_index,
-                history=history
-            )
+            (val, aux_data), grad = val_and_grad_fn(params, step_index=step_index, history=history)
             # TODO: add more kwargs here?
 
             # strip out auxiliary data
