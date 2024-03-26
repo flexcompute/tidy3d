@@ -58,28 +58,21 @@ def test_design_region():
         eps_bounds=(1.0, 4.0),
         # symmetry=(0, 1, -1),
         params_shape=PARAMS_SHAPE,
-        transformations=[
-            tdi.CircularFilter(radius=0.2, design_region_dl=0.1),
-            tdi.BinaryProjector(beta=2.0, vmin=0.0, vmax=1.0),
-            # custom_transformation, # TODO: fix these
-            tdi.ConicFilter(radius=0.2, design_region_dl=0.1),
-        ],
+        pixel_size=0.1,
+        # transformations=[
+        #     tdi.CircularFilter(radius=0.2, design_region_dl=0.1),
+        #     tdi.BinaryProjector(beta=2.0, vmin=0.0, vmax=1.0),
+        #     tdi.ConicFilter(radius=0.2, design_region_dl=0.1),
+        # ],
+        transformations=[tdi.FilterProject(radius=0.2, beta=2.0)],
         penalties=[
-            tdi.ErosionDilationPenalty(length_scale=0.2, pixel_size=0.1),
-            # custom_penalty, # TODO: fix these
+            tdi.ErosionDilationPenalty(length_scale=0.2),
         ],
-        penalty_weights=[0.2],
     )
 
     # test some design region functions
     design_region.material_density(PARAMS_0)
     design_region.penalty_value(PARAMS_0)
-    design_region.updated_copy(penalty_weights=None).penalty_value(PARAMS_0)
-    design_region_no_penalties = design_region.updated_copy(penalties=[], penalty_weights=None)
-    with pytest.raises(ValueError):
-        design_region_no_penalties._penalty_weights
-    assert design_region_no_penalties.penalty_value(PARAMS_0) == 0.0
-
     return design_region
 
 
@@ -131,6 +124,7 @@ def test_continue_run(use_emulated_run):
     assert (
         num_steps_full == num_steps_orig + optimizer.num_steps
     ), "wrong number of elements in the combined run history."
+
 
 def test_complete_run_from_file(use_emulated_run):
     """Test continuing an already run inverse design from file."""

@@ -31,7 +31,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         " optimizer instance, call ``optimizer.complete_run_from_file(fname)``. "
         "Alternatively, the latest results can then be loaded with "
         "``td.InverseDesignResult.from_file(fname)`` and then continued using "
-        "``optimizer.continue_run(result)``. "
+        "``optimizer.continue_run(result)``. ",
     )
 
     learning_rate: pd.NonNegativeFloat = pd.Field(
