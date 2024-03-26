@@ -19,6 +19,7 @@ from ..core.environment import Env
 from ..core.constants import SIM_FILE_HDF5, TaskId
 from ..core.task_core import SimulationTask, Folder
 from ..core.task_info import TaskInfo, ChargeType
+from ..core.exceptions import WebError as WebErrorCore
 from ...components.types import Literal
 from ...log import log, get_logging_console
 from ...exceptions import WebError
@@ -273,10 +274,15 @@ def start(
     task = SimulationTask.get(task_id)
     if not task:
         raise ValueError("Task not found.")
-    task.submit(
-        solver_version=solver_version,
-        worker_group=worker_group,
-    )
+
+    # note: this try block breaks if task has already been submitted, bypasses error.
+    try:
+        task.submit(
+            solver_version=solver_version,
+            worker_group=worker_group,
+        )
+    except WebErrorCore:
+        log.warning("Task has already been started, skipping.")
 
 
 @wait_for_connection
