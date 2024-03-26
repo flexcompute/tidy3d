@@ -72,7 +72,7 @@ def test_invdes():
     invdes = tdi.InverseDesign(
         simulation=simulation,
         design_region=test_design_region(),
-        output_monitor_names=[MNT_NAME],
+        # output_monitor_names=[MNT_NAME],
         post_process_fn=post_process_fn,
         task_name="test",
     )

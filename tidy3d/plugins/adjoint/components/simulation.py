@@ -55,7 +55,8 @@ NL_WARNING = (
     "We strongly recommend using linear simulations only with the adjoint plugin."
 )
 
-OutputMonitorType = Tuple[annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...]
+OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
+OutputMonitorType = Tuple[annotate_type(Union[OutputMonitorTypes]), ...]
 
 
 class JaxInfo(Tidy3dBaseModel):
