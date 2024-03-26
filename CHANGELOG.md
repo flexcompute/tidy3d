@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Warn instead of error if a task, `Job` or `Batch` is started twice.
+
 
 ## [2.6.2] - 2024-03-21
 

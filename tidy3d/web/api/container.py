@@ -707,7 +707,7 @@ class Batch(WebContainer):
         ----
         To load and iterate through the data, use :meth:`Batch.items()`.
 
-        The data for each task will be named as ``{path_dir}/{task_name}.hdf5``.
+        The data for each task will be named as ``{path_dir}/{task_id}.hdf5``.
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
         """
