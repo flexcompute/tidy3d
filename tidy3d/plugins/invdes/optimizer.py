@@ -13,8 +13,9 @@ from .base import InvdesBaseModel
 from .design import InverseDesign
 from .result import InverseDesignResult
 
-# TODO: beta schedule
-# TODO: penalty schedule
+# TODO: spec for beta schedule
+# TODO: spec for penalty schedule
+# TODO: expose certain kwargs to the postprocess fn
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
@@ -51,9 +52,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
         """The optimizer used by ``optax`` corresponding to this spec."""
 
-    def display_fn(self, result: InverseDesignResult, loop_index: int) -> None:
+    def display_fn(self, result: InverseDesignResult, step_index: int) -> None:
         """Default display function while optimizing."""
-        print(f"step ({loop_index + 1}/{self.num_steps})")
+        print(f"step ({step_index + 1}/{self.num_steps})")
         print(f"\tobjective_fn_val = {result.objective_fn_val[-1]:.3e}")
         print(f"\tgrad_norm = {jnp.linalg.norm(result.grad[-1]):.3e}")
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
@@ -92,9 +93,10 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         optax_optimizer = self.optax_optimizer
 
         # main optimization loop
-        for loop_index in range(self.num_steps):
+        for step_index in range(self.num_steps):
             # evaluate gradient
-            (val, aux_data), grad = val_and_grad_fn(params)
+            (val, aux_data), grad = val_and_grad_fn(params, step_index=step_index)
+            # TODO: add more kwargs here?
 
             # strip out auxiliary data
             penalty = aux_data["penalty"]
@@ -110,7 +112,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
             # display information
             result = InverseDesignResult(design=result.design, **history)
-            self.display_fn(result, loop_index=loop_index)
+            self.display_fn(result, step_index=step_index)
 
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)

@@ -15,6 +15,8 @@ from .base import InvdesBaseModel
 from .transformation import FilterProject, TransformationType
 from .penalty import ErosionDilationPenalty, PenaltyType
 
+# TODO: support auto handling of symmetry in parameters
+
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
     """Base class for design regions in the ``invdes`` plugin."""
@@ -44,14 +46,6 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         title="",
         description="",
     )
-
-    # TODO: support symmetry
-    # symmetry: typing.Tuple[Symmetry, Symmetry, Symmetry] = pd.Field(
-    #     (0, 0, 0),
-    #     title="Symmetry",
-    #     description="Symmetry of the design region. If specified, values on the '-' side of the "
-    #     "central axes will be filled in using the values on the '+' side of the axis.",
-    # )
 
     transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),

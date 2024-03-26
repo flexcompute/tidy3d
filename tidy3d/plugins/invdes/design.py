@@ -12,8 +12,6 @@ from .base import InvdesBaseModel
 from .region import DesignRegionType
 
 
-# TODO: expose optimization step_num to the postprocess fn kwargs?
-
 PostProcessFnType = typing.Callable[[tda.JaxSimulationData], float]
 
 
@@ -122,7 +120,7 @@ class InverseDesign(InvdesBaseModel):
     def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
-        def objective_fn(params: jnp.ndarray) -> float:
+        def objective_fn(params: jnp.ndarray, **kwargs_postprocess) -> float:
             """Full objective function."""
 
             jax_sim = self.to_jax_simulation(params=params)
@@ -131,7 +129,7 @@ class InverseDesign(InvdesBaseModel):
             jax_sim_data = tda.web.run(jax_sim, task_name=self.task_name, verbose=False)
 
             # construct objective function values
-            post_process_val = self.post_process_fn(jax_sim_data)
+            post_process_val = self.post_process_fn(jax_sim_data, **kwargs_postprocess)
             penalty_value = self.design_region.penalty_value(params)
             objective_fn_val = post_process_val - penalty_value
 
