@@ -2,6 +2,7 @@
 
 import pydantic.v1 as pd
 import typing
+import inspect
 
 import jax.numpy as jnp
 
@@ -65,6 +66,14 @@ class InverseDesign(InvdesBaseModel):
         " as in that case, the mesh may create too low of a resolution in the design region. ",
     )
 
+    @pd.validator("post_process_fn", always=True)
+    def _inspect_signature(cls, val):
+        """Make sure the call signature of the post process function is ok."""
+        sigature = inspect.signature(val)
+        import pdb; pdb.set_trace()
+
+
+
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
 
@@ -120,7 +129,7 @@ class InverseDesign(InvdesBaseModel):
     def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
-        def objective_fn(params: jnp.ndarray, **kwargs_postprocess) -> float:
+        def objective_fn(params: jnp.ndarray, **kwargs_objeczrocess) -> float:
             """Full objective function."""
 
             jax_sim = self.to_jax_simulation(params=params)
