@@ -7,7 +7,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import Size, Coordinate
+from tidy3d.components.types import Coordinate
 import tidy3d.plugins.adjoint as tda
 
 from .base import InvdesBaseModel
@@ -15,12 +15,13 @@ from .transformation import FilterProject, TransformationType
 from .penalty import ErosionDilationPenalty, PenaltyType
 
 # TODO: support auto handling of symmetry in parameters
+# TODO: convenience methods to create intial params, eg (design_region.params_random)
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
     """Base class for design regions in the ``invdes`` plugin."""
 
-    size: Size = pd.Field(
+    size: typing.Tuple[pd.PositiveFloat, pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
         ...,
         title="Size",
         description="Size in x, y, and z directions.",
@@ -34,11 +35,11 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         units=td.constants.MICROMETER,
     )
 
-    params_shape: typing.Tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
-        ...,
-        title="Parameters Shape",
-        description="Shape of the parameters array in (x, y, z) directions.",
-    )
+    # params_shape: typing.Tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
+    #     ...,
+    #     title="Parameters Shape",
+    #     description="Shape of the parameters array in (x, y, z) directions.",
+    # )
 
     eps_bounds: typing.Tuple[float, float] = pd.Field(
         ...,
@@ -114,9 +115,9 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
 
+    pixel_size: pd.PositiveFloat
     transformations: typing.Tuple[FilterProject, ...] = ()
     penalties: typing.Tuple[ErosionDilationPenalty, ...] = ()
-    pixel_size: pd.PositiveFloat = None
 
     @property
     def step_sizes(self) -> typing.Tuple[float, float, float]:
@@ -125,32 +126,49 @@ class TopologyDesignRegion(DesignRegion):
         return tuple((bounds[1] - bounds[0]).tolist())
 
     @property
-    def _pixel_size(self) -> float:
-        """If not specified, The average pixel size of this design region along 3 dimensions."""
-        if self.pixel_size is None:
-            return np.mean(self.step_sizes)
-        return self.pixel_size
+    def params_shape(self) -> typing.Tuple[int, int, int]:
+        """Shape of the parameters array in (x, y, z), given the ``pixel_size`` and bounds."""
+        # rmin, rmax = np.array(self.geometry.bounds)
+        # lengths = rmax - rmin
+        side_lengths = np.array(self.size)
+        num_pixels = np.ceil(side_lengths / self.pixel_size)
+        # TODO: if the structure is infinite but the simulation is finite, need reduced bounds
+        num_pixels[np.isinf(num_pixels)] = 1
+        return tuple(int(n) for n in num_pixels)
+
+    @property
+    def params_random(self) -> np.ndarray:
+        """Convenience for generating random parameters between (0,1) with correct shape."""
+        return np.random.random(self.params_shape)
+
+    @property
+    def params_zeros(self):
+        """Convenience for generating random parameters of all 0 values with correct shape."""
+        return np.zeros(self.params_shape)
+
+    @property
+    def params_ones(self):
+        """Convenience for generating random parameters of all 1 values with correct shape."""
+        return np.ones(self.params_shape)
 
     @property
     def coords(self) -> typing.Dict[str, typing.List[float]]:
         """Coordinates for the custom medium corresponding to this design region."""
 
+        lengths = np.array(self.size)
+
         rmin, rmax = self.geometry.bounds
+        params_shape = self.params_shape
 
         coords = dict()
-
-        for center, coord_key, ptmin, ptmax, num_pts in zip(
-            self.center, "xyz", rmin, rmax, self.params_shape
-        ):
-            size = ptmax - ptmin
-            if np.isinf(size):
-                coord_vals = num_pts * [center]
+        for dim, ptmin, ptmax, length, num_pts in zip("xyz", rmin, rmax, lengths, params_shape):
+            step_size = length / num_pts
+            if np.isinf(length):
+                coord_vals = [self.center["xyz".index(dim)]]
             else:
-                step_size = size / num_pts
-                coord_vals = np.linspace(
-                    ptmin + step_size / 2, ptmax - step_size / 2, num_pts
-                ).tolist()
-            coords[coord_key] = coord_vals
+                coord_vals = np.linspace(ptmin + step_size / 2, ptmax - step_size / 2, num_pts)
+                coord_vals = coord_vals.tolist()
+            coords[dim] = coord_vals
 
         coords["f"] = [td.C_0]  # TODO: is this a safe choice?
         return coords
@@ -160,7 +178,6 @@ class TopologyDesignRegion(DesignRegion):
         material_density = self.material_density(params)
         eps_min, eps_max = self.eps_bounds
         arr_3d = eps_min + material_density * (eps_max - eps_min)
-        # arr_3d = jax.lax.stop_gradient(arr_3d)
         arr_3d = arr_3d.reshape(params.shape)
         return jnp.expand_dims(arr_3d, axis=-1)
 
@@ -174,17 +191,25 @@ class TopologyDesignRegion(DesignRegion):
         medium = tda.JaxCustomMedium(eps_dataset=eps_dataset)
         return tda.JaxStructureStaticGeometry(geometry=self.geometry, medium=medium)
 
+    def to_mesh_override_structure(self) -> td.MeshOverrideStructure:
+        """Generate mesh override structure for this ``DesignRegion`` using ``pixel_size`` step."""
+        return td.MeshOverrideStructure(
+            geometry=self.geometry,
+            dl=3 * [self.pixel_size],
+            enforce=True,
+        )
+
     def evaluate_transformation(
         self, transformation: TransformationType, params: jnp.ndarray
     ) -> jnp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
-        return transformation.evaluate(spatial_data=params, design_region_dl=self._pixel_size)
+        return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
 
     def evaluate_penalty(
         self, penalty: ErosionDilationPenalty, material_density: jnp.ndarray
     ) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
-        return penalty.evaluate(x=material_density, pixel_size=self._pixel_size)
+        return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 
 
 DesignRegionType = typing.Union[TopologyDesignRegion]
