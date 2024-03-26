@@ -16,8 +16,6 @@ from ..utils import run_emulated
 FREQ0 = 1e14
 L_SIM = 2.0
 MNT_NAME = "mnt_name"
-PARAMS_SHAPE = (18, 19, 20)
-PARAMS_0 = np.random.random(PARAMS_SHAPE)
 HISTORY_FNAME = "tests/data/invdes_history.pkl"
 
 td.config.logging_level = "ERROR"
@@ -43,17 +41,19 @@ simulation = td.Simulation(
 
 def test_design_region():
     """make a design region and test some functions."""
+
     design_region = tdi.TopologyDesignRegion(
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
         eps_bounds=(1.0, 4.0),
-        params_shape=PARAMS_SHAPE,
-        pixel_size=0.1,
         transformations=[tdi.FilterProject(radius=0.2, beta=2.0)],
         penalties=[
             tdi.ErosionDilationPenalty(length_scale=0.2),
         ],
+        pixel_size=1.0 / 20.0,
     )
+
+    PARAMS_0 = np.random.random(design_region.params_shape)
 
     # test some design region functions
     design_region.material_density(PARAMS_0)
@@ -94,6 +94,7 @@ def test_optimizer():
 def test_run(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
     optimizer = test_optimizer()
+    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
     result = optimizer.run(params0=PARAMS_0)
     return result
 

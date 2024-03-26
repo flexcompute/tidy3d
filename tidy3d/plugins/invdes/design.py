@@ -60,13 +60,13 @@ class InverseDesign(InvdesBaseModel):
     )
 
     # TODO: test all of the options
-    override_structure_dl: typing.Union[td.components.types.Size, typing.Literal[False]] = pd.Field(
+    override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
         None,
         title="Design Region Override Structure Grid Sizes",
         description="Defines grid size when adding an ``override_structure`` to the "
         "``JaxSimulation.grid_spec`` corresponding to this design region. "
         "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
-        "pixel resolution defined by the parameter array within the design region. "
+        "``pixel_size`` of the ``DesignRegion``. "
         "This is advised if the pixel size is relatively close to the FDTD grid size. "
         "Specifying a ``tuple`` of 3 grid sizes for x, y, z will override this setting "
         "with the supplied values. Supplying ``False`` will completely leave out the "
@@ -97,19 +97,43 @@ class InverseDesign(InvdesBaseModel):
 
         return monitor.name in self.output_monitor_names
 
-    def separate_monitors(self, monitors: typing.Tuple[td.Monitor]) -> dict:
+    def separate_output_monitors(self, monitors: typing.Tuple[td.Monitor]) -> dict:
         """Separate monitors into output_monitors and regular monitors."""
 
-        monitor_dict = dict(
-            monitors=[],
-            output_monitors=[],
-        )
+        monitor_fields = dict(monitors=[], output_monitors=[])
 
         for monitor in monitors:
             key = "output_monitors" if self.is_output_monitor(monitor) else "monitors"
-            monitor_dict[key].append(monitor)
+            monitor_fields[key].append(monitor)
 
-        return monitor_dict
+        return monitor_fields
+
+    @property
+    def mesh_override_structure_dl(self) -> float:
+        """Mesh override structure corresponding to this object."""
+
+        if self.override_structure_dl is None:
+            return self.design_region.pixel_size
+
+        if self.override_structure_dl is False:
+            return None
+
+        return self.override_structure_dl
+
+    @property
+    def mesh_override_structure(self) -> td.MeshOverrideStructure:
+        """Mesh override structure corresponding to this object."""
+
+        if self.override_structure_dl is False:
+            return None
+
+        mesh_override_structure = self.design_region.to_mesh_override_structure()
+
+        if self.override_structure_dl is not None:
+            dl = 3 * [self.override_structure_dl]
+            mesh_override_structure = mesh_override_structure.updated_copy(dl=dl)
+
+        return mesh_override_structure
 
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
@@ -118,22 +142,11 @@ class InverseDesign(InvdesBaseModel):
         design_region_structure = self.design_region.to_jax_structure(params)
         grid_spec = self.simulation.grid_spec
 
-        # add override structure to grid spec, if specified
-        if self.override_structure_dl is not False:
-            if self.override_structure_dl is None:
-                dl_mesh_override = self.design_region.step_sizes
-            else:
-                dl_mesh_override = self.override_structure_dl
-
-            mesh_override_structure = td.MeshOverrideStructure(
-                geometry=design_region_structure.geometry,
-                dl=dl_mesh_override,
-                enforce=True,
-            )
-            grid_spec = grid_spec.updated_copy(
-                override_structures=list(self.simulation.grid_spec.override_structures)
-                + [mesh_override_structure]
-            )
+        mesh_override_structure = self.mesh_override_structure
+        grid_spec = grid_spec.updated_copy(
+            override_structures=list(self.simulation.grid_spec.override_structures)
+            + [mesh_override_structure]
+        )
 
         jax_info = tda.components.simulation.JaxInfo(
             num_input_structures=0,
@@ -147,27 +160,12 @@ class InverseDesign(InvdesBaseModel):
             jax_info=jax_info,
         )
 
-        # separate regular monitors from output monitors
-        monitor_dict = self.separate_monitors(monitors=jax_sim.monitors)
-        # monitors = []
-        # output_monitors = []
-        # for mnt in jax_sim.monitors:
-        #     output_mnt_types = tda.components.simulation.OutputMonitorTypes
-
-        #     is_output_monitor_type = any(isinstance(mnt, mnt_type) for mnt_type in output_mnt_types)
-        #     is_output_monitor_specified = (
-        #         self.output_monitor_names is not None and mnt.name in self.output_monitor_names
-        #     )
-
-        #     if is_output_monitor_type and is_output_monitor_specified:
-        #         output_monitors.append(mnt)
-        #     else:
-        #         monitors.append(mnt)
+        monitor_fields = self.separate_output_monitors(monitors=jax_sim.monitors)
 
         return jax_sim.updated_copy(
             input_structures=[design_region_structure],
             grid_spec=grid_spec,
-            **monitor_dict,
+            **monitor_fields,
         )
 
     def to_simulation(self, params: jnp.ndarray) -> td.Simulation:
