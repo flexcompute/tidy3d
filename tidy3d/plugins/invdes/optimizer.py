@@ -1,4 +1,5 @@
 # specification for running the optimizer
+
 import abc
 from copy import deepcopy
 
@@ -20,18 +21,10 @@ from .result import InverseDesignResult
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     """Specification for an optimization."""
 
-    design: InverseDesign = pd.Field(...)
-
-    results_cache_fname: str = pd.Field(
-        None,
-        title="History Storage File",
-        description="If specified, will save the optimization state to a local ``.pkl`` file "
-        "using ``dill.dump()``. This file stores an ``InverseDesignResult`` corresponding "
-        "to the latest state of the optimization. To continue this run from the file using the same"
-        " optimizer instance, call ``optimizer.complete_run_from_file(fname)``. "
-        "Alternatively, the latest results can then be loaded with "
-        "``td.InverseDesignResult.from_file(fname)`` and then continued using "
-        "``optimizer.continue_run(result)``. ",
+    design: InverseDesign = pd.Field(
+        ...,
+        title="Inverse Design Specification",
+        description="Specification describing the inverse design problem we wish to optimize.",
     )
 
     learning_rate: pd.NonNegativeFloat = pd.Field(
@@ -44,6 +37,18 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         ...,
         title="Number of Steps",
         description="Number of steps in the gradient descent optimizer.",
+    )
+
+    results_cache_fname: str = pd.Field(
+        None,
+        title="History Storage File",
+        description="If specified, will save the optimization state to a local ``.pkl`` file "
+        "using ``dill.dump()``. This file stores an ``InverseDesignResult`` corresponding "
+        "to the latest state of the optimization. To continue this run from the file using the same"
+        " optimizer instance, call ``optimizer.complete_run_from_history()``. "
+        "Alternatively, the latest results can then be loaded with "
+        "``td.InverseDesignResult.from_file(fname)`` and then continued using "
+        "``optimizer.continue_run(result)``. ",
     )
 
     @td.components.base.cached_property

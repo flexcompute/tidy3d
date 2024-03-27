@@ -59,7 +59,6 @@ class InverseDesign(InvdesBaseModel):
         description="If ``True``, will print the regular output from ``web.run(...)``.",
     )
 
-    # TODO: test all of the options
     override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
         None,
         title="Design Region Override Structure Grid Sizes",
