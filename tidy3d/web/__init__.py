@@ -1,8 +1,15 @@
 """ imports interfaces for interacting with server """
-from .api.container import Job, Batch, BatchData
-from .cli.migrate import migrate
-from .cli.app import configure_fn as configure
-from .api.webapi import (
+from .core import core_config
+from ..log import log, get_logging_console
+from ..version import __version__
+
+# set logger to tidy3d.log before it's invoked in other imports
+core_config.set_config(log, get_logging_console(), __version__)
+
+from .api.container import Job, Batch, BatchData  # noqa: E402
+from .cli.migrate import migrate  # noqa: E402
+from .cli.app import configure_fn as configure  # noqa: E402
+from .api.webapi import (  # noqa: E402
     run,
     upload,
     get_info,
@@ -21,15 +28,10 @@ from .api.webapi import (
     real_cost,
     test,
 )
-from .cli import tidy3d_cli
-from .api.asynchronous import run_async
-from .core import core_config
-from ..log import log, get_logging_console
-from ..version import __version__
+from .cli import tidy3d_cli  # noqa: E402
+from .api.asynchronous import run_async  # noqa: E402
 
 migrate()
-
-core_config.set_config(log, get_logging_console(), __version__)
 
 __all__ = [
     "run",
