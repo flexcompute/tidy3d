@@ -108,8 +108,10 @@ class MethodIndependent(Method, ABC):
         def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
             """Get task name for 'index'-th set of function kwargs."""
             try:
-                kwarg_str = str(fn_kwargs)
-                print(kwarg_str)
+                # Name can only be 1000 characters long so we'll slice it just in case.
+                kwarg_str = str(fn_kwargs)[
+                    :950
+                ]  # Slice to ensure it's no longer than 1000 characters
                 if sim_index is not None:
                     return f"{kwarg_str}_{sim_index}"
                 return kwarg_str

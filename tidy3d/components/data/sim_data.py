@@ -490,7 +490,7 @@ class SimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
-        plot_kwargs: dict = None,  # Not happy with this but we should make sel_kwargs consistent
+        cbar: bool = True,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -672,6 +672,7 @@ class SimulationData(AbstractSimulationData):
             vmin=vmin,
             vmax=vmax,
             cmap_type=cmap_type,
+            cbar=cbar,
             ax=ax,
             plot_kwargs=plot_kwargs,
         )
@@ -689,6 +690,7 @@ class SimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         cmap_type: ColormapType = "divergent",
+        cbar: bool = True,
         ax: Ax = None,
         plot_kwargs: dict = None,
     ) -> Ax:
@@ -724,7 +726,7 @@ class SimulationData(AbstractSimulationData):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
 
-        Returns
+        Returnscbar
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
@@ -761,14 +763,15 @@ class SimulationData(AbstractSimulationData):
             vmax=vmax,
             robust=robust,
             center=center,
-            cbar_kwargs={"label": field_data.name},
-            **plot_kwargs,
+            add_colorbar=cbar,
+            cbar_kwargs=(
+                {} if cbar is False else {"label": field_data.name}
+            ),  # Xarray plot API is a dirty pain
         )
 
         # plot the simulation epsilon
         ax = self.simulation.plot_structures_eps(
             freq=freq,
-            cbar=False,
             alpha=eps_alpha,
             reverse=eps_reverse,
             ax=ax,

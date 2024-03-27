@@ -129,3 +129,5 @@ htmlcov/
 
 # Specific file and folder exclusions
 .idea
+
+.python-version
