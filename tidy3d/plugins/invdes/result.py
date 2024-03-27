@@ -4,6 +4,7 @@ import typing
 
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
+import pydantic.v1 as pd
 
 import tidy3d as td
 
@@ -11,25 +12,63 @@ from .base import InvdesBaseModel
 from .design import InverseDesign
 
 
-# TODO: implement more convenience methods for exporting to figures, gds, etc.
-# TODO: convenience methods for all of these GDS methods? or just refer to ``self.sim_final``?
+# TODO: implement more convenience methods for exporting to figures?
 
 
 class InverseDesignResult(InvdesBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
-    design: InverseDesign
+    design: InverseDesign = pd.Field(
+        ...,
+        title="Inverse Design Specification",
+        description="Specification describing the inverse design problem we wish to optimize.",
+    )
 
-    params: typing.Tuple[jnp.ndarray, ...] = []
-    objective_fn_val: typing.Tuple[float, ...] = []
-    grad: typing.Tuple[jnp.ndarray, ...] = []
-    penalty: typing.Tuple[float, ...] = []
-    post_process_val: typing.Tuple[float, ...] = []
-    simulation: typing.Tuple[td.Simulation, ...] = []
-    opt_state: typing.Tuple[tuple, ...] = []
+    params: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+        (),
+        title="Parameter History",
+        description="History of parameter arrays throughout the optimization.",
+    )
+
+    objective_fn_val: typing.Tuple[float, ...] = pd.Field(
+        (),
+        title="Objective Function History",
+        description="History of objective function values throughout the optimization.",
+    )
+
+    grad: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+        (),
+        title="Gradient History",
+        description="History of objective function gradient arrays throughout the optimization.",
+    )
+
+    penalty: typing.Tuple[float, ...] = pd.Field(
+        (),
+        title="Penalty History",
+        description="History of weighted sum of penalties throughout the optimization.",
+    )
+
+    post_process_val: typing.Tuple[float, ...] = pd.Field(
+        (),
+        title="Post-Process Function History",
+        description="History of return values from ``post_process_fn`` throughout the optimization.",
+    )
+
+    simulation: typing.Tuple[td.Simulation, ...] = pd.Field(
+        (),
+        title="Simulation History",
+        description="History of ``td.Simulation`` instances throughout the optimization.",
+    )
+
+    opt_state: typing.Tuple[tuple, ...] = pd.Field(
+        (),
+        title="Optimizer State History",
+        description="History of ``optax`` optimizer states throughout the optimization.",
+    )
 
     @property
     def history(self) -> typing.Dict[str, list]:
+        """The history-containing fields as a dictionary of lists."""
         return dict(
             params=list(self.params),
             objective_fn_val=list(self.objective_fn_val),
@@ -53,7 +92,7 @@ class InverseDesignResult(InvdesBaseModel):
     def get_final(self, key: str) -> typing.Any:
         """Get the final value of a field in the ``self.history`` by key."""
         if key not in self.keys:
-            raise KeyError(f"'{key}' not present in ``Result.history`` dict with: {self.keys}.")
+            raise KeyError(f"'{key}' not present in 'Result.history' dict with: {self.keys}.")
         values = self.history.get(key)
         if not len(values):
             raise ValueError(
@@ -69,11 +108,6 @@ class InverseDesignResult(InvdesBaseModel):
     def sim_data_final(self, task_name: str, **run_kwargs) -> td.SimulationData:
         """Run the final simulation and return its data."""
         return td.web.run(self.sim_final, task_name=task_name, **run_kwargs)
-
-    # def to_gds_file(self, fname, **to_gds_file_kwargs) -> None:
-    #     """Export the final simulation to GDS using ``Simulation.to_gds``."""
-    #     sim_final = self.sim_final
-    #     return sim_final.to_gds_file(fname, **to_gds_file_kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

@@ -1,4 +1,5 @@
-# container for everything defining the inverse design
+# container for specification fully defining the inverse design problem
+
 import abc
 import typing
 
@@ -36,8 +37,8 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 
     eps_bounds: typing.Tuple[float, float] = pd.Field(
         ...,
-        title="",
-        description="",
+        title="Relative Permittivity Bounds",
+        description="Minimum and maximum relative permittivity expressed to the design region.",
     )
 
     transformations: typing.Tuple[TransformationType, ...] = pd.Field(
@@ -45,17 +46,17 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
         "The end result of the transformations should be the material density of the design region "
-        ". With floating point values between (0, 1), where 0 corresponds to the minimum relative "
+        ". With floating point values between (0, 1), 0 corresponds to the minimum relative "
         "permittivity and 1 corresponds to the maximum relative permittivity. "
-        "Set 'eps_bounds' to determine what permittivity values are evaluated given this density.",
+        "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
 
     penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
-        "penalties are applied after 'transformations' are applied. To set the weights of the "
-        "penalties, set 'penalty_weights'. ",
+        "penalties are applied after ``transformations`` are applied. Penalty weights can be set "
+        "inside of the penalties directly through the ``.weight`` field.",
     )
 
     @property
