@@ -15,7 +15,6 @@ from .transformation import FilterProject, TransformationType
 from .penalty import ErosionDilationPenalty, PenaltyType
 
 # TODO: support auto handling of symmetry in parameters
-# TODO: convenience methods to create intial params, eg (design_region.params_random)
 
 
 class DesignRegion(InvdesBaseModel, abc.ABC):
@@ -34,12 +33,6 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         description="Center of object in x, y, and z.",
         units=td.constants.MICROMETER,
     )
-
-    # params_shape: typing.Tuple[pd.PositiveInt, pd.PositiveInt, pd.PositiveInt] = pd.Field(
-    #     ...,
-    #     title="Parameters Shape",
-    #     description="Shape of the parameters array in (x, y, z) directions.",
-    # )
 
     eps_bounds: typing.Tuple[float, float] = pd.Field(
         ...,
@@ -76,11 +69,6 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
             params = self.evaluate_transformation(transformation=transformation, params=params)
         return params
 
-    @property
-    def _num_penalties(self) -> int:
-        """How many penalties are present."""
-        return len(self.penalties)
-
     def penalty_value(self, data: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the transformations on a dataset."""
 
@@ -104,12 +92,12 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         """How this design region evaluates a penalty given some passed information."""
 
     @abc.abstractmethod
-    def to_jax_structure(self) -> tda.JaxStructure:
+    def to_jax_structure(self, *args, **kwargs) -> tda.JaxStructure:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``. Implement in subclass."""
 
-    def to_structure(self) -> td.Structure:
+    def to_structure(self, *args, **kwargs) -> td.Structure:
         """Convert this ``DesignRegion`` into a ``Structure``. Implement in subclass."""
-        return self.to_jax_structure.to_structure()
+        return self.to_jax_structure(*args, **kwargs).to_structure()
 
 
 class TopologyDesignRegion(DesignRegion):
@@ -119,11 +107,14 @@ class TopologyDesignRegion(DesignRegion):
     transformations: typing.Tuple[FilterProject, ...] = ()
     penalties: typing.Tuple[ErosionDilationPenalty, ...] = ()
 
-    @property
-    def step_sizes(self) -> typing.Tuple[float, float, float]:
-        """Step sizes along x, y, z."""
-        bounds = np.array(self.geometry.bounds)
-        return tuple((bounds[1] - bounds[0]).tolist())
+    @staticmethod
+    def _check_params(params: jnp.ndarray):
+        """Ensure ``params`` are between 0 and 1."""
+        if np.any(params < 0) or np.any(params > 1):
+            raise ValueError(
+                "Parameters in the 'invdes' plugin's topology optimization feature "
+                "are restricted to be between 0 and 1."
+            )
 
     @property
     def params_shape(self) -> typing.Tuple[int, int, int]:
@@ -175,6 +166,9 @@ class TopologyDesignRegion(DesignRegion):
 
     def eps_values(self, params: jnp.ndarray) -> jnp.ndarray:
         """Values for the custom medium permittivity."""
+
+        self._check_params(params)
+
         material_density = self.material_density(params)
         eps_min, eps_max = self.eps_bounds
         arr_3d = eps_min + material_density * (eps_max - eps_min)
@@ -183,6 +177,8 @@ class TopologyDesignRegion(DesignRegion):
 
     def to_jax_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
+        self._check_params(params)
+
         coords = self.coords
         eps_values = self.eps_values(params)
         data_array = tda.JaxDataArray(values=eps_values, coords=coords)
@@ -203,6 +199,7 @@ class TopologyDesignRegion(DesignRegion):
         self, transformation: TransformationType, params: jnp.ndarray
     ) -> jnp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
+        self._check_params(params)
         return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
 
     def evaluate_penalty(

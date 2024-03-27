@@ -15,7 +15,6 @@ from .result import InverseDesignResult
 
 # TODO: spec for beta schedule
 # TODO: spec for penalty schedule
-# TODO: expose certain kwargs to the postprocess fn
 
 
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
@@ -23,7 +22,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     design: InverseDesign = pd.Field(...)
 
-    history_save_fname: str = pd.Field(
+    results_cache_fname: str = pd.Field(
         None,
         title="History Storage File",
         description="If specified, will save the optimization state to a local ``.pkl`` file "
@@ -60,7 +59,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def initialize_result(self, params0: jnp.ndarray) -> InverseDesignResult:
+    def _initialize_result(self, params0: jnp.ndarray) -> InverseDesignResult:
         """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
 
         # initialize optimizer
@@ -73,8 +72,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
     def run(self, params0: jnp.ndarray) -> InverseDesignResult:
         """Run this inverse design problem from an initial set of parameters."""
-
-        starting_result = self.initialize_result(params0)
+        self.design.design_region._check_params(params0)
+        starting_result = self._initialize_result(params0)
         return self.continue_run(result=starting_result)
 
     def continue_run(self, result: InverseDesignResult) -> InverseDesignResult:
@@ -86,7 +85,6 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         history = deepcopy(result.history)
 
         # use jax to grad the objective function
-        # objective_fn = result.design.make_objective_fn(post_process_fn=post_process_fn)
         objective_fn = self.design.objective_fn
         val_and_grad_fn = jax.value_and_grad(objective_fn, has_aux=True)
 
@@ -118,19 +116,28 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
             params = optax.apply_updates(params, updates)
+
+            # cap the parameters
+            params = jnp.minimum(params, 1.0)
+            params = jnp.maximum(params, 0.0)
+
             history["params"].append(params)
             history["opt_state"].append(opt_state)
 
             # save current results to file
-            if self.history_save_fname:
-                result.to_file(self.history_save_fname)
+            if self.results_cache_fname:
+                result.to_file(self.results_cache_fname)
 
         return InverseDesignResult(design=result.design, **history)
 
-    def complete_run_from_file(self, fname: str) -> InverseDesignResult:
+    def continue_run_from_file(self, fname: str) -> InverseDesignResult:
         """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
         result = InverseDesignResult.from_file(fname)
         return self.continue_run(result)
+
+    def continue_run_from_history(self) -> InverseDesignResult:
+        """Continue the optimization run from a ``.pkl`` file with an ``InverseDesignResult``."""
+        return self.continue_run_from_file(fname=self.results_cache_fname)
 
 
 class AdamOptimizer(AbstractOptimizer):
