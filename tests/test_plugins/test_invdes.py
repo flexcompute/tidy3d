@@ -11,7 +11,7 @@ import tidy3d.plugins.adjoint as tda
 import tidy3d.plugins.invdes as tdi
 import matplotlib.pyplot as plt
 
-from .test_adjoint import use_emulated_run
+from .test_adjoint import use_emulated_run, use_emulated_run_async
 from ..utils import run_emulated, log_capture, assert_log_level, AssertLogLevel
 
 FREQ0 = 1e14
@@ -218,6 +218,42 @@ def test_invdes_mesh_override():
     sim = invdes.to_simulation(params)
     assert sim.grid_spec.override_structures[-1].dl == (dl, dl, dl)
 
+def make_invdes_multi():
+
+    n = 7
+
+    region = make_design_region()
+
+    simulations = n * [simulation]
+    post_process_fns = n * [post_process_fn]
+
+    invdes = tdi.InverseDesignMulti(
+        design_region=region,
+        simulations=simulations,
+        post_process_fns=post_process_fns,
+        task_name="base",
+    )
+
+    return invdes
+
+
+def test_invdes_multi_same_length():
+    """Test validator ensuring all multi fields have the same lengths, if applicable."""
+
+    invdes = make_invdes_multi()
+    n = len(invdes.simulations)
+
+    simulations = (n + 1) * [simulation]
+
+    with pytest.raises(ValueError):
+        _ = invdes.updated_copy(simulations=simulations)
+
+    output_monitor_names = [([MNT_NAME], None)[i%2] for i in range(n)]
+    _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
+
+    override_structure_dl = [(0.1, False, None)[i%3] for i in range(n)]
+    _ = invdes.updated_copy(override_structure_dl=override_structure_dl)
+
 
 def make_optimizer():
     """Make a ``tdi.Optimizer``."""
@@ -234,6 +270,18 @@ def make_result(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
+
+    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
+
+    return optimizer.run(params0=PARAMS_0)
+
+def make_result_multi(use_emulated_run_async):
+    """Test running the optimization defined in the ``InverseDesignMulti`` object."""
+
+    optimizer = make_optimizer()
+    design = make_invdes_multi()
+
+    optimizer = optimizer.updated_copy(design=design)
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
@@ -268,8 +316,9 @@ def test_continue_run_from_file(use_emulated_run):
     result_full = optimizer.continue_run_from_history()
 
 
-def test_result(use_emulated_run, tmp_path):
+def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
     """Test methods of the ``InverseDesignResult`` object."""
+
 
     result = make_result(use_emulated_run)
 
@@ -282,6 +331,18 @@ def test_result(use_emulated_run, tmp_path):
 
     result.plot_optimization()
     sim_data_final = result.sim_data_final(task_name="final")
+
+def test_result_data(use_emulated_run, use_emulated_run_async, tmp_path):
+    """Test methods of the ``InverseDesignResult`` object."""
+
+    result = make_result(use_emulated_run)
+    sim_final = result.sim_final
+    sim_data_final = result.sim_data_final(task_name="final")
+ 
+    # TODO: make work
+    result_multi = make_result_multi(use_emulated_run)
+    # sim_final = result_multi.sim_final
+    # batch_data_final = result_multi.sim_data_final(task_name="final")
 
 
 def test_result_empty():

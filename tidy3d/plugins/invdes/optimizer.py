@@ -11,7 +11,7 @@ import jax
 import tidy3d as td
 
 from .base import InvdesBaseModel
-from .design import InverseDesign
+from .design import InverseDesignType
 from .result import InverseDesignResult
 
 # TODO: spec for beta schedule
@@ -21,7 +21,7 @@ from .result import InverseDesignResult
 class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     """Specification for an optimization."""
 
-    design: InverseDesign = pd.Field(
+    design: InverseDesignType = pd.Field(
         ...,
         title="Inverse Design Specification",
         description="Specification describing the inverse design problem we wish to optimize.",
@@ -105,14 +105,12 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             # strip out auxiliary data
             penalty = aux_data["penalty"]
             post_process_val = aux_data["post_process_val"]
-            simulation = self.design.to_simulation(params)
 
             # save history
             history["objective_fn_val"].append(val)
             history["grad"].append(grad)
             history["penalty"].append(penalty)
             history["post_process_val"].append(post_process_val)
-            history["simulation"].append(simulation)
 
             # display information
             result = InverseDesignResult(design=result.design, **history)
