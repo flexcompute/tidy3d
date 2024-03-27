@@ -153,7 +153,7 @@ design = tdi.InverseDesign(
     design_region=test_design_region(),
     output_monitors=[mnt],
     params0=np.random.random(PARAMS_SHAPE).tolist(),
-    history_save_fname="tests/data/invdes_history.pkl",
+    results_cache_fname="tests/data/invdes_history.pkl",
 )
 
 """Define the post processing function."""

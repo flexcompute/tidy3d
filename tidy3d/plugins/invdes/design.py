@@ -109,18 +109,6 @@ class InverseDesign(InvdesBaseModel):
         return monitor_fields
 
     @property
-    def mesh_override_structure_dl(self) -> float:
-        """Mesh override structure corresponding to this object."""
-
-        if self.override_structure_dl is None:
-            return self.design_region.pixel_size
-
-        if self.override_structure_dl is False:
-            return None
-
-        return self.override_structure_dl
-
-    @property
     def mesh_override_structure(self) -> td.MeshOverrideStructure:
         """Mesh override structure corresponding to this object."""
 
@@ -138,28 +126,30 @@ class InverseDesign(InvdesBaseModel):
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
 
-        # construct the jax simulation from the simulation + design region
+        # construct the jax structure design region
         design_region_structure = self.design_region.to_jax_structure(params)
+
+        # construct mesh override structures and a new grid spec, if applicable
         grid_spec = self.simulation.grid_spec
-
         mesh_override_structure = self.mesh_override_structure
-        grid_spec = grid_spec.updated_copy(
-            override_structures=list(self.simulation.grid_spec.override_structures)
-            + [mesh_override_structure]
-        )
+        if mesh_override_structure:
+            override_structures = list(self.simulation.grid_spec.override_structures)
+            override_structures += [mesh_override_structure]
+            grid_spec = grid_spec.updated_copy(override_structures=override_structures)
 
+        # make a base jax simulation corresponding to this InverseDesign
         jax_info = tda.components.simulation.JaxInfo(
             num_input_structures=0,
             num_output_monitors=0,
             num_grad_monitors=0,
             num_grad_eps_monitors=0,
         )
-
         jax_sim = tda.JaxSimulation.from_simulation(
             self.simulation,
             jax_info=jax_info,
         )
 
+        # split monitors into regular an output
         monitor_fields = self.separate_output_monitors(monitors=jax_sim.monitors)
 
         return jax_sim.updated_copy(
