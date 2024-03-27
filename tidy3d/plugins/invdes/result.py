@@ -9,7 +9,7 @@ import pydantic.v1 as pd
 import tidy3d as td
 
 from .base import InvdesBaseModel
-from .design import InverseDesign
+from .design import InverseDesignType
 
 
 # TODO: implement more convenience methods for exporting to figures?
@@ -18,7 +18,7 @@ from .design import InverseDesign
 class InverseDesignResult(InvdesBaseModel):
     """Container for the result of an ``InverseDesign.run()`` call."""
 
-    design: InverseDesign = pd.Field(
+    design: InverseDesignType = pd.Field(
         ...,
         title="Inverse Design Specification",
         description="Specification describing the inverse design problem we wish to optimize.",
@@ -60,6 +60,8 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
+    # simulations: tt
+
     opt_state: typing.Tuple[tuple, ...] = pd.Field(
         (),
         title="Optimizer State History",
@@ -75,7 +77,6 @@ class InverseDesignResult(InvdesBaseModel):
             grad=list(self.grad),
             penalty=list(self.penalty),
             post_process_val=list(self.post_process_val),
-            simulation=list(self.simulation),
             opt_state=list(self.opt_state),
         )
 
@@ -103,7 +104,8 @@ class InverseDesignResult(InvdesBaseModel):
     @property
     def sim_final(self) -> td.Simulation:
         """The final simulation."""
-        return self.get_final("simulation")
+        params_final = self.get_final("params")
+        return self.design.to_simulation(params_final)
 
     def sim_data_final(self, task_name: str, **run_kwargs) -> td.SimulationData:
         """Run the final simulation and return its data."""
