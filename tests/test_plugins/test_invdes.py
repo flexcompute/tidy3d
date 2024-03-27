@@ -41,6 +41,8 @@ simulation = td.Simulation(
 
 
 def make_design_region():
+    """Make a ``TopologyDesignRegion``."""
+
     return tdi.TopologyDesignRegion(
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
@@ -54,7 +56,7 @@ def make_design_region():
 
 
 def test_region_params():
-    """make a design region and test some functions."""
+    """Test creation of parameter arrays from a ``TopologyDesignRegion``."""
 
     design_region = make_design_region()
 
@@ -65,6 +67,8 @@ def test_region_params():
 
 
 def test_region_penalties():
+    """Test evaluation of penalties of a ``TopologyDesignRegion``."""
+
     region = make_design_region()
 
     PARAMS_0 = region.params_random
@@ -77,6 +81,8 @@ def test_region_penalties():
 
 
 def test_region_to_structure():
+    """Test converting ``TopologyDesignRegion`` to jax and regular structure."""
+
     region = make_design_region()
 
     PARAMS_0 = region.params_ones
@@ -86,6 +92,8 @@ def test_region_to_structure():
 
 
 def test_region_params_bounds():
+    """Test supplying parameters out of bounds to ``TopologyDesignRegion``."""
+
     region = make_design_region()
 
     PARAMS_0 = region.params_ones
@@ -98,6 +106,8 @@ def test_region_params_bounds():
 
 
 def test_region_inf_size():
+    """Test that a structure can be created with an infinite size edge case."""
+
     region = make_design_region()
     inf_size = list(region.size)
     inf_size[1] = td.inf
@@ -107,26 +117,28 @@ def test_region_inf_size():
 
 
 def test_penalty_pixel_size(log_capture):
-    with AssertLogLevel(log_capture, "WARNING"):
-        _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
+    """Test that warning is raised if ``pixel_size`` is supplied."""
 
     _ = tdi.ErosionDilationPenalty(length_scale=2.0)
 
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
+
 
 def post_process_fn(sim_data: tda.JaxSimulationData, **kwargs) -> float:
-    """Define a post-processing function"""
+    """Define a post-processing function with extra kwargs (recommended)."""
     intensity = sim_data.get_intensity(MNT_NAME)
     return jnp.sum(intensity.values)
 
 
 def post_process_fn_kwargless(sim_data: tda.JaxSimulationData) -> float:
-    """Define a post-processing function"""
+    """Define a post-processing function with no kwargs specified."""
     intensity = sim_data.get_intensity(MNT_NAME)
     return jnp.sum(intensity.values)
 
 
 def make_invdes():
-    """make an inverse design"""
+    """Make an inverse design"""
     return tdi.InverseDesign(
         simulation=simulation,
         design_region=make_design_region(),
@@ -136,34 +148,43 @@ def make_invdes():
 
 
 class MockDataArray:
+    """Pretends to be a ``JaxDataArray`` with ``.values``."""
+
     values = jnp.linspace(0, 1, 10)
 
 
 class MockSimData:
+    """Pretends to be a ``JaxSimulationData``, returns a data array with ``.get_intensity()``."""
+
     def get_intensity(self, name: str) -> jnp.ndarray:
         return MockDataArray()
 
 
 def test_invdes_kwarglfull():
-    """Test postprocess function defined with kwargs works."""
+    """Test that a postprocess function works when defined with kwargs in the signature."""
+
     invdes = make_invdes()
     invdes.post_process_fn(MockSimData(), kwarg1="hi")
 
 
 def test_invdes_kwargless():
-    """Test postprocess function defined without kwargs still works."""
+    """Test that a postprocess function works when defined with no kwargs in the signature."""
+
     invdes = make_invdes()
     invdes = invdes.updated_copy(post_process_fn=post_process_fn_kwargless)
     invdes.post_process_fn(MockSimData(), kwarg1="hi")
 
 
 def test_invdes_simulation_data():
+    """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
+
     invdes = make_invdes()
     params = invdes.design_region.params_random
     invdes.to_simulation_data(params=params, task_name="test")
 
 
 def test_invdes_output_monitor_names(use_emulated_run):
+    """test the inverse design objective function with user-specified output monitor names."""
     invdes = make_invdes()
     invdes = invdes.updated_copy(output_monitor_names=[MNT_NAME])
 
@@ -172,24 +193,26 @@ def test_invdes_output_monitor_names(use_emulated_run):
 
 
 def test_invdes_mesh_override():
+    """Test all edge cases of mesh override structure in the ``JaxSimulation``."""
+
     invdes = make_invdes()
     params = invdes.design_region.params_random
-    region_override_structure = invdes.design_region.to_mesh_override_structure()
 
-    # if override_structure_dl left to None, use the design region override structure
-    # with a dl corresponding to the pixel size
+    # if ``override_structure_dl`` left of ``None`` (default), use an override structure
+    # defined by the design region, with a ``dl`` corresponding to the ``pixel_size``.
     invdes = invdes.updated_copy(override_structure_dl=None)
     sim = invdes.to_simulation(params)
     sim_override_structure = sim.grid_spec.override_structures[-1]
+    region_override_structure = invdes.design_region.to_mesh_override_structure()
     assert sim_override_structure == region_override_structure
     assert all(dl == invdes.design_region.pixel_size for dl in sim_override_structure.dl)
 
-    # if override_structure_dl set to False, should be no override structure
+    # if ``override_structure_dl`` set to ``False``, should be no override structure
     invdes = invdes.updated_copy(override_structure_dl=False)
     sim = invdes.to_simulation(params)
     assert not sim.grid_spec.override_structures
 
-    # if override_structure_dl set directly, ensure the override structure has the value
+    # if ``override_structure_dl`` set directly, ensure the override structure has this value
     dl = 0.1234
     invdes = invdes.updated_copy(override_structure_dl=dl)
     sim = invdes.to_simulation(params)
@@ -197,7 +220,7 @@ def test_invdes_mesh_override():
 
 
 def make_optimizer():
-    """Make an optimizer"""
+    """Make a ``tdi.Optimizer``."""
     design = make_invdes()
     return tdi.AdamOptimizer(
         design=design,
@@ -209,6 +232,7 @@ def make_optimizer():
 
 def make_result(use_emulated_run):
     """Test running the optimization defined in the ``InverseDesign`` object."""
+
     optimizer = make_optimizer()
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
@@ -217,7 +241,7 @@ def make_result(use_emulated_run):
 
 
 def test_continue_run_fns(use_emulated_run):
-    """Test continuing an already run inverse design."""
+    """Test continuing an already run inverse design from result."""
     result_orig = make_result(use_emulated_run)
     optimizer = make_optimizer()
     result_full = optimizer.continue_run(result=result_orig)
@@ -239,11 +263,14 @@ def test_continue_run_from_file(use_emulated_run):
     assert (
         num_steps_full == optimizer_orig.num_steps + optimizer.num_steps
     ), "wrong number of elements in the combined run history."
+
+    # test the convenience function to load it from file
     result_full = optimizer.continue_run_from_history()
 
 
 def test_result(use_emulated_run, tmp_path):
     """Test methods of the ``InverseDesignResult`` object."""
+
     result = make_result(use_emulated_run)
 
     with pytest.raises(KeyError):
@@ -254,22 +281,18 @@ def test_result(use_emulated_run, tmp_path):
     assert np.allclose(val_final1, val_final2)
 
     result.plot_optimization()
-
-    # gds_fname = str(tmp_path / "sim_final.gds")
-    # gds_layer_dtype_map = {td.Medium(permittivity=4.0): (2, 1), td.Medium(): (1, 0)}
-    # result.sim_final.to_gds_file(gds_fname, z=0, gds_layer_dtype_map=gds_layer_dtype_map)
-
     sim_data_final = result.sim_data_final(task_name="final")
 
 
 def test_result_empty():
+    """Assert that things error with empty results."""
     result_empty = tdi.InverseDesignResult(design=make_invdes())
     with pytest.raises(ValueError):
         result_empty.get_final("params")
 
 
 def test_invdes_io(tmp_path, log_capture, use_emulated_run):
-    """Test saving a loading invdes instances to file."""
+    """Test saving a loading ``invdes`` components to file."""
 
     result = make_result(use_emulated_run)
     optimizer = make_optimizer()
@@ -292,6 +315,7 @@ def test_invdes_io(tmp_path, log_capture, use_emulated_run):
 
 @pytest.fixture
 def hide_jax(monkeypatch, request):
+    """Force an ``ImportError`` when trying to import ``jaxlib.xla_extension``."""
     import_orig = builtins.__import__
 
     def mocked_import(name, *args, **kwargs):
@@ -303,7 +327,8 @@ def hide_jax(monkeypatch, request):
 
 
 def try_array_impl_import() -> None:
-    """Try importing `tidy3d.plugins.adjoint.components.types`."""
+    """Try importing ``tidy3d.plugins.invdes.base``."""
+
     from importlib import reload
     import tidy3d
 
@@ -312,20 +337,20 @@ def try_array_impl_import() -> None:
 
 @pytest.mark.usefixtures("hide_jax")
 def test_jax_array_impl_import_fail(tmp_path, log_capture):
-    """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
+    """Make sure if import error with ArrayImpl, a warning is logged and module still imports."""
     try_array_impl_import()
     assert_log_level(log_capture, "WARNING")
 
 
 def test_jax_array_impl_import_pass(tmp_path, log_capture):
-    """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
+    """Make sure if no import error with ArrayImpl, nothing is logged and module imports."""
     try_array_impl_import()
     assert_log_level(log_capture, None)
 
 
 @pytest.mark.parametrize("exception, ok", [(TypeError, True), (OSError, True), (ValueError, False)])
 def test_fn_source_error(monkeypatch, exception, ok):
-    """Make sure type errors are caught."""
+    """Make sure type errors are caught when grabbing function source code."""
 
     import inspect
 
