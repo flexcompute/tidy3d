@@ -12,11 +12,11 @@ from ..bc_placement import BCPlacementType
 from ...constants import KELVIN, HEAT_FLUX, HEAT_TRANSFER_COEFF
 
 
-class HeatBC(ABC, Tidy3dBaseModel):
-    """Abstract thermal boundary conditions."""
+class DeviceBC(ABC, Tidy3dBaseModel):
+    """Abstract device boundary conditions."""
 
 
-class TemperatureBC(HeatBC):
+class TemperatureBC(DeviceBC):
     """Constant temperature thermal boundary conditions.
 
     Example
@@ -31,7 +31,7 @@ class TemperatureBC(HeatBC):
     )
 
 
-class HeatFluxBC(HeatBC):
+class HeatFluxBC(DeviceBC):
     """Constant flux thermal boundary conditions.
 
     Example
@@ -46,7 +46,7 @@ class HeatFluxBC(HeatBC):
     )
 
 
-class ConvectionBC(HeatBC):
+class ConvectionBC(DeviceBC):
     """Convective thermal boundary conditions.
 
     Example
@@ -67,11 +67,40 @@ class ConvectionBC(HeatBC):
     )
 
 
-HeatBoundaryConditionType = Union[TemperatureBC, HeatFluxBC, ConvectionBC]
+class PotentialBC(DeviceBC):
+    """Potential boundary condition.
+    Sets a potential at the specified boundary.
+
+    Example
+    -------
+    >>> bc = PotentialBC(potential=2)
+    """
+
+    potential: pd.FiniteFloat = pd.Field(
+        title="Potential",
+        description="Electric potential to be applied at the specified boundary.",
+        units="Volt",
+    )
 
 
-class HeatBoundarySpec(Tidy3dBaseModel):
-    """Heat boundary conditions specification.
+class InsulatingBC(DeviceBC):
+    """Insulation boundary condition.
+    Ensures electric fields as well as the surface recombination current density
+    are set to zero.
+
+    Example
+    -------
+    >>> bc = InsulatingBC()
+    """
+
+
+DeviceBoundaryConditionType = Union[
+    TemperatureBC, HeatFluxBC, ConvectionBC, PotentialBC, InsulatingBC
+]
+
+
+class DeviceBoundarySpec(Tidy3dBaseModel):
+    """Device boundary conditions specification.
 
     Example
     -------
@@ -87,7 +116,12 @@ class HeatBoundarySpec(Tidy3dBaseModel):
         description="Location to apply boundary conditions.",
     )
 
-    condition: HeatBoundaryConditionType = pd.Field(
+    condition: DeviceBoundaryConditionType = pd.Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
     )
+
+
+HeatBoundarySpec = Union[DeviceBoundarySpec]
+"""Heat BC specification
+NOTE: here for backward-compatibility only."""

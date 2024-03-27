@@ -5,160 +5,76 @@ from typing import Tuple
 import numpy as np
 import pydantic.v1 as pd
 
-from .monitor_data import SemiConDevMonitorDataType, PotentialData, ChargeDensityData
-from ..simulation import ElectrostaticSimulation
+from .monitor_data import DeviceMonitorDataType, TemperatureData, PotentialData
+from .simulation import DeviceSimulation
 
-from ...data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
-from ...data.data_array import SpatialDataArray
-from ...base_sim.data.sim_data import AbstractSimulationData
-from ...types import Ax, RealFieldVal, Literal
-from ...viz import equal_aspect, add_ax_if_none
-from ....exceptions import DataError
-
-# heat related imports
-from ...heat.data.sim_data import HeatSimulationData
-from ...heat.boundary import TemperatureBC, HeatFluxBC
-from ..charge_distributions import UniformChargeSource
-from ..boundary import PotentialBC, InsulatingBC, ElectricBoundarySpec
-from ..monitor import PotentialMonitor
-
-# from ...medium import Medium
-from ....constants import Q_e, EPSILON_0
+from ..data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
+from ..data.data_array import SpatialDataArray
+from ..base_sim.data.sim_data import AbstractSimulationData
+from ..types import Ax, RealFieldVal, Literal
+from ..viz import equal_aspect, add_ax_if_none
+from ...exceptions import DataError
 
 
-class ElectrostaticSimulationData(AbstractSimulationData):
-    """Stores results of an electrostatic simulation.
+class DeviceSimulationData(AbstractSimulationData):
+    """Stores results of a device simulation.
 
     Example
     -------
     >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, SpatialDataArray
-    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformChargeSource
-    >>> from tidy3d import StructureBoundary, PotentialBC, PotentialMonitor, PotentialData
-    >>> from tidy3d import ElectricBoundarySpec, ElectrostaticSimulation, ElectrostaticSimulationData
+    >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformHeatSource
+    >>> from tidy3d import StructureBoundary, TemperatureBC, TemperatureMonitor, TemperatureData
+    >>> from tidy3d import DeviceBoundarySpec, DeviceSimulationType
     >>> import numpy as np
-    >>> potential_mnt = PotentialMonitor(size=(1, 2, 3), name="sample")
-    >>> electrostatic_sim = ElectrostaticSimulation(
+    >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
+    >>> heat_sim = DeviceSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
     ...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),
-    ...             medium=Medium(permittivity=2.0),
+    ...             medium=Medium(
+    ...                 permittivity=2.0, heat_spec=SolidSpec(
+    ...                     conductivity=1,
+    ...                     capacity=1,
+    ...                 )
+    ...             ),
     ...             name="box",
     ...         ),
     ...     ],
-    ...     medium=Medium(permittivity=3.0),
+    ...     medium=Medium(permittivity=3.0, heat_spec=FluidSpec()),
     ...     grid_spec=UniformUnstructuredGrid(dl=0.1),
-    ...     sources=[UniformChargeSource(charge_density=1e15, structures=["box"])],
+    ...     sources=[UniformHeatSource(rate=1, structures=["box"])],
     ...     boundary_spec=[
-    ...         ElectricBoundarySpec(
+    ...         HeatBoundarySpec(
     ...             placement=StructureBoundary(structure="box"),
-    ...             condition=PotentialBC(potential=5),
+    ...             condition=TemperatureBC(temperature=500),
     ...         )
     ...     ],
-    ...     monitors=[potential_mnt],
+    ...     simulation_type=DeviceSimulationType.HEAT,
+    ...     monitors=[temp_mnt],
     ... )
     >>> x = [1,2]
     >>> y = [2,3,4]
     >>> z = [3,4,5,6]
     >>> coords = dict(x=x, y=y, z=z)
-    >>> potential_array = SpatialDataArray(5 * np.abs(np.random.random((2,3,4))), coords=coords)
-    >>> potential_mnt_data = PotentialData(monitor=potential_mnt, potential=potential_array)
-    >>> electrostatic_sim_data = ElectrostaticSimulationData(
-    ...     simulation=electrostatic_sim, data=[potential_mnt_data],
+    >>> temp_array = SpatialDataArray(300 * np.abs(np.random.random((2,3,4))), coords=coords)
+    >>> temp_mnt_data = TemperatureData(monitor=temp_mnt, temperature=temp_array)
+    >>> heat_sim_data = DeviceSimulationData(
+    ...     simulation=heat_sim, data=[temp_mnt_data],
     ... )
     """
 
-    simulation: ElectrostaticSimulation = pd.Field(
-        title="Electrostatic Simulation",
-        description="Original :class:`.ElectrostaticSimulation` associated with the data.",
+    simulation: DeviceSimulation = pd.Field(
+        title="Device Simulation",
+        description="Original :class:`.DeviceSimulation` associated with the data.",
     )
 
-    data: Tuple[SemiConDevMonitorDataType, ...] = pd.Field(
+    data: Tuple[DeviceMonitorDataType, ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
         "associated with the monitors of the original :class:`.Simulation`.",
     )
-
-    @classmethod
-    def from_HeatSimulationData(self, heat_sim_data: HeatSimulationData):
-        """This function transforms the equivalent heat simulation data to
-        Electrostatic data"""
-
-        heat_sim = heat_sim_data.simulation
-
-        # recover the Electrostatic simulation
-        charges = []
-        charge_scaling_factor = -EPSILON_0 * 1e12 / Q_e
-        for s in heat_sim.sources:
-            charges.append(
-                UniformChargeSource(
-                    structures=s.structures,
-                    charge_density=s.rate * charge_scaling_factor,
-                )
-            )
-
-        new_bcs = []
-        for bc in heat_sim.boundary_spec:
-            if isinstance(bc, TemperatureBC):
-                new_bcs.append(
-                    ElectricBoundarySpec(
-                        placement=bc.placement,
-                        condition=PotentialBC(
-                            potential=bc.condition.temperature
-                            - ElectrostaticSimulation.offset_for_heat_sim
-                        ),
-                    )
-                )
-            elif isinstance(bc, HeatFluxBC):
-                new_bcs.append(
-                    ElectricBoundarySpec(placement=bc.placement, condition=InsulatingBC())
-                )
-
-        new_mnt = []
-        for mnt in heat_sim.monitors:
-            new_mnt.append(
-                PotentialMonitor(
-                    size=mnt.size,
-                    center=mnt.center,
-                    unstructured=mnt.unstructured,
-                    conformal=mnt.conformal,
-                    name=mnt.name,
-                )
-            )
-
-        simulation = ElectrostaticSimulation(
-            medium=heat_sim.medium,
-            structures=heat_sim.structures,
-            size=heat_sim.size,
-            center=heat_sim.center,
-            grid_spec=heat_sim.grid_spec,
-            charge_distributions=charges,
-            boundary_spec=new_bcs,
-            symmetry=heat_sim.symmetry,
-            monitors=new_mnt,
-        )
-
-        # transform the data
-        dataSets = []
-        for data in heat_sim_data.data:
-            new_monitor = PotentialMonitor(
-                center=data.monitor.center,
-                size=data.monitor.size,
-                unstructured=data.monitor.unstructured,
-                conformal=data.monitor.conformal,
-                name=data.monitor.name,
-            )
-
-            new_potential = data.temperature
-            for n in range(len(new_potential.values)):
-                new_potential.values[n] -= simulation.offset_for_heat_sim
-
-            dataSets.append(PotentialData(monitor=new_monitor, potential=new_potential))
-
-        dataSets = tuple(dataSets)
-
-        return ElectrostaticSimulationData(simulation=simulation, data=dataSets)
 
     @equal_aspect
     @add_ax_if_none
@@ -179,7 +95,7 @@ class ElectrostaticSimulationData(AbstractSimulationData):
         Parameters
         ----------
         field_monitor_name : str
-            Name of :class:`.PotentialMonitor` to plot.
+            Name of :class:`.TemperatureMonitorData` to plot.
         val : Literal['real', 'abs', 'abs^2'] = 'real'
             Which part of the field to plot.
         scale : Literal['lin', 'log']
@@ -214,21 +130,21 @@ class ElectrostaticSimulationData(AbstractSimulationData):
 
         monitor_data = self[monitor_name]
 
-        if not isinstance(monitor_data, SemiConDevMonitorDataType):
-            raise DataError(
-                f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
-                f"'SemiConDevMonitorDataType'."
-            )
+        if isinstance(monitor_data, TemperatureData):
+            if monitor_data.temperature is None:
+                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+            field_data = self._field_component_value(monitor_data.temperature, val)
 
-        if isinstance(monitor_data, PotentialData):
+        elif isinstance(monitor_data, PotentialData):
             if monitor_data.potential is None:
                 raise DataError(f"No data to plot for monitor '{monitor_name}'.")
             field_data = self._field_component_value(monitor_data.potential, val)
 
-        elif isinstance(monitor_data, ChargeDensityData):
-            if monitor_data.charge_density is None:
-                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
-            field_data = self._field_component_value(monitor_data.charge_density, val)
+        else:
+            raise DataError(
+                f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
+                f"supported monitor Supported monitors are 'TemperatureData', 'PotentialData'."
+            )
 
         if val == "abs^2":
             field_name = "|T|², K²"
@@ -238,7 +154,7 @@ class ElectrostaticSimulationData(AbstractSimulationData):
         if scale == "log":
             field_data = np.log10(np.abs(field_data))
 
-        cmap = "viridis"
+        cmap = "coolwarm"
 
         # do sel on unstructured data
         # it could produce either SpatialDataArray or UnstructuredGridDatasetType
@@ -357,3 +273,16 @@ class ElectrostaticSimulationData(AbstractSimulationData):
         ax.set_ylim(min_bounds[1], max_bounds[1])
 
         return ax
+
+
+# In order to be backwards-compatible defining here a wrapper for heat simulations
+from .heat.simulation import HeatSimulation
+
+
+class HeatSimulationData(DeviceSimulationData):
+    """Wrapper for Heat simulation data"""
+
+    simulation: HeatSimulation = pd.Field(
+        title="Device Simulation",
+        description="Original :class:`.DeviceSimulation` associated with the data.",
+    )

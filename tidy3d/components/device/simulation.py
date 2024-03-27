@@ -2,32 +2,22 @@
 from __future__ import annotations
 
 from typing import Tuple, List, Dict
-import numpy as np
 from matplotlib import cm
+import numpy as np
+from enum import Enum
 
 import pydantic.v1 as pd
 
-from .boundary import PotentialBC, InsulatingBC
-from .boundary import ElectricBoundarySpec
-from .charge_distributions import ChargeDistributionType, UniformChargeSource
-from .monitor import SemiConDevMonitorType, PotentialMonitor, ChargeDensityMonitor
-from .viz import CHARGE_BC_COLOR_POTENTIAL, CHARGE_DIST_CMAP, plot_params_charge_distribution
-
-# from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
-from ..viz import PlotParams
-
-# heat related imports
-from ..heat.grid import HeatGridType
-from ..heat.simulation import HeatSimulation
-from ..heat.source import UniformHeatSource
-from ..heat_spec import SolidSpec
-from ..heat.boundary import HeatBoundarySpec, TemperatureBC, HeatFluxBC
-from ..heat.monitor import TemperatureMonitor
-from ..medium import Medium
-from ...constants import EPSILON_0, Q_e
+from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
+from .boundary import DeviceBoundarySpec
+from .source import DeviceSourceType, UniformHeatSource
+from .monitor import DeviceMonitorType
+from .grid import UnstructuredGridType
+from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
+from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
 from ..base_sim.simulation import AbstractSimulation
-from ..base import skip_if_fields_missing, cached_property
+from ..base import cached_property, skip_if_fields_missing
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
@@ -42,22 +32,23 @@ from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
 from ..bc_placement import MediumMediumInterface
 
 from ...exceptions import SetupError
-from ...constants import inf, PERCMCUBE
+from ...constants import inf, VOLUMETRIC_HEAT_RATE
 
 from ...log import log
 
-HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
-ELECTRIC_BACK_STRUCTURE_STR = "<<<ELECTRIC_BACKGROUND_STRUCTURE>>>"
+DEVICE_BACK_STRUCTURE_STR = "<<<DEVICE_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
-
-ElectrtostaticSingleGeometryType = HeatSingleGeometryType
+DeviceSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
 
 
-class ElectrostaticSimulation(AbstractSimulation):
-    """Contains all information about electrostatic simulation.
+class DeviceSimulationType(str, Enum):
+    HEAT = "HEAT"
+    CONDUCTOR = "CONDUCTOR"
 
-    TODO: MODIFY EXAMPLE!!
+
+class DeviceSimulation(AbstractSimulation):
+    """Contains all information about device simulations.
+
     Example
     -------
     >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, TemperatureMonitor
@@ -88,27 +79,27 @@ class ElectrostaticSimulation(AbstractSimulation):
     ... )
     """
 
-    boundary_spec: Tuple[ElectricBoundarySpec, ...] = pd.Field(
+    boundary_spec: Tuple[DeviceBoundarySpec, ...] = pd.Field(
         (),
         title="Boundary Condition Specifications",
         description="List of boundary condition specifications.",
     )
 
-    charge_distributions: Tuple[ChargeDistributionType, ...] = pd.Field(
-        (), title="Charge distribution", description="Type of charge distribution to be applied."
+    sources: Tuple[DeviceSourceType, ...] = pd.Field(
+        (),
+        title="Device sources",
+        description="List of device sources.",
     )
 
-    monitors: Tuple[SemiConDevMonitorType, ...] = pd.Field(
+    monitors: Tuple[DeviceMonitorType, ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
     )
 
-    # so far using the same grid spec as for heat simulation
-    # TODO: maybe refactor `components` so that we can reuse this
-    grid_spec: HeatGridType = pd.Field(
+    grid_spec: UnstructuredGridType = pd.Field(
         title="Grid Specification",
-        description="Grid specification for heat simulation.",
+        description="Grid specification for device simulation.",
         discriminator=TYPE_TAG_STR,
     )
 
@@ -121,88 +112,20 @@ class ElectrostaticSimulation(AbstractSimulation):
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
     )
 
-    # unlike temperature, electric potentia is allowed to be negative
-    # in order to avoid negative temperatures in the equivalent heat
-    # simulation we can offset the potential field.
-    offset_for_heat_sim = 400
+    simulation_type: DeviceSimulationType = pd.Field(
+        title="Simulation type",
+        description="Type of simulation. Current supported types are" " [HEAT, CONDUCTOR]",
+    )
 
-    def equivalent_heat_simulation(self):
-        """Creates an equivalent heat simulation."""
-
-        sources = []
-        # 1e-12 to transform to 1/um^3
-        # also dividing by eps_0 here so that the equivalent
-        # conductivity is order 1, which helps convergence
-        charge_scaling_factor = -Q_e / EPSILON_0 * 1e-12
-        for charge in self.charge_distributions:
-            sources.append(
-                UniformHeatSource(
-                    rate=charge.charge_density * charge_scaling_factor, structures=charge.structures
-                )
-            )
-
-        structures = []
-        for struct in self.structures:
-            eps = struct.medium.permittivity  # relative permitivity
-            heat_medium = Medium(
-                permittivity=eps,  # not relevant
-                heat_spec=SolidSpec(
-                    conductivity=eps,
-                    capacity=1,  # irrelevant in steady-state simulations
-                ),
-                name=struct.medium.name,
-            )
-            structures.append(struct.updated_copy(medium=heat_medium))
-
-        boundary_specs = []
-        for bc in self.boundary_spec:
-            heat_bc = None
-            if isinstance(bc.condition, PotentialBC):
-                heat_bc = HeatBoundarySpec(
-                    condition=TemperatureBC(
-                        temperature=bc.condition.potential + self.offset_for_heat_sim
-                    ),
-                    placement=bc.placement,
-                )
-            elif isinstance(bc.condition, InsulatingBC):
-                heat_bc = HeatBoundarySpec(condition=HeatFluxBC(flux=0), placement=bc.placement)
-            if heat_bc is not None:
-                boundary_specs.append(heat_bc)
-
-        monitors = []
-        for mnt in self.monitors:
-            heat_monitor = None
-            if isinstance(mnt, ChargeDensityMonitor):
-                log.critical("Charge monitors not yet supported")
-            elif isinstance(mnt, PotentialMonitor):
-                heat_monitor = TemperatureMonitor(
-                    size=mnt.size,
-                    center=mnt.center,
-                    unstructured=mnt.unstructured,
-                    conformal=mnt.conformal,
-                    name=mnt.name,
-                )
-            if heat_monitor is not None:
-                monitors.append(heat_monitor)
-
-        heat_sim = HeatSimulation(
-            medium=self.medium,
-            size=self.size,
-            center=self.center,
-            grid_spec=self.grid_spec,
-            sources=sources,
-            structures=structures,
-            boundary_spec=boundary_specs,
-            symmetry=self.symmetry,
-            monitors=monitors,
-            is_electrostatic_equivalent=True,
-        )
-
-        return heat_sim
+    is_electrostatic_equivalent: bool = pd.Field(
+        False,
+        title="is eletrostatic equivalent simulation",
+        description="TODO: add description",
+    )
 
     @pd.validator("structures", always=True)
     def check_unsupported_geometries(cls, val):
-        """Error if structures contain currently unsupported geometries."""
+        """Error if structures contain unsupported yet geometries."""
         for structure in val:
             if isinstance(structure.geometry, GeometryGroup):
                 geometries = structure.geometry.geometries
@@ -211,12 +134,12 @@ class ElectrostaticSimulation(AbstractSimulation):
             for geom in geometries:
                 if isinstance(geom, (GeometryGroup)):
                     raise SetupError(
-                        "'ElectrostaticSimulation' does not currently support recursive 'GeometryGroup's."
+                        "'DeviceSimulation' does not currently support recursive 'GeometryGroup's."
                     )
-                if not isinstance(geom, ElectrtostaticSingleGeometryType):
-                    geom_names = [f"'{cl.__name__}'" for cl in ElectrtostaticSingleGeometryType]
+                if not isinstance(geom, DeviceSingleGeometryType):
+                    geom_names = [f"'{cl.__name__}'" for cl in DeviceSingleGeometryType]
                     raise SetupError(
-                        "'ElectrostaticSimulation' does not currently support geometries of type "
+                        "'DeviceSimulation' does not currently support geometries of type "
                         f"'{geom.type}'. Allowed geometries are "
                         f"{', '.join(geom_names)}, "
                         "and non-recursive 'GeometryGroup'."
@@ -225,7 +148,7 @@ class ElectrostaticSimulation(AbstractSimulation):
 
     @pd.validator("size", always=True)
     def check_zero_dim_domain(cls, val, values):
-        """Error if simulation domain has zero dimensions."""
+        """Error if heat domain have zero dimensions."""
 
         dim_names = ["x", "y", "z"]
         zero_dimensions = [False, False, False]
@@ -238,7 +161,9 @@ class ElectrostaticSimulation(AbstractSimulation):
         num_zero_dims = np.sum(zero_dimensions)
 
         if num_zero_dims > 1:
-            mssg = f"Your current ElectrostaticSimulation has zero size along the {zero_dim_str}dimensions. "
+            mssg = (
+                f"Your current DeviceSimulation has zero size along the {zero_dim_str}dimensions. "
+            )
             mssg += "Only 2- and 3-D simulations are currently supported."
             raise SetupError(mssg)
 
@@ -293,30 +218,30 @@ class ElectrostaticSimulation(AbstractSimulation):
             if structure_name not in structures_names:
                 log.warning(
                     f"Structure '{structure_name}' listed as a non-refined structure in "
-                    "'HeatSimulation.grid_spec' is not present in 'HeatSimulation.structures'"
+                    "'DeviceSimulation.grid_spec' is not present in 'DeviceSimulation.structures'"
                 )
 
         return val
 
-    @pd.validator("charge_distributions", always=True)
+    @pd.validator("sources", always=True)
     @skip_if_fields_missing(["structures"])
     def names_exist_sources(cls, val, values):
-        """Error if a charge_distributions point to non-existing structures."""
+        """Error if a device source point to non-existing structures."""
         structures = values.get("structures")
         structures_names = {s.name for s in structures}
 
-        for charge in val:
-            for name in charge.structures:
+        for source in val:
+            for name in source.structures:
                 if name not in structures_names:
                     raise SetupError(
-                        f"Structure '{name}' provided in a '{charge.type}' "
+                        f"Structure '{name}' provided in a '{source.type}' "
                         "is not found among simulation structures."
                     )
         return val
 
     @equal_aspect
     @add_ax_if_none
-    def plot_electric_permittivity(
+    def plot_scene_specs(
         self,
         x: float = None,
         y: float = None,
@@ -325,7 +250,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
-        colorbar: str = "Relative permittivity",
+        plot_type: str = "heat_conductivity",
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
     ) -> Ax:
@@ -348,8 +273,9 @@ class ElectrostaticSimulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
-        colorbar: str = ["Relative permittivity" (default), "ChargeDist"]
-            Display colorbar for relative permittivity
+        plot_type : str = "heat_conductivity"
+            Specified the type of simulation for which the plot will be tailored.
+            Options are "heat_conductivity", "heat_source"
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
@@ -365,11 +291,24 @@ class ElectrostaticSimulation(AbstractSimulation):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        # cbar_cond = colorbar == "Relative permittivity"
+        cbar_cond = True
+        property_plot = "thermal_conductivity"
 
-        ax = self.scene.plot_eps(ax=ax, x=x, y=y, z=z, alpha=alpha, hlim=hlim, vlim=vlim)
-        # TODO: plot source. Do I need an equivalent for charges? How would it work?
-        ax = self.plot_charges(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
+        if self.simulation_type == DeviceSimulationType.CONDUCTOR:
+            property_plot = "electric_conductivity"
+
+        ax = self.scene.plot_device_property(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            cbar=cbar_cond,
+            alpha=alpha,
+            hlim=hlim,
+            vlim=vlim,
+            property=property_plot,
+        )
+        ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_boundaries(ax=ax, x=x, y=y, z=z)
         ax = Scene._set_plot_bounds(
@@ -377,9 +316,8 @@ class ElectrostaticSimulation(AbstractSimulation):
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        # NOTE: note sure this makes a lot of sense.
-        if colorbar == "ChargeDist":
-            self._add_charge_dist_cbar(ax=ax)
+        if plot_type == "heat_source":
+            self._add_heat_source_cbar(ax=ax)
         return ax
 
     @equal_aspect
@@ -422,7 +360,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         plane = Box(center=center, size=size)
 
         # get boundary conditions in the plane
-        boundaries = self._construct_electric_boundaries(
+        boundaries = self._construct_device_boundaries(
             structures=structures,
             plane=plane,
             boundary_spec=self.boundary_spec,
@@ -441,22 +379,23 @@ class ElectrostaticSimulation(AbstractSimulation):
 
         return ax
 
-    def _get_bc_plot_params(self, boundary_spec: ElectricBoundarySpec) -> PlotParams:
+    def _get_bc_plot_params(self, boundary_spec: DeviceBoundarySpec) -> PlotParams:
         """Constructs the plot parameters for given boundary conditions."""
 
-        # plot_params = plot_params_heat_bc
-        plot_params = PlotParams(lw=3)
+        plot_params = plot_params_heat_bc
         condition = boundary_spec.condition
 
-        if isinstance(condition, PotentialBC):
-            plot_params = plot_params.updated_copy(facecolor=CHARGE_BC_COLOR_POTENTIAL)
-        elif isinstance(condition, InsulatingBC):
-            plot_params = plot_params.updated_copy(facecolor=CHARGE_BC_COLOR_POTENTIAL)
+        if isinstance(condition, TemperatureBC):
+            plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_TEMPERATURE)
+        elif isinstance(condition, HeatFluxBC):
+            plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_FLUX)
+        elif isinstance(condition, ConvectionBC):
+            plot_params = plot_params.updated_copy(facecolor=HEAT_BC_COLOR_CONVECTION)
 
         return plot_params
 
     def _plot_boundary_condition(
-        self, shape: Shapely, boundary_spec: ElectricBoundarySpec, ax: Ax
+        self, shape: Shapely, boundary_spec: DeviceBoundarySpec, ax: Ax
     ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
@@ -465,10 +404,8 @@ class ElectrostaticSimulation(AbstractSimulation):
 
     @staticmethod
     def _structure_to_bc_spec_map(
-        plane: Box,
-        structures: Tuple[Structure, ...],
-        boundary_spec: Tuple[ElectricBoundarySpec, ...],
-    ) -> Dict[str, ElectricBoundarySpec]:
+        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[DeviceBoundarySpec, ...]
+    ) -> Dict[str, DeviceBoundarySpec]:
         """Construct structure name to bc spec inverse mapping. One structure may correspond to
         multiple boundary conditions."""
 
@@ -495,16 +432,14 @@ class ElectrostaticSimulation(AbstractSimulation):
                             struct_to_bc_spec[structure] = [bc_spec]
 
             if isinstance(bc_place, SimulationBoundary):
-                struct_to_bc_spec[ELECTRIC_BACK_STRUCTURE_STR] = [bc_spec]
+                struct_to_bc_spec[DEVICE_BACK_STRUCTURE_STR] = [bc_spec]
 
         return struct_to_bc_spec
 
     @staticmethod
     def _medium_to_bc_spec_map(
-        plane: Box,
-        structures: Tuple[Structure, ...],
-        boundary_spec: Tuple[ElectricBoundarySpec, ...],
-    ) -> Dict[str, ElectricBoundarySpec]:
+        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[DeviceBoundarySpec, ...]
+    ) -> Dict[str, DeviceBoundarySpec]:
         """Construct medium name to bc spec inverse mapping. One medium may correspond to
         multiple boundary conditions."""
 
@@ -528,10 +463,10 @@ class ElectrostaticSimulation(AbstractSimulation):
     @staticmethod
     def _construct_forward_boundaries(
         shapes: Tuple[Tuple[str, str, Shapely, Tuple[float, float, float, float]], ...],
-        struct_to_bc_spec: Dict[str, ElectricBoundarySpec],
-        med_to_bc_spec: Dict[str, ElectricBoundarySpec],
+        struct_to_bc_spec: Dict[str, DeviceBoundarySpec],
+        med_to_bc_spec: Dict[str, DeviceBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[ElectricBoundarySpec, Shapely], ...]:
+    ) -> Tuple[Tuple[DeviceBoundarySpec, Shapely], ...]:
         """Construct Simulation, StructureSimulation, Structure, and MediumMedium boundaries."""
 
         # forward foop to take care of Simulation, StructureSimulation, Structure,
@@ -620,9 +555,9 @@ class ElectrostaticSimulation(AbstractSimulation):
     @staticmethod
     def _construct_reverse_boundaries(
         shapes: Tuple[Tuple[str, str, Shapely, Bound], ...],
-        struct_to_bc_spec: Dict[str, ElectricBoundarySpec],
+        struct_to_bc_spec: Dict[str, DeviceBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[ElectricBoundarySpec, Shapely], ...]:
+    ) -> Tuple[Tuple[DeviceBoundarySpec, Shapely], ...]:
         """Construct StructureStructure boundaries."""
 
         # backward foop to take care of StructureStructure
@@ -686,11 +621,11 @@ class ElectrostaticSimulation(AbstractSimulation):
         return filtered_boundaries
 
     @staticmethod
-    def _construct_electric_boundaries(
+    def _construct_device_boundaries(
         structures: List[Structure],
         plane: Box,
-        boundary_spec: List[ElectricBoundarySpec],
-    ) -> List[Tuple[ElectricBoundarySpec, Shapely]]:
+        boundary_spec: List[DeviceBoundarySpec],
+    ) -> List[Tuple[DeviceBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
         Parameters
@@ -721,12 +656,12 @@ class ElectrostaticSimulation(AbstractSimulation):
         background_structure_shape = shapes[0][2]
 
         # construct an inverse mapping structure -> bc for present structures
-        struct_to_bc_spec = ElectrostaticSimulation._structure_to_bc_spec_map(
+        struct_to_bc_spec = DeviceSimulation._structure_to_bc_spec_map(
             plane=plane, structures=structures, boundary_spec=boundary_spec
         )
 
         # construct an inverse mapping medium -> bc for present mediums
-        med_to_bc_spec = ElectrostaticSimulation._medium_to_bc_spec_map(
+        med_to_bc_spec = DeviceSimulation._medium_to_bc_spec_map(
             plane=plane, structures=structures, boundary_spec=boundary_spec
         )
 
@@ -734,7 +669,7 @@ class ElectrostaticSimulation(AbstractSimulation):
 
         # 1. forward foop to take care of Simulation, StructureSimulation, Structure,
         # and MediumMediums
-        boundaries = ElectrostaticSimulation._construct_forward_boundaries(
+        boundaries = DeviceSimulation._construct_forward_boundaries(
             shapes=shapes,
             struct_to_bc_spec=struct_to_bc_spec,
             med_to_bc_spec=med_to_bc_spec,
@@ -742,7 +677,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         )
 
         # 2. reverse loop: construct structure-structure boundary
-        struct_struct_boundaries = ElectrostaticSimulation._construct_reverse_boundaries(
+        struct_struct_boundaries = DeviceSimulation._construct_reverse_boundaries(
             shapes=shapes,
             struct_to_bc_spec=struct_to_bc_spec,
             background_structure_shape=background_structure_shape,
@@ -752,7 +687,7 @@ class ElectrostaticSimulation(AbstractSimulation):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_charges(
+    def plot_sources(
         self,
         x: float = None,
         y: float = None,
@@ -762,7 +697,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         alpha: float = None,
         ax: Ax = None,
     ) -> Ax:
-        """Plot each of simulation's charges on a plane defined by one nonzero x,y,z coordinate.
+        """Plot each of simulation's sources on a plane defined by one nonzero x,y,z coordinate.
 
         Parameters
         ----------
@@ -798,30 +733,30 @@ class ElectrostaticSimulation(AbstractSimulation):
             return ax
 
         # distribute source where there are assigned
-        structure_charge_map = {}
-        for charge in self.charge_distributions:
-            for name in charge.structures:
-                structure_charge_map[name] = charge
+        structure_source_map = {}
+        for source in self.sources:
+            for name in source.structures:
+                structure_source_map[name] = source
 
-        charge_list = [structure_charge_map.get(structure.name, None) for structure in structures]
+        source_list = [structure_source_map.get(structure.name, None) for structure in structures]
 
         axis, position = Box.parse_xyz_kwargs(x=x, y=y, z=z)
         center = Box.unpop_axis(position, (0, 0), axis=axis)
         size = Box.unpop_axis(0, (inf, inf), axis=axis)
         plane = Box(center=center, size=size)
 
-        charge_shapes = self.scene._filter_structures_plane(
-            structures=structures, plane=plane, property_list=charge_list
+        source_shapes = self.scene._filter_structures_plane(
+            structures=structures, plane=plane, property_list=source_list
         )
 
-        charge_min, charge_max = self.charge_bounds
-        for charge, shape in charge_shapes:
-            if charge is not None:
-                ax = self._plot_shape_structure_charge(
+        source_min, source_max = self.source_bounds
+        for source, shape in source_shapes:
+            if source is not None:
+                ax = self._plot_shape_structure_source(
                     alpha=alpha,
-                    charge=charge,
-                    charge_min=charge_min,
-                    charge_max=charge_max,
+                    source=source,
+                    source_min=source_min,
+                    source_max=source_max,
                     shape=shape,
                     ax=ax,
                 )
@@ -834,78 +769,76 @@ class ElectrostaticSimulation(AbstractSimulation):
         ax = Scene._set_plot_bounds(bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z)
         return ax
 
-    def _add_charge_dist_cbar(self, ax: Ax):
-        """Add colorbar for charge distributions."""
-        source_min, source_max = self.charge_bounds
+    def _add_heat_source_cbar(self, ax: Ax):
+        """Add colorbar for heat sources."""
+        source_min, source_max = self.source_bounds
         self.scene._add_cbar(
             vmin=source_min,
             vmax=source_max,
-            label=f"Charge density ({PERCMCUBE})",
-            cmap=CHARGE_DIST_CMAP,
+            label=f"Volumetric heat rate ({VOLUMETRIC_HEAT_RATE})",
+            cmap=HEAT_SOURCE_CMAP,
             ax=ax,
         )
 
     @cached_property
-    def charge_bounds(self) -> Tuple[float, float]:
-        """Compute range of charge distributions present in the simulation."""
+    def source_bounds(self) -> Tuple[float, float]:
+        """Compute range of heat sources present in the simulation."""
 
-        density_list = [
-            charge.charge_density
-            for charge in self.charge_distributions
-            if isinstance(charge, UniformChargeSource)
+        rate_list = [
+            source.rate for source in self.sources if isinstance(source, UniformHeatSource)
         ]
-        density_list.append(0)
-        rate_min = min(density_list)
-        rate_max = max(density_list)
+        rate_list.append(0)
+        rate_min = min(rate_list)
+        rate_max = max(rate_list)
         return rate_min, rate_max
 
-    def _get_structure_charge_plot_params(
+    def _get_structure_source_plot_params(
         self,
-        charge: ChargeDistributionType,
-        charge_min: float,
-        charge_max: float,
+        source: DeviceSourceType,
+        source_min: float,
+        source_max: float,
         alpha: float = None,
     ) -> PlotParams:
         """Constructs the plot parameters for a given medium in simulation.plot_eps()."""
 
-        plot_params = plot_params_charge_distribution
+        plot_params = plot_params_heat_source
         if alpha is not None:
             plot_params = plot_params.copy(update={"alpha": alpha})
 
-        if isinstance(charge, UniformChargeSource):
-            charge_density = charge.charge_density
-            delta_rate = charge_density - charge_min
-            delta_rate_max = charge_max - charge_min + 1e-5
+        if isinstance(source, UniformHeatSource):
+            rate = source.rate
+            delta_rate = rate - source_min
+            delta_rate_max = source_max - source_min + 1e-5
             rate_fraction = delta_rate / delta_rate_max
-            cmap = cm.get_cmap(CHARGE_DIST_CMAP)
+            cmap = cm.get_cmap(HEAT_SOURCE_CMAP)
             rgba = cmap(rate_fraction)
             plot_params = plot_params.copy(update={"edgecolor": rgba})
 
         return plot_params
 
-    def _plot_shape_structure_charge(
+    def _plot_shape_structure_source(
         self,
-        charge: ChargeDistributionType,
+        source: DeviceSourceType,
         shape: Shapely,
-        charge_min: float,
-        charge_max: float,
+        source_min: float,
+        source_max: float,
         ax: Ax,
         alpha: float = None,
     ) -> Ax:
         """Plot a structure's cross section shape for a given medium, grayscale for permittivity."""
-        plot_params = self._get_structure_charge_plot_params(
-            charge=charge,
-            charge_min=charge_min,
-            charge_max=charge_max,
+        plot_params = self._get_structure_source_plot_params(
+            source=source,
+            source_min=source_min,
+            source_max=source_max,
             alpha=alpha,
         )
         ax = self.plot_shape(shape=shape, plot_params=plot_params, ax=ax)
         return ax
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> ElectrostaticSimulation:
+    def from_scene(cls, scene: Scene, **kwargs) -> DeviceSimulation:
         """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
-        to define a valid simulation (for example, ``size``, ``grid_spec``, etc).
+        to define a valid simulation (for example, ``size``, ``grid_spec``, ``simulation_type``, etc).
 
         Parameters
         ----------
@@ -925,7 +858,7 @@ class ElectrostaticSimulation(AbstractSimulation):
         ...     structures=[box],
         ...     medium=Medium(permittivity=3),
         ... )
-        >>> sim = ElectrostaticSimulation.from_scene(
+        >>> sim = DeviceSimulation.from_scene(
         ...     scene=scene,
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),

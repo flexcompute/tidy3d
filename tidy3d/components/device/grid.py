@@ -117,4 +117,4 @@ class DistanceUnstructuredGrid(Tidy3dBaseModel):
         return val
 
 
-HeatGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]
+UnstructuredGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]

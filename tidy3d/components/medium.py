@@ -29,8 +29,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
-from .heat_spec import HeatSpecType
-from .semiconductor_dev.semiconductor_spec import SemiConDevSpecType
+from .device_spec import ThermalSpec, ElectricSpec
 from .time_modulation import ModulationSpec
 
 # evaluate frequency as this number (Hz) if inf
@@ -651,7 +650,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "Time modulation is not currently supported for the components " "of a 2D medium."
             )
 
-    heat_spec: Optional[HeatSpecType] = pd.Field(
+    heat_spec: Optional[ThermalSpec] = pd.Field(
         None,
         title="Heat Specification",
         description="Specification of the medium heat properties. They are used for solving "
@@ -662,15 +661,6 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "models defined into spatially dependent custom mediums. "
         "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
         "``Simulation``.",
-        discriminator=TYPE_TAG_STR,
-    )
-
-    semicon_dev_spec: Optional[SemiConDevSpecType] = pd.Field(
-        None,
-        title="Semiconductor device specification",
-        description="Specification of medium for semiconductor simulations, which include "
-        + "``ElectrostaticSimulation``. These simulations are typically used to determine heat "
-        + "in semiconductor/electric devices due to electric currents (Joule heating).",
         discriminator=TYPE_TAG_STR,
     )
 
