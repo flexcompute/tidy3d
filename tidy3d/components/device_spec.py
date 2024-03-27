@@ -48,7 +48,7 @@ class SolidSpec(AbstractDeviceSpec):
     )
 
 
-class InsulatingSpec(AbstractDeviceSpec):
+class InsulatorSpec(AbstractDeviceSpec):
     """Insulating medium.
 
     Example
@@ -87,4 +87,4 @@ class ConductorSpec(AbstractDeviceSpec):
 #     hole_spec: CarrierSpec
 
 ThermalSpec = Union[FluidSpec, SolidSpec]
-ElectricSpec = Union[InsulatingSpec, ConductorSpec]
+ElectricSpec = Union[InsulatorSpec, ConductorSpec]

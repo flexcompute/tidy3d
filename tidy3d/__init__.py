@@ -133,7 +133,7 @@ from .components.bc_placement import StructureSimulationBoundary
 from .components.bc_placement import SimulationBoundary
 
 # device and heat
-from .components.device_spec import FluidSpec, SolidSpec
+from .components.device_spec import FluidSpec, SolidSpec, ConductorSpec, InsulatorSpec
 from .components.device.heat.simulation import HeatSimulation
 from .components.device.simulation import DeviceSimulation, DeviceSimulationType
 from .components.device.sim_data import HeatSimulationData, DeviceSimulationData
@@ -144,6 +144,8 @@ from .components.device.boundary import (
     HeatFluxBC,
     HeatBoundarySpec,
     DeviceBoundarySpec,
+    PotentialBC,
+    InsulatingBC,
 )
 from .components.device.source import UniformHeatSource, UniformChargeSource
 from .components.device.monitor import TemperatureMonitor, PotentialMonitor, DeviceMonitor
@@ -323,12 +325,16 @@ __all__ = [
     "SimulationBoundary",
     "FluidSpec",
     "SolidSpec",
+    "ConductorSpec",
+    "InsulatorSpec",
     "HeatSimulation",
     "HeatSimulationData",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
     "HeatBoundarySpec",
+    "PotentialBC",
+    "InsulatingBC",
     "UniformHeatSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",

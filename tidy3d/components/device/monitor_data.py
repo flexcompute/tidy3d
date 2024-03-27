@@ -176,4 +176,4 @@ class PotentialData(DeviceMonitorData):
         return self.updated_copy(potential=new_phi, symmetry=(0, 0, 0))
 
 
-DeviceMonitorDataType = Union[TemperatureData, PotentialMonitor]
+DeviceMonitorDataType = Union[TemperatureData, PotentialData]

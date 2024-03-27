@@ -259,14 +259,14 @@ class DeviceSimulationData(AbstractSimulationData):
             max_bounds = (max(x_coord_values), max(y_coord_values))
 
         # select the cross section data
-        interp_kwarg = {"xyz"[axis]: position}
+        # interp_kwarg = {"xyz"[axis]: position}
         # plot the simulation heat conductivity
-        ax = self.simulation.scene.plot_structures_heat_conductivity(
-            cbar=False,
-            alpha=structures_alpha,
-            ax=ax,
-            **interp_kwarg,
-        )
+        # ax = self.simulation.scene.plot_heat_conductivity(
+        #     cbar=False,
+        #     alpha=structures_alpha,
+        #     ax=ax,
+        #     **interp_kwarg,
+        # )
 
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
