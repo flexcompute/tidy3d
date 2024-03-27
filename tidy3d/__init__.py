@@ -135,7 +135,7 @@ from .components.bc_placement import SimulationBoundary
 # device and heat
 from .components.device_spec import FluidSpec, SolidSpec
 from .components.device.heat.simulation import HeatSimulation
-from .components.device.simulation import DeviceSimulation
+from .components.device.simulation import DeviceSimulation, DeviceSimulationType
 from .components.device.sim_data import HeatSimulationData, DeviceSimulationData
 from .components.device.monitor_data import TemperatureData, PotentialData
 from .components.device.boundary import (
@@ -335,6 +335,7 @@ __all__ = [
     "TemperatureData",
     "TemperatureMonitor",
     "DeviceSimulation",
+    "DeviceSimulationType",
     "DeviceSimulationData",
     "PotentialData",
     "DeviceBoundarySpec",
