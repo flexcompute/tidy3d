@@ -779,7 +779,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         origin[axis] = pos
 
         normal = [0, 0, 0]
-        normal[axis] = 1
+        # orientation of normal is important for edge (literally) cases
+        normal[axis] = -1
+        if pos > (self.bounds[0][axis] + self.bounds[1][axis]) / 2:
+            normal[axis] = 1
 
         # create cutting plane
         plane = vtk["mod"].vtkPlane()

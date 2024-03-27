@@ -72,12 +72,11 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
     )
 
     # invalid cell connections
+    tri_grid_cells_bad = td.CellDataArray(
+        [[0, 1, 2, 3]],
+        coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
+    )
     with pytest.raises(pd.ValidationError):
-        tri_grid_cells_bad = td.CellDataArray(
-            [[0, 1, 2, 3]],
-            coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),
-        )
-
         _ = td.TriangularGridDataset(
             normal_axis=2,
             normal_pos=-3,
@@ -86,12 +85,11 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
             values=tri_grid_values,
         )
 
+    tri_grid_cells_bad = td.CellDataArray(
+        [[0, 1, 5], [1, 2, 3]],
+        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
+    )
     with pytest.raises(pd.ValidationError):
-        tri_grid_cells_bad = td.CellDataArray(
-            [[0, 1, 5], [1, 2, 3]],
-            coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
-        )
-
         _ = td.TriangularGridDataset(
             normal_axis=2,
             normal_pos=-3,
@@ -101,12 +99,11 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         )
 
     # wrong number of values
+    tri_grid_values_bad = td.IndexedDataArray(
+        [1.0, 2.0, 3.0],
+        coords=dict(index=np.arange(3)),
+    )
     with pytest.raises(pd.ValidationError):
-        tri_grid_values_bad = td.IndexedDataArray(
-            [1.0, 2.0, 3.0],
-            coords=dict(index=np.arange(3)),
-        )
-
         _ = td.TriangularGridDataset(
             normal_axis=0,
             normal_pos=0,
@@ -147,6 +144,12 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         # can't slice outside of bounds
         with pytest.raises(DataError):
             _ = tri_grid.plane_slice(axis=0, pos=2)
+
+        # slicing along edges
+        _ = tri_grid.plane_slice(axis=0, pos=1)
+        _ = tri_grid.plane_slice(axis=0, pos=0)
+        _ = tri_grid.plane_slice(axis=2, pos=1)
+        _ = tri_grid.plane_slice(axis=2, pos=0)
 
     # clipping by a box
     if no_vtk:
@@ -282,17 +285,26 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     # basic create
     tet_grid_points = td.PointDataArray(
-        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+        [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [1.0, 0.0, 1.0],
+            [0.0, 1.0, 1.0],
+            [1.0, 1.0, 1.0],
+        ],
         dims=("index", "axis"),
     )
 
     tet_grid_cells = td.CellDataArray(
-        [[0, 1, 2, 4], [1, 2, 3, 4]],
+        [[0, 1, 3, 7], [0, 2, 3, 7], [0, 2, 6, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
         dims=("cell_index", "vertex_index"),
     )
 
     tet_grid_values = td.IndexedDataArray(
-        [1.0, 2.0, 3.0, 4.0, 5.0],
+        np.linspace(-1, 2, 8),
         dims=("index"),
         name=ds_name,
     )
@@ -304,12 +316,11 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     )
 
     # wrong points dimensionality
+    tet_grid_points_bad = td.PointDataArray(
+        np.random.random((8, 2)),
+        coords=dict(index=np.arange(8), axis=np.arange(2)),
+    )
     with pytest.raises(pd.ValidationError):
-        tet_grid_points_bad = td.PointDataArray(
-            np.random.random((5, 2)),
-            coords=dict(index=np.arange(5), axis=np.arange(2)),
-        )
-
         _ = td.TetrahedralGridDataset(
             points=tet_grid_points_bad,
             cells=tet_grid_cells,
@@ -318,8 +329,8 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     # grid with degenerate cells
     tet_grid_cells_bad = td.CellDataArray(
-        [[0, 1, 1, 4], [1, 2, 3, 4]],
-        coords=dict(cell_index=np.arange(2), vertex_index=np.arange(4)),
+        [[0, 1, 1, 7], [0, 2, 3, 7], [0, 2, 2, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
+        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
     )
 
     _ = td.TetrahedralGridDataset(
@@ -329,24 +340,22 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
     )
 
     # invalid cell connections
+    tet_grid_cells_bad = td.CellDataArray(
+        [[0, 1, 3], [0, 2, 3], [0, 2, 6], [0, 4, 6], [0, 4, 5], [0, 1, 5]],
+        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(3)),
+    )
     with pytest.raises(pd.ValidationError):
-        tet_grid_cells_bad = td.CellDataArray(
-            [[0, 1, 2], [1, 2, 3]],
-            coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
-        )
-
         _ = td.TetrahedralGridDataset(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
             values=tet_grid_values,
         )
 
+    tet_grid_cells_bad = td.CellDataArray(
+        [[0, 1, 3, 17], [0, 2, 3, 7], [0, 2, 6, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
+        coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
+    )
     with pytest.raises(pd.ValidationError):
-        tet_grid_cells_bad = td.CellDataArray(
-            [[0, 1, 2, 6], [1, 2, 3, 4]],
-            coords=dict(cell_index=np.arange(2), vertex_index=np.arange(4)),
-        )
-
         _ = td.TetrahedralGridDataset(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
@@ -354,12 +363,11 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         )
 
     # wrong number of values
+    tet_grid_values_bad = td.IndexedDataArray(
+        np.linspace(-1, 2, 18),
+        dims=("index"),
+    )
     with pytest.raises(pd.ValidationError):
-        tet_grid_values_bad = td.IndexedDataArray(
-            [1.0, 2.0, 3.0],
-            coords=dict(index=np.arange(3)),
-        )
-
         _ = td.TetrahedralGridDataset(
             points=tet_grid_points,
             cells=tet_grid_cells_bad,
@@ -368,7 +376,7 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     # some auxiliary properties
     assert tet_grid.bounds == ((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
-    assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8]))
+    assert np.all(tet_grid._vtk_offsets == np.array([0, 4, 8, 12, 16, 20, 24]))
     assert tet_grid.name == ds_name
 
     if no_vtk:
@@ -394,6 +402,20 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
         # can't slice outside of bounds
         with pytest.raises(DataError):
             _ = tet_grid.plane_slice(axis=1, pos=2)
+
+        # slicing along faces
+        for axis in range(3):
+            for pos in [0, 1]:
+                _ = tet_grid.plane_slice(axis=axis, pos=pos)
+
+        # slicing along edges
+        for axis in range(3):
+            for pos1 in [0, 0.4, 1]:
+                for pos2 in [0, 0.7, 1]:
+                    pos = [pos1, pos2]
+                    pos.insert(axis, 0)
+
+                    _ = tet_grid.line_slice(axis=axis, pos=pos)
 
     # clipping by a box
     if no_vtk:
