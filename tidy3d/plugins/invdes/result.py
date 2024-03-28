@@ -102,14 +102,15 @@ class InverseDesignResult(InvdesBaseModel):
         return values[-1]
 
     @property
-    def sim_final(self) -> td.Simulation:
+    def sim_final(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """The final simulation."""
         params_final = self.get_final("params")
         return self.design.to_simulation(params_final)
 
-    def sim_data_final(self, task_name: str, **run_kwargs) -> td.SimulationData:
+    def sim_data_final(self, task_name: str, **kwargs) -> td.SimulationData:
         """Run the final simulation and return its data."""
-        return td.web.run(self.sim_final, task_name=task_name, **run_kwargs)
+        params_final = self.get_final("params")
+        return self.design.to_simulation_data(params=params_final, task_name=task_name, **kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

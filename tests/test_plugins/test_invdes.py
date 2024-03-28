@@ -137,6 +137,15 @@ def post_process_fn_kwargless(sim_data: tda.JaxSimulationData) -> float:
     return jnp.sum(intensity.values)
 
 
+def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) -> float:
+    """Define a post-processing function for batch."""
+    intensity = 0.0
+    for sim_data in sim_data_list:
+        intensity_i = sim_data.get_intensity(MNT_NAME)
+        intensity += jnp.sum(intensity_i.values)
+    return intensity
+
+
 def make_invdes():
     """Make an inverse design"""
     return tdi.InverseDesign(
@@ -218,19 +227,20 @@ def test_invdes_mesh_override():
     sim = invdes.to_simulation(params)
     assert sim.grid_spec.override_structures[-1].dl == (dl, dl, dl)
 
-def make_invdes_multi():
 
+def make_invdes_multi():
     n = 7
 
     region = make_design_region()
 
     simulations = n * [simulation]
-    post_process_fns = n * [post_process_fn]
+    # post_process_fns = n * [post_process_fn]
 
     invdes = tdi.InverseDesignMulti(
         design_region=region,
         simulations=simulations,
-        post_process_fns=post_process_fns,
+        # post_process_fns=post_process_fns,
+        post_process_fn=post_process_fn_multi,
         task_name="base",
     )
 
@@ -243,16 +253,18 @@ def test_invdes_multi_same_length():
     invdes = make_invdes_multi()
     n = len(invdes.simulations)
 
-    simulations = (n + 1) * [simulation]
+    output_monitor_names = (n + 1) * [["test"]]
 
     with pytest.raises(ValueError):
-        _ = invdes.updated_copy(simulations=simulations)
+        _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    output_monitor_names = [([MNT_NAME], None)[i%2] for i in range(n)]
-    _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
+    output_monitor_names = [([MNT_NAME], None)[i % 2] for i in range(n)]
+    invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    override_structure_dl = [(0.1, False, None)[i%3] for i in range(n)]
-    _ = invdes.updated_copy(override_structure_dl=override_structure_dl)
+    override_structure_dl = [(0.1, False, None)[i % 3] for i in range(n)]
+    invdes = invdes.updated_copy(override_structure_dl=override_structure_dl)
+
+    ds = invdes.designs
 
 
 def make_optimizer():
@@ -274,6 +286,7 @@ def make_result(use_emulated_run):
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
     return optimizer.run(params0=PARAMS_0)
+
 
 def make_result_multi(use_emulated_run_async):
     """Test running the optimization defined in the ``InverseDesignMulti`` object."""
@@ -319,7 +332,6 @@ def test_continue_run_from_file(use_emulated_run):
 def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
     """Test methods of the ``InverseDesignResult`` object."""
 
-
     result = make_result(use_emulated_run)
 
     with pytest.raises(KeyError):
@@ -332,17 +344,19 @@ def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
     result.plot_optimization()
     sim_data_final = result.sim_data_final(task_name="final")
 
-def test_result_data(use_emulated_run, use_emulated_run_async, tmp_path):
+
+def test_result_data(use_emulated_run):
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run)
     sim_final = result.sim_final
     sim_data_final = result.sim_data_final(task_name="final")
- 
-    # TODO: make work
+
+
+def test_result_data_multi(use_emulated_run_async, tmp_path):
     result_multi = make_result_multi(use_emulated_run)
-    # sim_final = result_multi.sim_final
-    # batch_data_final = result_multi.sim_data_final(task_name="final")
+    sim_final = result_multi.sim_final
+    sim_data_final = result_multi.sim_data_final(task_name="final")
 
 
 def test_result_empty():
