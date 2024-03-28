@@ -171,7 +171,7 @@ class Tidy3dStubData(BaseModel, TaskStubData):
         elif "HeatSimulationData" == type_:
             sim_data = HeatSimulationData.from_file(file_path)
         elif "DeviceSimulation" == type_:
-            sim_data = DeviceSimulationData.fromç(file_path)
+            sim_data = DeviceSimulationData.from_file(file_path)
 
         return sim_data
 
