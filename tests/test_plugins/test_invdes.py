@@ -16,13 +16,22 @@ from ..utils import run_emulated, log_capture, assert_log_level, AssertLogLevel
 
 FREQ0 = 1e14
 L_SIM = 2.0
-MNT_NAME = "mnt_name"
+MNT_NAME1 = "mnt_name1"
+MNT_NAME2 = "mnt_name2"
 HISTORY_FNAME = "tests/data/invdes_history.pkl"
 
 td.config.logging_level = "ERROR"
 
-mnt = td.FieldMonitor(
-    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
+mnt1 = td.FieldMonitor(
+    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME1
+)
+
+mnt2 = td.ModeMonitor(
+    center=(-L_SIM / 3.0, 0, 0),
+    size=(0, td.inf, td.inf),
+    freqs=[FREQ0],
+    name=MNT_NAME2,
+    mode_spec=td.ModeSpec(num_modes=1),
 )
 
 simulation = td.Simulation(
@@ -36,7 +45,7 @@ simulation = td.Simulation(
         )
     ],
     run_time=1e-12,
-    monitors=[mnt],
+    monitors=[mnt1, mnt2],
 )
 
 
@@ -127,23 +136,25 @@ def test_penalty_pixel_size(log_capture):
 
 def post_process_fn(sim_data: tda.JaxSimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
-    intensity = sim_data.get_intensity(MNT_NAME)
+    intensity = sim_data.get_intensity(MNT_NAME1)
     return jnp.sum(intensity.values)
 
 
 def post_process_fn_kwargless(sim_data: tda.JaxSimulationData) -> float:
     """Define a post-processing function with no kwargs specified."""
-    intensity = sim_data.get_intensity(MNT_NAME)
+    intensity = sim_data.get_intensity(MNT_NAME1)
     return jnp.sum(intensity.values)
 
 
 def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) -> float:
     """Define a post-processing function for batch."""
-    intensity = 0.0
+    val = 0.0
     for sim_data in sim_data_list:
-        intensity_i = sim_data.get_intensity(MNT_NAME)
-        intensity += jnp.sum(intensity_i.values)
-    return intensity
+        intensity_i = sim_data.get_intensity(MNT_NAME1)
+        val += jnp.sum(intensity_i.values)
+        power_i = tdi.sum_abs_squared(tdi.get_amps(sim_data, MNT_NAME2))
+        val += power_i
+    return val
 
 
 def make_invdes():
@@ -165,7 +176,10 @@ class MockDataArray:
 class MockSimData:
     """Pretends to be a ``JaxSimulationData``, returns a data array with ``.get_intensity()``."""
 
-    def get_intensity(self, name: str) -> jnp.ndarray:
+    def get_intensity(self, name: str) -> MockDataArray:
+        return MockDataArray()
+
+    def __getitem__(self, name: str) -> MockDataArray:
         return MockDataArray()
 
 
@@ -195,7 +209,7 @@ def test_invdes_simulation_data():
 def test_invdes_output_monitor_names(use_emulated_run):
     """test the inverse design objective function with user-specified output monitor names."""
     invdes = make_invdes()
-    invdes = invdes.updated_copy(output_monitor_names=[MNT_NAME])
+    invdes = invdes.updated_copy(output_monitor_names=[MNT_NAME1, MNT_NAME2])
 
     params = invdes.design_region.params_random
     invdes.objective_fn(params, kwarg1="hi")
@@ -258,7 +272,7 @@ def test_invdes_multi_same_length():
     with pytest.raises(ValueError):
         _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    output_monitor_names = [([MNT_NAME], None)[i % 2] for i in range(n)]
+    output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
     override_structure_dl = [(0.1, False, None)[i % 3] for i in range(n)]
@@ -445,3 +459,32 @@ def test_fn_source_error(monkeypatch, exception, ok):
     else:
         with pytest.raises(exception):
             tdi.base.InvdesBaseModel._get_fn_source(test)
+
+
+def test_objective_utilities(use_emulated_run):
+    """Test objective function helpers."""
+
+    sim_data = td.web.run(simulation, task_name="test")
+
+    value = 0.0
+
+    amps_i = tdi.get_amps(sim_data, MNT_NAME2)
+    value += tdi.sum_abs_squared(amps_i)
+
+    phase = tdi.get_phase(amps_i)
+    value += tdi.sum_array(phase)
+
+    intensity = tdi.get_intensity(sim_data, MNT_NAME1)
+    value += tdi.sum_array(intensity)
+
+    ex = tdi.get_field_component(sim_data, MNT_NAME1, "Ex")
+    value += tdi.sum_abs_squared(ex)
+
+    with pytest.raises(ValueError):
+        tdi.get_intensity(sim_data, MNT_NAME2)
+
+    with pytest.raises(ValueError):
+        tdi.get_field_component(sim_data, MNT_NAME2, "Ex")
+
+    with pytest.raises(ValueError):
+        tdi.get_amps(sim_data, MNT_NAME1)

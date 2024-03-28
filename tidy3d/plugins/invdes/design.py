@@ -307,18 +307,14 @@ class InverseDesignMulti(AbstractInverseDesign):
         def objective_fn(params: jnp.ndarray, **kwargs_postprocess) -> float:
             """Full objective function."""
 
+            # construct the jax simulations
             jax_sims = [design.to_jax_simulation(params=params) for design in designs]
 
             # run the jax simulations
-            jax_batch_data = tda.web.run_async(jax_sims, verbose=self.verbose)
+            sim_data_list = tda.web.run_async(jax_sims, verbose=self.verbose)
 
             # compute objective function values and sum them
-            post_process_val = self.post_process_fn(jax_batch_data, **kwargs_postprocess)
-            # post_process_vals = []
-            # for jax_sim_data, post_process_fn in zip(jax_batch_data, self.post_process_fns):
-            #     post_process_val = post_process_fn(jax_sim_data, **kwargs_postprocess)
-            #     post_process_vals.append(post_process_val)
-            # post_process_val = jnp.sum(jnp.array(post_process_vals))
+            post_process_val = self.post_process_fn(sim_data_list, **kwargs_postprocess)
 
             # construct penalty value
             penalty_value = self.design_region.penalty_value(params)
@@ -330,7 +326,6 @@ class InverseDesignMulti(AbstractInverseDesign):
             aux_data = dict(
                 penalty=penalty_value,
                 post_process_val=post_process_val,
-                # post_process_vals=post_process_vals,
             )
             return objective_fn_val, aux_data
 
@@ -346,11 +341,11 @@ class InverseDesignMulti(AbstractInverseDesign):
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
 
-        def task_name(i: int) -> str:
+        def get_task_name(i: int) -> str:
             """task name for the i-th task."""
             return f"{task_name}_{str(i)}"
 
-        task_names = [task_name(i) for i in range(len(simulations))]
+        task_names = [get_task_name(i) for i in range(len(simulations))]
         sim_dict = dict(zip(task_names, simulations))
 
         kwargs = self._add_verbosity_to_kwargs(**kwargs)
