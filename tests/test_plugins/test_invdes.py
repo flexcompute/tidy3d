@@ -198,7 +198,7 @@ def test_invdes_kwargless():
     invdes.post_process_fn(MockSimData(), kwarg1="hi")
 
 
-def test_invdes_simulation_data():
+def test_invdes_simulation_data(use_emulated_run):
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
 
     invdes = make_invdes()
@@ -369,7 +369,7 @@ def test_result_data(use_emulated_run):
 
 
 def test_result_data_multi(use_emulated_run_async, tmp_path):
-    result_multi = make_result_multi(use_emulated_run)
+    result_multi = make_result_multi(use_emulated_run_async)
     sim_final = result_multi.sim_final
     sim_data_final = result_multi.sim_data_final(task_name="final")
 
@@ -465,7 +465,7 @@ def test_fn_source_error(monkeypatch, exception, ok):
 def test_objective_utilities(use_emulated_run):
     """Test objective function helpers."""
 
-    sim_data = td.web.run(simulation, task_name="test")
+    sim_data = run_emulated(simulation, task_name="test")
 
     value = 0.0
 
