@@ -13,11 +13,11 @@ from ..base_sim.source import AbstractSource
 from ..data.data_array import TimeDataArray
 from ..viz import PlotParams
 
-from ...constants import VOLUMETRIC_HEAT_RATE
+from ...constants import VOLUMETRIC_HEAT_RATE, PERCMCUBE
 
 
-class HeatSource(AbstractSource, ABC):
-    """Abstract heat source."""
+class DeviceSource(AbstractSource, ABC):
+    """Abstract device source."""
 
     structures: Tuple[str, ...] = pd.Field(
         title="Target Structures",
@@ -30,7 +30,7 @@ class HeatSource(AbstractSource, ABC):
         return plot_params_heat_source
 
 
-class UniformHeatSource(HeatSource):
+class UniformHeatSource(DeviceSource):
     """Volumetric heat source.
 
     Example
@@ -46,4 +46,19 @@ class UniformHeatSource(HeatSource):
     )
 
 
-HeatSourceType = Union[UniformHeatSource]
+class UniformChargeSource(DeviceSource):
+    """Uniform charge distribution.
+
+    Example
+    -------
+    >>> charge_distribution = UniformChargeSource(charge_density=-1e12, structures=["box"])
+    """
+
+    charge_density: Union[float, TimeDataArray] = pd.Field(
+        title="Uniform charge density",
+        description="Uniform charge density applied to the structures defined in the object.",
+        units=PERCMCUBE,
+    )
+
+
+DeviceSourceType = Union[UniformHeatSource, UniformChargeSource]

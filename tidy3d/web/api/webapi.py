@@ -23,6 +23,9 @@ from ...components.types import Literal
 from ...log import log, get_logging_console
 from ...exceptions import WebError
 
+# handling of electrostatic simulation
+# from ...components.device.sim_data import HeatSimulationData
+
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
 
@@ -208,9 +211,9 @@ def upload(
         console.log(
             f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'."
         )
-        if task_type == "HEAT":
+        if task_type == "HEAT" or task_type == "DEVICE":
             console.log(
-                "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
+                "Tidy3D's device solver is currently in the beta stage. Cost of device simulations "
                 "is subject to change in the future."
             )
         else:
@@ -346,7 +349,7 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_info = get_info(task_id)
 
-    if task_info.taskType in ("MODE_SOLVER", "HEAT"):
+    if task_info.taskType in ("MODE_SOLVER", "HEAT", "DEVICE"):
         log_level = "DEBUG" if verbose else "INFO"
         solver_name = "Mode" if task_info.taskType == "MODE_SOLVER" else "Heat"
 
@@ -664,6 +667,7 @@ def load(
         console.log(f"loading simulation from {path}")
 
     stub_data = Tidy3dStubData.postprocess(path)
+
     return stub_data
 
 

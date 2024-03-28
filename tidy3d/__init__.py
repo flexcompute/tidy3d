@@ -84,7 +84,11 @@ from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP
 from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
-from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
+from .components.data.dataset import (
+    TriangularGridDataset,
+    TetrahedralGridDataset,
+    UnstructuredGridDataset,
+)
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
@@ -128,15 +132,24 @@ from .components.bc_placement import MediumMediumInterface
 from .components.bc_placement import StructureSimulationBoundary
 from .components.bc_placement import SimulationBoundary
 
-# heat
-from .components.heat_spec import FluidSpec, SolidSpec
-from .components.heat.simulation import HeatSimulation
-from .components.heat.data.sim_data import HeatSimulationData
-from .components.heat.data.monitor_data import TemperatureData
-from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
-from .components.heat.source import UniformHeatSource
-from .components.heat.monitor import TemperatureMonitor
-from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
+# device and heat
+from .components.device_spec import FluidSpec, SolidSpec, ConductorSpec, InsulatorSpec
+from .components.device.heat.simulation import HeatSimulation
+from .components.device.simulation import DeviceSimulation, DeviceSimulationType
+from .components.device.sim_data import HeatSimulationData, DeviceSimulationData
+from .components.device.monitor_data import TemperatureData, PotentialData
+from .components.device.boundary import (
+    TemperatureBC,
+    ConvectionBC,
+    HeatFluxBC,
+    HeatBoundarySpec,
+    DeviceBoundarySpec,
+    PotentialBC,
+    InsulatingBC,
+)
+from .components.device.source import UniformHeatSource, UniformChargeSource
+from .components.device.monitor import TemperatureMonitor, PotentialMonitor, DeviceMonitor
+from .components.device.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
 
 
 def set_logging_level(level: str) -> None:
@@ -312,17 +325,29 @@ __all__ = [
     "SimulationBoundary",
     "FluidSpec",
     "SolidSpec",
+    "ConductorSpec",
+    "InsulatorSpec",
     "HeatSimulation",
     "HeatSimulationData",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
     "HeatBoundarySpec",
+    "PotentialBC",
+    "InsulatingBC",
     "UniformHeatSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
+    "DeviceSimulation",
+    "DeviceSimulationType",
+    "DeviceSimulationData",
+    "PotentialData",
+    "DeviceBoundarySpec",
+    "UniformChargeSource",
+    "PotentialMonitor",
+    "DeviceMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
@@ -332,6 +357,7 @@ __all__ = [
     "IndexedDataArray",
     "TriangularGridDataset",
     "TetrahedralGridDataset",
+    "UnstructuredGridDataset",
     "medium_from_nk",
     "BenklerConformalMeshSpec",
     "StaircasingConformalMeshSpec",

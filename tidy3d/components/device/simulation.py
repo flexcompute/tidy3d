@@ -4,14 +4,15 @@ from __future__ import annotations
 from typing import Tuple, List, Dict
 from matplotlib import cm
 import numpy as np
+from enum import Enum
 
 import pydantic.v1 as pd
 
 from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
-from .boundary import HeatBoundarySpec
-from .source import HeatSourceType, UniformHeatSource
-from .monitor import HeatMonitorType
-from .grid import HeatGridType
+from .boundary import DeviceBoundarySpec
+from .source import DeviceSourceType, UniformHeatSource
+from .monitor import DeviceMonitorType
+from .grid import UnstructuredGridType
 from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
 from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
@@ -35,13 +36,18 @@ from ...constants import inf, VOLUMETRIC_HEAT_RATE
 
 from ...log import log
 
-HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
+DEVICE_BACK_STRUCTURE_STR = "<<<DEVICE_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
+DeviceSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
 
 
-class HeatSimulation(AbstractSimulation):
-    """Contains all information about heat simulation.
+class DeviceSimulationType(str, Enum):
+    HEAT = "HEAT"
+    CONDUCTOR = "CONDUCTOR"
+
+
+class DeviceSimulation(AbstractSimulation):
+    """Contains all information about device simulations.
 
     Example
     -------
@@ -73,27 +79,27 @@ class HeatSimulation(AbstractSimulation):
     ... )
     """
 
-    boundary_spec: Tuple[HeatBoundarySpec, ...] = pd.Field(
+    boundary_spec: Tuple[DeviceBoundarySpec, ...] = pd.Field(
         (),
         title="Boundary Condition Specifications",
         description="List of boundary condition specifications.",
     )
 
-    sources: Tuple[HeatSourceType, ...] = pd.Field(
+    sources: Tuple[DeviceSourceType, ...] = pd.Field(
         (),
-        title="Heat Sources",
-        description="List of heat sources.",
+        title="Device sources",
+        description="List of device sources.",
     )
 
-    monitors: Tuple[HeatMonitorType, ...] = pd.Field(
+    monitors: Tuple[DeviceMonitorType, ...] = pd.Field(
         (),
         title="Monitors",
         description="Monitors in the simulation.",
     )
 
-    grid_spec: HeatGridType = pd.Field(
+    grid_spec: UnstructuredGridType = pd.Field(
         title="Grid Specification",
-        description="Grid specification for heat simulation.",
+        description="Grid specification for device simulation.",
         discriminator=TYPE_TAG_STR,
     )
 
@@ -104,6 +110,17 @@ class HeatSimulation(AbstractSimulation):
         "bisecting the simulation domain normal to the x-, y-, and z-axis "
         "at the simulation center of each axis, respectively. "
         "Each element can be ``0`` (symmetry off) or ``1`` (symmetry on).",
+    )
+
+    simulation_type: DeviceSimulationType = pd.Field(
+        title="Simulation type",
+        description="Type of simulation. Current supported types are" " [HEAT, CONDUCTOR]",
+    )
+
+    is_electrostatic_equivalent: bool = pd.Field(
+        False,
+        title="is eletrostatic equivalent simulation",
+        description="TODO: add description",
     )
 
     @pd.validator("structures", always=True)
@@ -117,12 +134,12 @@ class HeatSimulation(AbstractSimulation):
             for geom in geometries:
                 if isinstance(geom, (GeometryGroup)):
                     raise SetupError(
-                        "'HeatSimulation' does not currently support recursive 'GeometryGroup's."
+                        "'DeviceSimulation' does not currently support recursive 'GeometryGroup's."
                     )
-                if not isinstance(geom, HeatSingleGeometryType):
-                    geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
+                if not isinstance(geom, DeviceSingleGeometryType):
+                    geom_names = [f"'{cl.__name__}'" for cl in DeviceSingleGeometryType]
                     raise SetupError(
-                        "'HeatSimulation' does not currently support geometries of type "
+                        "'DeviceSimulation' does not currently support geometries of type "
                         f"'{geom.type}'. Allowed geometries are "
                         f"{', '.join(geom_names)}, "
                         "and non-recursive 'GeometryGroup'."
@@ -144,7 +161,9 @@ class HeatSimulation(AbstractSimulation):
         num_zero_dims = np.sum(zero_dimensions)
 
         if num_zero_dims > 1:
-            mssg = f"Your current HeatSimulation has zero size along the {zero_dim_str}dimensions. "
+            mssg = (
+                f"Your current DeviceSimulation has zero size along the {zero_dim_str}dimensions. "
+            )
             mssg += "Only 2- and 3-D simulations are currently supported."
             raise SetupError(mssg)
 
@@ -199,7 +218,7 @@ class HeatSimulation(AbstractSimulation):
             if structure_name not in structures_names:
                 log.warning(
                     f"Structure '{structure_name}' listed as a non-refined structure in "
-                    "'HeatSimulation.grid_spec' is not present in 'HeatSimulation.structures'"
+                    "'DeviceSimulation.grid_spec' is not present in 'DeviceSimulation.structures'"
                 )
 
         return val
@@ -207,7 +226,7 @@ class HeatSimulation(AbstractSimulation):
     @pd.validator("sources", always=True)
     @skip_if_fields_missing(["structures"])
     def names_exist_sources(cls, val, values):
-        """Error if a heat source point to non-existing structures."""
+        """Error if a device source point to non-existing structures."""
         structures = values.get("structures")
         structures_names = {s.name for s in structures}
 
@@ -222,7 +241,7 @@ class HeatSimulation(AbstractSimulation):
 
     @equal_aspect
     @add_ax_if_none
-    def plot_heat_conductivity(
+    def plot_scene_specs(
         self,
         x: float = None,
         y: float = None,
@@ -231,7 +250,7 @@ class HeatSimulation(AbstractSimulation):
         alpha: float = None,
         source_alpha: float = None,
         monitor_alpha: float = None,
-        colorbar: str = "conductivity",
+        plot_type: str = "heat_conductivity",
         hlim: Tuple[float, float] = None,
         vlim: Tuple[float, float] = None,
     ) -> Ax:
@@ -254,9 +273,9 @@ class HeatSimulation(AbstractSimulation):
             Opacity of the sources. If ``None``, uses Tidy3d default.
         monitor_alpha : float = None
             Opacity of the monitors. If ``None``, uses Tidy3d default.
-        colorbar: str = "conductivity"
-            Display colorbar for thermal conductivity ("conductivity") or heat source rate
-            ("source").
+        plot_type : str = "heat_conductivity"
+            Specified the type of simulation for which the plot will be tailored.
+            Options are "heat_conductivity", "heat_source"
         hlim : Tuple[float, float] = None
             The x range if plotting on xy or xz planes, y range if plotting on yz plane.
         vlim : Tuple[float, float] = None
@@ -272,10 +291,22 @@ class HeatSimulation(AbstractSimulation):
             bounds=self.simulation_bounds, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
 
-        cbar_cond = colorbar == "conductivity"
+        cbar_cond = True
+        property_plot = "thermal_conductivity"
 
-        ax = self.scene.plot_heat_conductivity(
-            ax=ax, x=x, y=y, z=z, cbar=cbar_cond, alpha=alpha, hlim=hlim, vlim=vlim
+        if self.simulation_type == DeviceSimulationType.CONDUCTOR:
+            property_plot = "electric_conductivity"
+
+        ax = self.scene.plot_device_property(
+            ax=ax,
+            x=x,
+            y=y,
+            z=z,
+            cbar=cbar_cond,
+            alpha=alpha,
+            hlim=hlim,
+            vlim=vlim,
+            property=property_plot,
         )
         ax = self.plot_sources(ax=ax, x=x, y=y, z=z, alpha=source_alpha, hlim=hlim, vlim=vlim)
         ax = self.plot_monitors(ax=ax, x=x, y=y, z=z, alpha=monitor_alpha, hlim=hlim, vlim=vlim)
@@ -285,7 +316,7 @@ class HeatSimulation(AbstractSimulation):
         )
         ax = self.plot_symmetries(ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim)
 
-        if colorbar == "source":
+        if plot_type == "heat_source":
             self._add_heat_source_cbar(ax=ax)
         return ax
 
@@ -329,7 +360,7 @@ class HeatSimulation(AbstractSimulation):
         plane = Box(center=center, size=size)
 
         # get boundary conditions in the plane
-        boundaries = self._construct_heat_boundaries(
+        boundaries = self._construct_device_boundaries(
             structures=structures,
             plane=plane,
             boundary_spec=self.boundary_spec,
@@ -348,7 +379,7 @@ class HeatSimulation(AbstractSimulation):
 
         return ax
 
-    def _get_bc_plot_params(self, boundary_spec: HeatBoundarySpec) -> PlotParams:
+    def _get_bc_plot_params(self, boundary_spec: DeviceBoundarySpec) -> PlotParams:
         """Constructs the plot parameters for given boundary conditions."""
 
         plot_params = plot_params_heat_bc
@@ -364,7 +395,7 @@ class HeatSimulation(AbstractSimulation):
         return plot_params
 
     def _plot_boundary_condition(
-        self, shape: Shapely, boundary_spec: HeatBoundarySpec, ax: Ax
+        self, shape: Shapely, boundary_spec: DeviceBoundarySpec, ax: Ax
     ) -> Ax:
         """Plot a structure's cross section shape for a given boundary condition."""
         plot_params_bc = self._get_bc_plot_params(boundary_spec=boundary_spec)
@@ -373,8 +404,8 @@ class HeatSimulation(AbstractSimulation):
 
     @staticmethod
     def _structure_to_bc_spec_map(
-        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[HeatBoundarySpec, ...]
-    ) -> Dict[str, HeatBoundarySpec]:
+        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[DeviceBoundarySpec, ...]
+    ) -> Dict[str, DeviceBoundarySpec]:
         """Construct structure name to bc spec inverse mapping. One structure may correspond to
         multiple boundary conditions."""
 
@@ -401,14 +432,14 @@ class HeatSimulation(AbstractSimulation):
                             struct_to_bc_spec[structure] = [bc_spec]
 
             if isinstance(bc_place, SimulationBoundary):
-                struct_to_bc_spec[HEAT_BACK_STRUCTURE_STR] = [bc_spec]
+                struct_to_bc_spec[DEVICE_BACK_STRUCTURE_STR] = [bc_spec]
 
         return struct_to_bc_spec
 
     @staticmethod
     def _medium_to_bc_spec_map(
-        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[HeatBoundarySpec, ...]
-    ) -> Dict[str, HeatBoundarySpec]:
+        plane: Box, structures: Tuple[Structure, ...], boundary_spec: Tuple[DeviceBoundarySpec, ...]
+    ) -> Dict[str, DeviceBoundarySpec]:
         """Construct medium name to bc spec inverse mapping. One medium may correspond to
         multiple boundary conditions."""
 
@@ -432,10 +463,10 @@ class HeatSimulation(AbstractSimulation):
     @staticmethod
     def _construct_forward_boundaries(
         shapes: Tuple[Tuple[str, str, Shapely, Tuple[float, float, float, float]], ...],
-        struct_to_bc_spec: Dict[str, HeatBoundarySpec],
-        med_to_bc_spec: Dict[str, HeatBoundarySpec],
+        struct_to_bc_spec: Dict[str, DeviceBoundarySpec],
+        med_to_bc_spec: Dict[str, DeviceBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[HeatBoundarySpec, Shapely], ...]:
+    ) -> Tuple[Tuple[DeviceBoundarySpec, Shapely], ...]:
         """Construct Simulation, StructureSimulation, Structure, and MediumMedium boundaries."""
 
         # forward foop to take care of Simulation, StructureSimulation, Structure,
@@ -524,9 +555,9 @@ class HeatSimulation(AbstractSimulation):
     @staticmethod
     def _construct_reverse_boundaries(
         shapes: Tuple[Tuple[str, str, Shapely, Bound], ...],
-        struct_to_bc_spec: Dict[str, HeatBoundarySpec],
+        struct_to_bc_spec: Dict[str, DeviceBoundarySpec],
         background_structure_shape: Shapely,
-    ) -> Tuple[Tuple[HeatBoundarySpec, Shapely], ...]:
+    ) -> Tuple[Tuple[DeviceBoundarySpec, Shapely], ...]:
         """Construct StructureStructure boundaries."""
 
         # backward foop to take care of StructureStructure
@@ -590,11 +621,11 @@ class HeatSimulation(AbstractSimulation):
         return filtered_boundaries
 
     @staticmethod
-    def _construct_heat_boundaries(
+    def _construct_device_boundaries(
         structures: List[Structure],
         plane: Box,
-        boundary_spec: List[HeatBoundarySpec],
-    ) -> List[Tuple[HeatBoundarySpec, Shapely]]:
+        boundary_spec: List[DeviceBoundarySpec],
+    ) -> List[Tuple[DeviceBoundarySpec, Shapely]]:
         """Compute list of boundary lines to plot on plane.
 
         Parameters
@@ -625,12 +656,12 @@ class HeatSimulation(AbstractSimulation):
         background_structure_shape = shapes[0][2]
 
         # construct an inverse mapping structure -> bc for present structures
-        struct_to_bc_spec = HeatSimulation._structure_to_bc_spec_map(
+        struct_to_bc_spec = DeviceSimulation._structure_to_bc_spec_map(
             plane=plane, structures=structures, boundary_spec=boundary_spec
         )
 
         # construct an inverse mapping medium -> bc for present mediums
-        med_to_bc_spec = HeatSimulation._medium_to_bc_spec_map(
+        med_to_bc_spec = DeviceSimulation._medium_to_bc_spec_map(
             plane=plane, structures=structures, boundary_spec=boundary_spec
         )
 
@@ -638,7 +669,7 @@ class HeatSimulation(AbstractSimulation):
 
         # 1. forward foop to take care of Simulation, StructureSimulation, Structure,
         # and MediumMediums
-        boundaries = HeatSimulation._construct_forward_boundaries(
+        boundaries = DeviceSimulation._construct_forward_boundaries(
             shapes=shapes,
             struct_to_bc_spec=struct_to_bc_spec,
             med_to_bc_spec=med_to_bc_spec,
@@ -646,7 +677,7 @@ class HeatSimulation(AbstractSimulation):
         )
 
         # 2. reverse loop: construct structure-structure boundary
-        struct_struct_boundaries = HeatSimulation._construct_reverse_boundaries(
+        struct_struct_boundaries = DeviceSimulation._construct_reverse_boundaries(
             shapes=shapes,
             struct_to_bc_spec=struct_to_bc_spec,
             background_structure_shape=background_structure_shape,
@@ -763,7 +794,7 @@ class HeatSimulation(AbstractSimulation):
 
     def _get_structure_source_plot_params(
         self,
-        source: HeatSourceType,
+        source: DeviceSourceType,
         source_min: float,
         source_max: float,
         alpha: float = None,
@@ -787,7 +818,7 @@ class HeatSimulation(AbstractSimulation):
 
     def _plot_shape_structure_source(
         self,
-        source: HeatSourceType,
+        source: DeviceSourceType,
         shape: Shapely,
         source_min: float,
         source_max: float,
@@ -805,9 +836,9 @@ class HeatSimulation(AbstractSimulation):
         return ax
 
     @classmethod
-    def from_scene(cls, scene: Scene, **kwargs) -> HeatSimulation:
+    def from_scene(cls, scene: Scene, **kwargs) -> DeviceSimulation:
         """Create a simulation from a :class:.`Scene` instance. Must provide additional parameters
-        to define a valid simulation (for example, ``size``, ``grid_spec``, etc).
+        to define a valid simulation (for example, ``size``, ``grid_spec``, ``simulation_type``, etc).
 
         Parameters
         ----------
@@ -827,7 +858,7 @@ class HeatSimulation(AbstractSimulation):
         ...     structures=[box],
         ...     medium=Medium(permittivity=3),
         ... )
-        >>> sim = HeatSimulation.from_scene(
+        >>> sim = DeviceSimulation.from_scene(
         ...     scene=scene,
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),
