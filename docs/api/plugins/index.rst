@@ -12,6 +12,7 @@ Plugins
     adjoint
     waveguide
     design
+    microwave
 
 
 .. include:: /api/plugins/mode_solver.rst
@@ -22,3 +23,4 @@ Plugins
 .. include:: /api/plugins/adjoint.rst
 .. include:: /api/plugins/waveguide.rst
 .. include:: /api/plugins/design.rst
+.. include:: /api/plugins/microwave.rst

@@ -46,6 +46,19 @@ from ..log import log
 MIN_FREQUENCY = 1e5
 
 
+def assert_line():
+    """makes sure a field's ``size`` attribute has exactly 2 zeros"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_line(cls, val):
+        """Raise validation error if not 1 dimensional."""
+        if val.count(0.0) != 2:
+            raise ValidationError(f"'{cls.__name__}' object must be a line, given size={val}")
+        return val
+
+    return is_line
+
+
 def assert_plane():
     """makes sure a field's ``size`` attribute has exactly 1 zero"""
 
