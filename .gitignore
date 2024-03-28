@@ -80,6 +80,9 @@ pip-log.txt
 .dmypy.json
 .mypy_cache/
 
+# pickle files
+*.pkl
+
 # PyInstaller
 *.manifest
 *.spec
