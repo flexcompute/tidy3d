@@ -218,26 +218,30 @@ def test_invdes_output_monitor_names(use_emulated_run):
 def test_invdes_mesh_override():
     """Test all edge cases of mesh override structure in the ``JaxSimulation``."""
 
+    region = make_design_region()
     invdes = make_invdes()
     params = invdes.design_region.params_random
 
     # if ``override_structure_dl`` left of ``None`` (default), use an override structure
     # defined by the design region, with a ``dl`` corresponding to the ``pixel_size``.
-    invdes = invdes.updated_copy(override_structure_dl=None)
+    region = region.updated_copy(override_structure_dl=None)
+    invdes = invdes.updated_copy(design_region=region)
     sim = invdes.to_simulation(params)
     sim_override_structure = sim.grid_spec.override_structures[-1]
-    region_override_structure = invdes.design_region.to_mesh_override_structure()
+    region_override_structure = invdes.design_region.mesh_override_structure
     assert sim_override_structure == region_override_structure
     assert all(dl == invdes.design_region.pixel_size for dl in sim_override_structure.dl)
 
     # if ``override_structure_dl`` set to ``False``, should be no override structure
-    invdes = invdes.updated_copy(override_structure_dl=False)
+    region = region.updated_copy(override_structure_dl=False)
+    invdes = invdes.updated_copy(design_region=region)
     sim = invdes.to_simulation(params)
     assert not sim.grid_spec.override_structures
 
     # if ``override_structure_dl`` set directly, ensure the override structure has this value
     dl = 0.1234
-    invdes = invdes.updated_copy(override_structure_dl=dl)
+    region = region.updated_copy(override_structure_dl=dl)
+    invdes = invdes.updated_copy(design_region=region)
     sim = invdes.to_simulation(params)
     assert sim.grid_spec.override_structures[-1].dl == (dl, dl, dl)
 
@@ -274,9 +278,6 @@ def test_invdes_multi_same_length():
 
     output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
-
-    override_structure_dl = [(0.1, False, None)[i % 3] for i in range(n)]
-    invdes = invdes.updated_copy(override_structure_dl=override_structure_dl)
 
     ds = invdes.designs
 
