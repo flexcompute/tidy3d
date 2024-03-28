@@ -1,298 +1,545 @@
 # Inverse Design Plugin
 
+![FlowInvdes](../../../docs/source/_static/img/invdes.png)
 
-## Introduction
+This describes the "Inverse Design" (`invdes`) plugin of Tidy3D.
 
-The inverse design plugin (`invdes`) is a wrapper that makes it simpler to set up and run inverse design in `tidy3d`. This plugin allows for high level specification of an inverse design. This specification then gets compiled into code written using the `adjoint` plugin. The `adjoint` plugin can still be used, but `invdes` is sufficient for most practical problems where that level of granularity is not desired and can sometimes even slow down development.
+The goal of `invdes` is to provide a simpler interface for setting up most practical inverse design problems. It wraps the lower-level `adjoint` plugin of Tidy3D to perform the gradient calculations, but allows the user to focus on the important aspects of their design without getting into the details of `jax`.
 
-In the coming months, we will develop a graphical user interface (GUI) version of the `invdes` plugin, which will make it simple to set up and run inverse design plugins from our web-based GUI using a similar framework as that outlined here.
+In this notebook, we'll give a simple demo showing the inverse design of a 1 -> 3 splitter using the inverse design plugin.
 
-## Workflow
-
-First, let's discuss the general workflow of `InverseDesign` plugin. For reference, the following image describes setting up an running an inverse design from left to right.
-
-![FlowInvdes](../../../docs/source/_static/img/InvdesFlow.png)
-
-### Importing the Plugin
-
-The plugin is imported from `tidy3d.plugins.invdes` and we conventionally import this `as tdi`. So the following will assume a `tdi.` namespace for `invdes` components, a `td.` namespace for regular `tidy3d` components, and `tda.` for `adjoint` components.
-
-### Components
-
-An inverse design project is defined within the `tdi.InverseDesign` object. This object contains the following fields
-
-#### simulation
-
-A `td.Simulation` describing the simulation before any of the optimization objects are added. This is sometimes referred to as the "base" simulation in our existing tutorial notebooks. You can think of if as the "static" component of our simulation.
-
-#### design region
-
-A `tdi.DesignRegion` component is introduced in the `invdes` package to describe the region that is being updated over the course of the optimization. For now, only topology optimization (pixel-based permittivity grid) is supported, but we plan to add shape and level-set design regions soon.
-
-This `tdi.DesignRegion` can be thought of as a convenient way to generate a `td.Structure` when passed some optimization parameters. More specifically, in the background, it gets converted to a `tda.JaxStructureStaticGeometry`, which contains a `tda.JaxCustomMedium`. 
-
-The `tdi.DesignRegion` contains fields that capture the geometric information (`center`, `size`), as well as some of the higher level description of the permittivity grid, such as the number of pixels in each dimension and the permittivity min and max bounds.
-
-As in many of our demos, there are often several steps involved in converting an array of optimization parameters into an array of relative permittivity values for the custom medium. In the `invdes` package, we provide a set of "transformations" that wrap those in the `tidy3d.plugins.adjoint.utils`. For topology optimization, we support `tdi.BinaryProjector`, `tdi.ConcicFilter`, and `tdi.CircularFilter`. These are similar to their equivalent components in `adjoint`, except some of the lower level fields, such as the `design_region_dl` are automatically set by the `invdes` plugin. When these components are added to the `DesignRegion.tranformations` `tuple`, they are implicitly `.evaluate`d on the parameters from beginning to end, specifying the full transformation from optimization parameters to relative permittivity.
-
-Similarly, we support the addition of `.penalties` to the `td.DesignRegion`. For topology optimization, there is a `tdi.ErosionDilationPenalty` that works like the `adjoint` equivalent but sets the `pixel_size` automatically. If several penalties are added, their contributions to the objective function will be summed, with an optional weight as set by the corresponding `tdi.DesignRegion.penalty_weights` list.
-
-> Internal Note: i worked a bit on getting user-defined transformations and penalties by exposing a base class. But it's a little strange with pydantic. but this might be a feature.
-
-#### output monitors
-
-Next, like in the `adjoint` plugin, we need to specify a set of output monitors which our objective function will depend on. We pass these monitors directly to the `tdi.DesignRegion.output_monitors` field.
-
-> Internal Note: maybe it makes sense to put the monitors in `DesignRegion.simulation` and just make `tdi.output_monitors` a `tuple` of `str` corresponding to the monitor names?
-
-
-#### optimizer
-
-Finally, we need to specify an `tdi.Optimizer`, which stores information about how we run the optimization procedure. For now, there is just a single optimizer which implements the "adam" method, similar to how it's done in our tutorial notebooks. The `Optimizer` is passed information about the step size, number of steps, as well as the optimizer parameters.
-
-> Internal Note: The `tdi.Optimizer` is not really necessary as it stands with just a single option, but it is nice for it to be separated for later if we do introduce different optimizers.
-
-#### inverse design
-
-All of these components get put into a single `tdi.InverseDesign` object, which acts as a container with some methods that let you run this inverse design problem. Note that there are some parallels to the `tidy3d.plugins.design` plugin which has a `tdd.Design` object that serves a similar purpose.
-
-### running the inverse design
-
-Now that we've set up our `tdi.InverseDesign`, we want to run it.
-
-#### post-processing function
-
-To fully define our objective function, we need to construct a "post-processing function". This regular python function accepts a `tda.JaxSimulationData` as an argument (corresponding to the result of running the `tda.JaxSimulation` generated by the `tdi.InverseDesign`) and should return a `float` indicating the contribution to the objective function from analyzing the `tidy3d` simulation results.
-
-> Note: the convention we use is for the optimizer to **maximize** this value.
-
-The full objective function we feed to the optimizer is the result of this post-processing function minus the values computed from the `tdi.DesignRegion.penalties`.
-
-> Internal Note: I was considering writing a new set of components that try to capture the possible post-processing of monitors. For example, grab monitor by name, grab it's dataset (eg. `.amps`), `sel` various elements, and then apply a series of operations (`Abs`, `Square`). Then we could specify the postprocessing function as a list of these. I wonder if this is general enough though. For example, what if I want to grab the power of 2 amplitudes and weigh them by some custom amount depending on the step number? 
-
-#### run API
-
-Finally, we can call `
+We first import our main packages, note that we will import the `invdes` plugin as `tdi` to make it easy to access.
 
 ```py
-res = InverseDesign.run(f_pp, task_name="inverse_design", ...)`
-```
-
-passing our postprocessing function `f_pp` and any keyword arguments to `tda.web.run()`. This will construct an objective function that generates the `JaxSimulation` given some design parameters, runs the simulation through `tda.web.run()` call, and then performs the post-processing of the result using the post-processing function and any penalties. After this function is generated, we use it in a regular gradient-descent optimization loop using `optax`, similar to how it's done in our `adjoint` plugin tutorial notebooks. Information about the optimization is optionally printed to STDOUT and a user can pass a callback function to customize the output.
-
-The returned `res` object is a `tdi.OptimizerResult`, which is a container storing the history of the optimization, including the `optax` optimization states. This object provides several convenience methods for plotting and grabbing data.
-
-If the user runs an optimization and then wants to continue the process, they can call
-
-```py
-InverseDesign.continue_run(res, f_pp)
-```
-
-, passing the `InverseDesignResult`. It will then pick up where it was before using the history stored in `res`.
-
-## API example
-
-For an overview of the entire API, below is an example, copied and modified from the `test_invdes.py` test.
-
-```py
+import matplotlib.pylab as plt
 import numpy as np
-import jax.numpy as jnp
 
 import tidy3d as td
-import tidy3d.plugins.adjoint as tda
 import tidy3d.plugins.invdes as tdi
-import matplotlib.pyplot as plt
+```
 
-FREQ0 = 1e14
-L_SIM = 2.0
-MNT_NAME = "mnt_name"
-PARAMS_SHAPE = (18, 19, 20)
-PARAMS_0 = np.random.random(PARAMS_SHAPE)
+## Setting Up the Inverse Design problem
+
+The `invdes` problem works by constructing an `InverseDesign` object that contains all of the information about the problem we wish to optimize. This includes some base information about the simulation itself, information about the design region, and which monitors our objective will depend on. We then run the `InverseDesign` object using an `Optimizer`, which returns an object that can be analyzed or used to continue the optimization, as needed.
+
+In the next few sections we will define all of the components we need to make an `InverseDesign`, but to start we will define some global parameters.
+
+```
+       |---------|===== ->
+       |         |
+-> ====+         |===== ->
+       |         |
+       |---------|===== ->
+```
+
+```py
+# source info
+wavelength = 1.0
+
+# waveguide parameters
+num_output_waveguides = 3
+ly_wg = 0.5 * wavelength
+buffer_wg = 0.9 * wavelength
+
+# buffer between design region, pml, and sources
+buffer = 1 * wavelength
+
+# relative permittivity of material
+eps_mat = 4.0
+
+# resolution (for both the FDTD simulation and for the design region)
+min_steps_per_wvl = 20
+pixel_size = wavelength / min_steps_per_wvl / np.sqrt(eps_mat)
+
+```
+
+Next we define some quantities derived from these parameters.
+
+```py
+
+# spectral information
+freq0 = td.C_0 / wavelength
+fwidth = freq0 / 10
+run_time = 50 / fwidth
+
+# design region size in y
+ly_des = num_output_waveguides * (ly_wg + buffer_wg)
+lx_des = 4 * wavelength
+
+# simulation size
+Lx = 2 * buffer + lx_des + 2 * buffer
+Ly = buffer + ly_des + buffer
+
+# source and monitor locations
+x_src = -lx_des/2 - buffer
+x_mnt = -x_src
+
+# material Medium
+medium = td.Medium(permittivity=eps_mat)
+
+# grid spec
+grid_spec = td.GridSpec.auto(wavelength=wavelength, min_steps_per_wvl=min_steps_per_wvl)
+
+# monitor names
+def output_monitor_name(i: int) -> str:
+    return f"MNT_{i}"
+
+field_mnt_name = "field"
+
+# mode spec
+mode_spec = td.ModeSpec(num_modes=1)
+
+```
+
+### Define Base Simulation
+
+Next we want to define the base `td.Simulation` that contains the static portions of our inverse design problem.
+
+For this, we will make a bunch of regular `tidy3d` components (excluding the design region) and put them into a `td.Simulation`.
+
+> Note: we don't need to use `adjoint` components, such as `tda.JaxSimulation` in the `invdes` plugin. These components are created behind the scenes by the higher level wrappers that we define here.
+
+```py
+
+waveguide_in = td.Structure(
+    geometry=td.Box(
+        size=(Lx, ly_wg, td.inf),
+        center=(-Lx + 2 * buffer, 0, 0),
+    ),
+    medium=medium,
+)
+
+y_max_wg_centers = ly_des / 2 - buffer_wg / 2 - ly_wg / 2
+wg_y_centers_out = np.linspace(-y_max_wg_centers, y_max_wg_centers, num_output_waveguides)
+
+# put a waveguide and mode monitor at each of the outputs
+waveguides_out = []
+monitors_out = []
+for i, wg_y_center in enumerate(wg_y_centers_out):
+
+    wg_out = td.Structure(
+        geometry=td.Box(
+            size=(Lx, ly_wg, td.inf),
+            center=(Lx - 2 * buffer, wg_y_center, 0),
+        ),
+        medium=medium,
+    )
+
+    waveguides_out.append(wg_out)
+
+    mnt_out = td.ModeMonitor(
+        size=(0, ly_wg + 1.8 * buffer_wg, td.inf),
+        center=(x_mnt, wg_y_center, 0),
+        freqs=[freq0],
+        name=output_monitor_name(i),
+        mode_spec=mode_spec,
+    )
+
+    monitors_out.append(mnt_out)
+
+source = td.ModeSource(
+    size=(0, ly_wg + 1.8 * buffer_wg, td.inf),
+    center=(x_src, 0, 0),
+    source_time=td.GaussianPulse(freq0=freq0, fwidth=fwidth),
+    mode_index=0,
+    direction="+",
+)
+
+# used to visualize fields in the plane, not for optimization
+fld_mnt = td.FieldMonitor(
+    center=(0,0,0),
+    size=(td.inf, td.inf, 0),
+    freqs=[freq0],
+    name=field_mnt_name,
+)
 
 simulation = td.Simulation(
-    size=(L_SIM, L_SIM, L_SIM),
-    grid_spec=td.GridSpec.auto(wavelength=td.C_0 / FREQ0),
-    sources=[
-        td.PointDipole(
-            center=(0, 0, 0),
-            source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
-            polarization="Ez",
-        )
-    ],
-    run_time=1e-12,
+    size=(Lx, Ly, 0),
+    grid_spec=grid_spec,
+    boundary_spec=td.BoundarySpec.pml(x=True, y=True, z=False),
+    run_time=run_time,
+    structures=[waveguide_in] + waveguides_out,
+    sources=[source],
+    monitors=[fld_mnt] + monitors_out,
 )
+```
 
-mnt = td.FieldMonitor(
-    center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME
-)
+### Define the Design Region
 
-"""make a design region and call some of its methods."""
+Next, we will introduce the `DesignRegion` component of the `invdes` plugin. This component contains fields that describe the design region and how it is rendered into a `td.Structure` as a function of the optimization design parameters.
+
+For now, we only support "topology optimization" design structures (pixellated permittivity grids) through a `TopologyDesignRegion`, but in future versions we will introduce shape and level-set design regions.
+
+The `TopologyDesignRegion` combines geometric information (size, center) about the design region with some information describing the pixellated grid. Furthermore, it also accepts a list of transformations and penalties, which respectively determine how the permittivity is rendered and how the optimization will penalize various expressions of the design region. We will explore each of the features below.
+
+#### Discretization
+
+The `TopologyDesignRegion` contains a `pixel_size` parameter, which sets the resolution of the permittivity grid and also determines the shape of the parameter array.
+
+The `pixel_size` is also passed to the various penalties and transformations to allow them to work properly with the design region.
+
+If not specified in a later step, this `pixel_size` will be used to set the FDTD grid size of the structure in the final `Simulation`. It is therefore a good idea to either set it to a low value (about equal to the simulation grid cell size) or manually set the mesh override structure resolution in the `TopologyDesignRegion.mesh_override_dl` field to overwrite it.
+
+#### Transformations
+The `TopologyDesignRegion.transformations` are specifications that tell the design region how to transform the supplied optimization parameters into a "material density" that is used to construct the permittivity grid. For example, a `FilterProject` transformation applies a conic filter convolution followed by a hyperbolic tangent function projection. If multiple transformations are added to the design region, they will be evaluated one by one, from beginning to end, on the optimization parameters.
+
+#### Penalties
+The `TopologyDesignRegion.penalties` are specifications that tell the optimizer how to penalize the material density corresponding to this design region. For example, an `ErosionDilation` penalty will look at the material density of the region (state of the parameters after all transformations have completed) and evaluate it based on whether the material density is invariant under erosion and dilation, a good proxy for feature size compatibility. Penalties have a `.weight` that can be used to tune their relative contribution to the objective. The total penalty contribution to the objective function is the weighted sum of penalties added to the design region.
+
+> Note: the convention used is that we wish to **maximize** our objective function. Penalties **subtract** from the objective. Therefore, a positive penalty `weight` corresponds to a negative contribution to the objective function.
+
+```py
+# transformations on the parameters that lead to the material density array (0,1)
+filter_project = tdi.FilterProject(radius=0.120, beta=10.0)
+
+# penalties applied to the state of the material density, after these transformations are applied
+penalty = tdi.ErosionDilationPenalty(weight=0.8, length_scale=0.120)
+
 design_region = tdi.TopologyDesignRegion(
-    size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
-    center=(0, 0, 0),
-    eps_bounds=(1.0, 4.0),
-    symmetry=(0, 1, -1),
-    params_shape=PARAMS_SHAPE,
-    transformations=[
-        tdi.CircularFilter(radius=0.2, design_region_dl=0.1),
-        tdi.BinaryProjector(beta=2.0, vmin=0.0, vmax=1.0),
-        tdi.ConicFilter(radius=0.2, design_region_dl=0.1),
-    ],
-    penalties=[
-        tdi.ErosionDilationPenalty(length_scale=0.2, pixel_size=0.1),
-    ],
-    penalty_weights=[0.2],
-)
+        size=(lx_des, ly_des, td.inf),
+        center=(0, 0, 0),
+        eps_bounds=(1.0, eps_mat), # the minimum and maximum permittivity values in the final grid
+        transformations=[filter_project],
+        penalties=[penalty],
+        pixel_size=pixel_size,
+    )
+```
 
-design_region.material_density(PARAMS_0)
-design_region.penalty_value(PARAMS_0)
+### Getting parameter arrays
 
-"""make an inverse design"""
+When optimizing, we will update an array of design parameters. Therefore, the `DesignRegion` accepts an array of these parameters when being converted to tidy3d `Structure` objects or when evaluating penalties or the material density values.
+
+The shape of this array is automatically determined by the geometric parameters and `pixel_size` of the `TopologyDesignRegion`. This shape can be accessed as a `tuple` from `design_region.params_shape`.
+
+To make it convenient to initialize parameter arrays of the proper shape, there are a few properties of the `TopologyDesignRegion` instance:
+
+* `TopologyDesignRegion.params_random` (creates an array uniformly sampled at random between 0 and 1)
+
+* `TopologyDesignRegion.params_ones` (creates an array of all 1)
+
+* `TopologyDesignRegion.params_zeros` (creates an array of all 0)
+
+These properties can be combined together to conveniently set up your parameter array, for example:
+
+```py
+params0 = design_region.params_random
+params0 += np.fliplr(params0)
+params0 /= 2
+print(params0.shape)
+
+```
+
+Given an array of parameter values, this `TopologyDesignRegion` object can be exported to a `JaxStructureStaticGeometry` from the `adjoint` plugin.
+
+Here's an example using the `params0` array we just defined.
+
+```py
+jax_structure = design_region.to_jax_structure(params0)
+```
+
+### Post-Process Function
+
+The next step of this process is to define a post-processing function, which tells our optimizer how we want it to interpret a `SimulationData` that corresponds to this design. We write this as a regular python function that takes a `tda.JaxSimulationData` as first argument. The function can accept optional keyword arguments involving the optimization history for more control over the objective function.
+
+> Reminder that the objective function will be **maximized** by our objective, minus any penalty values from the `DesignRegion`. So the sign of this function should take this into account.
+
+In this example, we will try to maximize the minimum power in each of the three output waveguides. This is to ensure that we get an even distribution of power and no ports are ignored.
+
+First we will grab the power at each of the waveguides from the `JaxSimulationData`. Then, we'll pass the negative of each power to `jax.nn.softmax()` to get a differentiable set of normalized weights for each of the ports, with more weight on the smallest values. We'll take the dot product of our powers with these weights and try to maximize this. Normalizing so that a "perfect" splitter gives a value of 1.
+
+> Note: there are some utility functions included in the `tdi` namespace that can make postprocessing a bit easier. Such as `.get_amps(sim_data, monitor_name, **sel_kwargs)`, and `sum_abs_squared(arr)`. We'll demonstrate both these in the function, along with the (commented out) equivalent approach using `jax`.
+
+> Note: If doing more complex operations in the postprocess function, be sure to use `jax.numpy` instead of regular `numpy` to ensure that the function is differentiable by `jax`.
+
+```py
+import jax.numpy as jnp
+import tidy3d.plugins.adjoint as tda
+import jax
+
+def post_process_fn(sim_data: tda.JaxSimulationData, step_index:int, history: dict) -> float:
+    ```Function called internally to compute contribution to the objective function from the data.```
+
+    amps = [tdi.get_amps(sim_data, monitor_name=mnt.name, direction="+") for mnt in monitors_out]
+    powers = [tdi.sum_abs_squared(amp) for amp in amps]
+
+    # # or, when written in more low-level syntax
+    # amps = [sim_data[mnt.name].amps.sel(direction="+") for mnt in monitors_out]
+    # powers = [jnp.sum(abs(jnp.array(amp.values))**2) for amp in amps]
+
+    powers = jnp.array(powers)
+    softmin_weights = jax.nn.softmax(-powers)
+    return num_output_waveguides * jnp.sum(jnp.array(powers) * softmin_weights)
+
+```
+> Note: the extra `**kwargs` contain information passed during optimization about the history and the index of the step. They can be used to schedule changes into the post processing function as a function of the optimization state.
+
+## Inverse Design object
+
+Next, we put the design region, simulation, and post-processing function together into an `InverseDesign` object, which captures everything we need to define our inverse design problem before running it.
+
+```py
 design = tdi.InverseDesign(
     simulation=simulation,
-    design_region=test_design_region(),
-    output_monitors=[mnt],
-    params0=np.random.random(PARAMS_SHAPE).tolist(),
-    results_cache_fname="tests/data/invdes_history.pkl",
+    design_region=design_region,
+    post_process_fn=post_process_fn,
+    task_name="invdes",
+    output_monitor_names=[mnt.name for mnt in monitors_out],
+)
+```
+> Note: the `output_monitor_names` field is used to specify which monitors to use in the objective function. If they are not supplied, `invdes` will automatically include all compatible monitors, but at times these can raise warnings in the `adjoint` plugin, so it can be nice to specify.
+
+The `InverseDesign` object can be exported to a `td.Simulation` given some parameters using the `to_simulation(params)` method.
+
+Let's do this with a set of parameters all at 0.5 as it's a better starting point for this specific problem.
+
+```py
+
+params0 = 0.5 * np.ones_like(params0)
+```
+It can be useful to run the initial problem to ensure it looks correct before optimizing. For conveniencen, the `to_simulation_data()` method generates the simulation and runs it through `web.run()` to return the `SimulationData`, which can be visualized.```
+
+```py
+sim_data = design.to_simulation_data(params=params0, task_name="inspect")
+
+ax = sim_data.plot_field(field_mnt_name, field_name="E", val="abs^2")
+```
+
+## Optimization
+
+Now that we've constructed our `InverseDesign` object, we can optimize it with gradient ascent. We will create an `Optimizer` object to contain all of the parameters that the optimization algorithm will need. This object also provides a few different methods to perform the optimization in different circumstances.
+
+> Note: For now, we only support the "Adam" optimization method (`AdamOptimizer`), but will implement other algorithms as needed later. Adam tends to work quite well for most applications.
+
+### Optimizer
+
+The optimizer accepts our `InverseDesign`, as well as various optimization parameters, such as the number of steps and learning rate, and parameters specific to the algorithm being implemented.
+
+The `results_cache_fname` is an optional, but very useful argument that will tell the optimizer to save the optimization state to file at each iteration using `pickle`. It is good practice to include it in case the optimization gets stalled, which can happen in case of a bad internet connection, for example.
+
+In a later section, we'll show how to conveniently load results from this file.
+
+```py
+optimizer = tdi.AdamOptimizer(
+    design=design,
+    num_steps=12,
+    learning_rate=0.3,
+    results_cache_fname="data/invdes_history.pkl",
 )
 
-"""Define the post processing function."""
-def post_process_fn(sim_data: tda.JaxSimulationData, scale: float = 2.0) -> float:
-    """Define a postprocessing function"""
-    intensity = sim_data.get_intensity(MNT_NAME)
-    return scale * jnp.sum(intensity.values)
+```
+### Running the optimization
 
-"""Make an optimizer"""
-optimizer = tdi.Optimizer(
-    params0=PARAMS_0,
-    learning_rate=0.2,
+Finally, we can use `result = Optimizer.run(params0)` on our initial parameters to run the inverse design problem.
+
+This will construct our combined objective funciton behind the scenes, including the penalties and our post-processing function, use `jax` to differentiate it, and feed it to a gradient-descent optimizer from the `optax` package.
+
+```py
+
+result = optimizer.run(params0)
+
+```
+## Optimization Results
+
+The result of an optimization run is stored as an `InverseDesignResult` object. This object has various fields storing information about the history of the optimization run, including the optimizer states, as well as a copy of the initial `InverseDesign` object.
+
+### Loading an optimization result from backup file
+If your optimization run was interrupted before you could get the `result` object. You can load if from the `optimizer.results_cache_fname`, if it was defined before. This file gets saved at every iteration with the most up to date `InverseDesignResult` so it should have the most up to date history.
+```py
+
+result = tdi.InverseDesignResult.from_file(optimizer.results_cache_fname)
+
+```
+
+### Continuing an optimization run
+
+To continue an optimization run from where it left off, you can use `Optimizer.continue_run(results)`, passing in the `InverseDesignResult`. As the `InverseDesignResult` stores the previous states of the `optax` optimizer, it can continue the optimization without loss of information. The return value of this method will be a new copy of the `InverseDesignResult` with the combined data.
+
+```py
+
+# change some optimization parameters, if desired, set new number of steps
+optimizer = optimizer.updated_copy(num_steps=3, learning_rate=0.1)
+
+# continue the run, passing in the latest result
+result = optimizer.continue_run(result=result)
+
+```
+> Note: A convenient way to continue an optimization in just one line is to use `Optimizer.continue_run_from_history()`. This method combines `.continue_run()` with the backup file in the `results_cache_fname` to continue a run from the history saved to disk.
+
+### Analyzing and Exporting Results
+
+The `InverseDesignResult` itself has a set of methods for analyzing results and exporting to various formats.
+
+#### Plotting history
+
+We can quickly view the optimization history, including the penalty and postprocessing function contributions.
+
+```py
+
+result.plot_optimization()
+_ = plt.gca().set_title('optimization history')
+
+```
+#### Grabbing history data
+
+`InverseDesignResult` objects maintain a `history` dictionary that stores the various parameters over the course of the optimization.
+
+They also have some methods to conveniently grab data from that history, as shown below:
+
+```py
+
+history_keys = result.keys
+history_penalty = result.history.get('penalty')
+final_objective = result.get_final("objective_fn_val")
+
+print(f"result contains '.history' for: {tuple(history_keys)}")
+print(f"penalty history: {history_penalty}")
+print(f"final objective function value: {final_objective}")
+
+```
+
+Finally, we are able to quickly grab the final `Simulation` and `SimulationData` from the results, making it easy to plot final devices, field patterns, or export to GDS file.
+
+```py
+
+sim_final = result.sim_final
+ax = sim_final.plot_eps(z=0, monitor_alpha=0.0, source_alpha=0.0)
+
+sim_data_final = result.sim_data_final(task_name="final_validation")
+
+ax = sim_data_final.plot_field(field_mnt_name, field_name="E", val="abs")
+
+```
+
+#### Exporting to GDS
+
+Use the regular GDS export functions defined in the `sim_final` to easily export to GDS.
+
+```py
+
+sim_final.to_gds_file(
+    fname="./misc/inv_des_demo.gds",
+    z=0,
+    frequency=freq0,
+    permittivity_threshold=2.5
+)
+
+```
+
+## Multi-Simulation Objectives
+
+In many cases, one would like to perform an optimization with more than one base simulation. For example, if optimizing a multi-port device, it is very common to have objective functions that share a single design region, but each simulation involves a source placed at a different port, to compute a scattering matrix, for example.
+
+To handle this use-case, the `invdes` plugin includes an `InverseDesignMulti` class. This object behaves similarly to the `InverseDesign` class, except it allows for a set of multiple `Simulation` instances. Additionally, the `postprocess_fn` now accepts a list of `JaxSimulationData` objects as first argument, which allows the user to write an objective function over all simulation results.
+
+Here we'll run through a simple example, where we'll place a source at each of the 3 waveguides on the right (each in a different simulation) and then measure the sum of the power measured on the waveguide on the left. Note that this objective function is similar to the one we optimized earlier, but involves three separate simulations, just for demonstration purposes.
+
+First, we'll switch up our sources and mode monitors.
+
+```py
+
+mnt_name_left = "mode"
+
+mnt_left = td.ModeMonitor(
+    size=source.size,
+    center=source.center,
+    mode_spec=mode_spec,
+    name=mnt_name_left,
+    freqs=[freq0]
+)
+
+srcs_right = []
+
+for mnt in monitors_out:
+    src_right = source.updated_copy(
+        size=mnt.size,
+        center=mnt.center,
+        direction="-",
+    )
+    srcs_right.append(src_right)
+
+```
+
+Make a simulation for each of the independent sources.
+
+```py
+
+simulations = [
+    simulation.updated_copy(sources=[src], monitors=[fld_mnt, mnt_left])
+    for src in srcs_right
+]
+
+f, axes = plt.subplots(1,3,figsize=(10,4), tight_layout=True)
+for ax, sim in zip(axes, simulations):
+    sim.plot_eps(z=0, ax=ax)
+plt.show()
+
+```
+
+We also need to construct a post-processing function that will tell the optmizer how to post process the data from each of the `simulations` into a single objective.
+
+```py
+
+def post_process_fn(sim_data_list: list, **kwargs) -> float:
+    ```Grab the power going left at the single waveguide monitor```
+    power_left = 0.0
+    for sim_data in sim_data_list:
+        amps = tdi.get_amps(sim_data, monitor_name=mnt_name_left, direction="-")
+        power = tdi.sum_abs_squared(amps)
+
+        # # or, when written in more low-level syntax
+        # amp = sim_data[mnt_name_left].amps.sel(direction="-")
+        # power = abs(jnp.sum(jnp.array(amp.values)))**2
+
+        power_left += power
+    return power_left
+
+```
+
+We'll also specify the output monitor names for each of the simulations, to keep unnecessary warnings from popping up.
+
+```py
+
+output_monitor_names = [[mnt_name_left], [mnt_name_left], [mnt_name_left]]
+
+```
+
+Finally, we combine everything into an `InverseDesignMulti` object.
+
+In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `JaxSimulationData` objects under the hood and use `tda.web.run_async` to run each of them in parallel.
+
+After the simulations are run, the combined post-processing function will be applied to the combined data to give the final value, minus any penalties in the shared `DesignRegion`.
+
+```py
+
+design_multi = tdi.InverseDesignMulti(
+    design_region=design_region,
+    simulations=simulations,
+    post_process_fn=post_process_fn,
+    task_name="invdes_multi",
+    output_monitor_names=output_monitor_names,
+)
+
+```
+
+To run this, let's make a new optimizer with this multi-design. We'll save the results to the same file as before.
+
+```py
+
+optimizer = tdi.AdamOptimizer(
+    design=design_multi,
+    results_cache_fname="data/invdes_history.pkl",
+    learning_rate=0.3,
     num_steps=3,
 )
 
-"""running the inverse design"""
-result = optimizer.run(design=design, post_process_fn=post_process_fn, task_name="blah")
-
-"""continuing an already run inverse design."""
-result_continued = optimizer.continue_run(result=result, post_process_fn=post_process_fn, task_name="blah")
-
-"""Grabbing information from a result and exporting."""
-final_params = result.params
-final_simulation = result.get_final("simulation")
-
-result.plot_optimization()
-
-gds_layer_dtype_map = {td.Medium(permittivity=4.0): (2, 1), td.Medium(): (1, 0)}
-result.to_gds_file("sim_final.gds", z=0, gds_layer_dtype_map=gds_layer_dtype_map)
-
-sim_data_final = result.sim_data_final(task_name="final")
 ```
 
-let me know if there's any feedback!
-
-
-## Notes / Testing ground
-
-
-### Packaging results
-
-#### Option 1: like `SimulationData`
+And use the `continue_run_from_history()` to pick up where we left off.
 
 ```py
-class InverseDesign:
-    pass
 
-class Result:
-    data : ...
-    design : InverseDesign
+results_multi = optimizer.continue_run_from_history()
 
-def run(design: InverseDesign) -> Result:
-    pass
+results_multi.plot_optimization()
 
 ```
-
-Pros:
-* `Result` has `InverseDesign` information
-
-Cons:
-* Need an external `run()` function.
-* Unnecessary coupling between design and result (what if not 1->1?)
-* What about a changing design? eg step size? which one goes in the result?
-
-#### Option 2: like `Design`
-
-```py
-class InverseDesign:
-    pass
-    
-    def run() -> Result:
-        pass
-
-class Result:
-    data : ...
-
-```
-
-#### Option 3: optimizer that captures running stuff.
-
-```py
-class InverseDesign:
-    pass
-
-class Result:
-    data: ...
-    design: InverseDesign
-
-class Optimizer:
-    num_steps : int
-
-    def run(design: InverseDesign) -> Result:
-        pass
-
-    def continue_run(result: Result) -> Result:
-        pass
-
-Pro:
-* Cleanest for continuing run
-* Reduces coupling
-
-Cons:
-* Still doesnt 100 handle changing design
-```
-Some use cases:
-
-### single run
-
-```py
-results = run(design)
-results = design.run()
-results = optimizer.run(design)
-```
-
-### continue running
-
-```py
-results = run_continue(design, results) <- X do we put both results in?
-results = design.continue_run(results)
-results = optimizer.continue_run(results) <- cleanest, re-use the design
-```
-
-### change the design and continue running
-
-```py
-ff
-```
-
-### plot the design with the results?
-
-```py
-ff
-```
-
-## Design QUestions
-* separate `optimizer` with a `.run(design) -> result`? 
-    seems like a good way to go
-* make `history` explicit in the result?
-    would be better
-* put penalties in optimizer?
-    probably not, penalties are more specific to the type of DesignRegion.
-
