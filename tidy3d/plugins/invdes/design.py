@@ -42,6 +42,12 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
+    def _add_verbosity_to_kwargs(self, **kwargs) -> dict:
+        """Add ``self.verbose`` to the ``kwargs`` passed to ``web`` functions."""
+        if "verbose" not in kwargs:
+            kwargs["verbose"] = self.verbose
+        return kwargs
+
 
 class InverseDesign(AbstractInverseDesign):
     """Container for an inverse design problem."""
@@ -177,7 +183,10 @@ class InverseDesign(AbstractInverseDesign):
     ) -> td.SimulationData:
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         sim = self.to_simulation(params=params)
-        sim_data = td.web.run(sim, task_name=task_name, verbose=self.verbose, **kwargs)
+
+        kwargs = self._add_verbosity_to_kwargs(**kwargs)
+
+        sim_data = td.web.run(sim, task_name=task_name, **kwargs)
         return sim_data
 
     @property
@@ -216,11 +225,12 @@ class InverseDesignMulti(AbstractInverseDesign):
         description="Set of simulation without the design regions or monitors used in the objective fn.",
     )
 
-    post_process_fns: typing.Tuple[PostProcessFnType, ...] = pd.Field(
+    post_process_fn: PostProcessFnType = pd.Field(
         ...,
         title="Post-Process Function",
-        description="Function of ``JaxSimulationData`` that returns a ``float`` contribution "
-        "to the objective function",
+        description="``list`` of ``JaxSimulationData`` instances corresponding to "
+        "each ``Simulation`` in ``.simulations``. "
+        "Should return a ``float`` contribution to the objective function.",
     )
 
     output_monitor_names: typing.Tuple[typing.Union[typing.Tuple[str, ...], None], ...] = pd.Field(
@@ -272,11 +282,11 @@ class InverseDesignMulti(AbstractInverseDesign):
         """List of individual ``InverseDesign`` objects corresponding to this instance."""
 
         designs_list = []
-        for i, (sim, post_process_fn) in enumerate(zip(self.simulations, self.post_process_fns)):
+        for i, sim in enumerate(self.simulations):
             des_i = InverseDesign(
                 design_region=self.design_region,
                 simulation=sim,
-                post_process_fn=post_process_fn,
+                post_process_fn=lambda *args, **kwargs: 0.0,
                 verbose=self.verbose,
                 task_name=self.task_name + "_{i}",
             )
@@ -303,11 +313,12 @@ class InverseDesignMulti(AbstractInverseDesign):
             jax_batch_data = tda.web.run_async(jax_sims, verbose=self.verbose)
 
             # compute objective function values and sum them
-            post_process_vals = []
-            for jax_sim_data, post_process_fn in zip(jax_batch_data, self.post_process_fns):
-                post_process_val = post_process_fn(jax_sim_data, **kwargs_postprocess)
-                post_process_vals.append(post_process_val)
-            post_process_val = jnp.sum(jnp.array(post_process_vals))
+            post_process_val = self.post_process_fn(jax_batch_data, **kwargs_postprocess)
+            # post_process_vals = []
+            # for jax_sim_data, post_process_fn in zip(jax_batch_data, self.post_process_fns):
+            #     post_process_val = post_process_fn(jax_sim_data, **kwargs_postprocess)
+            #     post_process_vals.append(post_process_val)
+            # post_process_val = jnp.sum(jnp.array(post_process_vals))
 
             # construct penalty value
             penalty_value = self.design_region.penalty_value(params)
@@ -319,7 +330,7 @@ class InverseDesignMulti(AbstractInverseDesign):
             aux_data = dict(
                 penalty=penalty_value,
                 post_process_val=post_process_val,
-                post_process_vals=post_process_vals,
+                # post_process_vals=post_process_vals,
             )
             return objective_fn_val, aux_data
 
@@ -330,17 +341,22 @@ class InverseDesignMulti(AbstractInverseDesign):
         return [design.to_simulation(params) for design in self.designs]
 
     def to_simulation_data(
-        self, params: jnp.ndarray, task_names: typing.List[str], **kwargs
-    ) -> td.web.BatchData:
-        """Convert the ``InverseDesign`` to a set of ``td.Simulation``s and run them async."""
-        designs = self.designs
-        if len(task_names) != len(designs):
-            raise ValueError(
-                f"Expected '{len(designs)}' task names for '{len(designs)}' simulations, got '{len(task_names)}'."
-            )
+        self, params: jnp.ndarray, task_name: str, **kwargs
+    ) -> typing.List[td.SimulationData]:
+        """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
+
+        def task_name(i: int) -> str:
+            """task name for the i-th task."""
+            return f"{task_name}_{str(i)}"
+
+        task_names = [task_name(i) for i in range(len(simulations))]
         sim_dict = dict(zip(task_names, simulations))
-        return td.web.run_async(sim_dict, **kwargs)
+
+        kwargs = self._add_verbosity_to_kwargs(**kwargs)
+
+        batch_data = td.web.run_async(sim_dict, **kwargs)
+        return [batch_data[tn] for tn in task_names]
 
 
 InverseDesignType = typing.Union[InverseDesign, InverseDesignMulti]
