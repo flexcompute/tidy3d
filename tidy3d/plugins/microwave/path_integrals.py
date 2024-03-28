@@ -4,28 +4,39 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 import numpy as np
-from typing import Tuple
-from ...components.data.dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset
-from ...components.data.data_array import AbstractSpatialDataArray
-from ...components.base import cached_property
+from abc import ABC, abstractmethod
+from typing import List, Tuple, Union
+
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+from ...components.data.data_array import (
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+)
+from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
+from ...components.base import cached_property, Tidy3dBaseModel
 from ...components.types import Axis, Direction
 from ...components.geometry.base import Box
 from ...components.validators import assert_line, assert_plane
-from ...exceptions import DataError
+from ...exceptions import Tidy3dError, DataError
+
+MonitorDataTypes = Union[FieldData, FieldTimeData, ModeSolverData]
+EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
+IntegralResultTypes = Union[FreqDataArray, FreqModeDataArray, TimeDataArray]
 
 
-class AbstractAxesRH:
+class AbstractAxesRH(Tidy3dBaseModel, ABC):
     """Represents an axis-aligned right-handed coordinate system with one axis preferred."""
 
     @cached_property
+    @abstractmethod
     def main_axis(self) -> Axis:
-        """Subclasses should implement this method."""
-        raise NotImplementedError()
+        """Get the preferred axis."""
 
     @cached_property
     def remaining_axes(self) -> Tuple[Axis, Axis]:
-        """Axes in plane, ordered to maintain a right-handed coordinate system"""
-        axes = [0, 1, 2]
+        """Get in-plane axes, ordered to maintain a right-handed coordinate system."""
+        axes: List[Axis] = [0, 1, 2]
         axes.pop(self.main_axis)
         if self.main_axis == 1:
             return (axes[1], axes[0])
@@ -34,29 +45,30 @@ class AbstractAxesRH:
 
 
 class AxisAlignedPathIntegral(AbstractAxesRH, Box):
-    """Class for defining the simplest type of path integral which is aligned with Cartesian axes."""
+    """Class for defining the simplest type of path integral, which is aligned with Cartesian axes."""
 
     _line_validator = assert_line()
 
     extrapolate_to_endpoints: bool = pd.Field(
         False,
-        title="Extrapolate to endpoints",
+        title="Extrapolate to Endpoints",
         description="If the endpoints of the path integral terminate at or near a material interface, "
-        "the field is likely discontinuous. This option ignores fields outside and on the bounds "
-        "of the integral. Should be turned on when computing voltage between two conductors. ",
+        "the field is likely discontinuous. When this field is ``True``, fields that are outside and on the bounds "
+        "of the integral are ignored. Should be enabled when computing voltage between two conductors.",
     )
 
     snap_path_to_grid: bool = pd.Field(
         False,
-        title="Snap path to grid",
+        title="Snap Path to Grid",
         description="It might be desireable to integrate exactly along the Yee grid associated with "
-        "a field. If enabled, the integration path will be snapped to the grid.",
+        "a field. When this field is ``True``, the integration path will be snapped to the grid.",
     )
 
-    def compute_integral(self, scalar_field: AbstractSpatialDataArray):
-        """Computes the defined integral given the input `scalar_field`."""
+    def compute_integral(self, scalar_field: EMScalarFieldType) -> IntegralResultTypes:
+        """Computes the defined integral given the input ``scalar_field``."""
+
         if not scalar_field.does_cover(self.bounds):
-            raise DataError("scalar field does not cover the integration domain")
+            raise DataError("Scalar field does not cover the integration domain.")
         coord = "xyz"[self.main_axis]
 
         scalar_field = self._get_field_along_path(scalar_field)
@@ -87,12 +99,17 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
         scalar_field = scalar_field.interp(
             coords_interp, method=method, kwargs={"fill_value": "extrapolate"}
         )
-        return scalar_field.integrate(coord=coord)
+        result = scalar_field.integrate(coord=coord)
+        if isinstance(scalar_field, ScalarFieldDataArray):
+            return FreqDataArray(data=result.data, coords=result.coords)
+        elif isinstance(scalar_field, ScalarFieldTimeDataArray):
+            return TimeDataArray(data=result.data, coords=result.coords)
+        else:
+            assert isinstance(scalar_field, ScalarModeFieldDataArray)
+            return FreqModeDataArray(data=result.data, coords=result.coords)
 
-    def _get_field_along_path(
-        self, scalar_field: AbstractSpatialDataArray
-    ) -> AbstractSpatialDataArray:
-        """Returns a selection of the input `scalar_field` ready for integration."""
+    def _get_field_along_path(self, scalar_field: EMScalarFieldType) -> EMScalarFieldType:
+        """Returns a selection of the input ``scalar_field`` ready for integration."""
         axis1 = self.remaining_axes[0]
         axis2 = self.remaining_axes[1]
         coord1 = "xyz"[axis1]
@@ -126,68 +143,74 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
                 scalar_field = scalar_field.interp(
                     coord2dict, method="linear", kwargs={"bounds_error": True}
                 )
-
+        # Remove unneeded coordinates
+        scalar_field = scalar_field.reset_coords(drop=True)
         return scalar_field
 
     @cached_property
     def main_axis(self) -> Axis:
         """Axis for performing integration."""
-        val = next((index for index, value in enumerate(self.size) if value != 0), None)
-        return val
+        for index, value in enumerate(self.size):
+            if value != 0:
+                return index
+        raise Tidy3dError("Failed to identify axis.")
 
 
-class VoltageIntegralAA(AxisAlignedPathIntegral):
+class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     """Class for computing the voltage between two points defined by an axis-aligned line."""
 
     sign: Direction = pd.Field(
-        "+",
-        title="Direction of path integral.",
+        ...,
+        title="Direction of Path Integral",
         description="Positive indicates V=Vb-Va where position b has a larger coordinate along the axis of integration.",
     )
 
-    def compute_voltage(self, em_field: FieldDataset | ModeSolverDataset | FieldTimeDataset):
+    def compute_voltage(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
         """Compute voltage along path defined by a line."""
+        if not isinstance(em_field, (FieldData, FieldTimeData, ModeSolverData)):
+            raise DataError("'em_field' type not supported.")
         e_component = "xyz"[self.main_axis]
         field_name = f"E{e_component}"
         # Validate that the field is present
-        if field_name not in em_field:
-            raise DataError(f"field_name '{field_name}' not found")
-        e_field = em_field[f"E{e_component}"]
-        integral = self.compute_integral(e_field)
+        if field_name not in em_field.field_components:
+            raise DataError(f"'field_name' '{field_name}' not found.")
+        e_field = em_field.field_components[field_name]
+        # V = -integral(E)
+        voltage = self.compute_integral(e_field)
 
-        voltage = -integral
-        if self.sign == "-":
+        if self.sign == "+":
             voltage *= -1
         # Return data array of voltage while keeping coordinates of frequency|time|mode index
         return voltage
 
 
-class CurrentIntegralAA(AbstractAxesRH, Box):
-    """Class for computing conduction current via Ampere's Circuital Law on an axis-aligned loop."""
+class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
+    """Class for computing conduction current via Ampère's circuital law on an axis-aligned loop."""
 
     _plane_validator = assert_plane()
 
     sign: Direction = pd.Field(
-        "+",
-        title="Direction of contour integral",
+        ...,
+        title="Direction of Contour Integral",
         description="Positive indicates current flowing in the positive normal axis direction.",
     )
 
     extrapolate_to_endpoints: bool = pd.Field(
         False,
-        title="Extrapolate to endpoints",
-        description="This parameter is passed to `AxisAlignedPathIntegral` objects when computing the contour integral.",
+        title="Extrapolate to Endpoints",
+        description="This parameter is passed to ``AxisAlignedPathIntegral`` objects when computing the contour integral.",
     )
 
     snap_contour_to_grid: bool = pd.Field(
         False,
-        title="Snap contour to grid",
-        description="This parameter is passed to `AxisAlignedPathIntegral` objects when computing the contour integral.",
+        title="Snap Contour to Grid",
+        description="This parameter is passed to ``AxisAlignedPathIntegral`` objects when computing the contour integral.",
     )
 
-    def compute_current(self, em_field: FieldDataset | ModeSolverDataset | FieldTimeDataset):
+    def compute_current(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
         """Compute current flowing in loop defined by the outer edge of a rectangle."""
-
+        if not isinstance(em_field, (FieldData, FieldTimeData, ModeSolverData)):
+            raise DataError("'em_field' type not supported.")
         ax1 = self.remaining_axes[0]
         ax2 = self.remaining_axes[1]
         h_component = "xyz"[ax1]
@@ -195,12 +218,12 @@ class CurrentIntegralAA(AbstractAxesRH, Box):
         h_field_name = f"H{h_component}"
         v_field_name = f"H{v_component}"
         # Validate that fields are present
-        if h_field_name not in em_field:
-            raise DataError(f"field_name '{h_field_name}' not found")
-        if v_field_name not in em_field:
-            raise DataError(f"field_name '{v_field_name}' not found")
-        h_horizontal = em_field[f"H{h_component}"]
-        h_vertical = em_field[f"H{v_component}"]
+        if h_field_name not in em_field.field_components:
+            raise DataError(f"'field_name' '{h_field_name}' not found.")
+        if v_field_name not in em_field.field_components:
+            raise DataError(f"'field_name' '{v_field_name}' not found.")
+        h_horizontal = em_field.field_components[h_field_name]
+        h_vertical = em_field.field_components[v_field_name]
 
         # Decompose contour into path integrals
         (bottom, right, top, left) = self._to_path_integrals(h_horizontal, h_vertical)
@@ -214,17 +237,20 @@ class CurrentIntegralAA(AbstractAxesRH, Box):
 
         if self.sign == "-":
             current *= -1
-        # Return data array of current while keeping coordinates of frequency|time|mode index
-        current = current.drop_vars((h_component, v_component))
+
         return current
 
     @cached_property
     def main_axis(self) -> Axis:
         """Axis normal to loop"""
-        val = next((index for index, value in enumerate(self.size) if value == 0), None)
-        return val
+        for index, value in enumerate(self.size):
+            if value == 0:
+                return index
+        raise Tidy3dError("Failed to identify axis.")
 
     def _to_path_integrals(self, h_horizontal, h_vertical) -> Tuple[AxisAlignedPathIntegral, ...]:
+        """Returns four ``AxisAlignedPathIntegral`` instances, which represent a contour
+        integral around the surface defined by ``self.size``."""
         ax1 = self.remaining_axes[0]
         ax2 = self.remaining_axes[1]
 

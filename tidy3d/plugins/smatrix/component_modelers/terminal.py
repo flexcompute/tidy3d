@@ -23,7 +23,7 @@ from ....web.api.container import BatchData
 from .base import AbstractComponentModeler, FWIDTH_FRAC
 from ..ports.lumped import LumpedPortDataArray, LumpedPort
 
-from ...microwave import VoltageIntegralAA, CurrentIntegralAA
+from ...microwave import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
 
 
 class TerminalComponentModeler(AbstractComponentModeler):
@@ -215,14 +215,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
             size = list(port.size)
             size[port.current_axis] = 0
-            voltage_integral = VoltageIntegralAA(
+            voltage_integral = VoltageIntegralAxisAligned(
                 center=port.center,
                 size=size,
                 extrapolate_to_endpoints=True,
                 snap_path_to_grid=True,
                 sign="+",
             )
-            voltage = voltage_integral.compute_voltage(field_data.field_components)
+            voltage = voltage_integral.compute_voltage(field_data)
             # Return data array of voltage with coordinates of frequency
             return voltage
 
@@ -242,7 +242,8 @@ class TerminalComponentModeler(AbstractComponentModeler):
             # Get h field tangent to resistive sheet
             h_component = "xyz"[port.current_axis]
             inject_component = "xyz"[port.injection_axis]
-            field_data = sim_data[f"{port.name}_H{h_component}"].field_components
+            monitor_data = sim_data[f"{port.name}_H{h_component}"]
+            field_data = monitor_data.field_components
             h_field = field_data[f"H{h_component}"]
             # Coordinates as numpy array for h_field along curren and injection axis
             h_coords_along_current = h_field.coords[h_component].values
@@ -290,14 +291,14 @@ class TerminalComponentModeler(AbstractComponentModeler):
             size[port.injection_axis] = dcap
 
             # H field is continuous at integral bounds, so extrapolation is turned off
-            I_integral = CurrentIntegralAA(
+            I_integral = CurrentIntegralAxisAligned(
                 center=center,
                 size=size,
                 sign="+",
                 extrapolate_to_endpoints=False,
                 snap_contour_to_grid=True,
             )
-            return I_integral.compute_current(field_data)
+            return I_integral.compute_current(monitor_data)
 
         def port_ab(port: LumpedPort, sim_data: SimulationData):
             """Helper to compute the port incident and reflected power waves."""

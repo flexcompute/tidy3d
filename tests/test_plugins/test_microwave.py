@@ -4,7 +4,11 @@ import numpy as np
 import tidy3d as td
 from tidy3d import FieldData
 from tidy3d.constants import ETA_0
-from tidy3d.plugins.microwave import VoltageIntegralAA, CurrentIntegralAA, ImpedanceCalculator
+from tidy3d.plugins.microwave import (
+    VoltageIntegralAxisAligned,
+    CurrentIntegralAxisAligned,
+    ImpedanceCalculator,
+)
 import pydantic.v1 as pydantic
 from tidy3d.exceptions import DataError
 from ..utils import run_emulated
@@ -17,7 +21,7 @@ FSTART = 0.5e9
 FSTOP = 1.5e9
 F0 = (FSTART + FSTOP) / 2
 FWIDTH = FSTOP - FSTART
-FS = np.linspace(FSTART, FSTOP, 5)
+FS = np.linspace(FSTART, FSTOP, 3)
 FIELD_MONITOR = td.FieldMonitor(
     size=MON_SIZE, fields=FIELDS, name="strip_field", freqs=FS, colocate=False
 )
@@ -33,8 +37,13 @@ SIM_Z = td.Simulation(
         td.FieldMonitor(
             center=(0, 0, 0), size=(1, 1, 1), freqs=FS, fields=["Ex", "Hx"], name="ExHx"
         ),
-        td.ModeMonitor(
-            center=(0, 0, 0), size=(1, 1, 0), freqs=FS, mode_spec=td.ModeSpec(), name="mode"
+        td.FieldTimeMonitor(center=(0, 0, 0), size=(1, 1, 0), colocate=False, name="field_time"),
+        td.ModeSolverMonitor(
+            center=(0, 0, 0),
+            size=(1, 1, 0),
+            freqs=FS,
+            mode_spec=td.ModeSpec(num_modes=2),
+            name="mode",
         ),
     ],
     sources=[
@@ -44,8 +53,10 @@ SIM_Z = td.Simulation(
             source_time=td.GaussianPulse(freq0=F0, fwidth=FWIDTH),
         )
     ],
-    run_time=2e-12,
+    run_time=5e-16,
 )
+
+SIM_Z_DATA = run_emulated(SIM_Z)
 
 """ Generate the data arrays for testing path integral computations """
 
@@ -105,13 +116,13 @@ def test_voltage_integral_axes(axis):
     size = [0, 0, 0]
     size[axis] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAA(
+    voltage_integral = VoltageIntegralAxisAligned(
         center=center,
         size=size,
+        sign="+",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
-    _ = voltage_integral.compute_voltage(sim_data["field"].field_components)
+
+    _ = voltage_integral.compute_voltage(SIM_Z_DATA["field"])
 
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
@@ -120,13 +131,12 @@ def test_current_integral_axes(axis):
     size = [length, length, length]
     size[axis] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAA(
+    current_integral = CurrentIntegralAxisAligned(
         center=center,
         size=size,
+        sign="+",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
-    _ = current_integral.compute_current(sim_data["field"].field_components)
+    _ = current_integral.compute_current(SIM_Z_DATA["field"])
 
 
 def test_voltage_integral_toggles():
@@ -134,16 +144,14 @@ def test_voltage_integral_toggles():
     size = [0, 0, 0]
     size[0] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAA(
+    voltage_integral = VoltageIntegralAxisAligned(
         center=center,
         size=size,
         extrapolate_to_endpoints=True,
         snap_path_to_grid=True,
         sign="-",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
-    _ = voltage_integral.compute_voltage(sim_data["field"].field_components)
+    _ = voltage_integral.compute_voltage(SIM_Z_DATA["field"])
 
 
 def test_current_integral_toggles():
@@ -151,16 +159,14 @@ def test_current_integral_toggles():
     size = [length, length, length]
     size[0] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAA(
+    current_integral = CurrentIntegralAxisAligned(
         center=center,
         size=size,
         extrapolate_to_endpoints=True,
         snap_contour_to_grid=True,
         sign="-",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
-    _ = current_integral.compute_current(sim_data["field"].field_components)
+    _ = current_integral.compute_current(SIM_Z_DATA["field"])
 
 
 def test_voltage_missing_fields():
@@ -168,14 +174,14 @@ def test_voltage_missing_fields():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAA(
+    voltage_integral = VoltageIntegralAxisAligned(
         center=center,
         size=size,
+        sign="+",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
+
     with pytest.raises(DataError):
-        _ = voltage_integral.compute_voltage(sim_data["ExHx"].field_components)
+        _ = voltage_integral.compute_voltage(SIM_Z_DATA["ExHx"])
 
 
 def test_current_missing_fields():
@@ -183,14 +189,42 @@ def test_current_missing_fields():
     size = [length, length, length]
     size[0] = 0.0
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAA(
+    current_integral = CurrentIntegralAxisAligned(
         center=center,
         size=size,
+        sign="+",
     )
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
+
     with pytest.raises(DataError):
-        _ = current_integral.compute_current(sim_data["ExHx"].field_components)
+        _ = current_integral.compute_current(SIM_Z_DATA["ExHx"])
+
+
+def test_time_monitor_voltage_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    center = [0, 0, 0]
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center,
+        size=size,
+        sign="+",
+    )
+
+    voltage_integral.compute_voltage(SIM_Z_DATA["field_time"])
+
+
+def test_mode_solver_monitor_voltage_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    center = [0, 0, 0]
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center,
+        size=size,
+        sign="+",
+    )
+
+    voltage_integral.compute_voltage(SIM_Z_DATA["mode"])
 
 
 def test_tiny_voltage_path():
@@ -198,10 +232,11 @@ def test_tiny_voltage_path():
     size = [0, 0, 0]
     size[1] = length
     center = [0, 0, 0]
-    voltage_integral = VoltageIntegralAA(center=center, size=size, extrapolate_to_endpoints=True)
-    sim = SIM_Z
-    sim_data = run_emulated(sim)
-    _ = voltage_integral.compute_voltage(sim_data["field"].field_components)
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="+", extrapolate_to_endpoints=True
+    )
+
+    _ = voltage_integral.compute_voltage(SIM_Z_DATA["field"])
 
 
 def test_impedance_calculator():
@@ -209,16 +244,42 @@ def test_impedance_calculator():
         _ = ImpedanceCalculator(voltage_integral=None, current_integral=None)
 
 
+def test_impedance_calculator_on_time_data():
+    # Setup path integrals
+    length = 0.5
+    size = [0, length, 0]
+    size[1] = length
+    center = [0, 0, 0]
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="+", extrapolate_to_endpoints=True
+    )
+
+    size = [length, length, 0]
+    current_integral = CurrentIntegralAxisAligned(center=center, size=size, sign="+")
+
+    # Compute impedance using the tool
+    Z_calc = ImpedanceCalculator(
+        voltage_integral=voltage_integral, current_integral=current_integral
+    )
+    _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
+    Z_calc = ImpedanceCalculator(voltage_integral=voltage_integral, current_integral=None)
+    _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
+    Z_calc = ImpedanceCalculator(voltage_integral=None, current_integral=current_integral)
+    _ = Z_calc.compute_impedance(SIM_Z_DATA["field_time"])
+
+
 def test_impedance_accuracy():
     field_data = make_field_data()
     # Setup path integrals
     size = [0, STRIP_HEIGHT / 2, 0]
     center = [0, -STRIP_HEIGHT / 4, 0]
-    voltage_integral = VoltageIntegralAA(center=center, size=size, extrapolate_to_endpoints=True)
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="+", extrapolate_to_endpoints=True
+    )
 
     size = [STRIP_WIDTH * 1.25, STRIP_HEIGHT / 2, 0]
     center = [0, 0, 0]
-    current_integral = CurrentIntegralAA(center=center, size=size)
+    current_integral = CurrentIntegralAxisAligned(center=center, size=size, sign="+")
 
     def impedance_of_stripline(width, height):
         # Assuming no fringing fields, is the same as a parallel plate
