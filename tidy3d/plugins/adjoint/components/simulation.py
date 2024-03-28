@@ -53,6 +53,9 @@ NL_WARNING = (
     "We strongly recommend using linear simulations only with the adjoint plugin."
 )
 
+OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
+OutputMonitorType = Tuple[annotate_type(Union[OutputMonitorTypes]), ...]
+
 
 class JaxInfo(Tidy3dBaseModel):
     """Class to store information when converting between jax and tidy3d."""
@@ -116,9 +119,7 @@ class JaxSimulation(Simulation, JaxObject):
         jax_field=True,
     )
 
-    output_monitors: Tuple[
-        annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...
-    ] = pd.Field(
+    output_monitors: OutputMonitorType = pd.Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
