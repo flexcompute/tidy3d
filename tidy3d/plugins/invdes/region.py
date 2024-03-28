@@ -104,9 +104,44 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
 class TopologyDesignRegion(DesignRegion):
     """Design region as a pixellated permittivity grid."""
 
-    pixel_size: pd.PositiveFloat
-    transformations: typing.Tuple[FilterProject, ...] = ()
-    penalties: typing.Tuple[ErosionDilationPenalty, ...] = ()
+    pixel_size: pd.PositiveFloat = pd.Field(
+        ...,
+        title="Pixel Size",
+        description="Pixel size of the design region in x, y, z. For now, we only support the same "
+        "pixel size in all 3 dimensions. If ``TopologyDesignRegion.override_structure_dl`` is left "
+        "``None``, the ``pixel_size`` will determine the FDTD mesh size in the design region. "
+        "Therefore, if your pixel size is large compared to the FDTD grid size, we recommend "
+        "setting the ``override_structure_dl`` directly to "
+        "a value on the same order as the grid size.",
+    )
+
+    transformations: typing.Tuple[FilterProject, ...] = pd.Field(
+        (),
+        title="Transformations",
+        description="Transformations that get applied from first to last on the parameter array."
+        "The end result of the transformations should be the material density of the design region "
+        ". With floating point values between (0, 1), 0 corresponds to the minimum relative "
+        "permittivity and 1 corresponds to the maximum relative permittivity. "
+        "Specific permittivity values given the density array are determined by ``eps_bounds``.",
+    )
+    penalties: typing.Tuple[ErosionDilationPenalty, ...] = pd.Field(
+        (),
+        title="Penalties",
+        description="Set of penalties that get evaluated on the material density. Note that the "
+        "penalties are applied after ``transformations`` are applied. Penalty weights can be set "
+        "inside of the penalties directly through the ``.weight`` field.",
+    )
+
+    override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
+        None,
+        title="Design Region Override Structure",
+        description="Defines grid size when adding an ``override_structure`` to the "
+        "``JaxSimulation.grid_spec`` corresponding to this design region. "
+        "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
+        "``pixel_size``. "
+        "This is advised if the pixel size is relatively close to the FDTD grid size. "
+        "Supplying ``False`` will completely leave out the override structure.",
+    )
 
     @staticmethod
     def _check_params(params: jnp.ndarray):
@@ -188,11 +223,27 @@ class TopologyDesignRegion(DesignRegion):
         medium = tda.JaxCustomMedium(eps_dataset=eps_dataset)
         return tda.JaxStructureStaticGeometry(geometry=self.geometry, medium=medium)
 
-    def to_mesh_override_structure(self) -> td.MeshOverrideStructure:
+    @property
+    def _override_structure_dl(self) -> float:
+        """Override structure step size along all three dimensions."""
+        if self.override_structure_dl is None:
+            return self.pixel_size
+        if self.override_structure_dl is False:
+            return None
+        return self.override_structure_dl
+
+    @property
+    def mesh_override_structure(self) -> td.MeshOverrideStructure:
         """Generate mesh override structure for this ``DesignRegion`` using ``pixel_size`` step."""
+
+        dl = self._override_structure_dl
+
+        if not dl:
+            return None
+
         return td.MeshOverrideStructure(
             geometry=self.geometry,
-            dl=3 * [self.pixel_size],
+            dl=(dl, dl, dl),
             enforce=True,
         )
 

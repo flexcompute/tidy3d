@@ -75,21 +75,6 @@ class InverseDesign(AbstractInverseDesign):
         "to the objective function",
     )
 
-    override_structure_dl: typing.Union[pd.PositiveFloat, typing.Literal[False]] = pd.Field(
-        None,
-        title="Design Region Override Structure Grid Sizes",
-        description="Defines grid size when adding an ``override_structure`` to the "
-        "``JaxSimulation.grid_spec`` corresponding to this design region. "
-        "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
-        "``pixel_size`` of the ``DesignRegion``. "
-        "This is advised if the pixel size is relatively close to the FDTD grid size. "
-        "Specifying a ``tuple`` of 3 grid sizes for x, y, z will override this setting "
-        "with the supplied values. Supplying ``False`` will completely leave out the "
-        " override structure. We recommend setting this to ``False`` or specifying your own values "
-        "if the pixel size of your design region is much larger than your simulation grid cell size"
-        " as in that case, the mesh may create too low of a resolution in the design region. ",
-    )
-
     @pd.validator("post_process_fn", always=True)
     def _add_kwargs(cls, val):
         """Make sure the call signature of the post process function accepts kwargs."""
@@ -123,21 +108,6 @@ class InverseDesign(AbstractInverseDesign):
 
         return monitor_fields
 
-    @property
-    def mesh_override_structure(self) -> td.MeshOverrideStructure:
-        """Mesh override structure corresponding to this object."""
-
-        if self.override_structure_dl is False:
-            return None
-
-        mesh_override_structure = self.design_region.to_mesh_override_structure()
-
-        if self.override_structure_dl is not None:
-            dl = 3 * [self.override_structure_dl]
-            mesh_override_structure = mesh_override_structure.updated_copy(dl=dl)
-
-        return mesh_override_structure
-
     def to_jax_simulation(self, params: jnp.ndarray) -> tda.JaxSimulation:
         """Convert the ``InverseDesign`` to a corresponding ``tda.JaxSimulation`` given make_."""
 
@@ -146,7 +116,7 @@ class InverseDesign(AbstractInverseDesign):
 
         # construct mesh override structures and a new grid spec, if applicable
         grid_spec = self.simulation.grid_spec
-        mesh_override_structure = self.mesh_override_structure
+        mesh_override_structure = self.design_region.mesh_override_structure
         if mesh_override_structure:
             override_structures = list(self.simulation.grid_spec.override_structures)
             override_structures += [mesh_override_structure]
@@ -243,23 +213,6 @@ class InverseDesignMulti(AbstractInverseDesign):
         "``FieldMonitor`` instances with ``.colocate != False``.",
     )
 
-    override_structure_dl: typing.Tuple[
-        typing.Union[pd.PositiveFloat, typing.Literal[False], None], ...
-    ] = pd.Field(
-        None,
-        title="Design Region Override Structure Grid Sizes",
-        description="Defines grid size when adding an ``override_structure`` to the "
-        "``JaxSimulation.grid_spec`` corresponding to this design region. "
-        "If left ``None``, ``invdes`` will mesh the simulation with the same resolution as the "
-        "``pixel_size`` of the ``DesignRegion``. "
-        "This is advised if the pixel size is relatively close to the FDTD grid size. "
-        "Specifying a ``tuple`` of 3 grid sizes for x, y, z will override this setting "
-        "with the supplied values. Supplying ``False`` will completely leave out the "
-        " override structure. We recommend setting this to ``False`` or specifying your own values "
-        "if the pixel size of your design region is much larger than your simulation grid cell size"
-        " as in that case, the mesh may create too low of a resolution in the design region. ",
-    )
-
     @pd.root_validator()
     def _check_lengths(cls, values):
         """Check the lengths of all of the multi fields."""
@@ -292,8 +245,7 @@ class InverseDesignMulti(AbstractInverseDesign):
             )
             if self.output_monitor_names is not None:
                 des_i = des_i.updated_copy(output_monitor_names=self.output_monitor_names[i])
-            if self.override_structure_dl is not None:
-                des_i = des_i.updated_copy(override_structure_dl=self.override_structure_dl[i])
+
             designs_list.append(des_i)
 
         return designs_list
