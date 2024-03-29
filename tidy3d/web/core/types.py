@@ -50,4 +50,4 @@ class TaskType(str, Enum):
     FDTD = "FDTD"
     MODE_SOLVER = "MODE_SOLVER"
     HEAT = "HEAT"
-    EME = "EME"
+    EME = "HEAT"
