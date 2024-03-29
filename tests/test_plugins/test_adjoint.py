@@ -403,6 +403,7 @@ def use_emulated_run_async(monkeypatch, tmp_path_factory):
 
     TMP_PATH = tmp_path_factory.mktemp("adjoint")
     monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
+    monkeypatch.setattr(td.web, "run_async", run_async_emulated)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
     monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
