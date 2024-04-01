@@ -1,16 +1,19 @@
 """Defines the methods used for parameter sweep."""
-from typing import Union, Tuple, Dict, Any, Callable
+from typing import Union, Tuple, Dict, Any, Callable, Literal
 from abc import ABC, abstractmethod
 
 import numpy as np
 import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
+import asyncio
+from concurrent.futures import ProcessPoolExecutor
 
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import AbstractSimulation
 from ...log import log
 from ... import web
 from ...web.api.container import BatchData
+
 
 from .parameter import ParameterType
 
@@ -98,16 +101,16 @@ class MethodIndependent(Method, ABC):
         fn_pre: Callable,
         fn_post: Callable,
         path_dir: str = None,
-        **batch_kwargs,
+        **kwargs,
     ) -> Tuple[Any]:
         """Defines the search algorithm (batched)."""
 
         simulations, task_name_mappings, fn_args = self.setup_batch(
-            parameters=parameters, fn_pre=fn_pre
+            parameters=parameters, fn_pre=fn_pre, **kwargs
         )
 
         # run in batch
-        batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
+        batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **kwargs)
         task_id_dict = batch_data.task_ids
 
         # run post processing on each data
@@ -130,10 +133,11 @@ class MethodIndependent(Method, ABC):
 
         return fn_args, result, task_ids, batch_data
 
-    def setup_batch(
+    async def setup_batch(
         self,
         parameters: Tuple[ParameterType, ...],
         fn_pre: Callable,
+        task_construction_method: Literal["sequential", "parallel"] = "sequential",
         **kwargs,
     ) -> tuple:
         """
@@ -141,6 +145,46 @@ class MethodIndependent(Method, ABC):
         This function is mainly separated out for ease of testing.
         TODO possibly we can specifically improve it to add the parallel construction of tasks.
         """
+
+        def construct_task(i, fn_args, fn_pre, get_task_name):
+            # for each point, construct the simulation inputs into a dict
+            simulations_task_i = {}
+            task_name_mappings_task_i = []
+            # Note that we have a local implementation of the task mapping functions which gets extended into a
+            # larger scope outside this function. This is because we need to keep track of the task names for each
+            # point in the parameter space, and a point might have multiple simulations.
+            fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
+            sim = fn_pre(**fn_kwargs)
+            if isinstance(sim, AbstractSimulation):
+                task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
+                simulations_task_i[task_name] = sim
+                task_name_mappings_task_i.append([task_name])
+            elif isinstance(sim, dict):
+                task_name_mappings_task_i.append({})
+                for name, _sim in sim.items():
+                    task_name = get_task_name(pt_index=1, sim_index=name, fn_kwargs=fn_kwargs)
+                    simulations_task_i[task_name] = _sim
+                    task_name_mappings_task_i[i][name] = task_name
+            else:
+                task_name_mappings_task_i.append([])
+                for j, _sim in enumerate(sim):
+                    task_name = get_task_name(pt_index=i, sim_index=j, fn_kwargs=fn_kwargs)
+                    simulations_task_i[task_name] = _sim
+                    task_name_mappings_task_i[i].append(task_name)
+            return simulations_task_i, task_name_mappings_task_i
+
+        async def main(num_points):
+            loop = asyncio.get_running_loop()
+            with ProcessPoolExecutor() as pool:
+                tasks = [
+                    loop.run_in_executor(pool, construct_task, i_task)
+                    for i_task in range(num_points)
+                ]
+                results = await asyncio.gather(*tasks)
+                out1 = zip(
+                    *[(result,) for result in results]
+                )  # Adjust according to your actual function's return type
+                return out1
 
         # get all function inputs
         fn_args, num_points = self._assemble_args(parameters)
@@ -163,25 +207,23 @@ class MethodIndependent(Method, ABC):
         # for each point, construct the simulation inputs into a dict
         simulations = {}
         task_name_mappings = []
-        for i in range(num_points):
-            fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-            sim = fn_pre(**fn_kwargs)
-            if isinstance(sim, AbstractSimulation):
-                task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
-                simulations[task_name] = sim
-                task_name_mappings.append([task_name])
-            elif isinstance(sim, dict):
-                task_name_mappings.append({})
-                for name, _sim in sim.items():
-                    task_name = get_task_name(pt_index=1, sim_index=name, fn_kwargs=fn_kwargs)
-                    simulations[task_name] = _sim
-                    task_name_mappings[i][name] = task_name
-            else:
-                task_name_mappings.append([])
-                for j, _sim in enumerate(sim):
-                    task_name = get_task_name(pt_index=i, sim_index=j, fn_kwargs=fn_kwargs)
-                    simulations[task_name] = _sim
-                    task_name_mappings[i].append(task_name)
+        if task_construction_method == "sequential":
+            for i in range(num_points):
+                simulations_i, task_name_mappings_i = construct_task(
+                    i, fn_args, fn_pre, get_task_name
+                )
+                simulations.update(simulations_i)
+                task_name_mappings.append(task_name_mappings_i)
+        elif task_construction_method == "parallel":
+            data = asyncio.run(main(num_points=num_points))
+            print(data)
+            print(type(data))
+            raise NotImplementedError("Parallel construction of tasks is not yet implemented.")
+        else:
+            raise ValueError(
+                f"Construction method '{task_construction_method}' not recognized. "
+                "Please choose either 'sequential' or 'parallel'."
+            )
 
         return simulations, task_name_mappings, fn_args
 

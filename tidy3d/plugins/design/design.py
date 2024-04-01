@@ -132,7 +132,14 @@ class DesignSpace(Tidy3dBaseModel):
         This function sets up a batch of simulations to be run in parallel
         and returns the list of task_ids of the corresponding simulations.
         """
-        pass
+        data = self.method.setup_batch(
+            parameters=self.parameters,
+            fn_pre=fn_pre,
+            fn_post=fn_post,
+            path_dir=path_dir,
+            **batch_kwargs,
+        )
+        return data
 
     def run_batch(
         self,
