@@ -16,7 +16,7 @@ from ....components.data.monitor_data import FieldData
 from ....exceptions import SetupError
 from ....constants import CONDUCTIVITY
 
-from .base import JaxObject
+from .base import JaxObject, WEB_ADJOINT_MESSAGE
 from .types import JaxFloat
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
@@ -304,23 +304,27 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             )
         return values
 
-    @pd.validator("eps_dataset", always=True)
-    def _is_not_too_large(cls, val):
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        self._is_not_too_large()
+
+    def _is_not_too_large(self):
         """Ensure number of pixels does not surpass a set amount."""
+
+        field_components = self.eps_dataset.field_components
 
         for field_dim in "xyz":
             field_name = f"eps_{field_dim}{field_dim}"
-            data_array = val.field_components[field_name]
+            data_array = field_components[field_name]
             coord_lens = [len(data_array.coords[key]) for key in "xyz"]
             num_cells_dim = np.prod(coord_lens)
             if num_cells_dim > MAX_NUM_CELLS_CUSTOM_MEDIUM:
                 raise SetupError(
                     "For the adjoint plugin, each component of the 'JaxCustomMedium.eps_dataset' "
                     f"is restricted to have a maximum of {MAX_NUM_CELLS_CUSTOM_MEDIUM} cells. "
-                    f"Detected {num_cells_dim} grid cells in the '{field_name}' component ."
+                    f"Detected {num_cells_dim} grid cells in the '{field_name}' component. "
+                    + WEB_ADJOINT_MESSAGE
                 )
-
-        return val
 
     @pd.validator("eps_dataset", always=True)
     def _eps_dataset_single_frequency(cls, val):
