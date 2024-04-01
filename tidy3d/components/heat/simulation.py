@@ -24,6 +24,7 @@ from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
 from ..geometry.mesh import TriangleMesh
 from ..scene import Scene
+from ..heat_spec import SolidSpec
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
 from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
@@ -176,6 +177,17 @@ class HeatSimulation(AbstractSimulation):
                         )
         return val
 
+    @pd.validator("boundary_spec", always=True)
+    def not_all_neumann(cls, val):
+        """Error if all boundary conditions are Neumann bc."""
+
+        if len(val) == 0 or all(isinstance(bc_spec.condition, HeatFluxBC) for bc_spec in val):
+            raise SetupError(
+                "Heat simulation contains only 'HeatFluxBC' (Neumann) boundary conditions. Steady-state solution is undefined in this case."
+            )
+
+        return val
+
     @pd.validator("grid_spec", always=True)
     @skip_if_fields_missing(["structures"])
     def names_exist_grid_spec(cls, val, values):
@@ -208,6 +220,21 @@ class HeatSimulation(AbstractSimulation):
                         "is not found among simulation structures."
                     )
         return val
+
+    @pd.root_validator(skip_on_failure=True)
+    def check_medium_heat_spec(cls, values):
+        """Error if no structures with SolidSpec."""
+        medium = values["medium"]
+        structures = values["structures"]
+        if not (
+            isinstance(medium.heat_spec, SolidSpec)
+            or any(isinstance(struct.medium.heat_spec, SolidSpec) for struct in structures)
+        ):
+            raise SetupError(
+                "No solid materials ('SolidSpec') are detected in heat simulation. Solution domain is empty."
+            )
+
+        return values
 
     @equal_aspect
     @add_ax_if_none
@@ -814,13 +841,24 @@ class HeatSimulation(AbstractSimulation):
         ... )
         >>> scene = Scene(
         ...     structures=[box],
-        ...     medium=Medium(permittivity=3),
+        ...     medium=Medium(
+        ...         permittivity=3,
+        ...         heat_spec=SolidSpec(
+        ...             conductivity=1, capacity=1,
+        ...         ),
+        ...     ),
         ... )
         >>> sim = HeatSimulation.from_scene(
         ...     scene=scene,
         ...     center=(0, 0, 0),
         ...     size=(5, 6, 7),
         ...     grid_spec=UniformUnstructuredGrid(dl=0.4),
+        ...     boundary_spec=[
+        ...         HeatBoundarySpec(
+        ...             placement=SimulationBoundary(),
+        ...             condition=TemperatureBC(temperature=300)
+        ...         )
+        ...     ],
         ... )
         """
 
