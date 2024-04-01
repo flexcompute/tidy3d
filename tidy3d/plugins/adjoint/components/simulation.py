@@ -20,7 +20,7 @@ from ....components.types import Ax, annotate_type
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
-from .base import JaxObject
+from .base import JaxObject, WEB_ADJOINT_MESSAGE
 from .structure import (
     JaxStructure,
     JaxStructureType,
@@ -177,18 +177,6 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @pd.validator("input_structures", always=True)
-    def _restrict_input_structures(cls, val):
-        """Restrict number of input structures."""
-        num_input_structures = len(val)
-        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
-            raise AdjointError(
-                "For performance, adjoint plugin restricts the number of input structures to "
-                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}."
-            )
-
-        return val
-
-    @pd.validator("input_structures", always=True)
     @skip_if_fields_missing(["structures"])
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
@@ -280,6 +268,21 @@ class JaxSimulation(Simulation, JaxObject):
             if hasattr(medium, "nonlinear_spec") and medium.nonlinear_spec:
                 log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val
+
+    def _restrict_input_structures(self) -> None:
+        """Restrict number of input structures."""
+        num_input_structures = len(self.input_structures)
+        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+            raise AdjointError(
+                "For performance, adjoint plugin restricts the number of input structures to "
+                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}. " + WEB_ADJOINT_MESSAGE
+            )
+
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        self._restrict_input_structures()
+        for structure in self.input_structures:
+            structure._validate_web_adjoint()
 
     @staticmethod
     def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:

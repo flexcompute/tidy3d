@@ -111,6 +111,8 @@ def run(
         Object containing solver results for the supplied :class:`.JaxSimulation`.
     """
 
+    simulation._validate_web_adjoint()
+
     sim, jax_info = simulation.to_simulation()
 
     sim_data = tidy3d_run_fn(
@@ -133,6 +135,8 @@ def run_fwd(
     verbose: bool,
 ) -> Tuple[JaxSimulationData, Tuple[RunResidual]]:
     """Run forward pass and stash extra objects for the backwards pass."""
+
+    simulation._validate_web_adjoint()
 
     sim_fwd, jax_info_fwd, jax_info_orig = simulation.to_simulation_fwd()
 
@@ -396,6 +400,9 @@ def run_async(
         Contains the :class:`.JaxSimulationData` of each :class:`.JaxSimulation`.
     """
 
+    for simulation in simulations:
+        simulation._validate_web_adjoint()
+
     # get task names, the td.Simulation, and JaxInfo for all supplied simulations
     task_names = [str(_task_name_orig(i)) for i in range(len(simulations))]
     task_info = [jax_sim.to_simulation() for jax_sim in simulations]
@@ -436,6 +443,9 @@ def run_async_fwd(
     num_workers: int,
 ) -> Tuple[Tuple[JaxSimulationData, ...], RunResidualBatch]:
     """Run forward pass and stash extra objects for the backwards pass."""
+
+    for simulation in simulations:
+        simulation._validate_web_adjoint()
 
     jax_infos_orig = []
     sims_fwd = []

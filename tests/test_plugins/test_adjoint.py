@@ -1346,11 +1346,13 @@ def test_validate_vertices():
         return np.stack((np.cos(angles), np.sin(angles)), axis=-1)
 
     vertices_pass = make_vertices(MAX_NUM_VERTICES)
-    _ = JaxPolySlab(vertices=vertices_pass, slab_bounds=(-1, 1))
+    ps = JaxPolySlab(vertices=vertices_pass, slab_bounds=(-1, 1))
+    ps._validate_web_adjoint()
 
-    with pytest.raises(pydantic.ValidationError):
-        vertices_fail = make_vertices(MAX_NUM_VERTICES + 1)
-        _ = JaxPolySlab(vertices=vertices_fail, slab_bounds=(-1, 1))
+    vertices_fail = make_vertices(MAX_NUM_VERTICES + 1)
+    ps = JaxPolySlab(vertices=vertices_fail, slab_bounds=(-1, 1))
+    with pytest.raises(AdjointError):
+        ps._validate_web_adjoint()
 
 
 def _test_custom_medium_3D(use_emulated_run):
@@ -1410,10 +1412,15 @@ def test_custom_medium_size(use_emulated_run):
         jax_eps_dataset = JaxPermittivityDataset(**field_components)
         return JaxCustomMedium(eps_dataset=jax_eps_dataset)
 
-    make_custom_medium(num_cells=1)
-    make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM)
-    with pytest.raises(pydantic.ValidationError):
-        make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)
+    med = make_custom_medium(num_cells=1)
+    med._validate_web_adjoint()
+
+    med = make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM)
+    med._validate_web_adjoint()
+
+    med = make_custom_medium(num_cells=MAX_NUM_CELLS_CUSTOM_MEDIUM + 1)
+    with pytest.raises(td.exceptions.SetupError):
+        med._validate_web_adjoint()
 
 
 def test_jax_sim_io(tmp_path):
@@ -1462,7 +1469,7 @@ def test_jax_sim_io(tmp_path):
     assert sim == sim2
 
 
-def test_num_input_structures():
+def test_num_input_structures(use_emulated_run, tmp_path):
     """Assert proper error is raised if number of input structures is too large."""
 
     def make_sim_(num_input_structures: int) -> JaxSimulation:
@@ -1470,10 +1477,18 @@ def test_num_input_structures():
         struct = sim.input_structures[0]
         return sim.updated_copy(input_structures=num_input_structures * [struct])
 
-    _ = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
+    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
+    sim._validate_web_adjoint()
 
-    with pytest.raises(pydantic.ValidationError):
-        _ = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
+    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
+    with pytest.raises(AdjointError):
+        sim._validate_web_adjoint()
+
+    # make sure that the remote web API fails whereas the local one passes
+    with pytest.raises(AdjointError):
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    sim_data = run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
 
 @pytest.mark.parametrize("strict_binarize", (True, False))
