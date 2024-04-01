@@ -1,6 +1,6 @@
 # Inverse Design Plugin
 
-![FlowInvdes](../../../docs/source/_static/img/invdes.png)
+![FlowInvdes](../../../docs/notebooks/img/invdes.png)
 
 This describes the "Inverse Design" (`invdes`) plugin of Tidy3D.
 
