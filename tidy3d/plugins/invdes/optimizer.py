@@ -121,9 +121,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             params = optax.apply_updates(params, updates)
 
             # cap the parameters
-            params = jnp.minimum(params, 1.0)
-            params = jnp.maximum(params, 0.0)
+            params = jnp.clip(params, a_min=0.0, a_max=1.0)
 
+            # save the state
             history["params"].append(params)
             history["opt_state"].append(opt_state)
 
