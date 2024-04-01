@@ -86,31 +86,43 @@ class InverseDesignResult(InvdesBaseModel):
         return list(self.history.keys())
 
     @property
-    def final(self) -> typing.Dict[str, typing.Any]:
-        """Dictionary of final values in ``self.history``."""
+    def last(self) -> typing.Dict[str, typing.Any]:
+        """Dictionary of last values in ``self.history``."""
         return {key: value[-1] for key, value in self.history.items()}
 
-    def get_final(self, key: str) -> typing.Any:
-        """Get the final value of a field in the ``self.history`` by key."""
+    def get(self, key: str, index: int = -1) -> typing.Any:
+        """Get the value from the history at a certain index (-1 means last)."""
         if key not in self.keys:
             raise KeyError(f"'{key}' not present in 'Result.history' dict with: {self.keys}.")
         values = self.history.get(key)
         if not len(values):
-            raise ValueError(
-                f"Can't get the final value of '{key}' as there is no history present."
-            )
-        return values[-1]
+            raise ValueError(f"Can't get the last value of '{key}' as there is no history present.")
+        return values[index]
+
+    def get_last(self, key: str) -> typing.Any:
+        """Get the last value from the history."""
+        return self.get(key=key, index=-1)
+
+    def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
+        """Get the simulation at a specific index in the history (list of sims if multi)."""
+        params = self.get(key="params", index=index)
+        return self.design.to_simulation(params)
+
+    def get_sim_data(
+        self, task_name: str, index: int = -1, **kwargs
+    ) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
+        """Get the simulation data at a specific index in the history (list of simdata if multi)."""
+        params = self.get(key="params", index=index)
+        return self.design.to_simulation_data(params=params, task_name=task_name, **kwargs)
 
     @property
-    def sim_final(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
-        """The final simulation."""
-        params_final = self.get_final("params")
-        return self.design.to_simulation(params_final)
+    def sim_last(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
+        """The last simulation."""
+        return self.get_sim(index=-1)
 
-    def sim_data_final(self, task_name: str, **kwargs) -> td.SimulationData:
-        """Run the final simulation and return its data."""
-        params_final = self.get_final("params")
-        return self.design.to_simulation_data(params=params_final, task_name=task_name, **kwargs)
+    def sim_data_last(self, task_name: str, **kwargs) -> td.SimulationData:
+        """Run the last simulation and return its data."""
+        return self.get_sim_data(index=-1, task_name=task_name, **kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

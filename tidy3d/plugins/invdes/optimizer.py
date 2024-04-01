@@ -84,9 +84,9 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
     def continue_run(self, result: InverseDesignResult) -> InverseDesignResult:
         """Run optimizer for a series of steps with an initialized state."""
 
-        # get the last state of the optimizer and the last number of params
-        opt_state = result.get_final("opt_state")
-        params = result.get_final("params")
+        # get the last state of the optimizer and the last parameters
+        opt_state = result.get_last("opt_state")
+        params = result.get_last("params")
         history = deepcopy(result.history)
 
         # use jax to grad the objective function

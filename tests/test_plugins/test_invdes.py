@@ -350,35 +350,35 @@ def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
     result = make_result(use_emulated_run)
 
     with pytest.raises(KeyError):
-        _ = result.get_final("blah")
+        _ = result.get_last("blah")
 
-    val_final1 = result.final["params"]
-    val_final2 = result.get_final("params")
-    assert np.allclose(val_final1, val_final2)
+    val_last1 = result.last["params"]
+    val_last2 = result.get_last("params")
+    assert np.allclose(val_last1, val_last2)
 
     result.plot_optimization()
-    sim_data_final = result.sim_data_final(task_name="final")
+    sim_data_last = result.sim_data_last(task_name="last")
 
 
 def test_result_data(use_emulated_run):
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run)
-    sim_final = result.sim_final
-    sim_data_final = result.sim_data_final(task_name="final")
+    sim_last = result.sim_last
+    sim_data_last = result.sim_data_last(task_name="last")
 
 
 def test_result_data_multi(use_emulated_run_async, tmp_path):
     result_multi = make_result_multi(use_emulated_run_async)
-    sim_final = result_multi.sim_final
-    sim_data_final = result_multi.sim_data_final(task_name="final")
+    sim_last = result_multi.sim_last
+    sim_data_last = result_multi.sim_data_last(task_name="last")
 
 
 def test_result_empty():
     """Assert that things error with empty results."""
     result_empty = tdi.InverseDesignResult(design=make_invdes())
     with pytest.raises(ValueError):
-        result_empty.get_final("params")
+        result_empty.get_last("params")
 
 
 def test_invdes_io(tmp_path, log_capture, use_emulated_run):

@@ -178,7 +178,7 @@ The `TopologyDesignRegion` contains a `pixel_size` parameter, which sets the res
 
 The `pixel_size` is also passed to the various penalties and transformations to allow them to work properly with the design region.
 
-If not specified in a later step, this `pixel_size` will be used to set the FDTD grid size of the structure in the final `Simulation`. It is therefore a good idea to either set it to a low value (about equal to the simulation grid cell size) or manually set the mesh override structure resolution in the `TopologyDesignRegion.mesh_override_dl` field to overwrite it.
+If not specified in a later step, this `pixel_size` will be used to set the FDTD grid size of the structure in the last `Simulation`. It is therefore a good idea to either set it to a low value (about equal to the simulation grid cell size) or manually set the mesh override structure resolution in the `TopologyDesignRegion.mesh_override_dl` field to overwrite it.
 
 #### Transformations
 The `TopologyDesignRegion.transformations` are specifications that tell the design region how to transform the supplied optimization parameters into a "material density" that is used to construct the permittivity grid. For example, a `FilterProject` transformation applies a conic filter convolution followed by a hyperbolic tangent function projection. If multiple transformations are added to the design region, they will be evaluated one by one, from beginning to end, on the optimization parameters.
@@ -198,7 +198,7 @@ penalty = tdi.ErosionDilationPenalty(weight=0.8, length_scale=0.120)
 design_region = tdi.TopologyDesignRegion(
         size=(lx_des, ly_des, td.inf),
         center=(0, 0, 0),
-        eps_bounds=(1.0, eps_mat), # the minimum and maximum permittivity values in the final grid
+        eps_bounds=(1.0, eps_mat), # the minimum and maximum permittivity values in the last grid
         transformations=[filter_project],
         penalties=[penalty],
         pixel_size=pixel_size,
@@ -389,34 +389,34 @@ They also have some methods to conveniently grab data from that history, as show
 
 history_keys = result.keys
 history_penalty = result.history.get('penalty')
-final_objective = result.get_final("objective_fn_val")
+last_objective = result.get_last("objective_fn_val")
 
 print(f"result contains '.history' for: {tuple(history_keys)}")
 print(f"penalty history: {history_penalty}")
-print(f"final objective function value: {final_objective}")
+print(f"last objective function value: {last_objective}")
 
 ```
 
-Finally, we are able to quickly grab the final `Simulation` and `SimulationData` from the results, making it easy to plot final devices, field patterns, or export to GDS file.
+Finally, we are able to quickly grab the last `Simulation` and `SimulationData` from the results, making it easy to plot last devices, field patterns, or export to GDS file.
 
 ```py
 
-sim_final = result.sim_final
-ax = sim_final.plot_eps(z=0, monitor_alpha=0.0, source_alpha=0.0)
+sim_last = result.sim_last
+ax = sim_last.plot_eps(z=0, monitor_alpha=0.0, source_alpha=0.0)
 
-sim_data_final = result.sim_data_final(task_name="final_validation")
+sim_data_last = result.sim_data_last(task_name="last_validation")
 
-ax = sim_data_final.plot_field(field_mnt_name, field_name="E", val="abs")
+ax = sim_data_last.plot_field(field_mnt_name, field_name="E", val="abs")
 
 ```
 
 #### Exporting to GDS
 
-Use the regular GDS export functions defined in the `sim_final` to easily export to GDS.
+Use the regular GDS export functions defined in the `sim_last` to easily export to GDS.
 
 ```py
 
-sim_final.to_gds_file(
+sim_last.to_gds_file(
     fname="./misc/inv_des_demo.gds",
     z=0,
     frequency=freq0,
@@ -507,7 +507,7 @@ Finally, we combine everything into an `InverseDesignMulti` object.
 
 In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `JaxSimulationData` objects under the hood and use `tda.web.run_async` to run each of them in parallel.
 
-After the simulations are run, the combined post-processing function will be applied to the combined data to give the final value, minus any penalties in the shared `DesignRegion`.
+After the simulations are run, the combined post-processing function will be applied to the combined data to give the last value, minus any penalties in the shared `DesignRegion`.
 
 ```py
 
