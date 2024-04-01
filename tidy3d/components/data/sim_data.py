@@ -674,7 +674,6 @@ class SimulationData(AbstractSimulationData):
             cmap_type=cmap_type,
             cbar=cbar,
             ax=ax,
-            plot_kwargs=plot_kwargs,
         )
 
     @equal_aspect
@@ -692,7 +691,6 @@ class SimulationData(AbstractSimulationData):
         cmap_type: ColormapType = "divergent",
         cbar: bool = True,
         ax: Ax = None,
-        plot_kwargs: dict = None,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
 
@@ -726,7 +724,7 @@ class SimulationData(AbstractSimulationData):
         ax : matplotlib.axes._subplots.Axes = None
             matplotlib axes to plot on, if not specified, one is created.
 
-        Returnscbar
+        Returns
         -------
         matplotlib.axes._subplots.Axes
             The supplied or created matplotlib axes.
@@ -775,7 +773,6 @@ class SimulationData(AbstractSimulationData):
             alpha=eps_alpha,
             reverse=eps_reverse,
             ax=ax,
-            plot_kwargs=plot_kwargs,
             **interp_kwarg,
         )
 
