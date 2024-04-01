@@ -490,7 +490,6 @@ class SimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
-        cbar: bool = True,
         **sel_kwargs,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -672,7 +671,6 @@ class SimulationData(AbstractSimulationData):
             vmin=vmin,
             vmax=vmax,
             cmap_type=cmap_type,
-            cbar=cbar,
             ax=ax,
         )
 
@@ -689,7 +687,6 @@ class SimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         cmap_type: ColormapType = "divergent",
-        cbar: bool = True,
         ax: Ax = None,
     ) -> Ax:
         """Plot the field data for a monitor with simulation plot overlaid.
@@ -761,10 +758,7 @@ class SimulationData(AbstractSimulationData):
             vmax=vmax,
             robust=robust,
             center=center,
-            add_colorbar=cbar,
-            cbar_kwargs=(
-                {} if cbar is False else {"label": field_data.name}
-            ),  # Xarray plot API is a dirty pain
+            cbar_kwargs=({"label": field_data.name}),  # Xarray plot API is a dirty pain
         )
 
         # plot the simulation epsilon

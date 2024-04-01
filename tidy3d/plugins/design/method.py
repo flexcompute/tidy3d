@@ -102,10 +102,51 @@ class MethodIndependent(Method, ABC):
     ) -> Tuple[Any]:
         """Defines the search algorithm (batched)."""
 
+        simulations, task_name_mappings, fn_args = self.setup_batch(
+            parameters=parameters, fn_pre=fn_pre
+        )
+
+        # run in batch
+        batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
+        task_id_dict = batch_data.task_ids
+
+        # run post processing on each data
+        result = []
+        task_ids = []
+        for task_names_i in task_name_mappings:
+            if isinstance(task_names_i, dict):
+                task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
+                kwargs_dict = {
+                    kwarg_name: batch_data[task_name]
+                    for kwarg_name, task_name in task_names_i.items()
+                }
+                val = fn_post(**kwargs_dict)
+            else:
+                task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
+                args_list = (batch_data[task_name] for task_name in task_names_i)
+                val = fn_post(*args_list)
+
+            result.append(val)
+
+        return fn_args, result, task_ids, batch_data
+
+    def setup_batch(
+        self,
+        parameters: Tuple[ParameterType, ...],
+        fn_pre: Callable,
+        **kwargs,
+    ) -> tuple:
+        """
+        Sets up the simulations and returns the list of task_ids of the corresponding simulations.
+        This function is mainly separated out for ease of testing.
+        TODO possibly we can specifically improve it to add the parallel construction of tasks.
+        """
+
         # get all function inputs
         fn_args, num_points = self._assemble_args(parameters)
 
         def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
+            # TODO move this into a staticmethod
             """Get task name for 'index'-th set of function kwargs."""
             try:
                 # Name can only be 1000 characters long so we'll slice it just in case.
@@ -142,29 +183,7 @@ class MethodIndependent(Method, ABC):
                     simulations[task_name] = _sim
                     task_name_mappings[i].append(task_name)
 
-        # run in batch
-        batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
-        task_id_dict = batch_data.task_ids
-
-        # run post processing on each data
-        result = []
-        task_ids = []
-        for task_names_i in task_name_mappings:
-            if isinstance(task_names_i, dict):
-                task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
-                kwargs_dict = {
-                    kwarg_name: batch_data[task_name]
-                    for kwarg_name, task_name in task_names_i.items()
-                }
-                val = fn_post(**kwargs_dict)
-            else:
-                task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
-                args_list = (batch_data[task_name] for task_name in task_names_i)
-                val = fn_post(*args_list)
-
-            result.append(val)
-
-        return fn_args, result, task_ids, batch_data
+        return simulations, task_name_mappings, fn_args
 
 
 class MethodGrid(MethodIndependent):

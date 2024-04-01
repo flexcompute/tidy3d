@@ -119,6 +119,21 @@ class DesignSpace(Tidy3dBaseModel):
 
         return str(fn_source_pre) + "\n\n" + str(fn_source_post)
 
+    def setup_batch(
+        self,
+        fn_pre: Callable[[Any], Union[Simulation, List[Simulation], Dict[str, Simulation]]],
+        fn_post: Callable[
+            [Union[SimulationData, List[SimulationData], Dict[str, SimulationData]]], Any
+        ],
+        path_dir: str = None,
+        **batch_kwargs,
+    ) -> tuple:
+        """
+        This function sets up a batch of simulations to be run in parallel
+        and returns the list of task_ids of the corresponding simulations.
+        """
+        pass
+
     def run_batch(
         self,
         fn_pre: Callable[[Any], Union[Simulation, List[Simulation], Dict[str, Simulation]]],

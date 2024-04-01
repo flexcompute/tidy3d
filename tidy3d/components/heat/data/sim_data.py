@@ -87,7 +87,6 @@ class HeatSimulationData(AbstractSimulationData):
         vmin: float = None,
         vmax: float = None,
         ax: Ax = None,
-        cbar: bool = True,
         **sel_kwargs,
     ) -> Ax:
         """Plot the data for a monitor with simulation plot overlaid.
@@ -169,7 +168,6 @@ class HeatSimulationData(AbstractSimulationData):
                 vmin=vmin,
                 vmax=vmax,
                 cbar_kwargs={"label": field_name},
-                cbar=cbar,
                 grid=False,
             )
 
@@ -258,7 +256,6 @@ class HeatSimulationData(AbstractSimulationData):
         interp_kwarg = {"xyz"[axis]: position}
         # plot the simulation heat conductivity
         ax = self.simulation.scene.plot_structures_heat_conductivity(
-            cbar=cbar,
             alpha=structures_alpha,
             ax=ax,
             **interp_kwarg,
