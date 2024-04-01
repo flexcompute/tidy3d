@@ -152,7 +152,7 @@ def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) 
     for sim_data in sim_data_list:
         intensity_i = sim_data.get_intensity(MNT_NAME1)
         val += jnp.sum(intensity_i.values)
-        power_i = tdi.sum_abs_squared(tdi.get_amps(sim_data, MNT_NAME2))
+        power_i = tdi.Utilities.sum_abs_squared(tdi.Utilities.get_amps(sim_data, MNT_NAME2))
         val += power_i
     return val
 
@@ -469,23 +469,25 @@ def test_objective_utilities(use_emulated_run):
 
     value = 0.0
 
-    amps_i = tdi.get_amps(sim_data, MNT_NAME2)
-    value += tdi.sum_abs_squared(amps_i)
+    utils = tdi.Utilities
 
-    phase = tdi.get_phase(amps_i)
-    value += tdi.sum_array(phase)
+    amps_i = utils.get_amps(sim_data, MNT_NAME2)
+    value += utils.sum_abs_squared(amps_i)
 
-    intensity = tdi.get_intensity(sim_data, MNT_NAME1)
-    value += tdi.sum_array(intensity)
+    phase = utils.get_phase(amps_i)
+    value += utils.sum_array(phase)
 
-    ex = tdi.get_field_component(sim_data, MNT_NAME1, "Ex")
-    value += tdi.sum_abs_squared(ex)
+    intensity = utils.get_intensity(sim_data, MNT_NAME1)
+    value += utils.sum_array(intensity)
 
-    with pytest.raises(ValueError):
-        tdi.get_intensity(sim_data, MNT_NAME2)
-
-    with pytest.raises(ValueError):
-        tdi.get_field_component(sim_data, MNT_NAME2, "Ex")
+    ex = utils.get_field_component(sim_data, MNT_NAME1, "Ex")
+    value += utils.sum_abs_squared(ex)
 
     with pytest.raises(ValueError):
-        tdi.get_amps(sim_data, MNT_NAME1)
+        utils.get_intensity(sim_data, MNT_NAME2)
+
+    with pytest.raises(ValueError):
+        utils.get_field_component(sim_data, MNT_NAME2, "Ex")
+
+    with pytest.raises(ValueError):
+        utils.get_amps(sim_data, MNT_NAME1)

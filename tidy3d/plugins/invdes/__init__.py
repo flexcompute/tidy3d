@@ -6,14 +6,7 @@ from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
 from .optimizer import AdamOptimizer
 from .result import InverseDesignResult
-from .function import (
-    get_amps,
-    get_field_component,
-    get_intensity,
-    sum_array,
-    sum_abs_squared,
-    get_phase,
-)
+from .function import Utilities
 
 __all__ = (
     "InverseDesign",
@@ -23,10 +16,5 @@ __all__ = (
     "TopologyDesignRegion",
     "AdamOptimizer",
     "InverseDesignResult",
-    "get_amps",
-    "get_field_component",
-    "get_intensity",
-    "sum_array",
-    "sum_abs_squared",
-    "get_phase",
+    "Utilities",
 )
