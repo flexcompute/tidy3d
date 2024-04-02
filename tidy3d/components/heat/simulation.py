@@ -109,7 +109,13 @@ class HeatSimulation(AbstractSimulation):
     @pd.validator("structures", always=True)
     def check_unsupported_geometries(cls, val):
         """Error if structures contain unsupported yet geometries."""
-        for structure in val:
+        for ind, structure in enumerate(val):
+            bbox = structure.geometry.bounding_box
+            if any(s == 0 for s in bbox.size):
+                raise SetupError(
+                    f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
+                )
+
             if isinstance(structure.geometry, GeometryGroup):
                 geometries = structure.geometry.geometries
             else:
@@ -117,13 +123,13 @@ class HeatSimulation(AbstractSimulation):
             for geom in geometries:
                 if isinstance(geom, (GeometryGroup)):
                     raise SetupError(
-                        "'HeatSimulation' does not currently support recursive 'GeometryGroup's."
+                        "'HeatSimulation' does not currently support recursive 'GeometryGroup's ('structures[{ind}]')."
                     )
                 if not isinstance(geom, HeatSingleGeometryType):
                     geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
                     raise SetupError(
                         "'HeatSimulation' does not currently support geometries of type "
-                        f"'{geom.type}'. Allowed geometries are "
+                        f"'{geom.type}'  ('structures[{ind}]'). Allowed geometries are "
                         f"{', '.join(geom_names)}, "
                         "and non-recursive 'GeometryGroup'."
                     )
