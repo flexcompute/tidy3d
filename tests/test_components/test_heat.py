@@ -351,6 +351,21 @@ def test_heat_sim():
             structures=[heat_sim.structures[0]], boundary_spec=[bc_spec], sources=[]
         )
 
+    # 1D and 2D structures
+    struct_1d = td.Structure(
+        geometry=td.Box(size=(1, 0, 0)),
+        medium=solid_med,
+    )
+    struct_2d = td.Structure(
+        geometry=td.Box(size=(1, 0, 1)),
+        medium=heat_sim.medium,
+    )
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [struct_1d])
+
+    with pytest.raises(pd.ValidationError):
+        _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [struct_2d])
+
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
 def test_heat_sim_bounds(shift_amount, log_level, log_capture):
