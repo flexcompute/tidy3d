@@ -26,7 +26,21 @@ class AbstractPenalty(InvdesBaseModel, abc.ABC):
 
 
 class ErosionDilationPenalty(AbstractPenalty, tda_penalty.ErosionDilationPenalty):
-    """Erosion and dilation penalty, addable to ``tdi.TopologyDesignRegion``."""
+    """Erosion and dilation penalty, addable to ``tdi.TopologyDesignRegion.penalties``.
+    Uses filtering and projection methods to erode and dilate the features within this array.
+    Measures the change in the array after eroding and dilating (and also dilating and eroding).
+    Returns a penalty proportional to the magnitude of this change.
+    The amount of change under dilation and erosion is minimized if the structure has large feature
+    sizes and large radius of curvature relative to the length scale.
+
+    Note
+    ----
+    For more details, refer to chapter 4 of Hammond, A., "High-Efficiency Topology Optimization
+    for Very Large-Scale Integrated-Photonics Inverse Design" (2022).
+
+    .. image:: ../../_static/img/erosion_dilation.png
+
+    """
 
     pixel_size: pd.PositiveFloat = pd.Field(
         None,
