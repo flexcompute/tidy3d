@@ -12,7 +12,9 @@ jobs:
   github-release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
     - name: Exit if any RC release
       if: contains(${{ github.ref }}, 'rc') == false
       uses: everlytic/branch-merge@1.1.2
@@ -20,7 +22,7 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         source_ref: ${{ github.ref }}
         target_branch: "latest"
-        commit_message_template: 'RELEASE: :shipit: :boom: :tada: Merged {source_ref} into target {target_branch}'
+        commit_message_template: ':tada: RELEASE: Merged {source_ref} into target {target_branch}'
     - name: Release
       uses: softprops/action-gh-release@v1
       with:
@@ -30,7 +32,9 @@ jobs:
   pypi-release:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.ref }}
     - uses: actions/setup-python@v2
     - name: Install dependencies
       run: |
@@ -43,3 +47,17 @@ jobs:
       run: |
         python -m build
         python -m twine upload --repository pypi dist/*
+  sync_to_develop:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: "latest"
+    - name: Exit if any RC release
+      if: contains(${{ github.ref }}, 'rc') == false
+      uses: everlytic/branch-merge@1.1.2
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        source_ref: "latest"
+        target_branch: "develop"
+        commit_message_template: ':tada: RELEASE: Synced latest into develop'
