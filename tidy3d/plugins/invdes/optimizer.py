@@ -51,6 +51,16 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         "``optimizer.continue_run(result)``. ",
     )
 
+    store_full_results: bool = pd.Field(
+        True,
+        title="Store Full Results",
+        description="If ``True``, stores the full history for the vector fields, specifically "
+        "the gradient, params, and optimizer state. For large design regions and many iterations, "
+        "storing the full history of these fields can lead to large file size and memory usage. "
+        "In some cases, we recommend setting this field to ``False``, which will only store the "
+        "last computed state of these variables.",
+    )
+
     @td.components.base.cached_property
     @abc.abstractmethod
     def optax_optimizer(self) -> optax.GradientTransformationExtraArgs:
@@ -106,16 +116,6 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             penalty = aux_data["penalty"]
             post_process_val = aux_data["post_process_val"]
 
-            # save history
-            history["objective_fn_val"].append(val)
-            history["grad"].append(grad)
-            history["penalty"].append(penalty)
-            history["post_process_val"].append(post_process_val)
-
-            # display information
-            result = InverseDesignResult(design=result.design, **history)
-            self.display_fn(result, step_index=step_index)
-
             # update optimizer and parameters
             updates, opt_state = optax_optimizer.update(-grad, opt_state, params)
             params = optax.apply_updates(params, updates)
@@ -123,9 +123,21 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             # cap the parameters
             params = jnp.clip(params, a_min=0.0, a_max=1.0)
 
-            # save the state
-            history["params"].append(params)
-            history["opt_state"].append(opt_state)
+            # save the history of scalar values
+            history["objective_fn_val"].append(val)
+            history["penalty"].append(penalty)
+            history["post_process_val"].append(post_process_val)
+
+            # save the state of vector values
+            for key, value in zip(("params", "opt_state", "grad"), (params, opt_state, grad)):
+                if self.store_full_results:
+                    history[key].append(value)
+                else:
+                    history[key] = [value]
+
+            # display information
+            result = InverseDesignResult(design=result.design, **history)
+            self.display_fn(result, step_index=step_index)
 
             # save current results to file
             if self.results_cache_fname:

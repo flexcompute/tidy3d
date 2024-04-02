@@ -316,6 +316,29 @@ def make_result_multi(use_emulated_run_async):
     return optimizer.run(params0=PARAMS_0)
 
 
+def test_result_store_full_results_is_false(use_emulated_run):
+    """Test running the optimization defined in the ``InverseDesign`` object."""
+
+    optimizer = make_optimizer()
+    optimizer = optimizer.updated_copy(store_full_results=False, num_steps=3)
+
+    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
+
+    result = optimizer.run(params0=PARAMS_0)
+
+    # these store at the very beginning and at the end of every iteration
+    # but when ``store_full_results == False``, they only store the last one
+    for key in ("params", "grad", "opt_state"):
+        assert len(result.history[key]) == 1
+
+    # these store at the end of each iteration
+    for key in ("penalty", "objective_fn_val", "post_process_val"):
+        assert len(result.history[key]) == optimizer.num_steps
+
+    # this should still work, even if ``store_full_results == False``
+    val_last1 = result.last["params"]
+
+
 def test_continue_run_fns(use_emulated_run):
     """Test continuing an already run inverse design from result."""
     result_orig = make_result(use_emulated_run)
@@ -335,9 +358,10 @@ def test_continue_run_from_file(use_emulated_run):
     optimizer_orig = make_optimizer()
     optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 1)
     result_full = optimizer.continue_run_from_file(HISTORY_FNAME)
+    num_steps_orig = len(result_orig.history["params"])
     num_steps_full = len(result_full.history["params"])
     assert (
-        num_steps_full == optimizer_orig.num_steps + optimizer.num_steps
+        num_steps_full == num_steps_orig + optimizer.num_steps
     ), "wrong number of elements in the combined run history."
 
     # test the convenience function to load it from file
