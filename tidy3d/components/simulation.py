@@ -3727,7 +3727,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     @cached_property
     def wvl_mat_min(self) -> float:
-        """Minimum wavelength in the material.
+        """Minimum wavelength in the materials present throughout the simulation.
 
         Returns
         -------

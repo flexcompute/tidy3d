@@ -11,6 +11,7 @@ import tidy3d.plugins.adjoint as tda
 
 from .base import InvdesBaseModel
 from .region import DesignRegionType
+from .validators import check_pixel_size
 
 
 PostProcessFnType = typing.Callable[[tda.JaxSimulationData], float]
@@ -74,6 +75,8 @@ class InverseDesign(AbstractInverseDesign):
         description="Function of ``JaxSimulationData`` that returns a ``float`` contribution "
         "to the objective function",
     )
+
+    _check_sim_pixel_size = check_pixel_size("simulation")
 
     @pd.validator("post_process_fn", always=True)
     def _add_kwargs(cls, val):
@@ -212,6 +215,8 @@ class InverseDesignMulti(AbstractInverseDesign):
         "monitors are not compatible with the ``adjoint`` plugin, for example if there are "
         "``FieldMonitor`` instances with ``.colocate != False``.",
     )
+
+    _check_sim_pixel_size = check_pixel_size("simulations")
 
     @pd.root_validator()
     def _check_lengths(cls, values):
