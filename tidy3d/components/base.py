@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import json
 import pathlib
-import os
-import tempfile
 from functools import wraps
 from typing import List, Callable, Dict, Union, Tuple, Any
 from math import ceil
 import io
 import hashlib
+import gzip
+import shutil
 
 import rich
 import pydantic.v1 as pydantic
@@ -21,7 +21,6 @@ import xarray as xr
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
-from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
 
@@ -685,15 +684,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5.gz') # doctest: +SKIP
         """
-        file, extracted = tempfile.mkstemp(".hdf5")
-        os.close(file)
-        try:
-            extract_gzip_file(fname, extracted)
+        with gzip.GzipFile(fname, "rb") as f_handle:
             result = cls.dict_from_hdf5(
-                extracted, group_path=group_path, custom_decoders=custom_decoders
+                f_handle, group_path=group_path, custom_decoders=custom_decoders
             )
-        finally:
-            os.unlink(extracted)
 
         return result
 
@@ -747,14 +741,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation.to_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
         """
+        with io.BytesIO() as bio:
+            self.to_hdf5(bio, custom_encoders=custom_encoders)
 
-        file, decompressed = tempfile.mkstemp(".hdf5")
-        os.close(file)
-        try:
-            self.to_hdf5(decompressed, custom_encoders=custom_encoders)
-            compress_file_to_gzip(decompressed, fname)
-        finally:
-            os.unlink(decompressed)
+            with gzip.GzipFile(filename=fname, mode="wb") as gz:
+                bio.seek(0)
+                shutil.copyfileobj(bio, gz)
 
     def __lt__(self, other):
         """define < for getting unique indices based on hash."""
