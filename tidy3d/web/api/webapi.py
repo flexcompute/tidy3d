@@ -919,7 +919,7 @@ def real_cost(task_id: str, verbose=True) -> float:
         if verbose:
             console = get_logging_console()
             console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-            if flex_unit != ori_flex_unit:
+            if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
                 console.log(
                     "Note: the task cost pro-rated due to early shutoff was below the minimum "
                     "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "
