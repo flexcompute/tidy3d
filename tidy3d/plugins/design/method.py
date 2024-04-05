@@ -87,7 +87,7 @@ class MethodIndependent(Method, ABC):
         self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
     ) -> BatchData:
         """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
-        batch = web.Batch(simulations=simulations, **kwargs)
+        batch = web.Batch(simulations=simulations, simulation_type="tidy3d_design", **kwargs)
         if path_dir:
             kwargs["path_dir"] = path_dir
         return batch.run(**kwargs)

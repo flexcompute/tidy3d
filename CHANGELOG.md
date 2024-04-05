@@ -8,29 +8,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - 2D heat simulations are now fully supported. 
 - `tidy3d.plugins.adjoint.web.run_local` used in place of `run` will skip validators that restrict the size or number of `input_structures`.
-
-### Fixed
-- Better error message when trying to transform a geometry with infinite bounds.
-
-### Changed
-- Bumped `trimesh` version to `>=4,<4.2`.
-
-## [2.6.1] - 2024-03-07
-
-### Added
 - Introduced the `microwave` plugin which includes `ImpedanceCalculator` for computing the characteristic impedance of transmission lines.
 - `Simulation` now accepts `LumpedElementType`, which currently only supports the `LumpedResistor` type. `LumpedPort` together with `LumpedResistor` make up the new `TerminalComponentModeler` in the `smatrix` plugin.
-- Uniaxial medium Lithium niobate to material library.
+- Uniaxial medium Lithium Niobate to material library.
 - Added support for conformal mesh methods near PEC structures that can be specified through the field `pec_conformal_mesh_spec` in the `Simulation` class.
 
 ### Changed
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
 - `FieldTimeMonitor` restriction to record at a maximum of 5000 time steps if the monitor is not zero-dimensional, to avoid creating unnecessarily large amounts of data.
+- Bumped `trimesh` version to `>=4,<4.2`.
 
 ### Fixed
+- Bug in PolySlab intersection if slab bounds are `inf` on one side.
+- Better error message when trying to transform a geometry with infinite bounds.
+
+## [2.6.3] - 2024-04-02
+
+### Added
+- Added new validators in `HeatSimulation`: no structures with dimensions of zero size, no all-Neumann boundary conditions, non-empty simulation domain.
+
+### Changed
+- Revert forbidden `"` in component names.
+
+## [2.6.2] - 2024-03-21
+
+### Changed
+- Characters `"` and `/` not allowed in component names.
+- Change error when `JaxPolySlab.sidewall_angle != 0.0` to a warning, enabling optimization with slanted sidewalls if a lower accuracy gradient is acceptable.
+
+### Fixed
+- Compute time stepping speed shown `tidy3d.log` using only the number of time steps that was run in the case of early shutoff. Previously, it was using the total number of time steps.
+- Bug in PolySlab intersection if slab bounds are `inf` on one side.
+- Divergence in the simultaneous presence of PML, absorber, and symmetry.
+- Fixed validator for `ModeSpec.bend_radius == 0`, which was not raising an error.
+
+## [2.6.1] - 2024-03-07
+
+### Added
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
-- Bug in PolySlab intersection if slab bounds are `inf` on one side.
 
 ### Changed
 - Slightly reorganized `web.run` logging when `verbose=True` to make it clearer.
@@ -1146,6 +1162,9 @@ which fields are to be projected is now determined automatically based on the me
 
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...pre/2.7
 [Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...develop
+[2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3
+[2.6.2]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/flexcompute/tidy3d/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/flexcompute/tidy3d/compare/v2.5.1...v2.5.2
