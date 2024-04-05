@@ -602,11 +602,16 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> simulation = Simulation.from_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
+        with io.BytesIO() as bio:
+            with open(fname, mode="rb") as f:
+                shutil.copyfileobj(f, bio)
 
-        group_path = cls._construct_group_path(group_path)
-        model_dict = cls.dict_from_hdf5(
-            fname=fname, group_path=group_path, custom_decoders=custom_decoders
-        )
+            bio.seek(0)
+            group_path = cls._construct_group_path(group_path)
+            model_dict = cls.dict_from_hdf5(
+                fname=bio, group_path=group_path, custom_decoders=custom_decoders
+            )
+
         return cls.parse_obj(model_dict, **parse_obj_kwargs)
 
     def to_hdf5(self, fname: str, custom_encoders: List[Callable] = None) -> None:
@@ -625,7 +630,30 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
         """
 
-        with h5py.File(fname, "w") as f_handle:
+        with io.BytesIO() as bio:
+            self.to_hdf5_bio(bio, custom_encoders)
+
+            with open(fname, mode="wb") as f:
+                bio.seek(0)
+                shutil.copyfileobj(bio, f)
+
+    def to_hdf5_bio(self, bio, custom_encoders: List[Callable] = None) -> None:
+        """Exports :class:`Tidy3dBaseModel` instance to .hdf5 file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the .hdf5 file to save the :class:`Tidy3dBaseModel` to.
+        custom_encoders : List[Callable]
+            List of functions accepting (fname: str, group_path: str, value: Any) that take
+            the ``value`` supplied and write it to the hdf5 ``fname`` at ``group_path``.
+
+        Example
+        -------
+        >>> simulation.to_hdf5(fname='folder/sim.hdf5') # doctest: +SKIP
+        """
+
+        with h5py.File(bio, "w") as f_handle:
             json_str = self._json_string
             for ind in range(ceil(len(json_str) / MAX_STRING_LENGTH)):
                 ind_start = int(ind * MAX_STRING_LENGTH)
@@ -684,10 +712,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         -------
         >>> sim_dict = Simulation.dict_from_hdf5(fname='folder/sim.hdf5.gz') # doctest: +SKIP
         """
-        with gzip.GzipFile(fname, "rb") as f_handle:
-            result = cls.dict_from_hdf5(
-                f_handle, group_path=group_path, custom_decoders=custom_decoders
-            )
+        with io.BytesIO() as bio:
+            with gzip.GzipFile(filename=fname, mode="rb") as gz:
+                shutil.copyfileobj(gz, bio)
+
+            bio.seek(0)
+            result = cls.dict_from_hdf5(bio, group_path=group_path, custom_decoders=custom_decoders)
 
         return result
 
@@ -742,7 +772,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         >>> simulation.to_hdf5_gz(fname='folder/sim.hdf5.gz') # doctest: +SKIP
         """
         with io.BytesIO() as bio:
-            self.to_hdf5(bio, custom_encoders=custom_encoders)
+            self.to_hdf5_bio(bio, custom_encoders=custom_encoders)
 
             with gzip.GzipFile(filename=fname, mode="wb") as gz:
                 bio.seek(0)
