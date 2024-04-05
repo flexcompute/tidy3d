@@ -155,12 +155,15 @@ class DataArray(xr.DataArray):
         """Save an xr.DataArray to the hdf5 file handle with a given path to the group."""
 
         sub_group = f_handle.create_group(group_path)
-        sub_group[DATA_ARRAY_VALUE_NAME] = self.values
+        sub_group.create_dataset(DATA_ARRAY_VALUE_NAME, data=self.values, compression="gzip", compression_opts=9)
+        # sub_group[DATA_ARRAY_VALUE_NAME] = self.values
         for key, val in self.coords.items():
             if val.dtype == "<U1":
-                sub_group[key] = val.values.tolist()
+                sub_group.create_dataset(key, data=val.values.tolist(), compression="gzip", compression_opts=9)
+                # sub_group[key] = val.values.tolist()
             else:
-                sub_group[key] = val
+                sub_group.create_dataset(key, data=val, compression="gzip", compression_opts=9)
+                # sub_group[key] = val
 
     @classmethod
     def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
