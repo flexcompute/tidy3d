@@ -1782,3 +1782,13 @@ def test_inf_IO(tmp_path):
     box.to_file(fname)
     box2 = JaxBox.from_file(fname)
     assert box == box2
+
+
+@pytest.mark.parametrize("sidewall_angle, log_expected", ([0.0, None], [0.1, "WARNING"]))
+def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
+    """Test that the sidewall angle warning works as expected."""
+
+    jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=VERTICES, slab_bounds=(-1, 1))
+
+    with AssertLogLevel(log_capture, log_expected, contains_str="sidewall"):
+        jax_polyslab1.updated_copy(sidewall_angle=sidewall_angle)

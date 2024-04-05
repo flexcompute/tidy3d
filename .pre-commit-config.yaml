@@ -6,7 +6,7 @@ repos:
       name: black <<< NOTE:, if you get a message stating that "All done! n file(s) reformatted", you must git add and commit the changes again to complete the commit. >>>
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.1.5"
+    rev: "v0.3.2"
     hooks:
      - id: ruff
        args: [ --fix ]

@@ -47,6 +47,7 @@ def run(
     progress_callback_download: Callable[[float], None] = None,
     solver_version: str = None,
     worker_group: str = None,
+    simulation_type: str = "tidy3d",
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -67,6 +68,8 @@ def run(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
     progress_callback_upload : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
     progress_callback_download : Callable[[float], None] = None
@@ -127,6 +130,7 @@ def run(
         callback_url=callback_url,
         verbose=verbose,
         progress_callback=progress_callback_upload,
+        simulation_type=simulation_type,
     )
     start(
         task_id,
@@ -169,7 +173,7 @@ def upload(
         If ``True``, will print progressbars and status, otherwise, will run silently.
     progress_callback : Callable[[float], None] = None
         Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
-    simulation_type : str
+    simulation_type : str = "tidy3d"
         Type of simulation being uploaded.
     parent_tasks : List[str]
         List of related task ids.

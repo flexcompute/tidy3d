@@ -1,12 +1,16 @@
 Feature Development Workflow
 ------------------------------
 
+Currently most of our release development flow is made under the latest ``pre/*`` branch under the main frontend
+tidy3d repository. You want to fork from this latest branch to develop your feature in order for it to be included
+under that release.
+
 We are using a variation of the `gitflow
 workflow <https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow>`__
 - so this is the first thing to familiarize yourselves with. The
 splitting of branches into ``main``, ``develop`` and separate feature
 branches is as explained there. Most importantly, **all contributions
-should happen through a PR from a feature branch into the ``develop``
+should happen through a PR from a feature branch into the develop
 branch.**
 
 The extra step that we have in our workflow is to
@@ -16,11 +20,8 @@ history clean, but it does require a little more work. As an extra
 advantage, once you get the hang of rebasing it also becomes a very
 useful tool to prune your commits and write more meaningful commit
 messages when you’re done with the work. The main purpose of this page
-is to give an example of the workflow.
-
-   for more information on the difference between rebasing vs merging,
-   see this
-   `article <https://www.atlassian.com/git/tutorials/merging-vs-rebasing>`__.
+is to give an example of the workflow. For more information on the difference between rebasing vs merging,
+see this `article <https://www.atlassian.com/git/tutorials/merging-vs-rebasing>`__.
 
 The first thing to do when starting a new batch of work is to start from
 a clean branch on your machine.
@@ -39,7 +40,7 @@ Create your feature rebase
 Before rebasing, you should make sure you have the latest version
 of ``develop``, in case other work has been merged meanwhile.
 
-::
+.. code-block:: bash
 
    git checkout develop
    git pull origin develop

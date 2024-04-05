@@ -24,6 +24,11 @@ def test_bend_axis_not_given():
         _ = td.ModeSpec(bend_radius=1.0, bend_axis=None)
 
 
+def test_zero_radius():
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.ModeSpec(bend_radius=0.0, bend_axis=1)
+
+
 def test_glancing_incidence():
     with pytest.raises(pydantic.ValidationError):
         _ = td.ModeSpec(angle_theta=np.pi / 2)

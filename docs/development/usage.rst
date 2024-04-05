@@ -4,7 +4,7 @@ Using the Development Flow
 Developing ``tidy3d`` with ``poetry``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``poetry`` is an incredibly powerful tool for reproducible package development environments and dependency management. TODO add link.
+`poetry <https://python-poetry.org/>`_ is an incredibly powerful tool for reproducible package development environments and dependency management.
 
 If you are developing ``tidy3d``, we recommend you work within the configured ``poetry`` environment defined by ``poetry.lock``. The way to install this environment is simple:
 

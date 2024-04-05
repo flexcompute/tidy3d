@@ -2226,7 +2226,7 @@
         ],
         "type": "GridSpec"
     },
-    "version": "2.6.1",
+    "version": "2.6.3",
     "courant": 0.8,
     "normalize_index": 0,
     "lumped_elements": [],

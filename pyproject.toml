@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.6.1"  # Thinking about bump2version
+version = "2.6.3"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -27,6 +27,7 @@ importlib-metadata = "^6.0.0"
 h5netcdf = "1.0.2"
 h5py = "^3.0.0"
 rich = "<12.6.0"
+numpy = "<2"
 matplotlib = "*"
 shapely = "^2.0"
 pydantic = "^2.0"
@@ -44,6 +45,7 @@ responses = "*"
 
 ### Optional dependencies ### 
 # development core
+bump-my-version =  {version="*", optional = true}
 black = {version="23.12.1", optional = true}
 coverage = {version="*", optional = true}
 dill = {version="*", optional = true}
@@ -53,7 +55,7 @@ pre-commit = {version="*", optional = true}
 pylint = {version="*", optional = true}
 pytest = {version="*", optional = true}
 pytest-timeout = {version="*", optional = true}
-ruff = {version="*", optional = true}
+ruff = {version="0.3.2", optional = true}
 tox = {version="*", optional = true}
 
 
@@ -108,7 +110,7 @@ devsim = {version="*", optional = true}
 cma = {version="*", optional = true}
 
 [tool.poetry.extras]
-dev = ['black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
+dev = ['bump-my-version', 'black', "coverage", 'dill', 'divparams', 'gdspy', 'gdstk', 'gdstk', 'grcwa', 'ipython', 'ipython', 'jax', 'jaxlib', 'jinja2',
   'jupyter', 'jupyterblack', 'myst-parser', 'memory_profiler', 'nbconvert', 'nbdime', 'nbsphinx', 'networkx', 'optax', 'pre-commit',
   'pydata-sphinx-theme', 'pylint', 'pyswarms', 'pytest', 'pytest-timeout', 'rtree', 'ruff', 'sax', 'signac', 'sphinx',
   'sphinx-book-theme', 'sphinx-copybutton', 'sphinx-favicon', 'sphinx-notfound-page', 'sphinx-sitemap', 'sphinx-tabs', 'sphinxemoji', 'tmm', 'tox', 'trimesh',
@@ -155,11 +157,11 @@ exclude = '''
 
 
 [tool.ruff]
-ignore-init-module-imports = true
-typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
+lint.ignore-init-module-imports = true
+lint.typing-modules = ["tidy3d.components.types"] # without this Literal["something fails"]
 line-length = 100
 fix = true
-ignore = [
+lint.ignore = [
   "E501",  # line too long, handled by black
   "B008",  # do not perform function calls in argument defaults
   "C901",  # too complex
@@ -173,13 +175,57 @@ ignore = [
   "UP035", # TODO decide what to do here
 ]
 
-select = [
+lint.select = [
   "E",  # pycodestyle errors
   "W",  # pycodestyle warnings
   "F",  # pyflakes
   "C",  # flake8-comprehensions
   "B",  # flake8-bugbear
-  "UP"
+  "UP",
+  "NPY201", # numpy 2.* compatibility check
 ]
+
+[tool.bumpversion]
+current_version = "2.6.3"
+parse = """(?x)
+    (?P<major>0|[1-9]\\d*)\\.
+    (?P<minor>0|[1-9]\\d*)\\.
+    (?P<patch>0|[1-9]\\d*)
+    (?:
+        -                             # dash seperator for pre-release section
+        (?P<pre_l>[a-zA-Z-]+)         # pre-release label
+        (?P<pre_n>0|[1-9]\\d*)        # pre-release version number
+    )?                                # pre-release section is optional
+"""
+serialize = [
+    "{major}.{minor}.{patch}{pre_l}{pre_n}",
+    "{major}.{minor}.{patch}",
+]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+ignore_missing_files = false
+tag = false
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = false
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+
+[tool.bumpversion.parts.pre_l]
+values = ["dev", "rc"]
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "{current_version}"
+replace = "{new_version}"
+
+[[tool.bumpversion.files]]
+filename = "tidy3d/version.py"
+search = "{current_version}"
+replace = "{new_version}"
 
 target-version = "py310"
