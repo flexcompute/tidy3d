@@ -681,6 +681,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     _name_validator = validate_name_str()
 
     @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return True
+
+    @cached_property
     def is_time_modulated(self) -> bool:
         """Whether any component of the medium is time modulated."""
         return self.modulation_spec is not None and self.modulation_spec.applied_modulation
@@ -1399,7 +1404,7 @@ class Medium(AbstractMedium):
             medium containing the corresponding ``permittivity`` and ``conductivity``.
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
-        if eps < 1:
+        if eps < 1 - fp_eps:
             raise ValidationError(
                 "Dispersiveless medium must have 'permittivity>=1`. "
                 "Please use 'Lorentz.from_nk()' to covert to a Lorentz medium, or the utility "
@@ -1450,7 +1455,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1):
+        if np.any(_get_numpy_array(val) < 1 - fp_eps):
             raise SetupError("'permittivity' must be no less than one.")
 
         return val
@@ -1483,6 +1488,13 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
                 "Caution: simulations with a gain medium are unstable, and are likely to diverge."
             )
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if self.conductivity is None:
+            return self.permittivity.is_uniform
+        return self.permittivity.is_uniform and self.conductivity.is_uniform
 
     @cached_property
     def n_cfl(self):
@@ -1722,7 +1734,7 @@ class CustomMedium(AbstractCustomMedium):
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
                 val.field_components[comp], val.field_components[comp].f
             )
-            if np.any(_get_numpy_array(eps_real) < 1):
+            if np.any(_get_numpy_array(eps_real) < 1 - fp_eps):
                 raise SetupError(
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
@@ -1769,7 +1781,8 @@ class CustomMedium(AbstractCustomMedium):
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1):
+        if np.any(_get_numpy_array(val) < 1 - fp_eps):
+            print(np.min(_get_numpy_array(val)))
             raise SetupError("'permittivity' must be no less than one.")
 
         modulation = values.get("modulation_spec")
@@ -1840,6 +1853,11 @@ class CustomMedium(AbstractCustomMedium):
         if self.eps_dataset.eps_xx == self.eps_dataset.eps_yy == self.eps_dataset.eps_zz:
             return True
         return False
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return self._medium.is_spatially_uniform
 
     @cached_property
     def freqs(self) -> np.ndarray:
@@ -2920,6 +2938,18 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     )
         return val
 
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+
+        for coeffs in self.poles:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -3187,7 +3217,7 @@ class Sellmeier(DispersiveMedium):
 
         if dn_dwvl >= 0:
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
-        if n < 1:
+        if n < 1 - fp_eps:
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
 
@@ -3272,6 +3302,15 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                     "and are likely to diverge."
                 )
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
@@ -3361,7 +3400,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             raise ValidationError("'n' and'dn_dwvl' must have the same dimension.")
         if np.any(_get_numpy_array(dn_dwvl) >= 0):
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
-        if np.any(_get_numpy_array(n) < 1):
+        if np.any(_get_numpy_array(n) < 1 - fp_eps):
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(
             coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl),
@@ -3698,6 +3737,17 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 )
         return val
 
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -3945,6 +3995,17 @@ class CustomDrude(CustomDispersiveMedium, Drude):
             if np.any(_get_numpy_array(delta) <= 0):
                 raise SetupError("For stable medium, 'delta' must be positive.")
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def eps_dataarray_freq(
         self, frequency: float
@@ -4206,6 +4267,17 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                     "and are likely to diverge."
                 )
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def eps_dataarray_freq(
         self, frequency: float
@@ -4838,6 +4910,11 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
                     "The field 'subpixel' is ignored. Please set 'subpixel' in each component."
                 )
         return values
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return any(comp.is_spatially_uniform for comp in self.components.values())
 
     @cached_property
     def n_cfl(self):

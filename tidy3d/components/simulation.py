@@ -2493,15 +2493,24 @@ class Simulation(AbstractYeeGridSimulation):
         structures = values.get("structures") or []
         total_structures = [structure_bg] + list(structures)
 
-        for monitor in val:
-            if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
-                mediums = Scene.intersecting_media(monitor, total_structures)
-                # make sure there is no more than one medium in the returned list
-                if len(mediums) > 1:
-                    raise SetupError(
-                        f"{len(mediums)} different mediums detected on plane "
-                        f"intersecting a {monitor.type}. Plane must be homogeneous."
-                    )
+        with log as consolidated_logger:
+            for monitor_ind, monitor in enumerate(val):
+                if isinstance(monitor, (AbstractFieldProjectionMonitor, DiffractionMonitor)):
+                    mediums = Scene.intersecting_media(monitor, total_structures)
+                    # make sure there is no more than one medium in the returned list
+                    if len(mediums) > 1:
+                        raise SetupError(
+                            f"{len(mediums)} different mediums detected on plane "
+                            f"intersecting a {monitor.type}. Plane must be homogeneous."
+                        )
+                    # if <=1 medium, check if the medium is spatially uniform
+                    for mat in mediums:
+                        if not mat.is_spatially_uniform:
+                            consolidated_logger.warning(
+                                f"Nonuniform custom medium detected on plane intersecting a {monitor.type}. "
+                                "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
+                                custom_loc=["monitors", monitor_ind],
+                            )
 
         return val
 
@@ -2754,23 +2763,33 @@ class Simulation(AbstractYeeGridSimulation):
         total_structures = [structure_bg] + list(structures)
 
         # for each plane wave in the sources list
-        for source in val:
-            if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
-                mediums = Scene.intersecting_media(source, total_structures)
-                # make sure there is no more than one medium in the returned list
-                if len(mediums) > 1:
-                    raise SetupError(
-                        f"{len(mediums)} different mediums detected on plane "
-                        f"intersecting a {source.type} source. Plane must be homogeneous."
-                    )
-                if len(mediums) == 1 and isinstance(
-                    list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)
-                ):
-                    raise SetupError(
-                        f"An anisotropic medium is detected on plane intersecting a {source.type} "
-                        f"source. Injection of {source.type} into anisotropic media currently is "
-                        "not supported."
-                    )
+        with log as consolidated_logger:
+            for source_id, source in enumerate(val):
+                if isinstance(source, (PlaneWave, GaussianBeam, AstigmaticGaussianBeam)):
+                    mediums = Scene.intersecting_media(source, total_structures)
+                    # make sure there is no more than one medium in the returned list
+                    if len(mediums) > 1:
+                        raise SetupError(
+                            f"{len(mediums)} different mediums detected on plane "
+                            f"intersecting a {source.type} source. Plane must be homogeneous."
+                        )
+                    if len(mediums) == 1 and isinstance(
+                        list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)
+                    ):
+                        raise SetupError(
+                            f"An anisotropic medium is detected on plane intersecting a {source.type} "
+                            f"source. Injection of {source.type} into anisotropic media currently is "
+                            "not supported."
+                        )
+
+                    # if <=1 medium, check if the medium is spatially uniform
+                    for mat in mediums:
+                        if not mat.is_spatially_uniform:
+                            consolidated_logger.warning(
+                                f"Nonuniform custom medium detected on plane intersecting a {source.type}. "
+                                "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
+                                custom_loc=["sources", source_id],
+                            )
 
         return val
 

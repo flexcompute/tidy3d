@@ -546,6 +546,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Data type."""
         return np.iscomplexobj(self.values)
 
+    @property
+    def is_uniform(self):
+        """Whether each element is of equal value in ``values``."""
+        return self.values.is_uniform
+
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
         """Check that cell connections does not have duplicate points."""

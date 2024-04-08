@@ -328,3 +328,25 @@ def test_spatial_data_array():
 
     with pytest.raises(DataError):
         reflected = arr.reflect(axis=2, center=2.5)
+
+
+def test_uniform_check():
+    """check if each element in the array is of equal value."""
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2), dtype=np.complex128),
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert arr.is_uniform
+
+    # small variation is still considered as uniform
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2)) + np.random.random((2, 2, 2)) * 1e-6,
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert arr.is_uniform
+
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2)) + np.random.random((2, 2, 2)) * 1e-4,
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert not arr.is_uniform
