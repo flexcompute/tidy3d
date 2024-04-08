@@ -681,6 +681,11 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
     _name_validator = validate_name_str()
 
     @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return True
+
+    @cached_property
     def is_time_modulated(self) -> bool:
         """Whether any component of the medium is time modulated."""
         return self.modulation_spec is not None and self.modulation_spec.applied_modulation
@@ -1485,6 +1490,13 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         return val
 
     @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if self.conductivity is None:
+            return self.permittivity.is_uniform
+        return self.permittivity.is_uniform and self.conductivity.is_uniform
+
+    @cached_property
     def n_cfl(self):
         """This property computes the index of refraction related to CFL condition, so that
         the FDTD with this medium is stable when the time step size that doesn't take
@@ -1840,6 +1852,11 @@ class CustomMedium(AbstractCustomMedium):
         if self.eps_dataset.eps_xx == self.eps_dataset.eps_yy == self.eps_dataset.eps_zz:
             return True
         return False
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return self._medium.is_spatially_uniform
 
     @cached_property
     def freqs(self) -> np.ndarray:
@@ -2920,6 +2937,18 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                     )
         return val
 
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+
+        for coeffs in self.poles:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -3272,6 +3301,15 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                     "and are likely to diverge."
                 )
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def _pole_residue_dict(self) -> Dict:
         """Dict representation of Medium as a pole-residue model."""
@@ -3698,6 +3736,17 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
                 )
         return val
 
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
+
     def eps_dataarray_freq(
         self, frequency: float
     ) -> Tuple[CustomSpatialDataType, CustomSpatialDataType, CustomSpatialDataType]:
@@ -3945,6 +3994,17 @@ class CustomDrude(CustomDispersiveMedium, Drude):
             if np.any(_get_numpy_array(delta) <= 0):
                 raise SetupError("For stable medium, 'delta' must be positive.")
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def eps_dataarray_freq(
         self, frequency: float
@@ -4206,6 +4266,17 @@ class CustomDebye(CustomDispersiveMedium, Debye):
                     "and are likely to diverge."
                 )
         return val
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        if not self.eps_inf.is_uniform:
+            return False
+        for coeffs in self.coeffs:
+            for coeff in coeffs:
+                if not coeff.is_uniform:
+                    return False
+        return True
 
     def eps_dataarray_freq(
         self, frequency: float
@@ -4844,6 +4915,11 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
                     "The field 'subpixel' is ignored. Please set 'subpixel' in each component."
                 )
         return values
+
+    @cached_property
+    def is_spatially_uniform(self) -> bool:
+        """Whether the medium is spatially uniform."""
+        return any(comp.is_spatially_uniform for comp in self.components.values())
 
     @cached_property
     def n_cfl(self):

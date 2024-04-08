@@ -381,3 +381,25 @@ def test_sel_inside(nx):
 
     with pytest.raises(DataError):
         _ = arr.does_cover([[0.1, 3, 2], [1, 2.5, 2]])
+
+
+def test_uniform_check():
+    """check if each element in the array is of equal value."""
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2), dtype=np.complex128),
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert arr.is_uniform
+
+    # small variation is still considered as uniform
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2)) + np.random.random((2, 2, 2)) * 1e-6,
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert arr.is_uniform
+
+    arr = td.SpatialDataArray(
+        np.ones((2, 2, 2)) + np.random.random((2, 2, 2)) * 1e-4,
+        coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
+    )
+    assert not arr.is_uniform
