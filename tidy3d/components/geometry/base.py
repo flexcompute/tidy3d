@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Union, Callable
 from math import isclose
 import functools
+import pathlib
 
 import pydantic.v1 as pydantic
 import numpy as np
@@ -1357,6 +1358,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
+        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     def _as_union(self) -> List[Geometry]:

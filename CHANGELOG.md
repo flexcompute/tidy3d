@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
 - `FieldTimeMonitor` restriction to record at a maximum of 5000 time steps if the monitor is not zero-dimensional, to avoid creating unnecessarily large amounts of data.
 - Bumped `trimesh` version to `>=4,<4.2`.
+- Make directories in path passed to `.to_gds_file()` methods, if they don't exist.
 
 ### Fixed
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
