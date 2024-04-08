@@ -9,6 +9,7 @@ import numpy as np
 import xarray as xr
 import matplotlib as mpl
 import math
+import pathlib
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -3585,6 +3586,7 @@ class Simulation(AbstractYeeGridSimulation):
             frequency=frequency,
             gds_layer_dtype_map=gds_layer_dtype_map,
         )
+        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     """ Plotting """
