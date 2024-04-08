@@ -563,6 +563,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
+    @property
+    def is_uniform(self):
+        """Whether each element is of equal value in ``values``."""
+        return self.values.is_uniform
+
     @pd.validator("points", always=True)
     def points_right_indexing(cls, val):
         """Check that points are indexed corrrectly."""

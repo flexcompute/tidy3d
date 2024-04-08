@@ -39,7 +39,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
         cells=tri_grid_cells,
         values=tri_grid_values,
     )
-
+    assert not tri_grid.is_uniform
     # test name redirect
     assert tri_grid.name == ds_name
 
@@ -594,3 +594,32 @@ def test_cartesian_to_unstructured(nz, use_vtk, fill_value):
         assert sample_outside.values.item() == values[0, 0, 0]
     else:
         assert sample_outside.values.item() == fill_value
+
+
+def test_triangular_dataset_uniform():
+    import tidy3d as td
+
+    # basic create
+    tri_grid_points = td.PointDataArray(
+        [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],
+        dims=("index", "axis"),
+    )
+
+    tri_grid_cells = td.CellDataArray(
+        [[0, 1, 2], [1, 2, 3]],
+        dims=("cell_index", "vertex_index"),
+    )
+
+    tri_grid_values = td.IndexedDataArray(
+        [1.0, 1.0, 1.0, 1.0],
+        dims=("index"),
+    )
+
+    tri_grid = td.TriangularGridDataset(
+        normal_axis=1,
+        normal_pos=0,
+        points=tri_grid_points,
+        cells=tri_grid_cells,
+        values=tri_grid_values,
+    )
+    assert tri_grid.is_uniform

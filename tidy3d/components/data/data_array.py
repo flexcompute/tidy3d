@@ -144,6 +144,12 @@ class DataArray(xr.DataArray):
         """Absolute value of data array."""
         return abs(self)
 
+    @property
+    def is_uniform(self):
+        """Whether each element is of equal value in the data array"""
+        raw_data = self.data.ravel()
+        return np.allclose(raw_data, raw_data[0])
+
     def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
 

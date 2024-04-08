@@ -64,12 +64,16 @@ def make_custom_current_source():
     return td.CustomCurrentSource(size=SIZE, source_time=ST, current_dataset=current_dataset)
 
 
-def make_spatial_data(value=0, dx=0, unstructured=False, seed=None):
+def make_spatial_data(value=0, dx=0, unstructured=False, seed=None, uniform=False):
     """Makes a spatial data array."""
-    data = np.random.random((Nx, Ny, Nz)) + value
+    if uniform:
+        data = value * np.ones((Nx, Ny, Nz))
+    else:
+        data = np.random.random((Nx, Ny, Nz)) + value
     arr = td.SpatialDataArray(data, coords=dict(x=X + dx, y=Y, z=Z))
     if unstructured:
-        return cartesian_to_unstructured(arr, seed=seed)
+        method = "direct" if uniform else "linear"
+        return cartesian_to_unstructured(arr, seed=seed, method=method)
     return arr
 
 
@@ -634,11 +638,20 @@ def test_custom_isotropic_medium(unstructured):
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
     mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp, allow_gain=True)
     verify_custom_medium_methods(mat, ["permittivity", "conductivity"])
+    assert not mat.is_spatially_uniform
 
     # inconsistent coords
     with pytest.raises(pydantic.ValidationError):
         sigmatmp = make_spatial_data(value=0, dx=1, unstructured=unstructured, seed=seed)
         mat = CustomMedium(permittivity=permittivity, conductivity=sigmatmp)
+
+    # uniform
+    permittivity = make_spatial_data(value=1, unstructured=unstructured, seed=seed, uniform=True)
+    mat = CustomMedium(permittivity=permittivity)
+    assert mat.is_spatially_uniform
+
+    mat = CustomAnisotropicMedium(xx=mat, yy=mat, zz=mat)
+    assert mat.is_spatially_uniform
 
 
 def verify_custom_dispersive_medium_methods(mat, reduced_fields=[]):
@@ -709,6 +722,7 @@ def test_custom_pole_residue(unstructured):
     mat = CustomPoleResidue(eps_inf=eps_inf, poles=((a, c),))
     verify_custom_dispersive_medium_methods(mat, ["eps_inf", "poles"])
     assert mat.n_cfl > 1
+    assert not mat.is_spatially_uniform
 
     # to custom non-dispersive medium
     # dispersive failure
@@ -775,6 +789,7 @@ def test_custom_sellmeier(unstructured):
     mat = CustomSellmeier(coeffs=((b1, c1), (b2, c2)))
     verify_custom_dispersive_medium_methods(mat, ["coeffs"])
     assert mat.n_cfl == 1
+    assert not mat.is_spatially_uniform
 
     # from dispersion
     n = make_spatial_data(value=2, unstructured=unstructured, seed=seed)
@@ -839,6 +854,7 @@ def test_custom_lorentz(unstructured):
     verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
     assert mat.pole_residue.subpixel
+    assert not mat.is_spatially_uniform
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -876,6 +892,7 @@ def test_custom_drude(unstructured):
     mat = CustomDrude(eps_inf=eps_inf, coeffs=((f1, delta1), (f2, delta2)))
     verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
+    assert not mat.is_spatially_uniform
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -926,6 +943,7 @@ def test_custom_debye(unstructured):
     mat = CustomDebye(eps_inf=eps_inf, coeffs=((eps1, tau1), (eps2, tau2)))
     verify_custom_dispersive_medium_methods(mat, ["eps_inf", "coeffs"])
     assert mat.n_cfl > 1
+    assert not mat.is_spatially_uniform
 
 
 @pytest.mark.parametrize("unstructured", [True])
@@ -957,6 +975,7 @@ def test_custom_anisotropic_medium(log_capture, unstructured):
     # anisotropic
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
     verify_custom_medium_methods(mat)
+    assert not mat.is_spatially_uniform
 
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, subpixel=True)
     assert_log_level(log_capture, "WARNING")
@@ -1075,3 +1094,86 @@ def test_io_dispersive(tmp_path, unstructured, z_custom):
     sim_load = td.Simulation.from_file(filename)
 
     assert sim_load == sim
+
+
+def test_warn_planewave_intersection(log_capture):
+    """Warn that if a nonuniform custom medium is intersecting PlaneWave source."""
+    src = td.PlaneWave(
+        source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        direction="+",
+    )
+
+    # uniform custom medium
+    permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=True)
+    mat = CustomMedium(permittivity=permittivity)
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 1)),
+        medium=mat,
+    )
+
+    sim = td.Simulation(
+        size=(1, 1, 2),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(wavelength=1),
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    assert_log_level(log_capture, None)
+
+    # nonuniform custom medium
+    permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=False)
+    mat = CustomMedium(permittivity=permittivity)
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 1)),
+        medium=mat,
+    )
+    sim.updated_copy(structures=[box])
+    assert_log_level(log_capture, "WARNING")
+
+
+def test_warn_diffraction_monitor_intersection(log_capture):
+    """Warn that if a nonuniform custom medium is intersecting Diffraction Monitor."""
+    src = td.PointDipole(
+        source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+        center=(0, 0, 0.6),
+        polarization="Ex",
+    )
+    monitor = td.DiffractionMonitor(
+        center=(0, 0, 0),
+        size=(td.inf, td.inf, 0),
+        freqs=[250e12],
+        name="monitor_diffraction",
+        normal_dir="+",
+    )
+
+    # uniform custom medium
+    permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=True)
+    mat = CustomMedium(permittivity=permittivity)
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 1)),
+        medium=mat,
+    )
+
+    sim = td.Simulation(
+        size=(1, 1, 2),
+        structures=[box],
+        grid_spec=td.GridSpec.auto(wavelength=1),
+        monitors=[monitor],
+        sources=[src],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+    )
+    assert_log_level(log_capture, None)
+
+    # nonuniform custom medium
+    permittivity = make_spatial_data(value=1, unstructured=False, seed=0, uniform=False)
+    mat = CustomMedium(permittivity=permittivity)
+    box = td.Structure(
+        geometry=td.Box(size=(td.inf, td.inf, 1)),
+        medium=mat,
+    )
+    sim.updated_copy(structures=[box])
+    assert_log_level(log_capture, "WARNING")
