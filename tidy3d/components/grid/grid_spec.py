@@ -407,6 +407,7 @@ class AutoGrid(GridSpec1d):
         "structures present in the simulation, including override structures "
         "with ``enforced=True``. It is a soft bound, meaning that the actual minimal "
         "grid size might be slightly smaller.",
+        units=MICROMETER,
     )
 
     mesher: MesherType = pd.Field(
