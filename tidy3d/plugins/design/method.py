@@ -6,7 +6,6 @@ import numpy as np
 import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
 import asyncio
-from concurrent.futures import ProcessPoolExecutor
 
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import AbstractSimulation
@@ -146,7 +145,7 @@ class MethodIndependent(Method, ABC):
         TODO possibly we can specifically improve it to add the parallel construction of tasks.
         """
 
-        def construct_task(i, fn_args, fn_pre, get_task_name):
+        async def construct_task(i, fn_args, fn_pre, get_task_name):
             # for each point, construct the simulation inputs into a dict
             simulations_task_i = {}
             task_name_mappings_task_i = []
@@ -174,17 +173,11 @@ class MethodIndependent(Method, ABC):
             return simulations_task_i, task_name_mappings_task_i
 
         async def main(num_points):
-            loop = asyncio.get_running_loop()
-            with ProcessPoolExecutor() as pool:
-                tasks = [
-                    loop.run_in_executor(pool, construct_task, i_task)
-                    for i_task in range(num_points)
-                ]
-                results = await asyncio.gather(*tasks)
-                out1 = zip(
-                    *[(result,) for result in results]
-                )  # Adjust according to your actual function's return type
-                return out1
+            tasks = [
+                construct_task(i_task, fn_args=fn_args, fn_pre=fn_pre, get_task_name=get_task_name)
+                for i_task in range(num_points)
+            ]
+            return await asyncio.gather(*tasks)
 
         # get all function inputs
         fn_args, num_points = self._assemble_args(parameters)
@@ -215,10 +208,11 @@ class MethodIndependent(Method, ABC):
                 simulations.update(simulations_i)
                 task_name_mappings.append(task_name_mappings_i)
         elif task_construction_method == "parallel":
-            data = asyncio.run(main(num_points=num_points))
-            print(data)
-            print(type(data))
-            raise NotImplementedError("Parallel construction of tasks is not yet implemented.")
+            data = await main(num_points=num_points)
+            zipped_data = [list(group) for group in zip(*data)]
+            simulations = zipped_data[0]
+            task_name_mappings = zipped_data[1]
+            # raise NotImplementedError("Parallel construction of tasks is not yet implemented.")
         else:
             raise ValueError(
                 f"Construction method '{task_construction_method}' not recognized. "
