@@ -94,6 +94,16 @@ class MethodIndependent(Method, ABC):
             kwargs["path_dir"] = path_dir
         return batch.run(**kwargs)
 
+    async def _async_run_batch(
+        self, simulations: Dict[str, AbstractSimulation], path_dir: str = None, **kwargs
+    ) -> list:
+        """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
+        if path_dir:
+            kwargs["path_dir"] = path_dir
+
+        tasks = [web.run(simulation, **kwargs) for simulation in simulations]
+        return await asyncio.gather(*tasks)
+
     def run_batch(
         self,
         parameters: Tuple[ParameterType, ...],
@@ -110,6 +120,47 @@ class MethodIndependent(Method, ABC):
 
         # run in batch
         batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **kwargs)
+        task_id_dict = batch_data.task_ids
+
+        # run post processing on each data
+        result = []
+        task_ids = []
+        for task_names_i in task_name_mappings:
+            if isinstance(task_names_i, dict):
+                task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
+                kwargs_dict = {
+                    kwarg_name: batch_data[task_name]
+                    for kwarg_name, task_name in task_names_i.items()
+                }
+                val = fn_post(**kwargs_dict)
+            else:
+                task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
+                args_list = (batch_data[task_name] for task_name in task_names_i)
+                val = fn_post(*args_list)
+
+            result.append(val)
+
+        return fn_args, result, task_ids, batch_data
+
+    async def async_run_batch(
+        self,
+        parameters: Tuple[ParameterType, ...],
+        fn_pre: Callable,
+        fn_post: Callable,
+        path_dir: str = None,
+        **kwargs,
+    ) -> Tuple[Any]:
+        """Defines the search algorithm (batched)."""
+
+        simulations, task_name_mappings, fn_args = await self.setup_batch(
+            parameters=parameters, fn_pre=fn_pre, **kwargs
+        )
+
+        # run in batch
+        batch_data = await self._async_run_batch(
+            simulations=simulations, path_dir=path_dir, **kwargs
+        )
+        return batch_data
         task_id_dict = batch_data.task_ids
 
         # run post processing on each data

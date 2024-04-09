@@ -199,3 +199,71 @@ class DesignSpace(Tidy3dBaseModel):
             task_ids=task_ids,
             batch_data=batch_data,
         )
+
+    async def async_run_batch(
+        self,
+        fn_pre: Callable[[Any], Union[Simulation, List[Simulation], Dict[str, Simulation]]],
+        fn_post: Callable[
+            [Union[SimulationData, List[SimulationData], Dict[str, SimulationData]]], Any
+        ],
+        path_dir: str = None,
+        **batch_kwargs,
+    ) -> Result:
+        """Run a design problem where the function is split into pre and post processing steps.
+
+        Parameters
+        ----------
+        fn_pre : Callable[Any, Union[Simulation, List[Simulation]]]
+            Function accepting arguments that correspond to the ``.name`` fields
+            of the ``DesignSpace.parameters``. Returns either a :class:`.Simulation`,
+            `list` of :class:`.Simulation`s or a `dict` of :class:`.Simulation`s to be run
+            in a batch.
+        fn_pre : Callable[Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any]
+            Function accepting the :class:`.SimulationData` object(s) corresponding to the
+            ``fn_pre`` and returning the result of the parameter sweep function.
+            If ``fn_pre`` returns a single simulation, it will be passed as a single argument to
+            ``fn_post``.
+            If ``fn_pre`` returns a list of simulations, their data will be passed as ``*args``.
+            If ``fn_pre`` returns a dict of simulations, their data will be passed as ``**kwargs``
+            with the keys corresponding to the argument names.
+        path_dir : str = None
+            Optional directory in which to store the batch results.
+
+        Returns
+        -------
+        :class:`.Result`
+            Object containing the results of the design space exploration.
+            Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
+        """
+
+        # run the functions using the `method.run_batch`
+        # fn_args, fn_values, task_ids, batch_data = self.method.async_run_batch(
+        #     parameters=self.parameters,
+        #     fn_pre=fn_pre,
+        #     fn_post=fn_post,
+        #     path_dir=path_dir,
+        #     **batch_kwargs,
+        # )
+
+        await self.method.async_run_batch(
+            parameters=self.parameters,
+            fn_pre=fn_pre,
+            fn_post=fn_post,
+            path_dir=path_dir,
+            **batch_kwargs,
+        )
+        return 0
+
+        # store the pre and post functions in a single source code
+        fn_source_pre = self.get_fn_source(fn_pre)
+        fn_source_post = self.get_fn_source(fn_post)
+        fn_source = self._make_batch_fn_source(fn_source_pre, fn_source_post)
+
+        # package the result
+        return self._package_run_results(
+            fn_args=fn_args,
+            fn_values=fn_values,
+            fn_source=fn_source,
+            task_ids=task_ids,
+            batch_data=batch_data,
+        )
