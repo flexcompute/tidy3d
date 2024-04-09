@@ -72,7 +72,8 @@ def make_spatial_data(value=0, dx=0, unstructured=False, seed=None, uniform=Fals
         data = np.random.random((Nx, Ny, Nz)) + value
     arr = td.SpatialDataArray(data, coords=dict(x=X + dx, y=Y, z=Z))
     if unstructured:
-        return cartesian_to_unstructured(arr, seed=seed)
+        method = "direct" if uniform else "linear"
+        return cartesian_to_unstructured(arr, seed=seed, method=method)
     return arr
 
 

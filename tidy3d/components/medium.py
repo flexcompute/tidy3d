@@ -1404,7 +1404,7 @@ class Medium(AbstractMedium):
             medium containing the corresponding ``permittivity`` and ``conductivity``.
         """
         eps, sigma = AbstractMedium.nk_to_eps_sigma(n, k, freq)
-        if eps < 1 - fp_eps:
+        if eps < 1:
             raise ValidationError(
                 "Dispersiveless medium must have 'permittivity>=1`. "
                 "Please use 'Lorentz.from_nk()' to covert to a Lorentz medium, or the utility "
@@ -1455,7 +1455,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1 - fp_eps):
+        if np.any(_get_numpy_array(val) < 1):
             raise SetupError("'permittivity' must be no less than one.")
 
         return val
@@ -1734,7 +1734,7 @@ class CustomMedium(AbstractCustomMedium):
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
                 val.field_components[comp], val.field_components[comp].f
             )
-            if np.any(_get_numpy_array(eps_real) < 1 - fp_eps):
+            if np.any(_get_numpy_array(eps_real) < 1):
                 raise SetupError(
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
@@ -1781,8 +1781,7 @@ class CustomMedium(AbstractCustomMedium):
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1 - fp_eps):
-            print(np.min(_get_numpy_array(val)))
+        if np.any(_get_numpy_array(val) < 1):
             raise SetupError("'permittivity' must be no less than one.")
 
         modulation = values.get("modulation_spec")
@@ -3217,7 +3216,7 @@ class Sellmeier(DispersiveMedium):
 
         if dn_dwvl >= 0:
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
-        if n < 1 - fp_eps:
+        if n < 1:
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl), **kwargs)
 
@@ -3400,7 +3399,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
             raise ValidationError("'n' and'dn_dwvl' must have the same dimension.")
         if np.any(_get_numpy_array(dn_dwvl) >= 0):
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
-        if np.any(_get_numpy_array(n) < 1 - fp_eps):
+        if np.any(_get_numpy_array(n) < 1):
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(
             coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl),
