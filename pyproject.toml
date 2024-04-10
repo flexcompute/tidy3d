@@ -66,16 +66,8 @@ gdspy = {version="*", optional = true}
 gdstk = {version=">=0.9.49", optional = true}
 
 # jax
-jaxlib = [
-    {version = ">=0.4.1,<=0.4.26", platform = "linux",  source="jaxsource", optional = true},
-    {version = ">=0.4.1,<=0.4.26", platform = "darwin",  source="jaxsource", optional = true},
-    {version = ">=0.4.13,<=0.4.26", platform = "win32", source="jaxsource", python = "^3.9", optional = true}
-]
-jax = [
-    {version = ">=0.4.1,<=0.4.26", extras = ["cpu"], platform = "linux", source="jaxsource", optional = true},
-    {version = ">=0.4.1,<=0.4.26", extras = ["cpu"], platform = "darwin",  source="jaxsource", optional = true},
-    {version = ">=0.4.13,<=0.4.26", extras = ["cpu"], platform = "win32", python = "^3.9", source="jaxsource", optional = true}
-]
+jaxlib = {version = "^0.4.13,<=0.4.26", source="jaxsource", optional = true}
+jax = {version = "^0.4.13,<=0.4.26", extras = ["cpu"], source="jaxsource", optional = true}
 
 # trimesh
 networkx = {version = "^2.6.3", optional = true}
