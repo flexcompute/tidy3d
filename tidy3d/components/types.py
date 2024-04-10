@@ -123,6 +123,7 @@ def constrained_array(
 
 
 # pre-define a set of commonly used array like instances for import and use in type hints
+ArrayInt1D = constrained_array(dtype=int, ndim=1)
 ArrayFloat1D = constrained_array(dtype=float, ndim=1)
 ArrayFloat2D = constrained_array(dtype=float, ndim=2)
 ArrayFloat3D = constrained_array(dtype=float, ndim=3)

@@ -7,7 +7,7 @@ import pydantic.v1 as pd
 import matplotlib as mpl
 import numpy as np
 
-from ..types import Ax
+from ..types import Ax, FreqArray
 from ..simulation import AbstractYeeGridSimulation
 from ..viz import add_ax_if_none, equal_aspect
 from ..boundary import BoundarySpec, PECBoundary
@@ -19,13 +19,14 @@ from ..scene import Scene
 from ..medium import FullyAnisotropicMedium
 from ..structure import Structure
 from ..source import ModeSource, GaussianPulse
-from ..monitor import ModeSolverMonitor, AbstractModeMonitor, FieldMonitor, Monitor
+from ..monitor import ModeSolverMonitor, AbstractModeMonitor, Monitor
+from ..validators import validate_freqs_not_empty, validate_freqs_min, MIN_FREQUENCY
 from ...exceptions import SetupError
 from ...log import log
 
 from .monitor import EMEMonitor, EMEMonitorType, EMEFieldMonitor, EMEModeSolverMonitor
 from .grid import EMEGridSpecType, EMEGrid, EMEGridSpec, EMECompositeGrid
-from .sweep import EMESweepSpecType, EMEModeSweep, EMELengthSweep
+from .sweep import EMESweepSpecType, EMEModeSweep, EMELengthSweep, EMEFreqSweep
 
 
 # maximum numbers of simulation parameters
@@ -39,6 +40,10 @@ WARN_MODE_NUM_CELLS = 1e5
 # eme specific simulation parameters
 MAX_NUM_FREQS = 20
 MAX_NUM_SWEEP = 100
+
+
+# constraint can be slow with too many modes
+WARN_CONSTRAINT_NUM_MODES = 50
 
 
 class EMESimulation(AbstractYeeGridSimulation):
@@ -117,8 +122,14 @@ class EMESimulation(AbstractYeeGridSimulation):
         * `EME Solver Demonstration <../../notebooks/docs/features/eme.rst>`_
     """
 
-    freqs: List[pd.PositiveFloat] = pd.Field(
-        ..., title="Frequencies", description="Frequencies for the EME simulation.", min_items=1
+    freqs: FreqArray = pd.Field(
+        ...,
+        title="Frequencies",
+        description="Frequencies for the EME simulation. "
+        "The field is propagated independently at each provided frequency. "
+        "This can be slow when the number of frequencies is large. In this case, "
+        "consider using the approximate 'EMEFreqSweep' as the 'sweep_spec' "
+        "instead of providing all desired frequencies here.",
     )
 
     axis: Axis = pd.Field(
@@ -182,6 +193,13 @@ class EMESimulation(AbstractYeeGridSimulation):
         "Required to find scattering matrix in basis besides the computational basis.",
     )
 
+    normalize: bool = pd.Field(
+        True,
+        title="Normalize Scattering Matrix",
+        description="Whether to normalize the port modes to unity flux, "
+        "thereby normalizing the scattering matrix and expansion coefficients.",
+    )
+
     port_offsets: Tuple[pd.NonNegativeFloat, pd.NonNegativeFloat] = pd.Field(
         (0, 0),
         title="Port Offsets",
@@ -208,30 +226,20 @@ class EMESimulation(AbstractYeeGridSimulation):
         "for the field continuity requirement and give more physical results.",
     )
 
+    _freqs_not_empty = validate_freqs_not_empty()
+    _freqs_lower_bound = validate_freqs_min()
+
     @pd.validator("grid_spec", always=True)
     def _validate_auto_grid_wavelength(cls, val, values):
         """Handle the case where grid_spec is auto and wavelength is not provided."""
         # this is handled instead post-init to ensure freqs is defined
         return val
 
-    @pd.validator("port_offsets", always=True)
-    def _validate_port_offsets(cls, val, values):
-        """Port offsets cannot jointly exceed simulation length."""
-        total_offset = val[0] + val[1]
-        size = values["size"]
-        axis = values["axis"]
-        if size[axis] < total_offset:
-            raise SetupError(
-                "The sum of the two 'port_offset' fields "
-                "cannot exceed the simulation 'size' in the 'axis' direction."
-            )
-        return val
-
     @pd.validator("freqs", always=True)
     def _validate_freqs(cls, val):
         """Freqs cannot contain duplicates."""
         if len(set(val)) != len(val):
-            raise SetupError(f"Simulation 'freqs={val}' cannot " "contain duplicate frequencies.")
+            raise SetupError(f"'EMESimulation' 'freqs={val}' cannot contain duplicate frequencies.")
         return val
 
     @pd.validator("structures", always=True)
@@ -502,7 +510,7 @@ class EMESimulation(AbstractYeeGridSimulation):
         Each monitor has a mode spec. The cells and mode specs
         are specified by 'eme_grid_spec'."""
         monitors = []
-        freqs = self.freqs
+        freqs = list(self.freqs)
         mode_planes = self.eme_grid.mode_planes
         mode_specs = [eme_mode_spec._to_mode_spec() for eme_mode_spec in self.eme_grid.mode_specs]
         for i in range(self.eme_grid.num_cells):
@@ -527,23 +535,79 @@ class EMESimulation(AbstractYeeGridSimulation):
             name="_eme_port_modes_monitor",
             colocate=False,
             num_modes=self.max_port_modes,
+            num_sweep=None,
+            normalize=self.normalize,
         )
 
     def _post_init_validators(self) -> None:
         """Call validators taking `self` that get run after init."""
+        self._validate_port_offsets()
         _ = self.grid
         _ = self.eme_grid
         _ = self.mode_solver_monitors
         log.begin_capture()
+        self._validate_too_close_to_edges()
+        self._validate_sweep_spec()
         self._validate_monitor_setup()
         self._validate_sources_and_boundary()
         self._validate_size()
         self._validate_monitor_size()
         self._validate_modes_size()
-        self._validate_sweep_spec()
         self._validate_symmetry()
+        self._validate_constraint()
         # self._warn_monitor_interval()
         log.end_capture(self)
+
+    def _validate_too_close_to_edges(self):
+        """Can't have mode planes closer to boundary than extreme Yee grid center."""
+        cell_centers = self.eme_grid.centers
+        yee_centers = list(self.grid.centers.to_dict.values())[self.axis]
+        if cell_centers[0] < yee_centers[0]:
+            raise SetupError(
+                "The first EME cell center must be further from the boundary "
+                "than the first Yee cell center, "
+                f"currently {cell_centers[0]} compared to {yee_centers[0]}."
+            )
+        if cell_centers[-1] > yee_centers[-1]:
+            raise SetupError(
+                "The last EME cell center must be further from the boundary "
+                "than the last Yee cell center, "
+                f"currently {cell_centers[-1]} compared to {yee_centers[-1]}."
+            )
+        for ind, monitor in enumerate(self.monitors):
+            if isinstance(monitor, ModeSolverMonitor) and monitor.normal_axis == self.axis:
+                center = monitor.center[monitor.normal_axis]
+                if center < yee_centers[0] or center > yee_centers[-1]:
+                    raise SetupError(
+                        f"'ModeSolverMonitor' at 'monitors[{ind}]' has "
+                        f"center {center}, which is within half a Yee cell "
+                        "of the simulation boundary along the propagation axis. "
+                        "Please move the monitor further from the boundary."
+                    )
+
+    def _validate_constraint(self):
+        """Constraint can be slow with too many modes. Warn in this case."""
+        constraint = self.constraint
+        max_num_modes = self.max_num_modes
+        if constraint is not None and max_num_modes > WARN_CONSTRAINT_NUM_MODES:
+            log.warning(
+                f"The simulation has 'constraint={constraint}', and the maximum "
+                f"number of EME modes in the simulation is '{max_num_modes}'. "
+                f"Using more than '{WARN_CONSTRAINT_NUM_MODES}' modes together with "
+                "a constraint can significantly slow down the simulation. Consider "
+                "reducing the number of modes or setting 'constraint=None'."
+            )
+
+    def _validate_port_offsets(self):
+        """Port offsets cannot jointly exceed simulation length."""
+        total_offset = self.port_offsets[0] + self.port_offsets[1]
+        size = self.size
+        axis = self.axis
+        if size[axis] < total_offset:
+            raise SetupError(
+                "The sum of the two 'port_offset' fields "
+                "cannot exceed the simulation 'size' in the 'axis' direction."
+            )
 
     def _validate_symmetry(self):
         """Symmetry in propagation direction is not supported."""
@@ -567,13 +631,15 @@ class EMESimulation(AbstractYeeGridSimulation):
         if self.sweep_spec is None:
             return
         # mode sweep can't exceed max num modes
+        num_sweep = self.sweep_spec.num_sweep
+        if num_sweep == 0:
+            raise SetupError("Simulation 'sweep_spec' has 'num_sweep=0'.")
+        if num_sweep > MAX_NUM_SWEEP:
+            raise SetupError(
+                f"Simulation 'sweep_spec' has 'num_sweep={num_sweep}, "
+                f"which exceeds the maximum allowed '{MAX_NUM_SWEEP}'."
+            )
         if isinstance(self.sweep_spec, EMEModeSweep):
-            if len(self.sweep_spec.num_modes) > MAX_NUM_SWEEP:
-                raise SetupError(
-                    "Simulation 'sweep_spec' has "
-                    f"'len(num_modes)={len(self.sweep_spec.num_modes)}', which exceeds "
-                    f"the maximum allowed '{MAX_NUM_SWEEP}'."
-                )
             if any(self.sweep_spec.num_modes > self.max_num_modes):
                 raise SetupError(
                     "Simulation 'sweep_spec' is an 'EMEModeSweep'. "
@@ -582,13 +648,26 @@ class EMESimulation(AbstractYeeGridSimulation):
                     f"'num_modes={self.sweep_spec.num_modes}'; the maximum "
                     f"number of EME modes is '{self.max_num_modes}'."
                 )
-        if isinstance(self.sweep_spec, EMELengthSweep):
-            if len(self.sweep_spec.scale_factors) > MAX_NUM_SWEEP:
-                raise SetupError(
-                    "Simulation 'sweep_spec' has "
-                    f"'len(scale_factors)={len(self.sweep_spec.scale_factors)}', which exceeds "
-                    f"the maximum allowed '{MAX_NUM_SWEEP}'."
-                )
+        elif isinstance(self.sweep_spec, EMELengthSweep):
+            scale_factors_shape = self.sweep_spec.scale_factors.shape
+            if len(scale_factors_shape) == 2:
+                num_scale_factors = scale_factors_shape[1]
+                if num_scale_factors != self.eme_grid.num_cells:
+                    raise SetupError(
+                        "Simulation 'sweep_spec.scale_factors' has shape "
+                        f"'{scale_factors_shape}'. The size of the second dimension "
+                        "must equal the number of EME cells in the simulation, which is "
+                        f"'{self.eme_grid.num_cells}'."
+                    )
+        elif isinstance(self.sweep_spec, EMEFreqSweep):
+            for i, scale_factor in enumerate(self.sweep_spec.freq_scale_factors):
+                scaled_freqs = np.array(self.freqs) * scale_factor
+                if np.min(scaled_freqs) < MIN_FREQUENCY:
+                    raise SetupError(
+                        f"Simulation 'sweep_spec' at sweep index {i} results in "
+                        f"scaled frequencies {scaled_freqs}; the minimum allowed is "
+                        f"{MIN_FREQUENCY:.0e} Hz."
+                    )
 
     def _validate_monitor_setup(self):
         """Check monitor setup."""
@@ -618,6 +697,18 @@ class EMESimulation(AbstractYeeGridSimulation):
                     "maximum number of modes in the 'eme_grid', which is "
                     f"'mode_spec.num_modes={self.max_num_modes}'."
                 )
+            if (
+                hasattr(monitor, "num_sweep")
+                and monitor.num_sweep is not None
+                and self.sweep_spec is not None
+                and not (monitor.num_sweep <= self.sweep_spec.num_sweep)
+            ):
+                raise SetupError(
+                    f"Monitor has 'num_sweep={monitor.num_sweep}', which exceeds the "
+                    "number of sweep indices in the simulation 'sweep_spec', which is "
+                    f"'{self.sweep_spec.num_sweep}'."
+                )
+
             if (
                 isinstance(monitor, EMEFieldMonitor)
                 and monitor.num_modes is not None
@@ -662,10 +753,10 @@ class EMESimulation(AbstractYeeGridSimulation):
         if num_freqs > MAX_NUM_FREQS:
             raise SetupError(
                 f"Simulation has {num_freqs:.2e} frequencies, "
-                f"a maximum of {MAX_NUM_FREQS:.2e} are allowed. Currently, mode solving "
+                f"a maximum of {MAX_NUM_FREQS:.2e} are allowed. Mode solving "
                 f"is repeated at each frequency, so EME simulations with too many frequencies "
-                f"can be slower and more expensive than FDTD simulations. In the future, "
-                f"we will support efficient frequency sweeps via perturbative mode solving."
+                f"can be slower and more expensive than FDTD simulations. "
+                f"Consider using an 'EMEFreqSweep' instead for a faster approximate solution."
             )
 
     def _validate_monitor_size(self) -> None:
@@ -689,29 +780,14 @@ class EMESimulation(AbstractYeeGridSimulation):
         if total_size_gb > MAX_SIMULATION_DATA_SIZE_GB:
             raise SetupError(
                 f"Simulation's monitors have {total_size_gb:.2f}GB of estimated storage, "
-                f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed."
+                f"a maximum of {MAX_SIMULATION_DATA_SIZE_GB:.2f}GB are allowed. Note that "
+                "this estimate includes the port modes if 'store_port_modes' is 'True'."
             )
 
-        # Some monitors store much less data than what is needed internally. Make sure that the
-        # internal storage also does not exceed the limit.
-        for monitor in self.monitors:
+        # Make sure that internal storage from mode solvers also does not exceed the limit.
+        for monitor in self.mode_solver_monitors:
             num_cells = self._monitor_num_cells(monitor)
-            # intermediate storage needed, in GB
-            if isinstance(monitor, EMEMonitor):
-                num_eme_cells = self._monitor_num_eme_cells(monitor)
-                num_freqs = self._monitor_num_freqs(monitor)
-                num_modes = self._monitor_num_modes(monitor)
-                solver_data = (
-                    monitor.storage_size(
-                        num_cells=num_cells,
-                        num_eme_cells=num_eme_cells,
-                        num_freqs=num_freqs,
-                        num_modes=num_modes,
-                    )
-                    / 1e9
-                )
-            else:
-                solver_data = (monitor.storage_size(num_cells=num_cells, tmesh=0)) / 1e9
+            solver_data = (monitor.storage_size(num_cells=num_cells, tmesh=0)) / 1e9
             if solver_data > MAX_MONITOR_INTERNAL_DATA_SIZE_GB:
                 raise SetupError(
                     f"Estimated internal storage of monitor '{monitor.name}' is "
@@ -737,49 +813,72 @@ class EMESimulation(AbstractYeeGridSimulation):
                 )
 
         with log as consolidated_logger:
-            for src_ind, source in enumerate(self.sources):
-                if isinstance(source, ModeSource):
-                    # Make a monitor so we can call ``discretize_monitor``
-                    monitor = FieldMonitor(
-                        center=source.center,
-                        size=source.size,
-                        name="tmp",
-                        freqs=[source.source_time.freq0],
-                        colocate=False,
-                    )
-                    msg_header = f"Mode source at sources[{src_ind}] "
-                    custom_loc = ["sources", src_ind]
-                    warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
-
-        with log as consolidated_logger:
             for mnt_ind, monitor in enumerate(self.monitors):
                 if isinstance(monitor, AbstractModeMonitor):
                     msg_header = f"Mode monitor '{monitor.name}' "
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
+            for mnt_ind, monitor in enumerate(self.mode_solver_monitors):
+                msg_header = f"Internal mode solver monitor '{monitor.name}' "
+                custom_loc = ["mode_solver_monitors", mnt_ind]
+                warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
+
+    @property
+    def _monitors_full(self) -> Tuple[EMEMonitorType, ...]:
+        """All monitors, including port modes monitor."""
+        if self.store_port_modes:
+            return list(self.monitors) + [self.port_modes_monitor]
+        return list(self.monitors)
 
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
         data_size = {}
-        for monitor in self.monitors:
+        for monitor in self._monitors_full:
             num_cells = self._monitor_num_cells(monitor)
             if isinstance(monitor, EMEMonitor):
+                num_transverse_cells = self._monitor_num_transverse_cells(monitor)
                 num_eme_cells = self._monitor_num_eme_cells(monitor)
                 num_freqs = self._monitor_num_freqs(monitor)
                 num_modes = self._monitor_num_modes(monitor)
+                num_sweep = self._monitor_num_sweep(monitor)
                 storage_size = float(
                     monitor.storage_size(
                         num_cells=num_cells,
+                        num_transverse_cells=num_transverse_cells,
                         num_eme_cells=num_eme_cells,
                         num_freqs=num_freqs,
                         num_modes=num_modes,
+                        num_sweep=num_sweep,
                     )
                 )
             else:
                 storage_size = float(monitor.storage_size(num_cells=num_cells, tmesh=0))
             data_size[monitor.name] = storage_size
         return data_size
+
+    @property
+    def _num_sweep(self) -> pd.PositiveInt:
+        """Number of sweep indices."""
+        if self.sweep_spec is None:
+            return 1
+        return self.sweep_spec.num_sweep
+
+    @property
+    def _sweep_modes(self) -> bool:
+        """Whether the sweep changes the modes."""
+        return self.sweep_spec is not None and isinstance(self.sweep_spec, EMEFreqSweep)
+
+    def _monitor_num_sweep(self, monitor: EMEMonitor) -> pd.PositiveInt:
+        """Number of sweep indices for a certain monitor."""
+        if self.sweep_spec is None:
+            return 1
+        # only freq sweep changes the modes
+        if isinstance(monitor, EMEModeSolverMonitor) and not self._sweep_modes:
+            return 1
+        if monitor.num_sweep is None:
+            return self.sweep_spec.num_sweep
+        return min(self.sweep_spec.num_sweep, monitor.num_sweep)
 
     def _monitor_eme_cell_indices(self, monitor: EMEMonitor) -> List[pd.NonNegativeInt]:
         """EME cell indices inside monitor. Takes into account 'eme_cell_interval_space'."""
@@ -799,8 +898,8 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _monitor_freqs(self, monitor: Monitor) -> List[pd.NonNegativeFloat]:
         """Monitor frequencies."""
         if monitor.freqs is None:
-            return self.freqs
-        return np.intersect1d(self.freqs, monitor.freqs)
+            return list(self.freqs)
+        return list(monitor.freqs)
 
     def _monitor_num_freqs(self, monitor: Monitor) -> int:
         """Total number of freqs included in monitor."""
@@ -862,9 +961,6 @@ class EMESimulation(AbstractYeeGridSimulation):
                     "a 'wavelength' value for 'grid_spec' to control automatic "
                     "grid generation."
                 )
-            # this is already logged in auto mesher
-            # wavelength = C_0 / freqs[0]
-            # log.info(f"Auto meshing using wavelength {wavelength:1.4f} defined from freqs.")
             plane = self.eme_grid.mode_planes[0]
             sources.append(
                 ModeSource(
@@ -884,6 +980,20 @@ class EMESimulation(AbstractYeeGridSimulation):
             num_pml_layers=self.num_pml_layers,
         )
 
-        # This would AutoGrid the in-plane directions of the 2D materials
-        # return self._grid_corrections_2dmaterials(grid)
         return grid
+
+    def _monitor_num_transverse_cells(self, monitor: Monitor) -> int:
+        """Total number of cells transverse to propagation axis
+        included in monitor based on simulation grid."""
+
+        def num_transverse_cells_in_monitor(monitor: Monitor) -> int:
+            """Get the number of transverse measurement cells in a
+            monitor given the simulation grid and downsampling."""
+            num_cells = self.discretize_monitor(monitor).num_cells
+            # take monitor downsampling into account
+            num_cells = list(monitor.downsampled_num_cells(num_cells))
+            # pop propagation axis
+            num_cells.pop(self.axis)
+            return np.prod(np.array(num_cells, dtype=np.int64))
+
+        return num_transverse_cells_in_monitor(monitor)

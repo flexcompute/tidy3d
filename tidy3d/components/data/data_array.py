@@ -788,7 +788,7 @@ class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "mode_index", "eme_cell_index")
+    _dims = ("x", "y", "z", "f", "sweep_index", "eme_cell_index", "mode_index")
 
 
 class EMEFreqModeDataArray(DataArray):
@@ -804,7 +804,7 @@ class EMEFreqModeDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index", "eme_cell_index")
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
 
 
 class EMEScalarFieldDataArray(AbstractSpatialDataArray):
@@ -824,7 +824,7 @@ class EMEScalarFieldDataArray(AbstractSpatialDataArray):
     """
 
     __slots__ = ()
-    _dims = ("x", "y", "z", "f", "mode_index", "eme_port_index")
+    _dims = ("x", "y", "z", "f", "sweep_index", "eme_port_index", "mode_index")
 
 
 class EMECoefficientDataArray(DataArray):
@@ -845,11 +845,18 @@ class EMECoefficientDataArray(DataArray):
     ...     eme_cell_index=eme_cell_index,
     ...     eme_port_index=eme_port_index
     ... )
-    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 2, 2, 5, 2)), coords=coords)
+    >>> fd = EMECoefficientDataArray((1 + 1j) * np.random.random((1, 2, 2, 5, 2)), coords=coords)
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index_out", "mode_index_in", "eme_cell_index", "eme_port_index")
+    _dims = (
+        "f",
+        "sweep_index",
+        "eme_port_index",
+        "eme_cell_index",
+        "mode_index_out",
+        "mode_index_in",
+    )
     _data_attrs = {"long_name": "mode expansion coefficient"}
 
 
@@ -873,7 +880,7 @@ class EMESMatrixDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index_out", "mode_index_in", "sweep_index")
+    _dims = ("f", "sweep_index", "mode_index_out", "mode_index_in")
     _data_attrs = {"long_name": "scattering matrix element"}
 
 
@@ -891,7 +898,7 @@ class EMEModeIndexDataArray(DataArray):
     """
 
     __slots__ = ()
-    _dims = ("f", "mode_index", "eme_cell_index")
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
     _data_attrs = {"long_name": "Propagation index"}
 
 
