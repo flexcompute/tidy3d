@@ -382,3 +382,7 @@ def test_batch_filename(tmp_path):
     modeler = make_component_modeler(path_dir=str(tmp_path))
     path = modeler._batch_path
     assert path
+
+
+def test_import_smatrix_smatrix():
+    from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
