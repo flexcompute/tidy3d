@@ -1,8 +1,8 @@
 """ imports interfaces for interacting with server """
-from .synchronous.api.container import Job, Batch, BatchData
-from .synchronous.cli.migrate import migrate
-from .synchronous.cli.app import configure_fn as configure
-from .synchronous.api.webapi import (
+from .api.container import Job, Batch, BatchData
+from .cli.migrate import migrate
+from .cli.app import configure_fn as configure
+from .api.webapi import (
     run,
     upload,
     get_info,
@@ -21,10 +21,10 @@ from .synchronous.api.webapi import (
     real_cost,
     test,
 )
-from .synchronous.cli import tidy3d_cli
-from .synchronous.core import core_config
-from ..log import log, get_logging_console
-from ..version import __version__
+from .cli import tidy3d_cli
+from .core import core_config
+from ...log import log, get_logging_console
+from ...version import __version__
 
 migrate()
 

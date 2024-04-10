@@ -49,7 +49,7 @@ def run(
     verbose: bool = True,
     progress_callback_upload: Callable[[float], None] = None,
     progress_callback_download: Callable[[float], None] = None,
-    reduce_simulation: Literal["auto", True, False] = "auto",
+    reduce_simulation: Literal[auto, True, False] = "auto",
 ) -> ModeSolverData:
     """Submits a :class:`.ModeSolver` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.ModeSolverData` object.

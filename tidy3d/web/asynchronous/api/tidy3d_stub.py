@@ -13,7 +13,7 @@ from ..core.file_util import (
     read_simulation_from_hdf5_gz,
 )
 from ..core.stub import TaskStub, TaskStubData
-from ... import log
+from .... import log
 from ....components.base import _get_valid_extension
 from ....components.data.sim_data import SimulationData
 from ....components.data.monitor_data import ModeSolverData

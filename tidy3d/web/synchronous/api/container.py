@@ -13,11 +13,11 @@ from .tidy3d_stub import SimulationType, SimulationDataType
 from ..api import webapi as web
 from ..core.task_info import TaskInfo, RunInfo
 from ..core.constants import TaskId, TaskName
-from ...components.base import Tidy3dBaseModel
-from ...components.types import annotate_type
-from ...log import log, get_logging_console
+from ....components.base import Tidy3dBaseModel
+from ....components.types import annotate_type
+from ....log import log, get_logging_console
 
-from ...exceptions import DataError
+from ....exceptions import DataError
 
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."

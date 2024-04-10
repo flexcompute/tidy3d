@@ -5,9 +5,9 @@ import time
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
 from requests.exceptions import JSONDecodeError
-from ...exceptions import WebError
+from ....exceptions import WebError
 from urllib3.exceptions import NewConnectionError
-from ...log import log
+from ....log import log
 
 # number of seconds to keep re-trying connection before erroring
 CONNECTION_RETRY_TIME = 180
