@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EME solver through `EMESimulation` class.
 - Properties `num_time_steps_adjoint` and `tmesh_adjoint` to `JaxSimulation` to estimate adjoint run time.
 - Ability to add `path` to `updated_copy()` method to recursively update sub-components of a tidy3d model. For example `sim2 = sim.updated_copy(size=new_size, path="structures/0/geometry")` creates a recursively updated copy of `sim` where `sim.structures[0].geometry` is updated with `size=new_size`.
+- Python 3.12 support. Updated dependencies.
 
 ### Changed
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
