@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 
-from typing import Union, List, Optional, Tuple, Literal
+from typing import Union, Optional, Tuple, Literal
 
 from abc import ABC, abstractmethod
 
 from ..base_sim.monitor import AbstractMonitor
 from ..monitor import AbstractFieldMonitor, ModeSolverMonitor
+from ..types import FreqArray
 
 
 BYTES_COMPLEX = 8
@@ -17,18 +18,29 @@ BYTES_COMPLEX = 8
 class EMEMonitor(AbstractMonitor, ABC):
     """Abstract EME monitor."""
 
-    freqs: Optional[List[pd.PositiveFloat]] = pd.Field(
+    freqs: Optional[FreqArray] = pd.Field(
         None,
         title="Monitor Frequencies",
         description="Frequencies at which the monitor will record. "
-        "Must be a subset of the simulation 'freqs'.",
+        "Must be a subset of the simulation 'freqs'. "
+        "A value of 'None' will record at all simulation 'freqs'.",
     )
 
     num_modes: Optional[pd.NonNegativeInt] = pd.Field(
         None,
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
-        "Cannot exceed the greatest number of modes in any EME cell.",
+        "Cannot exceed the greatest number of modes in any EME cell. "
+        "A value of 'None' will record all modes.",
+    )
+
+    num_sweep: Optional[pd.NonNegativeInt] = pd.Field(
+        1,
+        title="Number of Sweep Indices",
+        description="Number of sweep indices for the monitor to record. "
+        "Cannot exceed the number of sweep indices for the simulation. "
+        "If the sweep does not change the monitor data, the sweep index "
+        "will be omitted. A value of 'None' will record all sweep indices.",
     )
 
     interval_space: Tuple[Literal[1], Literal[1], Literal[1]] = pd.Field(
@@ -59,14 +71,23 @@ class EMEMonitor(AbstractMonitor, ABC):
 
     @abstractmethod
     def storage_size(
-        self, num_cells: int, num_eme_cells: int, num_freqs: int, num_modes: int
+        self,
+        num_cells: int,
+        num_transverse_cells: int,
+        num_eme_cells: int,
+        num_freqs: int,
+        num_modes: int,
+        num_sweep: int,
     ) -> int:
         """Size of monitor storage given the number of points after discretization.
 
         Parameters
         ----------
         num_cells : int
-            Number of grid cells within the monitor after discretization by a :class:`Simulation`.
+            Number of grid cells within the monitor after discretization by a :class:`.Simulation`.
+        num_transverse_cells: int
+            Number of grid cells within the monitor transverse to the propagation axis
+            after discretization by a :class:`.Simulation`.
         num_eme_cells: int
             Number of EME cells intersecting the monitor.
         num_freqs: int
@@ -121,11 +142,38 @@ class EMEModeSolverMonitor(EMEMonitor):
         "primal grid nodes). Default (False) is used internally in EME propagation.",
     )
 
+    normalize: bool = pd.Field(
+        True,
+        title="Normalize Modes",
+        description="Whether to normalize the EME modes to unity flux.",
+    )
+
+    keep_invalid_modes: bool = pd.Field(
+        False,
+        title="Keep Invalid Modes",
+        description="Whether to store modes containing nan values and modes which are "
+        "exponentially increasing in the propagation direction.",
+    )
+
     def storage_size(
-        self, num_cells: int, num_eme_cells: int, num_freqs: int, num_modes: int
+        self,
+        num_cells: int,
+        num_transverse_cells: int,
+        num_eme_cells: int,
+        num_freqs: int,
+        num_modes: int,
+        num_sweep: int,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = 6 * BYTES_COMPLEX * num_cells * num_freqs * num_modes
+        bytes_single = (
+            6
+            * BYTES_COMPLEX
+            * num_transverse_cells
+            * num_eme_cells
+            * num_freqs
+            * num_modes
+            * num_sweep
+        )
         return bytes_single
 
 
@@ -173,14 +221,21 @@ class EMEFieldMonitor(EMEMonitor, AbstractFieldMonitor):
         title="Number of Modes",
         description="Maximum number of modes for the monitor to record. "
         "For 'EMEFieldMonitor', refers to the number of modes at each port."
-        "Cannot exceed the max of the number of modes in the two ports. ",
+        "Cannot exceed the max of the number of modes in the two ports. "
+        "A value of 'None' will record all modes.",
     )
 
     def storage_size(
-        self, num_cells: int, num_eme_cells: int, num_freqs: int, num_modes: int
+        self,
+        num_cells: int,
+        num_transverse_cells: int,
+        num_eme_cells: int,
+        num_freqs: int,
+        num_modes: int,
+        num_sweep: int,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = 6 * BYTES_COMPLEX * num_cells * num_freqs * num_modes * 2
+        bytes_single = 6 * BYTES_COMPLEX * num_cells * num_freqs * num_modes * 2 * num_sweep
         return bytes_single
 
 
@@ -220,10 +275,18 @@ class EMECoefficientMonitor(EMEMonitor):
     )
 
     def storage_size(
-        self, num_cells: int, num_eme_cells: int, num_freqs: int, num_modes: int
+        self,
+        num_cells: int,
+        num_transverse_cells: int,
+        num_eme_cells: int,
+        num_freqs: int,
+        num_modes: int,
+        num_sweep: int,
     ) -> int:
         """Size of monitor storage given the number of points after discretization."""
-        bytes_single = 4 * BYTES_COMPLEX * num_freqs * num_modes * num_modes * num_eme_cells
+        bytes_single = (
+            4 * BYTES_COMPLEX * num_freqs * num_modes * num_modes * num_eme_cells * num_sweep
+        )
         return bytes_single
 
 

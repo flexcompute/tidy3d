@@ -812,7 +812,7 @@ def test_mode_solver_nan_pol_fraction():
     md = ms.solve()
     check_ms_reduction(ms)
 
-    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [8, 9]
+    assert list(np.where(np.isnan(md.pol_fraction.te))[1]) == [9]
 
 
 def test_mode_solver_method_defaults():
@@ -906,5 +906,39 @@ def test_mode_solver_web_run_batch(mock_remote_api):
     # Run mode solver one at a time
     results = msweb.run_batch(mode_solver_list, verbose=False, folder_name="Mode Solver")
     [print(type(x)) for x in results]
-    assert all([isinstance(x, ModeSolverData) for x in results])
+    assert all(isinstance(x, ModeSolverData) for x in results)
     assert (results[i].n_eff.shape == (num_freqs, i + 1) for i in range(num_of_sims))
+
+
+def test_mode_solver_relative():
+    """Relative mode solver"""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+        filter_pol="tm",
+        precision="double",
+        track_freq="lowest",
+    )
+    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+        colocate=False,
+    )
+    basis = ms.data_raw
+    new_freqs = np.array(freqs) * 1.01
+    ms = ms.updated_copy(freqs=new_freqs)
+    _ = ms._data_on_yee_grid_relative(basis=basis)

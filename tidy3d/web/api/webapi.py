@@ -459,6 +459,8 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     else:
         # non-verbose case, just keep checking until status is not running or perc_done >= 100
+        if verbose:
+            console.log("running solver")
         perc_done, _ = get_run_info(task_id)
         while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
             perc_done, field_decay = get_run_info(task_id)

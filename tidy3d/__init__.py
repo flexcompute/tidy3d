@@ -156,7 +156,7 @@ from .components.eme.data.dataset import EMEModeSolverDataset
 from .components.eme.data.monitor_data import EMEModeSolverData, EMEFieldData, EMECoefficientData
 from .components.eme.grid import EMEUniformGrid, EMECompositeGrid, EMEExplicitGrid
 from .components.eme.grid import EMEGrid, EMEModeSpec
-from .components.eme.sweep import EMELengthSweep, EMEModeSweep
+from .components.eme.sweep import EMELengthSweep, EMEModeSweep, EMEFreqSweep
 
 
 def set_logging_level(level: str) -> None:
@@ -387,4 +387,5 @@ __all__ = [
     "EMESweepSpec",
     "EMELengthSweep",
     "EMEModeSweep",
+    "EMEFreqSweep",
 ]
