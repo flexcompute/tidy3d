@@ -3,7 +3,7 @@ from typing import Dict, List
 
 from .container import DEFAULT_DATA_DIR, BatchData, Batch
 from .tidy3d_stub import SimulationType
-from ...log import log
+from ....log import log
 
 
 async def run_async(

@@ -1,81 +1,3 @@
-"""Interface to run several jobs in batch using simplified syntax."""
-from typing import Dict, List
-
-from .container import DEFAULT_DATA_DIR, BatchData, Batch
-from .tidy3d_stub import SimulationType
-from ...log import log
-
-
-async def run_async(
-    simulations: Dict[str, SimulationType],
-    folder_name: str = "default",
-    path_dir: str = DEFAULT_DATA_DIR,
-    callback_url: str = None,
-    num_workers: int = None,
-    verbose: bool = True,
-    simulation_type: str = "tidy3d",
-    parent_tasks: Dict[str, List[str]] = None,
-) -> BatchData:
-    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`] objects to server,
-    starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
-
-    .. TODO add example and see also reference.
-
-    Parameters
-    ----------
-    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`]]
-        Mapping of task name to simulation.
-    folder_name : str = "default"
-        Name of folder to store each task on web UI.
-    path_dir : str
-        Base directory where data will be downloaded, by default current working directory.
-    callback_url : str = None
-        Http PUT url to receive simulation finish event. The body content is a json file with
-        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
-    num_workers: int = None
-        Number of tasks to submit at once in a batch, if None, will run all at the same time.
-    verbose : bool = True
-        If ``True``, will print progressbars and status, otherwise, will run silently.
-
-    Returns
-    ------
-    :class:`BatchData`
-        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for each
-        Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
-
-    See Also
-    --------
-
-    :class:`Job`:
-        Interface for managing the running of a Simulation on server.
-
-    :class:`Batch`
-        Interface for submitting several :class:`Simulation` objects to sever.
-    """
-
-    if simulation_type is None:
-        simulation_type = "tidy3d"
-
-    # if number of workers not specified, just use the number of simulations
-    if num_workers is not None:
-        log.warning(
-            "The 'num_workers' kwarg does not have an effect anymore as all "
-            "simulations will now be uploaded in a single batch."
-        )
-
-    batch = Batch(
-        simulations=simulations,
-        folder_name=folder_name,
-        callback_url=callback_url,
-        verbose=verbose,
-        simulation_type=simulation_type,
-        parent_tasks=parent_tasks,
-    )
-
-    batch_data = batch.run(path_dir=path_dir)
-    return batch_data
-
-
 """Provides lowest level, user-facing interface to server."""
 
 import os
@@ -97,9 +19,9 @@ from ..core.environment import Env
 from ..core.constants import SIM_FILE_HDF5, TaskId
 from ..core.task_core import SimulationTask, Folder
 from ..core.task_info import TaskInfo, ChargeType
-from ...components.types import Literal
-from ...log import log, get_logging_console
-from ...exceptions import WebError
+from ....components.types import Literal
+from ....log import log, get_logging_console
+from ....exceptions import WebError
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0
@@ -113,11 +35,8 @@ def _get_url(task_id: str) -> str:
     return f"{Env.current.website_endpoint}/workbench?taskId={task_id}"
 
 
-# Current todo work out how the coroutines are working.
-
-
 @wait_for_connection
-async def run(
+def run(
     simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
@@ -201,7 +120,7 @@ async def run(
     :meth:`tidy3d.web.api.container.Batch.monitor`
         Monitor progress of each of the running tasks.
     """
-    task_id = await upload(
+    task_id = upload(
         simulation=simulation,
         task_name=task_name,
         folder_name=folder_name,
@@ -209,19 +128,19 @@ async def run(
         verbose=verbose,
         progress_callback=progress_callback_upload,
     )
-    await start(
+    start(
         task_id,
         solver_version=solver_version,
         worker_group=worker_group,
     )
-    await monitor(task_id, verbose=verbose)
-    return await load(
+    monitor(task_id, verbose=verbose)
+    return load(
         task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback_download
     )
 
 
 @wait_for_connection
-async def upload(
+def upload(
     simulation: SimulationType,
     task_name: str,
     folder_name: str = "default",
@@ -306,7 +225,7 @@ async def upload(
 
 
 @wait_for_connection
-async def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
+def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
     """Return information about a task.
 
     Parameters
@@ -327,7 +246,7 @@ async def get_info(task_id: TaskId, verbose: bool = True) -> TaskInfo:
 
 
 @wait_for_connection
-async def start(
+def start(
     task_id: TaskId,
     solver_version: str = None,
     worker_group: str = None,
@@ -357,7 +276,7 @@ async def start(
 
 
 @wait_for_connection
-async def get_run_info(task_id: TaskId):
+def get_run_info(task_id: TaskId):
     """Gets the % done and field_decay for a running task.
 
     Parameters
@@ -378,7 +297,7 @@ async def get_run_info(task_id: TaskId):
     return task.get_running_info()
 
 
-async def get_status(task_id) -> str:
+def get_status(task_id) -> str:
     """Get the status of a task. Raises an error if status is "error".
 
     Parameters
@@ -386,7 +305,7 @@ async def get_status(task_id) -> str:
     task_id : str
         Unique identifier of task on server.  Returned by :meth:`upload`.
     """
-    task_info = await get_info(task_id)
+    task_info = get_info(task_id)
     status = task_info.status
     if status == "visualize":
         return "success"
@@ -398,7 +317,7 @@ async def get_status(task_id) -> str:
     return status
 
 
-async def monitor(task_id: TaskId, verbose: bool = True) -> None:
+def monitor(task_id: TaskId, verbose: bool = True) -> None:
     """
     Print the real time task progress until completion.
 
@@ -425,7 +344,7 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     console = get_logging_console() if verbose else None
 
-    task_info = await get_info(task_id)
+    task_info = get_info(task_id)
 
     if task_info.taskType in ("MODE_SOLVER", "HEAT"):
         log_level = "DEBUG" if verbose else "INFO"
@@ -433,7 +352,7 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         # Wait for task to finish
         prev_status = "draft"
-        status = await get_status(task_id)
+        status = get_status(task_id)
         while status not in ("success", "error", "diverged", "deleted"):
             if status != prev_status:
                 log.log(log_level, f"{solver_name} solver status: {status}")
@@ -441,7 +360,7 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
                     console.log(f"{solver_name} solver status: {status}")
                 prev_status = status
             time.sleep(0.5)
-            status = await get_status(task_id)
+            status = get_status(task_id)
 
         log.log(log_level, f"{solver_name} solver status: {status}")
         if verbose:
@@ -456,9 +375,9 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
 
-        async def get_estimated_cost() -> float:
+        def get_estimated_cost() -> float:
             """Get estimated cost, if None, is not ready."""
-            task_info = await get_info(task_id)
+            task_info = get_info(task_id)
             block_info = task_info.taskBlockInfo
             if block_info and block_info.chargeType == ChargeType.FREE:
                 est_flex_unit = 0
@@ -481,18 +400,18 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
                     )
             return est_flex_unit
 
-        async def monitor_preprocess() -> None:
+        def monitor_preprocess() -> None:
             """Periodically check the status."""
-            status = await get_status(task_id)
+            status = get_status(task_id)
             while status not in break_statuses and status != "running":
-                new_status = await get_status(task_id)
+                new_status = get_status(task_id)
                 if new_status != status:
                     status = new_status
                     if verbose and status != "running":
                         console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
 
-        status = await get_status(task_id)
+        status = get_status(task_id)
 
         if verbose:
             console.log(f"status = {status}")
@@ -509,17 +428,17 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
                 "UI. Terminating the Python script will not stop the job running on the cloud."
             )
             with console.status(f"[bold green]Waiting for '{task_name}'...", spinner="runner"):
-                await monitor_preprocess()
+                monitor_preprocess()
         else:
-            await monitor_preprocess()
+            monitor_preprocess()
 
         # if the estimated cost is ready, print it
         if verbose:
-            await get_estimated_cost()
+            get_estimated_cost()
             console.log("starting up solver")
 
         # while running but before the percentage done is available, keep waiting
-        while await get_status(task_id) == "running":
+        while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
             time.sleep(REFRESH_TIME)
 
         # while running but percentage done is available
@@ -528,19 +447,17 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
             console.log("running solver")
             with Progress(console=console) as progress:
                 pbar_pd = progress.add_task("% done", total=100)
-                perc_done, _ = await get_run_info(task_id)
+                perc_done, _ = get_run_info(task_id)
 
                 while (
-                    perc_done is not None
-                    and perc_done < 100
-                    and await get_status(task_id) == "running"
+                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
                 ):
-                    perc_done, field_decay = await get_run_info(task_id)
+                    perc_done, field_decay = get_run_info(task_id)
                     new_description = f"solver progress (field decay = {field_decay:.2e})"
                     progress.update(pbar_pd, completed=perc_done, description=new_description)
                     time.sleep(RUN_REFRESH_TIME)
 
-                perc_done, field_decay = await get_run_info(task_id)
+                perc_done, field_decay = get_run_info(task_id)
                 if perc_done is not None and perc_done < 100 and field_decay > 0:
                     console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
 
@@ -549,22 +466,20 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
         else:
             # non-verbose case, just keep checking until status is not running or perc_done >= 100
-            perc_done, _ = await get_run_info(task_id)
-            while (
-                perc_done is not None and perc_done < 100 and await get_status(task_id) == "running"
-            ):
-                perc_done, field_decay = await get_run_info(task_id)
+            perc_done, _ = get_run_info(task_id)
+            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
+                perc_done, field_decay = get_run_info(task_id)
                 time.sleep(1.0)
 
         # post processing
         if verbose:
-            status = await get_status(task_id)
+            status = get_status(task_id)
             if status != "running":
                 console.log(f"status = {status}")
 
             with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
                 while status not in break_statuses:
-                    new_status = await get_status(task_id)
+                    new_status = get_status(task_id)
                     if new_status != status:
                         status = new_status
                         console.log(f"status = {status}")
@@ -572,12 +487,12 @@ async def monitor(task_id: TaskId, verbose: bool = True) -> None:
             url = _get_url(task_id)
             console.log(f"View simulation result at [blue underline][link={url}]'{url}'[/link].")
         else:
-            while await get_status(task_id) not in break_statuses:
+            while get_status(task_id) not in break_statuses:
                 time.sleep(REFRESH_TIME)
 
 
 @wait_for_connection
-async def download(
+def download(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     verbose: bool = True,
@@ -602,7 +517,7 @@ async def download(
 
 
 @wait_for_connection
-async def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
+def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True) -> None:
     """Download the ``.json`` file associated with the :class:`.Simulation` of a given task.
 
     Parameters
@@ -621,7 +536,7 @@ async def download_json(task_id: TaskId, path: str = SIM_FILE_JSON, verbose: boo
 
 
 @wait_for_connection
-async def download_hdf5(
+def download_hdf5(
     task_id: TaskId,
     path: str = SIM_FILE_HDF5,
     verbose: bool = True,
@@ -646,7 +561,7 @@ async def download_hdf5(
 
 
 @wait_for_connection
-async def load_simulation(
+def load_simulation(
     task_id: TaskId, path: str = SIM_FILE_JSON, verbose: bool = True
 ) -> SimulationType:
     """Download the ``.json`` file of a task and load the associated simulation.
@@ -672,7 +587,7 @@ async def load_simulation(
 
 
 @wait_for_connection
-async def download_log(
+def download_log(
     task_id: TaskId,
     path: str = "tidy3d.log",
     verbose: bool = True,
@@ -700,7 +615,7 @@ async def download_log(
 
 
 @wait_for_connection
-async def load(
+def load(
     task_id: TaskId,
     path: str = "simulation_data.hdf5",
     replace_existing: bool = True,
@@ -742,9 +657,7 @@ async def load(
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:
-        await download(
-            task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback
-        )
+        download(task_id=task_id, path=path, verbose=verbose, progress_callback=progress_callback)
 
     if verbose:
         console = get_logging_console()
@@ -755,7 +668,7 @@ async def load(
 
 
 @wait_for_connection
-async def delete(task_id: TaskId) -> TaskInfo:
+def delete(task_id: TaskId) -> TaskInfo:
     """Delete server-side data associated with task.
 
     Parameters
@@ -776,7 +689,7 @@ async def delete(task_id: TaskId) -> TaskInfo:
 
 
 @wait_for_connection
-async def delete_old(
+def delete_old(
     days_old: int = 100,
     folder: str = "default",
 ) -> int:
@@ -810,7 +723,7 @@ async def delete_old(
 
 
 @wait_for_connection
-async def abort(task_id: TaskId):
+def abort(task_id: TaskId):
     """Abort server-side data associated with task.
 
     Parameters
@@ -831,7 +744,7 @@ async def abort(task_id: TaskId):
 
 
 @wait_for_connection
-async def get_tasks(
+def get_tasks(
     num_tasks: int = None, order: Literal["new", "old"] = "new", folder: str = "default"
 ) -> List[Dict]:
     """Get a list with the metadata of the last ``num_tasks`` tasks.
@@ -864,7 +777,7 @@ async def get_tasks(
 
 
 @wait_for_connection
-async def estimate_cost(task_id: str, verbose: bool = True) -> float:
+def estimate_cost(task_id: str, verbose: bool = True) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -913,13 +826,13 @@ async def estimate_cost(task_id: str, verbose: bool = True) -> float:
         raise ValueError("Task not found.")
 
     task.estimate_cost()
-    task_info = await get_info(task_id)
+    task_info = get_info(task_id)
     status = task_info.metadataStatus
 
     # Wait for a termination status
     while status not in ["processed", "success", "error", "failed"]:
         time.sleep(REFRESH_TIME)
-        task_info = await get_info(task_id)
+        task_info = get_info(task_id)
         status = task_info.metadataStatus
 
     if status in ["processed", "success"]:
@@ -946,7 +859,7 @@ async def estimate_cost(task_id: str, verbose: bool = True) -> float:
 
 
 @wait_for_connection
-async def real_cost(task_id: str, verbose=True) -> float:
+def real_cost(task_id: str, verbose=True) -> float:
     """Get the billed cost for given task after it has been run.
 
     Parameters
@@ -992,7 +905,7 @@ async def real_cost(task_id: str, verbose=True) -> float:
         # Get the billed FlexCredit cost after a simulation run.
         cost = web.real_cost(job.task_id)
     """
-    task_info = await get_info(task_id)
+    task_info = get_info(task_id)
     flex_unit = task_info.realFlexUnit
     ori_flex_unit = task_info.oriRealFlexUnit
     if not flex_unit:
