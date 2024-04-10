@@ -117,6 +117,55 @@ def test_updated_copy():
     assert s3 == s2
 
 
+def test_updated_copy_path():
+    """Make sure updated copying shortcut works as expected with defaults."""
+    b = td.Box(size=(1, 1, 1))
+    m = td.Medium(permittivity=1)
+
+    s = td.Structure(
+        geometry=b,
+        medium=m,
+    )
+
+    index = 12
+    structures = (index + 1) * [s]
+
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=structures,
+    )
+
+    # works as expected
+    new_size = (2, 2, 2)
+    sim2 = sim.updated_copy(size=new_size, path=f"structures/{index}/geometry")
+    assert sim2.structures[index].geometry.size != sim.structures[index].geometry.size
+    assert sim2.structures[index].geometry.size == new_size
+
+    # wrong integer index
+    with pytest.raises(ValueError):
+        sim2 = sim.updated_copy(size=new_size, path="structures/blah/geometry")
+
+    # try with medium for good measure
+    new_permittivity = 2.0
+    sim3 = sim.updated_copy(permittivity=new_permittivity, path=f"structures/{index}/medium")
+    assert sim3.structures[index].medium.permittivity == new_permittivity
+    assert sim3.structures[index].medium.permittivity != sim.structures[index].medium.permittivity
+
+    # wrong field name
+    with pytest.raises(AttributeError):
+        sim3 = sim.updated_copy(
+            permittivity=new_permittivity, path=f"structures/{index}/not_a_field"
+        )
+
+    # forgot path
+    with pytest.raises(ValueError):
+        assert sim == sim.updated_copy(permittivity=2.0)
+
+    assert sim.updated_copy(size=(6, 6, 6)) == sim.updated_copy(size=(6, 6, 6), path=None)
+
+
 def test_equality():
     # test freqs / arraylike
     mnt1 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
