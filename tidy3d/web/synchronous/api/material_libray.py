@@ -6,7 +6,7 @@ import json
 from typing import List, Optional
 
 from pydantic.v1 import Field, parse_obj_as, validator
-from ...components.medium import MediumType
+from ....components.medium import MediumType
 
 from ..core.http_util import http
 from ..core.types import Queryable
