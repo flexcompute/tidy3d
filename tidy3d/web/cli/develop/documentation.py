@@ -21,7 +21,7 @@ from .utils import echo_and_check_subprocess, get_install_directory
 
 __all__ = [
     "build_documentation",
-    # "build_documentation_pdf",
+    "build_documentation_pdf",
     "build_documentation_from_remote_notebooks",
     "commit",
     # "convert_all_markdown_to_rst_command",
@@ -176,23 +176,23 @@ def build_documentation(args=None):
 
 
 # TODO: Fix the PDF build process
-# @develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
-# def build_documentation_pdf(args=None):
-#     """
-#     Build the Sphinx documentation in PDF format.
-#
-#     This command initiates the process to build the Sphinx documentation and generates a PDF output.
-#
-#     Parameters
-#     ----------
-#     args : optional
-#         Additional arguments for the PDF documentation build process.
-#     """
-#     # Runs the documentation build from the poetry environment
-#     echo_and_run_subprocess(
-#         ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
-#     )
-#     return 0
+@develop.command(name="build-docs-pdf", help="Builds the sphinx documentation pdf.")
+def build_documentation_pdf(args=None):
+    """
+    Build the Sphinx documentation in PDF format.
+
+    This command initiates the process to build the Sphinx documentation and generates a PDF output.
+
+    Parameters
+    ----------
+    args : optional
+        Additional arguments for the PDF documentation build process.
+    """
+    # Runs the documentation build from the poetry environment
+    echo_and_check_subprocess(
+        ["poetry", "run", "python", "-m", "sphinx", "-M", "latexpdf", "docs/", "_pdf/"]
+    )
+    return 0
 
 
 @develop.command(

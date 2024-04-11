@@ -218,10 +218,20 @@ latex_elements = {
     "preamble": r"""
     \usepackage[utf8]{inputenc}
     \usepackage[T1]{fontenc}
-    \usepackage[pdfa=true]{hyperref}
+    \usepackage{hyperref}
     \usepackage{cmap}
+    \usepackage{emoji}
     """
 }
+
+# latex_elements = {
+#     "preamble": r"""
+#     \usepackage[utf8]{inputenc}
+#     \usepackage[T1]{fontenc}
+#     \usepackage[pdfa=true]{hyperref}
+#     \usepackage{cmap}
+#     """
+# }
 
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
