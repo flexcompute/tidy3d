@@ -546,6 +546,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Data type."""
         return np.iscomplexobj(self.values)
 
+    @property
+    def _double_type(self):
+        """Corresponding double data type."""
+        return np.complex128 if self.is_complex else np.float64
+
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
         """Check that cell connections does not have duplicate points."""
@@ -1551,7 +1556,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         # first, we collect coordinates of cell vertices into a single array
         # (num_cells, num_cell_vertices, num_dims)
-        cell_vertices = points[cell_connections, :]
+        cell_vertices = np.float64(points[cell_connections, :])
 
         # array for resulting normals and distances
         normal = np.zeros((num_cell_faces, num_cells, num_dims))
@@ -1576,7 +1581,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             else:
                 n = np.roll(p01, 1, axis=1)
                 n[:, 0] = -n[:, 0]
-            n = n / np.linalg.norm(n, axis=1)[:, None]
+            n_norm = np.linalg.norm(n, axis=1)
+            n = n / n_norm[:, None]
 
             # compute distance to the opposing vertex by taking a dot product between normal
             # and a vector connecting the opposing vertex and the face
@@ -1587,6 +1593,11 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             to_flip = d > 0
             d[to_flip] *= -1
             n[to_flip, :] *= -1
+
+            # set distances in degenerate triangles to something positive to ignore later
+            dist_zero = d == 0
+            if any(dist_zero):
+                d[dist_zero] = 1
 
             # record obtained info
             normal[face_ind] = n
@@ -1608,7 +1619,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
         # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
         sdf = -inf * np.ones(num_samples_total)
-        interpolated = np.zeros(num_samples_total, dtype=self.values.dtype)
+        interpolated = np.zeros(num_samples_total, dtype=self._double_type)
 
         # coordinates of each sample point
         sample_xyz = np.zeros((num_samples_total, num_dims))
@@ -1641,9 +1652,15 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             # a linear shape function for that vertex. So, we just need to multiply that by
             # the data value at that vertex to find its contribution into intepolated value.
             # (decomposed in an attempt to reduce memory consumption)
-            tmp = data_values[cell_connections[step_cell_map, face_ind]]
+            tmp = self._double_type(data_values[cell_connections[step_cell_map, face_ind]])
             tmp *= d
             tmp /= dist[face_ind, step_cell_map]
+
+            # ignore degenerate cells
+            dist_zero = dist[face_ind, step_cell_map] > 0
+            if any(dist_zero):
+                sdf[dist_zero] = 10 * sdf_tol
+
             interpolated += tmp
 
         # The resulting array of interpolated values contain multiple candidate values for
