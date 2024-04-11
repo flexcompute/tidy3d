@@ -10,13 +10,13 @@ Physical Constants
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.C_0
-   tidy3d.HBAR
-   tidy3d.Q_e
-   tidy3d.ETA_0
-   tidy3d.EPSILON_0
-   tidy3d.MU_0
-   tidy3d.K_B
+   tidy3d.constants.C_0
+   tidy3d.constants.HBAR
+   tidy3d.constants.Q_e
+   tidy3d.constants.ETA_0
+   tidy3d.constants.EPSILON_0
+   tidy3d.constants.MU_0
+   tidy3d.constants.K_B
 
 
 Tidy3D Special Constants
@@ -26,8 +26,8 @@ Tidy3D Special Constants
    :toctree: _autosummary/
    :template: module.rst
 
-   tidy3d.inf
-   tidy3d.PEC
+   tidy3d.constants.inf
+   tidy3d.constants.PEC
 
 Tidy3D Configuration
 --------------------
