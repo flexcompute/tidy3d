@@ -1837,3 +1837,23 @@ def test_vertices_warning(log_capture):
 
     with AssertLogLevel(log_capture, None):
         z = jax.grad(f)(np.random.random((5, 2)).tolist())
+
+
+def test_no_poynting(use_emulated_run):
+    """Test that poynting vector fails with custom error."""
+
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    sim_data = run(sim, task_name="test", path=str(TMP_PATH / RUN_FILE))
+
+    mnt_name_static = "field"
+    mnt_name_differentiable = MNT_NAME + "3"
+
+    sim_data.get_poynting_vector(mnt_name_static)
+
+    with pytest.raises(NotImplementedError):
+        sim_data.get_poynting_vector(mnt_name_differentiable)
+
+    sim_data._get_scalar_field(mnt_name_static, "S", "abs")
+
+    with pytest.raises(NotImplementedError):
+        sim_data._get_scalar_field(mnt_name_differentiable, "S", "abs")
