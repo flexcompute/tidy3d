@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
 - Better error message when trying to transform a geometry with infinite bounds.
+- `JaxSimulation.epsilon` properly handles `input_structures`.
+
 
 ## [2.6.3] - 2024-04-02
 

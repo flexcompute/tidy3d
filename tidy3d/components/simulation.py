@@ -3661,6 +3661,17 @@ class Simulation(AbstractYeeGridSimulation):
 
         return len(self.tmesh)
 
+    @cached_property
+    def self_structure(self) -> Structure:
+        """The simulation background as a ``Structure``."""
+        geometry = Box(size=(inf, inf, inf), center=self.center)
+        return Structure(geometry=geometry, medium=self.medium)
+
+    @cached_property
+    def all_structures(self) -> List[Structure]:
+        """List of all structures in the simulation (including the ``Simulation.medium``)."""
+        return [self.self_structure] + list(self.structures)
+
     def _grid_corrections_2dmaterials(self, grid: Grid) -> Grid:
         """Correct the grid if 2d materials are present, using their volumetric equivalents."""
         if not any(isinstance(structure.medium, Medium2D) for structure in self.structures):
@@ -3725,7 +3736,9 @@ class Simulation(AbstractYeeGridSimulation):
         """
         freq_max = max(source.source_time.freq0 for source in self.sources)
         wvl_min = C_0 / freq_max
-        eps_max = max(abs(structure.medium.eps_model(freq_max)) for structure in self.structures)
+
+        all_structures = self.all_structures
+        eps_max = max(abs(structure.medium.eps_model(freq_max)) for structure in all_structures)
         n_max, _ = AbstractMedium.eps_complex_to_nk(eps_max)
         return wvl_min / n_max
 
