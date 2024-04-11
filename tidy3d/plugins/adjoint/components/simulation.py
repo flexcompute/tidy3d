@@ -6,6 +6,7 @@ from multiprocessing import Pool
 
 import pydantic.v1 as pd
 import numpy as np
+import xarray as xr
 
 from jax.tree_util import register_pytree_node_class
 
@@ -17,6 +18,7 @@ from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
 from ....components.types import Ax, annotate_type
+from ....components.geometry.base import Box
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
@@ -567,6 +569,46 @@ class JaxSimulation(Simulation, JaxObject):
             hlim=hlim,
             vlim=vlim,
         )
+
+    def epsilon(
+        self,
+        box: Box,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at volume specified by box and freq.
+
+        Parameters
+        ----------
+        box : :class:`.Box`
+            Rectangular geometry specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
+        """
+        sim, _ = self.to_simulation()
+        return sim.epsilon(box=box, coord_key=coord_key, freq=freq)
 
     def __eq__(self, other: JaxSimulation) -> bool:
         """Are two JaxSimulation objects equal?"""
