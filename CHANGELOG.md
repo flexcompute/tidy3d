@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Uniaxial medium Lithium Niobate to material library.
 - Added support for conformal mesh methods near PEC structures that can be specified through the field `pec_conformal_mesh_spec` in the `Simulation` class.
 - EME solver through `EMESimulation` class.
+- Properties `num_time_steps_adjoint` and `tmesh_adjoint` to `JaxSimulation` to estimate adjoint run time.
 
 ### Changed
 - `run_time` of the adjoint simulation is set more robustly based on the adjoint sources and the forward simulation `run_time` as `sim_fwd.run_time + c / fwdith_adj` where `c=10`.
