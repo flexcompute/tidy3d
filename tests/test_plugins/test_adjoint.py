@@ -1643,6 +1643,11 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
     run_time_adj = sim._run_time_adjoint
     fwidth_adj = sim._fwidth_adjoint
 
+    # number of adjoint time steps approximately scaled by the adjoint run_time compared to sim
+    num_time_steps_adjoint = sim.num_time_steps_adjoint
+    num_time_steps_scaled = sim.num_time_steps * (sim._run_time_adjoint / sim.run_time)
+    assert np.isclose(num_time_steps_adjoint, num_time_steps_scaled, rtol=1e-2)
+
     sim_adj = sim_data.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
 
     assert sim_adj.run_time == run_time_expected

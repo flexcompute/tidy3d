@@ -374,6 +374,23 @@ class JaxSimulation(Simulation, JaxObject):
 
         return run_time_adjoint
 
+    @cached_property
+    def tmesh_adjoint(self) -> np.ndarray:
+        """FDTD time stepping points.
+
+        Returns
+        -------
+        np.ndarray
+            Times (seconds) that the simulation time steps through.
+        """
+        dt = self.dt
+        return np.arange(0.0, self._run_time_adjoint + dt, dt)
+
+    @cached_property
+    def num_time_steps_adjoint(self) -> int:
+        """Number of time steps in the adjoint simulation."""
+        return len(self.tmesh_adjoint)
+
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
 
