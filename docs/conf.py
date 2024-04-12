@@ -215,14 +215,14 @@ elif current_tag:
 # version = tidy3d.__version__
 
 latex_elements = {
-    "preamble": r"""
-    \usepackage[utf8]{inputenc}
-    \usepackage[T1]{fontenc}
-    \usepackage{hyperref}
-    \usepackage{cmap}
-    \usepackage{emoji}
-    """
+    "fontpkg": r"""\usepackage{tgtermes}
+    \usepackage{tgheros}
+    \renewcommand\ttdefault{txtt}
+    """,
+    "papersize": "a4paper",
+    "pointsize": "12pt",
 }
+latex_additional_files = ["_latex/tidy3d.sty"]
 
 # latex_elements = {
 #     "preamble": r"""
