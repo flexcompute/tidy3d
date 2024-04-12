@@ -3,8 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 from functools import wraps
-import random
-import time
+from html import escape
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import PathPatch, ArrowStyle
@@ -244,26 +243,99 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
             "and the code to be running on a jupyter notebook."
         ) from e
 
-    uuid = str(int(time.time() * 1000)) + str(random.randint(0, 100000))
+    js_code = """
+        /**
+        * Simulation Viewer Injector
+        *
+        * Monitors the document for elements being added in the form:
+        *
+        *    <div class="simulation-viewer" data-width="800" data-height="800" data-simulation="{...}" />
+        *
+        * This script will then inject an iframe to the viewer application, and pass it the simulation data
+        * via the postMessage API on request. The script may be safely included multiple times, with only the
+        * configuration of the first started script (e.g. viewer URL) applying.
+        *
+        */
+        (function() {
+            const TARGET_CLASS = "simulation-viewer";
+            const ACTIVE_CLASS = "simulation-viewer-active";
+            const VIEWER_URL = "https://feature-simulation-viewer.d3a9gfg7glllfq.amplifyapp.com/simulation-viewer";
 
-    js_code = f"""
-    window.postMessageToViewer{uuid} = event => {{
-        if(event.data.type === 'viewer'&&event.data.uuid==='{uuid}'){{
-            document.getElementById('simulation-viewer{uuid}').contentWindow.postMessage({{ type: 'jupyter', uuid:'{uuid}', value:{sim._json_string}}}, '*')
-        }}
-    }};
-    window.addEventListener(
-        'message',
-        window.postMessageToViewer{uuid},
-        false
-    );
+            class SimulationViewerInjector {
+                constructor() {
+                    for (var node of document.getElementsByClassName(TARGET_CLASS)) {
+                        this.injectViewer(node);
+                    }
+
+                    // Monitor for newly added nodes to the DOM
+                    this.observer = new MutationObserver(this.onMutations.bind(this));
+                    this.observer.observe(document.body, {childList: true, subtree: true});
+                }
+
+                onMutations(mutations) {
+                    for (var mutation of mutations) {
+                        if (mutation.type === 'childList') {
+                            /**
+                            * Have found that adding the element does not reliably trigger the mutation observer.
+                            * It may be the case that setting content with innerHTML does not trigger.
+                            *
+                            * It seems to be sufficient to re-scan the document for un-activated viewers
+                            * whenever an event occurs, as Jupyter triggers multiple events on cell evaluation.
+                            */
+                            var viewers = document.getElementsByClassName(TARGET_CLASS);
+                            for (var node of viewers) {
+                                this.injectViewer(node);
+                            }
+                        }
+                    }
+                }
+
+                injectViewer(node) {
+                    // (re-)check that this is a valid simulation container and has not already been injected
+                    if (node.classList.contains(TARGET_CLASS) && !node.classList.contains(ACTIVE_CLASS)) {
+                        // Mark node as injected, to prevent re-runs
+                        node.classList.add(ACTIVE_CLASS);
+
+                        var uuid;
+                        if (window.crypto && window.crypto.randomUUID) {
+                            uuid = window.crypto.randomUUID();
+                        } else {
+                            uuid = "" + Math.random();
+                        }
+
+                        var frame = document.createElement("iframe");
+                        frame.width = node.dataset.width || 800;
+                        frame.height = node.dataset.height || 800;
+                        frame.src = VIEWER_URL + "?uuid=" + uuid;
+
+                        var postMessageToViewer;
+                        postMessageToViewer = event => {{
+                            if(event.data.type === 'viewer' && event.data.uuid===uuid){{
+                                var simulation = JSON.parse(node.dataset.simulation);
+                                frame.contentWindow.postMessage({ type: 'jupyter', uuid, value: simulation}, '*');
+
+                                // Run once only
+                                window.removeEventListener('message', postMessageToViewer);
+                            }}
+                        }};
+                        window.addEventListener(
+                            'message',
+                            postMessageToViewer,
+                            false
+                        );
+
+                        node.appendChild(frame);
+                    }
+                }
+            }
+
+            if (!window.simulationViewerInjector) {
+                window.simulationViewerInjector = new SimulationViewerInjector();
+            }
+        })();
     """
-    viewer_url = (
-        "https://feature-simulation-viewer.d3a9gfg7glllfq.amplifyapp.com/simulation-viewer?uuid="
-        + str(uuid)
-    )
     html_code = f"""
-    <iframe id="simulation-viewer{uuid}" src={viewer_url} width="{width}" height="{height}" allowfullscreen="true"></iframe>
+    <div class="simulation-viewer" data-width="{escape(str(width))}" data-height="{escape(str(height))}" data-simulation="{escape(sim._json_string)}" />
     <script>
         {js_code}
     </script>
