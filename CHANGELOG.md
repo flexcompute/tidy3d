@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
 - Better error message when trying to transform a geometry with infinite bounds.
 - `JaxSimulation.epsilon` properly handles `input_structures`.
+- `FieldData.flux` in adjoint plugin properly returns `JaxDataArray` containing frequency coordinate `f` instead of summing over values.
 
 ## [2.6.3] - 2024-04-02
 

@@ -29,7 +29,11 @@ from tidy3d.plugins.adjoint.components.structure import (
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
 from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
-from tidy3d.plugins.adjoint.components.data.monitor_data import JaxModeData, JaxDiffractionData
+from tidy3d.plugins.adjoint.components.data.monitor_data import (
+    JaxModeData,
+    JaxDiffractionData,
+    JaxFieldData,
+)
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.web import run, run_async
@@ -1797,3 +1801,16 @@ def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
 
     with AssertLogLevel(log_capture, log_expected, contains_str="sidewall"):
         jax_polyslab1.updated_copy(sidewall_angle=sidewall_angle)
+
+
+def test_package_flux():
+    """Test handling of packaging flux data for single and multi-freq."""
+
+    value = 1.0
+    da_single = JaxDataArray(values=[value], coords=dict(f=[1.0]))
+    res_single = JaxFieldData.package_flux_results(None, da_single)
+    assert res_single == value
+
+    da_multi = JaxDataArray(values=[1.0, 2.0], coords=dict(f=[1.0, 2.0]))
+    res_multi = JaxFieldData.package_flux_results(None, da_multi)
+    assert res_multi == da_multi
