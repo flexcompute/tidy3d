@@ -27,7 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Better error message when trying to transform a geometry with infinite bounds.
 - `JaxSimulation.epsilon` properly handles `input_structures`.
 
-
 ## [2.6.3] - 2024-04-02
 
 ### Added
