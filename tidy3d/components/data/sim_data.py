@@ -453,6 +453,8 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
             if monitor.size[dim] == 0 and "xyz"[dim] not in sel_kwargs
         }
         for axis, pos in thin_dims.items():
+            if axis not in field_data.coords:
+                continue
             if field_data.coords[axis].size <= 1:
                 field_data = field_data.sel(**{axis: pos}, method="nearest")
             else:
@@ -521,7 +523,10 @@ class AbstractYeeGridSimulationData(AbstractSimulationData, ABC):
         # get the spatial coordinate corresponding to the plane
         planar_coord = [name for name, c in spatial_coords_in_data.items() if c is False][0]
         axis = "xyz".index(planar_coord)
-        position = float(field_data.coords[planar_coord])
+        if planar_coord in field_data.coords:
+            position = float(field_data.coords[planar_coord])
+        else:
+            position = monitor.center[axis]
 
         return self.plot_scalar_array(
             field_data=field_data,
