@@ -791,6 +791,8 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _monitor_eme_cell_indices(self, monitor: EMEMonitor) -> List[pd.NonNegativeInt]:
         """EME cell indices inside monitor. Takes into account 'eme_cell_interval_space'."""
         cell_indices_full = self.eme_grid.cell_indices_in_box(box=monitor.geometry)
+        if len(cell_indices_full) == 0:
+            raise SetupError(f"Monitor '{monitor.name}' does not intersect any EME cells.")
         cell_indices = cell_indices_full[:: monitor.eme_cell_interval_space]
         # make sure last index is included
         if cell_indices[-1] != cell_indices_full[-1]:
