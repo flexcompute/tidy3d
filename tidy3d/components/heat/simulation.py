@@ -20,7 +20,7 @@ from ..base import cached_property, skip_if_fields_missing
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
-from ..geometry.base import Box, GeometryGroup
+from ..geometry.base import Box, GeometryGroup, Transformed
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
 from ..geometry.mesh import TriangleMesh
@@ -38,7 +38,7 @@ from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
+HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh, Transformed)
 
 
 class HeatSimulation(AbstractSimulation):
