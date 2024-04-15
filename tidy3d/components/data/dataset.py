@@ -6,7 +6,6 @@ from typing import Union, Dict, Callable, Any, Tuple
 
 import xarray as xr
 import numpy as np
-from scipy.interpolate import NearestNDInterpolator
 import pydantic.v1 as pd
 from matplotlib.tri import Triangulation
 from matplotlib import pyplot as plt
@@ -1102,6 +1101,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         ArrayLike
             Interpolated data.
         """
+        from scipy.interpolate import NearestNDInterpolator
 
         # use scipy's nearest neighbor interpolator
         X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
@@ -1140,6 +1140,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         nans = np.isnan(values)
 
         if np.sum(nans) > 0:
+            from scipy.interpolate import NearestNDInterpolator
+
             # use scipy's nearest neighbor interpolator
             X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
             interp = NearestNDInterpolator(self._points_3d_array, self.values.values)
