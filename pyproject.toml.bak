@@ -20,7 +20,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0.0"
+python = ">=3.9,<3.12"
 pyroots = ">=0.5.0"
 xarray = ">=0.16.2"
 importlib-metadata = ">=6.0.0"
