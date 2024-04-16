@@ -17,8 +17,8 @@ from ...constants import VOLUMETRIC_HEAT_RATE
 from ...exceptions import SetupError
 
 
-class HeatSource(AbstractSource, ABC):
-    """Abstract heat source."""
+class DeviceSource(AbstractSource, ABC):
+    """Abstract device source."""
 
     structures: Tuple[str, ...] = pd.Field(
         title="Target Structures",
@@ -39,6 +39,30 @@ class HeatSource(AbstractSource, ABC):
         return val
 
 
+class HeatSource(DeviceSource):
+    """Volumetric heat source.
+
+    Example
+    -------
+    >>> heat_source = HeatSource(rate=1, structures=["box"])
+
+    An analytical expression can also be defined
+    --------------------------------------------
+    expression = f"{r}*(sqrt(x) + sin(y)*pow(z,3))"
+    >>> heat_source_expr = HeatSource(rate=expression, structures=["box"])
+    """
+
+    rate: Union[str, float, TimeDataArray] = pd.Field(
+        title="Volumetric Heat Rate",
+        description="Volumetric rate of heating or cooling (if negative) in units of "
+        f"{VOLUMETRIC_HEAT_RATE}.",
+        units=VOLUMETRIC_HEAT_RATE,
+    )
+
+
+from ...log import log
+
+
 class UniformHeatSource(HeatSource):
     """Volumetric heat source.
 
@@ -47,12 +71,16 @@ class UniformHeatSource(HeatSource):
     >>> heat_source = UniformHeatSource(rate=1, structures=["box"])
     """
 
-    rate: Union[float, TimeDataArray] = pd.Field(
-        title="Volumetric Heat Rate",
-        description="Volumetric rate of heating or cooling (if negative) in units of "
-        f"{VOLUMETRIC_HEAT_RATE}.",
-        units=VOLUMETRIC_HEAT_RATE,
-    )
+    # NOTE: this is basically a wrapper for backwards compatibility.
+
+    # encapsulating the log.warning since otherwise it is output everytime there is
+    # an isinstance(x, UniformHeatSource)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        log.warning(
+            "'UniformHeatSource' is deprecated and will be discontinued. You can use "
+            "'HeatSource' instead."
+        )
 
 
-HeatSourceType = Union[UniformHeatSource]
+DeviceSourceType = Union[HeatSource, UniformHeatSource]

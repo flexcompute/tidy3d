@@ -30,7 +30,7 @@ from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
-from .heat_spec import HeatSpecType
+from .device_spec import ThermalSpecType, ElectricSpecType
 from .time_modulation import ModulationSpec
 
 # evaluate frequency as this number (Hz) if inf
@@ -651,7 +651,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
                 "Time modulation is not currently supported for the components " "of a 2D medium."
             )
 
-    heat_spec: Optional[HeatSpecType] = pd.Field(
+    heat_spec: Optional[ThermalSpecType] = pd.Field(
         None,
         title="Heat Specification",
         description="Specification of the medium heat properties. They are used for solving "
@@ -662,6 +662,13 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         "models defined into spatially dependent custom mediums. "
         "Otherwise, the ``heat_spec`` does not directly affect the running of an optical "
         "``Simulation``.",
+        discriminator=TYPE_TAG_STR,
+    )
+
+    electric_spec: Optional[ElectricSpecType] = pd.Field(
+        None,
+        title="Electric Specification",
+        description="Specification of the medium electric properties.",
         discriminator=TYPE_TAG_STR,
     )
 

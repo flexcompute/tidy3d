@@ -5,29 +5,30 @@ from typing import Tuple
 import numpy as np
 import pydantic.v1 as pd
 
-from .monitor_data import HeatMonitorDataType, TemperatureData
-from ..simulation import HeatSimulation
+from .monitor_data import DeviceMonitorDataType, TemperatureData, VoltageData
+from .simulation import DeviceSimulation
 
-from ...data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
-from ...data.data_array import SpatialDataArray
-from ...base_sim.data.sim_data import AbstractSimulationData
-from ...types import Ax, RealFieldVal, Literal
-from ...viz import equal_aspect, add_ax_if_none
-from ....exceptions import DataError
+from ..data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
+from ..data.data_array import SpatialDataArray
+from ..base_sim.data.sim_data import AbstractSimulationData
+from ..types import Ax, RealFieldVal, Literal
+from ..viz import equal_aspect, add_ax_if_none
+from ...exceptions import DataError
+from ...log import log
 
 
-class HeatSimulationData(AbstractSimulationData):
-    """Stores results of a heat simulation.
+class DeviceSimulationData(AbstractSimulationData):
+    """Stores results of a device simulation.
 
     Example
     -------
     >>> from tidy3d import Medium, SolidSpec, FluidSpec, UniformUnstructuredGrid, SpatialDataArray
     >>> from tidy3d import Structure, Box, UniformUnstructuredGrid, UniformHeatSource
     >>> from tidy3d import StructureBoundary, TemperatureBC, TemperatureMonitor, TemperatureData
-    >>> from tidy3d import HeatBoundarySpec
+    >>> from tidy3d import DeviceBoundarySpec
     >>> import numpy as np
     >>> temp_mnt = TemperatureMonitor(size=(1, 2, 3), name="sample")
-    >>> heat_sim = HeatSimulation(
+    >>> heat_sim = DeviceSimulation(
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         Structure(
@@ -58,17 +59,17 @@ class HeatSimulationData(AbstractSimulationData):
     >>> coords = dict(x=x, y=y, z=z)
     >>> temp_array = SpatialDataArray(300 * np.abs(np.random.random((2,3,4))), coords=coords)
     >>> temp_mnt_data = TemperatureData(monitor=temp_mnt, temperature=temp_array)
-    >>> heat_sim_data = HeatSimulationData(
+    >>> heat_sim_data = DeviceSimulationData(
     ...     simulation=heat_sim, data=[temp_mnt_data],
     ... )
     """
 
-    simulation: HeatSimulation = pd.Field(
-        title="Heat Simulation",
-        description="Original :class:`.HeatSimulation` associated with the data.",
+    simulation: DeviceSimulation = pd.Field(
+        title="Device Simulation",
+        description="Original :class:`.DeviceSimulation` associated with the data.",
     )
 
-    data: Tuple[HeatMonitorDataType, ...] = pd.Field(
+    data: Tuple[DeviceMonitorDataType, ...] = pd.Field(
         ...,
         title="Monitor Data",
         description="List of :class:`.MonitorData` instances "
@@ -129,16 +130,21 @@ class HeatSimulationData(AbstractSimulationData):
 
         monitor_data = self[monitor_name]
 
-        if not isinstance(monitor_data, TemperatureData):
+        if isinstance(monitor_data, TemperatureData):
+            if monitor_data.temperature is None:
+                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+            field_data = self._field_component_value(monitor_data.temperature, val)
+
+        elif isinstance(monitor_data, VoltageData):
+            if monitor_data.voltage is None:
+                raise DataError(f"No data to plot for monitor '{monitor_name}'.")
+            field_data = self._field_component_value(monitor_data.voltage, val)
+
+        else:
             raise DataError(
                 f"Monitor '{monitor_name}' (type '{monitor_data.monitor.type}') is not a "
-                f"'TemperatureMonitor'."
+                f"supported monitor Supported monitors are 'TemperatureData', 'VoltageData'."
             )
-
-        if monitor_data.temperature is None:
-            raise DataError(f"No data to plot for monitor '{monitor_name}'.")
-
-        field_data = self._field_component_value(monitor_data.temperature, val)
 
         if val == "abs^2":
             field_name = "|T|², K²"
@@ -253,17 +259,37 @@ class HeatSimulationData(AbstractSimulationData):
             max_bounds = (max(x_coord_values), max(y_coord_values))
 
         # select the cross section data
-        interp_kwarg = {"xyz"[axis]: position}
+        # interp_kwarg = {"xyz"[axis]: position}
         # plot the simulation heat conductivity
-        ax = self.simulation.scene.plot_structures_heat_conductivity(
-            cbar=False,
-            alpha=structures_alpha,
-            ax=ax,
-            **interp_kwarg,
-        )
+        # ax = self.simulation.scene.plot_heat_conductivity(
+        #     cbar=False,
+        #     alpha=structures_alpha,
+        #     ax=ax,
+        #     **interp_kwarg,
+        # )
 
         # set the limits based on the xarray coordinates min and max
         ax.set_xlim(min_bounds[0], max_bounds[0])
         ax.set_ylim(min_bounds[1], max_bounds[1])
 
         return ax
+
+
+# In order to be backwards-compatible defining here a wrapper for heat simulations
+from .heat.simulation import HeatSimulation
+
+
+class HeatSimulationData(DeviceSimulationData):
+    """Wrapper for Heat simulation data"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        log.warning(
+            '"HeatSimulationData" is deprecated and will be discontinued. You can use '
+            '"DeviceSimulationData" instead'
+        )
+
+    simulation: HeatSimulation = pd.Field(
+        title="Device Simulation",
+        description="Original :class:`.DeviceSimulation` associated with the data.",
+    )

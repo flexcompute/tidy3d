@@ -128,4 +128,4 @@ class DistanceUnstructuredGrid(UnstructuredGrid):
         return val
 
 
-HeatGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]
+UnstructuredGridType = Union[UniformUnstructuredGrid, DistanceUnstructuredGrid]

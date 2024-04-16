@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import tidy3d as td
 
 from tidy3d import FluidSpec, SolidSpec
-from tidy3d import UniformHeatSource
+from tidy3d import UniformHeatSource, HeatSource
 from tidy3d import (
     TemperatureBC,
     HeatFluxBC,
@@ -21,8 +21,8 @@ from tidy3d import (
     MediumMediumInterface,
 )
 from tidy3d import UniformUnstructuredGrid, DistanceUnstructuredGrid
-from tidy3d import HeatSimulation
-from tidy3d import HeatSimulationData
+from tidy3d import HeatSimulation, DeviceSimulation
+from tidy3d import HeatSimulationData, DeviceSimulationData
 from tidy3d import TemperatureMonitor
 from tidy3d import TemperatureData
 from tidy3d.exceptions import DataError
@@ -410,7 +410,7 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):
     def place_box(center_offset):
         shifted_center = tuple(c + s for (c, s) in zip(center_offset, CENTER_SHIFT))
 
-        _ = td.HeatSimulation(
+        _ = td.DeviceSimulation(
             size=(1.5, 1.5, 1.5),
             center=CENTER_SHIFT,
             medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=1)),
@@ -425,6 +425,7 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):
                 )
             ],
             grid_spec=td.UniformUnstructuredGrid(dl=0.1),
+            monitors=[TemperatureMonitor(size=(1.5, 1.5, 1.5), center=CENTER_SHIFT, name="test")],
         )
 
     # create all permutations of squares being shifted 1, -1, or zero in all three directions
@@ -624,3 +625,125 @@ def test_symmetry_expanded(zero_dim_axis):
 
     assert np.all(data_expanded_ugrid.bounds == mnt_bounds)
     assert data_expanded_cart.does_cover(mnt_bounds)
+
+
+## CHECKING BACKWARD COMPATIBILITY BEHAVIOR ##
+#  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# Checking backward compatibility behavior
+def test_backward_heat_source(log_capture):
+    """
+    Testing that 'UniformHeatSource' generates a warning while 'HeatSource' doesn't.
+    """
+    # this should issue a warning
+    sc = UniformHeatSource(structures=["solid_structure"], rate=100)
+    assert_log_level(log_capture, "WARNING")
+
+    # this doesn't issue warning
+    sc = HeatSource(structures=["solid_structure"], rate=100)
+
+
+def test_backwards_heat_sim(log_capture):
+    """
+    Checking that 'HeatSimulation' generates a warning but 'DeviceSimulation' doesn't.
+    """
+    fluid_medium, _ = make_heat_mediums()
+    fluid_structure, solid_structure = make_heat_structures()
+    bc_conv = ConvectionBC(ambient_temperature=400, transfer_coeff=0.2)
+    pl1 = HeatBoundarySpec(
+        condition=bc_conv, placement=MediumMediumInterface(mediums=["fluid_medium", "solid_medium"])
+    )
+    sc = HeatSource(structures=["solid_structure"], rate=100)
+    mnt = TemperatureMonitor(size=(1, 2, 3), name="test")
+    mnt2 = TemperatureMonitor(size=(1, 2, 3), name="test2")
+
+    heat_sim = HeatSimulation(
+        medium=fluid_medium,
+        structures=[fluid_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl1],
+        grid_spec=UniformUnstructuredGrid(dl=0.1),
+        sources=[sc],
+        monitors=(mnt,),
+    )
+    # this should issue a warning
+    assert_log_level(log_capture, "WARNING")
+
+    # this should issue warning
+    heat_sim = DeviceSimulation(
+        medium=fluid_medium,
+        structures=[fluid_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl1],
+        grid_spec=UniformUnstructuredGrid(dl=0.1),
+        sources=[sc],
+        monitors=(mnt,),
+    )
+
+
+def test_backwards_simulation_Data(log_capture):
+    """
+    Checking that 'HeatSimulationData' generates a warning while 'DeviceSimulationData' doesn't.
+    """
+    fluid_medium, _ = make_heat_mediums()
+    fluid_structure, solid_structure = make_heat_structures()
+    bc_conv = ConvectionBC(ambient_temperature=400, transfer_coeff=0.2)
+    pl1 = HeatBoundarySpec(
+        condition=bc_conv, placement=MediumMediumInterface(mediums=["fluid_medium", "solid_medium"])
+    )
+    sc = HeatSource(structures=["solid_structure"], rate=100)
+    mnt = TemperatureMonitor(size=(1, 2, 3), name="test")
+
+    heat_sim = DeviceSimulation(
+        medium=fluid_medium,
+        structures=[fluid_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl1],
+        grid_spec=UniformUnstructuredGrid(dl=0.1),
+        sources=[sc],
+        monitors=[mnt],
+    )
+    # this shouldn't create warning
+    assert_log_level(log_capture, log_level_expected=None)
+
+    nx, ny, nz = 9, 6, 5
+    x = np.linspace(0, 1, nx)
+    y = np.linspace(0, 2, ny)
+    z = np.linspace(0, 3, nz)
+    T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
+    coords = dict(x=x, y=y, z=z)
+    temperature_field = td.SpatialDataArray(T, coords=coords)
+    mnt_data1 = TemperatureData(monitor=mnt, temperature=temperature_field)
+    # this shouldn't create warning
+    assert_log_level(log_capture, log_level_expected=None)
+
+    heat_sim_data = DeviceSimulationData(
+        simulation=heat_sim,
+        data=[mnt_data1],
+    )
+    # this should issue a warning
+    assert_log_level(log_capture, None)
+
+    # Now check that backward-compatible functions issue warnings
+    heat_sim = HeatSimulation(
+        medium=fluid_medium,
+        structures=[fluid_structure, solid_structure],
+        center=(0, 0, 0),
+        size=(2, 2, 2),
+        boundary_spec=[pl1],
+        grid_spec=UniformUnstructuredGrid(dl=0.1),
+        sources=[sc],
+        monitors=[mnt],
+    )
+    # this should create warning
+    assert_log_level(log_capture, "WARNING")
+
+    heat_sim_data = HeatSimulationData(
+        simulation=heat_sim,
+        data=[mnt_data1],
+    )
+    # this should have created an additional warning
+    assert len(log_capture) == 2
+    assert_log_level([log_capture[1]], "WARNING")

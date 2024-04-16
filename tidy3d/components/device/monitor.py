@@ -6,16 +6,11 @@ from typing import Union
 from ..types import ArrayFloat1D
 from ..base_sim.monitor import AbstractMonitor
 
-
 BYTES_REAL = 4
 
 
-class HeatMonitor(AbstractMonitor, ABC):
-    """Abstract base class for heat monitors."""
-
-
-class TemperatureMonitor(HeatMonitor):
-    """Temperature monitor."""
+class DeviceMonitor(AbstractMonitor, ABC):
+    """Abstract base class for device monitors."""
 
     unstructured: bool = pd.Field(
         False,
@@ -41,5 +36,13 @@ class TemperatureMonitor(HeatMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
+class TemperatureMonitor(DeviceMonitor):
+    """Temperature monitor."""
+
+
+class VoltageMonitor(DeviceMonitor):
+    """Electric potential monitor."""
+
+
 # types of monitors that are accepted by heat simulation
-HeatMonitorType = Union[TemperatureMonitor]
+DeviceMonitorType = Union[TemperatureMonitor, VoltageMonitor]

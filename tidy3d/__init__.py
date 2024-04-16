@@ -84,7 +84,10 @@ from .components.data.monitor_data import DiffractionData
 from .components.data.sim_data import SimulationData
 from .components.data.sim_data import DATA_TYPE_MAP
 from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
-from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
+from .components.data.dataset import (
+    TriangularGridDataset,
+    TetrahedralGridDataset,
+)
 
 # boundary
 from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
@@ -128,15 +131,25 @@ from .components.bc_placement import MediumMediumInterface
 from .components.bc_placement import StructureSimulationBoundary
 from .components.bc_placement import SimulationBoundary
 
-# heat
-from .components.heat_spec import FluidSpec, SolidSpec
-from .components.heat.simulation import HeatSimulation
-from .components.heat.data.sim_data import HeatSimulationData
-from .components.heat.data.monitor_data import TemperatureData
-from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
-from .components.heat.source import UniformHeatSource
-from .components.heat.monitor import TemperatureMonitor
-from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
+# device and heat
+from .components.device_spec import FluidSpec, SolidSpec, ConductorSpec, InsulatorSpec
+from .components.device.heat.simulation import HeatSimulation
+from .components.device.simulation import DeviceSimulation
+from .components.device.sim_data import HeatSimulationData, DeviceSimulationData
+from .components.device.monitor_data import TemperatureData, VoltageData
+from .components.device.boundary import (
+    TemperatureBC,
+    ConvectionBC,
+    HeatFluxBC,
+    HeatBoundarySpec,
+    DeviceBoundarySpec,
+    VoltageBC,
+    CurrentBC,
+    InsulatingBC,
+)
+from .components.device.source import UniformHeatSource, HeatSource
+from .components.device.monitor import TemperatureMonitor, VoltageMonitor
+from .components.device.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
 
 # EME
 from .components.eme.simulation import EMESimulation
@@ -327,17 +340,28 @@ __all__ = [
     "SimulationBoundary",
     "FluidSpec",
     "SolidSpec",
+    "ConductorSpec",
+    "InsulatorSpec",
     "HeatSimulation",
     "HeatSimulationData",
     "TemperatureBC",
     "ConvectionBC",
     "HeatFluxBC",
     "HeatBoundarySpec",
+    "VoltageBC",
+    "CurrentBC",
+    "InsulatingBC",
     "UniformHeatSource",
+    "HeatSource",
     "UniformUnstructuredGrid",
     "DistanceUnstructuredGrid",
     "TemperatureData",
     "TemperatureMonitor",
+    "DeviceSimulation",
+    "DeviceSimulationData",
+    "VoltageData",
+    "DeviceBoundarySpec",
+    "VoltageMonitor",
     "SpaceTimeModulation",
     "SpaceModulation",
     "ContinuousWaveTimeModulation",
