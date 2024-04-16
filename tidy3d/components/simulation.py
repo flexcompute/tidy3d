@@ -17,8 +17,8 @@ from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
 from .geometry.mesh import TriangleMesh
-from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, increment_float, set_bounds, get_thickened_geom
+from .geometry.utils import flatten_groups, increment_float, traverse_geometries
+from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom
 from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
@@ -961,10 +961,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Expand monitor size slightly to break numerical precision in favor of always having
         # enough data to span the full monitor.
-        expand_size = [size + fp_eps if size > fp_eps else size for size in monitor.size]
-        box_expanded = Box(center=monitor.center, size=expand_size)
         # Discretize without extension for now
-        span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
+        span_inds = np.array(self.grid.discretize_inds(monitor, extend=False, expand_box=True))
 
         if any(ind[0] >= ind[1] for ind in span_inds):
             # At least one dimension has no indexes inside the grid, e.g. monitor is entirely

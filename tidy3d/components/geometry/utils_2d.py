@@ -4,11 +4,11 @@ import shapely
 from typing import Tuple, List
 
 from ..types import Axis
-from ...constants import inf
 from ...exceptions import ValidationError
 from ..geometry.base import Geometry, Box, ClipOperation
 from ..geometry.primitives import Cylinder
 from ..geometry.polyslab import PolySlab
+from ..geometry.utils import increment_float
 from ..grid.grid import Grid
 from ..scene import Scene
 from ..structure import Structure
@@ -16,24 +16,6 @@ from ..structure import Structure
 # for 2d materials. to find neighboring media, search a distance on either side
 # equal to this times the grid size
 DIST_NEIGHBOR_REL_2D_MED = 1e-5
-
-
-def increment_float(val: np.float32, sign) -> np.float32:
-    """Applies a small positive or negative shift to a 32bit float using numpy.nextafter,"""
-    """but additionally handles some corner cases."""
-    # Infinity is left unchanged
-    if val == inf or val == -inf:
-        return val
-
-    if sign >= 0:
-        sign = 1
-    else:
-        sign = -1
-    # Numpy seems to skip over the increment from -0.0 and +0.0
-    # which is different from c++
-    val_inc = np.nextafter(val, sign * inf, dtype=np.float32)
-
-    return np.float32(val_inc)
 
 
 def snap_coordinate_to_grid(grid: Grid, center: float, axis: Axis) -> float:

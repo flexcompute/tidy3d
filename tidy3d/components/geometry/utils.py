@@ -5,6 +5,7 @@ from math import isclose
 
 import numpy as np
 
+from ...constants import inf
 from ..types import Axis, PlanePosition, Shapely, ArrayFloat2D, MatrixReal4x4
 from ...exceptions import Tidy3dError
 
@@ -208,3 +209,21 @@ def validate_no_transformed_polyslabs(geometry: GeometryType, transform: MatrixR
     elif isinstance(geometry, base.ClipOperation):
         validate_no_transformed_polyslabs(geometry.geometry_a, transform)
         validate_no_transformed_polyslabs(geometry.geometry_b, transform)
+
+
+def increment_float(val: np.float32, sign) -> np.float32:
+    """Applies a small positive or negative shift to a 32bit float using numpy.nextafter,"""
+    """but additionally handles some corner cases."""
+    # Infinity is left unchanged
+    if val == inf or val == -inf:
+        return val
+
+    if sign >= 0:
+        sign = 1
+    else:
+        sign = -1
+    # Numpy seems to skip over the increment from -0.0 and +0.0
+    # which is different from c++
+    val_inc = np.nextafter(val, sign * inf, dtype=np.float32)
+
+    return np.float32(val_inc)

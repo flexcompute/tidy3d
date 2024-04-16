@@ -6,7 +6,7 @@ from typing import Optional
 
 from ....constants import OHM
 from ....components.geometry.base import Box
-from ....components.geometry.utils_2d import increment_float
+from ....components.geometry.utils import increment_float
 from ....components.types import Complex, FreqArray, Axis
 from ....components.base import cached_property
 from ....components.lumped_element import LumpedResistor

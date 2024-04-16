@@ -10,6 +10,7 @@ from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
 from ..data.dataset import UnstructuredGridDatasetType, UnstructuredGridDataset
 from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
 from ..geometry.base import Box
+from ..geometry.utils import increment_float
 
 from ...exceptions import SetupError
 
@@ -491,7 +492,9 @@ class Grid(Tidy3dBaseModel):
 
         return Coords(**yee_coords)
 
-    def discretize_inds(self, box: Box, extend: bool = False) -> List[Tuple[int, int]]:
+    def discretize_inds(
+        self, box: Box, extend: bool = False, expand_box: bool = False
+    ) -> List[Tuple[int, int]]:
         """Start and stopping indexes for the cells that intersect with a :class:`Box`.
 
         Parameters
@@ -502,6 +505,9 @@ class Grid(Tidy3dBaseModel):
             If ``True``, ensure that the returned indexes extend sufficiently in every direction to
             be able to interpolate any field component at any point within the ``box``, for field
             components sampled on the Yee grid.
+        expand_box : bool = False
+            If ``True``, the box is slightly enlarged. This ensures that Yee cell boundaries coincident
+            with the box boundaries are captured, which otherwise might be missed due to finite precision.
 
         Returns
         -------
@@ -509,6 +515,11 @@ class Grid(Tidy3dBaseModel):
             The (start, stop) indexes of the cells that intersect with ``box`` in each of the three
             dimensions.
         """
+
+        if expand_box:
+            box = Box(
+                center=box.center, size=[increment_float(dim_size, 1.0) for dim_size in box.size]
+            )
 
         pts_min, pts_max = box.bounds
         boundaries = self.boundaries
