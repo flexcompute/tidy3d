@@ -20,7 +20,7 @@ from ..base import cached_property, skip_if_fields_missing
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
-from ..geometry.base import Box, GeometryGroup, Transformed
+from ..geometry.base import Box, GeometryGroup, Transformed, ClipOperation
 from ..geometry.primitives import Sphere, Cylinder
 from ..geometry.polyslab import PolySlab
 from ..geometry.mesh import TriangleMesh
@@ -38,7 +38,7 @@ from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh, Transformed)
+HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh, Transformed, ClipOperation)
 
 
 class HeatSimulation(AbstractSimulation):
@@ -117,23 +117,23 @@ class HeatSimulation(AbstractSimulation):
                     f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
                 )
 
-            if isinstance(structure.geometry, GeometryGroup):
-                geometries = structure.geometry.geometries
-            else:
-                geometries = [structure.geometry]
-            for geom in geometries:
-                if isinstance(geom, (GeometryGroup)):
-                    raise SetupError(
-                        "'HeatSimulation' does not currently support recursive 'GeometryGroup's ('structures[{ind}]')."
-                    )
-                if not isinstance(geom, HeatSingleGeometryType):
-                    geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
-                    raise SetupError(
-                        "'HeatSimulation' does not currently support geometries of type "
-                        f"'{geom.type}'  ('structures[{ind}]'). Allowed geometries are "
-                        f"{', '.join(geom_names)}, "
-                        "and non-recursive 'GeometryGroup'."
-                    )
+            # if isinstance(structure.geometry, GeometryGroup):
+            #     geometries = structure.geometry.geometries
+            # else:
+            #     geometries = [structure.geometry]
+            # for geom in geometries:
+            #     if isinstance(geom, (GeometryGroup)):
+            #         raise SetupError(
+            #             "'HeatSimulation' does not currently support recursive 'GeometryGroup's ('structures[{ind}]')."
+            #         )
+            #     if not isinstance(geom, HeatSingleGeometryType):
+            #         geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
+            #         raise SetupError(
+            #             "'HeatSimulation' does not currently support geometries of type "
+            #             f"'{geom.type}'  ('structures[{ind}]'). Allowed geometries are "
+            #             f"{', '.join(geom_names)}, "
+            #             "and non-recursive 'GeometryGroup'."
+            #         )
         return val
 
     @pd.validator("size", always=True)
