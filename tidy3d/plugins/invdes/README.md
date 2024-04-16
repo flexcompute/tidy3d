@@ -296,7 +296,7 @@ Let's do this with a set of parameters all at 0.5 as it's a better starting poin
 
 params0 = 0.5 * np.ones_like(params0)
 ```
-It can be useful to run the initial problem to ensure it looks correct before optimizing. For conveniencen, the `to_simulation_data()` method generates the simulation and runs it through `web.run()` to return the `SimulationData`, which can be visualized.```
+It can be useful to run the initial problem to ensure it looks correct before optimizing. For convenience, the `to_simulation_data()` method generates the simulation and runs it through `web.run()` to return the `SimulationData`, which can be visualized.```
 
 ```py
 sim_data = design.to_simulation_data(params=params0, task_name="inspect")
@@ -475,7 +475,7 @@ plt.show()
 
 ```
 
-We also need to construct a post-processing function that will tell the optmizer how to post process the data from each of the `simulations` into a single objective.
+We also need to construct a post-processing function that will tell the optimizer how to post process the data from each of the `simulations` into a single objective.
 
 ```py
 

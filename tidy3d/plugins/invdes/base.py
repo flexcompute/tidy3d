@@ -5,8 +5,9 @@ import abc
 from types import FunctionType
 import inspect
 import typing
-import jax
+import pathlib
 
+import jax
 import numpy as np
 import dill
 import jax.numpy as jnp
@@ -58,7 +59,8 @@ class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
     @staticmethod
     def _check_fname(fname: str) -> None:
         """Warn if fname isn't pickle."""
-        if all(ext not in fname for ext in ("pkl", "pickle", "dill")):
+        suffix = pathlib.Path(fname).suffix
+        if not any(suffix.lower == ext for ext in ("pkl", "pickle", "dill")):
             td.log.warning(
                 "'invdes' components must be saved using 'dill'. "
                 f"Found a filename of '{fname}'. Consider using a 'pickle' extension, such as "

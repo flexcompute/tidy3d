@@ -24,7 +24,7 @@ class Utilities:
         monitor_data = sim_data[monitor_name]
 
         if not isinstance(monitor_data, td.ModeData):
-            raise ValueError("'grab_amps' only works with data from 'ModeMonitor's.")
+            raise ValueError("'get_amps' only works with data from 'ModeMonitor's.")
 
         amps = monitor_data.amps
         amps_sel = amps.sel(**sel_kwargs)
@@ -42,7 +42,7 @@ class Utilities:
         monitor_data = sim_data[monitor_name]
 
         if not isinstance(monitor_data, td.FieldData):
-            raise ValueError("'grab_field_component' only works with data from 'FieldMonitor's.")
+            raise ValueError("'get_field_component' only works with data from 'FieldMonitor's.")
 
         field_component = monitor_data.field_components[field_component]
         field_component_sel = field_component.sel(**sel_kwargs)
@@ -68,7 +68,7 @@ class Utilities:
     def sum_abs_squared(cls, arr: tda.JaxDataArray) -> float:
         """Sum the absolute value squared of a ``tda.JaxDataArray``."""
         arr = cls.make_array(arr)
-        arr_abs_squared = abs(arr) ** 2
+        arr_abs_squared = jnp.abs(arr) ** 2
         return cls.sum_array(arr_abs_squared)
 
     @classmethod

@@ -43,12 +43,6 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
     def objective_fn(self) -> typing.Callable[[jnp.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
-    def _add_verbosity_to_kwargs(self, **kwargs) -> dict:
-        """Add ``self.verbose`` to the ``kwargs`` passed to ``web`` functions."""
-        if "verbose" not in kwargs:
-            kwargs["verbose"] = self.verbose
-        return kwargs
-
 
 class InverseDesign(AbstractInverseDesign):
     """Container for an inverse design problem."""
@@ -157,7 +151,7 @@ class InverseDesign(AbstractInverseDesign):
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         sim = self.to_simulation(params=params)
 
-        kwargs = self._add_verbosity_to_kwargs(**kwargs)
+        kwargs.setdefault("verbose", self.verbose)
 
         sim_data = td.web.run(sim, task_name=task_name, **kwargs)
         return sim_data
@@ -305,7 +299,7 @@ class InverseDesignMulti(AbstractInverseDesign):
         task_names = [get_task_name(i) for i in range(len(simulations))]
         sim_dict = dict(zip(task_names, simulations))
 
-        kwargs = self._add_verbosity_to_kwargs(**kwargs)
+        kwargs.setdefault("verbose", self.verbose)
 
         batch_data = td.web.run_async(sim_dict, **kwargs)
         return [batch_data[tn] for tn in task_names]
