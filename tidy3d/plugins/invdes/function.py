@@ -8,7 +8,7 @@ import jax.numpy as jnp
 
 
 class Utilities:
-    """Funcional utilities that help define postprocessing functions more simply in ``invdes``."""
+    """Functional utilities that help define postprocessing functions more simply in ``invdes``."""
 
     @staticmethod
     def make_array(arr: typing.Any) -> jnp.ndarray:
