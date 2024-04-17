@@ -5,7 +5,8 @@ from abc import ABC
 
 import xarray as xr
 import numpy as np
-import dask
+
+# import dask
 import h5py
 
 from ...constants import (

@@ -7,8 +7,9 @@ from typing import Union, Dict, Callable, Any
 import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
-from matplotlib.tri import Triangulation
-from matplotlib import pyplot as plt
+
+# from matplotlib.tri import Triangulation
+# from matplotlib import pyplot as plt
 import numbers
 
 from .data_array import DataArray

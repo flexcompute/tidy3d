@@ -7,8 +7,9 @@ import functools
 
 import pydantic.v1 as pd
 import numpy as np
-import xarray as xr
-import matplotlib.pyplot as plt
+
+# import xarray as xr
+# import matplotlib.pyplot as plt
 
 from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray
 from .base import Tidy3dBaseModel, cached_property
