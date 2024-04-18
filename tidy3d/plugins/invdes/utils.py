@@ -13,6 +13,7 @@ def make_array(arr: typing.Any) -> jnp.ndarray:
         return jnp.array(arr.values)
     return jnp.array(arr)
 
+
 def get_amps(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -> jnp.ndarray:
     """Grab amplitudes from a ``ModeMonitorData`` and select out values."""
 
@@ -24,6 +25,7 @@ def get_amps(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -
     amps = monitor_data.amps
     amps_sel = amps.sel(**sel_kwargs)
     return amps_sel
+
 
 def get_field_component(
     sim_data: tda.JaxSimulationData,
@@ -42,13 +44,13 @@ def get_field_component(
     field_component_sel = field_component.sel(**sel_kwargs)
     return field_component_sel
 
-def get_intensity(
-    sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs
-) -> jnp.ndarray:
+
+def get_intensity(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -> jnp.ndarray:
     """Grab field intensity from a ``FieldMonitorData`` and select out values."""
     intensity = sim_data.get_intensity(monitor_name)
     intensity_sel = intensity.sel(**sel_kwargs)
     return intensity_sel
+
 
 def sum_array(arr: tda.JaxDataArray) -> float:
     """Sum values in the ``tda.JaxDataArray``."""
@@ -56,11 +58,13 @@ def sum_array(arr: tda.JaxDataArray) -> float:
     arr = make_array(arr)
     return jnp.sum(arr)
 
+
 def sum_abs_squared(arr: tda.JaxDataArray) -> float:
     """Sum the absolute value squared of a ``tda.JaxDataArray``."""
     arr = make_array(arr)
     arr_abs_squared = jnp.abs(arr) ** 2
     return sum_array(arr_abs_squared)
+
 
 def get_phase(arr: tda.JaxDataArray) -> jnp.ndarray:
     """Get ``jnp.angle`` of a ``tda.JaxDataArray`` as an array."""

@@ -33,8 +33,7 @@ class FilterProject(InvdesBaseModel):
         "Note: the radius value is often only approximately related to the final feature sizes. "
         "It is useful to apply a ``FilterProject`` transformation to 'encourage' larger "
         "feature sizes, but we ultimately recommend creating a ``ErosionDilationPenalty`` to the "
-        "``DesignRegion.penalties`` if you have strict fabrication constraints."
-        ,
+        "``DesignRegion.penalties`` if you have strict fabrication constraints.",
         units=td.constants.MICROMETER,
     )
 
