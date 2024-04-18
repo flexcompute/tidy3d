@@ -165,7 +165,7 @@ class TopologyDesignRegion(DesignRegion):
         num_pixels[np.isinf(num_pixels)] = 1
         return tuple(int(n) for n in num_pixels)
 
-    def params_value(self, value: float) -> np.ndarray:
+    def params_uniform(self, value: float) -> np.ndarray:
         """Make an array of parameters with a given value."""
         return value * np.ones(self.params_shape)
 
@@ -177,17 +177,17 @@ class TopologyDesignRegion(DesignRegion):
     @property
     def params_zeros(self):
         """Convenience for generating random parameters of all 0 values with correct shape."""
-        return self.params_value(0.0)
+        return self.params_uniform(0.0)
 
     @property
     def params_half(self):
         """Convenience for generating random parameters of all 0.5 values with correct shape."""
-        return self.params_value(0.5)
+        return self.params_uniform(0.5)
 
     @property
     def params_ones(self):
         """Convenience for generating random parameters of all 1 values with correct shape."""
-        return self.params_value(1.0)
+        return self.params_uniform(1.0)
 
     @property
     def coords(self) -> typing.Dict[str, typing.List[float]]:
