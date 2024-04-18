@@ -1814,3 +1814,26 @@ def test_package_flux():
     da_multi = JaxDataArray(values=[1.0, 2.0], coords=dict(f=[1.0, 2.0]))
     res_multi = JaxFieldData.package_flux_results(None, da_multi)
     assert res_multi == da_multi
+
+
+def test_vertices_warning(log_capture):
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    polyslab = sim.input_structures[3].geometry
+
+    radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        z = radius_penalty.evaluate(polyslab.vertices)
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        z = radius_penalty.evaluate(np.array(jax.lax.stop_gradient(polyslab.vertices)))
+
+    def f(vertices):
+        return radius_penalty.evaluate(vertices)
+
+    with AssertLogLevel(log_capture, None):
+        z = jax.grad(f)(np.random.random((5, 2)))
+
+    with AssertLogLevel(log_capture, None):
+        z = jax.grad(f)(np.random.random((5, 2)).tolist())
