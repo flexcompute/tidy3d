@@ -6,7 +6,7 @@ from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
 from .optimizer import AdamOptimizer
 from .result import InverseDesignResult
-from .function import Utilities
+from . import utils
 
 __all__ = (
     "InverseDesign",
@@ -16,5 +16,5 @@ __all__ = (
     "TopologyDesignRegion",
     "AdamOptimizer",
     "InverseDesignResult",
-    "Utilities",
+    "utils",
 )

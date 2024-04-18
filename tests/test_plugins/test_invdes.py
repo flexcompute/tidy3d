@@ -152,7 +152,7 @@ def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) 
     for sim_data in sim_data_list:
         intensity_i = sim_data.get_intensity(MNT_NAME1)
         val += jnp.sum(intensity_i.values)
-        power_i = tdi.Utilities.sum_abs_squared(tdi.Utilities.get_amps(sim_data, MNT_NAME2))
+        power_i = tdi.utils.sum_abs_squared(tdi.utils.get_amps(sim_data, MNT_NAME2))
         val += power_i
     return val
 
@@ -493,7 +493,7 @@ def test_objective_utilities(use_emulated_run):
 
     value = 0.0
 
-    utils = tdi.Utilities
+    utils = tdi.utils
 
     amps_i = utils.get_amps(sim_data, MNT_NAME2)
     value += utils.sum_abs_squared(amps_i)
