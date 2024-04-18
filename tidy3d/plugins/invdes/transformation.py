@@ -29,7 +29,12 @@ class FilterProject(InvdesBaseModel):
         description="Radius of the filter to convolve with supplied spatial data. "
         "Note: the corresponding feature size expressed in the device is typically "
         "sqrt(3) times smaller than the radius. For best results, it is recommended to make your "
-        "radius about twice as large as the desired feature size.",
+        "radius about twice as large as the desired feature size. "
+        "Note: the radius value is often only approximately related to the final feature sizes. "
+        "It is useful to apply a ``FilterProject`` transformation to 'encourage' larger "
+        "feature sizes, but we ultimately recommend creating a ``ErosionDilationPenalty`` to the "
+        "``DesignRegion.penalties`` if you have strict fabrication constraints."
+        ,
         units=td.constants.MICROMETER,
     )
 

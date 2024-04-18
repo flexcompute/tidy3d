@@ -74,19 +74,22 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def _initialize_result(self, params0: jnp.ndarray) -> InverseDesignResult:
+    def _initialize_result(self, params0: jnp.ndarray = None) -> InverseDesignResult:
         """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
 
         # initialize optimizer
+        if params0 is None:
+            params0 = self.design.design_region.params_half
         params0 = jnp.array(params0)
+
         optax_optimizer = self.optax_optimizer
         opt_state = optax_optimizer.init(params0)
 
         # initialize empty result
         return InverseDesignResult(design=self.design, opt_state=[opt_state], params=[params0])
 
-    def run(self, params0: jnp.ndarray) -> InverseDesignResult:
-        """Run this inverse design problem from an initial set of parameters."""
+    def run(self, params0: jnp.ndarray = None) -> InverseDesignResult:
+        """Run this inverse design problem from an optional initial set of parameters."""
         self.design.design_region._check_params(params0)
         starting_result = self._initialize_result(params0)
         return self.continue_run(result=starting_result)
@@ -111,6 +114,20 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
             (val, aux_data), grad = val_and_grad_fn(params, step_index=step_index, history=history)
             # TODO: add more kwargs here?
+
+            if jnp.allclose(grad, 0.0):
+                td.log.warning(
+                    "All elements of the gradient are almost zero. This likely indicates "
+                    "a problem with the optimization set up. This can occur if the symmetry of the "
+                    "simulation and design region are preventing any data to be recorded in the "
+                    "'output_monitors'. In this case, we recommend creating the initial parameters "
+                    " as 'params0 = DesignRegion.params_random' and passing this to "
+                    "'Optimizer.run()' to break the symmetry in the design region. "
+                    "This zero gradient can also occur if the objective function return value does "
+                    "not have a contribution from the input arguments. We recommend carefully "
+                    "inspecting your objective function to ensure that the variables passed to the "
+                    "function are contributing to the return value."
+                )
 
             # strip out auxiliary data
             penalty = aux_data["penalty"]

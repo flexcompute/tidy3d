@@ -144,8 +144,10 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     @staticmethod
-    def _check_params(params: jnp.ndarray):
+    def _check_params(params: jnp.ndarray = None):
         """Ensure ``params`` are between 0 and 1."""
+        if params is None:
+            return
         if np.any(params < 0) or np.any(params > 1):
             raise ValueError(
                 "Parameters in the 'invdes' plugin's topology optimization feature "
@@ -163,6 +165,10 @@ class TopologyDesignRegion(DesignRegion):
         num_pixels[np.isinf(num_pixels)] = 1
         return tuple(int(n) for n in num_pixels)
 
+    def params_value(self, value: float) -> np.ndarray:
+        """Make an array of parameters with a given value."""
+        return value * np.ones(self.params_shape)
+
     @property
     def params_random(self) -> np.ndarray:
         """Convenience for generating random parameters between (0,1) with correct shape."""
@@ -171,12 +177,17 @@ class TopologyDesignRegion(DesignRegion):
     @property
     def params_zeros(self):
         """Convenience for generating random parameters of all 0 values with correct shape."""
-        return np.zeros(self.params_shape)
+        return self.params_value(0.0)
+
+    @property
+    def params_half(self):
+        """Convenience for generating random parameters of all 0.5 values with correct shape."""
+        return self.params_value(0.5)
 
     @property
     def params_ones(self):
         """Convenience for generating random parameters of all 1 values with correct shape."""
-        return np.ones(self.params_shape)
+        return self.params_value(1.0)
 
     @property
     def coords(self) -> typing.Dict[str, typing.List[float]]:
