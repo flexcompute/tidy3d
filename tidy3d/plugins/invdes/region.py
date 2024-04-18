@@ -166,7 +166,7 @@ class TopologyDesignRegion(DesignRegion):
         return tuple(int(n) for n in num_pixels)
 
     def params_uniform(self, value: float) -> np.ndarray:
-        """Make an array of parameters with a given value."""
+        """Make an array of parameters with all the same value."""
         return value * np.ones(self.params_shape)
 
     @property
