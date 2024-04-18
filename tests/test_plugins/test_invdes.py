@@ -157,6 +157,11 @@ def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) 
     return val
 
 
+def post_process_fn_untraced(sim_data: tda.JaxSimulationData, **kwargs) -> float:
+    """Define a post-processing function with extra kwargs (recommended)."""
+    return 1.0
+
+
 def make_invdes():
     """Make an inverse design"""
     return tdi.InverseDesign(
@@ -301,6 +306,28 @@ def make_result(use_emulated_run):
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
     return optimizer.run(params0=PARAMS_0)
+
+
+def test_default_params(use_emulated_run):
+    """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
+
+    optimizer = make_optimizer()
+
+    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
+
+    return optimizer.run()
+
+
+def test_warn_zero_grad(log_capture, use_emulated_run):
+    """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
+
+    optimizer = make_optimizer()
+    design = optimizer.design.updated_copy(post_process_fn=post_process_fn_untraced)
+    optimizer = optimizer.updated_copy(design=design)
+    with AssertLogLevel(
+        log_capture, "WARNING", contains_str="All elements of the gradient are almost zero"
+    ):
+        return optimizer.run()
 
 
 def make_result_multi(use_emulated_run_async):
