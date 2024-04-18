@@ -1791,6 +1791,28 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             (dmin <= smin and dmax >= smax)
             for dmin, dmax, smin, smax in zip(self.bounds[0], self.bounds[1], bounds[0], bounds[1])
         )
+    
+    # @requires_vtk
+    # def symmetry_expanded_copy(
+    #     self, axis: Axis, center: float, pos_min: float = -inf
+    # ) -> UnstructuredGridDataset:
+
+    #     bounds = np.array(self.bounds)
+
+    #     if pos_min >= 2 * center - bounds[0][axis]:
+    #         return self.copy()
+    #     else:
+    #         reflected = self.reflect(axis=axis, center=center, reflection_only=False)
+
+    #         if pos_min > 2 * center - bounds[1][axis]:
+    #             # expand arbitrary by 1, should not matter by how much
+    #             clip_bounds = [bounds[0] - 1, bounds[1] + 1]
+    #             clip_bounds[0][axis] = pos_min
+    #             clipped = reflected.box_clip(bounds=clip_bounds)
+
+    #             return clipped
+            
+    #         return reflected
 
     @requires_vtk
     def reflect(
