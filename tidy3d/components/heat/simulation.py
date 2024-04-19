@@ -38,8 +38,6 @@ from ...log import log
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh, Transformed, ClipOperation)
-
 
 class HeatSimulation(AbstractSimulation):
     """Contains all information about heat simulation.
