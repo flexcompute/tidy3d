@@ -119,15 +119,20 @@ class TemperatureData(HeatMonitorData):
 
                 center = self.symmetry_center[dim]
 
+                # expand only if monitor bounds missing data
                 if mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
+                    # if we do expand, simply reflect symmetrically the whole data
                     new_temp = new_temp.reflect(axis=dim, center=center)
 
+                    # if it turns out that we expanded too much, we will trim unnecessary data later
                     if mnt_bounds[0][dim] > 2 * center - data_bounds[1][dim]:
                         dims_need_clipping.append(dim)
 
+        # trim over-expanded data
         if len(dims_need_clipping) > 0:
                 
-            # expand arbitrary by 1, should not matter by how much
+            # enlarge clipping domain on positive side arbitrary by 1
+            # should not matter by how much
             clip_bounds = [mnt_bounds[0] - 1, mnt_bounds[1] + 1]
             for dim in dims_need_clipping:
                 clip_bounds[0][dim] = mnt_bounds[0][dim]

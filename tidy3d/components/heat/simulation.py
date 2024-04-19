@@ -120,6 +120,9 @@ class HeatSimulation(AbstractSimulation):
     
     @staticmethod
     def _check_cross_solids(objs, values):
+        """Given model dictionary ``values``, check whether objects in list ``objs`` cross 
+        a ``SolidSpec`` medium.
+        """
 
         # list of structures including background as a Box()
         structure_bg = Structure(
@@ -136,11 +139,11 @@ class HeatSimulation(AbstractSimulation):
         failed_obj_inds = []
         for ind, obj in enumerate(objs):
             if obj.size.count(0.0) == 1:
-                # for planar monitors we could do a rigorous check
+                # for planar objects we could do a rigorous check
                 medium_set = Scene.intersecting_media(obj, total_structures)
                 crosses_solid = any(isinstance(medium.heat_spec, SolidSpec) for medium in medium_set)
             else:
-                # approximate check for volumetric monitors based on bounding boxes
+                # approximate check for volumetric objects based on bounding boxes
                 # thus, it could still miss a case when there is no data inside the monitor
                 crosses_solid = any(
                     obj.intersects(structure.geometry) 
