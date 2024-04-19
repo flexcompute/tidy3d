@@ -1226,7 +1226,7 @@ class FieldProjectionKSpaceMonitor(AbstractFieldProjectionMonitor):
      Notes
      -----
 
-         The :attr:`center` and :attr:`size`
+        The :attr:`center` and :attr:`size`
         fields define where the monitor will be placed in order to record near fields, typically
         very close to the structure of interest. The near fields are then
         projected to far-field locations defined in k-space by ``ux``, ``uy``, and ``proj_distance``,
