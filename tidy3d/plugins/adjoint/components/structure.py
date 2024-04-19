@@ -91,7 +91,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         grad_data_eps: PermittivityData,
     ) -> Dict[str, float]:
         """Compute params in the material of this structure."""
-        freq_max = max(grad_data_eps.eps_xx.f)
+        freq_max = float(max(grad_data_eps.eps_xx.f))
         eps_in = self.medium.eps_model(frequency=freq_max)
         ref_ind = np.sqrt(np.max(np.real(eps_in)))
         wvl_free_space = C_0 / freq_max

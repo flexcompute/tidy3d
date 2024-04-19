@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Set `imoprtlib-metadata`, `boto3`, `requests`, and `click` version requirements to how they were in Tidy3D v2.5.
+- Bug in `td.FullyAnisotropicMedium` when added to `adjoint.JaxStructureStaticMedium`.
 
 ## [2.6.3] - 2024-04-02
 
