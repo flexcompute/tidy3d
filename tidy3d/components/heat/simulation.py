@@ -11,7 +11,7 @@ from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
 from .boundary import HeatBoundarySpec
 from .source import HeatSourceType, UniformHeatSource
 from .monitor import HeatMonitorType
-from .grid import HeatGridType
+from .grid import HeatGridType, UniformUnstructuredGrid, DistanceUnstructuredGrid
 from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
 from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
@@ -258,6 +258,26 @@ class HeatSimulation(AbstractSimulation):
                     "'HeatSimulation.grid_spec' is not present in 'HeatSimulation.structures'"
                 )
 
+        return val
+
+    @pd.validator("grid_spec", always=True)
+    def warn_if_minimal_mesh_size_override(cls, val, values):
+        """Warn if minimal mesh size limit overrides desired mesh size."""
+
+        max_size = np.max(values.get("size"))
+        min_dl = val.rel_min_dl * max_size
+
+        if isinstance(val, UniformUnstructuredGrid):
+            desired_min_dl = val.dl
+        if isinstance(val, DistanceUnstructuredGrid):
+            desired_min_dl = min(val.dl_interface, val.dl_bulk)
+
+        if desired_min_dl < min_dl:
+            log.warning(
+                f"The resulting limit for minimal mesh size from parameter 'rel_min_dl={val.rel_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
+                "Consider lowering parameter 'rel_min_dl' if a finer grid is required."
+            )
+        
         return val
 
     @pd.validator("sources", always=True)

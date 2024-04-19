@@ -8,7 +8,7 @@ import pydantic.v1 as pd
 import numpy as np
 
 from ..monitor import TemperatureMonitor, HeatMonitorType
-from ...base import skip_if_fields_missing
+from ...base import skip_if_fields_missing, cached_property
 from ...base_sim.data.monitor_data import AbstractMonitorData
 from ...data.data_array import SpatialDataArray
 from ...data.dataset import TriangularGridDataset, TetrahedralGridDataset
@@ -39,7 +39,7 @@ class HeatMonitorData(AbstractMonitorData, ABC):
         description="Symmetry center of the original simulation in x, y, and z.",
     )
 
-    @property
+    @cached_property
     def symmetry_expanded_copy(self) -> HeatMonitorData:
         """Return copy of self with symmetry applied."""
         return self.copy()
@@ -90,7 +90,7 @@ class TemperatureData(HeatMonitorData):
 
         return val
 
-    @property
+    @cached_property
     def symmetry_expanded_copy(self) -> TemperatureData:
         """Return copy of self with symmetry applied."""
 

@@ -8,9 +8,18 @@ from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ...constants import MICROMETER
 from ...exceptions import ValidationError
 
+class UnstructuredGrid(Tidy3dBaseModel):
+    """Abstract unstructured grid.
+    """
 
-class UniformUnstructuredGrid(Tidy3dBaseModel):
+    rel_min_dl: pd.PositiveFloat = pd.Field(
+        1e-3,
+        title="Relative Mesh Size Limit",
+        description="The minimal allowed mesh size relative to the largest dimension of the simulation domain.",
+    )
 
+
+class UniformUnstructuredGrid(UnstructuredGrid):
     """Uniform grid.
 
     Example
@@ -47,7 +56,7 @@ class UniformUnstructuredGrid(Tidy3dBaseModel):
     )
 
 
-class DistanceUnstructuredGrid(Tidy3dBaseModel):
+class DistanceUnstructuredGrid(UnstructuredGrid):
     """Adaptive grid based on distance to material interfaces. Currently not recommended for larger
     simulations.
 
