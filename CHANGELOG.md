@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+## [2.7.0rc1] - 2024-04-22
+
+### Added
 - 2D heat simulations are now fully supported. 
 - `tidy3d.plugins.adjoint.web.run_local` used in place of `run` will skip validators that restrict the size or number of `input_structures`.
 - Introduced the `microwave` plugin which includes `ImpedanceCalculator` for computing the characteristic impedance of transmission lines.
@@ -1169,9 +1177,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...pre/2.7
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...develop
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0rc1...pre/2.7
+[2.7.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.7.0rc1
 [2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/flexcompute/tidy3d/compare/v2.6.0...v2.6.1
