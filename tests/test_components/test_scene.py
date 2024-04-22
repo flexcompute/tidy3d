@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tidy3d as td
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
-from ..utils import SIM_FULL
+from ..utils import SIM_FULL, cartesian_to_unstructured
 
 SCENE = td.Scene()
 
@@ -185,7 +185,9 @@ def test_names_unique():
         )
 
 
-def test_perturbed_mediums_copy():
+@pytest.mark.parametrize("z", [[5, 6], [5.5]])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_perturbed_mediums_copy(unstructured, z):
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(
@@ -211,10 +213,16 @@ def test_perturbed_mediums_copy():
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
-    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
-    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
-    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+    coords = dict(x=[1, 2], y=[3, 4], z=z)
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)
+
+    if unstructured:
+        seed = 654
+        temperature = cartesian_to_unstructured(temperature, seed=seed)
+        electron_density = cartesian_to_unstructured(electron_density, seed=seed)
+        hole_density = cartesian_to_unstructured(hole_density, seed=seed)
 
     pmed1 = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_real)
 

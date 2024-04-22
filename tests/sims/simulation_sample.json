@@ -759,12 +759,298 @@
             "geometry": {
                 "type": "Box",
                 "center": [
-                    -3.0,
+                    -1.0,
                     0.5,
                     0.5
                 ],
                 "size": [
                     0.1,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomMedium",
+                "interp_method": "nearest",
+                "subpixel": false,
+                "eps_dataset": null,
+                "permittivity": {
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "conductivity": null
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomDrude",
+                "eps_inf": {
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomLorentz",
+                "eps_inf": {
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomDebye",
+                "eps_inf": {
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomPoleResidue",
+                "eps_inf": {
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "poles": [
+                    [
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomSellmeier",
+                "coeffs": [
+                    [
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "geometry": {
+                "type": "Box",
+                "center": [
+                    -3.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
                     1.0,
                     1.0
                 ]
@@ -1084,6 +1370,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         },
         {
@@ -1109,6 +1396,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Ex"
         },
         {
@@ -1302,6 +1590,7 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "current_dataset": {
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
@@ -1366,6 +1655,7 @@
                 }
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         }
     ],
@@ -2222,10 +2512,14 @@
         ],
         "type": "GridSpec"
     },
-    "version": "2.6.3",
+    "version": "2.7.0rc1",
+    "lumped_elements": [],
+    "subpixel": false,
     "courant": 0.8,
     "normalize_index": 0,
     "shutoff": 0.0001,
-    "subpixel": false,
+    "pec_conformal_mesh_spec": {
+        "type": "StaircasingConformalMeshSpec"
+    },
     "run_time": 1e-12
 }

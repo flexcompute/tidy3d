@@ -307,10 +307,10 @@ def test_heat_sim():
     structure = structure.updated_copy(geometry=STL_GEO, name="stl")
     _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [structure])
 
-    # test unsupported yet zero dimension domains
-    with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(center=(0, 0, 0), size=(0, 2, 2))
+    # run 2D case
+    _ = heat_sim.updated_copy(center=(0, 0, 0), size=(0, 2, 2))
 
+    # test unsupported 1D heat domains
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(center=(0, 0, 0), size=(1, 0, 0))
 

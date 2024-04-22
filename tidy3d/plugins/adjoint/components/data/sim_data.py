@@ -54,6 +54,34 @@ class JaxSimulationData(SimulationData, JaxObject):
         description="Optional field storing the task_id for the original JaxSimulation.",
     )
 
+    def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
+        """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.
+
+        Calculated values represent the instantaneous Poynting vector for time-domain fields and the
+        complex vector for frequency-domain: ``S = 1/2 E × conj(H)``.
+
+        Only the available components are returned, e.g., if the indicated monitor doesn't include
+        field component `"Ex"`, then `"Sy"` and `"Sz"` will not be calculated.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.DataArray
+            DataArray containing the Poynting vector calculated based on the field components
+            colocated at the center locations of the Yee grid.
+        """
+
+        if field_monitor_name in self.output_monitor_data:
+            raise NotImplementedError(
+                "Adjoint support for differentiation with respect to Poynting vector not available."
+            )
+
+        return super().get_poynting_vector(field_monitor_name)
+
     @property
     def grad_data_symmetry(self) -> Tuple[FieldData, ...]:
         """``self.grad_data`` but with ``symmetry_expanded_copy`` applied."""

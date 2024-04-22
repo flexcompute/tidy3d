@@ -38,6 +38,13 @@ class AbstractJaxStructure(Structure, JaxObject):
         """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
         return val
 
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        if "geometry" in self._differentiable_fields:
+            self.geometry._validate_web_adjoint()
+        if "medium" in self._differentiable_fields:
+            self.medium._validate_web_adjoint()
+
     @property
     def jax_fields(self):
         """The fields that are jax-traced for this class."""
@@ -91,7 +98,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         grad_data_eps: PermittivityData,
     ) -> Dict[str, float]:
         """Compute params in the material of this structure."""
-        freq_max = max(grad_data_eps.eps_xx.f)
+        freq_max = float(max(grad_data_eps.eps_xx.f))
         eps_in = self.medium.eps_model(frequency=freq_max)
         ref_ind = np.sqrt(np.max(np.real(eps_in)))
         wvl_free_space = C_0 / freq_max

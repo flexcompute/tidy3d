@@ -12,6 +12,7 @@ These are some classes that are used to organize the tidy3d components, but aren
 
    tidy3d.components.base.Tidy3dBaseModel
    tidy3d.components.base_sim.simulation.AbstractSimulation
+   tidy3d.components.simulation.AbstractYeeGridSimulation
    tidy3d.components.boundary.AbsorberSpec
    tidy3d.Geometry
    tidy3d.components.geometry.base.Centered
@@ -40,7 +41,10 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.monitor.AbstractFluxMonitor
    tidy3d.components.monitor.PlanarMonitor
    tidy3d.components.monitor.AbstractFieldProjectionMonitor
+   tidy3d.components.lumped_element.LumpedElement
    tidy3d.components.grid.grid_spec.GridSpec1d
+   tidy3d.components.base_sim.data.sim_data.SimulationData
+   tidy3d.components.data.sim_data.AbstractYeeGridSimulationData
    tidy3d.components.data.sim_data.SimulationData
    tidy3d.components.data.data_array.DataArray
    tidy3d.components.data.monitor_data.MonitorData

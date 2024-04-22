@@ -6,9 +6,11 @@ import trimesh
 import pytest
 import numpy as np
 import tidy3d as td
+import xarray as xr
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
 from tidy3d.components.base import Tidy3dBaseModel
+from tidy3d import ModeIndexDataArray
 
 """ utilities shared between all tests """
 np.random.seed(4)
@@ -40,50 +42,288 @@ VERTICES = np.array([[-1.5, -0.5, -0.5], [-0.5, -0.5, -0.5], [-1.5, 0.5, -0.5], 
 FACES = np.array([[1, 2, 3], [0, 3, 2], [0, 1, 3], [0, 2, 1]])
 STL_GEO = td.TriangleMesh.from_trimesh(trimesh.Trimesh(VERTICES, FACES))
 
+
 # custom medium
+
+
+def cartesian_to_unstructured(
+    array: td.SpatialDataArray,
+    pert: float = 0.1,
+    method: str = "linear",
+    seed: int = None,
+    same_bounds: bool = True,
+) -> Union[td.TriangularGridDataset, td.TetrahedralGridDataset]:
+    """Convert a SpatialDataArray into TriangularGridDataset/TetrahedralGridDataset with
+    an optional perturbation of point coordinates.
+
+    Parameters
+    ----------
+    array : td.SpatialDataArray
+        Array to convert.
+    pert : float = 0.1
+        Degree of perturbations of point coordinates.
+    method : Literal["linear", "nearest", "direct"] = "linear"
+        Interpolation method for transfering data to unstructured grid.
+    seed : int = None
+        Seed number to use when randomly perturbing point coordinates.
+    same_bounds : bool = True
+        Preserve boundaries of data array. That is, data remains defined in a rectangular domain.
+        This options works best with ``method="direct"``, otherwise boundary nodes will not have values.
+
+    Returns
+    -------
+    Union[td.TriangularGridDataset, td.TetrahedralGridDataset]
+        Unstructured grid dataset.
+    """
+
+    xyz = [array.x, array.y, array.z]
+    lens = [len(coord) for coord in xyz]
+
+    num_len_zero = sum(length == 1 for length in lens)
+
+    if num_len_zero == 1:
+        normal_axis = lens.index(1)
+        normal_pos = xyz[normal_axis].values.item()
+        xyz.pop(normal_axis)
+
+    dxyz = [np.gradient(coord) for coord in xyz]
+
+    XYZ = np.meshgrid(*xyz, indexing="ij")
+    dXYZ = np.meshgrid(*dxyz, indexing="ij")
+
+    shape = np.shape(XYZ[0])
+
+    XYZp = XYZ.copy()
+    rng = np.random.default_rng(seed=seed)
+
+    x_pert = (1 - 2 * rng.random(shape)) * pert
+    if same_bounds:
+        x_pert[0] = 0
+        x_pert[-1] = 0
+    else:
+        x_pert[0] = -np.abs(x_pert[0])
+        x_pert[-1] = np.abs(x_pert[-1])
+
+    XYZp[0] = XYZp[0] + dXYZ[0] * x_pert
+
+    y_pert = (1 - 2 * rng.random(shape)) * pert
+    if same_bounds:
+        y_pert[:, 0] = 0
+        y_pert[:, -1] = 0
+    else:
+        y_pert[:, 0] = -np.abs(y_pert[:, 0])
+        y_pert[:, -1] = np.abs(y_pert[:, -1])
+
+    XYZp[1] = XYZp[1] + dXYZ[1] * y_pert
+
+    if num_len_zero == 0:
+        z_pert = (1 - 2 * rng.random(shape)) * pert
+        if same_bounds:
+            z_pert[:, :, 0] = 0
+            z_pert[:, :, -1] = 0
+        else:
+            z_pert[:, :, 0] = -np.abs(z_pert[:, :, 0])
+            z_pert[:, :, -1] = np.abs(z_pert[:, :, -1])
+
+        XYZp[2] = XYZp[2] + dXYZ[2] * z_pert
+
+        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel(), XYZp[2].ravel()])
+        if method == "direct":
+            values = array
+        else:
+            values = array.interp(
+                x=xr.DataArray(points[:, 0], dims=["index"]),
+                y=xr.DataArray(points[:, 1], dims=["index"]),
+                z=xr.DataArray(points[:, 2], dims=["index"]),
+                method=method,
+            )
+
+        # Kuhn triangulation of box
+        linear_inds = np.arange(np.prod(lens))
+        linear_inds = np.reshape(linear_inds, shape)
+
+        box_vertex_0_inds = linear_inds[:-1, :-1, :-1].ravel()
+        box_vertex_1_inds = linear_inds[:-1, :-1, 1:].ravel()
+        box_vertex_2_inds = linear_inds[:-1, 1:, :-1].ravel()
+        box_vertex_3_inds = linear_inds[:-1, 1:, 1:].ravel()
+        box_vertex_4_inds = linear_inds[1:, :-1, :-1].ravel()
+        box_vertex_5_inds = linear_inds[1:, :-1, 1:].ravel()
+        box_vertex_6_inds = linear_inds[1:, 1:, :-1].ravel()
+        box_vertex_7_inds = linear_inds[1:, 1:, 1:].ravel()
+
+        cell_vertex_0 = np.concatenate(
+            (
+                box_vertex_0_inds,
+                box_vertex_0_inds,
+                box_vertex_0_inds,
+                box_vertex_0_inds,
+                box_vertex_0_inds,
+                box_vertex_0_inds,
+            )
+        )
+        cell_vertex_1 = np.concatenate(
+            (
+                box_vertex_7_inds,
+                box_vertex_7_inds,
+                box_vertex_7_inds,
+                box_vertex_7_inds,
+                box_vertex_7_inds,
+                box_vertex_7_inds,
+            )
+        )
+        cell_vertex_2 = np.concatenate(
+            (
+                box_vertex_1_inds,
+                box_vertex_2_inds,
+                box_vertex_2_inds,
+                box_vertex_4_inds,
+                box_vertex_4_inds,
+                box_vertex_1_inds,
+            )
+        )
+        cell_vertex_3 = np.concatenate(
+            (
+                box_vertex_3_inds,
+                box_vertex_3_inds,
+                box_vertex_6_inds,
+                box_vertex_6_inds,
+                box_vertex_5_inds,
+                box_vertex_5_inds,
+            )
+        )
+
+        cells = np.transpose([cell_vertex_0, cell_vertex_1, cell_vertex_2, cell_vertex_3]).copy()
+
+        griddataset = td.TetrahedralGridDataset(
+            points=td.PointDataArray(points, dims=("index", "axis")),
+            cells=td.CellDataArray(cells, dims=("cell_index", "vertex_index")),
+            values=td.IndexedDataArray(values.values.ravel(), dims=("index")),
+        )
+        return griddataset
+
+    else:
+        points = np.transpose([XYZp[0].ravel(), XYZp[1].ravel()])
+
+        # Kuhn triangulation of square
+        linear_inds = np.arange(np.prod(lens))
+        shape_2d = (len(xyz[0]), len(xyz[1]))
+        linear_inds = np.reshape(linear_inds, shape_2d)
+
+        square_vertex_0_inds = linear_inds[:-1, :-1].ravel()
+        square_vertex_1_inds = linear_inds[:-1, 1:].ravel()
+        square_vertex_2_inds = linear_inds[1:, :-1].ravel()
+        square_vertex_3_inds = linear_inds[1:, 1:].ravel()
+
+        cell_vertex_0 = np.concatenate((square_vertex_0_inds, square_vertex_0_inds))
+        cell_vertex_1 = np.concatenate((square_vertex_1_inds, square_vertex_2_inds))
+        cell_vertex_2 = np.concatenate((square_vertex_3_inds, square_vertex_3_inds))
+
+        cells = np.transpose([cell_vertex_0, cell_vertex_1, cell_vertex_2]).copy()
+
+        xyz_names = ["x", "y", "z"]
+        normal_name = xyz_names.pop(normal_axis)
+        if method == "direct":
+            values = array.isel({normal_name: 0})
+        else:
+            values = array.isel({normal_name: 0}).interp(
+                {
+                    xyz_names[0]: xr.DataArray(points[:, 0], dims=["index"]),
+                    xyz_names[1]: xr.DataArray(points[:, 1], dims=["index"]),
+                },
+                method=method,
+            )
+
+        griddataset = td.TriangularGridDataset(
+            points=td.PointDataArray(points, dims=("index", "axis")),
+            cells=td.CellDataArray(cells, dims=("cell_index", "vertex_index")),
+            values=td.IndexedDataArray(values.values.ravel(), dims=("index")),
+            normal_axis=normal_axis,
+            normal_pos=normal_pos,
+        )
+        return griddataset
+
+
+def make_spatial_data(
+    size,
+    bounds,
+    lims=(0, 1),
+    seed_data=None,
+    unstructured=False,
+    perturbation=0.1,
+    seed_grid=None,
+    method="linear",
+):
+    """Makes a spatial data array."""
+    rng = np.random.default_rng(seed=seed_data)
+    data = lims[0] + (lims[1] - lims[0]) * rng.random(size)
+    arr = td.SpatialDataArray(
+        data,
+        coords=dict(
+            x=np.linspace(bounds[0][0], bounds[1][0], size[0]),
+            y=np.linspace(bounds[0][1], bounds[1][1], size[1]),
+            z=np.linspace(bounds[0][2], bounds[1][2], size[2]),
+        ),
+    )
+    if unstructured:
+        return cartesian_to_unstructured(arr, pert=perturbation, method=method, seed=seed_grid)
+    return arr
+
+
 COORDS = dict(x=[-1.5, -0.5], y=[0, 1], z=[0, 1])
+CUSTOM_SIZE = (2, 2, 2)
+CUSTOM_BOUNDS = [[-1.5, 0, 0], [-0.5, 1, 1]]
+CUSTOM_GRID_SEED = 12345
+
+
+def make_custom_data(lims, unstructured):
+    return make_spatial_data(
+        size=CUSTOM_SIZE,
+        bounds=CUSTOM_BOUNDS,
+        lims=lims,
+        unstructured=unstructured,
+        seed_grid=CUSTOM_GRID_SEED,
+    )
+
+
 custom_medium = td.CustomMedium(
-    permittivity=td.SpatialDataArray(
-        1 + np.random.random((2, 2, 2)),
-        coords=COORDS,
-    ),
+    permittivity=make_custom_data([1, 2], False),
 )
 custom_poleresidue = td.CustomPoleResidue(
-    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    eps_inf=make_custom_data([1, 2], False),
     poles=(
         (
-            td.SpatialDataArray(-1 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            make_custom_data([-1, 0], False),
+            make_custom_data([1, 2], False),
         ),
     ),
 )
 custom_debye = td.CustomDebye(
-    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    eps_inf=make_custom_data([1, 2], False),
     coeffs=(
         (
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            make_custom_data([1, 2], False),
+            make_custom_data([1, 2], False),
         ),
     ),
 )
 
 custom_drude = td.CustomDrude(
-    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    eps_inf=make_custom_data([1, 2], False),
     coeffs=(
         (
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            make_custom_data([1, 2], False),
+            make_custom_data([1, 2], False),
         ),
     ),
 )
 
 custom_lorentz = td.CustomLorentz(
-    eps_inf=td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+    eps_inf=make_custom_data([1, 2], False),
     coeffs=(
         (
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(10 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(1 + np.random.random((2, 2, 2)), coords=COORDS),
+            make_custom_data([1, 2], False),
+            make_custom_data([10, 11], False),
+            make_custom_data([1, 2], False),
         ),
     ),
 )
@@ -91,8 +331,60 @@ custom_lorentz = td.CustomLorentz(
 custom_sellmeier = td.CustomSellmeier(
     coeffs=(
         (
-            td.SpatialDataArray(0.1 + np.random.random((2, 2, 2)), coords=COORDS),
-            td.SpatialDataArray(10 + np.random.random((2, 2, 2)), coords=COORDS),
+            make_custom_data([0.1, 1.1], False),
+            make_custom_data([10, 11], False),
+        ),
+    ),
+)
+
+custom_medium_u = td.CustomMedium(
+    permittivity=make_custom_data([1, 2], True),
+)
+custom_poleresidue_u = td.CustomPoleResidue(
+    eps_inf=make_custom_data([1, 2], True),
+    poles=(
+        (
+            make_custom_data([-1, 0], True),
+            make_custom_data([1, 2], True),
+        ),
+    ),
+)
+custom_debye_u = td.CustomDebye(
+    eps_inf=make_custom_data([1, 2], True),
+    coeffs=(
+        (
+            make_custom_data([1, 2], True),
+            make_custom_data([1, 2], True),
+        ),
+    ),
+)
+
+custom_drude_u = td.CustomDrude(
+    eps_inf=make_custom_data([1, 2], True),
+    coeffs=(
+        (
+            make_custom_data([1, 2], True),
+            make_custom_data([1, 2], True),
+        ),
+    ),
+)
+
+custom_lorentz_u = td.CustomLorentz(
+    eps_inf=make_custom_data([1, 2], True),
+    coeffs=(
+        (
+            make_custom_data([1, 2], True),
+            make_custom_data([10, 11], True),
+            make_custom_data([1, 2], True),
+        ),
+    ),
+)
+
+custom_sellmeier_u = td.CustomSellmeier(
+    coeffs=(
+        (
+            make_custom_data([0.1, 1.1], True),
+            make_custom_data([10, 11], True),
         ),
     ),
 )
@@ -216,6 +508,48 @@ SIM_FULL = td.Simulation(
         td.Structure(
             geometry=td.Box(
                 size=(0.1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_medium_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_drude_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_lorentz_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_debye_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_poleresidue_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
+                center=(-1.0, 0.5, 0.5),
+            ),
+            medium=custom_sellmeier_u,
+        ),
+        td.Structure(
+            geometry=td.Box(
+                size=(1, 1, 1),
                 center=(-3.0, 0.5, 0.5),
             ),
             medium=td.Medium(
@@ -542,6 +876,72 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
             **field_cmps,
         )
 
+    def make_field_time_data(monitor: td.FieldTimeMonitor) -> td.FieldTimeData:
+        """make a random FieldTimeData from a FieldTimeMonitor."""
+        field_cmps = {}
+        coords = {}
+        grid = simulation.discretize_monitor(monitor)
+        tmesh = simulation.tmesh
+        for field_name in monitor.fields:
+            spatial_coords_dict = grid[field_name].dict()
+
+            for axis, dim in enumerate("xyz"):
+                if monitor.size[axis] == 0:
+                    coords[dim] = [monitor.center[axis]]
+                else:
+                    coords[dim] = np.array(spatial_coords_dict[dim])
+
+            (idx_begin, idx_end) = monitor.time_inds(tmesh)
+            tcoords = tmesh[idx_begin:idx_end]
+            coords["t"] = tcoords
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarFieldTimeDataArray, is_complex=False
+            )
+
+        return td.FieldTimeData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            **field_cmps,
+        )
+
+    def make_mode_solver_data(monitor: td.ModeSolverMonitor) -> td.ModeSolverData:
+        """make a random ModeSolverData from a ModeSolverMonitor."""
+        field_cmps = {}
+        coords = {}
+        grid = simulation.discretize_monitor(monitor)
+        index_coords = {}
+        index_coords["f"] = list(monitor.freqs)
+        index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
+        index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
+        index_data = ModeIndexDataArray(
+            (1 + 1j) * np.random.random(index_data_shape), coords=index_coords
+        )
+        for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
+            spatial_coords_dict = grid[field_name].dict()
+
+            for axis, dim in enumerate("xyz"):
+                if monitor.size[axis] == 0:
+                    coords[dim] = [monitor.center[axis]]
+                else:
+                    coords[dim] = np.array(spatial_coords_dict[dim])
+
+            coords["f"] = list(monitor.freqs)
+            coords["mode_index"] = index_coords["mode_index"]
+            field_cmps[field_name] = make_data(
+                coords=coords, data_array_type=td.ScalarModeFieldDataArray, is_complex=True
+            )
+
+        return td.ModeSolverData(
+            monitor=monitor,
+            symmetry=(0, 0, 0),
+            symmetry_center=simulation.center,
+            grid_expanded=grid,
+            n_complex=index_data,
+            **field_cmps,
+        )
+
     def make_eps_data(monitor: td.PermittivityMonitor) -> td.PermittivityData:
         """make a random PermittivityData from a PermittivityMonitor."""
         field_mnt = td.FieldMonitor(**monitor.dict(exclude={"type", "fields"}))
@@ -587,6 +987,8 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
 
     MONITOR_MAKER_MAP = {
         td.FieldMonitor: make_field_data,
+        td.FieldTimeMonitor: make_field_time_data,
+        td.ModeSolverMonitor: make_mode_solver_data,
         td.ModeMonitor: make_mode_data,
         td.PermittivityMonitor: make_eps_data,
         td.DiffractionMonitor: make_diff_data,

@@ -55,7 +55,7 @@ def run(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -81,7 +81,7 @@ def run(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing solver results for the supplied simulation.
 
     Notes
@@ -160,7 +160,7 @@ def upload(
 
     Parameters
     ----------
-    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation to upload to server.
     task_name : str
         Name of task.
@@ -217,9 +217,13 @@ def upload(
                 "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
                 "is subject to change in the future."
             )
-        else:
-            url = _get_url(task.task_id)
-            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+        elif task_type == "EME":
+            console.log(
+                "Tidy3D's EME solver is currently in the beta stage. Cost of EME simulations "
+                "is subject to change in the future."
+            )
+        url = _get_url(task.task_id)
+        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
     task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
 
@@ -350,9 +354,14 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_info = get_info(task_id)
 
-    if task_info.taskType in ("MODE_SOLVER", "HEAT"):
+    if task_info.taskType in ("MODE_SOLVER", "HEAT", "EME"):
         log_level = "DEBUG" if verbose else "INFO"
-        solver_name = "Mode" if task_info.taskType == "MODE_SOLVER" else "Heat"
+        if task_info.taskType == "MODE_SOLVER":
+            solver_name = "Mode"
+        elif task_info.taskType == "HEAT":
+            solver_name = "Heat"
+        elif task_info.taskType == "EME":
+            solver_name = "EME"
 
         # Wait for task to finish
         prev_status = "draft"
@@ -581,7 +590,7 @@ def load_simulation(
 
     Returns
     -------
-    Union[:class:`.Simulation`, :class:`.HeatSimulation`]
+    Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
         Simulation loaded from downloaded json file.
     """
 
@@ -657,7 +666,7 @@ def load(
 
     Returns
     -------
-    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
         Object containing simulation data.
     """
     if not os.path.exists(path) or replace_existing:
@@ -781,7 +790,7 @@ def get_tasks(
 
 
 @wait_for_connection
-def estimate_cost(task_id: str, verbose: bool = True) -> float:
+def estimate_cost(task_id: str, verbose: bool = True, solver_version: str = None) -> float:
     """Compute the maximum FlexCredit charge for a given task.
 
     Parameters
@@ -790,6 +799,8 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
         Unique identifier of task on server.  Returned by :meth:`upload`.
     verbose : bool = True
         Whether to log the cost and helpful messages.
+    solver_version : str = None
+        Target solver version.
 
     Returns
     -------
@@ -829,7 +840,7 @@ def estimate_cost(task_id: str, verbose: bool = True) -> float:
     if not task:
         raise ValueError("Task not found.")
 
-    task.estimate_cost()
+    task.estimate_cost(solver_version=solver_version)
     task_info = get_info(task_id)
     status = task_info.metadataStatus
 
@@ -921,7 +932,7 @@ def real_cost(task_id: str, verbose=True) -> float:
         if verbose:
             console = get_logging_console()
             console.log(f"Billed flex credit cost: {flex_unit:1.3f}.")
-            if flex_unit != ori_flex_unit:
+            if flex_unit != ori_flex_unit and task_info.taskType == "FDTD":
                 console.log(
                     "Note: the task cost pro-rated due to early shutoff was below the minimum "
                     "threshold, due to fast shutoff. Decreasing the simulation 'run_time' should "

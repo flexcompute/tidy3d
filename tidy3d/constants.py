@@ -162,6 +162,11 @@ PICOSECOND_PER_NANOMETER_PER_KILOMETER = "ps/(nm km)"
 Picosecond per (nanometer kilometer).
 """
 
+OHM = "ohm"
+"""
+SI unit of resistance..
+"""
+
 THERMAL_CONDUCTIVITY = "W/(um*K)"
 """
 Watts per (micrometer Kelvin).
@@ -194,6 +199,9 @@ Large number used for comparing infinity.
 """
 
 inf = np.inf
+"""
+Representation of infinity used within tidy3d.
+"""
 
 # if |np.pi/2 - angle_theta| < GLANCING_CUTOFF in an angled source or in mode spec, raise warning
 GLANCING_CUTOFF = 0.1

@@ -14,6 +14,7 @@ API |:computer:|
     sources
     monitors
     mode
+    lumped_elements
     discretization
     output_data
     scene
@@ -21,6 +22,7 @@ API |:computer:|
     submit_simulations
     heat/index
     charge/index
+    eme/index
     plugins/index
     constants
     abstract_base
@@ -34,6 +36,7 @@ API |:computer:|
 .. include:: /api/sources.rst
 .. include:: /api/monitors.rst
 .. include:: /api/mode.rst
+.. include:: /api/lumped_elements.rst
 .. include:: /api/discretization.rst
 .. include:: /api/output_data.rst
 .. include:: /api/scene.rst
@@ -41,6 +44,7 @@ API |:computer:|
 .. include:: /api/submit_simulations.rst
 .. include:: /api/heat/index.rst
 .. include:: /api/charge/index.rst
+.. include:: /api/eme/index.rst
 .. include:: /api/plugins/index.rst
 .. include:: /api/constants.rst
 .. include:: /api/abstract_base.rst

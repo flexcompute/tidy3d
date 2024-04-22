@@ -6,6 +6,7 @@ from multiprocessing import Pool
 
 import pydantic.v1 as pd
 import numpy as np
+import xarray as xr
 
 from jax.tree_util import register_pytree_node_class
 
@@ -17,10 +18,11 @@ from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
 from ....components.types import Ax, annotate_type
+from ....components.geometry.base import Box
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
 
-from .base import JaxObject
+from .base import JaxObject, WEB_ADJOINT_MESSAGE
 from .structure import (
     JaxStructure,
     JaxStructureType,
@@ -36,8 +38,8 @@ FWIDTH_FACTOR = 1.0 / 10
 # bandwidth of adjoint sources in units of the minimum difference between output frequencies
 FWIDTH_FACTOR_MULTIFREQ = 0.1
 
-# the adjoint run time is RUN_TIME_FACTOR / fwidth
-RUN_TIME_FACTOR = 100
+# the adjoint run time is the forward simulation run time + RUN_TIME_FACTOR / fwidth
+RUN_TIME_FACTOR = 10
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1
@@ -177,18 +179,6 @@ class JaxSimulation(Simulation, JaxObject):
         return val
 
     @pd.validator("input_structures", always=True)
-    def _restrict_input_structures(cls, val):
-        """Restrict number of input structures."""
-        num_input_structures = len(val)
-        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
-            raise AdjointError(
-                "For performance, adjoint plugin restricts the number of input structures to "
-                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}."
-            )
-
-        return val
-
-    @pd.validator("input_structures", always=True)
     @skip_if_fields_missing(["structures"])
     def _warn_overlap(cls, val, values):
         """Print appropriate warning if structures intersect in ways that cause gradient error."""
@@ -281,6 +271,21 @@ class JaxSimulation(Simulation, JaxObject):
                 log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val
 
+    def _restrict_input_structures(self) -> None:
+        """Restrict number of input structures."""
+        num_input_structures = len(self.input_structures)
+        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+            raise AdjointError(
+                "For performance, adjoint plugin restricts the number of input structures to "
+                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}. " + WEB_ADJOINT_MESSAGE
+            )
+
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        self._restrict_input_structures()
+        for structure in self.input_structures:
+            structure._validate_web_adjoint()
+
     @staticmethod
     def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
         """Return sorted list of unique frequencies stripped from a collection of monitors."""
@@ -350,7 +355,8 @@ class JaxSimulation(Simulation, JaxObject):
         if self.run_time_adjoint is not None:
             return self.run_time_adjoint
 
-        run_time_adjoint = RUN_TIME_FACTOR / self._fwidth_adjoint
+        run_time_fwd = self.run_time
+        run_time_adjoint = run_time_fwd + RUN_TIME_FACTOR / self._fwidth_adjoint
 
         if self._is_multi_freq:
             log.warning(
@@ -367,6 +373,23 @@ class JaxSimulation(Simulation, JaxObject):
             )
 
         return run_time_adjoint
+
+    @cached_property
+    def tmesh_adjoint(self) -> np.ndarray:
+        """FDTD time stepping points.
+
+        Returns
+        -------
+        np.ndarray
+            Times (seconds) that the simulation time steps through.
+        """
+        dt = self.dt
+        return np.arange(0.0, self._run_time_adjoint + dt, dt)
+
+    @cached_property
+    def num_time_steps_adjoint(self) -> int:
+        """Number of time steps in the adjoint simulation."""
+        return len(self.tmesh_adjoint)
 
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
@@ -563,6 +586,46 @@ class JaxSimulation(Simulation, JaxObject):
             hlim=hlim,
             vlim=vlim,
         )
+
+    def epsilon(
+        self,
+        box: Box,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at volume specified by box and freq.
+
+        Parameters
+        ----------
+        box : :class:`.Box`
+            Rectangular geometry specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
+        """
+        sim, _ = self.to_simulation()
+        return sim.epsilon(box=box, coord_key=coord_key, freq=freq)
 
     def __eq__(self, other: JaxSimulation) -> bool:
         """Are two JaxSimulation objects equal?"""

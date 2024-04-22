@@ -328,7 +328,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full.tolist()
+        return path.polygons_full
 
     def _intersections_normal(self, z: float):
         """Find shapely geometries intersecting cylindrical geometry with axis normal to slab.
