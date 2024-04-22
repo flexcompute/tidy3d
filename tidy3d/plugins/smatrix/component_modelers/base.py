@@ -67,7 +67,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     verbose: bool = pd.Field(
         False,
         title="Verbosity",
-        description="Whether the :class:`.ComponentModeler` should print status and progressbars.",
+        description="Whether the :class:`.AbstractComponentModeler` should print status and progressbars.",
     )
 
     callback_url: str = pd.Field(
