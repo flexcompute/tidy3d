@@ -5,6 +5,7 @@ import os
 from abc import ABC
 from typing import Dict, Tuple
 import time
+import json
 
 from rich.progress import Progress
 import pydantic.v1 as pd
@@ -13,7 +14,7 @@ from .tidy3d_stub import SimulationType, SimulationDataType
 from ..api import webapi as web
 from ..core.task_info import TaskInfo, RunInfo
 from ..core.constants import TaskId, TaskName
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.types import annotate_type
 from ...log import log, get_logging_console
 
@@ -146,11 +147,7 @@ class Job(WebContainer):
         None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
     )
 
-    task_id: TaskId = pd.Field(
-        None,
-        title="Task Id",
-        description="Task ID number, set when the task is uploaded, leave as None.",
-    )
+    task_id: TaskId = None
 
     _upload_fields = (
         "simulation",
@@ -161,6 +158,18 @@ class Job(WebContainer):
         "simulation_type",
         "parent_tasks",
     )
+
+    def json(self, **kwargs):
+        """Save ``Job`` to dictionary. Add the `task_id` if it has been cached."""
+
+        self_json = super().json(**kwargs)
+        self_dict = json.loads(self_json)
+
+        task_id = self._cached_properties.get("_task_id")
+        if task_id:
+            self_dict["task_id"] = task_id
+
+        return json.dumps(self_dict)
 
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
         """Run :class:`Job` all the way through and return data.
@@ -176,25 +185,21 @@ class Job(WebContainer):
             Object containing simulation results.
         """
 
+        self.upload()
         self.start()
         self.monitor()
         return self.load(path=path)
 
-    @pd.root_validator()
-    def _upload(cls, values) -> None:
-        """Upload simulation to server without running."""
+    @cached_property
+    def _task_id(self):
+        if self.task_id:
+            return self.task_id
+        return self.upload()
 
-        # task_id already present, don't re-upload
-        if values.get("task_id") is not None:
-            return values
-
+    def upload(self) -> TaskId:
         # upload kwargs with all fields except task_id
-        upload_kwargs = {key: values.get(key) for key in cls._upload_fields}
-        task_id = web.upload(**upload_kwargs)
-
-        # then set the task_id and return
-        values["task_id"] = task_id
-        return values
+        upload_kwargs = {key: getattr(self, key) for key in self._upload_fields}
+        return web.upload(**upload_kwargs)
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -205,7 +210,7 @@ class Job(WebContainer):
             :class:`TaskInfo` object containing info about status, size, credits of task and others.
         """
 
-        return web.get_info(task_id=self.task_id)
+        return web.get_info(task_id=self._task_id)
 
     @property
     def status(self):
@@ -219,7 +224,7 @@ class Job(WebContainer):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        web.start(self.task_id, solver_version=self.solver_version)
+        web.start(self._task_id, solver_version=self.solver_version)
 
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
@@ -229,7 +234,7 @@ class Job(WebContainer):
         :class:`RunInfo`
             Task run information.
         """
-        return web.get_run_info(task_id=self.task_id)
+        return web.get_run_info(task_id=self._task_id)
 
     def monitor(self) -> None:
         """Monitor progress of running :class:`Job`.
@@ -239,7 +244,7 @@ class Job(WebContainer):
         To load the output of completed simulation into :class:`.SimulationData` objects,
         call :meth:`Job.load`.
         """
-        web.monitor(self.task_id, verbose=self.verbose)
+        web.monitor(self._task_id, verbose=self.verbose)
 
     def download(self, path: str = DEFAULT_DATA_PATH) -> None:
         """Download results of simulation.
@@ -253,7 +258,7 @@ class Job(WebContainer):
         ----
         To load the data after download, use :meth:`Job.load`.
         """
-        web.download(task_id=self.task_id, path=path, verbose=self.verbose)
+        web.download(task_id=self._task_id, path=path, verbose=self.verbose)
 
     def load(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
         """Download job results and load them into a data object.
@@ -268,11 +273,11 @@ class Job(WebContainer):
         Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
-        return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
+        return web.load(task_id=self._task_id, path=path, verbose=self.verbose)
 
     def delete(self) -> None:
         """Delete server-side data associated with :class:`Job`."""
-        web.delete(self.task_id)
+        web.delete(self._task_id)
 
     def real_cost(self, verbose: bool = True) -> float:
         """Get the billed cost for the task associated with this job.
@@ -287,7 +292,7 @@ class Job(WebContainer):
         float
             Billed cost of the task in FlexCredits.
         """
-        return web.real_cost(self.task_id, verbose=verbose)
+        return web.real_cost(self._task_id, verbose=verbose)
 
     def estimate_cost(self, verbose: bool = True) -> float:
         """Compute the maximum FlexCredit charge for a given :class:`.Job`.
@@ -307,7 +312,7 @@ class Job(WebContainer):
         Cost is calculated assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
-        return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
+        return web.estimate_cost(self._task_id, verbose=verbose)
 
 
 class BatchData(Tidy3dBaseModel):
@@ -462,12 +467,7 @@ class Batch(WebContainer):
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    jobs: Dict[TaskName, Job] = pd.Field(
-        None,
-        title="Simulations",
-        description="Mapping of task names to individual Job object for each task in the batch. "
-        "Set by ``Batch.upload``, leave as None.",
-    )
+    _job_type = Job
 
     @staticmethod
     def _check_path_dir(path_dir: str) -> None:
@@ -505,39 +505,44 @@ class Batch(WebContainer):
         data from file one by one. If no file exists for that task, it downloads it.
         """
         self._check_path_dir(path_dir)
+        self.upload()
         self.start()
         self.monitor()
         return self.load(path_dir=path_dir)
 
-    @pd.validator("jobs", always=True)
-    def _upload(cls, val, values) -> None:
+    @cached_property
+    def jobs(self) -> Dict[TaskName, Job]:
         """Create a series of tasks in the :class:`.Batch` and upload them to server.
 
         Note
         ----
         To start the simulations running, must call :meth:`Batch.start` after uploaded.
         """
-        if val is not None:
-            return val
 
         # the type of job to upload (to generalize to subclasses)
-        JobType = cls.__fields__["jobs"].type_
-        parent_tasks = values.get("parent_tasks")
+        JobType = self._job_type
 
-        verbose = bool(values.get("verbose"))
-        solver_version = values.get("solver_version")
         jobs = {}
-        for task_name, simulation in values.get("simulations").items():
-            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
+        for task_name, simulation in self.simulations.items():
+            upload_kwargs = {}
+            for key in JobType._upload_fields:
+                if hasattr(self, key):
+                    upload_kwargs[key] = getattr(self, key)
+
             upload_kwargs["task_name"] = task_name
             upload_kwargs["simulation"] = simulation
-            upload_kwargs["verbose"] = verbose
-            upload_kwargs["solver_version"] = solver_version
-            if parent_tasks and task_name in parent_tasks:
-                upload_kwargs["parent_tasks"] = parent_tasks[task_name]
+            upload_kwargs["verbose"] = False
+            upload_kwargs["solver_version"] = self.solver_version
+            if self.parent_tasks and task_name in self.parent_tasks:
+                upload_kwargs["parent_tasks"] = self.parent_tasks[task_name]
             job = JobType(**upload_kwargs)
             jobs[task_name] = job
         return jobs
+
+    def upload(self) -> None:
+        jobs = self.jobs
+        for _, job in self.jobs.items():
+            job.upload()
 
     def get_info(self) -> Dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
@@ -715,7 +720,7 @@ class Batch(WebContainer):
         self.to_file(self._batch_path(path_dir=path_dir))
 
         for task_name, job in self.jobs.items():
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+            job_path = self._job_data_path(task_id=job._task_id, path_dir=path_dir)
 
             if "error" in job.status:
                 log.warning(f"Not downloading '{task_name}' as the task errored.")
@@ -753,8 +758,8 @@ class Batch(WebContainer):
                 log.warning(f"Not loading '{task_name}' as the task errored.")
                 continue
 
-            task_paths[task_name] = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
-            task_ids[task_name] = self.jobs[task_name].task_id
+            task_paths[task_name] = self._job_data_path(task_id=job._task_id, path_dir=path_dir)
+            task_ids[task_name] = self.jobs[task_name]._task_id
 
         return BatchData(task_paths=task_paths, task_ids=task_ids, verbose=self.verbose)
 
