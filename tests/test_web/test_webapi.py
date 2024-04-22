@@ -510,7 +510,13 @@ def test_job(mock_webapi, monkeypatch, tmp_path):
     sim = make_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
-    _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
+    fname = str(tmp_path / "web_test_tmp.json")
+
+    j.to_file(fname)
+
+    j = j.from_file(fname)
+
+    _ = j.run(path=fname)
     _ = j.status
     j.estimate_cost()
     # j.download
@@ -525,14 +531,21 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, tmp_path):
+def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
     sims = {TASK_NAME: make_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
+
+    fname = str(tmp_path / "batch.json")
+
+    b.to_file(fname)
+    b = b.from_file(fname)
+
     b.estimate_cost()
-    _ = b.run(path_dir=str(tmp_path))
+    data = b.run(path_dir=str(tmp_path))
+    _ = b.get_info()
     assert b.real_cost() == FLEX_UNIT * len(sims)
 
 

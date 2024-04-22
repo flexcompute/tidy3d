@@ -241,7 +241,8 @@ class AdjointJob(Job):
         ----
         To monitor progress of the :class:`Job`, call :meth:`Job.monitor` after started.
         """
-        upload_jax_info(task_id=self.task_id, jax_info=self.jax_info, verbose=self.verbose)
+        if self.jax_info is not None:
+            upload_jax_info(task_id=self.task_id, jax_info=self.jax_info, verbose=self.verbose)
         super().start()
 
 
@@ -254,44 +255,25 @@ class AdjointBatch(Batch):
         description="Type of simulation, used internally only.",
     )
 
-    jobs: Dict[str, AdjointJob] = pd.Field(
-        None,
-        title="Simulations",
-        description="Mapping of task names to individual AdjointJob object for each task "
-        "in the batch. Set by ``AdjointBatch.upload``, leave as None.",
-    )
-
     jax_infos: Dict[str, JaxInfo] = pd.Field(
         ...,
         title="Jax Info Dict",
         description="Containers of information needed to reconstruct JaxSimulation for each item.",
     )
 
-    @pd.root_validator()
-    def _add_jax_infos(cls, values) -> None:
-        """Add jax_info fields to the uploaded jobs."""
-        jax_infos = values.get("jax_infos")
-        jobs = values.get("jobs")
-
-        if jobs is None:
-            return values
-
-        for task_name, job in jobs.items():
-            jax_info = jax_infos[task_name]
-            values["jobs"][task_name] = job.updated_copy(jax_info=jax_info)
-
-        return values
+    _job_type = AdjointJob
 
     def start(self) -> None:
-        """Start running all tasks in the :class:`Batch`.
+        """Start running a :class:`AdjointBatch`. after uploading jax info for each job.
 
         Note
         ----
-        To monitor the running simulations, can call :meth:`Batch.monitor`.
+        To monitor progress of the :class:`Batch`, call :meth:`Batch.monitor` after started.
         """
-        for _, job in self.jobs.items():
-            upload_jax_info(task_id=job.task_id, jax_info=job.jax_info, verbose=self.verbose)
-            job.start()
+        for task_name, job in self.jobs.items():
+            jax_info = self.jax_infos.get(task_name)
+            upload_jax_info(task_id=job.task_id, jax_info=jax_info, verbose=job.verbose)
+        super().start()
 
 
 def webapi_run_adjoint_fwd(
