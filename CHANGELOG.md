@@ -5,16 +5,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-### Changed
+## [2.6.4] - 2024-04-23
 
 ### Fixed
-
-## [2.6.4] - 2024-04-22
-
-### Fixed
-- Set `imoprtlib-metadata`, `boto3`, `requests`, and `click` version requirements to how they were in Tidy3D v2.5.
+- Set `importlib-metadata`, `boto3`, `requests`, and `click` version requirements to how they were in Tidy3D v2.5.
 - Bug in `td.FullyAnisotropicMedium` when added to `adjoint.JaxStructureStaticMedium`.
 - Bug when extra `**kwargs` passed to `Design.run_batch()`.
 
@@ -1156,7 +1150,7 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...develop
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...develop
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...v2.6.2
