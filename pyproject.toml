@@ -215,8 +215,8 @@ values = ["dev", "rc"]
 
 [[tool.bumpversion.files]]
 filename = "pyproject.toml"
-search = "{current_version}"
-replace = "{new_version}"
+search = "\nversion = \"{current_version}\""
+replace = "\nversion = \"{new_version}\""
 
 [[tool.bumpversion.files]]
 filename = "tidy3d/version.py"
