@@ -39,12 +39,19 @@ jobs:
         id: get_branch
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "BRANCH_NAME=${{ github.event.pull_request.base.ref }}" >> $GITHUB_ENV
+            # Extract the base branch of the PR
+            BRANCH_NAME="${{ github.event.pull_request.base.ref }}"
+            echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           else
-            echo "BRANCH_NAME=$(echo $GITHUB_REF | sed 's|refs/heads/||')" >> $GITHUB_ENV
+            # Assume it's a push event, extract the branch name from $GITHUB_REF
+            BRANCH_NAME=$(echo $GITHUB_REF | sed 's|refs/heads/||')
+            echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           fi
-          echo $BRANCH_NAME
+          # Now echoing the BRANCH_NAME to verify
+          echo "BRANCH_NAME: $BRANCH_NAME"
         shell: bash
+        env:
+          GITHUB_REF: ${{ github.ref }}
 
       - name: Initialize and update submodule
         run: |
@@ -59,9 +66,9 @@ jobs:
           # Checking out Notebooks submodule with the same branch as the main project
           echo "Checking $NOTEBOOKS_PATH for updates..."
           cd $NOTEBOOKS_PATH
+          NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
           echo $(git fetch --all --verbose)
           echo $(git remote get-url origin)
-          git checkout origin/$BRANCH_NAME
           if git show-ref --verify refs/remotes/origin/$BRANCH_NAME; then
            echo "Branch $BRANCH_NAME exists."
           else
@@ -69,7 +76,8 @@ jobs:
             exit 1
           fi
           NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${{ env.BRANCH_NAME }})
-          NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
+          echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
+          echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
           
           
           cd ../..
@@ -83,8 +91,12 @@ jobs:
           # Checking FAQs only on the develop branch.
           echo "Checking $FAQ_PATH for updates..."
           cd $FAQ_PATH
-          FAQ_LATEST_COMMIT=$(git rev-parse origin/develop)
           FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
+          echo $(git fetch --all --verbose)
+          echo $(git remote get-url origin)
+          FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
+          echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
+          echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
           cd ../..
           if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
             echo "::error ::Submodule $FAQ_PATH is not up to date. Please update it."
