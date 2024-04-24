@@ -12,10 +12,11 @@ class UnstructuredGrid(Tidy3dBaseModel):
     """Abstract unstructured grid.
     """
 
-    rel_min_dl: pd.PositiveFloat = pd.Field(
+    relative_min_dl: pd.NonNegativeFloat = pd.Field(
         1e-3,
         title="Relative Mesh Size Limit",
-        description="The minimal allowed mesh size relative to the largest dimension of the simulation domain.",
+        description="The minimal allowed mesh size relative to the largest dimension of the simulation domain."
+        "Use 'relative_min_dl=0' to remove this constraint.",
     )
 
 

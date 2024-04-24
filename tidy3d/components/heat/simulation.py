@@ -266,7 +266,7 @@ class HeatSimulation(AbstractSimulation):
         """Warn if minimal mesh size limit overrides desired mesh size."""
 
         max_size = np.max(values.get("size"))
-        min_dl = val.rel_min_dl * max_size
+        min_dl = val.relative_min_dl * max_size
 
         if isinstance(val, UniformUnstructuredGrid):
             desired_min_dl = val.dl
@@ -275,8 +275,8 @@ class HeatSimulation(AbstractSimulation):
 
         if desired_min_dl < min_dl:
             log.warning(
-                f"The resulting limit for minimal mesh size from parameter 'rel_min_dl={val.rel_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
-                "Consider lowering parameter 'rel_min_dl' if a finer grid is required."
+                f"The resulting limit for minimal mesh size from parameter 'relative_min_dl={val.relative_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
+                "Consider lowering parameter 'relative_min_dl' if a finer grid is required."
             )
         
         return val

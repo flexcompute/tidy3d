@@ -308,6 +308,10 @@ def test_spatial_data_array():
         coords=dict(x=[0, 1], y=[1, 2], z=[2, 3]),
     )
 
+    # make it non sorted
+    arr = arr.isel(x=[1, 0], z=[1, 0])
+
+    # reflection with a gap
     reflected = arr.reflect(axis=0, center=-0.5)
 
     reflected_expected = td.SpatialDataArray(
@@ -317,6 +321,17 @@ def test_spatial_data_array():
 
     assert reflected == reflected_expected
 
+    # reflection with a gap, only reflection
+    reflected = arr.reflect(axis=0, center=-0.5, reflection_only=True)
+
+    reflected_expected = td.SpatialDataArray(
+        [[[4, 5], [6, 7]], [[0, 1], [2, 3]]],
+        coords=dict(x=[-2, -1], y=[1, 2], z=[2, 3]),
+    )
+
+    assert reflected == reflected_expected
+
+    # reflection with no gap
     reflected = arr.reflect(axis=1, center=1)
 
     reflected_expected = td.SpatialDataArray(
@@ -326,5 +341,43 @@ def test_spatial_data_array():
 
     assert reflected == reflected_expected
 
+    # reflection with no gap, only reflection
+    reflected = arr.reflect(axis=1, center=1, reflection_only=True)
+
+    reflected_expected = td.SpatialDataArray(
+        [[[2, 3], [0, 1]], [[6, 7], [4, 5]]],
+        coords=dict(x=[0, 1], y=[0, 1], z=[2, 3]),
+    )
+
+    assert reflected == reflected_expected
+
     with pytest.raises(DataError):
         reflected = arr.reflect(axis=2, center=2.5)
+
+@pytest.mark.parametrize("nx", [10, 1])
+def test_sel_inside(nx):
+    ny = 11
+    nz = 12
+    arr = td.SpatialDataArray(
+        np.random.random((nx, ny, nz)),
+        coords=dict(
+            x=np.linspace(0, 1, nx), 
+            y=np.linspace(2, 3, ny), 
+            z=np.linspace(0, 2, nz),
+        ),
+    )
+    
+    bounds_small = [[0.1, 2, 2], [1, 2.5, 2]]
+    bounds_large = [[0.1, 2, 2], [1, 4, 2]]
+    assert arr.does_cover(bounds_small)
+    assert not arr.does_cover(bounds_large)
+    
+    arr_selected = arr.sel_inside(bounds_small)
+    assert arr_selected.does_cover(bounds_small)
+
+    arr_selected = arr.sel_inside(bounds_large)
+    assert not arr_selected.does_cover(bounds_large)
+
+    with pytest.raises(DataError):
+        _ = arr.does_cover([[0.1, 3, 2], [1, 2.5, 2]])
+    

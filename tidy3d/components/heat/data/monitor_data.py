@@ -111,31 +111,43 @@ class TemperatureData(HeatMonitorData):
         else:
             data_bounds = new_temp.bounds
 
-        dims_need_clipping = []
+        dims_need_clipping_left = []
+        dims_need_clipping_right = []
         for dim in range(3):
             # do not expand monitor with zero size along symmetry direction
             # this is done because 2d unstructured data does not support this
-            if self.symmetry[dim] == 1 and self.monitor.size[dim] != 0:
+            if self.symmetry[dim] == 1:
 
                 center = self.symmetry_center[dim]
 
-                # expand only if monitor bounds missing data
-                if mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
+                if mnt_bounds[1][dim] < data_bounds[0][dim]:
+                    # (note that mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim] will be satisfied based on backend behavior)
+                    # simple reflection 
+                    new_temp = new_temp.reflect(axis=dim, center=center, reflection_only=True)
+                elif mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
+                    # expand only if monitor bounds missing data
                     # if we do expand, simply reflect symmetrically the whole data
                     new_temp = new_temp.reflect(axis=dim, center=center)
 
                     # if it turns out that we expanded too much, we will trim unnecessary data later
                     if mnt_bounds[0][dim] > 2 * center - data_bounds[1][dim]:
-                        dims_need_clipping.append(dim)
+                        dims_need_clipping_left.append(dim)
+
+                    # likewise, if some of original data was only for symmetry expansion, thim excess on the right
+                    if mnt_bounds[1][dim] < data_bounds[1][dim]:
+                        dims_need_clipping_right.append(dim)
 
         # trim over-expanded data
-        if len(dims_need_clipping) > 0:
+        if len(dims_need_clipping_left) > 0 or len(dims_need_clipping_right) > 0:
                 
             # enlarge clipping domain on positive side arbitrary by 1
             # should not matter by how much
             clip_bounds = [mnt_bounds[0] - 1, mnt_bounds[1] + 1]
-            for dim in dims_need_clipping:
+            for dim in dims_need_clipping_left:
                 clip_bounds[0][dim] = mnt_bounds[0][dim]
+                
+            for dim in dims_need_clipping_right:
+                clip_bounds[1][dim] = mnt_bounds[1][dim]
 
             if isinstance(new_temp, SpatialDataArray):
                 new_temp = new_temp.sel_inside(clip_bounds)

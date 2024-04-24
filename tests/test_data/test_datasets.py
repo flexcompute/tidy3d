@@ -4,13 +4,14 @@ import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
 from ..utils import cartesian_to_unstructured
+from ..utils import log_capture, AssertLogLevel
 
 
 np.random.seed(4)
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
+def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -63,13 +64,31 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
         coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),
     )
 
-    _ = td.TriangularGridDataset(
-        normal_axis=2,
-        normal_pos=-3,
-        points=tri_grid_points,
-        cells=tri_grid_cells_bad,
-        values=tri_grid_values,
-    )
+    with AssertLogLevel(log_capture, "WARNING"):
+        tri_grid_with_degenerates = td.TriangularGridDataset(
+            normal_axis=2,
+            normal_pos=-3,
+            points=tri_grid_points,
+            cells=tri_grid_cells_bad,
+            values=tri_grid_values,
+        )
+
+    # removal of degenerate cells
+
+    # only removing degenerate cells will result in unsude points in this case
+    with AssertLogLevel(log_capture, "WARNING"):
+        tri_grid_with_fixed = tri_grid_with_degenerates.clean(remove_degenerate_cells=True, remove_unused_points=False)
+    assert np.all(tri_grid_with_fixed.cells.values == [[1, 2, 3]])
+
+    # once we remove those, no warning should occur
+    with AssertLogLevel(log_capture, None):
+        tri_grid_with_fixed = tri_grid_with_fixed.clean(remove_degenerate_cells=False, remove_unused_points=True)
+    assert np.all(tri_grid_with_fixed.cells.values == [[0, 1, 2]])
+
+    # doing both at the same time
+    with AssertLogLevel(log_capture, None):
+        tri_grid_with_fixed = tri_grid_with_degenerates.clean()
+    assert np.all(tri_grid_with_fixed.cells.values == [[0, 1, 2]])
 
     # invalid cell connections
     tri_grid_cells_bad = td.CellDataArray(
@@ -279,7 +298,7 @@ def test_triangular_dataset(tmp_path, ds_name, no_vtk=False):
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
+def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -329,15 +348,33 @@ def test_tetrahedral_dataset(tmp_path, ds_name, no_vtk=False):
 
     # grid with degenerate cells
     tet_grid_cells_bad = td.CellDataArray(
-        [[0, 1, 1, 7], [0, 2, 3, 7], [0, 2, 2, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 1, 5, 7]],
+        [[0, 1, 1, 7], [0, 2, 3, 7], [0, 2, 2, 7], [0, 4, 6, 7], [0, 4, 5, 7], [0, 5, 5, 7]],
         coords=dict(cell_index=np.arange(6), vertex_index=np.arange(4)),
     )
 
-    _ = td.TetrahedralGridDataset(
-        points=tet_grid_points,
-        cells=tet_grid_cells_bad,
-        values=tet_grid_values,
-    )
+    with AssertLogLevel(log_capture, "WARNING"):
+        tet_grid_with_degenerates = td.TetrahedralGridDataset(
+            points=tet_grid_points,
+            cells=tet_grid_cells_bad,
+            values=tet_grid_values,
+        )
+
+    # removal of degenerate cells
+
+    # only removing degenerate cells will result in unsude points in this case
+    with AssertLogLevel(log_capture, "WARNING"):
+        tet_grid_with_fixed = tet_grid_with_degenerates.clean(remove_degenerate_cells=True, remove_unused_points=False)
+    assert np.all(tet_grid_with_fixed.cells.values == [[0, 2, 3, 7], [0, 4, 6, 7], [0, 4, 5, 7]])
+
+    # once we remove those, no warning should occur
+    with AssertLogLevel(log_capture, None):
+        tet_grid_with_fixed = tet_grid_with_fixed.clean(remove_degenerate_cells=False, remove_unused_points=True)
+    assert np.all(tet_grid_with_fixed.cells.values == [[0, 1, 2, 6], [0, 3, 5, 6], [0, 3, 4, 6]])
+
+    # doing both at the same time
+    with AssertLogLevel(log_capture, None):
+        tet_grid_with_fixed = tet_grid_with_degenerates.clean()
+    assert np.all(tet_grid_with_fixed.cells.values == [[0, 1, 2, 6], [0, 3, 5, 6], [0, 3, 4, 6]])
 
     # invalid cell connections
     tet_grid_cells_bad = td.CellDataArray(

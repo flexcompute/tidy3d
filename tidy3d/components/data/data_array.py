@@ -265,9 +265,23 @@ class AbstractSpatialDataArray(DataArray, ABC):
     _dims = ("x", "y", "z")
     _data_attrs = {"long_name": "field value"}
 
+    @property
+    def _spatially_sorted(self) -> SpatialDataArray:
+        """Check whether sorted and sort if not."""
+        needs_sorting = []
+        for axis in "xyz":
+            if np.any(self.coords[axis].values[1:] < self.coords[axis].values[:-1]):
+                needs_sorting.append(axis)
+
+        if len(needs_sorting) > 0:
+            return self.sortby(needs_sorting)
+        
+        return self
+
     def sel_inside(self, bounds: Bound) -> SpatialDataArray:
         """Return a new SpatialDataArray that contains the minimal amount data necessary to cover
-        a spatial region defined by ``bounds``.
+        a spatial region defined by ``bounds``. Note that the returned data is sorted with respect
+        to spatial coordinates.
 
 
         Parameters
@@ -280,10 +294,15 @@ class AbstractSpatialDataArray(DataArray, ABC):
         SpatialDataArray
             Extracted spatial data array.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError("Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.")
+
+        # make sure data is sorted with respect to coordinates
+        sorted_self = self._spatially_sorted
 
         inds_list = []
 
-        coords = (self.x, self.y, self.z)
+        coords = (sorted_self.x, sorted_self.y, sorted_self.z)
 
         for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
             length = len(coord)
@@ -316,7 +335,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
             inds_list.append(comp_inds)
 
-        return self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+        return sorted_self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
     def does_cover(self, bounds: Bound) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -334,10 +353,12 @@ class AbstractSpatialDataArray(DataArray, ABC):
         bool
             Full cover check outcome.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError("Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.")
 
         coords = (self.x, self.y, self.z)
         return all(
-            (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
+            (np.min(coord) <= smin and np.max(coord) >= smax) or len(coord) == 1
             for coord, smin, smax in zip(coords, bounds[0], bounds[1])
         )
 
@@ -356,9 +377,9 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
 
-    def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
+    def reflect(self, axis: Axis, center: float, reflection_only: bool = False) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
-        left.
+        left. Note that the returned data is sorted with respect to spatial coordinates.
 
         Parameters
         ----------
@@ -366,6 +387,8 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Normal direction of the reflection plane.
         center : float
             Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
 
         Returns
         -------
@@ -373,15 +396,27 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Data after reflection is performed.
         """
 
-        coords = list(self.coords.values())
-        data = np.array(self.data)
+        sorted_self = self._spatially_sorted
 
-        if np.isclose(center, coords[axis].data[0]):
+        coords = [sorted_self.x.values, sorted_self.y.values, sorted_self.z.values]
+        data = np.array(sorted_self.data)
+
+        data_left_bound = coords[axis].data[0]
+
+        if np.isclose(center, data_left_bound):
             num_duplicates = 1
-        elif center > coords[axis].data[0]:
+        elif center > data_left_bound:
             raise DataError("Reflection center must be outside and on the left of the data region.")
         else:
             num_duplicates = 0
+
+        if reflection_only:
+            coords[axis] = 2 * center - coords[axis]
+            coords_dict = dict(zip("xyz", coords))
+
+            tmp_arr = SpatialDataArray(sorted_self.data, coords=coords_dict)
+
+            return tmp_arr.sortby("xyz"[axis])
 
         shape = np.array(np.shape(data))
         old_len = shape[axis]
