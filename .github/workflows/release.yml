@@ -16,7 +16,7 @@ jobs:
       with:
         ref: ${{ github.ref }}
     - name: Exit if any RC release
-      if: contains(${{ github.ref }}, 'rc') == false
+      if: contains(github.ref, 'rc') == false
       uses: everlytic/branch-merge@1.1.2
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
@@ -54,7 +54,7 @@ jobs:
       with:
         ref: "latest"
     - name: Exit if any RC release
-      if: contains(${{ github.ref }}, 'rc') == false
+      if: contains(github.ref, 'rc') == false
       uses: everlytic/branch-merge@1.1.2
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
