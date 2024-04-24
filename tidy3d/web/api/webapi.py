@@ -29,6 +29,15 @@ RUN_REFRESH_TIME = 1.0
 # file names when uploading to S3
 SIM_FILE_JSON = "simulation.json"
 
+# not all solvers are supported yet in GUI
+GUI_SUPPORTED_TASK_TYPES = ["FDTD", "MODE_SOLVER", "HEAT"]
+
+# if a solver is in beta stage, cost is subject to change
+BETA_TASK_TYPES = ["HEAT", "EME"]
+
+# map task_type to solver name for display
+SOLVER_NAME = {"FDTD": "FDTD", "HEAT": "Heat", "MODE_SOLVER": "Mode", "EME": "EME"}
+
 
 def _get_url(task_id: str) -> str:
     """Get the URL for a task on our server."""
@@ -212,18 +221,15 @@ def upload(
         console.log(
             f"Created task '{task_name}' with task_id '{task.task_id}' and task_type '{task_type}'."
         )
-        if task_type == "HEAT":
+        if task_type in BETA_TASK_TYPES:
+            solver_name = SOLVER_NAME[task_type]
             console.log(
-                "Tidy3D's heat solver is currently in the beta stage. Cost of heat simulations "
-                "is subject to change in the future."
+                f"Tidy3D's {solver_name} solver is currently in the beta stage. "
+                f"Cost of {solver_name} simulations is subject to change in the future."
             )
-        elif task_type == "EME":
-            console.log(
-                "Tidy3D's EME solver is currently in the beta stage. Cost of EME simulations "
-                "is subject to change in the future."
-            )
-        url = _get_url(task.task_id)
-        console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
+        if task_type in GUI_SUPPORTED_TASK_TYPES:
+            url = _get_url(task.task_id)
+            console.log(f"View task using web UI at [link={url}]'{url}'[/link].")
 
     task.upload_simulation(stub=stub, verbose=verbose, progress_callback=progress_callback)
 
@@ -354,154 +360,128 @@ def monitor(task_id: TaskId, verbose: bool = True) -> None:
 
     task_info = get_info(task_id)
 
-    if task_info.taskType in ("MODE_SOLVER", "HEAT", "EME"):
-        log_level = "DEBUG" if verbose else "INFO"
-        if task_info.taskType == "MODE_SOLVER":
-            solver_name = "Mode"
-        elif task_info.taskType == "HEAT":
-            solver_name = "Heat"
-        elif task_info.taskType == "EME":
-            solver_name = "EME"
+    task_name = task_info.taskName
 
-        # Wait for task to finish
-        prev_status = "draft"
-        status = get_status(task_id)
-        while status not in ("success", "error", "diverged", "deleted"):
-            if status != prev_status:
-                log.log(log_level, f"{solver_name} solver status: {status}")
-                if verbose:
-                    console.log(f"{solver_name} solver status: {status}")
-                prev_status = status
-            time.sleep(0.5)
-            status = get_status(task_id)
+    task_type = task_info.taskType
 
-        log.log(log_level, f"{solver_name} solver status: {status}")
-        if verbose:
-            console.log(f"{solver_name} solver status: {status}")
+    break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
 
-        if status != "success":
-            # Our cache discards None, so the user is able to re-run
-            return None
-
-    elif task_info.taskType == "FDTD":
-        task_name = task_info.taskName
-
-        break_statuses = ("success", "error", "diverged", "deleted", "draft", "abort")
-
-        def get_estimated_cost() -> float:
-            """Get estimated cost, if None, is not ready."""
-            task_info = get_info(task_id)
-            block_info = task_info.taskBlockInfo
-            if block_info and block_info.chargeType == ChargeType.FREE:
-                est_flex_unit = 0
-                grid_points = block_info.maxGridPoints
-                time_steps = block_info.maxTimeSteps
-                grid_points_str = get_grid_points_str(grid_points)
-                time_steps_str = get_time_steps_str(time_steps)
+    def get_estimated_cost() -> float:
+        """Get estimated cost, if None, is not ready."""
+        task_info = get_info(task_id)
+        block_info = task_info.taskBlockInfo
+        if block_info and block_info.chargeType == ChargeType.FREE:
+            est_flex_unit = 0
+            grid_points = block_info.maxGridPoints
+            time_steps = block_info.maxTimeSteps
+            grid_points_str = get_grid_points_str(grid_points)
+            time_steps_str = get_time_steps_str(time_steps)
+            console.log(
+                f"You are running this simulation for FREE. Your current plan allows"
+                f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
+                f" day (under {grid_points_str} grid points and {time_steps_str}"
+                f" time steps)"
+            )
+        else:
+            est_flex_unit = task_info.estFlexUnit
+            if est_flex_unit is not None and est_flex_unit > 0:
                 console.log(
-                    f"You are running this simulation for FREE. Your current plan allows"
-                    f" up to {block_info.maxFreeCount} free non-concurrent simulations per"
-                    f" day (under {grid_points_str} grid points and {time_steps_str}"
-                    f" time steps)"
+                    f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
+                    f" to get the billed FlexCredit cost after a simulation run."
                 )
-            else:
-                est_flex_unit = task_info.estFlexUnit
-                if est_flex_unit is not None and est_flex_unit > 0:
-                    console.log(
-                        f"Maximum FlexCredit cost: {est_flex_unit:1.3f}. Use 'web.real_cost(task_id)'"
-                        f" to get the billed FlexCredit cost after a simulation run."
-                    )
-            return est_flex_unit
+        return est_flex_unit
 
-        def monitor_preprocess() -> None:
-            """Periodically check the status."""
-            status = get_status(task_id)
-            while status not in break_statuses and status != "running":
+    def monitor_preprocess() -> None:
+        """Periodically check the status."""
+        status = get_status(task_id)
+        while status not in break_statuses and status != "running":
+            new_status = get_status(task_id)
+            if new_status != status:
+                status = new_status
+                if verbose and status != "running":
+                    console.log(f"status = {status}")
+            time.sleep(REFRESH_TIME)
+
+    status = get_status(task_id)
+
+    if verbose:
+        console.log(f"status = {status}")
+
+    # already done
+    if status in break_statuses:
+        return
+
+    # preprocessing
+    if verbose:
+        console.log(
+            "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
+            "or abort/delete the task in the web "
+            "UI. Terminating the Python script will not stop the job running on the cloud."
+        )
+        with console.status(f"[bold green]Waiting for '{task_name}'...", spinner="runner"):
+            monitor_preprocess()
+    else:
+        monitor_preprocess()
+
+    # if the estimated cost is ready, print it
+    if verbose:
+        get_estimated_cost()
+        console.log("starting up solver")
+
+    # while running but before the percentage done is available, keep waiting
+    while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
+        time.sleep(REFRESH_TIME)
+
+    # while running but percentage done is available
+    if verbose and task_type == "FDTD":
+        # verbose case, update progressbar
+        console.log("running solver")
+        with Progress(console=console) as progress:
+            pbar_pd = progress.add_task("% done", total=100)
+            perc_done, _ = get_run_info(task_id)
+
+            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
+                perc_done, field_decay = get_run_info(task_id)
+                new_description = f"solver progress (field decay = {field_decay:.2e})"
+                progress.update(pbar_pd, completed=perc_done, description=new_description)
+                time.sleep(RUN_REFRESH_TIME)
+
+            perc_done, field_decay = get_run_info(task_id)
+            if perc_done is not None and perc_done < 100 and field_decay > 0:
+                console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
+
+            new_description = f"solver progress (field decay = {field_decay:.2e})"
+            progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
+
+    # TODO: progressbar for EME
+
+    else:
+        # non-verbose case, just keep checking until status is not running or perc_done >= 100
+        perc_done, _ = get_run_info(task_id)
+        while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
+            perc_done, field_decay = get_run_info(task_id)
+            time.sleep(1.0)
+
+    # post processing
+    if verbose:
+        status = get_status(task_id)
+        if status != "running":
+            console.log(f"status = {status}")
+
+        with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
+            while status not in break_statuses:
                 new_status = get_status(task_id)
                 if new_status != status:
                     status = new_status
-                    if verbose and status != "running":
-                        console.log(f"status = {status}")
+                    console.log(f"status = {status}")
                 time.sleep(REFRESH_TIME)
 
-        status = get_status(task_id)
-
-        if verbose:
-            console.log(f"status = {status}")
-
-        # already done
-        if status in break_statuses:
-            return
-
-        # preprocessing
-        if verbose:
-            console.log(
-                "To cancel the simulation, use 'web.abort(task_id)' or 'web.delete(task_id)' "
-                "or abort/delete the task in the web "
-                "UI. Terminating the Python script will not stop the job running on the cloud."
-            )
-            with console.status(f"[bold green]Waiting for '{task_name}'...", spinner="runner"):
-                monitor_preprocess()
-        else:
-            monitor_preprocess()
-
-        # if the estimated cost is ready, print it
-        if verbose:
-            get_estimated_cost()
-            console.log("starting up solver")
-
-        # while running but before the percentage done is available, keep waiting
-        while get_run_info(task_id)[0] is None and get_status(task_id) == "running":
-            time.sleep(REFRESH_TIME)
-
-        # while running but percentage done is available
-        if verbose:
-            # verbose case, update progressbar
-            console.log("running solver")
-            with Progress(console=console) as progress:
-                pbar_pd = progress.add_task("% done", total=100)
-                perc_done, _ = get_run_info(task_id)
-
-                while (
-                    perc_done is not None and perc_done < 100 and get_status(task_id) == "running"
-                ):
-                    perc_done, field_decay = get_run_info(task_id)
-                    new_description = f"solver progress (field decay = {field_decay:.2e})"
-                    progress.update(pbar_pd, completed=perc_done, description=new_description)
-                    time.sleep(RUN_REFRESH_TIME)
-
-                perc_done, field_decay = get_run_info(task_id)
-                if perc_done is not None and perc_done < 100 and field_decay > 0:
-                    console.log(f"early shutoff detected at {perc_done:1.0f}%, exiting.")
-
-                new_description = f"solver progress (field decay = {field_decay:.2e})"
-                progress.update(pbar_pd, completed=100, refresh=True, description=new_description)
-
-        else:
-            # non-verbose case, just keep checking until status is not running or perc_done >= 100
-            perc_done, _ = get_run_info(task_id)
-            while perc_done is not None and perc_done < 100 and get_status(task_id) == "running":
-                perc_done, field_decay = get_run_info(task_id)
-                time.sleep(1.0)
-
-        # post processing
-        if verbose:
-            status = get_status(task_id)
-            if status != "running":
-                console.log(f"status = {status}")
-
-            with console.status(f"[bold green]Finishing '{task_name}'...", spinner="runner"):
-                while status not in break_statuses:
-                    new_status = get_status(task_id)
-                    if new_status != status:
-                        status = new_status
-                        console.log(f"status = {status}")
-                    time.sleep(REFRESH_TIME)
+        if task_type in GUI_SUPPORTED_TASK_TYPES:
             url = _get_url(task_id)
             console.log(f"View simulation result at [blue underline][link={url}]'{url}'[/link].")
-        else:
-            while get_status(task_id) not in break_statuses:
-                time.sleep(REFRESH_TIME)
+    else:
+        while get_status(task_id) not in break_statuses:
+            time.sleep(REFRESH_TIME)
 
 
 @wait_for_connection
