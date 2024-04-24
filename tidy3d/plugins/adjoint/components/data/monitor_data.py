@@ -160,18 +160,12 @@ class JaxFieldData(JaxMonitorData, FieldData):
         """How to package the dictionary of fields computed via self.colocate()."""
         return self.updated_copy(**centered_fields)
 
-    def package_flux_results(self, flux_values: JaxDataArray) -> Union[float, JaxDataArray]:
+    def package_flux_results(self, flux_values: JaxDataArray) -> float:
         """How to package the dictionary of fields computed via self.colocate()."""
-
-        freqs = flux_values.coords.get("f")
-
-        # handle single frequency case separately for backwards compatibility
-        # return a float of the only value
-        if freqs is not None and len(freqs) == 1:
-            return jnp.sum(flux_values.values)
-
-        # for multi-frequency, return a JaxDataArray
-        return flux_values
+        flux_data = flux_values
+        if isinstance(flux_data, JaxDataArray):
+            return jnp.sum(flux_data.values)
+        return jnp.sum(flux_data)
 
     @property
     def intensity(self) -> ScalarFieldDataArray:

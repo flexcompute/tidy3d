@@ -28,22 +28,17 @@ for _, path in enumerate(notebook_filenames_all):
     notebook_base = path.split("/")[-1]
     print(f"'{notebook_base[:-6]}',")
 
+
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = [
-]
+run_only = []
 
 skip = [
-
-# long time (excluding most adjoint)
-'8ChannelDemultiplexer',
-'BullseyeCavityPSO',
-'FocusedApodGC',
-"GeneticAlgorithmReflector",
-'ParticleSwarmOptimizedPBS',
-
-# hang by default
-"AdjointPlugin14PreFab.ipynb",
-"WaveguideBendSimulator",
+    "AdjointPlugin5BoundaryGradients",
+    "AdjointPlugin6GratingCoupler",
+    "AdjointPlugin7Metalens",
+    "AdjointPlugin8WaveguideBend",
+    "AdjointPlugin9WDM",
+    "AdjointPlugin11CircuitMZI",
 ]
 
 # if any run only supplied, only add those
@@ -57,17 +52,13 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """
-as of April 15 2024
+as of Nov 10 2023
 '8ChannelDemultiplexer',
 '90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
 'AdiabaticCouplerLN',
-'AdjointPlugin0Quickstart',
 'AdjointPlugin10YBranchLevelSet',
 'AdjointPlugin11CircuitMZI',
-'AdjointPlugin12LightExtractor',
-'AdjointPlugin13Metasurface',
-'AdjointPlugin14PreFab',
 'AdjointPlugin1Intro',
 'AdjointPlugin2GradientChecking',
 'AdjointPlugin3InverseDesign',
@@ -77,12 +68,10 @@ as of April 15 2024
 'AdjointPlugin7Metalens',
 'AdjointPlugin8WaveguideBend',
 'AdjointPlugin9WDM',
-'AllDielectricStructuralColor',
 'AndersonLocalization',
 'AnimationTutorial',
 'AutoGrid',
 'Bandstructure',
-'BilayerSiNEdgeCoupler',
 'BilevelPSR',
 'BiosensorGrating',
 'BistablePCCavity',
@@ -90,29 +79,22 @@ as of April 15 2024
 'BraggGratings',
 'BroadbandDirectionalCoupler',
 'BullseyeCavityPSO',
-'CMOSRGBSensor',
 'CavityFOM',
 'CreatingGeometryUsingTrimesh',
 'CustomFieldSource',
 'CustomMediumTutorial',
-'Design',
 'DielectricMetasurfaceAbsorber',
 'Dispersion',
 'DistributedBraggReflectorCavity',
 'DivergedFDTDSimulation',
-'EMESolver',
 'EdgeCoupler',
-'EffectiveIndexApproximation',
 'EulerWaveguideBend',
 'FieldProjections',
 'Fitting',
 'FocusedApodGC',
 'FresnelLens',
 'FullyAnisotropic',
-'GDSExport',
 'GDSImport',
-'GeneticAlgorithmReflector',
-'GeometryTransformations',
 'GradientMetasurfaceReflector',
 'GrapheneMetamaterial',
 'GratingCoupler',
@@ -121,9 +103,7 @@ as of April 15 2024
 'HeatSolver',
 'HighQGe',
 'HighQSi',
-'MIMResonator',
 'MMI1x4',
-'MachZehnderModulator',
 'MetalHeaterPhaseShifter',
 'Metalens',
 'MicrowaveFrequencySelectiveSurface',
@@ -135,7 +115,6 @@ as of April 15 2024
 'Near2FarSphereRCS',
 'NonHermitianMetagratings',
 'OpticalLuneburgLens',
-'OpticalSwitchDBS',
 'OptimizedL3',
 'PICComponents',
 'ParameterScan',
@@ -143,7 +122,6 @@ as of April 15 2024
 'PhotonicCrystalWaveguidePolarizationFilter',
 'PhotonicCrystalsComponents',
 'PlasmonicNanoparticle',
-'PlasmonicNanorodArray',
 'PlasmonicWaveguideCO2Sensor',
 'PlasmonicYagiUdaNanoantenna',
 'PolarizationSplitterRotator',
@@ -154,8 +132,6 @@ as of April 15 2024
 'SMatrix',
 'STLImport',
 'SWGBroadbandPolarizer',
-'SbendCMAES',
-'ScaleInvariantWaveguide',
 'SelfIntersectingPolyslab',
 'Simulation',
 'StartHere',
@@ -164,20 +140,14 @@ as of April 15 2024
 'TFSF',
 'THzDemultiplexerFilter',
 'ThermallyTunedRingResonator',
-'ThermoOpticDopedModulator',
 'TimeModulationTutorial',
-'TunableChiralMetasurface',
-'UnstructuredData',
 'VizData',
 'VizSimulation',
-'WaveguideBendSimulator',
 'WaveguideCrossing',
-'WaveguideGratingAntenna',
 'WaveguidePluginDemonstration',
 'WaveguideSizeConverter',
 'WaveguideToRingCoupling',
 'WebAPI',
-'XarrayTutorial',
 'YJunction',
 'ZeroCrossTalkTE',
 'ZonePlateFieldProjection',

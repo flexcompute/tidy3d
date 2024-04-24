@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import Union, Tuple, Optional
-import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
 
@@ -420,7 +419,6 @@ class Structure(AbstractStructure):
             gds_layer=gds_layer,
             gds_dtype=gds_dtype,
         )
-        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
 

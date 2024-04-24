@@ -200,61 +200,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
-    def updated_copy(self, path: str = None, **kwargs) -> Tidy3dBaseModel:
-        """Make copy of a component instance with ``**kwargs`` indicating updated field values.
-
-        Note
-        ----
-        If ``path`` supplied, applies the updated copy with the update performed on the sub-
-        component corresponding to the path. For indexing into a tuple or list, use the integer
-        value.
-
-        Example
-        -------
-        >>> sim = simulation.updated_copy(size=new_size, path=f"structures/{i}/geometry") # doctest: +SKIP
-        """
-
-        if not path:
-            return self._updated_copy(**kwargs)
-
-        path_components = path.split("/")
-
-        field_name = path_components[0]
-
-        try:
-            sub_component = getattr(self, field_name)
-        except AttributeError as e:
-            raise AttributeError(
-                f"Could not field field '{field_name}' in the sub-component `path`. "
-                f"Found fields of '{tuple(self.__fields__.keys())}'. "
-                "Please double check the `path` passed to `.updated_copy()`."
-            ) from e
-
-        if isinstance(sub_component, (list, tuple)):
-            integer_index_path = path_components[1]
-
-            try:
-                index = int(integer_index_path)
-            except ValueError:
-                raise ValueError(
-                    f"Could not grab integer index from path '{path}'. "
-                    f"Please correct the sub path containing '{integer_index_path}' to be an "
-                    f"integer index into '{field_name}' (containing {len(sub_component)} elements)."
-                )
-
-            sub_component_list = list(sub_component)
-            sub_component = sub_component_list[index]
-            sub_path = "/".join(path_components[2:])
-
-            sub_component_list[index] = sub_component.updated_copy(path=sub_path, **kwargs)
-            new_component = tuple(sub_component_list)
-        else:
-            sub_path = "/".join(path_components[1:])
-            new_component = sub_component.updated_copy(path=sub_path, **kwargs)
-
-        return self._updated_copy(**{field_name: new_component})
-
-    def _updated_copy(self, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(self, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
         return self.copy(update=kwargs)
 

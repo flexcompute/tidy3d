@@ -7,19 +7,10 @@ import jax.numpy as jnp
 from ....components.base import Tidy3dBaseModel
 from ....components.types import ArrayFloat2D
 from ....constants import MICROMETER
-from ....log import log
+
 from .filter import ConicFilter, BinaryProjector
 
 # Radius of Curvature Calculation
-
-
-def is_jax_object(arr) -> bool:
-    """Test whether an object is a `jnp.ndarray` or an iterable containing them."""
-    if isinstance(arr, jnp.ndarray):
-        return True
-    if isinstance(arr, (list, tuple)):
-        return is_jax_object(arr[0])
-    return False
 
 
 class Penalty(Tidy3dBaseModel, ABC):
@@ -78,19 +69,6 @@ class RadiusPenalty(Penalty):
         fitting a spline to the curve and evaluating local radius of curvature compared to a
         desired minimum value. If ``wrap``, it is assumed that the points wrap around to form a
         closed geometry instead of an isolated line segment."""
-
-        if not is_jax_object(points):
-            log.warning(
-                "The points passed to 'RadiusPenalty.evaluate()' are not a 'jax' array. "
-                "If passing the 'JaxPolySlab.vertices' field directly, note that the "
-                "derivative information for this field "
-                "is no longer traced by jax as of "
-                "version '2.7'. "
-                "The derivative information is contained in 'JaxPolySlab.vertices_jax'. "
-                "Therefore, we recommend changing your code to either pass that field or pass "
-                "the output of the parameterization functions directly, eg. "
-                "'penalty.evaluate(make_vertices(params))'."
-            )
 
         def quad_fit(p0, pc, p2):
             """Quadratic bezier fit (and derivatives) for three points.

@@ -3,8 +3,7 @@
 import numpy as np
 from tidy3d import material_library as lib
 from tidy3d.constants import C_0
-from tidy3d.material_library.material_library import MaterialItemUniaxial, MaterialItem
-from tidy3d.material_library.material_library import MaterialItem2D
+from tidy3d import Medium2D, PoleResidue
 
 LOW_LOSS_THRESHOLD = 2e-5
 
@@ -95,15 +94,9 @@ def generate_material_library_doc():
                     # Load medium
                     medium = var.medium
 
-                    # for uniaxial medium, use optical_axis=0 and xx component as representative
-                    if isinstance(mat, MaterialItemUniaxial):
-                        medium = medium(0).xx
-
-                    if isinstance(mat, MaterialItem2D):
+                    if isinstance(medium, Medium2D):
                         row["model"] = ":class:`Medium2D`"
-                    elif isinstance(mat, MaterialItemUniaxial):
-                        row["model"] = ":class:`AnisotropicMedium`"
-                    elif isinstance(mat, MaterialItem):
+                    elif isinstance(medium, PoleResidue):
                         # Pole number
                         row["model"] = str(len(medium.poles)) + "-pole"
                         # Lossy (based on model)
@@ -165,19 +158,9 @@ def generate_material_library_doc():
                             width[col] = len(row[col])
 
                     # Update example code
-                    if isinstance(mat, MaterialItemUniaxial):
-                        code_string += (
-                            ">>> medium = material_library['"
-                            + abbr
-                            + "']['"
-                            + varname
-                            + "'](optical axis)"
-                            + " # 'optical axis' can take value 0/1/2 for x/y/z axis.\n\n"
-                        )
-                    else:
-                        code_string += (
-                            ">>> medium = material_library['" + abbr + "']['" + varname + "']\n\n"
-                        )
+                    code_string += (
+                        ">>> medium = material_library['" + abbr + "']['" + varname + "']\n\n"
+                    )
 
                 # Write table
                 tab = "   "

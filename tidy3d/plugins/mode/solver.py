@@ -34,8 +34,6 @@ class EigSolver(Tidy3dBaseModel):
         coords,
         freq,
         mode_spec,
-        mu_cross=None,
-        split_curl_scaling=None,
         symmetry=(0, 0),
         direction="+",
     ) -> Tuple[Numpy, Numpy, EpsSpecType]:
@@ -56,18 +54,6 @@ class EigSolver(Tidy3dBaseModel):
             (Hertz) Frequency at which the eigenmodes are computed.
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
-        mu_cross : array_like or tuple of array_like
-            Either a single 2D array defining the relative permeability in the cross-section,
-            or nine 2D arrays defining the permeability at the Hx, Hy, and Hz locations
-            of the Yee grid in the order xx, xy, xz, yx, yy, yz, zx, zy, zz.
-            Set to 1 if `None`.
-        split_curl_scaling : tuple of array_like
-            Split curl coefficient to Curl E. Three 2D arrays defining the scaling factor
-            at the Ex, Ey, and Ez locations of the Yee grid in the order xx, yy, zz.
-            Following Benkler's approach, we formulate it as the following:
-            1) during mode solver: eps_cross -> eps_corss / scaling, so eigenvector is E * scaling
-            2) in postprocessing: apply scaling^-1 to eigenvector to obtain E
-        direction : Union["+", "-"]
         direction : Union["+", "-"]
             Direction of mode propagation.
 
@@ -86,14 +72,15 @@ class EigSolver(Tidy3dBaseModel):
         angle_phi = mode_spec.angle_phi
         omega = 2 * np.pi * freq
         k0 = omega / C_0
-        enable_incidence_matrices = split_curl_scaling is not None or mu_cross is not None
 
-        eps_formated = cls.format_medium_data(eps_cross)
-        eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_formated
-
-        mu_formated = None
-        if mu_cross is not None:
-            mu_formated = cls.format_medium_data(mu_cross)
+        if isinstance(eps_cross, Numpy):
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
+        elif len(eps_cross) == 9:
+            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = (
+                np.copy(e) for e in eps_cross
+            )
+        else:
+            raise ValueError("Wrong input to mode solver pemittivity!")
 
         Nx, Ny = eps_xx.shape
         N = eps_xx.size
@@ -108,31 +95,16 @@ class EigSolver(Tidy3dBaseModel):
         (2N, 2N), and the full tensorial case, in which case it has shape (4N, 4N)."""
         eps_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         mu_tensor = np.zeros((3, 3, N), dtype=np.complex128)
-        identity_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         for row, eps_row in enumerate(
             [[eps_xx, eps_xy, eps_xz], [eps_yx, eps_yy, eps_yz], [eps_zx, eps_zy, eps_zz]]
         ):
-            identity_tensor[row, row, :] = 1.0
+            mu_tensor[row, row, :] = 1.0
             for col, eps in enumerate(eps_row):
-                if split_curl_scaling is not None and col == row:
-                    outside_pec = ~np.isclose(split_curl_scaling[col], 0)
-                    eps[outside_pec] /= split_curl_scaling[col][outside_pec]
-
                 eps_tensor[row, col, :] = eps.ravel()
 
-        if mu_formated is not None:
-            mu_xx, mu_xy, mu_xz, mu_yx, mu_yy, mu_yz, mu_zx, mu_zy, mu_zz = mu_formated
-            for row, mu_row in enumerate(
-                [[mu_xx, mu_xy, mu_xz], [mu_yx, mu_yy, mu_yz], [mu_zx, mu_zy, mu_zz]]
-            ):
-                for col, mu in enumerate(mu_row):
-                    mu_tensor[row, col, :] = mu.ravel()
-        else:
-            mu_tensor = np.copy(identity_tensor)
-
         # Get Jacobian of all coordinate transformations. Initialize as identity (same as mu so far)
-        jac_e = np.real(np.copy(identity_tensor))
-        jac_h = np.real(np.copy(identity_tensor))
+        jac_e = np.real(np.copy(mu_tensor))
+        jac_h = np.real(np.copy(mu_tensor))
 
         if bend_radius is not None:
             new_coords, jac_e, jac_h = radial_transform(new_coords, bend_radius, bend_axis)
@@ -215,13 +187,10 @@ class EigSolver(Tidy3dBaseModel):
             target_neff_p,
             mode_spec.precision,
             direction,
-            enable_incidence_matrices,
         )
 
         # Transform back to original axes, E = J^T E'
         E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)
-        if split_curl_scaling is not None:
-            E = cls.split_curl_field_postprocess(split_curl_scaling, E)
         E = E.reshape((3, Nx, Ny, 1, num_modes))
         H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
@@ -248,7 +217,6 @@ class EigSolver(Tidy3dBaseModel):
         neff_guess,
         mat_precision,
         direction,
-        enable_incidence_matrices,
     ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -321,9 +289,7 @@ class EigSolver(Tidy3dBaseModel):
 
         if not is_tensorial:
             eps_spec = "diagonal"
-            E, H, neff, keff = cls.solver_diagonal(
-                **kwargs, enable_incidence_matrices=enable_incidence_matrices
-            )
+            E, H, neff, keff = cls.solver_diagonal(**kwargs)
             if direction == "-":
                 H[0] *= -1
                 H[1] *= -1
@@ -377,20 +343,11 @@ class EigSolver(Tidy3dBaseModel):
         mat.eliminate_zeros()
 
     @classmethod
-    def solver_diagonal(
-        cls,
-        eps,
-        mu,
-        der_mats,
-        num_modes,
-        neff_guess,
-        vec_init,
-        mat_precision,
-        enable_incidence_matrices,
-    ):
+    def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
         # code associated with these options is included below in case it's useful in the future
+        enable_incidence_matrices = False
         enable_preconditioner = False
         analyze_conditioning = False
 
@@ -781,38 +738,6 @@ class EigSolver(Tidy3dBaseModel):
             return neff, keff
 
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
-
-    @staticmethod
-    def format_medium_data(mat_data):
-        """
-        mat_data can be either permittivity or permeability. It's either a single 2D array
-        defining the relative property in the cross-section, or nine 2D arrays defining
-        the property at the E(H)x, E(H)y, and E(H)z locations of the Yee grid in the order
-        xx, xy, xz, yx, yy, yz, zx, zy, zz.
-        """
-        if isinstance(mat_data, Numpy):
-            return (mat_data[i, :, :] for i in range(9))
-        if len(mat_data) == 9:
-            return (np.copy(e) for e in mat_data)
-        raise ValueError("Wrong input to mode solver pemittivity/permeability!")
-
-    @staticmethod
-    def split_curl_field_postprocess(split_curl, E):
-        """E has the shape (3, N, num_modes)"""
-        _, Nx, Ny = split_curl.shape
-        field_shape = E.shape
-
-        # set a dummy value of split curl inside PEC to avoid division by 0 warning (it's 0/0, since
-        # E field inside PEC is also 0); then by the end, zero out E inside PEC again just to be safe.
-        outside_pec = ~np.isclose(split_curl, 0)
-        split_curl_scaling = np.copy(split_curl)
-        split_curl_scaling[~outside_pec] = 1.0
-
-        E = E.reshape(3, Nx, Ny, field_shape[-1])
-        E /= split_curl_scaling[:, :, :, np.newaxis]
-        E *= outside_pec[:, :, :, np.newaxis]
-        E = E.reshape(field_shape)
-        return E
 
 
 def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:

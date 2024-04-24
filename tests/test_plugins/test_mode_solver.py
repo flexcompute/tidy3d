@@ -12,7 +12,7 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, log_capture, cartesian_to_unstructured  # noqa: F401
+from ..utils import assert_log_level, log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
 
@@ -375,8 +375,8 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         precision="double" if local else "single",
     )
 
-    plane_left = td.Box(center=(-0.5, 0, 0), size=(0, 0.9, 0.9))
-    plane_right = td.Box(center=(0.5, 0, 0), size=(0, 0.9, 0.9))
+    plane_left = td.Box(center=(-0.5, 0, 0), size=(0.9, 0, 0.9))
+    plane_right = td.Box(center=(0.5, 0, 0), size=(0.9, 0, 0.9))
 
     n_eff = []
     for plane in [plane_left, plane_right]:
@@ -402,69 +402,6 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
         assert n_eff[0] < 1.5
         assert n_eff[1] > 4
         assert n_eff[1] < 5
-
-
-@pytest.mark.parametrize("interp,tol", [("linear", 1e-3), ("nearest", 1e-3)])
-@pytest.mark.parametrize("cond_factor", [0, 0.01])
-@pytest.mark.parametrize("nx", [1, 3])
-def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tmp_path):
-    """Test mode solver can work with unstructured custom medium. We compare mode solver results
-    with unstructured custom medium to the results with usual Cartesian custom medium.
-    """
-
-    freq0 = td.C_0 / 1.0
-
-    # Cartesian
-    x_custom = np.linspace(-0.6, 0.6, nx)
-    y_custom = np.linspace(-0.3, 0.3, 21)
-    z_custom = np.linspace(-0.3, 0.3, 22)
-    n = 2.5 + (x_custom[:, None, None] + 0.6) / 1.2 * np.sin(y_custom[None, :, None]) * np.cos(
-        z_custom[None, None, :]
-    )
-    n_data = td.SpatialDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom))
-
-    # unperturbed unstructured grid
-    n_data_u = cartesian_to_unstructured(n_data, pert=0, seed=987, method="direct")
-
-    # more perturbed unstructured grid
-    n_data_up = cartesian_to_unstructured(n_data, pert=0.15, seed=987)
-
-    md = []
-
-    for n_arr in [n_data, n_data_u, n_data_up]:
-        mat_custom = td.CustomMedium.from_nk(
-            n=n_arr, k=cond_factor * n_arr, freq=freq0, interp_method=interp
-        )
-        waveguide = td.Structure(geometry=td.Box(size=(100, 0.5, 0.5)), medium=mat_custom)
-        simulation = td.Simulation(
-            size=(2, 2, 2),
-            grid_spec=td.GridSpec(wavelength=1.0),
-            structures=[waveguide],
-            run_time=1e-12,
-        )
-        mode_spec = td.ModeSpec(num_modes=1)
-
-        plane = td.Box(center=(0, 0, 0), size=(0.0, 0.9, 0.9))
-        ms = ModeSolver(
-            simulation=simulation,
-            plane=plane,
-            mode_spec=mode_spec,
-            freqs=[freq0],
-            direction="+",
-        )
-        modes = ms.solve()
-        md.append(modes)
-
-    # ms.plot_field(mode_index=0, f=freq0, field_name="Ez")
-    # plt.show()
-
-    error_u = np.abs(md[0].n_eff - md[1].n_eff).values.item()
-    error_up = np.abs(md[0].n_eff - md[2].n_eff).values.item()
-
-    print(nx, cond_factor, interp, tol, error_u, error_up)
-
-    assert error_u < 5e-5
-    assert error_up < tol
 
 
 def test_mode_solver_straight_vs_angled():

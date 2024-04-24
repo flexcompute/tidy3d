@@ -28,11 +28,6 @@ DIM_ATTRS = {
     "t": {"units": SECOND, "long_name": "time"},
     "direction": {"long_name": "propagation direction"},
     "mode_index": {"long_name": "mode index"},
-    "eme_port_index": {"long_name": "EME port index"},
-    "eme_cell_index": {"long_name": "EME cell index"},
-    "mode_index_in": {"long_name": "mode index in"},
-    "mode_index_out": {"long_name": "mode index out"},
-    "sweep_index": {"long_name": "sweep index"},
     "theta": {"units": RADIAN, "long_name": "elevation angle"},
     "phi": {"units": RADIAN, "long_name": "azimuth angle"},
     "ux": {"long_name": "normalized kx"},
@@ -173,11 +168,11 @@ class DataArray(xr.DataArray):
         with h5py.File(fname, "r") as f:
             sub_group = f[group_path]
             values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
+            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims}
             for key, val in coords.items():
                 if val.dtype == "O":
                     coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords, dims=cls._dims)
+            return cls(values, coords=coords)
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:
@@ -655,130 +650,6 @@ class HeatDataArray(DataArray):
     _dims = "T"
 
 
-class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
-    """Spatial distribution of a mode in frequency-domain as a function of mode index
-    and EME cell index.
-
-    Example
-    -------
-    >>> x = [1,2]
-    >>> y = [2,3,4]
-    >>> z = [3]
-    >>> f = [2e14, 3e14]
-    >>> mode_index = np.arange(5)
-    >>> eme_cell_index = np.arange(5)
-    >>> coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
-    >>> fd = EMEScalarModeFieldDataArray((1+1j) * np.random.random((2,3,1,2,5,5)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("x", "y", "z", "f", "mode_index", "eme_cell_index")
-
-
-class EMEFreqModeDataArray(DataArray):
-    """Array over frequency, mode index, and EME cell index.
-
-    Example
-    -------
-    >>> f = [2e14, 3e14]
-    >>> mode_index = np.arange(5)
-    >>> eme_cell_index = np.arange(5)
-    >>> coords = dict(f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
-    >>> fd = EMEFreqModeDataArray((1+1j) * np.random.random((2, 5, 5)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("f", "mode_index", "eme_cell_index")
-
-
-class EMEScalarFieldDataArray(AbstractSpatialDataArray):
-    """Spatial distribution of a field excited from an EME port in frequency-domain as a
-    function of mode index at the EME port and the EME port index.
-
-    Example
-    -------
-    >>> x = [1,2]
-    >>> y = [2,3,4]
-    >>> z = [3,4,5,6]
-    >>> f = [2e14, 3e14]
-    >>> mode_index = np.arange(5)
-    >>> eme_port_index = [0, 1]
-    >>> coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, eme_port_index=eme_port_index)
-    >>> fd = EMEScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2,5,2)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("x", "y", "z", "f", "mode_index", "eme_port_index")
-
-
-class EMECoefficientDataArray(DataArray):
-    """EME expansion coefficient of the mode `mode_index_out` in the EME cell
-    `eme_cell_index`, when excited from mode `mode_index_in` of EME port `eme_port_index`.
-
-    Example
-    -------
-    >>> mode_index_in = [0, 1]
-    >>> mode_index_out = [0, 1]
-    >>> eme_cell_index = np.arange(5)
-    >>> eme_port_index = [0, 1]
-    >>> f = [2e14]
-    >>> coords = dict(
-    ...     f=f,
-    ...     mode_index_out=mode_index_out,
-    ...     mode_index_in=mode_index_in,
-    ...     eme_cell_index=eme_cell_index,
-    ...     eme_port_index=eme_port_index
-    ... )
-    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 2, 2, 5, 2)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("f", "mode_index_out", "mode_index_in", "eme_cell_index", "eme_port_index")
-    _data_attrs = {"long_name": "mode expansion coefficient"}
-
-
-class EMESMatrixDataArray(DataArray):
-    """Scattering matrix elements for a fixed pair of ports, possibly with an extra
-    sweep index.
-
-    Example
-    -------
-    >>> mode_index_in = [0, 1]
-    >>> mode_index_out = [0, 1, 2]
-    >>> f = [2e14]
-    >>> sweep_index = np.arange(10)
-    >>> coords = dict(
-    ...     f=f,
-    ...     mode_index_out=mode_index_out,
-    ...     mode_index_in=mode_index_in,
-    ...     sweep_index=sweep_index
-    ... )
-    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 3, 2, 10)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("f", "mode_index_out", "mode_index_in", "sweep_index")
-    _data_attrs = {"long_name": "scattering matrix element"}
-
-
-class EMEModeIndexDataArray(DataArray):
-    """Complex-valued effective propagation index of an EME mode,
-    also indexed by EME cell.
-
-    Example
-    -------
-    >>> f = [2e14, 3e14]
-    >>> mode_index = np.arange(4)
-    >>> eme_cell_index = np.arange(5)
-    >>> coords = dict(f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
-    >>> data = EMEModeIndexDataArray((1+1j) * np.random.random((2,4,5)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("f", "mode_index", "eme_cell_index")
-    _data_attrs = {"long_name": "Propagation index"}
-
-
 class ChargeDataArray(DataArray):
     """Charge data array.
 
@@ -873,12 +744,6 @@ DATA_ARRAY_TYPES = [
     FreqModeDataArray,
     TriangleMeshDataArray,
     HeatDataArray,
-    EMEScalarFieldDataArray,
-    EMEScalarModeFieldDataArray,
-    EMESMatrixDataArray,
-    EMECoefficientDataArray,
-    EMEModeIndexDataArray,
-    EMEFreqModeDataArray,
     ChargeDataArray,
     PointDataArray,
     CellDataArray,

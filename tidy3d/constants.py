@@ -162,11 +162,6 @@ PICOSECOND_PER_NANOMETER_PER_KILOMETER = "ps/(nm km)"
 Picosecond per (nanometer kilometer).
 """
 
-OHM = "ohm"
-"""
-SI unit of resistance..
-"""
-
 THERMAL_CONDUCTIVITY = "W/(um*K)"
 """
 Watts per (micrometer Kelvin).

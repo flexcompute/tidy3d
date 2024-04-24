@@ -11,7 +11,7 @@ from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
 from ..utils import assert_log_level, SIM_FULL, run_emulated, AssertLogLevel
-from ..utils import cartesian_to_unstructured, log_capture  # noqa: F401
+from ..utils import log_capture  # noqa: F401
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
@@ -1850,39 +1850,6 @@ def test_error_large_monitors(monitor):
         sim_large.validate_pre_upload()
 
 
-def test_error_max_time_monitor_steps():
-    """Test if a time monitor with too many time steps causes pre upload error."""
-
-    sim = td.Simulation(
-        size=(5, 5, 5),
-        run_time=1e-12,
-        grid_spec=td.GridSpec.uniform(dl=0.01),
-        sources=[
-            td.ModeSource(
-                size=(0.1, 0.1, 0),
-                direction="+",
-                source_time=td.GaussianPulse(freq0=2e14, fwidth=0.1e14),
-            )
-        ],
-    )
-
-    # simulation with a 0D time monitor should not error
-    monitor = td.FieldTimeMonitor(center=(0, 0, 0), size=(0, 0, 0), name="time")
-    sim = sim.updated_copy(monitors=[monitor])
-    sim.validate_pre_upload()
-
-    # 1D monitor should error
-    with pytest.raises(SetupError):
-        monitor = monitor.updated_copy(size=(1, 0, 0))
-        sim = sim.updated_copy(monitors=[monitor])
-        sim.validate_pre_upload()
-
-    # setting a large enough interval should again not error
-    monitor = monitor.updated_copy(interval=20)
-    sim = sim.updated_copy(monitors=[monitor])
-    sim.validate_pre_upload()
-
-
 def test_monitor_num_cells():
     """Test the computation of number of cells in monitor."""
     sim = td.Simulation(
@@ -1941,34 +1908,6 @@ def test_dt():
     )
     sim_new = sim.copy(update=dict(structures=[structure]))
     assert sim_new.dt == 0.4 * dt
-
-
-def test_conformal_dt():
-    """make sure dt is reduced when BenklerConformalMeshSpec is applied."""
-    sim = td.Simulation(
-        size=(2.0, 2.0, 2.0),
-        run_time=1e-12,
-        grid_spec=td.GridSpec.uniform(dl=0.1),
-    )
-    dt = sim.dt
-
-    # Benkler
-    sim_conformal = sim.updated_copy(pec_conformal_mesh_spec=td.BenklerConformalMeshSpec())
-    assert sim_conformal.dt < dt
-
-    # Benkler: same courant
-    sim_conformal2 = sim.updated_copy(
-        pec_conformal_mesh_spec=td.BenklerConformalMeshSpec(timestep_reduction=0)
-    )
-    assert sim_conformal2.dt == dt
-
-    # staircasing
-    sim_staircasing = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
-    assert sim_staircasing.dt == dt
-
-    # heuristic
-    sim_heuristic = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
-    assert sim_heuristic.dt == dt
 
 
 def test_sim_volumetric_structures(log_capture, tmp_path):  # noqa F811
@@ -2226,9 +2165,7 @@ def test_allow_gain():
     assert sim.allow_gain
 
 
-@pytest.mark.parametrize("z", [[5, 6], [5.5]])
-@pytest.mark.parametrize("unstructured", [True, False])
-def test_perturbed_mediums_copy(unstructured, z):
+def test_perturbed_mediums_copy():
     # Non-dispersive
     pp_real = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(
@@ -2254,16 +2191,10 @@ def test_perturbed_mediums_copy(unstructured, z):
         ),
     )
 
-    coords = dict(x=[1, 2], y=[3, 4], z=z)
-    temperature = td.SpatialDataArray(300 * np.ones((2, 2, len(z))), coords=coords)
-    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, len(z))), coords=coords)
-    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, len(z))), coords=coords)
-
-    if unstructured:
-        seed = 654
-        temperature = cartesian_to_unstructured(temperature, seed=seed)
-        electron_density = cartesian_to_unstructured(electron_density, seed=seed)
-        hole_density = cartesian_to_unstructured(hole_density, seed=seed)
+    coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
+    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
 
     pmed1 = td.PerturbationMedium(permittivity=3, permittivity_perturbation=pp_real)
 
@@ -2377,9 +2308,7 @@ def test_to_gds(tmp_path):
     assert np.allclose(areas[(0, 0)], 0.25 * np.pi * 1.4**2, atol=1e-2)
 
 
-@pytest.mark.parametrize("nz", [13, 1])
-@pytest.mark.parametrize("unstructured", [True, False])
-def test_sim_subsection(unstructured, nz):
+def test_sim_subsection():
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
     region_yz = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
@@ -2403,19 +2332,16 @@ def test_sim_subsection(unstructured, nz):
     assert sim_red.structures == SIM_FULL.structures
     sim_red = SIM_FULL.subsection(region=region, remove_outside_custom_mediums=True)
 
-    perm = td.SpatialDataArray(
-        1 + np.random.random((11, 12, nz)),
-        coords=dict(
-            x=np.linspace(-0.51, 0.52, 11),
-            y=np.linspace(-1.02, 1.04, 12),
-            z=np.linspace(-1.51, 1.51, nz),
-        ),
+    fine_custom_medium = td.CustomMedium(
+        permittivity=td.SpatialDataArray(
+            1 + np.random.random((11, 12, 13)),
+            coords=dict(
+                x=np.linspace(-0.51, 0.52, 11),
+                y=np.linspace(-1.02, 1.04, 12),
+                z=np.linspace(-1.51, 1.51, 13),
+            ),
+        )
     )
-
-    if unstructured:
-        perm = cartesian_to_unstructured(perm, seed=523)
-
-    fine_custom_medium = td.CustomMedium(permittivity=perm)
 
     sim = SIM_FULL.updated_copy(
         structures=[
@@ -2726,82 +2652,3 @@ def test_advanced_material_intersection():
         )
         # it's ok if these are both present as long as they don't intersect
         sim = sim.updated_copy(structures=[struct1, struct2])
-
-
-def test_num_lumped_elements():
-    """Make sure we error if too many lumped elements supplied."""
-
-    resistor = td.LumpedResistor(
-        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
-    )
-    grid_spec = td.GridSpec.auto(wavelength=1.0)
-
-    _ = td.Simulation(
-        size=(5, 5, 5),
-        grid_spec=grid_spec,
-        structures=[],
-        lumped_elements=[resistor] * MAX_NUM_MEDIUMS,
-        run_time=1e-12,
-    )
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.Simulation(
-            size=(5, 5, 5),
-            grid_spec=grid_spec,
-            structures=[],
-            lumped_elements=[resistor] * (MAX_NUM_MEDIUMS + 1),
-            run_time=1e-12,
-        )
-
-
-def test_validate_lumped_elements():
-    resistor = td.LumpedResistor(
-        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
-    )
-
-    _ = td.Simulation(
-        size=(1, 2, 3),
-        run_time=1e-12,
-        grid_spec=td.GridSpec.uniform(dl=0.1),
-        lumped_elements=[resistor],
-    )
-    # error for 1D/2D simulation with lumped elements
-    with pytest.raises(pydantic.ValidationError):
-        td.Simulation(
-            size=(1, 0, 3),
-            run_time=1e-12,
-            grid_spec=td.GridSpec.uniform(dl=0.1),
-            lumped_elements=[resistor],
-        )
-
-    with pytest.raises(pydantic.ValidationError):
-        td.Simulation(
-            size=(1, 0, 0),
-            run_time=1e-12,
-            grid_spec=td.GridSpec.uniform(dl=0.1),
-            lumped_elements=[resistor],
-        )
-
-
-def test_suggested_mesh_overrides():
-    resistor = td.LumpedResistor(
-        size=(0, 1, 2), center=(0, 0, 0), name="R1", voltage_axis=2, resistance=75
-    )
-    sim = td.Simulation(
-        size=(1, 2, 3),
-        run_time=1e-12,
-        grid_spec=td.GridSpec.uniform(dl=0.1),
-        lumped_elements=[resistor],
-    )
-
-    suggested_mesh_overrides = sim.suggest_mesh_overrides()
-    assert len(suggested_mesh_overrides) == 2
-    grid_spec = sim.grid_spec.copy(
-        update={
-            "override_structures": list(sim.grid_spec.override_structures)
-            + suggested_mesh_overrides,
-        }
-    )
-
-    _ = sim.updated_copy(
-        grid_spec=grid_spec,
-    )

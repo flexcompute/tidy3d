@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, Any, Tuple
+from typing import Union, Dict, Callable, Any
 
 import xarray as xr
 import numpy as np
@@ -11,27 +11,21 @@ from matplotlib.tri import Triangulation
 from matplotlib import pyplot as plt
 import numbers
 
-from .data_array import DataArray, DATA_ARRAY_MAP
+from .data_array import DataArray
 from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
 from .data_array import ModeIndexDataArray, GroupIndexDataArray, ModeDispersionDataArray
 from .data_array import TriangleMeshDataArray
 from .data_array import TimeDataArray
 from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
-from .data_array import EMEScalarFieldDataArray, EMEScalarModeFieldDataArray
 
 from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
 from ..base import Tidy3dBaseModel, cached_property
 from ..base import skip_if_fields_missing
-from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal, annotate_type
+from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal
 from ...packaging import vtk, requires_vtk
 from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
-from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
+from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER
 from ...log import log
-
-
-DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
-DEFAULT_MAX_CELLS_PER_STEP = 10_000
-DEFAULT_TOLERANCE_CELL_FINDING = 1e-6
 
 
 class Dataset(Tidy3dBaseModel, ABC):
@@ -136,13 +130,7 @@ class AbstractFieldDataset(Dataset, ABC):
         return self.package_colocate_results(centered_fields)
 
 
-EMScalarFieldType = Union[
-    ScalarFieldDataArray,
-    ScalarFieldTimeDataArray,
-    ScalarModeFieldDataArray,
-    EMEScalarModeFieldDataArray,
-    EMEScalarFieldDataArray,
-]
+EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]
 
 
 class ElectromagneticFieldDataset(AbstractFieldDataset, ABC):
@@ -540,16 +528,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # we redirect name to values.name
         return self.values.name
 
-    @property
-    def is_complex(self) -> bool:
-        """Data type."""
-        return np.iscomplexobj(self.values)
-
-    @property
-    def _double_type(self):
-        """Corresponding double data type."""
-        return np.complex128 if self.is_complex else np.float64
-
     @pd.validator("cells", always=True)
     def match_cells_to_vtk_type(cls, val):
         """Check that cell connections does not have duplicate points."""
@@ -604,56 +582,29 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def check_cell_vertex_range(cls, val, values):
         """Check that cell connections use only defined points."""
         all_point_indices_used = val.data.ravel()
-        # skip validation if zero size data
-        if len(all_point_indices_used) > 0:
-            min_index_used = np.min(all_point_indices_used)
-            max_index_used = np.max(all_point_indices_used)
+        min_index_used = np.min(all_point_indices_used)
+        max_index_used = np.max(all_point_indices_used)
 
-            points = values.get("points")
-            num_points = len(points)
+        points = values.get("points")
+        num_points = len(points)
 
-            if max_index_used != num_points - 1 or min_index_used != 0:
-                raise ValidationError(
-                    "Cell connections array uses undefined point indices in the range "
-                    f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
-                    f"[0, {num_points-1}]."
-                )
+        if max_index_used != num_points - 1 or min_index_used != 0:
+            raise ValidationError(
+                "Cell connections array uses undefined point indices in the range "
+                f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
+                f"[0, {num_points-1}]."
+            )
         return val
 
     @pd.validator("cells", always=True)
     def check_valid_cells(cls, val):
         """Check that cell connections does not have duplicate points."""
         indices = val.data
-        # skip validation if zero size data
-        if len(indices) > 0:
-            for i in range(cls._cell_num_vertices() - 1):
-                for j in range(i + 1, cls._cell_num_vertices()):
-                    if np.any(indices[:, i] == indices[:, j]):
-                        log.warning("Unstructured grid contains degenerate cells.")
+        for i in range(cls._cell_num_vertices() - 1):
+            for j in range(i + 1, cls._cell_num_vertices()):
+                if np.any(indices[:, i] == indices[:, j]):
+                    log.warning("Unstructured grid contains degenerate cells.")
         return val
-
-    @pd.root_validator(pre=True, allow_reuse=True)
-    def _warn_if_none(cls, values):
-        """Warn if any of data arrays are not loaded."""
-
-        no_data_fields = []
-        for field_name in ["points", "cells", "values"]:
-            field = values.get(field_name)
-            if isinstance(field, str) and field in DATA_ARRAY_MAP.keys():
-                no_data_fields.append(field_name)
-        if len(no_data_fields) > 0:
-            formatted_names = [f"'{fname}'" for fname in no_data_fields]
-            log.warning(
-                f"Loading {', '.join(formatted_names)} without data. Constructing an empty dataset."
-            )
-            values["points"] = PointDataArray(
-                np.zeros((0, cls._point_dims())), dims=["index", "axis"]
-            )
-            values["cells"] = CellDataArray(
-                np.zeros((0, cls._cell_num_vertices())), dims=["cell_index", "vertex_index"]
-            )
-            values["values"] = IndexedDataArray(np.zeros(0), dims=["index"])
-        return values
 
     def rename(self, name: str) -> UnstructuredGridDataset:
         """Return a renamed array."""
@@ -713,7 +664,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
     @cached_property
     @abstractmethod
-    def _points_3d_array(self):
+    def _points_3d_array(self) -> Bound:
         """3D coordinates of grid points."""
 
     @classmethod
@@ -764,13 +715,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         grid.SetPoints(self._vtk_points)
         grid.SetCells(self._vtk_cell_type(), self._vtk_cells)
-        if self.is_complex:
-            # vtk doesn't support complex numbers
-            # so we will store our complex array as a two-component vtk array
-            data_values = self.values.values.view("(2,)float")
-        else:
-            data_values = self.values.values
-        point_data_vtk = vtk["numpy_to_vtk"](data_values)
+        point_data_vtk = vtk["numpy_to_vtk"](self.values.data)
         point_data_vtk.SetName(self.values.name)
         grid.GetPointData().AddArray(point_data_vtk)
 
@@ -846,7 +791,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @classmethod
     @abstractmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj, field: str = None) -> UnstructuredGridDataset:
+    def _from_vtk_obj(cls, vtk_obj, field=None) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
@@ -916,31 +861,22 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     "'.values' while the rest will be ignored."
                 )
 
-            # currently we assume data is real or complex scalar
+            # currently we assume data is scalar
             num_components = array_vtk.GetNumberOfComponents()
-            if num_components > 2:
+            if num_components > 1:
                 raise DataError(
-                    "Found point data array in a VTK object is expected to have maximum 2 "
-                    "components (1 is for real data, 2 is for complex data). "
-                    f"Found {num_components} components."
+                    f"Found point data array in a VTK object is expected to have only 1 component. Found {num_components} components."
                 )
 
             # check that number of values matches number of grid points
             num_tuples = array_vtk.GetNumberOfTuples()
             if num_tuples != num_points:
                 raise DataError(
-                    f"The length of found point data array ({num_tuples}) does not match the number"
-                    f" of grid points ({num_points})."
+                    f"The length of found point data array ({num_tuples}) does not match the number of grid points ({num_points})."
                 )
 
             values_numpy = vtk["vtk_to_numpy"](array_vtk)
             values_name = array_vtk.GetName()
-
-            # vtk doesn't support complex numbers
-            # we store our complex array as a two-component vtk array
-            # so here we convert that into a single component complex array
-            if num_components == 2:
-                values_numpy = values_numpy.view("complex")[:, 0]
 
         values = IndexedDataArray(
             values_numpy, coords=dict(index=np.arange(len(values_numpy))), name=values_name
@@ -988,177 +924,15 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         return self._from_vtk_obj(clean_clip)
 
+    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = None,
-        use_vtk: bool = False,
-        method: Literal["linear", "nearest"] = "linear",
-        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
-        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
-        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
+        fill_value: float = 0,
     ) -> SpatialDataArray:
         """Interpolate data at provided x, y, and z.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = 0
-            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
-            nearest values are used. Note: in a future version the default value will be changed
-            to ``"extrapolate"``.
-        use_vtk : bool = False
-            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
-            option will be removed in a future version.
-        method: Literal["linear", "nearest"] = "linear"
-            Interpolation method to use.
-        max_samples_per_step : int = 1e4
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int = 1e4
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float = 1e-6
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        SpatialDataArray
-            Interpolated data.
-        """
-
-        if fill_value is None:
-            log.warning(
-                "Default parameter setting 'fill_value=0' will be changed to "
-                "'fill_value=``extrapolate``' in a future version."
-            )
-            fill_value = 0
-
-        # calculate the resulting array shape
-        x = np.atleast_1d(x)
-        y = np.atleast_1d(y)
-        z = np.atleast_1d(z)
-
-        if method == "nearest":
-            interpolated_values = self._interp_nearest(x=x, y=y, z=z)
-        else:
-            if fill_value == "extrapolate":
-                fill_value_actual = np.nan
-            else:
-                fill_value_actual = fill_value
-
-            if use_vtk:
-                log.warning("Note that option 'use_vtk=True' will be removed in future versions.")
-                interpolated_values = self._interp_vtk(x=x, y=y, z=z, fill_value=fill_value_actual)
-            else:
-                interpolated_values = self._interp_py(
-                    x=x,
-                    y=y,
-                    z=z,
-                    fill_value=fill_value_actual,
-                    max_samples_per_step=max_samples_per_step,
-                    max_cells_per_step=max_cells_per_step,
-                    rel_tol=rel_tol,
-                )
-
-            if fill_value == "extrapolate" and method != "nearest":
-                interpolated_values = self._fill_nans_from_nearests(
-                    interpolated_values, x=x, y=y, z=z
-                )
-
-        return SpatialDataArray(
-            interpolated_values, coords=dict(x=x, y=y, z=z), name=self.values.name
-        )
-
-    def _interp_nearest(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-    ) -> ArrayLike:
-        """Interpolate data at provided x, y, and z using Scipy's nearest neighbor interpolator.
-
-        Parameters
-        ----------
-        x : ArrayLike
-            x-coordinates of sampling points.
-        y : ArrayLike
-            y-coordinates of sampling points.
-        z : ArrayLike
-            z-coordinates of sampling points.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-        from scipy.interpolate import NearestNDInterpolator
-
-        # use scipy's nearest neighbor interpolator
-        X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
-        interp = NearestNDInterpolator(self._points_3d_array, self.values.values)
-        values = interp(X, Y, Z)
-
-        return values
-
-    def _fill_nans_from_nearests(
-        self,
-        values: ArrayLike,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-    ) -> ArrayLike:
-        """Replace nan's in ``values`` with nearest data points.
-
-        Parameters
-        ----------
-        values : ArrayLike
-            3D array containing nan's
-        x : ArrayLike
-            x-coordinates of sampling points.
-        y : ArrayLike
-            y-coordinates of sampling points.
-        z : ArrayLike
-            z-coordinates of sampling points.
-
-        Returns
-        -------
-        ArrayLike
-            Data without nan's.
-        """
-
-        # locate all nans
-        nans = np.isnan(values)
-
-        if np.sum(nans) > 0:
-            from scipy.interpolate import NearestNDInterpolator
-
-            # use scipy's nearest neighbor interpolator
-            X, Y, Z = np.meshgrid(x, y, z, indexing="ij")
-            interp = NearestNDInterpolator(self._points_3d_array, self.values.values)
-            values_to_replace_nans = interp(X[nans], Y[nans], Z[nans])
-            values[nans] = values_to_replace_nans
-
-        return values
-
-    @requires_vtk
-    def _interp_vtk(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-    ) -> ArrayLike:
-        """Interpolate data at provided x, y, and z using vtk package.
 
         Parameters
         ----------
@@ -1173,10 +947,14 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
         Returns
         -------
-        ArrayLike
+        SpatialDataArray
             Interpolated data.
         """
 
+        # calculate the resulting array shape
+        x = np.atleast_1d(x)
+        y = np.atleast_1d(y)
+        z = np.atleast_1d(z)
         shape = (len(x), len(y), len(z))
 
         # create a VTK rectilinear grid to sample onto
@@ -1207,478 +985,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         # VTK arrays are the z-y-x order, reorder interpolation results to x-y-z order
         values_reordered = np.transpose(np.reshape(values_numpy, shape[::-1]), (2, 1, 0))
 
-        return values_reordered
-
-    @abstractmethod
-    def _interp_py(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-        max_samples_per_step: int,
-        max_cells_per_step: int,
-        rel_tol: float,
-    ) -> ArrayLike:
-        """Dimensionality-specific function (2D and 3D) to interpolate data at provided x, y, and z
-        using vectorized python implementation.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : float
-            Value to use when filling points without interpolated values.
-        max_samples_per_step : int
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-
-    def _interp_py_general(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-        max_samples_per_step: int,
-        max_cells_per_step: int,
-        rel_tol: float,
-        axis_ignore: Union[Axis, None],
-    ) -> ArrayLike:
-        """A general function (2D and 3D) to interpolate data at provided x, y, and z using
-        vectorized python implementation.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : float
-            Value to use when filling points without interpolated values.
-        max_samples_per_step : int
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float
-            Relative tolerance when determining whether a point belongs to a cell.
-        axis_ignore : Union[Axis, None]
-            When interpolating from a 2D dataset, must specify normal axis.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-
-        # get dimensionality of data
-        num_dims = self._point_dims()
-
-        if num_dims == 2 and axis_ignore is None:
-            raise DataError("Must porvide 'axis_ignore' when interpolating from a 2d dataset.")
-
-        xyz_grid = [x, y, z]
-
-        if axis_ignore is not None:
-            xyz_grid.pop(axis_ignore)
-
-        # get numpy arrays for points and cells
-        cell_connections = (
-            self.cells.values
-        )  # (num_cells, num_cell_vertices), num_cell_vertices=num_cell_faces
-        points = self.points.values  # (num_points, num_dims)
-
-        num_cells = len(cell_connections)
-        num_points = len(points)
-
-        # compute tolerances based on total size of unstructured grid
-        bounds = self.bounds
-        size = np.subtract(bounds[1], bounds[0])
-        tol = size * rel_tol
-        diag_tol = np.linalg.norm(tol)
-
-        # compute (index) positions of unstructured points w.r.t. target Cartesian grid points
-        # (i.e. between which Cartesian grid points a given unstructured grid point is located)
-        # we perturb grid values in both directions to make sure we don't miss any points
-        # due to numerical precision
-        xyz_pos_l = np.zeros((num_dims, num_points), dtype=int)
-        xyz_pos_r = np.zeros((num_dims, num_points), dtype=int)
-        for dim in range(num_dims):
-            xyz_pos_l[dim] = np.searchsorted(xyz_grid[dim] + tol[dim], points[:, dim])
-            xyz_pos_r[dim] = np.searchsorted(xyz_grid[dim] - tol[dim], points[:, dim])
-
-        # let's allocate an array for resulting values
-        # every time we process a chunk of samples, we will write into this array
-        interpolated_values = fill_value + np.zeros(
-            [len(xyz_comp) for xyz_comp in xyz_grid], dtype=self.values.dtype
-        )
-
-        processed_cells_global = 0
-
-        # to ovoid OOM for large datasets, we process only certain number of cells at a time
-        while processed_cells_global < num_cells:
-            target_processed_cells_global = min(
-                num_cells, processed_cells_global + max_cells_per_step
-            )
-
-            connections_to_process = cell_connections[
-                processed_cells_global:target_processed_cells_global
-            ]
-
-            # now we transfer this information to each cell. That is, each cell knows how its vertices
-            # positioned relative to Cartesian grid points.
-            # (num_dims, num_cells, num_vertices=num_cell_faces)
-            xyz_pos_l_per_cell = xyz_pos_l[:, connections_to_process]
-            xyz_pos_r_per_cell = xyz_pos_r[:, connections_to_process]
-
-            # taking min/max among all cell vertices (per each dimension separately)
-            # we get min and max indices of Cartesian grid points that may receive their values
-            # from a given cell.
-            # (num_dims, num_cells)
-            cell_ind_min = np.min(xyz_pos_l_per_cell, axis=2)
-            cell_ind_max = np.max(xyz_pos_r_per_cell, axis=2)
-
-            # calculate number of Cartesian grid points where we will perform interpolation for a given
-            # cell. Note that this number is much larger than actually needed, because essentially for
-            # each cell we consider all Cartesian grid points that fall into the cell's bounding box.
-            # We use word "sample" to represent such Cartesian grid points.
-            # (num_cells,)
-            num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
-
-            # find cells that have non-zero number of samples
-            # we use "ne" as a shortcut for "non empty"
-            ne_cells = num_samples_per_cell > 0  # (num_cells,)
-            num_ne_cells = np.sum(ne_cells)
-            # indices of cells with non-zero number of samples in the original list of cells
-            # (num_cells,)
-            ne_cell_inds = np.arange(processed_cells_global, target_processed_cells_global)[
-                ne_cells
-            ]
-
-            # restrict to non-empty cells only
-            num_samples_per_ne_cell = num_samples_per_cell[ne_cells]
-            cum_num_samples_per_ne_cell = np.cumsum(num_samples_per_ne_cell)
-
-            ne_cell_ind_min = cell_ind_min[:, ne_cells]
-            ne_cell_ind_max = cell_ind_max[:, ne_cells]
-
-            # Next we need to perform actual interpolation at all sample points
-            # this is computationally expensive operation and because we try to do everything
-            # in the vectorized form, it can require a lot of memory, sometimes even causing OOM errors.
-            # To avoid that, we impose restrictions on how many cells/samples can be processed at a time
-            # effectivelly performing these operations in chunks.
-            # Note that currently this is done sequentially, but could be relatively easy to parallelize
-
-            # start counters of how many cells/samples have been processed
-            processed_samples = 0
-            processed_cells = 0
-
-            while processed_cells < num_ne_cells:
-                # how many cells we would like to process by the end of this step
-                target_processed_cells = min(num_ne_cells, processed_cells + max_cells_per_step)
-
-                # find how many cells we can processed based on number of allowed samples
-                target_processed_samples = processed_samples + max_samples_per_step
-                target_processed_cells_from_samples = (
-                    np.searchsorted(cum_num_samples_per_ne_cell, target_processed_samples) + 1
-                )
-
-                # take min between the two
-                target_processed_cells = min(
-                    target_processed_cells, target_processed_cells_from_samples
-                )
-
-                # select cells and corresponding samples to process
-                step_ne_cell_ind_min = ne_cell_ind_min[:, processed_cells:target_processed_cells]
-                step_ne_cell_ind_max = ne_cell_ind_max[:, processed_cells:target_processed_cells]
-                step_ne_cell_inds = ne_cell_inds[processed_cells:target_processed_cells]
-
-                # process selected cells and points
-                xyz_inds, interpolated = self._interp_py_chunk(
-                    xyz_grid=xyz_grid,
-                    cell_inds=step_ne_cell_inds,
-                    cell_ind_min=step_ne_cell_ind_min,
-                    cell_ind_max=step_ne_cell_ind_max,
-                    sdf_tol=diag_tol,
-                )
-
-                if num_dims == 3:
-                    interpolated_values[xyz_inds[0], xyz_inds[1], xyz_inds[2]] = interpolated
-                else:
-                    interpolated_values[xyz_inds[0], xyz_inds[1]] = interpolated
-
-                processed_cells = target_processed_cells
-                processed_samples = cum_num_samples_per_ne_cell[target_processed_cells - 1]
-
-            processed_cells_global = target_processed_cells_global
-
-        # in case of 2d grid broadcast results along normal direction assuming translational
-        # invariance
-        if num_dims == 2:
-            orig_shape = [len(x), len(y), len(z)]
-            flat_shape = orig_shape.copy()
-            flat_shape[axis_ignore] = 1
-            interpolated_values = np.reshape(interpolated_values, flat_shape)
-            interpolated_values = np.broadcast_to(
-                interpolated_values, (len(x), len(y), len(z))
-            ).copy()
-
-        return interpolated_values
-
-    def _interp_py_chunk(
-        self,
-        xyz_grid: Tuple[ArrayLike[float], ...],
-        cell_inds: ArrayLike[int],
-        cell_ind_min: ArrayLike[int],
-        cell_ind_max: ArrayLike[int],
-        sdf_tol: float,
-    ) -> Tuple[Tuple[ArrayLike, ...], ArrayLike]:
-        """For each cell listed in ``cell_inds`` perform interpolation at a rectilinear subarray of
-        xyz_grid given by a (3D) index span (cell_ind_min, cell_ind_max).
-
-        Parameters
-        ----------
-        xyz_grid : Tuple[ArrayLike[float], ...]
-            x, y, and z coordiantes defining rectilinear grid.
-        cell_inds : ArrayLike[int]
-            Indices of cells to perfrom interpolation from.
-        cell_ind_min : ArrayLike[int]
-            Starting x, y, and z indices of points for interpolation for each cell.
-        cell_ind_max : ArrayLike[int]
-            End x, y, and z indices of points for interpolation for each cell.
-        sdf_tol : float
-            Effective zero level set value, below which a point is considered to be inside a cell.
-
-        Returns
-        -------
-        Tuple[Tuple[ArrayLike, ...], ArrayLike]
-            x, y, and z indices of interpolated values and values themselves.
-        """
-
-        # get dimensionality of data
-        num_dims = self._point_dims()
-        num_cell_faces = self._cell_num_vertices()
-
-        # get mesh info as numpy arrays
-        points = self.points.values  # (num_points, num_dims)
-        data_values = self.values.values  # (num_points,)
-        cell_connections = self.cells.values[cell_inds]
-
-        # compute number of samples to generate per cell
-        num_samples_per_cell = np.prod(cell_ind_max - cell_ind_min, axis=0)
-
-        # at this point we know how many samples we need to perform per each cell and we also
-        # know span indices of these samples (in x, y, and z arrays)
-
-        # we would like to perform all interpolations in a vectorized form, however, we have
-        # a different number of interpolation samples for different cells. Thus, we need to
-        # arange all samples in a linear way (flatten). Basically, we want to have data in this
-        # form:
-        # cell_ind | x_ind | y_ind | z_ind
-        # --------------------------------
-        #        0 |    23 |     5 |    11
-        #        0 |    23 |     5 |    12
-        #        0 |    23 |     6 |    11
-        #        0 |    23 |     6 |    12
-        #        1 |    41 |    11 |     0
-        #        1 |    42 |    11 |     0
-        #      ... |   ... |   ... |   ...
-
-        # to do that we start with performing arange for each cell, but in vectorized way
-        # this gives us something like this
-        # [0, 1, 2, 3,   0, 1,   0, 1, 2, 3, 4, 5, 6,   ...]
-        # |<-cell 0->|<-cell 1->|<-     cell 2    ->|<- ...
-
-        num_cells = len(num_samples_per_cell)
-        num_samples_cumul = num_samples_per_cell.cumsum()
-        num_samples_total = num_samples_cumul[-1]
-
-        # one big arange array
-        inds_flat = np.arange(num_samples_total)
-        # now subtract previous number of samples
-        inds_flat[num_samples_per_cell[0] :] -= np.repeat(
-            num_samples_cumul[:-1], num_samples_per_cell[1:]
-        )
-
-        # convert flat indices into 3d/2d indices as:
-        # x_ind = [23, 23, 23, 23,   41, 41,      ...]
-        # y_ind = [ 5,  5,  5,  5,    6,  6,      ...]
-        # z_ind = [11, 12, 11, 12,    0,  0,      ...]
-        #         |<-  cell 0  ->|<- cell 1 ->|<- ...
-        num_samples_y = np.repeat(cell_ind_max[1] - cell_ind_min[1], num_samples_per_cell)
-
-        # note: in 2d x, y correspond to (x, y, z).pop(normal_axis)
-        if num_dims == 3:
-            num_samples_z = np.repeat(cell_ind_max[2] - cell_ind_min[2], num_samples_per_cell)
-            inds_flat, z_inds = np.divmod(inds_flat, num_samples_z)
-
-        x_inds, y_inds = np.divmod(inds_flat, num_samples_y)
-
-        start_inds = np.repeat(cell_ind_min, num_samples_per_cell, axis=1)
-        x_inds = x_inds + start_inds[0]
-        y_inds = y_inds + start_inds[1]
-        if num_dims == 3:
-            z_inds = z_inds + start_inds[2]
-
-        # finally, we repeat cell indices corresponding number of times to obtain how
-        # (x_ind, y_ind, z_ind) map to cell indices. So, now we have four arras:
-        # x_ind    = [23, 23, 23, 23,   41, 41,      ...]
-        # y_ind    = [ 5,  5,  5,  5,    6,  6,      ...]
-        # z_ind    = [11, 12, 11, 12,    0,  0,      ...]
-        # cell_map = [ 0,  0,  0,  0,    1,  1,      ...]
-        #            |<-  cell 0  ->|<- cell 1 ->|<- ...
-        step_cell_map = np.repeat(np.arange(num_cells), num_samples_per_cell)
-
-        # let's put these arrays aside for a moment and perform the second preparatory step
-        # specifically, for each face of each cell we will compute normal vector and distance
-        # to the opposing cell vertex. This will allows us quickly calculate SDF of a cell at
-        # each sample point as well as perform linear interpolation.
-
-        # first, we collect coordinates of cell vertices into a single array
-        # (num_cells, num_cell_vertices, num_dims)
-        cell_vertices = np.float64(points[cell_connections, :])
-
-        # array for resulting normals and distances
-        normal = np.zeros((num_cell_faces, num_cells, num_dims))
-        dist = np.zeros((num_cell_faces, num_cells))
-
-        # loop face by face
-        # note that by face_ind we denote both index of face in a cell and index of the opposing vertex
-        for face_ind in range(num_cell_faces):
-            # select vertices forming the given face
-            face_pinds = list(np.arange(num_cell_faces))
-            face_pinds.pop(face_ind)
-
-            # calculate normal to the face
-            # in 3D: cross product of two vectors lying in the face plane
-            # in 2D: (-ty, tx) for a vector (tx, ty) along the face
-            p0 = cell_vertices[:, face_pinds[0]]
-            p01 = cell_vertices[:, face_pinds[1]] - p0
-            p0Opp = cell_vertices[:, face_ind] - p0
-            if num_dims == 3:
-                p02 = cell_vertices[:, face_pinds[2]] - p0
-                n = np.cross(p01, p02)
-            else:
-                n = np.roll(p01, 1, axis=1)
-                n[:, 0] = -n[:, 0]
-            n_norm = np.linalg.norm(n, axis=1)
-            n = n / n_norm[:, None]
-
-            # compute distance to the opposing vertex by taking a dot product between normal
-            # and a vector connecting the opposing vertex and the face
-            d = np.einsum("ij,ij->i", n, p0Opp)
-
-            # obtained normal direction is arbitrary here. We will orient it such that it points
-            # away from the triangle (and distance to the opposing vertex is negative).
-            to_flip = d > 0
-            d[to_flip] *= -1
-            n[to_flip, :] *= -1
-
-            # set distances in degenerate triangles to something positive to ignore later
-            dist_zero = d == 0
-            if any(dist_zero):
-                d[dist_zero] = 1
-
-            # record obtained info
-            normal[face_ind] = n
-            dist[face_ind] = d
-
-        # now we all set up to proceed with actual interpolation at each sample point
-        # the main idea here is that:
-        # - we use `cell_map` to grab normals and distances
-        #   of cells in which the given sample point is (potentially) located.
-        # - use `x_ind, y_ind, z_ind` to find actual coordinates of a given sample point
-        # - combine the above two to calculate cell SDF and interpolated value at a given sample
-        #   point
-        # - having cell SDF at the sample point actually tells us whether its inside the cell
-        #   (keep value) or outside of it (discard interpolated value)
-
-        # to perform SDF calculation and interpolation we will loop face by face and recording
-        # their contributions. That is,
-        # cell_sdf = max(face0_sdf, face1_sdf, ...)
-        # interpolated_value = value0 * face0_sdf / dist0_sdf + ...
-        # (because face0_sdf / dist0_sdf is linear shape function for vertex0)
-        sdf = -inf * np.ones(num_samples_total)
-        interpolated = np.zeros(num_samples_total, dtype=self._double_type)
-
-        # coordinates of each sample point
-        sample_xyz = np.zeros((num_samples_total, num_dims))
-        sample_xyz[:, 0] = xyz_grid[0][x_inds]
-        sample_xyz[:, 1] = xyz_grid[1][y_inds]
-        if num_dims == 3:
-            sample_xyz[:, 2] = xyz_grid[2][z_inds]
-
-        # loop face by face
-        for face_ind in range(num_cell_faces):
-            # find a vector connecting sample point and face
-            if face_ind == 0:
-                vertex_ind = 1  # anythin other than 0
-                vec = sample_xyz - cell_vertices[step_cell_map, vertex_ind, :]
-
-            if face_ind == 1:  # since three faces share a point only do this once
-                vertex_ind = 0  # it belongs to every face 1, 2, and 3
-                vec = sample_xyz - cell_vertices[step_cell_map, 0, :]
-
-            # compute distance from every sample point to the face of corresponding cell
-            # using dot product
-            tmp = normal[face_ind, step_cell_map, :] * vec
-            d = np.sum(tmp, axis=1)
-
-            # take max between distance to obtain the overall SDF of a cell
-            sdf = np.maximum(sdf, d)
-
-            # perform linear interpolation. Here we use the fact that when computing face SDF
-            # at a given point and dividing it by the distance to the opposing vertex we get
-            # a linear shape function for that vertex. So, we just need to multiply that by
-            # the data value at that vertex to find its contribution into intepolated value.
-            # (decomposed in an attempt to reduce memory consumption)
-            tmp = self._double_type(data_values[cell_connections[step_cell_map, face_ind]])
-            tmp *= d
-            tmp /= dist[face_ind, step_cell_map]
-
-            # ignore degenerate cells
-            dist_zero = dist[face_ind, step_cell_map] > 0
-            if any(dist_zero):
-                sdf[dist_zero] = 10 * sdf_tol
-
-            interpolated += tmp
-
-        # The resulting array of interpolated values contain multiple candidate values for
-        # every Cartesian point because bounding boxes of cells overlap.
-        # Thus, we need to keep only those that come cell actually containing a given point.
-        # This can be easily determined by the sign of the cell SDF sampled at a given point.
-        valid_samples = sdf < sdf_tol
-
-        interpolated_valid = interpolated[valid_samples]
-        xyz_valid_inds = []
-        xyz_valid_inds.append(x_inds[valid_samples])
-        xyz_valid_inds.append(y_inds[valid_samples])
-        if num_dims == 3:
-            xyz_valid_inds.append(z_inds[valid_samples])
-
-        return xyz_valid_inds, interpolated_valid
+        return SpatialDataArray(values_reordered, coords=dict(x=x, y=y, z=z), name=self.values.name)
 
     @abstractmethod
     @requires_vtk
@@ -1705,92 +1012,6 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         Union[TriangularGridDataset, SpatialDataArray]
             Extracted data.
         """
-
-    @requires_vtk
-    def sel_inside(self, bounds: Bound) -> UnstructuredGridDataset:
-        """Return a new UnstructuredGridDataset that contains the minimal amount data necessary to
-        cover a spatial region defined by ``bounds``.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        UnstructuredGridDataset
-            Extracted spatial data array.
-        """
-
-        data_bounds = self.bounds
-        tol = 1e-6
-
-        # For extracting cells covering target region we use vtk's filter that extract cells based
-        # on provided implicit function. However, when we provide to it the implicit function of
-        # the entire box, it has a couple of issues coming from the fact that the algorithm
-        # eliminates every cells for which the implicit function has positive sign at all vertices.
-        # As result, sometimes there are cells that despite overlaping with the target domain still
-        # being eliminated. Two common cases:
-        # - near corners of the target domain
-        # - target domain is very thin
-        # That's why we perform selection by sequentially eliminating cells on the outer side of
-        # each of the 6 surfaces of the bounding box separately.
-        tmp = self._vtk_obj
-        for direction in range(2):
-            for dim in range(3):
-                sign = -1 + 2 * direction
-                plane_pos = bounds[direction][dim]
-
-                # Dealing with situation when target region does intersect with any cell:
-                # in this case we shift target region so that it barely touches at least some
-                # of cells
-                if sign < 0 and plane_pos > data_bounds[1][dim] - tol:
-                    plane_pos = data_bounds[1][dim] - tol
-                if sign > 0 and plane_pos < data_bounds[0][dim] + tol:
-                    plane_pos = data_bounds[0][dim] + tol
-
-                # if all cells are on the inside side of the plane for a given surface
-                # we don't need to check for intersection
-                if plane_pos <= data_bounds[1][dim] and plane_pos >= data_bounds[0][dim]:
-                    plane = vtk["mod"].vtkPlane()
-                    center = [0, 0, 0]
-                    normal = [0, 0, 0]
-                    center[dim] = plane_pos
-                    normal[dim] = sign
-                    plane.SetOrigin(center)
-                    plane.SetNormal(normal)
-                    extractor = vtk["mod"].vtkExtractGeometry()
-                    extractor.SetImplicitFunction(plane)
-                    extractor.ExtractInsideOn()
-                    extractor.ExtractBoundaryCellsOn()
-                    extractor.SetInputData(tmp)
-                    extractor.Update()
-                    tmp = extractor.GetOutput()
-
-        return self._from_vtk_obj(tmp)
-
-    def does_cover(self, bounds: Bound) -> bool:
-        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
-        only one point along a given direction, then it is assumed the data is constant along that
-        direction and coverage is not checked.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        bool
-            Full cover check outcome.
-        """
-
-        return all(
-            (dmin <= smin and dmax >= smax)
-            for dmin, dmax, smin, smax in zip(self.bounds[0], self.bounds[1], bounds[0], bounds[1])
-        )
 
     @requires_vtk
     def reflect(
@@ -1826,8 +1047,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
 
 
 class TriangularGridDataset(UnstructuredGridDataset):
-    """Dataset for storing triangular grid data. Data values are associated with the nodes of
-    the grid.
+    """Dataset for storing triangular grid data.
 
     Note
     ----
@@ -2036,7 +1256,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
         vmax: float = None,
         shading: Literal["gourand", "flat"] = "gouraud",
         cbar_kwargs: Dict = None,
-        pcolor_kwargs: Dict = None,
     ) -> Ax:
         """Plot the data field and/or the unstructured grid.
 
@@ -2071,8 +1290,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         if cbar_kwargs is None:
             cbar_kwargs = {}
-        if pcolor_kwargs is None:
-            pcolor_kwargs = {}
         if not (field or grid):
             raise DataError("Nothing to plot ('field == False', 'grid == False').")
 
@@ -2085,7 +1302,6 @@ class TriangularGridDataset(UnstructuredGridDataset):
                 cmap=cmap,
                 vmin=vmin,
                 vmax=vmax,
-                **pcolor_kwargs,
             )
 
             if cbar:
@@ -2110,21 +1326,16 @@ class TriangularGridDataset(UnstructuredGridDataset):
         ax.set_title(f"{normal_axis_name} = {self.normal_pos}")
         return ax
 
+    @requires_vtk
     def interp(
         self,
         x: Union[float, ArrayLike],
         y: Union[float, ArrayLike],
         z: Union[float, ArrayLike],
-        fill_value: Union[float, Literal["extrapolate"]] = None,
-        use_vtk: bool = False,
-        method: Literal["linear", "nearest"] = "linear",
+        fill_value: float = 0,
         ignore_normal_pos: bool = True,
-        max_samples_per_step: int = DEFAULT_MAX_SAMPLES_PER_STEP,
-        max_cells_per_step: int = DEFAULT_MAX_CELLS_PER_STEP,
-        rel_tol: float = DEFAULT_TOLERANCE_CELL_FINDING,
     ) -> SpatialDataArray:
-        """Interpolate data at provided x, y, and z. Note that data is assumed to be invariant along
-        the dataset's normal direction.
+        """Interpolate data at provided x, y, and z.
 
         Parameters
         ----------
@@ -2134,27 +1345,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
             y-coordinates of sampling points.
         z : Union[float, ArrayLike]
             z-coordinates of sampling points.
-        fill_value : Union[float, Literal["extrapolate"]] = 0
-            Value to use when filling points without interpolated values. If ``"extrapolate"`` then
-            nearest values are used. Note: in a future version the default value will be changed
-            to ``"extrapolate"``.
-        use_vtk : bool = False
-            Use vtk's interpolation functionality or Tidy3D's own implementation. Note: this
-            option will be removed in a future version.
-        method: Literal["linear", "nearest"] = "linear"
-            Interpolation method to use.
+        fill_value : float = 0
+            Value to use when filling points without interpolated values.
         ignore_normal_pos : bool = True
-            (Depreciated) Assume data is invariant along the normal direction to the grid plane.
-        max_samples_per_step : int = 1e4
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int = 1e4
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float = 1e-6
-            Relative tolerance when determining whether a point belongs to a cell.
+            Assume data is invariant along the normal direction to the grid plane.
 
         Returns
         -------
@@ -2162,92 +1356,23 @@ class TriangularGridDataset(UnstructuredGridDataset):
             Interpolated data.
         """
 
-        if fill_value is None:
-            log.warning(
-                "Default parameter setting 'fill_value=0' will be changed to "
-                "'fill_value=``extrapolate``' in a future version."
-            )
-            fill_value = 0
-
-        if not ignore_normal_pos:
-            log.warning(
-                "Parameter 'ignore_normal_pos' is depreciated. It is always assumed that data "
-                "contained in 'TriangularGridDataset' is invariant in the normal direction. "
-                "That is, 'ignore_normal_pos=True' is used."
-            )
-
         x = np.atleast_1d(x)
         y = np.atleast_1d(y)
         z = np.atleast_1d(z)
 
-        xyz = [x, y, z]
-        xyz[self.normal_axis] = [self.normal_pos]
-        interp_inplane = super().interp(
-            **dict(zip("xyz", xyz)),
-            fill_value=fill_value,
-            use_vtk=use_vtk,
-            method=method,
-            max_samples_per_step=max_samples_per_step,
-            max_cells_per_step=max_cells_per_step,
-        )
-        interp_broadcasted = np.broadcast_to(
-            interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
-        )
+        if ignore_normal_pos:
+            xyz = [x, y, z]
+            xyz[self.normal_axis] = [self.normal_pos]
+            interp_inplane = super().interp(**dict(zip("xyz", xyz)), fill_value=fill_value)
+            interp_broadcasted = np.broadcast_to(
+                interp_inplane, [len(np.atleast_1d(comp)) for comp in [x, y, z]]
+            )
 
-        return SpatialDataArray(
-            interp_broadcasted, coords=dict(x=x, y=y, z=z), name=self.values.name
-        )
+            return SpatialDataArray(
+                interp_broadcasted, coords=dict(x=x, y=y, z=z), name=self.values.name
+            )
 
-    def _interp_py(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-        max_samples_per_step: int,
-        max_cells_per_step: int,
-        rel_tol: float,
-    ) -> ArrayLike:
-        """2D-specific function to interpolate data at provided x, y, and z
-        using vectorized python implementation.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : float
-            Value to use when filling points without interpolated values.
-        max_samples_per_step : int
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-
-        return self._interp_py_general(
-            x=x,
-            y=y,
-            z=z,
-            fill_value=fill_value,
-            max_samples_per_step=max_samples_per_step,
-            max_cells_per_step=max_cells_per_step,
-            rel_tol=rel_tol,
-            axis_ignore=self.normal_axis,
-        )
+        return super().interp(x=x, y=y, z=z, fill_value=fill_value)
 
     @requires_vtk
     def sel(
@@ -2333,60 +1458,9 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
 
-    @requires_vtk
-    def sel_inside(self, bounds: Bound) -> TriangularGridDataset:
-        """Return a new ``TriangularGridDataset`` that contains the minimal amount data necessary to
-        cover a spatial region defined by ``bounds``.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        TriangularGridDataset
-            Extracted spatial data array.
-        """
-
-        # expand along normal direction
-        new_bounds = [list(bounds[0]), list(bounds[1])]
-
-        new_bounds[0][self.normal_axis] = -inf
-        new_bounds[1][self.normal_axis] = inf
-
-        return super().sel_inside(new_bounds)
-
-    def does_cover(self, bounds: Bound) -> bool:
-        """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
-        only one point along a given direction, then it is assumed the data is constant along that
-        direction and coverage is not checked.
-
-
-        Parameters
-        ----------
-        bounds : Tuple[float, float, float], Tuple[float, float float]
-            Min and max bounds packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.
-
-        Returns
-        -------
-        bool
-            Full cover check outcome.
-        """
-
-        # expand along normal direction
-        new_bounds = [list(bounds[0]), list(bounds[1])]
-
-        new_bounds[0][self.normal_axis] = self.normal_pos
-        new_bounds[1][self.normal_axis] = self.normal_pos
-
-        return super().does_cover(new_bounds)
-
 
 class TetrahedralGridDataset(UnstructuredGridDataset):
-    """Dataset for storing tetrahedral grid data. Data values are associated with the nodes of
-    the grid.
+    """Dataset for storing tetrahedral grid data.
 
     Note
     ----
@@ -2602,120 +1676,5 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         if num_provided == 3:
             return self.interp(x=x, y=y, z=z)
 
-    def _interp_py(
-        self,
-        x: ArrayLike,
-        y: ArrayLike,
-        z: ArrayLike,
-        fill_value: float,
-        max_samples_per_step: int,
-        max_cells_per_step: int,
-        rel_tol: float,
-    ) -> ArrayLike:
-        """3D-specific function to interpolate data at provided x, y, and z
-        using vectorized python implementation.
-
-        Parameters
-        ----------
-        x : Union[float, ArrayLike]
-            x-coordinates of sampling points.
-        y : Union[float, ArrayLike]
-            y-coordinates of sampling points.
-        z : Union[float, ArrayLike]
-            z-coordinates of sampling points.
-        fill_value : float
-            Value to use when filling points without interpolated values.
-        max_samples_per_step : int
-            Max number of points to interpolate at per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        max_cells_per_step : int
-            Max number of cells to interpolate from per iteration (used only if `use_vtk=False`).
-            Using a higher number may speed up calculations but, at the same time, it increases
-            RAM usage.
-        rel_tol : float
-            Relative tolerance when determining whether a point belongs to a cell.
-
-        Returns
-        -------
-        ArrayLike
-            Interpolated data.
-        """
-
-        return self._interp_py_general(
-            x=x,
-            y=y,
-            z=z,
-            fill_value=fill_value,
-            max_samples_per_step=max_samples_per_step,
-            max_cells_per_step=max_cells_per_step,
-            rel_tol=rel_tol,
-            axis_ignore=None,
-        )
-
 
 UnstructuredGridDatasetType = Union[TriangularGridDataset, TetrahedralGridDataset]
-CustomSpatialDataType = Union[SpatialDataArray, UnstructuredGridDatasetType]
-CustomSpatialDataTypeAnnotated = Union[SpatialDataArray, annotate_type(UnstructuredGridDatasetType)]
-
-
-def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDataset]) -> ArrayLike:
-    """Get numpy representation of dataarray/dataset values."""
-    if isinstance(data_array, UnstructuredGridDataset):
-        return data_array.values.values
-    if isinstance(data_array, xr.DataArray):
-        return data_array.values
-    return np.array(data_array)
-
-
-def _zeros_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
-) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
-    """Get a zeroed replica of dataarray/dataset."""
-    if isinstance(data_array, UnstructuredGridDataset):
-        return data_array.updated_copy(values=xr.zeros_like(data_array.values))
-    if isinstance(data_array, xr.DataArray):
-        return xr.zeros_like(data_array)
-    return np.zeros_like(data_array)
-
-
-def _ones_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
-) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
-    """Get a unity replica of dataarray/dataset."""
-    if isinstance(data_array, UnstructuredGridDataset):
-        return data_array.updated_copy(values=xr.ones_like(data_array.values))
-    if isinstance(data_array, xr.DataArray):
-        return xr.ones_like(data_array)
-    return np.ones_like(data_array)
-
-
-def _check_same_coordinates(
-    a: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
-    b: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
-) -> bool:
-    """Check whether two array are defined at the same coordinates."""
-
-    # we can have xarray.DataArray's of different types but still same coordinates
-    # we will deal with that case separately
-    both_xarrays = isinstance(a, xr.DataArray) and isinstance(b, xr.DataArray)
-    if (not both_xarrays) and type(a) != type(b):
-        return False
-
-    if isinstance(a, UnstructuredGridDataset):
-        if not np.allclose(a.points, b.points) or not np.all(a.cells == b.cells):
-            return False
-
-        if isinstance(a, TriangularGridDataset):
-            if a.normal_axis != b.normal_axis or a.normal_pos != b.normal_pos:
-                return False
-
-    elif isinstance(a, xr.DataArray):
-        if a.coords.keys() != b.coords.keys() or a.coords != b.coords:
-            return False
-
-    else:
-        if np.shape(a) != np.shape(b):
-            return False
-
-    return True

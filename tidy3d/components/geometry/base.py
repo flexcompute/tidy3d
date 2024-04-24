@@ -1,12 +1,12 @@
 """Abstract base classes for geometry."""
 
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any, Union, Callable
 from math import isclose
 import functools
-import pathlib
 
 import pydantic.v1 as pydantic
 import numpy as np
@@ -1358,7 +1358,6 @@ class Geometry(Tidy3dBaseModel, ABC):
 
         cell = library.new_cell(gds_cell_name)
         self.to_gds(cell, x=x, y=y, z=z, gds_layer=gds_layer, gds_dtype=gds_dtype)
-        pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
     def _as_union(self) -> List[Geometry]:
@@ -1859,7 +1858,7 @@ class Box(Centered):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full
+        return path.polygons_full.tolist()
 
     def intersections_plane(self, x: float = None, y: float = None, z: float = None):
         """Returns shapely geometry at plane specified by one non None value of x,y,z.
@@ -2199,16 +2198,6 @@ class Transformed(Geometry):
     def _transform_is_invertible(cls, val):
         # If the transform is not invertible, this will raise an error
         _ = np.linalg.inv(val)
-        return val
-
-    @pydantic.validator("geometry")
-    def _geometry_is_finite(cls, val):
-        if not np.isfinite(val.bounds).all():
-            raise ValidationError(
-                "Transformations are only supported on geometries with finite dimensions. "
-                "Try using a large value instead of 'inf' when creating geometries that undergo "
-                "transformations."
-            )
         return val
 
     @pydantic.root_validator(skip_on_failure=True)

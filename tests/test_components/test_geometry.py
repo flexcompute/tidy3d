@@ -883,8 +883,3 @@ def test_geo_group_sim():
 
     # why is this failing?  assert 4==2
     assert len(sim.custom_datasets) == len(geos_orig)
-
-
-def test_finite_geometry_transformation():
-    with pytest.raises(pydantic.ValidationError):
-        _ = td.Box(size=(td.inf, 0, 1)).scaled(1, 1, 1)

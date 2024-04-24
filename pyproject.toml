@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tidy3d"
-version = "2.7.0rc1"
+version = "2.6.4"
 description = "A fast FDTD solver"
 authors = ["Tyler Hughes <tyler@flexcompute.com>"]
 license = "LGPLv2+"
@@ -12,7 +12,6 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
 ]
 documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
@@ -21,7 +20,7 @@ documentation = "https://docs.flexcompute.com/projects/tidy3d/en/latest/"
 "Bug Tracker" = "https://github.com/flexcompute/tidy3d/issues"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0.0"
+python = ">=3.9,<3.12"
 pyroots = ">=0.5.0"
 xarray = ">=0.16.2"
 importlib-metadata = ">=6.0.0"
@@ -31,7 +30,6 @@ rich = "<12.6.0"
 numpy = "<2"
 matplotlib = "*"
 shapely = "^2.0"
-pandas = "<=2.2.1"
 pydantic = "^2.0"
 PyYAML = "*"
 dask = "*"
@@ -68,13 +66,21 @@ gdspy = {version="*", optional = true}
 gdstk = {version=">=0.9.49", optional = true}
 
 # jax
-jaxlib = {version = "^0.4.13,<=0.4.26", source="jaxsource", optional = true}
-jax = {version = "^0.4.13,<=0.4.26", extras = ["cpu"], source="jaxsource", optional = true}
+jaxlib = [
+    {version = ">=0.4.1,<=0.4.14", platform = "linux",  source="jaxsource", optional = true},
+    {version = ">=0.4.1,<=0.4.14", platform = "darwin",  source="jaxsource", optional = true},
+    {version = ">=0.4.13,<=0.4.14", platform = "win32", source="jaxsource", python = "^3.9", optional = true}
+]
+jax = [
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "linux", source="jaxsource", optional = true},
+    {version = ">=0.4.1,<=0.4.14", extras = ["cpu"], platform = "darwin",  source="jaxsource", optional = true},
+    {version = ">=0.4.13,<=0.4.14", extras = ["cpu"], platform = "win32", python = "^3.9", source="jaxsource", optional = true}
+]
 
 # trimesh
 networkx = {version = "^2.6.3", optional = true}
-rtree = {version = "1.2.0", optional = true}
-trimesh = {version = "^4", optional = true}
+rtree = {version = "1.0.1", optional = true}
+trimesh = {version = "3.20.0", optional = true}
 
 # docs
 jupyter = {version="*", optional = true}
@@ -94,11 +100,10 @@ sphinx-notfound-page = {version="*", optional = true}
 sphinx-tabs = {version="*", optional = true}
 nbdime = {version="*", optional = true}
 myst-parser = {version="*", optional = true}
-optax = {version=">=0.2.2", optional = true}
+optax = {version="*", optional = true}
 signac = {version="*", optional = true}
-flax = {version=">=0.8.2", optional = true}
 sax = {version="*", optional = true}
-vtk = {version=">=9.2.6", optional = true}
+vtk = {version="<=9.2.6", optional = true}
 pyswarms = {version="*", optional = true}
 sphinxemoji = {version="*", optional = true}
 devsim = {version="*", optional = true}
@@ -181,7 +186,7 @@ lint.select = [
 ]
 
 [tool.bumpversion]
-current_version = "2.6.3"
+current_version = "2.6.4"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.

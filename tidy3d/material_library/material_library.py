@@ -3,9 +3,8 @@ import json
 from typing import Dict, List
 import pydantic.v1 as pd
 
-from ..components.medium import PoleResidue, Medium2D, AnisotropicMedium, Sellmeier
+from ..components.medium import PoleResidue, Medium2D
 from ..components.base import Tidy3dBaseModel
-from ..components.types import Axis
 from ..exceptions import SetupError
 from .material_reference import material_refs, ReferenceData
 from .parametric_materials import Graphene
@@ -19,30 +18,21 @@ def export_matlib_to_file(fname: str = "matlib.json") -> None:
             var_name: json.loads(var.medium._json_string) for var_name, var in mat.variants.items()
         }
         for mat_name, mat in material_library.items()
-        if not isinstance(mat, (type, MaterialItemUniaxial))
+        if not isinstance(mat, type)
     }
-
-    # Uniaxial medium treated differently
-    mat_lib_dict.update(
-        {
-            f'{mat.name} ("{mat_name}")': {
-                var_name: {
-                    "ordinary": json.loads(var.ordinary._json_string),
-                    "extraordinary": json.loads(var.extraordinary._json_string),
-                }
-                for var_name, var in mat.variants.items()
-            }
-            for mat_name, mat in material_library.items()
-            if isinstance(mat, MaterialItemUniaxial)
-        }
-    )
 
     with open(fname, "w") as f:
         json.dump(mat_lib_dict, f)
 
 
-class AbstractVariantItem(Tidy3dBaseModel):
-    """Reference, and data_source for a variant of a material."""
+class VariantItem(Tidy3dBaseModel):
+    """Reference, data_source, and material model for a variant of a material."""
+
+    medium: PoleResidue = pd.Field(
+        ...,
+        title="Material dispersion model",
+        description="A dispersive medium described by the pole-residue pair model.",
+    )
 
     reference: List[ReferenceData] = pd.Field(
         None,
@@ -55,16 +45,6 @@ class AbstractVariantItem(Tidy3dBaseModel):
         title="Dispersion data URL",
         description="The URL to access the dispersion data upon which the material "
         "model is fitted.",
-    )
-
-
-class VariantItem(AbstractVariantItem):
-    """Reference, data_source, and material model for a variant of a material."""
-
-    medium: PoleResidue = pd.Field(
-        ...,
-        title="Material dispersion model",
-        description="A dispersive medium described by the pole-residue pair model.",
     )
 
 
@@ -102,7 +82,7 @@ class MaterialItem(Tidy3dBaseModel):
         return self.variants[self.default].medium
 
 
-class VariantItem2D(AbstractVariantItem):
+class VariantItem2D(VariantItem):
     """Reference, data_source, and material model for a variant of a 2D material."""
 
     medium: Medium2D = pd.Field(
@@ -124,68 +104,6 @@ class MaterialItem2D(MaterialItem):
         "that maps from a key to the variant model.",
     )
 
-
-class VariantItemUniaxial(AbstractVariantItem):
-    """Reference, data_source, and material model for a variant of an uniaxial material."""
-
-    ordinary: PoleResidue = pd.Field(
-        ..., title="Ordinary Component", description="Medium describing the ordinary component."
-    )
-
-    extraordinary: PoleResidue = pd.Field(
-        ...,
-        title="Extraordinary Component",
-        description="Medium describing the extraordinary component.",
-    )
-
-    def medium(self, optical_axis: Axis) -> AnisotropicMedium:
-        """
-        Generate anisotropic medium.
-
-        Parameters
-        ----------
-        optical_axis : Axis
-            Optical axis of the uniaxial medium.
-
-        Returns
-        -------
-        :class:`.AnisotropicMedium`
-            The anisotropic medium representing the uniaxial medium.
-        """
-
-        components = ["xx", "yy", "zz"]
-        mat_dict = {comp: self.ordinary for comp in components}
-        mat_dict.update({components[optical_axis]: self.extraordinary})
-        return AnisotropicMedium.parse_obj(mat_dict)
-
-
-class MaterialItemUniaxial(MaterialItem):
-    """A material that includes several variants."""
-
-    variants: Dict[str, VariantItemUniaxial] = pd.Field(
-        ...,
-        title="Dictionary of available variants for this material",
-        description="A dictionary of available variants for this material "
-        "that maps from a key to the variant model.",
-    )
-
-    def medium(self, optical_axis: Axis):
-        """The default medium."""
-        return self.variants[self.default].medium(optical_axis)
-
-
-LiNbO3_Zelmon1997 = VariantItemUniaxial(
-    ordinary=Sellmeier(
-        coeffs=((2.6734, 0.01764), (1.2290, 0.05914), (12.614, 474.60)),
-        frequency_range=(59958491600000.0, 749481145000000.0),
-    ).pole_residue,
-    extraordinary=Sellmeier(
-        coeffs=((2.9804, 0.02047), (0.5981, 0.0666), (8.9543, 416.08)),
-        frequency_range=(59958491600000.0, 749481145000000.0),
-    ).pole_residue,
-    reference=[material_refs["Zelmon1997"]],
-    data_url="https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/LiNbO3/Zelmon-e.yml",
-)
 
 Ag_Rakic1998BB = VariantItem(
     medium=PoleResidue(
@@ -2214,11 +2132,6 @@ material_library = dict(
             Green2008=cSi_Green2008,
         ),
         default="Green2008",
-    ),
-    LiNbO3=MaterialItemUniaxial(
-        name="Lithium niobate",
-        variants=dict(Zelmon1997=LiNbO3_Zelmon1997),
-        default="Zelmon1997",
     ),
     graphene=Graphene,
 )

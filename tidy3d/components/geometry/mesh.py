@@ -310,7 +310,7 @@ class TriangleMesh(base.Geometry, ABC):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full
+        return path.polygons_full.tolist()
 
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None

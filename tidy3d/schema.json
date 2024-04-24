@@ -1,6 +1,6 @@
 {
   "title": "Simulation",
-  "description": "Custom implementation of Maxwell\u2019s equations which represents the physical model to be solved using the FDTD\nmethod.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium, PerturbationMedium, PerturbationPoleResidue] = Medium(name=None, frequency_range=None, allow_gain=False, nonlinear_spec=None, modulation_spec=None, heat_spec=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.CustomCurrentSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, PML boundary conditions are applied on all sides.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nversion : str = 2.7.0rc1\n    String specifying the front end version number.\nlumped_elements : Tuple[LumpedResistor, ...] = ()\n    Tuple of lumped elements in the simulation. Note: only :class:`tidy3d.LumpedResistor` is supported currently.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\npec_conformal_mesh_spec : Union[BenklerConformalMeshSpec, StaircasingConformalMeshSpec, HeuristicConformalMeshSpec] = StaircasingConformalMeshSpec(type='StaircasingConformalMeshSpec')\n    Conformal mesh specifications applied to PEC strucures.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \n\nNotes\n-----\n\n    A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model\n    to be solved using `the Finite-Difference Time-Domain (FDTD) method\n    <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations\n    run very quickly in the cloud through GPU parallelization.\n\n    .. image:: ../../_static/img/field_update_fdtd.png\n        :width: 50%\n        :align: left\n\n    FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is\n    the most widely used method in photonics design. The Maxwell's\n    equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.\n\n    The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`\n    which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to\n    computate the time dynamics of the electric and magnetic fields in this system. From these time-domain\n    results, frequency-domain information of the simulation can also be extracted, and used for device design and\n    optimization.\n\n    If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series\n    <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_\n\n    **Dimensions Selection**\n\n    By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation\n    :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.\n    ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.\n\n    .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/\n\n    See further parameter explanations below.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> from tidy3d import Medium\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )\n\nSee Also\n--------\n\n**Notebooks:**\n    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n    * See nearly all notebooks for :class:`Simulation` applications.\n\n**Lectures:**\n    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_\n\n**GUI:**\n    * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_",
+  "description": "Custom implementation of Maxwell\u2019s equations which represents the physical model to be solved using the FDTD\nmethod.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nmedium : Union[Medium, AnisotropicMedium, PECMedium, PoleResidue, Sellmeier, Lorentz, Debye, Drude, FullyAnisotropicMedium, CustomMedium, CustomPoleResidue, CustomSellmeier, CustomLorentz, CustomDebye, CustomDrude, CustomAnisotropicMedium, PerturbationMedium, PerturbationPoleResidue] = Medium(name=None, frequency_range=None, allow_gain=False, nonlinear_spec=None, modulation_spec=None, heat_spec=None, type='Medium', permittivity=1.0, conductivity=0.0)\n    Background medium of simulation, defaults to vacuum if not specified.\nstructures : Tuple[Structure, ...] = ()\n    Tuple of structures present in simulation. Note: Structures defined later in this list override the simulation material properties in regions of spatial overlap.\nsymmetry : Tuple[Literal[0, -1, 1], Literal[0, -1, 1], Literal[0, -1, 1]] = (0, 0, 0)\n    Tuple of integers defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis at the simulation center of each axis, respectively. Each element can be ``0`` (no symmetry), ``1`` (even, i.e. 'PMC' symmetry) or ``-1`` (odd, i.e. 'PEC' symmetry). Note that the vectorial nature of the fields must be taken into account to correctly determine the symmetry value.\nsources : Tuple[Annotated[Union[tidy3d.components.source.UniformCurrentSource, tidy3d.components.source.PointDipole, tidy3d.components.source.GaussianBeam, tidy3d.components.source.AstigmaticGaussianBeam, tidy3d.components.source.ModeSource, tidy3d.components.source.PlaneWave, tidy3d.components.source.CustomFieldSource, tidy3d.components.source.CustomCurrentSource, tidy3d.components.source.TFSF], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of electric current sources injecting fields into the simulation.\nboundary_spec : BoundarySpec = BoundarySpec(x=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), y=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), z=Boundary(plus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, minus=PML(name=None,, type='PML',, num_layers=12,, parameters=PMLParams(sigma_order=3,, sigma_min=0.0,, sigma_max=1.5,, type='PMLParams',, kappa_order=3,, kappa_min=1.0,, kappa_max=3.0,, alpha_order=1,, alpha_min=0.0,, alpha_max=0.0)),, type='Boundary'), type='BoundarySpec')\n    Specification of boundary conditions along each dimension. If ``None``, PML boundary conditions are applied on all sides.\nmonitors : Tuple[Annotated[Union[tidy3d.components.monitor.FieldMonitor, tidy3d.components.monitor.FieldTimeMonitor, tidy3d.components.monitor.PermittivityMonitor, tidy3d.components.monitor.FluxMonitor, tidy3d.components.monitor.FluxTimeMonitor, tidy3d.components.monitor.ModeMonitor, tidy3d.components.monitor.ModeSolverMonitor, tidy3d.components.monitor.FieldProjectionAngleMonitor, tidy3d.components.monitor.FieldProjectionCartesianMonitor, tidy3d.components.monitor.FieldProjectionKSpaceMonitor, tidy3d.components.monitor.DiffractionMonitor], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], ...] = ()\n    Tuple of monitors in the simulation. Note: monitor names are used to access data after simulation is run.\ngrid_spec : GridSpec = GridSpec(grid_x=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_y=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), grid_z=AutoGrid(type='AutoGrid',, min_steps_per_wvl=10.0,, max_scale=1.4,, dl_min=0.0,, mesher=GradedMesher(type='GradedMesher')), wavelength=None, override_structures=(), type='GridSpec')\n    Specifications for the simulation grid along each of the three directions.\nversion : str = 2.6.4\n    String specifying the front end version number.\ncourant : ConstrainedFloatValue = 0.99\n    Courant stability factor, controls time step to spatial step ratio. Lower values lead to more stable simulations for dispersive materials, but result in longer simulation times. This factor is normalized to no larger than 1 when CFL stability condition is met in 3D.\nnormalize_index : Optional[NonNegativeInt] = 0\n    Index of the source in the tuple of sources whose spectrum will be used to normalize the frequency-dependent data. If ``None``, the raw field data is returned unnormalized.\nshutoff : NonNegativeFloat = 1e-05\n    Ratio of the instantaneous integrated E-field intensity to the maximum value at which the simulation will automatically terminate time stepping. Used to prevent extraneous run time of simulations with fully decayed fields. Set to ``0`` to disable this feature.\nsubpixel : bool = True\n    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.\nrun_time : PositiveFloat\n    [units = sec].  Total electromagnetic evolution time in seconds. Note: If simulation 'shutoff' is specified, simulation will terminate early when shutoff condition met. \n\nNotes\n-----\n\n    A ``Simulation`` defines a custom implementation of Maxwell's equations which represents the physical model\n    to be solved using `the Finite-Difference Time-Domain (FDTD) method\n    <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/>`_. ``tidy3d`` simulations\n    run very quickly in the cloud through GPU parallelization.\n\n    .. image:: ../../_static/img/field_update_fdtd.png\n        :width: 50%\n        :align: left\n\n    FDTD is a method for simulating the interaction of electromagnetic waves with structures and materials. It is\n    the most widely used method in photonics design. The Maxwell's\n    equations implemented in the ``Simulation`` are solved per time-step in the order shown in this image.\n\n    The simplified input to FDTD solver consists of the permittivity distribution defined by :attr:`structures`\n    which describe the device and :attr:`sources` of electromagnetic excitation. This information is used to\n    computate the time dynamics of the electric and magnetic fields in this system. From these time-domain\n    results, frequency-domain information of the simulation can also be extracted, and used for device design and\n    optimization.\n\n    If you are new to the FDTD method, we recommend you get started with the `FDTD 101 Lecture Series\n    <https://www.flexcompute.com/tidy3d/learning-center/fdtd101/>`_\n\n    **Dimensions Selection**\n\n    By default, simulations are defined as 3D. To make the simulation 2D, we can just set the simulation\n    :attr:`size` in one of the dimensions to be 0. However, note that we still have to define a grid size (eg.\n    ``tidy3d.Simulation(size=[size_x, size_y, 0])``) and specify a periodic boundary condition in that direction.\n\n    .. TODO sort out inheritance problem https://aware-moon.cloudvent.net/tidy3d/examples/notebooks/RingResonator/\n\n    See further parameter explanations below.\n\nExample\n-------\n>>> from tidy3d import Sphere, Cylinder, PolySlab\n>>> from tidy3d import UniformCurrentSource, GaussianPulse\n>>> from tidy3d import FieldMonitor, FluxMonitor\n>>> from tidy3d import GridSpec, AutoGrid\n>>> from tidy3d import BoundarySpec, Boundary\n>>> from tidy3d import Medium\n>>> sim = Simulation(\n...     size=(3.0, 3.0, 3.0),\n...     grid_spec=GridSpec(\n...         grid_x = AutoGrid(min_steps_per_wvl = 20),\n...         grid_y = AutoGrid(min_steps_per_wvl = 20),\n...         grid_z = AutoGrid(min_steps_per_wvl = 20)\n...     ),\n...     run_time=40e-11,\n...     structures=[\n...         Structure(\n...             geometry=Box(size=(1, 1, 1), center=(0, 0, 0)),\n...             medium=Medium(permittivity=2.0),\n...         ),\n...     ],\n...     sources=[\n...         UniformCurrentSource(\n...             size=(0, 0, 0),\n...             center=(0, 0.5, 0),\n...             polarization=\"Hx\",\n...             source_time=GaussianPulse(\n...                 freq0=2e14,\n...                 fwidth=4e13,\n...             ),\n...         )\n...     ],\n...     monitors=[\n...         FluxMonitor(size=(1, 1, 0), center=(0, 0, 0), freqs=[2e14, 2.5e14], name='flux'),\n...     ],\n...     symmetry=(0, 0, 0),\n...     boundary_spec=BoundarySpec(\n...         x = Boundary.pml(num_layers=20),\n...         y = Boundary.pml(num_layers=30),\n...         z = Boundary.periodic(),\n...     ),\n...     shutoff=1e-6,\n...     courant=0.8,\n...     subpixel=False,\n... )\n\nSee Also\n--------\n\n**Notebooks:**\n    * `Quickstart <../../notebooks/StartHere.html>`_: Usage in a basic simulation flow.\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n    * See nearly all notebooks for :class:`Simulation` applications.\n\n**Lectures:**\n    * `Introduction to FDTD Simulation <https://www.flexcompute.com/fdtd101/Lecture-1-Introduction-to-FDTD-Simulation/#presentation-slides>`_: Usage in a basic simulation flow.\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_\n\n**GUI:**\n    * `FDTD Walkthrough <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-1-FDTD-Walkthrough/#presentation-slides>`_",
   "type": "object",
   "properties": {
     "type": {
@@ -475,23 +475,8 @@
     "version": {
       "title": "Version",
       "description": "String specifying the front end version number.",
-      "default": "2.7.0rc1",
+      "default": "2.6.4",
       "type": "string"
-    },
-    "lumped_elements": {
-      "title": "Lumped Elements",
-      "description": "Tuple of lumped elements in the simulation. Note: only :class:`tidy3d.LumpedResistor` is supported currently.",
-      "default": [],
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/LumpedResistor"
-      }
-    },
-    "subpixel": {
-      "title": "Subpixel Averaging",
-      "description": "If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.",
-      "default": true,
-      "type": "boolean"
     },
     "courant": {
       "title": "Courant Factor",
@@ -515,31 +500,11 @@
       "minimum": 0,
       "type": "number"
     },
-    "pec_conformal_mesh_spec": {
-      "title": "Conformal mesh specifications",
-      "description": "Conformal mesh specifications applied to PEC strucures.",
-      "default": {
-        "type": "StaircasingConformalMeshSpec"
-      },
-      "discriminator": {
-        "propertyName": "type",
-        "mapping": {
-          "BenklerConformalMeshSpec": "#/definitions/BenklerConformalMeshSpec",
-          "StaircasingConformalMeshSpec": "#/definitions/StaircasingConformalMeshSpec",
-          "HeuristicConformalMeshSpec": "#/definitions/HeuristicConformalMeshSpec"
-        }
-      },
-      "oneOf": [
-        {
-          "$ref": "#/definitions/BenklerConformalMeshSpec"
-        },
-        {
-          "$ref": "#/definitions/StaircasingConformalMeshSpec"
-        },
-        {
-          "$ref": "#/definitions/HeuristicConformalMeshSpec"
-        }
-      ]
+    "subpixel": {
+      "title": "Subpixel Averaging",
+      "description": "If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much higher accuracy for a given grid size.",
+      "default": true,
+      "type": "boolean"
     },
     "run_time": {
       "title": "Run Time",
@@ -2314,152 +2279,9 @@
       ],
       "additionalProperties": false
     },
-    "TriangularGridDataset": {
-      "title": "TriangularGridDataset",
-      "description": "Dataset for storing triangular grid data. Data values are associated with the nodes of\nthe grid.\n\nParameters\n----------\npoints : PointDataArray\n    Coordinates of points composing the unstructured grid.\nvalues : IndexedDataArray\n    Values stored at the grid points.\ncells : CellDataArray\n    Cells composing the unstructured grid specified as connections between grid points.\nnormal_axis : Literal[0, 1, 2]\n    Orientation of the grid.\nnormal_pos : float\n    Coordinate of the grid along the normal direction.\n\nNote\n----\nTo use full functionality of unstructured datasets one must install ``vtk`` package (``pip\ninstall tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured\ndatasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.\n\nExample\n-------\n>>> tri_grid_points = PointDataArray(\n...     [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0], [1.0, 1.0]],\n...     coords=dict(index=np.arange(4), axis=np.arange(2)),\n... )\n>>>\n>>> tri_grid_cells = CellDataArray(\n...     [[0, 1, 2], [1, 2, 3]],\n...     coords=dict(cell_index=np.arange(2), vertex_index=np.arange(3)),\n... )\n>>>\n>>> tri_grid_values = IndexedDataArray(\n...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),\n... )\n>>>\n>>> tri_grid = TriangularGridDataset(\n...     normal_axis=1,\n...     normal_pos=0,\n...     points=tri_grid_points,\n...     cells=tri_grid_cells,\n...     values=tri_grid_values,\n... )",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "TriangularGridDataset",
-          "enum": [
-            "TriangularGridDataset"
-          ],
-          "type": "string"
-        },
-        "points": {
-          "title": "DataArray",
-          "description": "Coordinates of points composing the unstructured grid.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "values": {
-          "title": "DataArray",
-          "description": "Values stored at the grid points.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "cells": {
-          "title": "DataArray",
-          "description": "Cells composing the unstructured grid specified as connections between grid points.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "normal_axis": {
-          "title": "Grid Axis",
-          "description": "Orientation of the grid.",
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "normal_pos": {
-          "title": "Position",
-          "description": "Coordinate of the grid along the normal direction.",
-          "type": "number"
-        }
-      },
-      "required": [
-        "points",
-        "values",
-        "cells",
-        "normal_axis",
-        "normal_pos"
-      ],
-      "additionalProperties": false
-    },
-    "TetrahedralGridDataset": {
-      "title": "TetrahedralGridDataset",
-      "description": "Dataset for storing tetrahedral grid data. Data values are associated with the nodes of\nthe grid.\n\nParameters\n----------\npoints : PointDataArray\n    Coordinates of points composing the unstructured grid.\nvalues : IndexedDataArray\n    Values stored at the grid points.\ncells : CellDataArray\n    Cells composing the unstructured grid specified as connections between grid points.\n\nNote\n----\nTo use full functionality of unstructured datasets one must install ``vtk`` package (``pip\ninstall tidy3d[vtk]`` or ``pip install vtk``). Otherwise the functionality of unstructured\ndatasets is limited to creation, writing to/loading from a file, and arithmetic manipulations.\n\nExample\n-------\n>>> tet_grid_points = PointDataArray(\n...     [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],\n...     coords=dict(index=np.arange(4), axis=np.arange(3)),\n... )\n>>>\n>>> tet_grid_cells = CellDataArray(\n...     [[0, 1, 2, 3]],\n...     coords=dict(cell_index=np.arange(1), vertex_index=np.arange(4)),\n... )\n>>>\n>>> tet_grid_values = IndexedDataArray(\n...     [1.0, 2.0, 3.0, 4.0], coords=dict(index=np.arange(4)),\n... )\n>>>\n>>> tet_grid = TetrahedralGridDataset(\n...     points=tet_grid_points,\n...     cells=tet_grid_cells,\n...     values=tet_grid_values,\n... )",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "TetrahedralGridDataset",
-          "enum": [
-            "TetrahedralGridDataset"
-          ],
-          "type": "string"
-        },
-        "points": {
-          "title": "DataArray",
-          "description": "Coordinates of points composing the unstructured grid.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "values": {
-          "title": "DataArray",
-          "description": "Values stored at the grid points.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        },
-        "cells": {
-          "title": "DataArray",
-          "description": "Cells composing the unstructured grid specified as connections between grid points.",
-          "type": "xr.DataArray",
-          "properties": {
-            "_dims": {
-              "title": "_dims",
-              "type": "Tuple[str, ...]"
-            }
-          },
-          "required": [
-            "_dims"
-          ]
-        }
-      },
-      "required": [
-        "points",
-        "values",
-        "cells"
-      ],
-      "additionalProperties": false
-    },
     "CustomMedium": {
       "title": "CustomMedium",
-      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\neps_dataset : Optional[PermittivityDataset] = None\n    [To be deprecated] User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\npermittivity : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], NoneType] = None\n    [units = None (relative permittivity)].  Spatial profile of relative permittivity.\nconductivity : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})], NoneType] = None\n    [units = S/um].  Spatial profile Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> coords = dict(x=X, y=Y, z=Z)\n>>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)\n>>> eps = dielectric.eps_model(200e12)",
+      "description": ":class:`.Medium` with user-supplied permittivity distribution.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\neps_dataset : Optional[PermittivityDataset] = None\n    [To be deprecated] User-supplied dataset containing complex-valued permittivity as a function of space. Permittivity distribution over the Yee-grid will be interpolated based on ``interp_method``.\npermittivity : Optional[SpatialDataArray] = None\n    [units = None (relative permittivity)].  Spatial profile of relative permittivity.\nconductivity : Optional[SpatialDataArray] = None\n    [units = S/um].  Spatial profile Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.\n\nExample\n-------\n>>> Nx, Ny, Nz = 10, 9, 8\n>>> X = np.linspace(-1, 1, Nx)\n>>> Y = np.linspace(-1, 1, Ny)\n>>> Z = np.linspace(-1, 1, Nz)\n>>> coords = dict(x=X, y=Y, z=Z)\n>>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)\n>>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)\n>>> eps = dielectric.eps_model(200e12)",
       "type": "object",
       "properties": {
         "name": {
@@ -2566,63 +2388,33 @@
           ]
         },
         "permittivity": {
-          "title": "Permittivity",
+          "title": "DataArray",
           "description": "Spatial profile of relative permittivity.",
           "units": "None (relative permittivity)",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         },
         "conductivity": {
-          "title": "Conductivity",
+          "title": "DataArray",
           "description": "Spatial profile Electric conductivity. Defined such that the imaginary part of the complex permittivity at angular frequency omega is given by conductivity/omega.",
           "units": "S/um",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         }
       },
@@ -2630,7 +2422,7 @@
     },
     "CustomPoleResidue": {
       "title": "CustomPoleResidue",
-      "description": "A spatially varying dispersive medium described by the pole-residue pair model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of\n    resonant material poles _`[1]`.\n\n    .. math::\n\n        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n        \\left[\\frac{c_i}{j \\omega + a_i} +\n        \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\n    For each of these resonant poles identified by the index :math:`i`, an auxiliary differential equation is\n    used to relate the auxiliary current :math:`J_i(t)` to the applied electric field :math:`E(t)`.\n    The sum of all these auxiliary current contributions describes the total dielectric response of the material.\n\n    .. math::\n\n        \\frac{d}{dt} J_i (t) - a_i J_i (t) = \\epsilon_0 c_i \\frac{d}{dt} E (t)\n\n    Hence, the computational cost increases with the number of poles.\n\n    **References**\n\n    .. [1]   M. Han, R.W. Dutton and S. Fan, IEEE Microwave and Wireless Component Letters, 16, 119 (2006).\n\n    .. TODO add links to notebooks using this.\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> a1 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> a2 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])\n>>> eps = pole_res.eps_model(200e12)\n\nSee Also\n--------\n\n**Notebooks**\n\n* `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n\n* `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
+      "description": "A spatially varying dispersive medium described by the pole-residue pair model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\npoles : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...] = ()\n    [units = (rad/sec, rad/sec)].  Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    In this method, the frequency-dependent permittivity :math:`\\epsilon(\\omega)` is expressed as a sum of\n    resonant material poles _`[1]`.\n\n    .. math::\n\n        \\epsilon(\\omega) = \\epsilon_\\infty - \\sum_i\n        \\left[\\frac{c_i}{j \\omega + a_i} +\n        \\frac{c_i^*}{j \\omega + a_i^*}\\right]\n\n    For each of these resonant poles identified by the index :math:`i`, an auxiliary differential equation is\n    used to relate the auxiliary current :math:`J_i(t)` to the applied electric field :math:`E(t)`.\n    The sum of all these auxiliary current contributions describes the total dielectric response of the material.\n\n    .. math::\n\n        \\frac{d}{dt} J_i (t) - a_i J_i (t) = \\epsilon_0 c_i \\frac{d}{dt} E (t)\n\n    Hence, the computational cost increases with the number of poles.\n\n    **References**\n\n    .. [1]   M. Han, R.W. Dutton and S. Fan, IEEE Microwave and Wireless Component Letters, 16, 119 (2006).\n\n    .. TODO add links to notebooks using this.\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> a1 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> a2 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)\n>>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])\n>>> eps = pole_res.eps_model(200e12)\n\nSee Also\n--------\n\n**Notebooks**\n\n* `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n\n* `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -2712,33 +2504,18 @@
           "type": "string"
         },
         "eps_inf": {
-          "title": "Epsilon at Infinity",
+          "title": "DataArray",
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "units": "None (relative permittivity)",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         },
         "poles": {
@@ -2756,57 +2533,29 @@
             "maxItems": 2,
             "items": [
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               }
             ]
@@ -2836,7 +2585,7 @@
     },
     "CustomSellmeier": {
       "title": "CustomSellmeier",
-      "description": "A spatially varying dispersive medium described by the Sellmeier model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\ncoeffs : Tuple[Tuple[Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]], ...]\n    [units = (None, um^2)].  List of Sellmeier (:math:`B_i, C_i`) coefficients.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the refractive index is described by:\n\n    .. math::\n\n        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])\n>>> eps = sellmeier_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Sellmeier`\n    A dispersive medium described by the Sellmeier model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
+      "description": "A spatially varying dispersive medium described by the Sellmeier model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None, um^2)].  List of Sellmeier (:math:`B_i, C_i`) coefficients.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the refractive index is described by:\n\n    .. math::\n\n        n(\\lambda)^2 = 1 + \\sum_i \\frac{B_i \\lambda^2}{\\lambda^2 - C_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])\n>>> eps = sellmeier_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Sellmeier`\n    A dispersive medium described by the Sellmeier model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -2931,57 +2680,29 @@
             "maxItems": 2,
             "items": [
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               }
             ]
@@ -3011,7 +2732,7 @@
     },
     "CustomLorentz": {
       "title": "CustomLorentz",
-      "description": "A spatially varying dispersive medium described by the Lorentz model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> d_epsilon = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> f = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])\n>>> eps = lorentz_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`CustomPoleResidue`:\n    A spatially varying dispersive medium described by the pole-residue pair model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
+      "description": "A spatially varying dispersive medium described by the Lorentz model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None (relative permittivity), Hz, Hz)].  List of (:math:`\\Delta\\epsilon_i, f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n        \\frac{\\Delta\\epsilon_i f_i^2}{f_i^2 - 2jf\\delta_i - f^2}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> d_epsilon = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> f = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])\n>>> eps = lorentz_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`CustomPoleResidue`:\n    A spatially varying dispersive medium described by the pole-residue pair model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -3093,33 +2814,18 @@
           "type": "string"
         },
         "eps_inf": {
-          "title": "Epsilon at Infinity",
+          "title": "DataArray",
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "units": "None (relative permittivity)",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         },
         "coeffs": {
@@ -3137,84 +2843,42 @@
             "maxItems": 3,
             "items": [
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               }
             ]
@@ -3245,7 +2909,7 @@
     },
     "CustomDebye": {
       "title": "CustomDebye",
-      "description": "A spatially varying dispersive medium described by the Debye model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])\n>>> eps = debye_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Debye`\n    A dispersive medium described by the Debye model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
+      "description": "A spatially varying dispersive medium described by the Debye model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (None (relative permittivity), sec)].  List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty + \\sum_i\n        \\frac{\\Delta\\epsilon_i}{1 - jf\\tau_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)\n>>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])\n>>> eps = debye_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Debye`\n    A dispersive medium described by the Debye model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -3327,33 +2991,18 @@
           "type": "string"
         },
         "eps_inf": {
-          "title": "Epsilon at Infinity",
+          "title": "DataArray",
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "units": "None (relative permittivity)",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         },
         "coeffs": {
@@ -3370,57 +3019,29 @@
             "maxItems": 2,
             "items": [
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               }
             ]
@@ -3451,7 +3072,7 @@
     },
     "CustomDrude": {
       "title": "CustomDrude",
-      "description": "A spatially varying dispersive medium described by the Drude model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : Union[SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]], Union[tidy3d.components.data.data_array.SpatialDataArray, Annotated[Union[tidy3d.components.data.dataset.TriangularGridDataset, tidy3d.components.data.dataset.TetrahedralGridDataset], FieldInfo(default=PydanticUndefined, discriminator='type', extra={})]]], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n        \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])\n>>> eps = drude_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Drude`:\n    A dispersive medium described by the Drude model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
+      "description": "A spatially varying dispersive medium described by the Drude model.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional unique name for medium.\nfrequency_range : Optional[Tuple[float, float]] = None\n    [units = (Hz, Hz)].  Optional range of validity for the medium.\nallow_gain : bool = False\n    Allow the medium to be active. Caution: simulations with a gain medium are unstable, and are likely to diverge.Simulations where 'allow_gain' is set to 'True' will still be charged even if diverged. Monitor data up to the divergence point will still be returned and can be useful in some cases.\nnonlinear_spec : Union[NonlinearSpec, NonlinearSusceptibility] = None\n    Nonlinear spec applied on top of the base medium properties.\nmodulation_spec : Optional[ModulationSpec] = None\n    Modulation spec applied on top of the base medium properties.\nheat_spec : Union[FluidSpec, SolidSpec, NoneType] = None\n    Specification of the medium heat properties. They are used for solving the heat equation via the ``HeatSimulation`` interface. Such simulations can be used for investigating the influence of heat propagation on the properties of optical systems. Once the temperature distribution in the system is found using ``HeatSimulation`` object, ``Simulation.perturbed_mediums_copy()`` can be used to convert mediums with perturbation models defined into spatially dependent custom mediums. Otherwise, the ``heat_spec`` does not directly affect the running of an optical ``Simulation``.\neps_inf : SpatialDataArray\n    [units = None (relative permittivity)].  Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).\ncoeffs : Tuple[Tuple[tidy3d.components.data.data_array.SpatialDataArray, tidy3d.components.data.data_array.SpatialDataArray], ...]\n    [units = (Hz, Hz)].  List of (:math:`f_i, \\delta_i`) values for model.\ninterp_method : Literal['nearest', 'linear'] = nearest\n    Interpolation method to obtain permittivity values that are not supplied at the Yee grids; For grids outside the range of the supplied data, extrapolation will be applied. When the extrapolated value is smaller (greater) than the minimal (maximal) of the supplied data, the extrapolated value will take the minimal (maximal) of the supplied data.\nsubpixel : bool = False\n    If ``True`` and simulation's ``subpixel`` is also ``True``, applies subpixel averaging of the permittivity on the interface of the structure, including exterior boundary and intersection interfaces with other structures.\n\n\nNotes\n-----\n\n    The frequency-dependence of the complex-valued permittivity is described by:\n\n    .. math::\n\n        \\epsilon(f) = \\epsilon_\\infty - \\sum_i\n        \\frac{ f_i^2}{f^2 + jf\\delta_i}\n\nExample\n-------\n>>> x = np.linspace(-1, 1, 5)\n>>> y = np.linspace(-1, 1, 6)\n>>> z = np.linspace(-1, 1, 7)\n>>> coords = dict(x=x, y=y, z=z)\n>>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)\n>>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)\n>>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])\n>>> eps = drude_medium.eps_model(200e12)\n\nSee Also\n--------\n\n:class:`Drude`:\n    A dispersive medium described by the Drude model.\n\n**Notebooks**\n    * `Fitting dispersive material models <../../notebooks/Fitting.html>`_\n\n**Lectures**\n    * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -3533,33 +3154,18 @@
           "type": "string"
         },
         "eps_inf": {
-          "title": "Epsilon at Infinity",
+          "title": "DataArray",
           "description": "Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
           "units": "None (relative permittivity)",
-          "anyOf": [
-            {
-              "title": "DataArray",
-              "type": "xr.DataArray",
-              "properties": {
-                "_dims": {
-                  "title": "_dims",
-                  "type": "Tuple[str, ...]"
-                }
-              },
-              "required": [
-                "_dims"
-              ]
-            },
-            {
-              "oneOf": [
-                {
-                  "$ref": "#/definitions/TriangularGridDataset"
-                },
-                {
-                  "$ref": "#/definitions/TetrahedralGridDataset"
-                }
-              ]
+          "type": "xr.DataArray",
+          "properties": {
+            "_dims": {
+              "title": "_dims",
+              "type": "Tuple[str, ...]"
             }
+          },
+          "required": [
+            "_dims"
           ]
         },
         "coeffs": {
@@ -3576,57 +3182,29 @@
             "maxItems": 2,
             "items": [
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               },
               {
-                "anyOf": [
-                  {
-                    "title": "DataArray",
-                    "type": "xr.DataArray",
-                    "properties": {
-                      "_dims": {
-                        "title": "_dims",
-                        "type": "Tuple[str, ...]"
-                      }
-                    },
-                    "required": [
-                      "_dims"
-                    ]
-                  },
-                  {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/TriangularGridDataset"
-                      },
-                      {
-                        "$ref": "#/definitions/TetrahedralGridDataset"
-                      }
-                    ]
+                "title": "DataArray",
+                "type": "xr.DataArray",
+                "properties": {
+                  "_dims": {
+                    "title": "_dims",
+                    "type": "Tuple[str, ...]"
                   }
+                },
+                "required": [
+                  "_dims"
                 ]
               }
             ]
@@ -5773,7 +5351,7 @@
     },
     "UniformCurrentSource": {
       "title": "UniformCurrentSource",
-      "description": "Source in a rectangular volume with uniform time dependence.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\nconfine_to_bounds : bool = False\n    If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nNotes\n-----\n\n    Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
+      "description": "Source in a rectangular volume with uniform time dependence.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\nNotes\n-----\n\n    Inputting the parameter ``size=(0,0,0)`` defines the equivalent of a point source.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_source = UniformCurrentSource(size=(0,0,0), source_time=pulse, polarization='Ex')",
       "type": "object",
       "properties": {
         "name": {
@@ -5864,12 +5442,6 @@
           "default": true,
           "type": "boolean"
         },
-        "confine_to_bounds": {
-          "title": "Confine to Analytical Bounds",
-          "description": "If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.",
-          "default": false,
-          "type": "boolean"
-        },
         "polarization": {
           "title": "Polarization",
           "description": "Specifies the direction and type of current component.",
@@ -5893,7 +5465,7 @@
     },
     "PointDipole": {
       "title": "PointDipole",
-      "description": "Uniform current source with a zero size.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\nconfine_to_bounds : bool = False\n    If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\n.. TODO add image of how it looks like based on sim 1.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')\n\nSee Also\n--------\n\n**Lectures:**\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_",
+      "description": "Uniform current source with a zero size.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[Literal[0], Literal[0], Literal[0]] = (0, 0, 0)\n    [units = um].  Size in x, y, and z directions, constrained to ``(0, 0, 0)``.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\npolarization : Literal['Ex', 'Ey', 'Ez', 'Hx', 'Hy', 'Hz']\n    Specifies the direction and type of current component.\n\n.. TODO add image of how it looks like based on sim 1.\n\nExample\n-------\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> pt_dipole = PointDipole(center=(1,2,3), source_time=pulse, polarization='Ex')\n\nSee Also\n--------\n\n**Lectures:**\n    * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -5993,12 +5565,6 @@
           "title": "Enable Interpolation",
           "description": "Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.",
           "default": true,
-          "type": "boolean"
-        },
-        "confine_to_bounds": {
-          "title": "Confine to Analytical Bounds",
-          "description": "If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.",
-          "default": false,
           "type": "boolean"
         },
         "polarization": {
@@ -6943,7 +6509,7 @@
     },
     "CustomCurrentSource": {
       "title": "CustomCurrentSource",
-      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\nconfine_to_bounds : bool = False\n    If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNotes\n-----\n\n    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current\n    distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the\n    source center.\n\n    The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source\n    accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,\n    z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also\n    fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar\n    without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source\n    center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)\n\nSee Also\n--------\n\n**Notebooks**\n    * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_",
+      "description": "Implements a source corresponding to an input dataset containing ``E`` and ``H`` fields.\n\nParameters\n----------\nname : Optional[str] = None\n    Optional name for the source.\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nsource_time : Union[GaussianPulse, ContinuousWave, CustomSourceTime]\n    Specification of the source time-dependence.\ninterpolate : bool = True\n    Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.\ncurrent_dataset : Optional[FieldDataset]\n    :class:`.FieldDataset` containing the desired frequency-domain electric and magnetic current patterns to inject.\n\nNotes\n-----\n\n    Injects the specified components of the ``E`` and ``H`` dataset directly as ``J`` and ``M`` current\n    distributions in the FDTD solver. The coordinates of all provided fields are assumed to be relative to the\n    source center.\n\n    The syntax is very similar to :class:`CustomFieldSource`, except instead of a ``field_dataset``, the source\n    accepts a :attr:`current_dataset`. This dataset still contains :math:`E_{x,y,z}` and :math:`H_{x,y,\n    z}` field components, which correspond to :math:`J` and :math:`M` components respectively. There are also\n    fewer constraints on the data requirements for :class:`CustomCurrentSource`. It can be volumetric or planar\n    without requiring tangential components. Finally, note that the dataset is still defined w.r.t. the source\n    center, just as in the case of the :class:`CustomFieldSource`, and can then be placed anywhere in the simulation.\n\nExample\n-------\n>>> from tidy3d import ScalarFieldDataArray\n>>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)\n>>> x = np.linspace(-1, 1, 101)\n>>> y = np.linspace(-1, 1, 101)\n>>> z = np.array([0])\n>>> f = [2e14]\n>>> coords = dict(x=x, y=y, z=z, f=f)\n>>> scalar_field = ScalarFieldDataArray(np.ones((101, 101, 1, 1)), coords=coords)\n>>> dataset = FieldDataset(Ex=scalar_field)\n>>> custom_source = CustomCurrentSource(\n...     center=(1, 1, 1),\n...     size=(2, 2, 0),\n...     source_time=pulse,\n...     current_dataset=dataset)\n\nSee Also\n--------\n\n**Notebooks**\n    * `Defining spatially-varying sources <../../notebooks/CustomFieldSource.html>`_",
       "type": "object",
       "properties": {
         "name": {
@@ -7032,12 +6598,6 @@
           "title": "Enable Interpolation",
           "description": "Handles reverse-interpolation of zero-size dimensions of the source. If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, equivalent source data is applied on the surrounding Yee grid points to emulate placement at the specified location using linear interpolation.",
           "default": true,
-          "type": "boolean"
-        },
-        "confine_to_bounds": {
-          "title": "Confine to Analytical Bounds",
-          "description": "If ``True``, any source amplitudes which, after discretization, fall beyond the bounding box of the source are zeroed out, but only along directions where the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` when the current source is being used to excite a current in a conductive material.",
-          "default": false,
           "type": "boolean"
         },
         "current_dataset": {
@@ -10173,7 +9733,7 @@
     },
     "AutoGrid": {
       "title": "AutoGrid",
-      "description": "Specification for non-uniform grid along a given dimension.\n\nParameters\n----------\nmin_steps_per_wvl : ConstrainedFloatValue = 10.0\n    Minimal number of steps per wavelength in each medium.\nmax_scale : ConstrainedFloatValue = 1.4\n    Sets the maximum ratio between any two consecutive grid steps.\ndl_min : NonNegativeFloat = 0\n    [units = um].  Lower bound of the grid size along this dimension regardless of structures present in the simulation, including override structures with ``enforced=True``. It is a soft bound, meaning that the actual minimal grid size might be slightly smaller.\nmesher : GradedMesher = GradedMesher(type='GradedMesher')\n    The type of mesher to use to generate the grid automatically.\n\nExample\n-------\n>>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)\n\nSee Also\n--------\n\n:class:`UniformGrid`\n    Uniform 1D grid.\n\n:class:`GridSpec`\n    Collective grid specification for all three dimensions.\n\n**Notebooks:**\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n\n**Lectures:**\n    *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_\n    *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_",
+      "description": "Specification for non-uniform grid along a given dimension.\n\nParameters\n----------\nmin_steps_per_wvl : ConstrainedFloatValue = 10.0\n    Minimal number of steps per wavelength in each medium.\nmax_scale : ConstrainedFloatValue = 1.4\n    Sets the maximum ratio between any two consecutive grid steps.\ndl_min : NonNegativeFloat = 0\n    Lower bound of the grid size along this dimension regardless of structures present in the simulation, including override structures with ``enforced=True``. It is a soft bound, meaning that the actual minimal grid size might be slightly smaller.\nmesher : GradedMesher = GradedMesher(type='GradedMesher')\n    The type of mesher to use to generate the grid automatically.\n\nExample\n-------\n>>> grid_1d = AutoGrid(min_steps_per_wvl=16, max_scale=1.4)\n\nSee Also\n--------\n\n:class:`UniformGrid`\n    Uniform 1D grid.\n\n:class:`GridSpec`\n    Collective grid specification for all three dimensions.\n\n**Notebooks:**\n    * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_\n\n**Lectures:**\n    *  `Time step size and CFL condition in FDTD <https://www.flexcompute.com/fdtd101/Lecture-7-Time-step-size-and-CFL-condition-in-FDTD/>`_\n    *  `Numerical dispersion in FDTD <https://www.flexcompute.com/fdtd101/Lecture-8-Numerical-dispersion-in-FDTD/>`_",
       "type": "object",
       "properties": {
         "type": {
@@ -10203,7 +9763,6 @@
           "title": "Lower bound of grid size",
           "description": "Lower bound of the grid size along this dimension regardless of structures present in the simulation, including override structures with ``enforced=True``. It is a soft bound, meaning that the actual minimal grid size might be slightly smaller.",
           "default": 0,
-          "units": "um",
           "minimum": 0,
           "type": "number"
         },
@@ -10457,160 +10016,6 @@
           "default": "GridSpec",
           "enum": [
             "GridSpec"
-          ],
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "LumpedResistor": {
-      "title": "LumpedResistor",
-      "description": "Class representing a lumped resistor. Lumped resistors are appended to the list of structures in the simulation\nas :class:`Medium2D` with the appropriate conductivity given their size and voltage axis.\n\nParameters\n----------\ncenter : Tuple[float, float, float] = (0.0, 0.0, 0.0)\n    [units = um].  Center of object in x, y, and z.\nsize : Tuple[NonNegativeFloat, NonNegativeFloat, NonNegativeFloat]\n    [units = um].  Size in x, y, and z directions.\nname : ConstrainedStrValue\n    Unique name for the lumped element.\nvoltage_axis : Literal[0, 1, 2]\n    Specifies the axis along which the component is oriented and along which the associated voltage drop will occur. Must be in the plane of the element.\nnum_grid_cells : Optional[PositiveInt] = 3\n    Number of mesh grid cells associated with the lumped element along each direction. Used in generating the suggested list of :class:`MeshOverrideStructure` objects.A value of ``None`` will turn off mesh refinement suggestions.\nresistance : PositiveFloat\n    Resistance value in ohms.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "LumpedResistor",
-          "enum": [
-            "LumpedResistor"
-          ],
-          "type": "string"
-        },
-        "center": {
-          "title": "Center",
-          "description": "Center of object in x, y, and z.",
-          "default": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "number"
-            }
-          ]
-        },
-        "size": {
-          "title": "Size",
-          "description": "Size in x, y, and z directions.",
-          "units": "um",
-          "type": "array",
-          "minItems": 3,
-          "maxItems": 3,
-          "items": [
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            },
-            {
-              "type": "number",
-              "minimum": 0
-            }
-          ]
-        },
-        "name": {
-          "title": "Name",
-          "description": "Unique name for the lumped element.",
-          "minLength": 1,
-          "type": "string"
-        },
-        "voltage_axis": {
-          "title": "Voltage Drop Axis",
-          "description": "Specifies the axis along which the component is oriented and along which the associated voltage drop will occur. Must be in the plane of the element.",
-          "enum": [
-            0,
-            1,
-            2
-          ],
-          "type": "integer"
-        },
-        "num_grid_cells": {
-          "title": "Lumped element grid cells",
-          "description": "Number of mesh grid cells associated with the lumped element along each direction. Used in generating the suggested list of :class:`MeshOverrideStructure` objects.A value of ``None`` will turn off mesh refinement suggestions.",
-          "default": 3,
-          "exclusiveMinimum": 0,
-          "type": "integer"
-        },
-        "resistance": {
-          "title": "Resistance",
-          "description": "Resistance value in ohms.",
-          "unit": "ohm",
-          "exclusiveMinimum": 0,
-          "type": "number"
-        }
-      },
-      "required": [
-        "size",
-        "name",
-        "voltage_axis",
-        "resistance"
-      ],
-      "additionalProperties": false
-    },
-    "BenklerConformalMeshSpec": {
-      "title": "BenklerConformalMeshSpec",
-      "description": "Conformal mesh scheme based on\n[S. Benkler, IEEE Transactions on Antennas and Propagation 54.6, 1843 (2006)], which is similar\nto the approach described in [S. Dey, R. Mittra, IEEE Microwave and Guided Wave Letters 7.9, 273 (1997)].\n\n\nParameters\n----------\ntimestep_reduction : ConstrainedFloatValue = 0.3\n    Reduction factor between 0 and 1 such that the simulation's time step size will be ``1 - timestep_reduction`` times its default value. Accuracy can be improved with a smaller time step size; but simulation time increased as well.",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "BenklerConformalMeshSpec",
-          "enum": [
-            "BenklerConformalMeshSpec"
-          ],
-          "type": "string"
-        },
-        "timestep_reduction": {
-          "title": "Time Step Size Reduction Rate",
-          "description": "Reduction factor between 0 and 1 such that the simulation's time step size will be ``1 - timestep_reduction`` times its default value. Accuracy can be improved with a smaller time step size; but simulation time increased as well.",
-          "default": 0.3,
-          "exclusiveMaximum": 1,
-          "minimum": 0,
-          "type": "number"
-        }
-      },
-      "additionalProperties": false
-    },
-    "StaircasingConformalMeshSpec": {
-      "title": "StaircasingConformalMeshSpec",
-      "description": "Simple staircasing scheme based on\n[Taflove, The Electrical Engineering Handbook 3.629-670 (2005): 15.].\n\n\nParameters\n----------",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "StaircasingConformalMeshSpec",
-          "enum": [
-            "StaircasingConformalMeshSpec"
-          ],
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "HeuristicConformalMeshSpec": {
-      "title": "HeuristicConformalMeshSpec",
-      "description": "Slightly different from the staircasing scheme: the field component near PEC\nis considered to be outside PEC if it's substantially normal to the interface.\n\n\nParameters\n----------",
-      "type": "object",
-      "properties": {
-        "type": {
-          "title": "Type",
-          "default": "HeuristicConformalMeshSpec",
-          "enum": [
-            "HeuristicConformalMeshSpec"
           ],
           "type": "string"
         }

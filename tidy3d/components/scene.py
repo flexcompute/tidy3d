@@ -19,8 +19,7 @@ from .medium import AbstractCustomMedium, Medium2D, MediumType3D
 from .medium import AbstractPerturbationMedium
 from .grid.grid import Grid
 from .structure import Structure
-from .data.dataset import _get_numpy_array, CustomSpatialDataType
-from .data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
+from .data.data_array import SpatialDataArray
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from .heat_spec import SolidSpec
@@ -851,11 +850,11 @@ class Scene(Tidy3dBaseModel):
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min(np.min(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
             eps_max = max(
                 eps_max,
-                max(np.max(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
             )
         return eps_min, eps_max
 
@@ -892,51 +891,9 @@ class Scene(Tidy3dBaseModel):
             plane_axes_inds = [0, 1, 2]
             plane_axes_inds.pop(normal_axis_ind)
 
-            eps_diag = medium.eps_dataarray_freq(frequency=freq)
-
-            # handle unstructured data case
-            if isinstance(eps_diag[0], UnstructuredGridDataset):
-                if (
-                    isinstance(eps_diag[0], TriangularGridDataset)
-                    and eps_diag[0].normal_axis != normal_axis_ind
-                ):
-                    # if we trying to visualize 2d unstructured data not along its normal direction
-                    # we need to extract line slice that lies in the visualization plane
-                    # note that after this eps_diag[] will be SpatialDataArray's
-                    eps_diag = list(eps_diag)
-                    for dim in range(3):
-                        eps_diag[dim] = eps_diag[dim].plane_slice(
-                            axis=normal_axis_ind, pos=normal_position
-                        )
-                else:
-                    eps_mean = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
-
-                    if isinstance(eps_mean, TetrahedralGridDataset):
-                        # extract slice if volumetric unstructured data
-                        eps_mean = eps_mean.plane_slice(axis=normal_axis_ind, pos=normal_position)
-
-                    if reverse:
-                        eps_mean = eps_min + eps_max - eps_mean
-
-                    # at this point eps_mean is TriangularGridDataset and we just plot it directly
-                    # with applying shape mask
-                    eps_mean.plot(
-                        grid=False,
-                        ax=ax,
-                        cbar=False,
-                        cmap=STRUCTURE_EPS_CMAP,
-                        vmin=eps_min,
-                        vmax=eps_max,
-                        pcolor_kwargs=dict(
-                            clip_path=(polygon_path(shape), ax.transData),
-                            clip_box=ax.bbox,
-                            alpha=alpha,
-                        ),
-                    )
-                    return
-
             # in case when different components of custom medium are defined on different grids
             # we will combine all points along each dimension
+            eps_diag = medium.eps_dataarray_freq(frequency=freq)
             if (
                 eps_diag[0].coords == eps_diag[1].coords
                 and eps_diag[0].coords == eps_diag[2].coords
@@ -1283,9 +1240,9 @@ class Scene(Tidy3dBaseModel):
 
     def perturbed_mediums_copy(
         self,
-        temperature: CustomSpatialDataType = None,
-        electron_density: CustomSpatialDataType = None,
-        hole_density: CustomSpatialDataType = None,
+        temperature: SpatialDataArray = None,
+        electron_density: SpatialDataArray = None,
+        hole_density: SpatialDataArray = None,
         interp_method: InterpMethod = "linear",
     ) -> Scene:
         """Return a copy of the scene with heat and/or charge data applied to all mediums
@@ -1296,23 +1253,11 @@ class Scene(Tidy3dBaseModel):
 
         Parameters
         ----------
-        temperature : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        temperature : SpatialDataArray = None
             Temperature field data.
-        electron_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        electron_density : SpatialDataArray = None
             Electron density field data.
-        hole_density : Union[
-                :class:`.SpatialDataArray`,
-                :class:`.TriangularGridDataset`,
-                :class:`.TetrahedralGridDataset`,
-            ] = None
+        hole_density : SpatialDataArray = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied
@@ -1320,7 +1265,7 @@ class Scene(Tidy3dBaseModel):
 
         Returns
         -------
-        :class:`.Scene`
+        Scene
             Simulation after application of heat and/or charge data.
         """
 

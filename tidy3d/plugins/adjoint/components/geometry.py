@@ -22,7 +22,7 @@ from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
 from ....log import log
 
-from .base import JaxObject, WEB_ADJOINT_MESSAGE
+from .base import JaxObject
 from .types import JaxFloat
 
 # number of integration points per unit wavelength in material
@@ -301,17 +301,14 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             raise AdjointError("'JaxPolySlab' does not support dilation.")
         return val
 
-    def _validate_web_adjoint(self) -> None:
-        """Run validators for this component, only if using ``tda.web.run()``."""
-        self._limit_number_of_vertices()
-
-    def _limit_number_of_vertices(self) -> None:
+    @pd.validator("vertices", always=True)
+    def limit_number_of_vertices(cls, val):
         """Limit the maximum number of vertices."""
-        if len(self.vertices_jax) > MAX_NUM_VERTICES:
+        if len(val) > MAX_NUM_VERTICES:
             raise AdjointError(
-                f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'. "
-                + WEB_ADJOINT_MESSAGE
+                f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'."
             )
+        return val
 
     def edge_contrib(
         self,

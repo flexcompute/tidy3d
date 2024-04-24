@@ -97,7 +97,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     strategy:
       matrix:
-        python-version: ['3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11']
         platform: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
@@ -114,7 +114,7 @@ jobs:
     - name: Install Poetry
       uses: abatilo/actions-poetry@v2
       with:
-        version: 1.8.1
+        version: 1.7.1
 
     # After installing Poetry add to PATH
     - name: Add Poetry's bin directory to PATH
@@ -135,10 +135,7 @@ jobs:
     - name: Install library
       run: |
         poetry --version
-        poetry run pip install --upgrade pip wheel setuptools
-        poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
-
     #----------------------------------------------
     #    add matrix specifics and run test suite
     #----------------------------------------------
