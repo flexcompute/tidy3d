@@ -107,7 +107,10 @@ class TemperatureData(HeatMonitorData):
         mnt_bounds = np.array(self.monitor.bounds)
 
         if isinstance(new_temp, SpatialDataArray):
-            data_bounds = [[np.min(new_temp.x), np.min(new_temp.y), np.min(new_temp.z)], [np.max(new_temp.x), np.max(new_temp.y), np.max(new_temp.z)]]
+            data_bounds = [
+                [np.min(new_temp.x), np.min(new_temp.y), np.min(new_temp.z)],
+                [np.max(new_temp.x), np.max(new_temp.y), np.max(new_temp.z)],
+            ]
         else:
             data_bounds = new_temp.bounds
 
@@ -117,12 +120,11 @@ class TemperatureData(HeatMonitorData):
             # do not expand monitor with zero size along symmetry direction
             # this is done because 2d unstructured data does not support this
             if self.symmetry[dim] == 1:
-
                 center = self.symmetry_center[dim]
 
                 if mnt_bounds[1][dim] < data_bounds[0][dim]:
                     # (note that mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim] will be satisfied based on backend behavior)
-                    # simple reflection 
+                    # simple reflection
                     new_temp = new_temp.reflect(axis=dim, center=center, reflection_only=True)
                 elif mnt_bounds[0][dim] < 2 * center - data_bounds[0][dim]:
                     # expand only if monitor bounds missing data
@@ -139,13 +141,12 @@ class TemperatureData(HeatMonitorData):
 
         # trim over-expanded data
         if len(dims_need_clipping_left) > 0 or len(dims_need_clipping_right) > 0:
-                
             # enlarge clipping domain on positive side arbitrary by 1
             # should not matter by how much
             clip_bounds = [mnt_bounds[0] - 1, mnt_bounds[1] + 1]
             for dim in dims_need_clipping_left:
                 clip_bounds[0][dim] = mnt_bounds[0][dim]
-                
+
             for dim in dims_need_clipping_right:
                 clip_bounds[1][dim] = mnt_bounds[1][dim]
 

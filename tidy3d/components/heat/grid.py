@@ -8,9 +8,9 @@ from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ...constants import MICROMETER
 from ...exceptions import ValidationError
 
+
 class UnstructuredGrid(Tidy3dBaseModel):
-    """Abstract unstructured grid.
-    """
+    """Abstract unstructured grid."""
 
     relative_min_dl: pd.NonNegativeFloat = pd.Field(
         1e-3,

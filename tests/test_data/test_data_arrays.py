@@ -354,6 +354,7 @@ def test_spatial_data_array():
     with pytest.raises(DataError):
         reflected = arr.reflect(axis=2, center=2.5)
 
+
 @pytest.mark.parametrize("nx", [10, 1])
 def test_sel_inside(nx):
     ny = 11
@@ -361,17 +362,17 @@ def test_sel_inside(nx):
     arr = td.SpatialDataArray(
         np.random.random((nx, ny, nz)),
         coords=dict(
-            x=np.linspace(0, 1, nx), 
-            y=np.linspace(2, 3, ny), 
+            x=np.linspace(0, 1, nx),
+            y=np.linspace(2, 3, ny),
             z=np.linspace(0, 2, nz),
         ),
     )
-    
+
     bounds_small = [[0.1, 2, 2], [1, 2.5, 2]]
     bounds_large = [[0.1, 2, 2], [1, 4, 2]]
     assert arr.does_cover(bounds_small)
     assert not arr.does_cover(bounds_large)
-    
+
     arr_selected = arr.sel_inside(bounds_small)
     assert arr_selected.does_cover(bounds_small)
 
@@ -380,4 +381,3 @@ def test_sel_inside(nx):
 
     with pytest.raises(DataError):
         _ = arr.does_cover([[0.1, 3, 2], [1, 2.5, 2]])
-    

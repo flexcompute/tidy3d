@@ -77,12 +77,16 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
 
     # only removing degenerate cells will result in unsude points in this case
     with AssertLogLevel(log_capture, "WARNING"):
-        tri_grid_with_fixed = tri_grid_with_degenerates.clean(remove_degenerate_cells=True, remove_unused_points=False)
+        tri_grid_with_fixed = tri_grid_with_degenerates.clean(
+            remove_degenerate_cells=True, remove_unused_points=False
+        )
     assert np.all(tri_grid_with_fixed.cells.values == [[1, 2, 3]])
 
     # once we remove those, no warning should occur
     with AssertLogLevel(log_capture, None):
-        tri_grid_with_fixed = tri_grid_with_fixed.clean(remove_degenerate_cells=False, remove_unused_points=True)
+        tri_grid_with_fixed = tri_grid_with_fixed.clean(
+            remove_degenerate_cells=False, remove_unused_points=True
+        )
     assert np.all(tri_grid_with_fixed.cells.values == [[0, 1, 2]])
 
     # doing both at the same time
@@ -363,12 +367,16 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
 
     # only removing degenerate cells will result in unsude points in this case
     with AssertLogLevel(log_capture, "WARNING"):
-        tet_grid_with_fixed = tet_grid_with_degenerates.clean(remove_degenerate_cells=True, remove_unused_points=False)
+        tet_grid_with_fixed = tet_grid_with_degenerates.clean(
+            remove_degenerate_cells=True, remove_unused_points=False
+        )
     assert np.all(tet_grid_with_fixed.cells.values == [[0, 2, 3, 7], [0, 4, 6, 7], [0, 4, 5, 7]])
 
     # once we remove those, no warning should occur
     with AssertLogLevel(log_capture, None):
-        tet_grid_with_fixed = tet_grid_with_fixed.clean(remove_degenerate_cells=False, remove_unused_points=True)
+        tet_grid_with_fixed = tet_grid_with_fixed.clean(
+            remove_degenerate_cells=False, remove_unused_points=True
+        )
     assert np.all(tet_grid_with_fixed.cells.values == [[0, 1, 2, 6], [0, 3, 5, 6], [0, 3, 4, 6]])
 
     # doing both at the same time

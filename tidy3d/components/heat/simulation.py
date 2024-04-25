@@ -20,10 +20,7 @@ from ..base import cached_property, skip_if_fields_missing
 from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
 from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
-from ..geometry.base import Box, GeometryGroup, Transformed, ClipOperation
-from ..geometry.primitives import Sphere, Cylinder
-from ..geometry.polyslab import PolySlab
-from ..geometry.mesh import TriangleMesh
+from ..geometry.base import Box
 from ..scene import Scene
 from ..heat_spec import SolidSpec
 
@@ -115,10 +112,10 @@ class HeatSimulation(AbstractSimulation):
                     f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
                 )
         return val
-    
+
     @staticmethod
     def _check_cross_solids(objs, values):
-        """Given model dictionary ``values``, check whether objects in list ``objs`` cross 
+        """Given model dictionary ``values``, check whether objects in list ``objs`` cross
         a ``SolidSpec`` medium.
         """
 
@@ -139,39 +136,40 @@ class HeatSimulation(AbstractSimulation):
             if obj.size.count(0.0) == 1:
                 # for planar objects we could do a rigorous check
                 medium_set = Scene.intersecting_media(obj, total_structures)
-                crosses_solid = any(isinstance(medium.heat_spec, SolidSpec) for medium in medium_set)
+                crosses_solid = any(
+                    isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
+                )
             else:
                 # approximate check for volumetric objects based on bounding boxes
                 # thus, it could still miss a case when there is no data inside the monitor
                 crosses_solid = any(
-                    obj.intersects(structure.geometry) 
-                    for structure in total_structures 
+                    obj.intersects(structure.geometry)
+                    for structure in total_structures
                     if isinstance(structure.medium.heat_spec, SolidSpec)
                 )
-            
+
             if not crosses_solid:
                 failed_obj_inds.append(ind)
 
         return failed_obj_inds
-    
+
     @pd.validator("monitors", always=True)
     @skip_if_fields_missing(["medium", "center", "size", "structures"])
     def _monitors_cross_solids(cls, val, values):
-        """Error if monitors does not cross any solid medium.
-        """
+        """Error if monitors does not cross any solid medium."""
 
         if val is None:
             return val
-        
+
         failed_mnt_inds = cls._check_cross_solids(val, values)
-        
+
         if len(failed_mnt_inds) > 0:
             monitor_names = ", ".join(f"'{val[ind].name}'" for ind in failed_mnt_inds)
             raise SetupError(
                 f"Monitor(s) {monitor_names} do(es) not cross any solid materials ('heat_spec=SolidSpec(...)'). "
                 "Heat equation is solved only inside solid materials. "
                 "Thus, no information will be recorded in this monitor."
-            )                
+            )
 
         return val
 
@@ -278,7 +276,7 @@ class HeatSimulation(AbstractSimulation):
                 f"The resulting limit for minimal mesh size from parameter 'relative_min_dl={val.relative_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
                 "Consider lowering parameter 'relative_min_dl' if a finer grid is required."
             )
-        
+
         return val
 
     @pd.validator("sources", always=True)
@@ -301,17 +299,19 @@ class HeatSimulation(AbstractSimulation):
     def check_medium_heat_spec(cls, values):
         """Error if no structures with SolidSpec."""
 
-        sim_box = Box(
-            size=values.get("size"),
-            center=values.get("center"),
-        ),
-        
+        sim_box = (
+            Box(
+                size=values.get("size"),
+                center=values.get("center"),
+            ),
+        )
+
         failed = cls._check_cross_solids(sim_box, values)
-        
+
         if len(failed) > 0:
             raise SetupError(
                 "No solid materials ('SolidSpec') are detected in heat simulation. Solution domain is empty."
-            )                
+            )
 
         return values
 

@@ -275,7 +275,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
         if len(needs_sorting) > 0:
             return self.sortby(needs_sorting)
-        
+
         return self
 
     def sel_inside(self, bounds: Bound) -> SpatialDataArray:
@@ -295,7 +295,9 @@ class AbstractSpatialDataArray(DataArray, ABC):
             Extracted spatial data array.
         """
         if any(bmin > bmax for bmin, bmax in zip(*bounds)):
-            raise DataError("Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.")
+            raise DataError(
+                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+            )
 
         # make sure data is sorted with respect to coordinates
         sorted_self = self._spatially_sorted
@@ -354,7 +356,9 @@ class AbstractSpatialDataArray(DataArray, ABC):
             Full cover check outcome.
         """
         if any(bmin > bmax for bmin, bmax in zip(*bounds)):
-            raise DataError("Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``.")
+            raise DataError(
+                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+            )
 
         coords = (self.x, self.y, self.z)
         return all(
