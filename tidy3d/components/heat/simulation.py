@@ -114,21 +114,33 @@ class HeatSimulation(AbstractSimulation):
         return val
 
     @staticmethod
-    def _check_cross_solids(objs, values):
+    def _check_cross_solids(objs: Tuple[Box, ...], values: Dict) -> Tuple[int, ...]:
         """Given model dictionary ``values``, check whether objects in list ``objs`` cross
         a ``SolidSpec`` medium.
         """
 
+        try:
+            size = values["size"]
+            center = values["center"]
+            medium = values["medium"]
+            structures = values["structures"]
+        except KeyError:
+            raise SetupError(
+                "Function '_check_cross_solids' assumes dictionary 'values' contains well-defined "
+                "'size', 'center',  'medium', and 'structures'. Thus, it should only be used in "
+                "validators with @skip_if_fields_missing(['medium', 'center', 'size', 'structures']) "
+                "or root validators with option 'skip_on_failure=True'."
+            )
+
         # list of structures including background as a Box()
         structure_bg = Structure(
             geometry=Box(
-                size=values.get("size"),
-                center=values.get("center"),
+                size=size,
+                center=center,
             ),
-            medium=values.get("medium"),
+            medium=medium,
         )
 
-        structures = values.get("structures") or []
         total_structures = [structure_bg] + list(structures)
 
         failed_obj_inds = []
@@ -164,11 +176,11 @@ class HeatSimulation(AbstractSimulation):
         failed_mnt_inds = cls._check_cross_solids(val, values)
 
         if len(failed_mnt_inds) > 0:
-            monitor_names = ", ".join(f"'{val[ind].name}'" for ind in failed_mnt_inds)
+            monitor_names = [f"'{val[ind].name}'" for ind in failed_mnt_inds]
             raise SetupError(
-                f"Monitor(s) {monitor_names} do(es) not cross any solid materials ('heat_spec=SolidSpec(...)'). "
-                "Heat equation is solved only inside solid materials. "
-                "Thus, no information will be recorded in this monitor."
+                f"Monitors {monitor_names} do not cross any solid materials "
+                "('heat_spec=SolidSpec(...)'). The heat equation is solved only inside solid "
+                "materials. Thus, no information will be recorded in these monitors."
             )
 
         return val

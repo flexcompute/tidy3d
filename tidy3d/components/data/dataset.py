@@ -570,7 +570,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         indices_given = val.index.data
         if np.any(indices_expected != indices_given):
             raise ValidationError(
-                "Points array is expected to be indexed in a simple fashion (0, 1, 2, ...)."
+                "Coordinate 'index' of array 'points' is expected to have values (0, 1, 2, ...). "
+                "This can be easily achieved, for example, by using "
+                "PointDataArray(data, dims=['index', 'axis'])."
             )
         return val
 
@@ -582,7 +584,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         indices_given = val.index.data
         if np.any(indices_expected != indices_given):
             raise ValidationError(
-                "Values array is expected to be indexed in a simple fashion (0, 1, 2, ...)."
+                "Coordinate 'index' of array 'values' is expected to have values (0, 1, 2, ...). "
+                "This can be easily achieved, for example, by using "
+                "IndexedDataArray(data, dims=['index'])."
             )
         return val
 
@@ -680,8 +684,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     def _remove_unused_points(
         cls, points: PointDataArray, values: IndexedDataArray, cells: CellDataArray
     ):
-        """Remove explicitly degenerate cells if any.
-        That is, cells that use the same point indices for their different vertices.
+        """Remove unused points if any.
+        That is, points that are not used in any grid cell.
         """
 
         used_indices = np.unique(cells.values.ravel())
@@ -722,7 +726,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         if num_degenerate_cells > 0:
             log.warning(
                 f"Unstructured grid contains {num_degenerate_cells} degenerate cell(s). "
-                "Consider applying 'clean()'."
+                "Such cells can be removed by using function "
+                "'.clean(remove_degenerate_cells: bool = True, remove_unused_points: bool = True)'. "
+                "For example, 'dataset = dataset.clean()'."
             )
         return val
 

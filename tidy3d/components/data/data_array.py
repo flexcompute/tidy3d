@@ -270,7 +270,8 @@ class AbstractSpatialDataArray(DataArray, ABC):
         """Check whether sorted and sort if not."""
         needs_sorting = []
         for axis in "xyz":
-            if np.any(self.coords[axis].values[1:] < self.coords[axis].values[:-1]):
+            axis_coords = self.coords[axis].values
+            if len(axis_coords) > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
                 needs_sorting.append(axis)
 
         if len(needs_sorting) > 0:
@@ -296,7 +297,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
         """
         if any(bmin > bmax for bmin, bmax in zip(*bounds)):
             raise DataError(
-                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
             )
 
         # make sure data is sorted with respect to coordinates
@@ -357,7 +358,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
         """
         if any(bmin > bmax for bmin, bmax in zip(*bounds)):
             raise DataError(
-                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
             )
 
         coords = (self.x, self.y, self.z)
@@ -410,7 +411,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
         if np.isclose(center, data_left_bound):
             num_duplicates = 1
         elif center > data_left_bound:
-            raise DataError("Reflection center must be outside and on the left of the data region.")
+            raise DataError("Reflection center must be outside and to the left of the data region.")
         else:
             num_duplicates = 0
 
