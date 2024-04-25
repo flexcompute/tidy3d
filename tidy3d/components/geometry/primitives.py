@@ -10,7 +10,7 @@ import numpy as np
 import shapely
 
 from ..base import cached_property, skip_if_fields_missing
-from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely
+from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, Tuple
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, LARGE_NUMBER
 from ...packaging import verify_packages_import
@@ -232,6 +232,19 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         if self.length != 0:
             raise ValidationError("'Medium2D' requires the 'Cylinder' length to be zero.")
         return self.axis
+
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Cylinder:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        if axis != self.axis:
+            raise ValueError(
+                f"'_update_from_bounds' may only be applied along axis '{self.axis}', "
+                f"but was given axis '{axis}'."
+            )
+        new_center = list(self.center)
+        new_center[axis] = (bounds[0] + bounds[1]) / 2
+        new_length = bounds[1] - bounds[0]
+        return self.updated_copy(center=new_center, length=new_length)
 
     @verify_packages_import(["trimesh"])
     def _do_intersections_tilted_plane(

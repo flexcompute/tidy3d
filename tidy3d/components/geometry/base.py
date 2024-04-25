@@ -368,7 +368,14 @@ class Geometry(Tidy3dBaseModel, ABC):
     @cached_property
     def _normal_2dmaterial(self) -> Axis:
         """Get the normal to the given geometry, checking that it is a 2D geometry."""
-        raise ValidationError("'Medium2D' is not conpatible with this geometry class.")
+        raise ValidationError("'Medium2D' is not compatible with this geometry class.")
+
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Geometry:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        raise NotImplementedError(
+            "'_update_from_bounds' is not compatible with this geometry class."
+        )
 
     @equal_aspect
     @add_ax_if_none
@@ -2073,6 +2080,15 @@ class Box(SimplePlaneIntersection, Centered):
             )
         return self.size.index(0)
 
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Box:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        new_center = list(self.center)
+        new_center[axis] = (bounds[0] + bounds[1]) / 2
+        new_size = list(self.size)
+        new_size[axis] = bounds[1] - bounds[0]
+        return self.updated_copy(center=new_center, size=new_size)
+
     def _plot_arrow(
         self,
         direction: Tuple[float, float, float],
@@ -2499,6 +2515,33 @@ class Transformed(Geometry):
         j = (axis + 2) % 3
         return np.isclose(transform[i, axis], 0) and np.isclose(transform[j, axis], 0)
 
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+        normal = self.geometry._normal_2dmaterial
+        preserves_axis = Transformed.preserves_axis(self.transform, normal)
+
+        if not preserves_axis:
+            raise ValidationError(
+                "'Medium2D' requires geometries of type 'Transformed' to "
+                "perserve the axis normal to the 'Medium2D'."
+            )
+
+        return normal
+
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> Transformed:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        min_bound = np.array([0, 0, 0, 1.0])
+        min_bound[axis] = bounds[0]
+        max_bound = np.array([0, 0, 0, 1.0])
+        max_bound[axis] = bounds[1]
+        new_bounds = []
+        new_bounds.append(np.dot(self.inverse, min_bound)[axis])
+        new_bounds.append(np.dot(self.inverse, max_bound)[axis])
+        new_geometry = self.geometry._update_from_bounds(bounds=new_bounds, axis=axis)
+        return self.updated_copy(geometry=new_geometry)
+
 
 class ClipOperation(Geometry):
     """Class representing the result of a set operation between geometries."""
@@ -2716,6 +2759,34 @@ class ClipOperation(Geometry):
         # Overestimates
         return self.geometry_a.surface_area(bounds) + self.geometry_b.surface_area(bounds)
 
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+        normal_a = self.geometry_a._normal_2dmaterial
+        normal_b = self.geometry_b._normal_2dmaterial
+
+        if normal_a != normal_b:
+            raise ValidationError(
+                "'Medium2D' requires both geometries in the 'ClipOperation' to "
+                "have exactly one dimension with zero size in common."
+            )
+
+        plane_position_a = self.geometry_a.bounds[0][normal_a]
+        plane_position_b = self.geometry_b.bounds[0][normal_b]
+
+        if plane_position_a != plane_position_b:
+            raise ValidationError(
+                "'Medium2D' requires both geometries in the 'ClipOperation' to be co-planar."
+            )
+        return normal_a
+
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> ClipOperation:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        new_geom_a = self.geometry_a._update_from_bounds(bounds=bounds, axis=axis)
+        new_geom_b = self.geometry_b._update_from_bounds(bounds=bounds, axis=axis)
+        return self.updated_copy(geometry_a=new_geom_a, geometry_b=new_geom_b)
+
 
 class GeometryGroup(Geometry):
     """A collection of Geometry objects that can be called as a single geometry object."""
@@ -2880,6 +2951,33 @@ class GeometryGroup(Geometry):
         """Returns object's surface area within given bounds."""
         individual_areas = (geometry.surface_area(bounds) for geometry in self.geometries)
         return np.sum(individual_areas)
+
+    @cached_property
+    def _normal_2dmaterial(self) -> Axis:
+        """Get the normal to the given geometry, checking that it is a 2D geometry."""
+
+        normals = {geom._normal_2dmaterial for geom in self.geometries}
+
+        if len(normals) != 1:
+            raise ValidationError(
+                "'Medium2D' requires all geometries in the 'GeometryGroup' to "
+                "share exactly one dimension with zero size."
+            )
+        normal = list(normals)[0]
+        positions = {geom.bounds[0][normal] for geom in self.geometries}
+        if len(positions) != 1:
+            raise ValidationError(
+                "'Medium2D' requires all geometries in the 'GeometryGroup' to be co-planar."
+            )
+        return normal
+
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> GeometryGroup:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        new_geometries = [
+            geometry._update_from_bounds(bounds=bounds, axis=axis) for geometry in self.geometries
+        ]
+        return self.updated_copy(geometries=new_geometries)
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402

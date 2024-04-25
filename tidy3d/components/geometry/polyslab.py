@@ -431,6 +431,16 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> PolySlab:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        if axis != self.axis:
+            raise ValueError(
+                f"'_update_from_bounds' may only be applied along axis '{self.axis}', "
+                f"but was given axis '{axis}'."
+            )
+        return self.updated_copy(slab_bounds=bounds)
+
     @cached_property
     def is_ccw(self) -> bool:
         """Is this ``PolySlab`` CCW-oriented?"""

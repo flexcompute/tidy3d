@@ -19,7 +19,7 @@ from .validators import validate_mode_objects_symmetry
 from .geometry.base import Geometry, Box
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, set_bounds, get_thickened_geom
+from .geometry.utils_2d import get_bounds, get_thickened_geom
 from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
 from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
@@ -1192,7 +1192,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             center = get_bounds(geom, axis)[0]
             assert get_bounds(geom, axis)[0] == get_bounds(geom, axis)[1]
             snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
-            return set_bounds(geom, (snapped_center, snapped_center), axis)
+            return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 
         lumped_structures = []
         for lumped_element in self.lumped_elements:
@@ -1259,7 +1259,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
                 )
 
                 new_bounds = (snapped_center, snapped_center)
-                new_geometry = set_bounds(snapped_geometry, bounds=new_bounds, axis=axis)
+                new_geometry = snapped_geometry._update_from_bounds(bounds=new_bounds, axis=axis)
                 new_structure = structure.updated_copy(geometry=new_geometry, medium=new_medium)
 
                 new_structures.append(new_structure)
