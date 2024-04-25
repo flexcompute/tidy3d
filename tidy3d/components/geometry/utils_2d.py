@@ -5,17 +5,11 @@ from typing import Tuple, List
 
 from ..types import Axis
 from ...constants import inf
-from ...exceptions import ValidationError
 from ..geometry.base import Geometry, Box, ClipOperation
-from ..geometry.primitives import Cylinder
 from ..geometry.polyslab import PolySlab
 from ..grid.grid import Grid
 from ..scene import Scene
 from ..structure import Structure
-
-# for 2d materials. to find neighboring media, search a distance on either side
-# equal to this times the grid size
-DIST_NEIGHBOR_REL_2D_MED = 1e-5
 
 
 def increment_float(val: np.float32, sign) -> np.float32:
@@ -48,32 +42,12 @@ def get_bounds(geom: Geometry, axis: Axis) -> Tuple[float, float]:
     return (geom.bounds[0][axis], geom.bounds[1][axis])
 
 
-def set_bounds(geom: Geometry, bounds: Tuple[float, float], axis: Axis) -> Geometry:
-    """Set the bounds of a geometry in the axis direction."""
-    if isinstance(geom, Box):
-        new_center = list(geom.center)
-        new_center[axis] = (bounds[0] + bounds[1]) / 2
-        new_size = list(geom.size)
-        new_size[axis] = bounds[1] - bounds[0]
-        return geom.updated_copy(center=new_center, size=new_size)
-    if isinstance(geom, PolySlab):
-        return geom.updated_copy(slab_bounds=bounds)
-    if isinstance(geom, Cylinder):
-        new_center = list(geom.center)
-        new_center[axis] = (bounds[0] + bounds[1]) / 2
-        new_length = bounds[1] - bounds[0]
-        return geom.updated_copy(center=new_center, length=new_length)
-    raise ValidationError(
-        "'Medium2D' is only compatible with 'Box', 'PolySlab', or 'Cylinder' geometry."
-    )
-
-
 def get_thickened_geom(geom: Geometry, axis: Axis, axis_dl: float):
     """Helper to return a slightly thickened version of a planar geometry."""
     center = get_bounds(geom, axis)[0]
-    neg_thickness = axis_dl * DIST_NEIGHBOR_REL_2D_MED
-    pos_thickness = axis_dl * DIST_NEIGHBOR_REL_2D_MED
-    return set_bounds(geom, bounds=(center - neg_thickness, center + pos_thickness), axis=axis)
+    neg_thickness = increment_float(center, -1.0)
+    pos_thickness = increment_float(center, 1.0)
+    return geom._update_from_bounds(bounds=(neg_thickness, pos_thickness), axis=axis)
 
 
 def get_neighbors(
@@ -85,14 +59,16 @@ def get_neighbors(
     """Find the neighboring structures and return the tested positions above and below."""
     center = get_bounds(geom, axis)[0]
     check_delta = [
-        -axis_dl * DIST_NEIGHBOR_REL_2D_MED,
-        axis_dl * DIST_NEIGHBOR_REL_2D_MED,
+        increment_float(center, -1.0) - center,
+        increment_float(center, 1.0) - center,
     ]
 
     neighbors_below = []
     neighbors_above = []
     for _, position in enumerate(check_delta):
-        geom_shifted = set_bounds(geom, bounds=(center + position, center + position), axis=axis)
+        geom_shifted = geom._update_from_bounds(
+            bounds=(center + position, center + position), axis=axis
+        )
 
         # to prevent false positives due to 2D materials touching different materials
         # along their sides, shrink the bounds along the tangential directions by
