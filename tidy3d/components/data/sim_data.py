@@ -8,8 +8,16 @@ import pydantic.v1 as pd
 import numpy as np
 import h5py
 import json
+from jax.tree_util import register_pytree_node_class
+import jax.numpy as jnp
 
-from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
+from .monitor_data import (
+    MonitorDataTypes,
+    MonitorDataType,
+    AbstractFieldData,
+    FieldTimeData,
+    FieldData,
+)
 from ..simulation import Simulation
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
@@ -26,6 +34,7 @@ DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataT
 DATA_TYPE_NAME_MAP = {val.__fields__["monitor"].type_.__name__: val for val in MonitorDataTypes}
 
 
+@register_pytree_node_class
 class SimulationData(AbstractSimulationData):
     """Stores data from a collection of :class:`.Monitor` objects in a :class:`.Simulation`.
 
@@ -114,6 +123,41 @@ class SimulationData(AbstractSimulationData):
         title="Diverged",
         description="A boolean flag denoting whether the simulation run diverged.",
     )
+
+    def tree_flatten(self) -> Tuple[list, dict]:
+        aux_data = self.dict(exclude={"type", "jax_info"})
+
+        children = ([], [])
+
+        for structure in self.simulation.structures:
+            jax_info = structure.geometry.jax_info
+            children[0].append(jax_info)
+
+        for data in self.data:
+            children[1].append(jnp.array(data.Ex.values))
+
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+        sim_data = cls.parse_obj(aux_data)
+
+        new_structures = list(sim_data.simulation.structures)
+
+        for i, (structure, jax_info) in enumerate(zip(sim_data.simulation.structures, children[0])):
+            new_geometry = structure.geometry.updated_copy(jax_info=jax_info)
+            new_structure = structure.updated_copy(geometry=new_geometry)
+
+            new_structures[i] = new_structure
+
+        new_simulation = sim_data.simulation.updated_copy(structures=new_structures)
+
+        new_data = list(sim_data.data)
+
+        for i, (data, ex_values) in enumerate(zip(sim_data.data, children[1])):
+            data.jax_info["Ex"] = ex_values
+
+        return sim_data.updated_copy(simulation=new_simulation)  # , data=new_data)
 
     @property
     def final_decay_value(self) -> float:

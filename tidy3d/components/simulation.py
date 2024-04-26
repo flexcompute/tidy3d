@@ -9,6 +9,9 @@ import xarray as xr
 import matplotlib as mpl
 import math
 
+import jax
+from jax.tree_util import register_pytree_node_class
+
 from .base import cached_property
 from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
@@ -88,6 +91,7 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
 
+@register_pytree_node_class
 class Simulation(AbstractSimulation):
     """
     Custom implementation of Maxwell’s equations which represents the physical model to be solved using the FDTD
@@ -774,6 +778,32 @@ class Simulation(AbstractSimulation):
     *   `High-Q silicon resonator <../../notebooks/HighQSi.html>`_
 
     """
+
+    """ Adjoint Bits """
+
+    def tree_flatten(self) -> Tuple[list, dict]:
+        aux_data = self.dict(exclude={"type", "jax_info"})
+
+        children = []
+        for structure in self.structures:
+            jax_info = structure.geometry.jax_info
+            children.append(jax_info)
+
+        return children, aux_data
+
+    @classmethod
+    def tree_unflatten(cls, aux_data: dict, children: list) -> JaxObject:
+        sim = cls.parse_obj(aux_data)
+
+        new_structures = list(sim.structures)
+
+        for i, (structure, jax_info) in enumerate(zip(sim.structures, children)):
+            new_geometry = structure.geometry.updated_copy(jax_info=jax_info)
+            new_structure = structure.updated_copy(geometry=new_geometry)
+
+            new_structures[i] = new_structure
+
+        return sim.updated_copy(structures=new_structures)
 
     """ Validating setup """
 

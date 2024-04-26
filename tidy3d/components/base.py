@@ -18,6 +18,8 @@ import yaml
 import numpy as np
 import h5py
 import xarray as xr
+
+# TODO: move this import elsewhere and catch if it breaks?
 import jax
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR

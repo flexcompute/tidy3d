@@ -4,7 +4,7 @@ from typing import Dict, List, Union
 from abc import ABC
 
 import xarray as xr
-import numpy as np
+import jax.numpy as np
 import dask
 import h5py
 
