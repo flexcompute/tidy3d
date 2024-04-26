@@ -100,7 +100,7 @@ def test_flatten():
     """Test flatten / unflatten operations on tidy3d objects."""
 
     x = jnp.array(x0)
-    s1 = make_structure(x)
+    s1 = make_sim(x)
 
     leaves, treedef = jax.tree_util.tree_flatten(s1)
     s2 = jax.tree_util.tree_unflatten(treedef, leaves)
