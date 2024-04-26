@@ -3889,29 +3889,35 @@ class Simulation(AbstractYeeGridSimulation):
             med = structure.medium
             if isinstance(med, AbstractPerturbationMedium):
                 # get structure's bounding box
-                s_bounds = structure.geometry.bounds
+                s_bounds = np.array(structure.geometry.bounds)
 
                 bounds = [
                     np.max([sim_bounds[0], s_bounds[0]], axis=0),
                     np.min([sim_bounds[1], s_bounds[1]], axis=0),
                 ]
 
-                # for each structure select a minimal subset of data that covers it
-                restricted_arrays = {}
+                # skip structure if it's completely outside of sim box
+                if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+                    new_structures.append(structure)
+                else:
+                    # for each structure select a minimal subset of data that covers it
+                    restricted_arrays = {}
 
-                for name, array in array_dict.items():
-                    if array is not None:
-                        restricted_arrays[name] = array.sel_inside(bounds)
+                    for name, array in array_dict.items():
+                        if array is not None:
+                            restricted_arrays[name] = array.sel_inside(bounds)
 
-                        # check provided data fully cover structure
-                        if not array.does_cover(bounds):
-                            log.warning(
-                                f"Provided '{name}' does not fully cover structures[{s_ind}]."
-                            )
+                            # check provided data fully cover structure
+                            if not array.does_cover(bounds):
+                                log.warning(
+                                    f"Provided '{name}' does not fully cover structures[{s_ind}]."
+                                )
 
-                new_medium = med.perturbed_copy(**restricted_arrays, interp_method=interp_method)
-                new_structure = structure.updated_copy(medium=new_medium)
-                new_structures.append(new_structure)
+                    new_medium = med.perturbed_copy(
+                        **restricted_arrays, interp_method=interp_method
+                    )
+                    new_structure = structure.updated_copy(medium=new_medium)
+                    new_structures.append(new_structure)
             else:
                 new_structures.append(structure)
 

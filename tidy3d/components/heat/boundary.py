@@ -8,6 +8,7 @@ import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel
 from ..bc_placement import BCPlacementType
+from ..types import TYPE_TAG_STR
 
 from ...constants import KELVIN, HEAT_FLUX, HEAT_TRANSFER_COEFF
 
@@ -85,9 +86,11 @@ class HeatBoundarySpec(Tidy3dBaseModel):
     placement: BCPlacementType = pd.Field(
         title="Boundary Conditions Placement",
         description="Location to apply boundary conditions.",
+        discriminator=TYPE_TAG_STR,
     )
 
     condition: HeatBoundaryConditionType = pd.Field(
         title="Boundary Conditions",
         description="Boundary conditions to apply at the selected location.",
+        discriminator=TYPE_TAG_STR,
     )
