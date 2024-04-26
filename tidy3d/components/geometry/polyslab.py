@@ -534,7 +534,7 @@ class PolySlab(base.Planar):
         return inside_height * inside_polygon
 
     @verify_packages_import(["trimesh"])
-    def intersections_tilted_plane(
+    def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.

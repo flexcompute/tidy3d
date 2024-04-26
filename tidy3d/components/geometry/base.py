@@ -1456,7 +1456,76 @@ class Centered(Geometry, ABC):
         return val
 
 
-class Planar(Geometry, ABC):
+class SimplePlaneIntersection(Geometry, ABC):
+    """A geometry where intersections with an axis aligned plane may be computed efficiently."""
+
+    def intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+        Checks special cases before relying on the complete computation.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+        # Check if normal is a special case, where the normal is aligned with an axis.
+        if normal.count(0.0) == 2:
+            axis = np.nonzero(normal)[0][0]
+            coord = "xyz"[axis]
+            kwargs = {coord: origin[axis]}
+            section = self.intersections_plane(**kwargs)
+            # Apply transformation in the plane by removing row and column
+            to_2D_in_plane = np.delete(np.delete(to_2D, axis, 0), axis, 1)
+
+            def transform(p_array):
+                return np.dot(
+                    np.hstack((p_array, np.ones((p_array.shape[0], 1)))), to_2D_in_plane.T
+                )[:, :2]
+
+            transformed_section = shapely.transform(section, transformation=transform)
+            return transformed_section
+        else:  # Otherwise compute the arbitrary intersection
+            return self._do_intersections_tilted_plane(normal=normal, origin=origin, to_2D=to_2D)
+
+    @abstractmethod
+    def _do_intersections_tilted_plane(
+        self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
+    ) -> List[Shapely]:
+        """Return a list of shapely geometries at the plane specified by normal and origin.
+
+        Parameters
+        ----------
+        normal : Coordinate
+            Vector defining the normal direction to the plane.
+        origin : Coordinate
+            Vector defining the plane origin.
+        to_2D : MatrixReal4x4
+            Transformation matrix to apply to resulting shapes.
+
+        Returns
+        -------
+        List[shapely.geometry.base.BaseGeometry]
+            List of 2D shapes that intersect plane.
+            For more details refer to
+            `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
+        """
+
+
+class Planar(SimplePlaneIntersection, Geometry, ABC):
     """Geometry with one ``axis`` that is slab-like with thickness ``height``."""
 
     axis: Axis = pydantic.Field(
@@ -1656,7 +1725,7 @@ class Circular(Geometry):
 """Primitive classes"""
 
 
-class Box(Centered):
+class Box(SimplePlaneIntersection, Centered):
     """Rectangular prism.
        Also base class for :class:`Simulation`, :class:`Monitor`, and :class:`Source`.
 
@@ -1811,7 +1880,7 @@ class Box(Centered):
         return surfaces
 
     @verify_packages_import(["trimesh"])
-    def intersections_tilted_plane(
+    def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
