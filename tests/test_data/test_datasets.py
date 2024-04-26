@@ -28,7 +28,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
 
     tri_grid_values = td.IndexedDataArray(
         [1.0, 2.0, 3.0, 4.0],
-        dims=("index"),
+        coords=dict(index=np.arange(4)),
         name=ds_name,
     )
 

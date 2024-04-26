@@ -698,8 +698,8 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             index_map[used_indices - min_index] = np.arange(len(used_indices))
 
             cells = CellDataArray(data=index_map[cells.data - min_index], coords=cells.coords)
-            points = points[used_indices, :]
-            values = values[used_indices]
+            points = PointDataArray(points.data[used_indices, :], dims=["index", "axis"])
+            values = IndexedDataArray(values.data[used_indices], dims=["index"])
 
         return points, values, cells
 
