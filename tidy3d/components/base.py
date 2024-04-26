@@ -18,6 +18,7 @@ import yaml
 import numpy as np
 import h5py
 import xarray as xr
+import jax
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
@@ -180,6 +181,52 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         copy_on_model_validation = "none"
 
     _cached_properties = pydantic.PrivateAttr({})
+
+    """ BEGIN jax integration stuff. """
+
+    jax_info: dict = {}
+
+    @classmethod
+    def _get_field_names(cls, field_key: str) -> List[str]:
+        """Get all fields where ``field_key`` defined in the ``pydantic.Field``."""
+        fields = []
+        for field_name, model_field in cls.__fields__.items():
+            field_value = model_field.field_info.extra.get(field_key)
+            if field_value:
+                fields.append(field_name)
+        return fields
+
+    @classmethod
+    def get_jax_field_names(cls) -> List[str]:
+        """Returns list of field names where ``jax_field=True``."""
+        return cls._get_field_names("jax_field")
+
+    @pydantic.root_validator(pre=True)
+    def handle_jax_kwargs(cls, values: dict) -> dict:
+        """Pass jax inputs to the jax fields and pass untraced values to the regular fields."""
+
+        # for all jax-traced fields
+        for jax_name in cls.get_jax_field_names():
+            # if a value was passed to the object for the regular field
+            val = values.get(jax_name)
+
+            if val is not None:
+                # try adding the sanitized (no trace) version to the regular field
+                try:
+                    values[jax_name] = jax.lax.stop_gradient(val)
+
+                # if it doesnt work, just pass the raw value (necessary to handle inf strings)
+                except TypeError:
+                    values[jax_name] = val
+
+                if "jax_info" not in values:
+                    values["jax_info"] = {}
+
+                values["jax_info"][jax_name] = val
+
+        return values
+
+    """ END jax integration stuff. """
 
     @pydantic.root_validator(skip_on_failure=True)
     def _special_characters_not_in_name(cls, values):

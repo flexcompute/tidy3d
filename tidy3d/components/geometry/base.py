@@ -1669,6 +1669,7 @@ class Box(Centered):
         title="Size",
         description="Size in x, y, and z directions.",
         units=MICROMETER,
+        jax_field=True,
     )
 
     @classmethod
