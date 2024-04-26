@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 ### Fixed
+- Bug in plotting and computing tilted plane intersections of transformed 0 thickness geometries.
 
 ## [2.7.0rc1] - 2024-04-22
 
