@@ -93,7 +93,7 @@ class Updater(pd.BaseModel):
         """Dictionary representing the simulation loaded from file."""
 
         # TODO: fix this, it broke
-        if ".hdf5" in fname:
+        if any(ext in fname for ext in (".hdf5", ".gz")):
             sim_dict = Tidy3dBaseModel.from_file(fname=fname).dict()
 
         else:
@@ -104,7 +104,7 @@ class Updater(pd.BaseModel):
                 elif ".yaml" in fname:
                     sim_dict = yaml.safe_load(f)
                 else:
-                    raise FileError('file extension must be ".json", ".yaml", or ".hdf5"')
+                    raise FileError('file extension must be ".json", ".yaml", ".hdf5", or ".gz"')
 
             # except Exception as e:
             #     raise FileError(f"Could not load file {fname}") from e
