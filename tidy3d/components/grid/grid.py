@@ -42,7 +42,10 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_dict(self):
         """Return a dict of the three Coord1D objects as numpy arrays."""
-        return {key: np.array(value) for key, value in self.dict(exclude={TYPE_TAG_STR}).items()}
+        return {
+            key: np.array(value)
+            for key, value in self.dict(exclude={TYPE_TAG_STR, "jax_info", "jax_info"}).items()
+        }
 
     @property
     def to_list(self):
@@ -300,7 +303,8 @@ class Grid(Tidy3dBaseModel):
         >>> Nx, Ny, Nz = grid.num_cells
         """
         return [
-            len(coords1d) - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
+            len(coords1d) - 1
+            for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR, "jax_info"}).values()
         ]
 
     @property
@@ -325,7 +329,7 @@ class Grid(Tidy3dBaseModel):
             applied.
         """
 
-        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
+        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR, "jax_info"})
         dsteps = {key: (psteps + np.roll(psteps, 1)) / 2 for (key, psteps) in primal_steps.items()}
 
         return Coords(**dsteps)

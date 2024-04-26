@@ -4,6 +4,8 @@ import tidy3d as td
 import jax
 import jax.numpy as jnp
 
+x0 = 1.0
+
 
 def make_box(x: float) -> td.Box:
     """Make a box storing (x,x,x) in its size."""
@@ -19,45 +21,73 @@ def make_structure(x: float) -> td.Structure:
     return td.Structure(geometry=b, medium=td.Medium(permittivity=2.0))
 
 
-def test_jax_field():
+def make_sim(x: float) -> td.Simulation:
+    """Make a sim with a structure with a geometry of a Box storing (x,x,x) in its size."""
+    s = make_structure(x)
+    return td.Simulation(
+        size=(5, 5, 5),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=[s],
+    )
+
+
+def sum_size(b: td.Box) -> float:
+    """Sum the size of a box."""
+    return jnp.sum(jnp.array(b.jax_info["size"]))
+
+
+def test_jax_field_box():
     """Test storage of jax fields in tidy3d objects."""
 
     def f(x):
         b = make_box(x)
-        return jnp.sum(jnp.array(b.jax_info["size"]))
+        return sum_size(b) ** 2
 
-    val = f(1.0)
-    grad = jax.grad(f)(1.0)
+    val = f(x0)
+    grad = jax.grad(f)(x0)
 
-    assert val >= 0.0
-    assert abs(grad) >= 0.0
+    assert val == (3 * x0) ** 2
+    assert grad == 2 * 3 * (3 * x0)
 
 
-def test_jax_field_nested():
-    """Test storage of jax fields in nested tidy3d objects."""
+def test_jax_field_structure():
+    """Test storage of jax fields in nested tidy3d object."""
 
     def f(x):
         s = make_structure(x)
-        return jnp.sum(jnp.array(s.geometry.jax_info["size"]))
+        return sum_size(s.geometry) ** 2
 
-    val = f(1.0)
-    grad = jax.grad(f)(1.0)
+    val = f(x0)
+    grad = jax.grad(f)(x0)
 
-    assert val >= 0.0
-    assert abs(grad) >= 0.0
+    assert val == (3 * x0) ** 2
+    assert grad == 2 * 3 * (3 * x0)
+
+
+def test_jax_field_sim():
+    """Test storage of jax fields in a simulation."""
+
+    def f(x):
+        sim = make_sim(x)
+        return sum_size(sim.structures[0].geometry) ** 2
+
+    val = f(x0)
+    grad = jax.grad(f)(x0)
+
+    assert val == (3 * x0) ** 2
+    assert grad == 2 * 3 * (3 * x0)
 
 
 def test_passing_objects():
     """Test passing tidy3d objects into jax functions."""
 
     def g(s: td.Structure) -> float:
-        return jnp.sum(jnp.array(s.geometry.jax_info["size"])) ** 2
+        return sum_size(s.geometry) ** 2
 
     def f(x: float) -> float:
         s = make_structure(x)
         return g(s)
-
-    x0 = 1.0
 
     val = f(x0)
     grad = jax.grad(f)(x0)
@@ -69,7 +99,7 @@ def test_passing_objects():
 def test_flatten():
     """Test flatten / unflatten operations on tidy3d objects."""
 
-    x = jnp.array(1.0)
+    x = jnp.array(x0)
     s1 = make_structure(x)
 
     leaves, treedef = jax.tree_util.tree_flatten(s1)
