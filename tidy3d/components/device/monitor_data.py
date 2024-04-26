@@ -1,9 +1,9 @@
 """Monitor level data, store the DataArrays associated with a single device monitor."""
 from __future__ import annotations
 from typing import Union, Tuple, Optional
-
 from abc import ABC
 
+import numpy as np
 import pydantic.v1 as pd
 
 from .monitor import TemperatureMonitor, VoltageMonitor, DeviceMonitorType
@@ -52,7 +52,7 @@ class DeviceMonitorData(AbstractMonitorData, ABC):
 
         # no symmetry
         if all(sym == 0 for sym in self.symmetry):
-            return self.copy()
+            return property
 
         new_property = property
 

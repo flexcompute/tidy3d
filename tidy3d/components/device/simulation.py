@@ -11,10 +11,10 @@ import pydantic.v1 as pd
 from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
 from .boundary import VoltageBC, CurrentBC, InsulatingBC
 from .boundary import DeviceBoundarySpec
-from ..device_spec import FluidSpec, InsulatorSpec
+from ..device_spec import FluidSpec, InsulatorSpec, SolidSpec
 from .source import DeviceSourceType, UniformHeatSource, HeatSource
 from .monitor import DeviceMonitorType, TemperatureMonitor, VoltageMonitor
-from .grid import UnstructuredGridType
+from .grid import UnstructuredGridType, UniformUnstructuredGrid, DistanceUnstructuredGrid
 from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
 from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
 
@@ -25,7 +25,6 @@ from ..viz import add_ax_if_none, equal_aspect, PlotParams
 from ..structure import Structure
 from ..geometry.base import Box
 from ..scene import Scene
-from ..heat_spec import SolidSpec
 
 from ..bc_placement import StructureBoundary, StructureStructureInterface
 from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
@@ -440,11 +439,11 @@ class DeviceSimulation(AbstractSimulation):
                     ):
                         one_correct = True
 
-            if not one_correct:
-                raise SetupError(
-                    "Make sure your structures have the correct HEAT/CONDUCTION specification, e.g., "
-                    'for simulations of HEAT type, "heat_spec" must be not None.'
-                )
+            # if not one_correct:
+            #     raise SetupError(
+            #         "Make sure your structures have the correct HEAT/CONDUCTION specification, e.g., "
+            #         'for simulations of HEAT type, "heat_spec" must be not None.'
+            #     )
 
         return values
 
