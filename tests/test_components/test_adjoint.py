@@ -83,10 +83,10 @@ def test_passing_objects():
     """Test passing tidy3d objects into jax functions."""
 
     def g(s: td.Structure) -> float:
-        return sum_size(s.geometry) ** 2
+        return sum_size(s.structures[0].geometry) ** 2
 
     def f(x: float) -> float:
-        s = make_structure(x)
+        s = make_sim(x)
         return g(s)
 
     val = f(x0)
