@@ -550,14 +550,45 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         """Corresponding double data type."""
         return np.complex128 if self.is_complex else np.float64
 
-    @pd.validator("cells", always=True)
-    def match_cells_to_vtk_type(cls, val):
-        """Check that cell connections does not have duplicate points."""
-        if vtk is None:
-            return val
+    @pd.validator("points", always=True)
+    def points_right_dims(cls, val):
+        """Check that point coordinates have the right dimensionality."""
+        # currently support only the standard axis ordering, that is 01(2)
+        axis_coords_expected = np.arange(cls._point_dims())
+        axis_coords_given = val.axis.data
+        if np.any(axis_coords_given != axis_coords_expected):
+            raise ValidationError(
+                f"Points array is expected to have {axis_coords_expected} coord values along 'axis'"
+                f" (given: {axis_coords_given})."
+            )
+        return val
 
-        # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
-        return CellDataArray(val.data.astype(vtk["id_type"], copy=False), coords=val.coords)
+    @pd.validator("points", always=True)
+    def points_right_indexing(cls, val):
+        """Check that points are indexed corrrectly."""
+        indices_expected = np.arange(len(val.data))
+        indices_given = val.index.data
+        if np.any(indices_expected != indices_given):
+            raise ValidationError(
+                "Coordinate 'index' of array 'points' is expected to have values (0, 1, 2, ...). "
+                "This can be easily achieved, for example, by using "
+                "PointDataArray(data, dims=['index', 'axis'])."
+            )
+        return val
+
+    @pd.validator("values", always=True)
+    def values_right_indexing(cls, val):
+        """Check that data values are indexed correctly."""
+        # currently support only simple ordered indexing of points, that is, 0, 1, 2, ...
+        indices_expected = np.arange(len(val.data))
+        indices_given = val.index.data
+        if np.any(indices_expected != indices_given):
+            raise ValidationError(
+                "Coordinate 'index' of array 'values' is expected to have values (0, 1, 2, ...). "
+                "This can be easily achieved, for example, by using "
+                "IndexedDataArray(data, dims=['index'])."
+            )
+        return val
 
     @pd.validator("values", always=True)
     @skip_if_fields_missing(["points"])
@@ -575,21 +606,19 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             )
         return val
 
-    @pd.validator("points", always=True)
-    def points_right_dims(cls, val):
-        """Check that point coordinates have the right dimensionality."""
-        axis_coords_expected = np.arange(cls._point_dims())
-        axis_coords_given = val.axis.data
-        if np.any(axis_coords_given != axis_coords_expected):
-            raise ValidationError(
-                f"Points array is expected to have {axis_coords_expected} coord values along 'axis'"
-                f" (given: {axis_coords_given})."
-            )
-        return val
+    @pd.validator("cells", always=True)
+    def match_cells_to_vtk_type(cls, val):
+        """Check that cell connections does not have duplicate points."""
+        if vtk is None:
+            return val
+
+        # using val.astype(np.int32/64) directly causes issues when dataarray are later checked ==
+        return CellDataArray(val.data.astype(vtk["id_type"], copy=False), coords=val.coords)
 
     @pd.validator("cells", always=True)
     def cells_right_type(cls, val):
         """Check that cell are of the right type."""
+        # only supporting the standard ordering of cell vertices 012(3)
         vertex_coords_expected = np.arange(cls._cell_num_vertices())
         vertex_coords_given = val.vertex_index.data
         if np.any(vertex_coords_given != vertex_coords_expected):
@@ -612,7 +641,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             points = values.get("points")
             num_points = len(points)
 
-            if max_index_used != num_points - 1 or min_index_used != 0:
+            if max_index_used > num_points - 1 or min_index_used < 0:
                 raise ValidationError(
                     "Cell connections array uses undefined point indices in the range "
                     f"[{min_index_used}, {max_index_used}]. The valid range of point indices is "
@@ -620,16 +649,87 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 )
         return val
 
-    @pd.validator("cells", always=True)
-    def check_valid_cells(cls, val):
-        """Check that cell connections does not have duplicate points."""
-        indices = val.data
+    @classmethod
+    def _find_degenerate_cells(cls, cells: CellDataArray):
+        """Find explicitly degenerate cells if any.
+        That is, cells that use the same point indices for their different vertices.
+        """
+        indices = cells.data
         # skip validation if zero size data
+        degenerate_cell_inds = set()
         if len(indices) > 0:
             for i in range(cls._cell_num_vertices() - 1):
                 for j in range(i + 1, cls._cell_num_vertices()):
-                    if np.any(indices[:, i] == indices[:, j]):
-                        log.warning("Unstructured grid contains degenerate cells.")
+                    degenerate_cell_inds = degenerate_cell_inds.union(
+                        np.where(indices[:, i] == indices[:, j])[0]
+                    )
+
+        return degenerate_cell_inds
+
+    @classmethod
+    def _remove_degenerate_cells(cls, cells: CellDataArray):
+        """Remove explicitly degenerate cells if any.
+        That is, cells that use the same point indices for their different vertices.
+        """
+        degenerate_cells = cls._find_degenerate_cells(cells=cells)
+        if len(degenerate_cells) > 0:
+            data = np.delete(cells.values, list(degenerate_cells), axis=0)
+            cell_index = np.delete(cells.cell_index.values, list(degenerate_cells))
+            return CellDataArray(
+                data=data, coords=dict(cell_index=cell_index, vertex_index=cells.vertex_index)
+            )
+        return cells
+
+    @classmethod
+    def _remove_unused_points(
+        cls, points: PointDataArray, values: IndexedDataArray, cells: CellDataArray
+    ):
+        """Remove unused points if any.
+        That is, points that are not used in any grid cell.
+        """
+
+        used_indices = np.unique(cells.values.ravel())
+        num_points = len(points)
+
+        if len(used_indices) != num_points or np.any(np.diff(used_indices) != 1):
+            min_index = np.min(used_indices)
+            map_len = np.max(used_indices) - min_index + 1
+            index_map = np.zeros(map_len)
+            index_map[used_indices - min_index] = np.arange(len(used_indices))
+
+            cells = CellDataArray(data=index_map[cells.data - min_index], coords=cells.coords)
+            points = PointDataArray(points.data[used_indices, :], dims=["index", "axis"])
+            values = IndexedDataArray(values.data[used_indices], dims=["index"])
+
+        return points, values, cells
+
+    def clean(self, remove_degenerate_cells=True, remove_unused_points=True):
+        """Remove degenerate cells and/or unused points."""
+        if remove_degenerate_cells:
+            cells = self._remove_degenerate_cells(cells=self.cells)
+        else:
+            cells = self.cells
+
+        if remove_unused_points:
+            points, values, cells = self._remove_unused_points(self.points, self.values, cells)
+        else:
+            points = self.points
+            values = self.values
+
+        return self.updated_copy(points=points, values=values, cells=cells)
+
+    @pd.validator("cells", always=True)
+    def warn_degenerate_cells(cls, val):
+        """Check that cell connections does not have duplicate points."""
+        degenerate_cells = cls._find_degenerate_cells(val)
+        num_degenerate_cells = len(degenerate_cells)
+        if num_degenerate_cells > 0:
+            log.warning(
+                f"Unstructured grid contains {num_degenerate_cells} degenerate cell(s). "
+                "Such cells can be removed by using function "
+                "'.clean(remove_degenerate_cells: bool = True, remove_unused_points: bool = True)'. "
+                "For example, 'dataset = dataset.clean()'."
+            )
         return val
 
     @pd.root_validator(pre=True, allow_reuse=True)
@@ -653,6 +753,20 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                 np.zeros((0, cls._cell_num_vertices())), dims=["cell_index", "vertex_index"]
             )
             values["values"] = IndexedDataArray(np.zeros(0), dims=["index"])
+        return values
+
+    @pd.root_validator(skip_on_failure=True, allow_reuse=True)
+    def _warn_unused_points(cls, values):
+        """Warn if some points are unused."""
+        point_indices = set(np.arange(len(values["values"].data)))
+        used_indices = set(values["cells"].values.ravel())
+
+        if not point_indices.issubset(used_indices):
+            log.warning(
+                "Unstructured grid dataset contains unused points. "
+                "Consider calling 'clean()' to remove them."
+            )
+
         return values
 
     def rename(self, name: str) -> UnstructuredGridDataset:
@@ -790,7 +904,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         origin[axis] = pos
 
         normal = [0, 0, 0]
-        normal[axis] = 1
+        # orientation of normal is important for edge (literally) cases
+        normal[axis] = -1
+        if pos > (self.bounds[0][axis] + self.bounds[1][axis]) / 2:
+            normal[axis] = 1
 
         # create cutting plane
         plane = vtk["mod"].vtkPlane()
@@ -846,12 +963,24 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
     @classmethod
     @abstractmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj, field: str = None) -> UnstructuredGridDataset:
+    def _from_vtk_obj(
+        cls,
+        vtk_obj,
+        field: str = None,
+        remove_degenerate_cells: bool = False,
+        remove_unused_points: bool = False,
+    ) -> UnstructuredGridDataset:
         """Initialize from a vtk object."""
 
     @classmethod
     @requires_vtk
-    def from_vtu(cls, file: str, field: str = None) -> UnstructuredGridDataset:
+    def from_vtu(
+        cls,
+        file: str,
+        field: str = None,
+        remove_degenerate_cells: bool = False,
+        remove_unused_points: bool = False,
+    ) -> UnstructuredGridDataset:
         """Load unstructured data from a vtu file.
 
         Parameters
@@ -860,6 +989,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Full path to the .vtu file to load the unstructured data from.
         field : str = None
             Name of the field to load.
+        remove_degenerate_cells : bool = False
+            Remove explicitly degenerate cells.
+        remove_unused_points : bool = False
+            Remove unused points.
 
         Returns
         -------
@@ -867,7 +1000,12 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
             Unstructured data.
         """
         grid = cls._read_vtkUnstructuredGrid(file)
-        return cls._from_vtk_obj(grid, field=field)
+        return cls._from_vtk_obj(
+            grid,
+            field=field,
+            remove_degenerate_cells=remove_degenerate_cells,
+            remove_unused_points=remove_unused_points,
+        )
 
     @requires_vtk
     def to_vtu(self, fname: str):
@@ -986,7 +1124,9 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         if clean_clip.GetNumberOfPoints() == 0:
             raise DataError("Clipping box does not intersect the unstructured grid.")
 
-        return self._from_vtk_obj(clean_clip)
+        return self._from_vtk_obj(
+            clean_clip, remove_degenerate_cells=True, remove_unused_points=True
+        )
 
     def interp(
         self,
@@ -1722,6 +1862,10 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
         UnstructuredGridDataset
             Extracted spatial data array.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError(
+                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+            )
 
         data_bounds = self.bounds
         tol = 1e-6
@@ -1768,7 +1912,7 @@ class UnstructuredGridDataset(Dataset, np.lib.mixins.NDArrayOperatorsMixin, ABC)
                     extractor.Update()
                     tmp = extractor.GetOutput()
 
-        return self._from_vtk_obj(tmp)
+        return self._from_vtk_obj(tmp, remove_degenerate_cells=True, remove_unused_points=True)
 
     def does_cover(self, bounds: Bound) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -1906,7 +2050,13 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
     @classmethod
     @requires_vtk
-    def _from_vtk_obj(cls, vtk_obj, field=None):
+    def _from_vtk_obj(
+        cls,
+        vtk_obj,
+        field=None,
+        remove_degenerate_cells: bool = False,
+        remove_unused_points: bool = False,
+    ):
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # get points cells data from vtk object
@@ -1961,6 +2111,14 @@ class TriangularGridDataset(UnstructuredGridDataset):
             points_2d_numpy,
             coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
         )
+
+        if remove_degenerate_cells:
+            cells = cls._remove_degenerate_cells(cells=cells)
+
+        if remove_unused_points:
+            points, values, cells = cls._remove_unused_points(
+                points=points, values=values, cells=cells
+            )
 
         return cls(
             normal_axis=normal_axis,
@@ -2329,7 +2487,12 @@ class TriangularGridDataset(UnstructuredGridDataset):
 
         # disallow reflecting along normal direction
         if axis == self.normal_axis:
-            raise DataError("Reflection in the normal direction to the grid is prohibited.")
+            if reflection_only:
+                return self.updated_copy(normal_pos=2 * center - self.normal_pos)
+            else:
+                raise DataError(
+                    "Reflection in the normal direction to the grid is prohibited unless 'reflection_only=True'."
+                )
 
         return super().reflect(axis=axis, center=center, reflection_only=reflection_only)
 
@@ -2349,6 +2512,10 @@ class TriangularGridDataset(UnstructuredGridDataset):
         TriangularGridDataset
             Extracted spatial data array.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError(
+                "Min and max bounds must be packaged as ``(minx, miny, minz), (maxx, maxy, maxz)``."
+            )
 
         # expand along normal direction
         new_bounds = [list(bounds[0]), list(bounds[1])]
@@ -2440,7 +2607,13 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
     @classmethod
     @requires_vtk
-    def _from_vtk_obj(cls, grid, field=None) -> TetrahedralGridDataset:
+    def _from_vtk_obj(
+        cls,
+        grid,
+        field=None,
+        remove_degenerate_cells: bool = False,
+        remove_unused_points: bool = False,
+    ) -> TetrahedralGridDataset:
         """Initialize from a vtkUnstructuredGrid instance."""
 
         # read point, cells, and values info from a vtk instance
@@ -2469,6 +2642,14 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
             coords=dict(index=np.arange(len(points_numpy)), axis=np.arange(cls._point_dims())),
         )
 
+        if remove_degenerate_cells:
+            cells = cls._remove_degenerate_cells(cells=cells)
+
+        if remove_unused_points:
+            points, values, cells = cls._remove_unused_points(
+                points=points, values=values, cells=cells
+            )
+
         return cls(points=points, cells=cells, values=values)
 
     @requires_vtk
@@ -2490,7 +2671,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
 
         slice_vtk = self._plane_slice_raw(axis=axis, pos=pos)
 
-        return TriangularGridDataset._from_vtk_obj(slice_vtk)
+        return TriangularGridDataset._from_vtk_obj(
+            slice_vtk, remove_degenerate_cells=True, remove_unused_points=True
+        )
 
     @requires_vtk
     def line_slice(self, axis: Axis, pos: Coordinate) -> SpatialDataArray:
@@ -2539,7 +2722,9 @@ class TetrahedralGridDataset(UnstructuredGridDataset):
         if extracted_cells_vtk.GetNumberOfPoints() == 0:
             raise DataError("Slicing line does not intersect the unstructured grid.")
 
-        extracted_cells = TetrahedralGridDataset._from_vtk_obj(extracted_cells_vtk)
+        extracted_cells = TetrahedralGridDataset._from_vtk_obj(
+            extracted_cells_vtk, remove_degenerate_cells=True, remove_unused_points=True
+        )
 
         tan_dims = [0, 1, 2]
         tan_dims.remove(axis)

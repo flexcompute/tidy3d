@@ -1,6 +1,7 @@
 """Defines heat grid specifications"""
 from __future__ import annotations
 
+from abc import ABC
 from typing import Union, Tuple
 import pydantic.v1 as pd
 
@@ -9,8 +10,18 @@ from ...constants import MICROMETER
 from ...exceptions import ValidationError
 
 
-class UniformUnstructuredGrid(Tidy3dBaseModel):
+class UnstructuredGrid(Tidy3dBaseModel, ABC):
+    """Abstract unstructured grid."""
 
+    relative_min_dl: pd.NonNegativeFloat = pd.Field(
+        1e-3,
+        title="Relative Mesh Size Limit",
+        description="The minimal allowed mesh size relative to the largest dimension of the simulation domain."
+        "Use ``relative_min_dl=0`` to remove this constraint.",
+    )
+
+
+class UniformUnstructuredGrid(UnstructuredGrid):
     """Uniform grid.
 
     Example
@@ -47,7 +58,7 @@ class UniformUnstructuredGrid(Tidy3dBaseModel):
     )
 
 
-class DistanceUnstructuredGrid(Tidy3dBaseModel):
+class DistanceUnstructuredGrid(UnstructuredGrid):
     """Adaptive grid based on distance to material interfaces. Currently not recommended for larger
     simulations.
 

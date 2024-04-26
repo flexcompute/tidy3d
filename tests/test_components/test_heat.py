@@ -27,7 +27,13 @@ from tidy3d import TemperatureMonitor
 from tidy3d import TemperatureData
 from tidy3d.exceptions import DataError
 
-from ..utils import STL_GEO, assert_log_level, log_capture
+from ..utils import (
+    STL_GEO,
+    assert_log_level,
+    log_capture,
+    AssertLogLevel,
+    cartesian_to_unstructured,
+)
 
 
 def make_heat_mediums():
@@ -105,16 +111,22 @@ def test_heat_bcs():
 
 
 def make_heat_mnts():
-    temp_mnt1 = TemperatureMonitor(size=(1, 2, 3), name="test")
-    temp_mnt2 = TemperatureMonitor(size=(1, 2, 3), name="tet", unstructured=True)
-    temp_mnt3 = TemperatureMonitor(size=(1, 0, 3), name="tri", unstructured=True, conformal=True)
-    temp_mnt4 = TemperatureMonitor(size=(1, 0, 3), name="empty", unstructured=True, conformal=False)
+    temp_mnt1 = TemperatureMonitor(size=(1.6, 2, 3), name="test")
+    temp_mnt2 = TemperatureMonitor(size=(1.6, 2, 3), name="tet", unstructured=True)
+    temp_mnt3 = TemperatureMonitor(
+        center=(0, 1, 0), size=(1.6, 0, 3), name="tri", unstructured=True, conformal=True
+    )
+    temp_mnt4 = TemperatureMonitor(
+        center=(0, 1, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
+    )
+    temp_mnt5 = TemperatureMonitor(center=(0, 0.7, 0.8), size=(3, 0, 0), name="line")
+    temp_mnt6 = TemperatureMonitor(center=(0.7, 0.6, 0.8), size=(0, 0, 0), name="point")
 
-    return (temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4)
+    return (temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4, temp_mnt5, temp_mnt6)
 
 
 def test_heat_mnt():
-    temp_mnt, _, _, _ = make_heat_mnts()
+    temp_mnt, _, _, _, _, _ = make_heat_mnts()
 
     with pytest.raises(pd.ValidationError):
         _ = temp_mnt.updated_copy(name=None)
@@ -124,7 +136,7 @@ def test_heat_mnt():
 
 
 def make_heat_mnt_data():
-    temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4 = make_heat_mnts()
+    temp_mnt1, temp_mnt2, temp_mnt3, temp_mnt4, temp_mnt5, temp_mnt6 = make_heat_mnts()
 
     nx, ny, nz = 9, 6, 5
     x = np.linspace(0, 1, nx)
@@ -188,7 +200,27 @@ def make_heat_mnt_data():
 
     mnt_data4 = TemperatureData(monitor=temp_mnt4, temperature=None)
 
-    return (mnt_data1, mnt_data2, mnt_data3, mnt_data4)
+    nx, ny, nz = 9, 1, 1
+    x = np.linspace(0, 1, nx)
+    y = np.linspace(0, 2, ny)
+    z = np.linspace(0, 3, nz)
+    T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
+    coords = dict(x=x, y=y, z=z)
+    temperature_field = td.SpatialDataArray(T, coords=coords)
+
+    mnt_data5 = TemperatureData(monitor=temp_mnt5, temperature=temperature_field)
+
+    nx, ny, nz = 1, 1, 1
+    x = np.linspace(0, 1, nx)
+    y = np.linspace(0, 2, ny)
+    z = np.linspace(0, 3, nz)
+    T = np.random.default_rng().uniform(300, 350, (nx, ny, nz))
+    coords = dict(x=x, y=y, z=z)
+    temperature_field = td.SpatialDataArray(T, coords=coords)
+
+    mnt_data6 = TemperatureData(monitor=temp_mnt6, temperature=temperature_field)
+
+    return (mnt_data1, mnt_data2, mnt_data3, mnt_data4, mnt_data5, mnt_data6)
 
 
 def test_heat_mnt_data():
@@ -196,12 +228,14 @@ def test_heat_mnt_data():
 
 
 def make_uniform_grid_spec():
-    return UniformUnstructuredGrid(dl=0.1, min_edges_per_circumference=5, min_edges_per_side=3)
+    return UniformUnstructuredGrid(
+        dl=0.1, min_edges_per_circumference=5, min_edges_per_side=3, relative_min_dl=1e-3
+    )
 
 
 def make_distance_grid_spec():
     return DistanceUnstructuredGrid(
-        dl_interface=0.1, dl_bulk=1, distance_interface=1, distance_bulk=2
+        dl_interface=0.1, dl_bulk=1, distance_interface=1, distance_bulk=2, relative_min_dl=1e-5
     )
 
 
@@ -213,12 +247,15 @@ def test_grid_spec():
         _ = grid_spec.updated_copy(min_edges_per_circumference=-1)
     with pytest.raises(pd.ValidationError):
         _ = grid_spec.updated_copy(min_edges_per_side=-1)
+    with pytest.raises(pd.ValidationError):
+        _ = grid_spec.updated_copy(relative_min_dl=-1e-4)
 
     grid_spec = make_distance_grid_spec()
+    _ = grid_spec.updated_copy(relative_min_dl=0)
     with pytest.raises(pd.ValidationError):
-        grid_spec.updated_copy(dl_interface=-1)
+        _ = grid_spec.updated_copy(dl_interface=-1)
     with pytest.raises(pd.ValidationError):
-        grid_spec.updated_copy(distance_interface=2, distance_bulk=1)
+        _ = grid_spec.updated_copy(distance_interface=2, distance_bulk=1)
 
 
 def make_heat_source():
@@ -296,23 +333,12 @@ def test_heat_sim():
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(sources=[UniformHeatSource(structures=["noname"])], rate=-10)
 
-    # polyslab support
-    vertices = np.array([(0, 0), (1, 0), (1, 1)])
-    p = td.PolySlab(vertices=vertices, axis=2, slab_bounds=(-1, 1))
-    _, structure = make_heat_structures()
-    structure = structure.updated_copy(geometry=p, name="polyslab")
-    _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [structure])
-
-    # stl support
-    structure = structure.updated_copy(geometry=STL_GEO, name="stl")
-    _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [structure])
-
     # run 2D case
-    _ = heat_sim.updated_copy(center=(0, 0, 0), size=(0, 2, 2))
+    _ = heat_sim.updated_copy(center=(0.7, 0, 0), size=(0, 2, 2), monitors=heat_sim.monitors[:5])
 
     # test unsupported 1D heat domains
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(center=(0, 0, 0), size=(1, 0, 0))
+        _ = heat_sim.updated_copy(center=(1, 1, 1), size=(1, 0, 0))
 
     temp_mnt = heat_sim.monitors[0]
 
@@ -325,8 +351,8 @@ def test_heat_sim():
     _ = heat_sim.plot_heat_conductivity(y=0)
     plt.close()
 
-    heat_sim = heat_sim.updated_copy(symmetry=(0, 1, 1))
-    _ = heat_sim.plot_heat_conductivity(z=0, colorbar="source")
+    heat_sim_sym = heat_sim.updated_copy(symmetry=(0, 1, 1))
+    _ = heat_sim_sym.plot_heat_conductivity(z=0, colorbar="source")
     plt.close()
 
     # no negative symmetry
@@ -341,14 +367,14 @@ def test_heat_sim():
 
     _ = heat_sim.updated_copy(structures=[], medium=solid_med, sources=[], boundary_spec=[bc_spec])
     with pytest.raises(pd.ValidationError):
-        _ = heat_sim.updated_copy(structures=[], sources=[], boundary_spec=[bc_spec])
+        _ = heat_sim.updated_copy(structures=[], sources=[], boundary_spec=[bc_spec], monitors=[])
 
     _ = heat_sim.updated_copy(
         structures=[heat_sim.structures[0]], medium=solid_med, boundary_spec=[bc_spec], sources=[]
     )
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(
-            structures=[heat_sim.structures[0]], boundary_spec=[bc_spec], sources=[]
+            structures=[heat_sim.structures[0]], boundary_spec=[bc_spec], sources=[], monitors=[]
         )
 
     # 1D and 2D structures
@@ -365,6 +391,13 @@ def test_heat_sim():
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim.updated_copy(structures=list(heat_sim.structures) + [struct_2d])
+
+    # no data expected inside a monitor
+    for mnt_size in [(0.2, 0.2, 0.2), (0, 1, 1), (0, 2, 0), (0, 0, 0)]:
+        temp_mnt = td.TemperatureMonitor(center=(0, 0, 0), size=mnt_size, name="test")
+
+        with pytest.raises(pd.ValidationError):
+            _ = heat_sim.updated_copy(monitors=[temp_mnt])
 
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
@@ -475,3 +508,119 @@ def test_sim_data():
 
     with pytest.raises(pd.ValidationError):
         _ = heat_sim_data.updated_copy(simulation=sim)
+
+
+def test_relative_min_dl_warning(log_capture):
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = td.HeatSimulation(
+            size=(1, 1, 1),
+            medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
+            grid_spec=td.UniformUnstructuredGrid(dl=0.0001, relative_min_dl=1e-2),
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+        )
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = td.HeatSimulation(
+            size=(1, 1, 1),
+            medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
+            grid_spec=td.DistanceUnstructuredGrid(
+                dl_interface=0.0001,
+                dl_bulk=0.1,
+                distance_interface=0.01,
+                distance_bulk=0.5,
+                relative_min_dl=1e-2,
+            ),
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+        )
+
+    with AssertLogLevel(log_capture, "WARNING"):
+        _ = td.HeatSimulation(
+            size=(1, 1, 1),
+            medium=td.Medium(heat_spec=td.SolidSpec(conductivity=1, capacity=2)),
+            grid_spec=td.DistanceUnstructuredGrid(
+                dl_interface=0.1,
+                dl_bulk=0.0001,
+                distance_interface=0.01,
+                distance_bulk=0.5,
+                relative_min_dl=1e-2,
+            ),
+            boundary_spec=[
+                td.HeatBoundarySpec(
+                    placement=td.SimulationBoundary(), condition=td.TemperatureBC(temperature=300)
+                )
+            ],
+        )
+
+
+@pytest.mark.parametrize("zero_dim_axis", [None, 0, 2])
+def test_symmetry_expanded(zero_dim_axis):
+    symmetry_center = [2, 0.5, 0]
+    symmetry = [1, 1, 1]
+
+    lens = [1, 2, 2]
+    num_points = [7, 4, 11]
+
+    if zero_dim_axis is not None:
+        lens[zero_dim_axis] = 0
+        num_points[zero_dim_axis] = 1
+
+    mnt_span_x = [1 - lens[0], 1]
+    mnt_span_y = [-lens[1] / 2, lens[1] / 2]
+    mnt_span_z = [1, 1 + lens[2]]
+
+    # symmetric around symmetry_center
+    data_span_x = [3, 3 + lens[0]]
+    data_span_y = [0.5, 0.5 + lens[1]]
+    data_span_z = [1, 1 + lens[2]]
+
+    mnt_bounds = np.array(list(zip(mnt_span_x, mnt_span_y, mnt_span_z)))
+    mnt_size = tuple(mnt_bounds[1] - mnt_bounds[0])
+    mnt_center = tuple((mnt_bounds[1] + mnt_bounds[0]) / 2)
+
+    x = np.linspace(*data_span_x, num_points[0])
+    y = np.linspace(*data_span_y, num_points[1])
+    z = np.linspace(*data_span_z, num_points[2])
+    v = np.sin(x[:, None, None]) * np.cos(y[None, :, None]) * np.exp(z[None, None, :])
+
+    data_cart = td.SpatialDataArray(v, coords=dict(x=x, y=y, z=z))
+    data_ugrid = cartesian_to_unstructured(data_cart, seed=33342)
+
+    mnt_cart = td.TemperatureMonitor(
+        center=mnt_center, size=mnt_size, name="test", unstructured=False
+    )
+    mnt_ugrid = td.TemperatureMonitor(
+        center=mnt_center, size=mnt_size, name="test", unstructured=True
+    )
+
+    mnt_data_cart = td.TemperatureData(
+        temperature=data_cart, monitor=mnt_cart, symmetry=symmetry, symmetry_center=symmetry_center
+    )
+    mnt_data_ugrid = td.TemperatureData(
+        temperature=data_ugrid,
+        monitor=mnt_ugrid,
+        symmetry=symmetry,
+        symmetry_center=symmetry_center,
+    )
+
+    mnt_data_cart_expanded = mnt_data_cart.symmetry_expanded_copy
+    mnt_data_ugrid_expanded = mnt_data_ugrid.symmetry_expanded_copy
+
+    assert mnt_data_cart_expanded.symmetry == (0, 0, 0)
+    assert mnt_data_ugrid_expanded.symmetry == (0, 0, 0)
+
+    data_expanded_cart = mnt_data_cart_expanded.temperature
+    data_expanded_ugrid = mnt_data_ugrid_expanded.temperature
+
+    print(data_expanded_ugrid.bounds)
+    print(mnt_bounds)
+
+    assert np.all(data_expanded_ugrid.bounds == mnt_bounds)
+    assert data_expanded_cart.does_cover(mnt_bounds)
