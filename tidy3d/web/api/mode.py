@@ -12,6 +12,10 @@ import time
 import pydantic.v1 as pydantic
 from botocore.exceptions import ClientError
 
+from typing import List
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+from rich.progress import Progress
+
 from ..core.environment import Env
 from ...components.simulation import Simulation
 from ...components.data.monitor_data import ModeSolverData
@@ -38,6 +42,10 @@ MODESOLVER_GZ = "mode_solver.hdf5.gz"
 MODESOLVER_LOG = "output/result.log"
 MODESOLVER_RESULT = "output/result.hdf5"
 MODESOLVER_RESULT_GZ = "output/mode_solver_data.hdf5.gz"
+
+DEFAULT_NUM_WORKERS = 10
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 10 # in seconds
 
 
 def run(
@@ -137,6 +145,97 @@ def run(
         to_file=results_file, verbose=verbose, progress_callback=progress_callback_download
     )
 
+def run_batch(
+    mode_solvers: List[ModeSolver],
+    task_name: str = "BatchModeSolver",
+    folder_name: str = "BatchModeSolvers",
+    results_files: List[str] = None,
+    verbose: bool = True,
+    max_workers: int = DEFAULT_NUM_WORKERS,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    retry_delay: int = DEFAULT_RETRY_DELAY,
+    progress_callback_upload: Callable[[float], None] = None,
+    progress_callback_download: Callable[[float], None] = None
+) -> List[ModeSolverData]:
+    """
+    Submits a batch of ModeSolver to the server concurrently, manages progress, and retrieves results.
+
+    Parameters
+    ----------
+    mode_solvers : List[ModeSolver]
+        List of mode solvers to be submitted to the server.
+    task_name : str
+        Base name for tasks. Each task in the batch will have a unique index appended to this base name.
+    folder_name : str
+        Name of the folder where tasks are stored on the server's web UI.
+    results_files : List[str], optional
+        List of file paths where the results for each ModeSolver should be downloaded. If None, a default path based on the folder name and index is used.
+    verbose : bool
+        If True, displays a progress bar. If False, runs silently.
+    max_workers : int
+        Maximum number of concurrent workers to use for processing the batch of simulations.
+    max_retries : int
+        Maximum number of retries for each simulation in case of failure before giving up.
+    retry_delay : int
+        Delay in seconds between retries when a simulation fails.
+    progress_callback_upload : Callable[[float], None], optional
+        Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    progress_callback_download : Callable[[float], None], optional
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+
+
+    Returns
+    -------
+    List[ModeSolverData]
+        A list of ModeSolverData objects containing the results from each simulation in the batch. None is placed in the list for simulations that fail after all retries.
+    """
+    console = get_logging_console()
+
+    # Check type to make sure the user is submitting a list of mode solvers
+    if False in [type(x)== ModeSolver for x in mode_solvers]: 
+        console.print("[red]ERROR: Stopped running a batch of mode solver simulations. Please provide a list of mode solvers of type [cyan]`td.plugins.mode.mode_solver.ModeSolver` [red]to run a batch of mode solver simulations.")
+        return
+
+    # Result files where the data is stored after downloading
+    if results_files is None:
+        results_files = [f"{folder_name}/mode_solver_results_{i}.hdf5" for i in range(len(mode_solvers))]
+
+    results = [None] * len(mode_solvers)
+    
+    # Handling simulation to make sure there are more than one tries if simulation produces some error
+    def handle_simulation(index, retries=0):
+        try:
+            # We'll create a separate progress bar for batch simulations so we'll set verbose=False here for individual runs
+            result = run(mode_solvers[index], f"{task_name}_{index}", f"mode_solver_batch_{index}", folder_name, results_files[index], False, progress_callback_upload, progress_callback_download)
+            results[index] = result
+        except Exception as exc:
+            if retries < max_retries:
+                # Wait before retrying
+                time.sleep(retry_delay)  
+                handle_simulation(index, retries + 1)
+            else:
+                results[index] = None 
+
+    # Using multithreading to run mode solver simulations concurrently
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(handle_simulation, i) for i in range(len(mode_solvers))]
+        # Creating a progress bar for batch simulations using rich progress
+        if verbose:
+            with Progress(console=console) as progress:
+                pbar_message = f"[cyan]Running a batch of [deep_pink4]{len(mode_solvers)} mode solvers [cyan]in parallel.\n"
+                pbar = progress.add_task(pbar_message, total=len(mode_solvers))
+                for future in as_completed(futures):
+                    progress.advance(pbar)
+                    try:
+                        future.result()  # Add timeout if needed
+                    except TimeoutError:
+                        console.print(f"[red]A ModeSolver task has timed out.")
+
+                # Make sure the progress bar is complete
+                progress.update(pbar, completed=len(mode_solvers), refresh=True)
+                console.print("[green]Batch simulations completed successfully!")  
+
+    return results
 
 class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow):
     """Interface for managing the running of a :class:`.ModeSolver` task on server."""
