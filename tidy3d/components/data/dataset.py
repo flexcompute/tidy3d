@@ -217,6 +217,7 @@ class FieldDataset(ElectromagneticFieldDataset):
         None,
         title="Ex",
         description="Spatial distribution of the x-component of the electric field.",
+        jax_field=True,
     )
     Ey: ScalarFieldDataArray = pd.Field(
         None,
