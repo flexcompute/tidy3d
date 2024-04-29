@@ -6,7 +6,7 @@ from abc import ABC
 from typing import Dict, Tuple, Optional
 import time
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import concurrent
 
 from rich.progress import Progress
@@ -375,7 +375,6 @@ class BatchData(Tidy3dBaseModel):
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
-
         return web.load(
             task_id=task_id,
             path=task_data_path,
@@ -503,6 +502,37 @@ class Batch(WebContainer):
         if not os.path.exists(path_dir):
             os.makedirs(path_dir, exist_ok=True)
 
+    def _process_single_job_verbose(self, job, path_dir=None, progress=None, task_id=None) -> None:
+        """How a batch handles a single job with progressbar."""
+
+        progress[task_id] = {"progress": 1, "status": "uploading"}
+        job.upload()
+        progress[task_id] = {"progress": 2, "status": "initializing"}
+        job.start()
+        progress[task_id] = {"progress": 3, "status": "running"}
+        job.monitor()
+        progress[task_id] = {"progress": 4, "status": "downloading"}
+
+        job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+        if "error" in job.status:
+            log.warning(f"Not downloading '{task_name}' as the task errored.")
+        else:            
+            job.download(path=job_path)
+
+        progress[task_id] = {"progress": 5, "status": "completed"}
+
+    def _process_single_job_silent(self, job, path_dir=None) -> None:
+        """How a batch handles a single job without."""
+        job.upload()
+        job.start()
+        job.monitor()
+        job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+        if "error" in job.status:
+            log.warning(f"Not downloading '{task_name}' as the task errored.")
+        else:            
+            job.download(path=job_path)
+
+
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Upload and run each simulation in :class:`Batch`.
 
@@ -531,12 +561,74 @@ class Batch(WebContainer):
         rather it iterates over the task names and loads the corresponding
         data from file one by one. If no file exists for that task, it downloads it.
         """
-        # TODO: multi-threaded version of this (end to end)
+
+        import multiprocessing
+
+
         self._check_path_dir(path_dir)
-        self.upload()
-        self.start()
-        self.monitor()
-        self.download(path_dir=path_dir)
+        self.to_file(self._batch_path(path_dir=path_dir))
+        # initialize jobs
+        jobs = self.jobs
+
+        if self.verbose:
+            console = get_logging_console()
+            console.log(f"Started working on Batch containing {self.num_jobs} tasks.")
+            with Progress(console=console) as progress:
+
+                futures = []  # keep track of the jobs
+                with multiprocessing.Manager() as manager:
+                    # this is the key - we share some state between our 
+                    # main process and our worker functions
+                    _progress = manager.dict()
+                    overall_progress_task = progress.add_task("[green]All jobs progress:")
+
+                    with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+                        for task_id, job in jobs.items():  # iterate over the jobs we need to run
+
+                            # set visible false so we don't have a lot of bars all at once:
+                            task_id = progress.add_task(f"task {task_id}", visible=True)
+                            futures.append(executor.submit(self._process_single_job_verbose, job, path_dir, _progress, task_id))
+
+                        # monitor the progress:
+                        while (n_finished := sum([future.done() for future in futures])) < len(
+                            futures
+                        ):
+                            progress.update(
+                                overall_progress_task, completed=n_finished, total=len(futures)
+                            )
+                            for task_id, update_data in _progress.items():
+                                latest = update_data["progress"]
+                                status = update_data["status"]
+                                # update the progress bar for this task:
+                                progress.update(
+                                    task_id,
+                                    completed=latest,
+                                    description=f"task {task_id}: {status}",
+                                    total=5,
+                                    refresh=True,
+                                )
+                                time.sleep(0.2)
+
+                        # raise any errors:
+                        # for future in futures:
+                        #     future.result()
+
+                    # mark all complete
+                    for task_id, update_data in _progress.items():
+                        progress.update(
+                            task_id,
+                            completed=5,
+                            total=5,
+                            refresh=True,
+                        )
+                    progress.update(overall_progress_task, completed=n_finished, refresh=True)
+
+
+        else:
+            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:            
+                for task_name, job in jobs.items():
+                    _ = executor.submit(self._process_single_job_silent, job, path_dir, None)
+
         return self.load(path_dir=path_dir)
 
     @cached_property
