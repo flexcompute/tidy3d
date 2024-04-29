@@ -242,6 +242,7 @@ class Job(WebContainer):
         """
         web.start(self.task_id, solver_version=self.solver_version)
 
+
     def get_run_info(self) -> RunInfo:
         """Return information about the running :class:`Job`.
 
@@ -532,12 +533,24 @@ class Batch(WebContainer):
         data from file one by one. If no file exists for that task, it downloads it.
         """
         # TODO: multi-threaded version of this (end to end)
+        if self.verbose:
+            console = get_logging_console()
+            console.log(f"start the batch for {self.num_jobs} tasks.")
         self._check_path_dir(path_dir)
-        self.upload()
-        self.start()
-        self.monitor()
-        self.download(path_dir=path_dir)
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            for task_name, job in self.jobs.items():
+                _ = executor.submit(self.process_single_job, job, path_dir)
+            self.monitor()
+
         return self.load(path_dir=path_dir)
+
+    def process_single_job(self, job, path_dir=None):
+        job.upload()
+        job.start()
+        job.monitor()
+        job.download(path_dir)
+
 
     @cached_property
     def jobs(self) -> Dict[TaskName, Job]:
