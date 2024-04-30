@@ -38,10 +38,10 @@ dask = "*"
 toml = "*"
 ### NOT CORE
 scipy = "*"
-boto3 = "1.28.*"
-requests = "2.31.*"
+boto3 = "^1.28.0"
+requests = "^2.31.0"
 pyjwt = "*"
-click = "8.1.*"
+click = "^8.1.0"
 responses = "*"
 ### END NOT CORE
 
@@ -68,8 +68,8 @@ gdspy = {version="*", optional = true}
 gdstk = {version=">=0.9.49", optional = true}
 
 # jax
-jaxlib = {version = "^0.4.13,<=0.4.26", source="jaxsource", optional = true}
-jax = {version = "^0.4.13,<=0.4.26", extras = ["cpu"], source="jaxsource", optional = true}
+jaxlib = {version = "^0.4.13", source="jaxsource", optional = true}
+jax = {version = "^0.4.13", extras = ["cpu"], source="jaxsource", optional = true}
 
 # trimesh
 networkx = {version = "^2.6.3", optional = true}
@@ -97,7 +97,7 @@ myst-parser = {version="*", optional = true}
 optax = {version=">=0.2.2", optional = true}
 signac = {version="*", optional = true}
 flax = {version=">=0.8.2", optional = true}
-sax = {version="*", optional = true}
+sax = {version="^0.11", optional = true}
 vtk = {version=">=9.2.6", optional = true}
 pyswarms = {version="*", optional = true}
 sphinxemoji = {version="*", optional = true}
@@ -181,7 +181,7 @@ lint.select = [
 ]
 
 [tool.bumpversion]
-current_version = "2.6.3"
+current_version = "2.7.0rc1"
 parse = """(?x)
     (?P<major>0|[1-9]\\d*)\\.
     (?P<minor>0|[1-9]\\d*)\\.
