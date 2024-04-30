@@ -93,6 +93,10 @@ def test_lossless_dispersion(random_data, mock_remote_api):
     fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=tuple(n_data))
     medium, rms = fitter.fit(advanced_param=advanced_param)
 
+    # from permittivity data
+    fitter = FastDispersionFitter.from_complex_permittivity(wvl_um, n_data**2)
+    medium2, rms2 = fitter.fit(advanced_param=advanced_param)
+
 
 @responses.activate
 def test_lossy_dispersion(random_data, mock_remote_api):
@@ -105,6 +109,34 @@ def test_lossy_dispersion(random_data, mock_remote_api):
 
     fitter = FastDispersionFitter(wvl_um=wvl_um.tolist(), n_data=n_data, k_data=k_data)
     medium, rms = fitter.fit(advanced_param=advanced_param)
+
+    # from permittivity data
+    eps_complex = (n_data + 1j * k_data) ** 2
+    fitter = FastDispersionFitter.from_complex_permittivity(
+        wvl_um, eps_complex.real, eps_complex.imag
+    )
+    medium2, rms2 = fitter.fit(advanced_param=advanced_param)
+
+    # from loss tangent
+    fitter = FastDispersionFitter.from_loss_tangent(
+        wvl_um, eps_complex.real, eps_complex.imag / eps_complex.real
+    )
+    medium3, rms3 = fitter.fit(advanced_param=advanced_param)
+
+
+def test_constant_loss_tangent():
+    """perform fitting on constant loss tangent material"""
+
+    eps_real = 2.5
+    loss_tangent = 1e-2
+    frequency_range = (1e9, 6e9)
+    mat = FastDispersionFitter.constant_loss_tangent_model(eps_real, loss_tangent, frequency_range)
+
+    # validate
+    sampling_frequency = np.linspace(frequency_range[0], frequency_range[1], 29)
+    eps_out, loss_tangent_out = mat.loss_tangent_model(sampling_frequency)
+    assert np.max(np.abs(eps_out - eps_real)) < 2e-2
+    assert np.max(np.abs(loss_tangent_out - loss_tangent)) / loss_tangent < 2e-2
 
 
 @responses.activate
