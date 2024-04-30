@@ -30,7 +30,7 @@ INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally
 JSON_TAG = "JSON_STRING"
 # If json string is larger than ``MAX_STRING_LENGTH``, split the string when storing in hdf5
-MAX_STRING_LENGTH = 1e9
+MAX_STRING_LENGTH = 1_000_000_000
 FORBID_SPECIAL_CHARACTERS = ["/"]
 
 
