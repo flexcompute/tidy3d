@@ -1,5 +1,6 @@
 """Fit PoleResidue Dispersion models to optical NK data
 """
+from __future__ import annotations
 
 from typing import Tuple, List, Optional
 import csv
@@ -564,7 +565,9 @@ class DispersionFitter(Tidy3dBaseModel):
             raise ValidationError("Invalid URL. Too many k labels.")
 
     @classmethod
-    def from_url(cls, url_file: str, delimiter: str = ",", ignore_k: bool = False, **kwargs):
+    def from_url(
+        cls, url_file: str, delimiter: str = ",", ignore_k: bool = False, **kwargs
+    ) -> DispersionFitter:
         """loads :class:`DispersionFitter` from url linked to a csv/txt file that
         contains wavelength (micron), n, and optionally k data. Preferred from
         refractiveindex.info.
@@ -652,7 +655,7 @@ class DispersionFitter(Tidy3dBaseModel):
         return cls(wvl_um=n_lam[:, 0], n_data=n_lam[:, 1], **kwargs)
 
     @classmethod
-    def from_file(cls, fname: str, **loadtxt_kwargs):
+    def from_file(cls, fname: str, **loadtxt_kwargs) -> DispersionFitter:
         """Loads :class:`DispersionFitter` from file containing wavelength, n, k data.
 
         Parameters
@@ -697,3 +700,65 @@ class DispersionFitter(Tidy3dBaseModel):
         else:
             wvl_um, n_data, k_data = data.T
         return cls(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
+
+    @classmethod
+    def from_complex_permittivity(
+        cls,
+        wvl_um: ArrayFloat1D,
+        eps_real: ArrayFloat1D,
+        eps_imag: ArrayFloat1D = None,
+        wvl_range: Tuple[Optional[float], Optional[float]] = (None, None),
+    ) -> DispersionFitter:
+        """Loads :class:`DispersionFitter` from wavelength and complex relative permittivity data
+
+        Parameters
+        ----------
+        wvl_um : ArrayFloat1D
+            Wavelength data in micrometers.
+        eps_real : ArrayFloat1D
+            Real parts of relative permittivity data
+        eps_imag : Optional[ArrayFloat1D]
+            Imaginary parts of relative permittivity data; `None` for lossless medium.
+        wvg_range : Tuple[Optional[float], Optional[float]]
+            Wavelength range [wvl_min,wvl_max] for fitting.
+
+        Returns
+        -------
+        :class:`DispersionFitter`
+            A :class:`DispersionFitter` instance.
+        """
+        if eps_imag is None:
+            n, _ = AbstractMedium.eps_complex_to_nk(eps_real + 0j)
+            return cls(wvl_um=wvl_um, n_data=n, wvl_range=wvl_range)
+        n, k = AbstractMedium.eps_complex_to_nk(eps_real + eps_imag * 1j)
+        return cls(wvl_um=wvl_um, n_data=n, k_data=k, wvl_range=wvl_range)
+
+    @classmethod
+    def from_loss_tangent(
+        cls,
+        wvl_um: ArrayFloat1D,
+        eps_real: ArrayFloat1D,
+        loss_tangent: ArrayFloat1D,
+        wvl_range: Tuple[Optional[float], Optional[float]] = (None, None),
+    ) -> DispersionFitter:
+        """Loads :class:`DispersionFitter` from wavelength and loss tangent data.
+
+        Parameters
+        ----------
+        wvl_um : ArrayFloat1D
+            Wavelength data in micrometers.
+        eps_real : ArrayFloat1D
+            Real parts of relative permittivity data
+        loss_tangent : Optional[ArrayFloat1D]
+            Loss tangent data, defined as the ratio of imaginary and real parts of permittivity.
+        wvl_range : Tuple[Optional[float], Optional[float]]
+            Wavelength range [wvl_min,wvl_max] for fitting.
+
+        Returns
+        -------
+        :class:`DispersionFitter`
+            A :class:`DispersionFitter` instance.
+        """
+        eps_complex = AbstractMedium.eps_loss_tangent_to_eps_complex(eps_real, loss_tangent)
+        n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
+        return cls(wvl_um=wvl_um, n_data=n, k_data=k, wvl_range=wvl_range)

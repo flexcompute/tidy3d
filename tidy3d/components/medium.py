@@ -763,6 +763,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         ----------
         frequency : float
             Frequency to evaluate permittivity at (Hz).
+
         Returns
         -------
         Tuple[float, float]
@@ -770,6 +771,22 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """
         eps_complex = self.eps_model(frequency=frequency)
         return self.eps_complex_to_nk(eps_complex)
+
+    def loss_tangent_model(self, frequency: float) -> Tuple[float, float]:
+        """Permittivity and loss tangent as a function of frequency.
+
+        Parameters
+        ----------
+        frequency : float
+            Frequency to evaluate permittivity at (Hz).
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real part of permittivity and loss tangent.
+        """
+        eps_complex = self.eps_model(frequency=frequency)
+        return self.eps_complex_to_eps_loss_tangent(eps_complex)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
@@ -967,6 +984,41 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         omega = 2 * np.pi * freq
         sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
+
+    @staticmethod
+    def eps_complex_to_eps_loss_tangent(eps_complex: complex) -> Tuple[float, float]:
+        """Convert complex permittivity to permittivity and loss tangent.
+
+        Parameters
+        ----------
+        eps_complex : complex
+            Complex-valued relative permittivity.
+
+        Returns
+        -------
+        Tuple[float, float]
+            Real part of relative permittivity & loss tangent
+        """
+        eps_real, eps_imag = eps_complex.real, eps_complex.imag
+        return eps_real, eps_imag / eps_real
+
+    @staticmethod
+    def eps_loss_tangent_to_eps_complex(eps_real: float, loss_tangent: float) -> complex:
+        """Convert permittivity and loss tangent to complex permittivity.
+
+        Parameters
+        ----------
+        eps_real : float
+            Real part of relative permittivity
+        loss_tangent : float
+            Loss tangent
+
+        Returns
+        -------
+        eps_complex : complex
+            Complex-valued relative permittivity.
+        """
+        return eps_real * (1 + 1j * loss_tangent)
 
     @ensure_freq_in_range
     def sigma_model(self, freq: float) -> complex:

@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `JaxSimulation` now supports the following GDS export methods: `to_gds()`, `to_gds_file()`, `to_gdspy()`, and `to_gdstk()`.
 - `RunTimeSpec` accepted by `Simulation.run_time` to adaptively set the run time based on Q-factor, propagation length, and other factors.
 - `JaxDataArray` now supports selection by nearest value via `JaxDataArray.sel(..., method="nearest")`.
+- Convenience method `constant_loss_tangent_model` in `FastDispersionFitter` to fit constant loss tangent material model.
+- Classmethods in `DispersionFitter` to load complex-valued permittivity or loss tangent data.
 
 ### Changed
 - `tidy3d convert` from `.lsf` files to tidy3d scripts is moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.
