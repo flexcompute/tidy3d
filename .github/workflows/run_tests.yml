@@ -112,22 +112,11 @@ jobs:
     #  -----  install & configure poetry  -----
     #----------------------------------------------
     - name: Install Poetry
-      uses: abatilo/actions-poetry@v2
+      uses: snok/install-poetry@v1
       with:
-        version: 1.7.1
-
-    # After installing Poetry add to PATH
-    - name: Add Poetry's bin directory to PATH
-      run: |
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        echo $(which poetry)
-        echo $(poetry --version)
-
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-        cache: "poetry" # caching poetry dependencies
+        version: 1.8.2
+        virtualenvs-create: true
+        virtualenvs-in-project: true
 
     #----------------------------------------------
     # install your root project, if required
