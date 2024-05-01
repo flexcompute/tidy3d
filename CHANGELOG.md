@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for complex and self-intersecting polyslabs in adjoint module via `JaxComplexPolySlab`.
 - Support for `.gz` files in `Simulation` version updater.
 - Warning if a nonuniform custom medium is intersecting `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`, `FieldProjectionCartesianMonitor`, `FieldProjectionAngleMonitor`, `FieldProjectionKSpaceMonitor`, and `DiffractionMonitor`.
+- Added a `CoaxialLumpedPort` and `CoaxialLumpedResistor` for coaxial type transmission lines and excitations.
 
 ### Changed
 - `tidy3d convert` from `.lsf` files to tidy3d scripts has moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.

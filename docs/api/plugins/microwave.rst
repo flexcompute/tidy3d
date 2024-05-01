@@ -10,4 +10,7 @@ Microwave
    tidy3d.plugins.microwave.AxisAlignedPathIntegral 
    tidy3d.plugins.microwave.VoltageIntegralAxisAligned
    tidy3d.plugins.microwave.CurrentIntegralAxisAligned
+   tidy3d.plugins.microwave.CustomPathIntegral2D 
+   tidy3d.plugins.microwave.CustomVoltageIntegral2D
+   tidy3d.plugins.microwave.CustomCurrentIntegral2D
    tidy3d.plugins.microwave.ImpedanceCalculator

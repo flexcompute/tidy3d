@@ -53,7 +53,7 @@ from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSur
 from .components.monitor import DiffractionMonitor
 
 # lumped elements
-from .components.lumped_element import LumpedResistor
+from .components.lumped_element import LumpedResistor, CoaxialLumpedResistor
 
 # run time spec
 from .components.run_time_spec import RunTimeSpec
@@ -322,6 +322,7 @@ __all__ = [
     "__version__",
     "Updater",
     "LumpedResistor",
+    "CoaxialLumpedResistor",
     "Scene",
     "StructureStructureInterface",
     "StructureBoundary",

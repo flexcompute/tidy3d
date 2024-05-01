@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Tuple, Dict
+from typing import Tuple, Dict, Union
 
 import pydantic.v1 as pd
 import numpy as np
-import xarray as xr
 
 from ....constants import C_0, fp_eps
-from ....exceptions import SetupError
 from ....components.simulation import Simulation
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.data.sim_data import SimulationData
@@ -21,16 +19,16 @@ from ....exceptions import ValidationError
 from ....web.api.container import BatchData
 
 from .base import AbstractComponentModeler, FWIDTH_FRAC
-from ..ports.lumped import LumpedPortDataArray, LumpedPort
-
-from ...microwave import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
+from ..ports.base_lumped import LumpedPortDataArray
+from ..ports.rectangular_lumped import LumpedPort
+from ..ports.coaxial_lumped import CoaxialLumpedPort
 
 
 class TerminalComponentModeler(AbstractComponentModeler):
     """Tool for modeling two-terminal multiport devices and computing port parameters
     with lumped ports."""
 
-    ports: Tuple[LumpedPort, ...] = pd.Field(
+    ports: Tuple[Union[LumpedPort, CoaxialLumpedPort], ...] = pd.Field(
         (),
         title="Lumped ports",
         description="Collection of lumped ports associated with the network. "
@@ -42,11 +40,13 @@ class TerminalComponentModeler(AbstractComponentModeler):
     def plot_sim(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot a :class:`Simulation` with all sources added for each port, for troubleshooting."""
+        """Plot a :class:`.Simulation` with all sources added for each port, for troubleshooting."""
 
         plot_sources = []
         for port_source in self.ports:
-            source_0 = port_source.to_source(self._source_time, snap_center=None)
+            source_0 = port_source.to_source(
+                self._source_time, snap_center=None, grid=self.simulation.grid
+            )
             plot_sources.append(source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
         return sim_plot.plot(x=x, y=y, z=z, ax=ax, **kwargs)
@@ -56,18 +56,20 @@ class TerminalComponentModeler(AbstractComponentModeler):
     def plot_sim_eps(
         self, x: float = None, y: float = None, z: float = None, ax: Ax = None, **kwargs
     ) -> Ax:
-        """Plot permittivity of the :class:`Simulation` with all sources added for each port."""
+        """Plot permittivity of the :class:`.Simulation` with all sources added for each port."""
 
         plot_sources = []
         for port_source in self.ports:
-            source_0 = port_source.to_source(self._source_time, snap_center=None)
+            source_0 = port_source.to_source(
+                self._source_time, snap_center=None, grid=self.simulation.grid
+            )
             plot_sources.append(source_0)
         sim_plot = self.simulation.copy(update=dict(sources=plot_sources))
         return sim_plot.plot_eps(x=x, y=y, z=z, ax=ax, **kwargs)
 
     @cached_property
     def sim_dict(self) -> Dict[str, Simulation]:
-        """Generate all the :class:`Simulation` objects for the port parameter calculation."""
+        """Generate all the :class:`.Simulation` objects for the port parameter calculation."""
 
         sim_dict = {}
 
@@ -112,15 +114,15 @@ class TerminalComponentModeler(AbstractComponentModeler):
         snap_and_recreate = False
         snap_centers = []
         for port in self.ports:
-            port_source = port.to_source(self._source_time, snap_center=None)
             update_dict = dict(
-                sources=[port_source],
                 monitors=new_mnts,
                 lumped_elements=lumped_resistors,
                 grid_spec=grid_spec,
             )
 
             sim_copy = self.simulation.copy(update=update_dict)
+            port_source = port.to_source(self._source_time, snap_center=None, grid=sim_copy.grid)
+            sim_copy = sim_copy.updated_copy(sources=[port_source])
             task_name = self._task_name(port=port)
             sim_dict[task_name] = sim_copy
 
@@ -151,15 +153,17 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 list(self.simulation.monitors) + port_voltage_monitors + port_current_monitors
             )
             for port, center in zip(self.ports, snap_centers):
-                port_source = port.to_source(self._source_time, snap_center=center)
                 update_dict = dict(
-                    sources=[port_source],
                     monitors=new_mnts,
                     lumped_elements=lumped_resistors,
                     grid_spec=grid_spec,
                 )
 
                 sim_copy = self.simulation.copy(update=update_dict)
+                port_source = port.to_source(
+                    self._source_time, snap_center=center, grid=sim_copy.grid
+                )
+                sim_copy = sim_copy.updated_copy(sources=[port_source])
                 task_name = self._task_name(port=port)
                 sim_dict[task_name] = sim_copy
 
@@ -179,7 +183,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
         )
 
     def _construct_smatrix(self, batch_data: BatchData) -> LumpedPortDataArray:
-        """Post process `BatchData` to generate scattering matrix."""
+        """Post process ``BatchData`` to generate scattering matrix."""
 
         port_names = [port.name for port in self.ports]
 
@@ -195,115 +199,11 @@ class TerminalComponentModeler(AbstractComponentModeler):
         a_matrix = LumpedPortDataArray(values, coords=coords)
         b_matrix = a_matrix.copy(deep=True)
 
-        def select_within_bounds(coords: np.array, min, max):
-            """Helper to return indices of coordinates within min and max bounds,"""
-            """including a tolerance. xarray does not have this functionality yet. """
-            min_idx = np.searchsorted(coords, min, "left")
-            # If a coordinate is close enough, it is considered included
-            if min_idx > 0 and np.isclose(coords[min_idx - 1], min, rtol=fp_eps, atol=fp_eps):
-                min_idx -= 1
-            max_idx = np.searchsorted(coords, max, "left")
-            if max_idx < len(coords) and np.isclose(coords[max_idx], max, rtol=fp_eps, atol=fp_eps):
-                max_idx += 1
-
-            return (min_idx, max_idx - 1)
-
-        def port_voltage(port: LumpedPort, sim_data: SimulationData) -> xr.DataArray:
-            """Helper to compute voltage across the port."""
-            e_component = "xyz"[port.voltage_axis]
-            field_data = sim_data[f"{port.name}_E{e_component}"]
-
-            size = list(port.size)
-            size[port.current_axis] = 0
-            voltage_integral = VoltageIntegralAxisAligned(
-                center=port.center,
-                size=size,
-                extrapolate_to_endpoints=True,
-                snap_path_to_grid=True,
-                sign="+",
-            )
-            voltage = voltage_integral.compute_voltage(field_data)
-            # Return data array of voltage with coordinates of frequency
-            return voltage
-
-        def port_current(port: LumpedPort, sim_data: SimulationData) -> xr.DataArray:
-            """Helper to compute current flowing through the port."""
-
-            # Diagram of contour integral, dashed line indicates location of sheet resistance
-            # and electric field used for voltage computation. Voltage axis is out-of-page.
-            #
-            #                                    current_axis = ->
-            #                                    injection_axis = ^
-            #
-            #                  |                   h2_field ->             |
-            #    h_cap_minus ^  -------------------------------------------  h_cap_plus ^
-            #                  |                   h1_field ->             |
-
-            # Get h field tangent to resistive sheet
-            h_component = "xyz"[port.current_axis]
-            inject_component = "xyz"[port.injection_axis]
-            monitor_data = sim_data[f"{port.name}_H{h_component}"]
-            field_data = monitor_data.field_components
-            h_field = field_data[f"H{h_component}"]
-            # Coordinates as numpy array for h_field along curren and injection axis
-            h_coords_along_current = h_field.coords[h_component].values
-            h_coords_along_injection = h_field.coords[inject_component].values
-            # h_cap represents the very short section (single cell) of the H contour that
-            # is in the injection_axis direction. It is needed to fully enclose the sheet.
-            h_cap_field = field_data[f"H{inject_component}"]
-            # Coordinates of h_cap field as numpy arrays
-            h_cap_coords_along_current = h_cap_field.coords[h_component].values
-            h_cap_coords_along_injection = h_cap_field.coords[inject_component].values
-
-            # Use the coordinates of h_cap since it lies on the same grid that the
-            # lumped resistor is snapped to
-            orth_index = np.argmin(
-                np.abs(h_cap_coords_along_injection - port.center[port.injection_axis])
-            )
-            inject_center = h_cap_coords_along_injection[orth_index]
-            # Some sanity checks, tangent H field coordinates should be directly above
-            # and below the coordinates of the resistive sheet
-            assert orth_index > 0
-            assert inject_center < h_coords_along_injection[orth_index]
-            assert h_coords_along_injection[orth_index - 1] < inject_center
-            # Distance between the h1_field and h2_field, a single cell size
-            dcap = h_coords_along_injection[orth_index] - h_coords_along_injection[orth_index - 1]
-
-            # Next find the size in the current_axis direction
-            # Find exact bounds of port taking into consideration the Yee grid
-            # Select bounds carefully and allow for h_cap very close to the port bounds
-            port_min = port.bounds[0][port.current_axis]
-            port_max = port.bounds[1][port.current_axis]
-
-            (idx_min, idx_max) = select_within_bounds(h_coords_along_current, port_min, port_max)
-            # Use these indices to select the exact positions of the h_cap field
-            h_min_bound = h_cap_coords_along_current[idx_min - 1]
-            h_max_bound = h_cap_coords_along_current[idx_max]
-
-            # Setup axis aligned contour integral, which is defined by a plane
-            # The path integral is snapped to the grid, so center and size will
-            # be slightly modified when compared to the original port.
-            center = list(port.center)
-            center[port.injection_axis] = inject_center
-            center[port.current_axis] = (h_max_bound + h_min_bound) / 2
-            size = [0, 0, 0]
-            size[port.current_axis] = h_max_bound - h_min_bound
-            size[port.injection_axis] = dcap
-
-            # H field is continuous at integral bounds, so extrapolation is turned off
-            I_integral = CurrentIntegralAxisAligned(
-                center=center,
-                size=size,
-                sign="+",
-                extrapolate_to_endpoints=False,
-                snap_contour_to_grid=True,
-            )
-            return I_integral.compute_current(monitor_data)
-
-        def port_ab(port: LumpedPort, sim_data: SimulationData):
+        def port_ab(port: Union[LumpedPort, CoaxialLumpedPort], sim_data: SimulationData):
             """Helper to compute the port incident and reflected power waves."""
-            voltage = port_voltage(port, sim_data)
-            current = port_current(port, sim_data)
+            voltage = port.compute_voltage(sim_data)
+            current = port.compute_current(sim_data)
+
             power_a = (voltage + port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
             power_b = (voltage - port.impedance * current) / 2 / np.sqrt(np.real(port.impedance))
             return power_a, power_b
@@ -334,7 +234,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
 
     @pd.validator("simulation")
     def _validate_3d_simulation(cls, val):
-        """Error if Simulation is not a 3D simulation"""
+        """Error if :class:`.Simulation` is not a 3D simulation"""
 
         if val.size.count(0.0) > 0:
             raise ValidationError(
@@ -343,19 +243,10 @@ class TerminalComponentModeler(AbstractComponentModeler):
         return val
 
     @staticmethod
-    def _check_grid_size_at_ports(simulation: Simulation, ports: list[LumpedPort]):
-        """Raises :class:`SetupError` if the grid is too coarse at port locations"""
+    def _check_grid_size_at_ports(
+        simulation: Simulation, ports: list[Union[LumpedPort, CoaxialLumpedPort]]
+    ):
+        """Raises :class:`.SetupError` if the grid is too coarse at port locations"""
         yee_grid = simulation.grid.yee
         for port in ports:
-            e_component = "xyz"[port.voltage_axis]
-            e_yee_grid = yee_grid.grid_dict[f"E{e_component}"]
-            coords = e_yee_grid.to_dict[e_component]
-            min_bound = port.bounds[0][port.voltage_axis]
-            max_bound = port.bounds[1][port.voltage_axis]
-            coords_within_port = np.any(np.logical_and(coords > min_bound, coords < max_bound))
-            if not coords_within_port:
-                raise SetupError(
-                    f"Grid is too coarse along '{e_component}' direction for the lumped port "
-                    f"at location {port.center}. Either set the port's 'num_grid_cells' to "
-                    f"a nonzero integer or modify the 'GridSpec'. "
-                )
+            port._check_grid_size(yee_grid)

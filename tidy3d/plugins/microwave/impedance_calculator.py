@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pydantic.v1 as pd
 import numpy as np
-from typing import Optional
+from typing import Optional, Union
 from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 
 from ...components.base import Tidy3dBaseModel
@@ -13,19 +13,23 @@ from ...exceptions import DataError, ValidationError
 
 from .path_integrals import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
 from .path_integrals import MonitorDataTypes, IntegralResultTypes
+from .custom_path_integrals import CustomVoltageIntegral2D, CustomCurrentIntegral2D
+
+VoltageIntegralTypes = Union[VoltageIntegralAxisAligned, CustomVoltageIntegral2D]
+CurrentIntegralTypes = Union[CurrentIntegralAxisAligned, CustomCurrentIntegral2D]
 
 
 class ImpedanceCalculator(Tidy3dBaseModel):
     """Tool for computing the characteristic impedance of a transmission line."""
 
-    voltage_integral: Optional[VoltageIntegralAxisAligned] = pd.Field(
-        ...,
+    voltage_integral: Optional[VoltageIntegralTypes] = pd.Field(
+        None,
         title="Voltage Integral",
         description="Definition of path integral for computing voltage.",
     )
 
-    current_integral: Optional[CurrentIntegralAxisAligned] = pd.Field(
-        ...,
+    current_integral: Optional[CurrentIntegralTypes] = pd.Field(
+        None,
         title="Current Integral",
         description="Definition of contour integral for computing current.",
     )
@@ -33,7 +37,20 @@ class ImpedanceCalculator(Tidy3dBaseModel):
     def compute_impedance(self, em_field: MonitorDataTypes) -> IntegralResultTypes:
         """Compute impedance for the supplied ``em_field`` using ``voltage_integral`` and
         ``current_integral``. If only a single integral has been defined, impedance is
-        computed using the total flux in ``em_field``."""
+        computed using the total flux in ``em_field``.
+
+        Parameters
+        ----------
+        em_field : :class:`.MonitorDataTypes`
+            The electromagnetic field data that will be used for computing the characteristic
+            impedance.
+
+        Returns
+        -------
+        :class:`.IntegralResultTypes`
+            Result of impedance computation over remaining dimensions (frequency, time, mode indices).
+        """
+
         if not isinstance(em_field, (FieldData, FieldTimeData, ModeSolverData)):
             raise DataError("'em_field' type not supported by impedance calculator.")
 
