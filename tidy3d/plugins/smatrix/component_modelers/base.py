@@ -18,7 +18,7 @@ from ....log import log
 from ....web.api.container import BatchData, Batch
 
 from ..ports.modal import Port
-from ..ports.lumped import LumpedPort
+from ..ports.rectangular_lumped import LumpedPort
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10

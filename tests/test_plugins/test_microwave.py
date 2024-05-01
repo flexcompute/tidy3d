@@ -13,6 +13,8 @@ from tidy3d.constants import ETA_0
 from tidy3d.plugins.microwave import (
     VoltageIntegralAxisAligned,
     CurrentIntegralAxisAligned,
+    CustomVoltageIntegral2D,
+    CustomCurrentIntegral2D,
     ImpedanceCalculator,
 )
 
@@ -379,3 +381,60 @@ def test_coupled_microstrip_model():
     assert np.isclose(Z_odd, 39, rtol=0.01)
     assert np.isclose(eps_even, 3.42, rtol=0.01)
     assert np.isclose(eps_odd, 2.80, rtol=0.01)
+
+
+def test_frequency_monitor_custom_voltage_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make line
+    vertices = [(0, 0), (0, 0.2), (0, 0.4)]
+    voltage_integral = CustomVoltageIntegral2D(axis=2, position=0, vertices=vertices)
+    voltage_integral.compute_voltage(SIM_Z_DATA["field"])
+
+
+def test_vertices_validator_custom_current_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make wrong box
+    vertices = [(0.2, -0.2, 0.5), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+
+    # Make wrong box shape
+    vertices = [(0.2, 0.2, -0.2, -0.2, 0.2), (-0.2, 0.2, 0.2, -0.2, 0.2)]
+    with pytest.raises(pydantic.ValidationError):
+        _ = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+
+
+def test_fields_missing_custom_current_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make box
+    vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
+    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    with pytest.raises(DataError):
+        current_integral.compute_current(SIM_Z_DATA["ExHx"])
+
+
+def test_time_monitor_custom_current_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make box
+    vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
+    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral.compute_current(SIM_Z_DATA["field_time"])
+
+
+def test_mode_solver_custom_current_integral():
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make box
+    vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
+    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    current_integral.compute_current(SIM_Z_DATA["mode"])

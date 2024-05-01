@@ -754,9 +754,15 @@ def test_lumped_resistor():
         voltage_axis=0,
         name="R",
     )
-    _ = resistor.sheet_conductance
+    _ = resistor._sheet_conductance
     normal_axis = resistor.normal_axis
     assert normal_axis == 1
+
+    # Check conversion to geometry
+    _ = resistor.to_structure
+
+    # Check conversion to mesh overrides
+    _ = resistor.to_mesh_overrides()
 
     # error if voltage axis is not in plane with the resistor
     with pytest.raises(pydantic.ValidationError):
@@ -783,5 +789,47 @@ def test_lumped_resistor():
             center=[0, 0, 0],
             size=[2, 1, 3],
             voltage_axis=2,
+            name="R",
+        )
+
+
+def test_coaxial_lumped_resistor():
+    resistor = td.CoaxialLumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0],
+        outer_diameter=3,
+        inner_diameter=1,
+        normal_axis=1,
+        name="R",
+    )
+
+    _ = resistor._sheet_conductance
+    normal_axis = resistor.normal_axis
+    assert normal_axis == 1
+
+    # Check conversion to geometry
+    _ = resistor.to_structure
+
+    # Check conversion to mesh overrides
+    _ = resistor.to_mesh_overrides()
+
+    # error if inner diameter is larger
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CoaxialLumpedResistor(
+            resistance=50.0,
+            center=[0, 0, 0],
+            outer_diameter=3,
+            inner_diameter=4,
+            normal_axis=1,
+            name="R",
+        )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.CoaxialLumpedResistor(
+            resistance=50.0,
+            center=[0, 0, np.inf],
+            outer_diameter=3,
+            inner_diameter=1,
+            normal_axis=1,
             name="R",
         )

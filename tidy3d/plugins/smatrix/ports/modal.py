@@ -12,8 +12,9 @@ class ModalPortDataArray(DataArray):
 
     Example
     -------
-    >>> port_in = ['port1', 'port2']
-    >>> port_out = ['port1', 'port2']
+    >>> import numpy as np
+    >>> ports_in = ['port1', 'port2']
+    >>> ports_out = ['port1', 'port2']
     >>> mode_index_in = [0, 1]
     >>> mode_index_out = [0, 1]
     >>> f = [2e14]

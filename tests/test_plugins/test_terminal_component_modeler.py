@@ -7,12 +7,13 @@ import tidy3d as td
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
     LumpedPort,
+    CoaxialLumpedPort,
     LumpedPortDataArray,
     TerminalComponentModeler,
 )
 from tidy3d.exceptions import Tidy3dKeyError, SetupError
 from ..utils import run_emulated
-from .terminal_component_modeler_def import make_component_modeler
+from .terminal_component_modeler_def import make_component_modeler, make_coaxial_component_modeler
 
 
 def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
@@ -163,3 +164,60 @@ def test_coarse_grid_at_port(monkeypatch, tmp_path):
 def test_validate_port_voltage_axis():
     with pytest.raises(pydantic.ValidationError):
         LumpedPort(center=(0, 0, 0), size=(0, 1, 2), voltage_axis=0, impedance=50)
+
+
+@pytest.mark.parametrize("port_refinement", [False, True])
+def test_make_coaxial_component_modeler(tmp_path, port_refinement):
+    _ = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=port_refinement)
+
+
+def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
+    modeler = make_coaxial_component_modeler(path_dir=str(tmp_path))
+    s_matrix = run_component_modeler(monkeypatch, modeler)
+
+    for port_in in modeler.ports:
+        for port_out in modeler.ports:
+            coords_in = dict(port_in=port_in.name)
+            coords_out = dict(port_out=port_out.name)
+
+            assert np.all(s_matrix.sel(**coords_in) != 0), "source index not present in S matrix"
+            assert np.all(
+                s_matrix.sel(**coords_in).sel(**coords_out) != 0
+            ), "monitor index not present in S matrix"
+
+
+def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_refinement=False, auto_grid=False
+    )
+    # Without port refinement the grid is much too coarse for these port sizes
+    with pytest.raises(SetupError):
+        _ = run_component_modeler(monkeypatch, modeler)
+
+
+def test_validate_coaxial_center_not_inf():
+    with pytest.raises(pydantic.ValidationError):
+        CoaxialLumpedPort(
+            center=(td.inf, 0, 0),
+            outer_diameter=8,
+            inner_diameter=1,
+            normal_axis=2,
+            direction="+",
+            name="coax_port_1",
+            num_grid_cells=None,
+            impedance=50,
+        )
+
+
+def test_validate_coaxial_port_diameters():
+    with pytest.raises(pydantic.ValidationError):
+        CoaxialLumpedPort(
+            center=(0, 0, 0),
+            outer_diameter=1,
+            inner_diameter=2,
+            normal_axis=2,
+            direction="+",
+            name="coax_port_1",
+            num_grid_cells=None,
+            impedance=50,
+        )

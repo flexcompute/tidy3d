@@ -39,7 +39,7 @@ from .monitor import ModeMonitor, MonitorType, Monitor, FreqMonitor, SurfaceInte
 from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor, FieldTimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
-from .lumped_element import LumpedElementType, LumpedResistor
+from .lumped_element import LumpedElementType
 from .data.dataset import Dataset, CustomSpatialDataType
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene, MAX_NUM_MEDIUMS
@@ -635,7 +635,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         """
         bounds = self.bounds
         for element in self.lumped_elements:
-            ax = element.plot(x=x, y=y, z=z, alpha=alpha, ax=ax, sim_bounds=bounds)
+            kwargs = element.plot_params.include_kwargs(alpha=alpha).to_kwargs()
+            ax = element.to_structure.plot(x=x, y=y, z=z, ax=ax, sim_bounds=bounds, **kwargs)
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )
@@ -1194,29 +1195,10 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             snapped_center = snap_coordinate_to_grid(self.grid, center, axis)
             return geom._update_from_bounds(bounds=(snapped_center, snapped_center), axis=axis)
 
+        # Convert lumped elements into structures
         lumped_structures = []
         for lumped_element in self.lumped_elements:
-            _, tan_dirs = self.pop_axis([0, 1, 2], axis=lumped_element.normal_axis)
-
-            if isinstance(lumped_element, LumpedResistor):
-                conductivity = lumped_element.sheet_conductance
-
-                if tan_dirs[0] == lumped_element.voltage_axis:
-                    medium_dict = {
-                        "ss": Medium(conductivity=conductivity),
-                        "tt": self.medium,
-                    }
-                else:
-                    medium_dict = {
-                        "tt": Medium(conductivity=conductivity),
-                        "ss": self.medium,
-                    }
-                lumped_structures.append(
-                    Structure(
-                        geometry=Box(size=lumped_element.size, center=lumped_element.center),
-                        medium=Medium2D(**medium_dict),
-                    )
-                )
+            lumped_structures.append(lumped_element.to_structure)
 
         # Begin volumetric structures grid
         all_structures = list(self.structures) + lumped_structures

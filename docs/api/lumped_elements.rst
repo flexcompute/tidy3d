@@ -10,3 +10,4 @@ Passive elements
    :template: module.rst
 
    tidy3d.LumpedResistor
+   tidy3d.CoaxialLumpedResistor

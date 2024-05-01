@@ -691,6 +691,15 @@ def test_plot_boundaries():
     plt.close()
 
 
+def test_plot_with_lumped_elements():
+    load = td.LumpedResistor(
+        center=(0, 0, 0), size=(1, 2, 0), name="resistor", voltage_axis=0, resistance=50
+    )
+    sim_test = SIM_FULL.updated_copy(lumped_elements=[load])
+    sim_test.plot(z=0)
+    plt.close()
+
+
 def test_wvl_mat_grid():
     td.Simulation.wvl_mat_min.fget(SIM_FULL)
 
@@ -2398,7 +2407,6 @@ def test_to_gds(tmp_path):
 def test_sim_subsection(unstructured, nz):
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
-    _ = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
 
     sim_red = SIM_FULL.subsection(region=region)
     assert sim_red.structures != SIM_FULL.structures
@@ -2809,18 +2817,37 @@ def test_suggested_mesh_overrides():
         lumped_elements=[resistor],
     )
 
-    suggested_mesh_overrides = sim.suggest_mesh_overrides()
-    assert len(suggested_mesh_overrides) == 2
-    grid_spec = sim.grid_spec.copy(
-        update={
-            "override_structures": list(sim.grid_spec.override_structures)
-            + suggested_mesh_overrides,
-        }
+    def update_sim_with_suggested_overrides(sim):
+        suggested_mesh_overrides = sim.suggest_mesh_overrides()
+        assert len(suggested_mesh_overrides) == 2
+        grid_spec = sim.grid_spec.copy(
+            update={
+                "override_structures": list(sim.grid_spec.override_structures)
+                + suggested_mesh_overrides,
+            }
+        )
+
+        return sim.updated_copy(
+            grid_spec=grid_spec,
+        )
+
+    _ = update_sim_with_suggested_overrides(sim)
+
+    coax_resistor = td.CoaxialLumpedResistor(
+        resistance=50.0,
+        center=[0, 0, 0],
+        outer_diameter=2,
+        inner_diameter=0.5,
+        normal_axis=0,
+        name="R",
     )
 
-    _ = sim.updated_copy(
-        grid_spec=grid_spec,
+    sim = sim.updated_copy(
+        lumped_elements=[coax_resistor],
+        grid_spec=td.GridSpec.uniform(dl=0.1),
     )
+
+    _ = update_sim_with_suggested_overrides(sim)
 
 
 def test_run_time_spec():
