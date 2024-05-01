@@ -60,11 +60,11 @@ class InvdesBaseModel(td.components.base.Tidy3dBaseModel, abc.ABC):
     def _check_fname(fname: str) -> None:
         """Warn if fname isn't pickle."""
         suffix = pathlib.Path(fname).suffix
-        if not any(suffix.lower == ext for ext in ("pkl", "pickle", "dill")):
+        if not any(suffix.lower == ext for ext in (".pkl", ".pickle", ".dill")):
             td.log.warning(
                 "'invdes' components must be saved using 'dill'. "
                 f"Found a filename of '{fname}'. Consider using a 'pickle' extension, such as "
-                "'.pkl'."
+                "'.pkl' if you aren't already."
             )
 
     def to_file(self, fname: str) -> None:
