@@ -205,7 +205,7 @@ class EMESimulation(AbstractYeeGridSimulation):
     )
 
     constraint: Optional[Literal["passive", "unitary"]] = pd.Field(
-        None,
+        "passive",
         title="EME Constraint",
         description="Constraint for EME propagation, imposed at cell interfaces. "
         "A constraint of 'passive' means that energy can be dissipated but not created at "
