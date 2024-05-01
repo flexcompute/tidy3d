@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- A batch of `ModeSolver` objects can be run concurrently using `tidy3d.plugins.mode.web.run_batch()`
 - `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
 - `RectangularWaveguide` supports layered cladding above and below core.
 

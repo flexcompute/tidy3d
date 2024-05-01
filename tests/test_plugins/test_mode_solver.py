@@ -16,6 +16,7 @@ from ..utils import assert_log_level, cartesian_to_unstructured
 from ..utils import log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
+from tidy3d.components.data.monitor_data import ModeSolverData
 
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
@@ -89,6 +90,34 @@ def mock_remote_api(monkeypatch):
                     "projectId": PROJECT_ID,
                     "taskName": TASK_NAME,
                     "modeSolverName": MODESOLVER_NAME,
+                    "fileType": "Gz",
+                    "source": "Python",
+                    "protocolVersion": td.version.__version__,
+                }
+            )
+        ],
+        json={
+            "data": {
+                "refId": TASK_ID,
+                "id": SOLVER_ID,
+                "status": "draft",
+                "createdAt": "2023-05-19T16:47:57.190Z",
+                "charge": 0,
+                "fileType": "Gz",
+            }
+        },
+        status=200,
+    )
+
+    responses.add(
+        responses.POST,
+        f"{Env.current.web_api_endpoint}/tidy3d/modesolver/py",
+        match=[
+            responses.matchers.json_params_matcher(
+                {
+                    "projectId": PROJECT_ID,
+                    "taskName": "BatchModeSolver_0",
+                    "modeSolverName": MODESOLVER_NAME + "_batch_0",
                     "fileType": "Gz",
                     "source": "Python",
                     "protocolVersion": td.version.__version__,
@@ -837,3 +866,45 @@ def test_mode_solver_method_defaults():
 
     sim = ms.sim_with_monitor(name="test")
     assert np.allclose(sim.monitors[-1].freqs, ms.freqs)
+
+
+@responses.activate
+def test_mode_solver_web_run_batch(mock_remote_api):
+    """Testing run_batch function for the web mode solver."""
+
+    wav = 1.5
+    wav_min = 1.4
+    wav_max = 1.5
+    num_freqs = 1
+    num_of_sims = 1
+    freqs = np.linspace(td.C_0 / wav_min, td.C_0 / wav_max, num_freqs)
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=wav),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+    )
+
+    # create a list of mode solvers
+    mode_solver_list = [None] * num_of_sims
+
+    # create three different mode solvers with different number of modes specifications
+    for i in range(num_of_sims):
+        mode_solver_list[i] = ModeSolver(
+            simulation=simulation,
+            plane=PLANE,
+            mode_spec=td.ModeSpec(
+                num_modes=i + 1,
+                target_neff=2.0,
+            ),
+            freqs=freqs,
+            direction="+",
+        )
+
+    # Run mode solver one at a time
+    results = msweb.run_batch(mode_solver_list, verbose=False, folder_name="Mode Solver")
+    [print(type(x)) for x in results]
+    assert all([isinstance(x, ModeSolverData) for x in results])
+    assert (results[i].n_eff.shape == (num_freqs, i + 1) for i in range(num_of_sims))
