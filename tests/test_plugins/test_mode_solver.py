@@ -15,6 +15,8 @@ from tidy3d.exceptions import SetupError
 from ..utils import assert_log_level, log_capture, cartesian_to_unstructured  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
+from tidy3d.components.data.monitor_data import ModeSolverData
+
 
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
@@ -836,3 +838,88 @@ def test_mode_solver_method_defaults():
 
     sim = ms.sim_with_monitor(name="test")
     assert np.allclose(sim.monitors[-1].freqs, ms.freqs)
+
+
+
+def test_mode_solver_local_parallel():
+    """Testing parallel solving of frequencies for the local mode solver."""
+    wav = 1.5
+    wav_min = 1.4
+    wav_max = 1.5
+    num_freqs = 5
+    num_of_sims= 3
+    freqs = np.linspace(td.C_0/wav_min,td.C_0/wav_max, num_freqs) 
+    
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=wav),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+    )
+
+    # create a list of mode solvers
+    mode_solver_list = [None] * num_of_sims
+    results = [None] * num_of_sims
+
+    # create three different mode solvers with different number of modes we are solving
+    for i in range(num_of_sims):
+        mode_solver_list[i] =  ModeSolver(
+                                simulation=simulation,
+                                plane=PLANE,
+                                mode_spec= td.ModeSpec(
+                                            num_modes=i+1,
+                                            target_neff=2.0,
+                                        ),
+                                freqs=freqs,
+                                direction="+",
+                            )
+
+    # Run mode solver one at a time
+    for i in range(num_of_sims):
+        results[i] = mode_solver_list[i].solve()
+
+    assert any(isinstance(x,ModeSolverData) for x in results)
+    assert (results[i].n_eff.shape == (num_freqs, i+1) for i in range(num_of_sims))
+
+    
+def test_mode_solver_web_run_batch():
+    """Testing run_batch function for the web mode solver."""
+    wav = 1.5
+    wav_min = 1.4
+    wav_max = 1.5
+    num_freqs = 5
+    num_of_sims= 3
+    freqs = np.linspace(td.C_0/wav_min,td.C_0/wav_max, num_freqs) 
+    
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=wav),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.PML()),
+    )
+
+    # create a list of mode solvers
+    mode_solver_list = [None] * num_of_sims
+
+    # create three different mode solvers with different number of modes specifications
+    for i in range(num_of_sims):
+        mode_solver_list[i] =  ModeSolver(
+                                simulation=simulation,
+                                plane=PLANE,
+                                mode_spec= td.ModeSpec(
+                                            num_modes=i+1,
+                                            target_neff=2.0,
+                                        ),
+                                freqs=freqs,
+                                direction="+",
+                            )
+
+    # Run mode solver one at a time
+    results = msweb.run_batch(mode_solver_list, verbose = False)
+
+    assert any(isinstance(x,ModeSolverData) for x in results)
+    assert (results[i].n_eff.shape == (num_freqs, i+1) for i in range(num_of_sims))
+    
+        
