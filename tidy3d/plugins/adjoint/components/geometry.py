@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import ABC
 from typing import Tuple, Union, Dict, List
-from multiprocessing import Pool
+from joblib import Parallel, delayed
 
 import pydantic.v1 as pd
 import numpy as np
@@ -540,12 +540,14 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         """Generate arguments for ``vertex_vjp``."""
 
         num_verts = len(self.vertices)
-        args = [range(num_verts)]
 
-        # append all of the arguments that are the same for each call
-        constant_args = [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
-        args += [[arg] * num_verts for arg in constant_args]
-        return args
+        arg_list = []
+
+        for i in range(num_verts):
+            args_i = [i] + [e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in]
+            arg_list.append(args_i)
+
+        return arg_list
 
     def store_vjp_sequential(
         self,
@@ -559,8 +561,10 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         """Stores the gradient of the vertices given forward and adjoint field data."""
         # Construct arguments to pass to the parallel vertices_vjp computation
 
-        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-        vertices_vjp = tuple(map(self.vertex_vjp, *args))
+        arg_list = self._make_vertex_args(
+            e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in
+        )
+        vertices_vjp = tuple(self.vertex_vjp(*args) for args in arg_list)
         vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
 
         return self.updated_copy(vertices_jax=vertices_vjp)
@@ -578,8 +582,9 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
         args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-        with Pool(num_proc) as pool:
-            vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
+
+        vertices_vjp = Parallel(n_jobs=num_proc)(delayed(self.vertex_vjp)(*arg) for arg in args)
+
         vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
         return self.updated_copy(vertices_jax=vertices_vjp)
 
@@ -638,22 +643,28 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
     ) -> JaxGeometryGroup:
         """Returns a ``JaxGeometryGroup`` where the ``.geometries`` store the gradient info."""
 
-        map_args = (
-            self.geometries,
-            [grad_data_fwd] * len(self.geometries),
-            [grad_data_adj] * len(self.geometries),
-            [grad_data_eps] * len(self.geometries),
-            [sim_bounds] * len(self.geometries),
-            [wvl_mat] * len(self.geometries),
-            [eps_out] * len(self.geometries),
-            [eps_in] * len(self.geometries),
-        )
+        args_list = []
+        for geo in self.geometries:
+            args_i = [
+                geo,
+                grad_data_fwd,
+                grad_data_adj,
+                grad_data_eps,
+                sim_bounds,
+                wvl_mat,
+                eps_out,
+                eps_in,
+            ]
+            args_list.append(args_i)
 
         if num_proc == 1:
-            geometries_vjp = tuple(map(self._store_vjp_geometry, *map_args))
+            geometries_vjp = tuple(self._store_vjp_geometry(*args) for args in args_list)
         else:
-            with Pool(num_proc) as pool:
-                geometries_vjp = tuple(pool.starmap(self._store_vjp_geometry, zip(*map_args)))
+            geometries_vjp = tuple(
+                Parallel(n_jobs=num_proc)(
+                    delayed(self._store_vjp_geometry)(*args) for args in args_list
+                )
+            )
 
         return self.updated_copy(geometries=geometries_vjp)
 

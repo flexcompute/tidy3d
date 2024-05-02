@@ -43,6 +43,7 @@ requests = "^2.31.0"
 pyjwt = "*"
 click = "^8.1.0"
 responses = "*"
+joblib = "*"
 ### END NOT CORE
 
 ### Optional dependencies ###
