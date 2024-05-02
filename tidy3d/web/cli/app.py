@@ -13,7 +13,6 @@ from ..cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
 from ..cli.migrate import migrate
 from ..core.constants import KEY_APIKEY, HEADER_APIKEY
 from ..core.environment import Env
-from ..cli.converter import converter_arg
 from .develop.index import develop
 
 if not os.path.exists(TIDY3D_DIR):
@@ -118,11 +117,15 @@ def migration():
 
 
 @click.command()
-@click.argument("lsf_file", type=click.Path(exists=True))
+@click.argument("lsf_file")
 @click.argument("new_file")
 def convert(lsf_file, new_file):
     """Click command to convert .lsf project into Tidy3D .py file"""
-    converter_arg(lsf_file, new_file)
+    raise ValueError(
+        "The converter feature is deprecated. "
+        "To use this feature, please use the external tool at "
+        "'https://github.com/hirako22/Lumerical-to-Tidy3D-Converter'."
+    )
 
 
 tidy3d_cli.add_command(configure)
