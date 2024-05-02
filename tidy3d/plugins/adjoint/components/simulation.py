@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Tuple, Union, List, Dict, Literal
-from multiprocessing import Pool
+from joblib import Parallel, delayed
 
 import pydantic.v1 as pd
 import numpy as np
@@ -972,26 +972,33 @@ class JaxSimulation(Simulation, JaxObject):
             else:
                 inds_par_external.append(index)
 
-        def make_args(indexes, num_proc_internal):
+        def make_args(indexes, num_proc_internal) -> list:
             """Make the arguments to map over selecting over a set of structure ``indexes``."""
-            structures = [self.input_structures[index] for index in indexes]
-            data_fwd = [grad_data_fwd[index] for index in indexes]
-            data_bwd = [grad_data_adj[index] for index in indexes]
-            eps_data = [grad_eps_data[index] for index in indexes]
-            num_proc = [num_proc_internal] * len(indexes)
+            args_list = []
+            for index in indexes:
+                args_i = [
+                    self.input_structures[index],
+                    grad_data_fwd[index],
+                    grad_data_adj[index],
+                    grad_eps_data[index],
+                    num_proc_internal,
+                ]
+                args_list.append(args_i)
 
-            return (structures, data_fwd, data_bwd, eps_data, num_proc)
+            return args_list
 
         # Get vjps for structures that parallelize internally using simple map
-        args_par_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
-        vjps_par_internal = list(map(self._store_vjp_structure, *args_par_internal))
+        args_list_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
+        vjps_par_internal = [self._store_vjp_structure(*args) for args in args_list_internal]
 
         # Get vjps for structures where we parallelize directly here
-        args_par_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
-        with Pool(num_proc) as pool:
-            vjps_par_external = list(
-                pool.starmap(self._store_vjp_structure, zip(*args_par_external))
+        args_list_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
+
+        vjps_par_external = list(
+            Parallel(n_jobs=num_proc)(
+                delayed(self._store_vjp_structure)(*args) for args in args_list_external
             )
+        )
 
         # Reshuffle the two lists back in the correct order
         vjps_all = list(vjps_par_internal) + list(vjps_par_external)
