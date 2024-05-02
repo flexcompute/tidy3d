@@ -1,4 +1,5 @@
 """Defines a jax-compatible simulation."""
+
 from __future__ import annotations
 
 from typing import Tuple, Union, List, Dict, Literal
@@ -17,6 +18,7 @@ from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
+from ....components.medium import AbstractMedium
 from ....components.types import Ax, annotate_type
 from ....components.geometry.base import Box
 from ....constants import HERTZ, SECOND
@@ -432,6 +434,118 @@ class JaxSimulation(Simulation, JaxObject):
         )
 
         return sim, jax_info
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pd.NonNegativeFloat = 1,
+        frequency: pd.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> None:
+        """Append the simulation structures to a .gds cell.
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluation in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gds(
+            cell=cell,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pd.NonNegativeFloat = 1,
+        frequency: pd.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluation in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gdstk(
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
 
     def plot(
         self,

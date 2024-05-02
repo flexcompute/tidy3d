@@ -13,6 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import h5py
 import trimesh
+import gdstk
 
 import tidy3d as td
 
@@ -42,7 +43,6 @@ from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRES
 from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty, ErosionDilationPenalty
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.api.container import BatchData
-import tidy3d.material_library as material_library
 from ..utils import run_emulated, assert_log_level, run_async_emulated, AssertLogLevel
 from ..utils import log_capture  # noqa: F401
 from ..test_components.test_custom import CUSTOM_MEDIUM
@@ -206,7 +206,11 @@ def run_async_emulated_bwd(
 
 
 def make_sim(
-    permittivity: float, size: Tuple[float, float, float], vertices: tuple, base_eps_val: float
+    permittivity: float,
+    size: Tuple[float, float, float],
+    vertices: tuple,
+    base_eps_val: float,
+    custom_medium: bool = True,
 ) -> JaxSimulation:
     """Construt a simulation out of some input parameters."""
 
@@ -266,7 +270,8 @@ def make_sim(
     jax_struct_group = JaxStructure(geometry=jax_geo_group, medium=jax_med1)
 
     jax_struct_static_med = JaxStructureStaticMedium(
-        geometry=jax_box1, medium=td.Medium()  # material_library["Ag"]["Rakic1998BB"]
+        geometry=jax_box1,
+        medium=td.Medium(),  # material_library["Ag"]["Rakic1998BB"]
     )
     jax_struct_static_geo = JaxStructureStaticGeometry(
         geometry=td.Box(size=(1, 1, 1)), medium=jax_med1
@@ -311,13 +316,8 @@ def make_sim(
         name="field",
     )
 
-    sim = JaxSimulation(
-        size=(10, 10, 10),
-        run_time=SIM_RUN_TIME,
-        grid_spec=td.GridSpec(wavelength=4.0),
-        monitors=(extraneous_field_monitor,),
-        structures=(extraneous_structure,),
-        input_structures=(
+    if custom_medium:
+        input_structures = (
             jax_struct1,
             jax_struct2,
             jax_struct_custom,
@@ -326,7 +326,24 @@ def make_sim(
             jax_struct_custom_anis,
             jax_struct_static_med,
             jax_struct_static_geo,
-        ),
+        )
+    else:
+        input_structures = (
+            jax_struct1,
+            jax_struct2,
+            jax_struct3,
+            jax_struct_group,
+            jax_struct_static_med,
+            jax_struct_static_geo,
+        )
+
+    sim = JaxSimulation(
+        size=(10, 10, 10),
+        run_time=SIM_RUN_TIME,
+        grid_spec=td.GridSpec(wavelength=4.0),
+        monitors=(extraneous_field_monitor,),
+        structures=(extraneous_structure,),
+        input_structures=input_structures,
         output_monitors=(output_mnt1, output_mnt2, output_mnt3, output_mnt4),
         sources=[src],
         boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=False),
@@ -1858,3 +1875,37 @@ def test_no_poynting(use_emulated_run):
 
     with pytest.raises(NotImplementedError):
         sim_data._get_scalar_field(mnt_name_differentiable, "S", "abs")
+
+
+def test_to_gds(tmp_path):
+    """Test that JaxSimulation can be converted to GDS."""
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    fname = str(tmp_path / "simulation_z.gds")
+    sim.to_gds_file(fname, z=0, permittivity_threshold=6, frequency=200e14)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.get_polygons()) > 0
+
+    fname = str(tmp_path / "simulation_y.gds")
+    sim.to_gds_file(fname, y=0, permittivity_threshold=6, frequency=200e14)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.get_polygons()) > 4  # 4 polys from extraneous_structure
+
+    polys = sim.to_gdstk(y=0, permittivity_threshold=6, frequency=200e14)
+    assert len(polys) > 4
+    polys = sim.to_gdstk(z=0, permittivity_threshold=6, frequency=200e14)
+    assert len(polys) > 0
+
+    # to_gdspy() does not support custom medium
+    sim = make_sim(
+        permittivity=EPS,
+        size=SIZE,
+        vertices=VERTICES,
+        base_eps_val=BASE_EPS_VAL,
+        custom_medium=False,
+    )
+    polys = sim.to_gdspy(z=0)
+    assert len(polys) > 0
+
+    polys = sim.to_gdspy(y=0)
+    assert len(polys) > 4
