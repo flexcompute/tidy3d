@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from typing import Tuple, Union, List, Dict, Literal
-from multiprocessing import Pool
 
 import pydantic.v1 as pd
 import numpy as np
@@ -29,7 +28,7 @@ from .structure import (
     JaxStructureStaticMedium,
     JaxStructureStaticGeometry,
 )
-from .geometry import JaxPolySlab, JaxGeometryGroup
+from .geometry import JaxPolySlab
 
 
 # bandwidth of adjoint source in units of freq0 if no `fwidth_adjoint`, and one output freq
@@ -40,9 +39,6 @@ FWIDTH_FACTOR_MULTIFREQ = 0.1
 
 # the adjoint run time is the forward simulation run time + RUN_TIME_FACTOR / fwidth
 RUN_TIME_FACTOR = 10
-
-# how many processors to use for server and client side adjoint
-NUM_PROC_LOCAL = 1
 
 # number of input structures before it errors
 MAX_NUM_INPUT_STRUCTURES = 400
@@ -778,7 +774,6 @@ class JaxSimulation(Simulation, JaxObject):
         fld_fwd: FieldData,
         fld_adj: FieldData,
         eps_data: PermittivityData,
-        num_proc: int = NUM_PROC_LOCAL,
     ) -> JaxStructure:
         """Store the vjp for a single structure."""
 
@@ -790,33 +785,9 @@ class JaxSimulation(Simulation, JaxObject):
             grad_data_eps=eps_data,
             sim_bounds=self.bounds,
             eps_out=eps_out,
-            num_proc=num_proc,
         )
 
     def store_vjp(
-        self,
-        grad_data_fwd: Tuple[FieldData],
-        grad_data_adj: Tuple[FieldData],
-        grad_eps_data: Tuple[PermittivityData],
-        num_proc: int = NUM_PROC_LOCAL,
-    ) -> JaxSimulation:
-        """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data."""
-
-        # if num_proc supplied and greater than 1, run parallel
-        if num_proc is not None and num_proc > 1:
-            return self.store_vjp_parallel(
-                grad_data_fwd=grad_data_fwd,
-                grad_data_adj=grad_data_adj,
-                grad_eps_data=grad_eps_data,
-                num_proc=num_proc,
-            )
-
-        # otherwise, call regular sequential one
-        return self.store_vjp_sequential(
-            grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_eps_data=grad_eps_data
-        )
-
-    def store_vjp_sequential(
         self,
         grad_data_fwd: Tuple[FieldData],
         grad_data_adj: Tuple[FieldData],
@@ -825,65 +796,6 @@ class JaxSimulation(Simulation, JaxObject):
         """Store the vjp w.r.t. each input_structure without multiprocessing."""
         map_args = [self.input_structures, grad_data_fwd, grad_data_adj, grad_eps_data]
         input_structures_vjp = list(map(self._store_vjp_structure, *map_args))
-
-        return self.copy(
-            update=dict(
-                input_structures=input_structures_vjp, grad_monitors=(), grad_eps_monitors=()
-            )
-        )
-
-    def store_vjp_parallel(
-        self,
-        grad_data_fwd: Tuple[FieldData],
-        grad_data_adj: Tuple[FieldData],
-        grad_eps_data: Tuple[PermittivityData],
-        num_proc: int,
-    ) -> JaxSimulation:
-        """Store the vjp w.r.t. each input_structure as a sim using fwd and adj grad_data, and
-        parallel processing over ``num_proc`` processes."""
-
-        # Indexing into structures which use internal parallelization, and those which don't.
-        # For the latter, simple parallelization over the list will be used.
-        internal_par_structs = [JaxGeometryGroup]
-
-        # Parallelize polyslabs internally or externally depending on total number
-        polyslabs = [struct for struct in self.input_structures if isinstance(struct, JaxPolySlab)]
-        if len(polyslabs) < num_proc:
-            internal_par_structs += [JaxPolySlab]
-
-        inds_par_internal, inds_par_external = [], []
-        for index, structure in enumerate(self.input_structures):
-            if isinstance(structure.geometry, tuple(internal_par_structs)):
-                inds_par_internal.append(index)
-            else:
-                inds_par_external.append(index)
-
-        def make_args(indexes, num_proc_internal):
-            """Make the arguments to map over selecting over a set of structure ``indexes``."""
-            structures = [self.input_structures[index] for index in indexes]
-            data_fwd = [grad_data_fwd[index] for index in indexes]
-            data_bwd = [grad_data_adj[index] for index in indexes]
-            eps_data = [grad_eps_data[index] for index in indexes]
-            num_proc = [num_proc_internal] * len(indexes)
-
-            return (structures, data_fwd, data_bwd, eps_data, num_proc)
-
-        # Get vjps for structures that parallelize internally using simple map
-        args_par_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
-        vjps_par_internal = list(map(self._store_vjp_structure, *args_par_internal))
-
-        # Get vjps for structures where we parallelize directly here
-        args_par_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
-        with Pool(num_proc) as pool:
-            vjps_par_external = list(
-                pool.starmap(self._store_vjp_structure, zip(*args_par_external))
-            )
-
-        # Reshuffle the two lists back in the correct order
-        vjps_all = list(vjps_par_internal) + list(vjps_par_external)
-        input_structures_vjp = [None] * len(self.input_structures)
-        for index, vjp in zip(inds_par_internal + inds_par_external, vjps_all):
-            input_structures_vjp[index] = vjp
 
         return self.copy(
             update=dict(

@@ -112,7 +112,6 @@ class AbstractJaxStructure(Structure, JaxObject):
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
         eps_out: complex,
-        num_proc: int = 1,
     ) -> JaxGeometryType:
         """Compute the VJP for the structure geometry."""
 
@@ -126,7 +125,6 @@ class AbstractJaxStructure(Structure, JaxObject):
             wvl_mat=medium_params["wvl_mat"],
             eps_out=eps_out,
             eps_in=medium_params["eps_in"],
-            num_proc=num_proc,
         )
 
     def medium_vjp(
@@ -156,7 +154,6 @@ class AbstractJaxStructure(Structure, JaxObject):
         grad_data_eps: PermittivityData,
         sim_bounds: Bound,
         eps_out: complex,
-        num_proc: int = 1,
     ) -> JaxStructure:
         """Returns the gradient of the structure parameters given forward and adjoint field data."""
 
@@ -174,7 +171,6 @@ class AbstractJaxStructure(Structure, JaxObject):
                 grad_data_eps=grad_data_eps,
                 sim_bounds=sim_bounds,
                 eps_out=eps_out,
-                num_proc=num_proc,
             )
 
         if "medium" in self._differentiable_fields:

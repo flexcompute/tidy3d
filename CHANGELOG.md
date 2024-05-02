@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tidy3D objects may store arbitrary metadata in an `.attrs` dictionary.
 
 ### Changed
+- Removed multi-processing ability in adjoint plugin gradient calculation.
 
 ### Fixed
 - Bug in plotting and computing tilted plane intersections of transformed 0 thickness geometries.

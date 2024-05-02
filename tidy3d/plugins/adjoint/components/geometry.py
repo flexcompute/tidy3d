@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from abc import ABC
 from typing import Tuple, Union, Dict, List
-from multiprocessing import Pool
 
 import pydantic.v1 as pd
 import numpy as np
@@ -151,7 +150,6 @@ class JaxBox(JaxGeometry, Box, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
-        num_proc: int = 1,
     ) -> JaxBox:
         """Stores the gradient of the box parameters given forward and adjoint field data."""
 
@@ -499,7 +497,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
-        num_proc: int = 1,
     ) -> JaxPolySlab:
         """Stores the gradient of the vertices given forward and adjoint field data."""
 
@@ -507,17 +504,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         e_mult_xyz, d_mult_xyz = self.compute_dotted_e_d_fields(
             grad_data_fwd=grad_data_fwd, grad_data_adj=grad_data_adj, grad_data_eps=grad_data_eps
         )
-
-        if num_proc is not None and num_proc > 1:
-            return self.store_vjp_parallel(
-                e_mult_xyz=e_mult_xyz,
-                d_mult_xyz=d_mult_xyz,
-                sim_bounds=sim_bounds,
-                wvl_mat=wvl_mat,
-                eps_out=eps_out,
-                eps_in=eps_in,
-                num_proc=num_proc,
-            )
 
         return self.store_vjp_sequential(
             e_mult_xyz=e_mult_xyz,
@@ -563,24 +549,6 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         vertices_vjp = tuple(map(self.vertex_vjp, *args))
         vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
 
-        return self.updated_copy(vertices_jax=vertices_vjp)
-
-    def store_vjp_parallel(
-        self,
-        e_mult_xyz: FieldData,
-        d_mult_xyz: FieldData,
-        sim_bounds: Bound,
-        wvl_mat: float,
-        eps_out: complex,
-        eps_in: complex,
-        num_proc: int = 1,
-    ) -> JaxPolySlab:
-        """Stores the gradient of the vertices given forward and adjoint field data."""
-
-        args = self._make_vertex_args(e_mult_xyz, d_mult_xyz, sim_bounds, wvl_mat, eps_out, eps_in)
-        with Pool(num_proc) as pool:
-            vertices_vjp = pool.starmap(self.vertex_vjp, zip(*args))
-        vertices_vjp = tuple(tuple(x) for x in vertices_vjp)
         return self.updated_copy(vertices_jax=vertices_vjp)
 
 
@@ -634,7 +602,6 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
         wvl_mat: float,
         eps_out: complex,
         eps_in: complex,
-        num_proc: int = 1,
     ) -> JaxGeometryGroup:
         """Returns a ``JaxGeometryGroup`` where the ``.geometries`` store the gradient info."""
 
@@ -649,12 +616,7 @@ class JaxGeometryGroup(JaxGeometry, GeometryGroup, JaxObject):
             [eps_in] * len(self.geometries),
         )
 
-        if num_proc == 1:
-            geometries_vjp = tuple(map(self._store_vjp_geometry, *map_args))
-        else:
-            with Pool(num_proc) as pool:
-                geometries_vjp = tuple(pool.starmap(self._store_vjp_geometry, zip(*map_args)))
-
+        geometries_vjp = tuple(map(self._store_vjp_geometry, *map_args))
         return self.updated_copy(geometries=geometries_vjp)
 
 
