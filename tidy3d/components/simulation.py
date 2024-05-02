@@ -3378,6 +3378,9 @@ class Simulation(AbstractYeeGridSimulation):
         List
             List of `gdstk.Polygon`.
         """
+        if gds_layer_dtype_map is None:
+            gds_layer_dtype_map = {}
+
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         _, bmin = self.pop_axis(self.bounds[0], axis)
         _, bmax = self.pop_axis(self.bounds[1], axis)
@@ -3438,6 +3441,9 @@ class Simulation(AbstractYeeGridSimulation):
         List
             List of `gdspy.Polygon` and `gdspy.PolygonSet`.
         """
+        if gds_layer_dtype_map is None:
+            gds_layer_dtype_map = {}
+
         axis, _ = self.geometry.parse_xyz_kwargs(x=x, y=y, z=z)
         _, bmin = self.pop_axis(self.bounds[0], axis)
         _, bmax = self.pop_axis(self.bounds[1], axis)
