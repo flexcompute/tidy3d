@@ -2099,7 +2099,7 @@ class Simulation(AbstractSimulation):
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
+            Permittivity value used to define the shape boundaries for structures with custom
             medim
         frequency : float = 0
             Frequency for permittivity evaluaiton in case of custom medium (Hz).
@@ -2225,7 +2225,7 @@ class Simulation(AbstractSimulation):
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
+            Permittivity value used to define the shape boundaries for structures with custom
             medim
         frequency : float = 0
             Frequency for permittivity evaluaiton in case of custom medium (Hz).
@@ -2291,8 +2291,8 @@ class Simulation(AbstractSimulation):
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
         permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
-            medim
+            Permittivity value used to define the shape boundaries for structures with custom
+            medium
         frequency : float = 0
             Frequency for permittivity evaluaiton in case of custom medium (Hz).
         gds_layer_dtype_map : Dict

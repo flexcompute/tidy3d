@@ -13,6 +13,8 @@ from ....log import log
 from ....components.base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
+from ....components.medium import AbstractMedium
+
 from ....components.simulation import Simulation
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
@@ -409,6 +411,30 @@ class JaxSimulation(Simulation, JaxObject):
         )
 
         return sim, jax_info
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pd.NonNegativeFloat = 1,
+        frequency: pd.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> None:
+        """Wrapper around regular :class:`.Simulation` `to_gds()` method."""
+        sim, _ = self.to_simulation()
+        return sim.to_gds(
+            cell=cell,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
 
     def plot(
         self,

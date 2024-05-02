@@ -13,6 +13,7 @@ import time
 import matplotlib.pyplot as plt
 import h5py
 import trimesh
+import gdstk
 
 import tidy3d as td
 
@@ -1769,3 +1770,18 @@ def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
 
     with AssertLogLevel(log_capture, log_expected, contains_str="sidewall"):
         jax_polyslab1.updated_copy(sidewall_angle=sidewall_angle)
+
+
+def test_to_gds(tmp_path):
+    """Test that JaxSimulation can be converted to GDS."""
+    sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+
+    fname = str(tmp_path / "simulation_z.gds")
+    sim.to_gds_file(fname, z=0, permittivity_threshold=6, frequency=200e14)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.get_polygons()) > 0
+
+    fname = str(tmp_path / "simulation_y.gds")
+    sim.to_gds_file(fname, y=0, permittivity_threshold=6, frequency=200e14)
+    cell = gdstk.read_gds(fname).cells[0]
+    assert len(cell.get_polygons()) > 4  # 4 polys from extraneous_structure
