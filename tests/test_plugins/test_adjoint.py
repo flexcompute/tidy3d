@@ -43,7 +43,8 @@ from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty, ErosionDilationP
 from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
 from tidy3d.web.api.container import BatchData
 import tidy3d.material_library as material_library
-from ..utils import run_emulated, assert_log_level, log_capture, run_async_emulated, AssertLogLevel
+from ..utils import run_emulated, assert_log_level, run_async_emulated, AssertLogLevel
+from ..utils import log_capture  # noqa: F401
 from ..test_components.test_custom import CUSTOM_MEDIUM
 
 TMP_PATH = None
