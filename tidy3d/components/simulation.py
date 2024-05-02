@@ -1,4 +1,5 @@
-""" Container holding all information about simulation and its components"""
+"""Container holding all information about simulation and its components"""
+
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union
@@ -3365,11 +3366,11 @@ class Simulation(AbstractYeeGridSimulation):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
             medim
         frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+            Frequency for permittivity evaluation in case of custom medium (Hz).
         gds_layer_dtype_map : Dict
             Dictionary mapping mediums to GDSII layer and data type tuples.
 
@@ -3497,11 +3498,11 @@ class Simulation(AbstractYeeGridSimulation):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
             medim
         frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+            Frequency for permittivity evaluation in case of custom medium (Hz).
         gds_layer_dtype_map : Dict
             Dictionary mapping mediums to GDSII layer and data type tuples.
         """
@@ -3563,11 +3564,11 @@ class Simulation(AbstractYeeGridSimulation):
             Position of plane in y direction, only one of x,y,z can be specified to define plane.
         z : float = None
             Position of plane in z direction, only one of x,y,z can be specified to define plane.
-        permittivity_threshold : float = 1.001
-            Permitivitty value used to define the shape boundaries for structures with custom
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
             medim
         frequency : float = 0
-            Frequency for permittivity evaluaiton in case of custom medium (Hz).
+            Frequency for permittivity evaluation in case of custom medium (Hz).
         gds_layer_dtype_map : Dict
             Dictionary mapping mediums to GDSII layer and data type tuples.
         gds_cell_name : str = 'MAIN'
