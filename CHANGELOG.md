@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tidy3D objects may store arbitrary metadata in an `.attrs` dictionary.
 - `JaxSimulation` now supports the following GDS export methods: `to_gds()`, `to_gds_file()`, `to_gdspy()`, and `to_gdstk()`.
 - `RunTimeSpec` accepted by `Simulation.run_time` to adaptively set the run time based on Q-factor, propagation length, and other factors.
+- `JaxDataArray` now supports selection by nearest value via `JaxDataArray.sel(..., method="nearest")`.
 
 ### Changed
 - `tidy3d convert` from `.lsf` files to tidy3d scripts is moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.
