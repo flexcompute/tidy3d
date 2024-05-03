@@ -6,7 +6,7 @@ import gdstk
 
 import numpy as np
 import tidy3d as td
-from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
@@ -1775,7 +1775,7 @@ def test_warn_large_mode_monitor(log_capture, dl, log_level):  # noqa F811
         run_time=1e-12,
         sources=[
             td.ModeSource(
-                size=(0.1, 0.1, 0),
+                size=(0.4, 0.4, 0),
                 direction="+",
                 source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
@@ -1914,7 +1914,7 @@ def test_warn_time_monitor_outside_run_time(log_capture, start, log_level):  # n
         run_time=1e-12,
         sources=[
             td.ModeSource(
-                size=(0.1, 0.1, 0),
+                size=(0.4, 0.4, 0),
                 direction="+",
                 source_time=td.GaussianPulse(freq0=1e12, fwidth=0.1e12),
             )
@@ -2382,7 +2382,7 @@ def test_to_gds(tmp_path):
 def test_sim_subsection(unstructured, nz):
     region = td.Box(size=(0.3, 0.5, 0.7), center=(0.1, 0.05, 0.02))
     region_xy = td.Box(size=(0.3, 0.5, 0), center=(0.1, 0.05, 0.02))
-    region_yz = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
+    _ = td.Box(size=(0, 0.5, 0.7), center=(0.1, 0.05, 0.02))
 
     sim_red = SIM_FULL.subsection(region=region)
     assert sim_red.structures != SIM_FULL.structures
@@ -2681,7 +2681,7 @@ def test_advanced_material_intersection():
 
     perm = rot.rotate_tensor(perm_diag)
     cond = rot.rotate_tensor(cond_diag)
-    cond2 = rot2.rotate_tensor(cond_diag)
+    _ = rot2.rotate_tensor(cond_diag)
 
     fully_anisotropic_medium = td.FullyAnisotropicMedium(permittivity=perm, conductivity=cond)
 
@@ -2813,3 +2813,51 @@ def test_run_time_spec():
     sim = SIM_FULL.updated_copy(run_time=run_time_spec)
 
     assert sim._run_time > 0
+
+
+def test_validate_low_num_cells_in_mode_objects():
+    pulse = td.GaussianPulse(freq0=200e12, fwidth=20e12)
+    mode_spec = td.ModeSpec(target_neff=2.0)
+    mode_source = td.ModeSource(
+        center=(0, 0, 0),
+        size=(1, 0.02, 0.0),
+        source_time=pulse,
+        name="Small Source",
+        mode_spec=mode_spec,
+        mode_index=1,
+        direction="+",
+    )
+
+    sim = SIM.updated_copy(sources=[mode_source])
+
+    # check with mode source that is too small
+    with pytest.raises(SetupError):
+        sim._validate_num_cells_in_mode_objects()
+
+    sim_2d_size = list(sim.size)
+    sim_2d_size[1] = 0
+    # Should be fine if the simulation is 2D
+    sim2d = td.Simulation(
+        size=sim_2d_size,
+        run_time=1e-12,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        sources=[mode_source],
+        boundary_spec=td.BoundarySpec(
+            x=td.Boundary.pml(num_layers=5),
+            y=td.Boundary.pec(),
+            z=td.Boundary.pml(num_layers=5),
+        ),
+    )
+    sim2d._validate_num_cells_in_mode_objects()
+
+    # Now try with a mode monitor
+    mode_monitor = td.ModeMonitor(
+        center=(0, 0, 0),
+        size=(1, 0.02, 0.0),
+        name="Small Monitor",
+        mode_spec=mode_spec,
+        freqs=[1e12],
+    )
+    sim = SIM.updated_copy(monitors=[mode_monitor])
+    with pytest.raises(SetupError):
+        sim._validate_num_cells_in_mode_objects()

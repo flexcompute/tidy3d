@@ -35,7 +35,7 @@ from .structure import Structure, MeshOverrideStructure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
 from .source import TFSF, Source, ModeSource
-from .monitor import MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
+from .monitor import ModeMonitor, MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor, FieldTimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
 from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
@@ -2939,6 +2939,7 @@ class Simulation(AbstractYeeGridSimulation):
         self._validate_size()
         self._validate_monitor_size()
         self._validate_modes_size()
+        self._validate_num_cells_in_mode_objects()
         self._validate_datasets_not_none()
         self._validate_tfsf_structure_intersections()
         self._warn_time_monitors_outside_run_time()
@@ -3053,6 +3054,36 @@ class Simulation(AbstractYeeGridSimulation):
                     msg_header = f"Mode monitor '{monitor.name}' "
                     custom_loc = ["monitors", mnt_ind]
                     warn_mode_size(monitor=monitor, msg_header=msg_header, custom_loc=custom_loc)
+
+    def _validate_num_cells_in_mode_objects(self) -> None:
+        """Raise an error if mode sources or monitors intersect with a very small number
+        of grid cells in their transverse dimensions."""
+
+        def check_num_cells(
+            mode_object: Tuple[ModeSource, ModeMonitor], normal_axis: Axis, msg_header: str
+        ):
+            disc_grid = self.discretize(mode_object)
+            _, check_axes = Box.pop_axis([0, 1, 2], axis=normal_axis)
+            for axis in check_axes:
+                sim_size = self.size[axis]
+                dim_cells = disc_grid.num_cells[axis]
+                if sim_size > 0 and dim_cells <= 2:
+                    small_dim = "xyz"[axis]
+                    raise SetupError(
+                        msg_header + f"is too small along the "
+                        f"'{small_dim}' axis. Less than '3' grid cells were detected. "
+                        f"Increase the size of the object along '{small_dim}'."
+                    )
+
+        for source in self.sources:
+            if isinstance(source, ModeSource):
+                msg_header = f"Mode source '{source.name}' "
+                check_num_cells(source, source.injection_axis, msg_header)
+
+        for monitor in self.monitors:
+            if isinstance(monitor, ModeMonitor):
+                msg_header = f"Mode monitor '{monitor.name}' "
+                check_num_cells(monitor, monitor.normal_axis, msg_header)
 
     def _validate_time_monitors_num_steps(self) -> None:
         """Raise an error if non-0D time monitors have too many time steps."""
