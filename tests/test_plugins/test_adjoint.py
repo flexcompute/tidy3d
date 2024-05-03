@@ -7,6 +7,8 @@ import pytest
 import pydantic.v1 as pydantic
 import jax.numpy as jnp
 import numpy as np
+from numpy.testing import assert_allclose
+from xarray import DataArray
 from jax import grad
 import jax
 import time
@@ -836,6 +838,76 @@ def test_jax_data_array():
     assert da3.shape == (3, 2, 2)
 
     assert da2 == da3
+
+    n = 11
+    cs = list(range(n))
+    vals = np.random.uniform(0, 1, (n, n, 1, 1, 2))
+    coords = dict(x=cs, y=cs, z=[0], f=[0], direction=["+", "-"])
+
+    jda = JaxDataArray(values=vals, coords=coords)
+    xda = DataArray(data=vals, coords=coords)
+
+    # test exact, single value, non-numeric
+    xda_vals = xda.sel(direction="+", method=None).values
+    jda_vals = jda.sel(direction="+", method=None).values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test exact, single value, 1d coordinate
+    xda_vals = xda.sel(f=0, method=None).values
+    jda_vals = jda.sel(f=0, method=None).values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test exact, single value, 1d coordinate as list
+    xda_vals = xda.sel(f=[0], method=None).values
+    jda_vals = jda.sel(f=[0], method=None).values
+    assert_allclose(xda_vals, jda_vals)
+
+    # # disabled because it fails on xarray's side
+    # # test nearest, single value, non-numeric
+    # xda_vals = xda.sel(direction="+", method="nearest").values
+    # jda_vals = jda.sel(direction="+", method="nearest").values
+    # assert_allclose(xda_vals, jda_vals)
+
+    # test exact, multiple values, non-numeric
+    xda_vals = xda.sel(direction=["+", "-"], method=None).values
+    jda_vals = jda.sel(direction=["+", "-"], method=None).values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, single value
+    xda_vals = xda.sel(x=0.1, method="nearest").values
+    jda_vals = jda.sel(x=0.1, method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, single value, 1d coordinate
+    xda_vals = xda.sel(f=0.1, method="nearest").values
+    jda_vals = jda.sel(f=0.1, method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, single value, 1d coordinate as list
+    xda_vals = xda.sel(f=[0.1], method="nearest").values
+    jda_vals = jda.sel(f=[0.1], method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, multiple values
+    xda_vals = xda.sel(x=[0.0, 0.1, 0.3], method="nearest").values
+    jda_vals = jda.sel(x=[0.0, 0.1, 0.3], method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, multiple coords, single value
+    xda_vals = xda.sel(x=0.1, y=-0.3, method="nearest").values
+    jda_vals = jda.sel(x=0.1, y=-0.3, method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, multiple coords, multiple values
+    xda_vals = xda.sel(x=[-1.5, 0.1], y=[-0.3, 0.0, 0.9], method="nearest").values
+    jda_vals = jda.sel(x=[-1.5, 0.1], y=[-0.3, 0.0, 0.9], method="nearest").values
+    assert_allclose(xda_vals, jda_vals)
+
+    # test nearest, multiple coords, duplicate values
+    xda_vals = xda.sel(x=[-1.5, 0.2, 0.1, -1.5, 0.2], y=[-0.3, 0.0, 0.9], method="nearest")
+    jda_vals = jda.sel(x=[-1.5, 0.2, 0.1, -1.5, 0.2], y=[-0.3, 0.0, 0.9], method="nearest")
+    assert_allclose(xda_vals.values, jda_vals.values)
+    assert_allclose(xda_vals.coords["x"], jda_vals.coords["x"])
 
 
 def test_jax_sim_data(use_emulated_run):
