@@ -123,6 +123,7 @@ def run(
         callback_url=callback_url,
         verbose=verbose,
     )
+    # TODO: add task_id
     return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
@@ -151,7 +152,9 @@ def run_fwd(
     )
 
     res = RunResidual(fwd_task_id=task_id)
-    jax_sim_data_orig = JaxSimulationData.from_sim_data(sim_data_orig, jax_info_orig)
+    jax_sim_data_orig = JaxSimulationData.from_sim_data(
+        sim_data_orig, jax_info_orig, task_id=task_id
+    )
 
     return jax_sim_data_orig, (res,)
 
@@ -410,6 +413,7 @@ def run_async(
         task_name = str(_task_name_orig(i))
         sim_data_tidy3d = batch_data_tidy3d[task_name]
         jax_info = jax_infos[str(task_name)]
+        # TODO: add task_id
         jax_sim_data = JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
         jax_batch_data.append(jax_sim_data)
 
@@ -450,8 +454,10 @@ def run_async_fwd(
     batch_data_orig = [sim_data for _, sim_data in batch_data_orig.items()]
 
     jax_batch_data_orig = []
-    for sim_data_orig, jax_info_orig in zip(batch_data_orig, jax_infos_orig):
-        jax_sim_data = JaxSimulationData.from_sim_data(sim_data_orig, jax_info_orig)
+    for sim_data_orig, jax_info_orig, task_id in zip(batch_data_orig, jax_infos_orig, fwd_task_ids):
+        jax_sim_data = JaxSimulationData.from_sim_data(
+            sim_data_orig, jax_info_orig, task_id=task_id
+        )
         jax_batch_data_orig.append(jax_sim_data)
 
     residual = RunResidualBatch(fwd_task_ids=fwd_task_ids)
@@ -626,6 +632,7 @@ def run_local(
     )
 
     # convert back to jax type and return
+    # TODO: add task_id
     return JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
 
 
@@ -779,6 +786,7 @@ def run_async_local(
         task_name = _task_name_orig_local(i, task_name_suffix)
         sim_data_tidy3d = batch_data_tidy3d[task_name]
         jax_info = jax_infos[str(task_name)]
+        # TODO: add task_id
         jax_sim_data = JaxSimulationData.from_sim_data(sim_data_tidy3d, jax_info=jax_info)
         jax_batch_data.append(jax_sim_data)
 
