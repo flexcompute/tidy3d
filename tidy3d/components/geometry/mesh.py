@@ -12,13 +12,15 @@ from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from ..viz import add_ax_if_none, equal_aspect
 from ...log import log
 from ...exceptions import ValidationError, DataError
-from ...constants import fp_eps, inf
+from ...constants import inf
 from ..data.dataset import TriangleMeshDataset
 from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
 from ..data.validators import validate_no_nans
 from ...packaging import verify_packages_import
 
 from . import base
+
+AREA_SIZE_THRESHOLD = 1e-36
 
 
 class TriangleMesh(base.Geometry, ABC):
@@ -60,9 +62,9 @@ class TriangleMesh(base.Geometry, ABC):
         if val is None:
             return None
         mesh = cls._triangles_to_trimesh(val.surface_mesh)
-        if not all(np.array(mesh.area_faces) > fp_eps):
+        if not all(np.array(mesh.area_faces) > AREA_SIZE_THRESHOLD):
             raise ValidationError(
-                "The provided mesh has triangles with zero area. "
+                f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
                 "Consider using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
                 "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
             )
