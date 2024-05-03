@@ -865,6 +865,11 @@ def test_custom_surface_geometry(tmp_path):
     _ = sim.plot(y=0, ax=ax)
     plt.close()
 
+    # allow small triangles
+    vertices = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]])
+    vertices_small = vertices * 1e-6
+    geom_small = td.TriangleMesh.from_vertices_faces(vertices_small, faces)
+
 
 def test_geo_group_sim():
     geo_grp = td.TriangleMesh.from_stl("tests/data/two_boxes_separate.stl")

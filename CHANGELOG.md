@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `tidy3d convert` from `.lsf` files to tidy3d scripts is moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.
+- Relax validation of smallest triangles area in `TriangleMesh`.
 
 ### Fixed
 - Bug in plotting and computing tilted plane intersections of transformed 0 thickness geometries.
