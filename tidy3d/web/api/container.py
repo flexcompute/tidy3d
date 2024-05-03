@@ -884,7 +884,11 @@ class Batch(WebContainer):
         float
             Estimated total cost of the tasks in FlexCredits.
         """
-        batch_cost = sum(job.estimate_cost(verbose=False) for _, job in self.jobs.items())
+        job_costs = [job.estimate_cost(verbose=False) for _, job in self.jobs.items()]
+        if any(cost is None for cost in job_costs):
+            batch_cost = None
+        else:
+            batch_cost = sum(job_costs)
 
         if verbose:
             console = get_logging_console()
