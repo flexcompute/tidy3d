@@ -33,6 +33,9 @@ DEFAULT_TOLERANCE_RMS = 1e-5
 # this avoids divide by zero errors with lossless poles
 SCALE_FACTOR = 1.01
 
+# when poles are close to omega, can cause invalid response function, and we reject model
+OMEGA_POLE_CLOSE_ATOL = 1e-10
+
 
 class AdvancedFastFitterParam(Tidy3dBaseModel):
     """Advanced fast fitter parameters."""
@@ -520,6 +523,16 @@ class FastFitterData(AdvancedFastFitterParam):
         """
 
         model = self.iterate_poles()
+
+        # if any of the poles align with the test frequencies exactly, we reject the new model
+        if any(
+            np.isclose(omega, 1j * pole, rtol=0, atol=OMEGA_POLE_CLOSE_ATOL)
+            or np.isclose(omega, -1j * pole, rtol=0, atol=OMEGA_POLE_CLOSE_ATOL)
+            for omega in self.omega
+            for pole in self.complex_poles
+        ):
+            return self
+
         model = model.fit_residues()
 
         return model
