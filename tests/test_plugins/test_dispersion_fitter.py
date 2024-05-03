@@ -123,6 +123,15 @@ def test_lossy_dispersion(random_data, mock_remote_api):
     )
     medium3, rms3 = fitter.fit(advanced_param=advanced_param)
 
+    # test that poles can be close but not exactly equal to provided freqs
+    N = 2
+    wvl_um = np.linspace(0.5, 0.6, N)
+    n_data = np.ones(N) * 2
+    k_data = np.ones(N) * 0.5
+
+    fitter = FastDispersionFitter(wvl_um=wvl_um, n_data=n_data, k_data=k_data)
+    medium, rms_error = fitter.fit(max_num_poles=2, tolerance_rms=1e-3)
+
 
 def test_constant_loss_tangent():
     """perform fitting on constant loss tangent material"""
