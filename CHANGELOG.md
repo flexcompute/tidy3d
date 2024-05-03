@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bug in plotting and computing tilted plane intersections of transformed 0 thickness geometries.
 - `Simulation.to_gdspy()` and `Simulation.to_gdstk()` now place polygons in GDS layer `(0, 0)` when no `gds_layer_dtype_map` is provided instead of erroring.
+- `task_id` now properly stored in `JaxSimulationData`.
 
 ## [2.7.0rc1] - 2024-04-22
 
