@@ -2020,6 +2020,24 @@ class Simulation(AbstractYeeGridSimulation):
 
     """
 
+    kx: float = pydantic.Field(
+        0,
+        title="k",
+        description="k.",
+    )
+
+    ky: float = pydantic.Field(
+        0,
+        title="k",
+        description="k.",
+    )
+
+    kz: float = pydantic.Field(
+        0,
+        title="k",
+        description="k.",
+    )
+
     """ Validating setup """
 
     @pydantic.root_validator(pre=True)
