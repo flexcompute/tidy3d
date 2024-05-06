@@ -1,4 +1,5 @@
 """Defines EME simulation class."""
+
 from __future__ import annotations
 
 from typing import Tuple, List, Dict, Optional, Literal

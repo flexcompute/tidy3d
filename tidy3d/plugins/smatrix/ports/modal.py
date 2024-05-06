@@ -1,4 +1,5 @@
 """Class and custom data array for representing a scattering matrix port based on waveguide modes."""
+
 import pydantic.v1 as pd
 
 from ....components.geometry.base import Box

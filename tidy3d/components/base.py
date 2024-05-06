@@ -1,4 +1,5 @@
 """global configuration / base class for pydantic models used to make simulation."""
+
 from __future__ import annotations
 
 import json

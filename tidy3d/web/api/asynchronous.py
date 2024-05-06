@@ -1,4 +1,5 @@
 """Interface to run several jobs in batch using simplified syntax."""
+
 from typing import Dict, List
 
 from .container import DEFAULT_DATA_DIR, BatchData, Batch

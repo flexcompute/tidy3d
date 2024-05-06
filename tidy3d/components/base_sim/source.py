@@ -1,4 +1,5 @@
 """Abstract base for classes that define simulation sources."""
+
 from __future__ import annotations
 from abc import ABC, abstractmethod
 import pydantic.v1 as pydantic

@@ -1,4 +1,5 @@
 """Objects that define how data is recorded from simulation."""
+
 from abc import ABC, abstractmethod
 from typing import Union, Tuple
 
@@ -216,14 +217,14 @@ class AbstractFieldMonitor(Monitor, ABC):
         description="Collection of field components to store in the monitor.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
     )
 
     colocate: bool = pydantic.Field(
@@ -461,14 +462,14 @@ class PermittivityMonitor(FreqMonitor):
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
     )
 
     apodization: ApodizationSpec = pydantic.Field(
@@ -788,19 +789,19 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "in the far field of the device.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals at which near fields are recorded for "
-        "projection to the far field, along each direction. If equal to 1, there will be no "
-        "downsampling. If greater than 1, the step will be applied, but the first and last "
-        "point of the monitor grid are always included. Using values greater than 1 can "
-        "help speed up server-side far field projections with minimal accuracy loss, "
-        "especially in cases where it is necessary for the grid resolution to be high for "
-        "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
-        "projecting the recorded near fields to the far field.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals at which near fields are recorded for "
+            "projection to the far field, along each direction. If equal to 1, there will be no "
+            "downsampling. If greater than 1, the step will be applied, but the first and last "
+            "point of the monitor grid are always included. Using values greater than 1 can "
+            "help speed up server-side far field projections with minimal accuracy loss, "
+            "especially in cases where it is necessary for the grid resolution to be high for "
+            "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
+            "projecting the recorded near fields to the far field.",
+        )
     )
 
     window_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(

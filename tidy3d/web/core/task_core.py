@@ -1,4 +1,5 @@
 """Tidy3d webapi types."""
+
 from __future__ import annotations
 
 import os

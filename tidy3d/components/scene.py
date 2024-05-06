@@ -1,5 +1,6 @@
 """ Container holding about the geometry and medium properties common to all types of simulations.
 """
+
 from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 

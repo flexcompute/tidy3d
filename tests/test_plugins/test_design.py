@@ -1,4 +1,5 @@
 """Test the parameter sweep plugin."""
+
 import pytest
 import numpy as np
 import tidy3d as td

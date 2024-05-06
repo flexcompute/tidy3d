@@ -1,4 +1,5 @@
 """Defines perturbations to properties of the medium / materials"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

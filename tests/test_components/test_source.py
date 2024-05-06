@@ -1,4 +1,5 @@
 """Tests sources."""
+
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt

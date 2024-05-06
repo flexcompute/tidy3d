@@ -1,4 +1,5 @@
 """Holds dispersive models for several commonly used optical materials."""
+
 import json
 from typing import Dict, List
 import pydantic.v1 as pd

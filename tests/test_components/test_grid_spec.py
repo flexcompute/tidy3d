@@ -1,4 +1,5 @@
 """Tests GridSpec."""
+
 import pytest
 import numpy as np
 

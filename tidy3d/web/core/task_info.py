@@ -1,4 +1,5 @@
 """ Defnes information about a task """
+
 from datetime import datetime
 from enum import Enum
 from abc import ABC

@@ -1,4 +1,5 @@
 """Imports for parameter sweep."""
+
 from .parameter import ParameterAny, ParameterFloat, ParameterInt
 from .design import DesignSpace
 from .method import MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom

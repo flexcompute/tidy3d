@@ -1,4 +1,5 @@
 """Base model for Tidy3D components that are compatible with jax."""
+
 from __future__ import annotations
 
 from typing import Tuple, List, Any, Callable

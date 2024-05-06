@@ -1,4 +1,5 @@
 """Tests visualization operations."""
+
 import pytest
 import matplotlib.pyplot as plt
 import tidy3d as td

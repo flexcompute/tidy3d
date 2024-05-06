@@ -1,4 +1,5 @@
 """Defines parameter sweeping utilities for tidy3d."""
+
 from __future__ import annotations
 
 from typing import Tuple, Dict, Any, List

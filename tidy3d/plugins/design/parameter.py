@@ -1,4 +1,5 @@
 """Defines the dimensions of the parameter sweep and their properties."""
+
 from __future__ import annotations
 
 from typing import Tuple, Any, Union, List

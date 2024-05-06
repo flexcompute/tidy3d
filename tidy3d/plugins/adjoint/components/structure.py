@@ -1,4 +1,5 @@
 """Defines a jax-compatible structure and its conversion to a gradient monitor."""
+
 from __future__ import annotations
 
 from typing import List, Union, Dict

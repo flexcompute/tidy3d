@@ -1,4 +1,5 @@
 """ Monitor Level Data, store the DataArrays associated with a single monitor."""
+
 from __future__ import annotations
 
 from abc import ABC

@@ -1,4 +1,5 @@
 """Defines the methods used for parameter sweep."""
+
 from typing import Union, Tuple, Dict, Any, Callable
 from abc import ABC, abstractmethod
 

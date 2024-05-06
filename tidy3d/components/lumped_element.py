@@ -1,4 +1,5 @@
 """Defines lumped elements that should be included in the simulation."""
+
 from __future__ import annotations
 from abc import ABC
 from typing import Union, List, Optional

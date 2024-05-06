@@ -1,4 +1,5 @@
 """Defines heat simulation class"""
+
 from __future__ import annotations
 
 from typing import Tuple, List, Dict

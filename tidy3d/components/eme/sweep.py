@@ -1,4 +1,5 @@
 """Defines sweep settings for the EME simulation."""
+
 from __future__ import annotations
 
 from typing import List, Union

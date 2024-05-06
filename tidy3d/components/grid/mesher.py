@@ -1121,9 +1121,7 @@ class GradedMesher(Mesher):
                 if isclose(new_scale, 1.0):
                     return len_interval - small_dl * (1 + num_step)
                 return (
-                    len_interval
-                    - small_dl * (1 - new_scale**num_step) / (1 - new_scale)
-                    - small_dl
+                    len_interval - small_dl * (1 - new_scale**num_step) / (1 - new_scale) - small_dl
                 )
 
             # solve for new scaling factor

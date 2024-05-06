@@ -3,6 +3,7 @@ This file contains a set of functions relating to packaging tidy3d for distribut
 
 This section should only depend on the standard core installation in the pyproject.toml, and should not depend on any other part of the codebase optional imports.
 """
+
 import functools
 import numpy as np
 from typing import Literal

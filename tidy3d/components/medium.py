@@ -1,4 +1,5 @@
 """Defines properties of the medium / materials"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -2884,13 +2885,13 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        (),
-        title="Poles",
-        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=(RADPERSEC, RADPERSEC),
+    poles: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            (),
+            title="Poles",
+            description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+            units=(RADPERSEC, RADPERSEC),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")
@@ -3228,13 +3229,13 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
-        units=(None, MICROMETER + "^2"),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+            units=(None, MICROMETER + "^2"),
+        )
     )
 
     _no_nans = validate_no_nans("coeffs")
@@ -3905,13 +3906,13 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of (:math:`f_i, \\delta_i`) values for model.",
-        units=(HERTZ, HERTZ),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of (:math:`f_i, \\delta_i`) values for model.",
+            units=(HERTZ, HERTZ),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")
@@ -4151,13 +4152,13 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
-        units=(PERMITTIVITY, SECOND),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+            units=(PERMITTIVITY, SECOND),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")

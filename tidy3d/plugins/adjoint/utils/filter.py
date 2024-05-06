@@ -1,4 +1,5 @@
 """Spatial filtering Functions for adjoint plugin."""
+
 from abc import ABC, abstractmethod
 
 import pydantic.v1 as pd

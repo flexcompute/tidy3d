@@ -1,4 +1,5 @@
 """Objects that define how data is recorded from simulation."""
+
 from abc import ABC
 import pydantic.v1 as pd
 from typing import Union

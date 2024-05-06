@@ -10,9 +10,6 @@ import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
 
-from joblib import Parallel, delayed
-import os
-
 from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import PECBoundary, BoundarySpec, Boundary, PML, StablePML, Absorber
@@ -57,7 +54,7 @@ MAX_MODES_DATA_SIZE_GB = 20
 
 # Default number of jobs (or workers) settings for parallel computing in joblib.Parallel
 # For numbers below -1, (n_cpus+1+n_jobs) are used
-DEFAULT_NUM_JOB : int = -2
+DEFAULT_NUM_JOB: int = -2
 
 
 class ModeSolver(Tidy3dBaseModel):
@@ -521,27 +518,17 @@ class ModeSolver(Tidy3dBaseModel):
         symmetry: Tuple[Symmetry, Symmetry],
     ) -> Tuple[List[float], List[Dict[str, ArrayComplex4D]], List[EpsSpecType]]:
         """Call the mode solver at all requested frequencies."""
-        
-        # Get the number of cpu cores
-        n_cpus = os.cpu_count()
 
-        if n_cpus <= 2: 
-            n_jobs = 1 # just use one worker if the number of cpus is less than or equal to 2
-        else:
-            # using n_jobs=-2 will result in all CPUs but one being used. n_jobs= -1 will results in all CPUs being use.
-            n_jobs = DEFAULT_NUM_JOB 
-
-        # Use multiple python worker processes to speed up when solving for mutiple frequency points
-        results = Parallel(n_jobs=n_jobs)(delayed(self._solve_single_freq)(
-                                                                            freq = freq, 
-                                                                            coords = coords, 
-                                                                            symmetry = symmetry) 
-                                                                            for freq in self.freqs
-                                                                            )
-        # Unpack results
-        n_complex = [result[0] for result in results]
-        fields = [result[1] for result in results]
-        eps_spec = [result[2] for result in results]
+        fields = []
+        n_complex = []
+        eps_spec = []
+        for freq in self.freqs:
+            n_freq, fields_freq, eps_spec_freq = self._solve_single_freq(
+                freq=freq, coords=coords, symmetry=symmetry
+            )
+            fields.append(fields_freq)
+            n_complex.append(n_freq)
+            eps_spec.append(eps_spec_freq)
 
         return n_complex, fields, eps_spec
 

@@ -1,4 +1,5 @@
 """Defines Geometric objects with Medium properties."""
+
 from __future__ import annotations
 
 from typing import Union, Tuple, Optional

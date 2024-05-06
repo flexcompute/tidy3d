@@ -1,4 +1,5 @@
 """Defines a jax-compatible SimulationData."""
+
 from __future__ import annotations
 
 from typing import Tuple, Dict, Union, List

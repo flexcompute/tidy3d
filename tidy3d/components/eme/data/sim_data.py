@@ -1,4 +1,5 @@
 """EME simulation data"""
+
 from __future__ import annotations
 
 from typing import Tuple, Union, Optional, Literal

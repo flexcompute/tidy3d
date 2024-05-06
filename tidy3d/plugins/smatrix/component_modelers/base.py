@@ -1,4 +1,5 @@
 """Base class for generating an S matrix automatically from tidy3d simulations and port definitions."""
+
 from __future__ import annotations
 from typing import Tuple, Dict, Union
 import os

@@ -1,4 +1,5 @@
 """Defines jax-compatible geometries and their conversion to grad monitors."""
+
 from __future__ import annotations
 
 from abc import ABC

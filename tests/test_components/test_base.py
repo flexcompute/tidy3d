@@ -1,4 +1,5 @@
 """Tests the base model."""
+
 import pytest
 import numpy as np
 

@@ -1,4 +1,5 @@
 """Generates sample simulation json and h5 files in the tests/sims folder"""
+
 from os.path import join
 import sys
 

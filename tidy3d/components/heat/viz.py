@@ -1,4 +1,5 @@
 """ utilities for heat solver plotting """
+
 from ..viz import PlotParams
 
 """ Constants """

@@ -1,4 +1,5 @@
 """Tests grid operations."""
+
 import pytest
 import numpy as np
 

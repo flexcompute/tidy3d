@@ -1,4 +1,5 @@
 """Tests tidy3d/components/data/monitor_data.py"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pytest

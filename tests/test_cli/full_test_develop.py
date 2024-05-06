@@ -1,6 +1,7 @@
 """
 These scripts just test the CLI commands for the develop command, and verify that they run properly.
 """
+
 import pytest
 import os
 from click.testing import CliRunner

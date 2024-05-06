@@ -1,6 +1,5 @@
 """Defines electric current sources for injecting light into simulation."""
 
-
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Union, Tuple, Optional

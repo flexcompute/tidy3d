@@ -1,4 +1,5 @@
 """ command-line interface. For instructions run `python -m tidy3d --help` """
+
 import sys
 import argparse
 

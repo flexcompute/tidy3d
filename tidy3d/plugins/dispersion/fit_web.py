@@ -1,4 +1,5 @@
 """Deprecated module"""
+
 from ...log import log
 
 log.warning(

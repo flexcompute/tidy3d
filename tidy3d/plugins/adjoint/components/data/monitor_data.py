@@ -1,4 +1,5 @@
 """Defines jax-compatible MonitorData and their conversion to adjoint sources."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

@@ -1,4 +1,5 @@
 """Utilities for geometry manipulation."""
+
 from __future__ import annotations
 from typing import Union, Tuple
 from math import isclose

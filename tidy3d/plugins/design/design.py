@@ -1,4 +1,5 @@
 """Defines design space specification for tidy3d."""
+
 from __future__ import annotations
 
 from typing import Tuple, Callable, Dict, Any, List, Union

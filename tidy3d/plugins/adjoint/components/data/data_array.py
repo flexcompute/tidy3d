@@ -1,4 +1,5 @@
 """Defines jax-compatible DataArrays."""
+
 from __future__ import annotations
 
 from typing import Tuple, Any, Dict, List

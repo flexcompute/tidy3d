@@ -1,4 +1,5 @@
 """Tool for generating an S matrix automatically from a Tidy3d simulation and modal port definitions."""
+
 # TODO: The names "ComponentModeler" and "Port" should be changed to "ModalComponentModeler" and
 # "ModalPort" to explicitly differentiate these from "TerminalComponentModeler" and "LumpedPort".
 from __future__ import annotations

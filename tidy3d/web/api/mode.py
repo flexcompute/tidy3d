@@ -45,7 +45,7 @@ MODESOLVER_RESULT_GZ = "output/mode_solver_data.hdf5.gz"
 
 DEFAULT_NUM_WORKERS = 10
 DEFAULT_MAX_RETRIES = 3
-DEFAULT_RETRY_DELAY = 10 # in seconds
+DEFAULT_RETRY_DELAY = 10  # in seconds
 
 
 def run(
@@ -145,6 +145,7 @@ def run(
         to_file=results_file, verbose=verbose, progress_callback=progress_callback_download
     )
 
+
 def run_batch(
     mode_solvers: List[ModeSolver],
     task_name: str = "BatchModeSolver",
@@ -155,7 +156,7 @@ def run_batch(
     max_retries: int = DEFAULT_MAX_RETRIES,
     retry_delay: float = DEFAULT_RETRY_DELAY,
     progress_callback_upload: Callable[[float], None] = None,
-    progress_callback_download: Callable[[float], None] = None
+    progress_callback_download: Callable[[float], None] = None,
 ) -> List[ModeSolverData]:
     """
     Submits a batch of ModeSolver to the server concurrently, manages progress, and retrieves results.
@@ -193,39 +194,43 @@ def run_batch(
 
     # Check type to make sure the user is submitting a list of mode solvers
     if not all(isinstance(x, ModeSolver) for x in mode_solvers):
-        log.error("[red]Stopped running a batch of mode solver simulations. Please provide a list of mode solvers of type [cyan]`td.plugins.mode.mode_solver.ModeSolver` [red]to run a batch of mode solver simulations.")
-        return
-    
+        raise ValueError(
+            "`modes_solvers` passed to `tidy3d.plugins.mode.web.run_batch()` should be a list containing all `ModeSolver` instances. Cannot run the batched mode solver."
+        )
+
     num_mode_solvers = len(mode_solvers)
 
     # Result files where the data is stored after downloading
     if results_files is None:
-        results_files = [f"{folder_name}/mode_solver_results_{i}.hdf5" for i in range(num_mode_solvers)]
+        results_files = [
+            f"{folder_name}/mode_solver_results_{i}.hdf5" for i in range(num_mode_solvers)
+        ]
 
-    results = [None] * num_mode_solvers 
-    
+    results = [None] * num_mode_solvers
+
     # Handling simulation to make sure there are more than one tries if simulation produces some error
     def handle_mode_solver(index, retries=0):
         try:
             # We'll create a separate progress bar for batch simulations so we'll set verbose=False here for individual runs
             result = run(
-                        mode_solver = mode_solvers[index], 
-                         task_name = f"{task_name}_{index}", 
-                         mode_solver_name = f"mode_solver_batch_{index}", 
-                         folder_name = folder_name, 
-                         results_file = results_files[index], 
-                         verbose = False, 
-                         progress_callback_upload = progress_callback_upload, 
-                         progress_callback_download = progress_callback_download
-                         )
+                mode_solver=mode_solvers[index],
+                task_name=f"{task_name}_{index}",
+                mode_solver_name=f"mode_solver_batch_{index}",
+                folder_name=folder_name,
+                results_file=results_files[index],
+                verbose=False,
+                progress_callback_upload=progress_callback_upload,
+                progress_callback_download=progress_callback_download,
+            )
             results[index] = result
-        except Exception as exc:
+        except Exception:
             if retries < max_retries:
                 # Wait before retrying
-                time.sleep(retry_delay)  
+                time.sleep(retry_delay)
                 handle_mode_solver(index, retries + 1)
             else:
-                log.warning(f"The {index}-th mode solver failed after {max_retries} tries.")          
+                log.warning(f"The {index}-th mode solver failed after {max_retries} tries.")
+                log.warning(f"The data returned for the {index}-th mode solver will be `None`.")
 
     # Using multithreading to run mode solver simulations concurrently
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -234,14 +239,14 @@ def run_batch(
         if verbose:
             console.log(f"[cyan]Running a batch of [deep_pink4]{num_mode_solvers} mode solvers.\n")
             with Progress(console=console) as progress:
-                pbar_message = f"Status:"
+                pbar_message = "Status:"
                 pbar = progress.add_task(pbar_message, total=num_mode_solvers)
                 for _ in as_completed(futures):
                     progress.advance(pbar)
 
                 # Make sure the progress bar is complete
                 progress.update(pbar, completed=num_mode_solvers, refresh=True)
-                console.log("[green]A batch of `ModeSolver` tasks completed successfully!")  
+                console.log("[green]A batch of `ModeSolver` tasks completed successfully!")
 
     return results
 

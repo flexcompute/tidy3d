@@ -1,4 +1,5 @@
 """Mode solver for propagating EM modes."""
+
 from typing import Tuple
 
 import numpy as np

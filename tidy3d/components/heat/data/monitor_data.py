@@ -1,4 +1,5 @@
 """Monitor level data, store the DataArrays associated with a single heat monitor."""
+
 from __future__ import annotations
 from typing import Union, Tuple, Optional
 

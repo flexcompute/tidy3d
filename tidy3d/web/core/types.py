@@ -1,4 +1,5 @@
 """Tidy3d abstraction types for the core."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

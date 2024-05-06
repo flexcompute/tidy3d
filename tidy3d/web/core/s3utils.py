@@ -1,5 +1,6 @@
 """handles filesystem, storage
 """
+
 import os
 import tempfile
 
@@ -251,9 +252,9 @@ def upload_file(
                 Key=token.get_s3_key(),
                 Callback=_callback,
                 Config=_s3_config,
-                ExtraArgs={"ContentEncoding": "gzip"}
-                if token.get_s3_key().endswith(".gz")
-                else None,
+                ExtraArgs=(
+                    {"ContentEncoding": "gzip"} if token.get_s3_key().endswith(".gz") else None
+                ),
             )
 
     if progress_callback is not None:

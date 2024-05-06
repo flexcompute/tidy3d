@@ -1,4 +1,5 @@
 """Utilities for 2D geometry manipulation."""
+
 import numpy as np
 import shapely
 from typing import Tuple, List

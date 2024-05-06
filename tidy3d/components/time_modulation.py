@@ -1,4 +1,5 @@
 """ Defines time modulation to the medium"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

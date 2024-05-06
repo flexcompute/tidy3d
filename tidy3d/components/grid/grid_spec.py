@@ -1,4 +1,5 @@
 """ Defines classes specifying meshing in 1D and a collective class for 3D """
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -75,7 +76,6 @@ ConformalMeshSpecType = Union[
 
 
 class GridSpec1d(Tidy3dBaseModel, ABC):
-
     """Abstract base class, defines 1D grid generation specifications."""
 
     def make_coords(
@@ -189,7 +189,6 @@ class GridSpec1d(Tidy3dBaseModel, ABC):
 
 
 class UniformGrid(GridSpec1d):
-
     """Uniform 1D grid. The most standard way to define a simulation is to use a constant grid size in each of the three directions.
 
     Example
@@ -252,7 +251,6 @@ class UniformGrid(GridSpec1d):
 
 
 class CustomGrid(GridSpec1d):
-
     """Custom 1D grid supplied as a list of grid cell sizes centered on the simulation center.
 
     Example
@@ -503,7 +501,6 @@ GridType = Union[UniformGrid, CustomGrid, AutoGrid]
 
 
 class GridSpec(Tidy3dBaseModel):
-
     """Collective grid specification for all three dimensions.
 
     Example

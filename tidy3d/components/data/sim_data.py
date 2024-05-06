@@ -1,4 +1,5 @@
 """ Simulation Level Data """
+
 from __future__ import annotations
 from typing import Callable, Tuple, Union
 from abc import ABC

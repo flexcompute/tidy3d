@@ -1,4 +1,5 @@
 """Defines jax-compatible datasets."""
+
 import pydantic.v1 as pd
 
 from jax.tree_util import register_pytree_node_class

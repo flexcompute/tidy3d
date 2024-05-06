@@ -1,4 +1,5 @@
 """Defines jax-compatible mediums."""
+
 from __future__ import annotations
 
 from typing import Dict, Tuple, Union, Callable, Optional

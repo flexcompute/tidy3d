@@ -1,4 +1,5 @@
 """ Container holding all information about simulation and its components"""
+
 from __future__ import annotations
 
 from typing import Dict, Tuple, List, Set, Union

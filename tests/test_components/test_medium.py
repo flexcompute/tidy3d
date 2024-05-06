@@ -1,4 +1,5 @@
 """Tests mediums."""
+
 import numpy as np
 import pytest
 import pydantic.v1 as pydantic

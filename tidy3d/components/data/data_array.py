@@ -1,4 +1,5 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
+
 from __future__ import annotations
 from typing import Dict, List, Union
 from abc import ABC

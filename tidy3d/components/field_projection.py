@@ -1,5 +1,6 @@
 """Near field to far field transformation plugin
 """
+
 from __future__ import annotations
 from typing import Dict, Tuple, Union, List
 import numpy as np

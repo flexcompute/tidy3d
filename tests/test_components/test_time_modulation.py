@@ -1,4 +1,5 @@
 """Tests space time modulation."""
+
 import numpy as np
 import pytest
 from math import isclose

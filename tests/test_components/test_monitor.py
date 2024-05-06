@@ -1,4 +1,5 @@
 """Tests monitors."""
+
 import pytest
 import pydantic.v1 as pydantic
 import numpy as np

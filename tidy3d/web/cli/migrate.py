@@ -1,4 +1,5 @@
 """Migrate authentication to API key."""
+
 import json
 import os
 
