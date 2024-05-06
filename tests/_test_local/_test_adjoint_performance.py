@@ -5,7 +5,6 @@ from memory_profiler import profile
 import matplotlib.pyplot as plt
 import time
 
-import jax.numpy as jnp
 from jax import grad
 
 import tidy3d as td
@@ -240,21 +239,21 @@ def test_simple_jax_data_array(use_emulated_run):
 
     Nx, Ny, Nz, Nf = 300, 300, 1, 1
     VALUES = 2 + np.random.random((Nx, Ny, Nz, Nf))
-    data_array = make_data_array(VALUES)
+    data_array = make_data_array(VALUES)  # noqa: F841
 
     # the first 3 are fast, last one is slow
 
-    def f(values):
-        data_array = make_data_array(values)
-        return jnp.sum(data_array.values)
+    # def f(values):
+    #     data_array = make_data_array(values)
+    #     return jnp.sum(data_array.values)
 
-    def f(values):
-        custom_medium = make_custom_medium(values)
-        return jnp.sum(custom_medium.eps_dataset.eps_xx.values)
+    # def f(values):
+    #     custom_medium = make_custom_medium(values)
+    #     return jnp.sum(custom_medium.eps_dataset.eps_xx.values)
 
-    def f(values):
-        custom_structure = make_custom_structure(values)
-        return jnp.sum(custom_structure.medium.eps_dataset.eps_xx.values)
+    # def f(values):
+    #     custom_structure = make_custom_structure(values)
+    #     return jnp.sum(custom_structure.medium.eps_dataset.eps_xx.values)
 
     def f(values):
         sim = make_sim(values)

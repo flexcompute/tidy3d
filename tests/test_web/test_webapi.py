@@ -544,7 +544,7 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
     b = b.from_file(fname)
 
     b.estimate_cost()
-    data = b.run(path_dir=str(tmp_path))
+    b.run(path_dir=str(tmp_path))
     _ = b.get_info()
     assert b.real_cost() == FLEX_UNIT * len(sims)
 

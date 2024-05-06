@@ -4,7 +4,8 @@ import gdstk
 import tidy3d as td
 
 from tidy3d.plugins.polyslab import ComplexPolySlab
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level
+from ..utils import log_capture  # noqa: F401
 
 
 def test_divide_simple_events():
@@ -30,7 +31,7 @@ def test_divide_simple_events():
                 _ = s.geometry_group
 
 
-def test_many_sub_polyslabs(log_capture):
+def test_many_sub_polyslabs(log_capture):  # noqa: F811
     """warn when too many subpolyslabs are generated."""
 
     # generate vertices that can generate at least this number
@@ -116,7 +117,7 @@ def test_gds_import(tmp_path):
         # bend interpolator
         interp = tanh_interp(3)
         delta = wg_width + wg_spacing_coup - wg_spacing_in
-        offset = lambda u: wg_spacing_in + interp(u) * delta
+        offset = lambda u: wg_spacing_in + interp(u) * delta  # noqa: E731
 
         coup = gdstk.RobustPath(
             (-0.5 * length, 0),

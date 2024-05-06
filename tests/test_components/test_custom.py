@@ -1,4 +1,5 @@
 """Tests custom sources and mediums."""
+
 import dill as pickle
 from typing import Tuple
 
@@ -8,7 +9,8 @@ import pydantic.v1 as pydantic
 import xarray as xr
 import tidy3d as td
 
-from ..utils import assert_log_level, log_capture, cartesian_to_unstructured
+from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import log_capture  # noqa: F401
 from tidy3d.components.data.dataset import (
     PermittivityDataset,
     _get_numpy_array,
@@ -95,8 +97,8 @@ def get_dataset(custom_source_obj) -> Tuple[str, td.FieldDataset]:
 def test_field_components(source):
     """Get Dictionary of field components and select some data."""
     _, dataset = get_dataset(source)
-    for name, field in dataset.field_components.items():
-        _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+    for field in dataset.field_components.values():
+        field.interp(x=0, y=0, z=0).sel(f=freqs[0])
 
 
 @pytest.mark.parametrize("source", (FIELD_SRC, CURRENT_SRC))
@@ -150,7 +152,7 @@ def test_io_hdf5(tmp_path):
     assert FIELD_SRC == FIELD_SRC2
 
 
-def test_io_json(tmp_path, log_capture):
+def test_io_json(tmp_path, log_capture):  # noqa: F811
     """to json warns and then from json errors."""
     path = str(tmp_path / "custom_source.json")
     FIELD_SRC.to_file(path)
@@ -278,8 +280,8 @@ CUSTOM_MEDIUM_LIST = [
 
 def test_medium_components():
     """Get Dictionary of field components and select some data."""
-    for name, field in CUSTOM_MEDIUM.eps_dataset.field_components.items():
-        _ = field.interp(x=0, y=0, z=0).sel(f=freqs[0])
+    for field in CUSTOM_MEDIUM.eps_dataset.field_components.values():
+        field.interp(x=0, y=0, z=0).sel(f=freqs[0])
 
 
 @pytest.mark.parametrize("medium", CUSTOM_MEDIUM_LIST)
@@ -500,8 +502,8 @@ def test_nk_diff_coords():
 def test_grids():
     """Get Dictionary of field components and select some data."""
     bounds = td.Box(size=(1, 1, 1)).bounds
-    for key, grid in CUSTOM_MEDIUM.grids(bounds=bounds).items():
-        grid.sizes
+    for grid in CUSTOM_MEDIUM.grids(bounds=bounds).values():
+        grid.sizes  # noqa: B018
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -512,7 +514,7 @@ def test_n_cfl(unstructured):
     assert med.n_cfl >= 2
 
 
-def verify_custom_medium_methods(mat, reduced_fields=[]):
+def verify_custom_medium_methods(mat, reduced_fields):
     """Verify that the methods in custom medium is producing expected results."""
     freq = 1.0
     assert isinstance(mat, AbstractCustomMedium)
@@ -574,8 +576,8 @@ def verify_custom_medium_methods(mat, reduced_fields=[]):
         structures=(struct,),
     )
     _ = sim.grid
-    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=False)
-    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=True)
+    sim.subsection(subsection, remove_outside_custom_mediums=False)
+    sim.subsection(subsection, remove_outside_custom_mediums=True)
 
     # bkg
     sim = td.Simulation(
@@ -585,8 +587,8 @@ def verify_custom_medium_methods(mat, reduced_fields=[]):
         medium=mat,
     )
     _ = sim.grid
-    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=False)
-    sim_reduced = sim.subsection(subsection, remove_outside_custom_mediums=True)
+    sim.subsection(subsection, remove_outside_custom_mediums=False)
+    sim.subsection(subsection, remove_outside_custom_mediums=True)
 
 
 def test_anisotropic_custom_medium():
@@ -607,7 +609,7 @@ def test_anisotropic_custom_medium():
     for field_components in field_components_list:
         eps_dataset = PermittivityDataset(**field_components)
         mat = CustomMedium(eps_dataset=eps_dataset)
-        verify_custom_medium_methods(mat)
+        verify_custom_medium_methods(mat, [])
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -654,7 +656,7 @@ def test_custom_isotropic_medium(unstructured):
     assert mat.is_spatially_uniform
 
 
-def verify_custom_dispersive_medium_methods(mat, reduced_fields=[]):
+def verify_custom_dispersive_medium_methods(mat, reduced_fields):
     """Verify that the methods in custom dispersive medium is producing expected results."""
     verify_custom_medium_methods(mat, reduced_fields)
     freq = 1.0
@@ -947,7 +949,7 @@ def test_custom_debye(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [True])
-def test_custom_anisotropic_medium(log_capture, unstructured):
+def test_custom_anisotropic_medium(log_capture, unstructured):  # noqa: F811
     """Custom anisotropic medium."""
     seed = 43243
 
@@ -974,7 +976,7 @@ def test_custom_anisotropic_medium(log_capture, unstructured):
 
     # anisotropic
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
-    verify_custom_medium_methods(mat)
+    verify_custom_medium_methods(mat, [])
     assert not mat.is_spatially_uniform
 
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, subpixel=True)
@@ -1096,7 +1098,7 @@ def test_io_dispersive(tmp_path, unstructured, z_custom):
     assert sim_load == sim
 
 
-def test_warn_planewave_intersection(log_capture):
+def test_warn_planewave_intersection(log_capture):  # noqa: F811
     """Warn that if a nonuniform custom medium is intersecting PlaneWave source."""
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
@@ -1134,7 +1136,7 @@ def test_warn_planewave_intersection(log_capture):
     assert_log_level(log_capture, "WARNING")
 
 
-def test_warn_diffraction_monitor_intersection(log_capture):
+def test_warn_diffraction_monitor_intersection(log_capture):  # noqa: F811
     """Warn that if a nonuniform custom medium is intersecting Diffraction Monitor."""
     src = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),

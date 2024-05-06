@@ -195,10 +195,9 @@ def _run_notebook(notebook_fname):
         # try running the notebook
         try:
             # run from the `notebooks/` directory
-            out = ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
+            ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
         except CellExecutionError:
             # if there is an error, print message and fail test
-            out = None
             msg = 'Error executing the notebook "%s".\n\n' % notebook_fname
             msg += 'See notebook "%s" for the traceback.' % notebook_fname
             print(msg)

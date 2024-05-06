@@ -191,7 +191,7 @@ def run_async_emulated_bwd(
 
     sim_vjps_orig = []
 
-    for i, (sim, jax_info, parent_tasks_i) in enumerate(zip(simulations, jax_infos, parent_tasks)):
+    for i, (sim, jax_info, _) in enumerate(zip(simulations, jax_infos, parent_tasks)):
         sim_vjp = run_emulated_bwd(
             sim_adj=sim,
             jax_info_adj=jax_info,
@@ -923,7 +923,7 @@ def test_jax_sim_data(use_emulated_run):
         _ = sim_data[mnt_name]
 
 
-def test_intersect_structures(log_capture):
+def test_intersect_structures(log_capture):  # noqa: F811
     """Test validators for structures touching and intersecting."""
 
     SIZE_X = 1.0
@@ -1112,8 +1112,8 @@ def _test_polyslab_box(use_emulated_run):
         amp = extract_amp(sim_data)
         return objective(amp)
 
-    f_b = lambda size, center: f(size, center, is_box=True)
-    f_p = lambda size, center: f(size, center, is_box=False)
+    f_b = lambda size, center: f(size, center, is_box=True)  # noqa: E731
+    f_p = lambda size, center: f(size, center, is_box=False)  # noqa: E731
 
     g_b = grad(f_b, argnums=(0, 1))
     g_p = grad(f_p, argnums=(0, 1))
@@ -1208,7 +1208,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
         amp = extract_amp(sim_data)
         return objective(amp)
 
-    f_b = lambda size, center: f(size, center)
+    f_b = lambda size, center: f(size, center)  # noqa: E731
 
     g_b = grad(f_b, argnums=(0, 1))
 
@@ -1230,11 +1230,7 @@ def test_adjoint_run_async(local, use_emulated_run_async):
     def f(x):
         """Objective function to differentiate."""
 
-        sims = []
-        for i in range(1):
-            permittivity = x + 1.0
-            sims.append(make_sim_simple(permittivity=permittivity))
-
+        sims = [make_sim_simple(permittivity=x + 1.0)]
         sim_data_list = run_fn(sims, path_dir=str(TMP_PATH))
 
         result = 0.0
@@ -1367,7 +1363,7 @@ def _test_polyslab_scale(use_emulated_run):
             size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(SIZE, axis=POLYSLAB_AXIS)
             cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(CENTER, axis=POLYSLAB_AXIS)
 
-            vertices_jax = [(scale * x, scale * y) for x, y in vertices]
+            vertices_jax = [(scale * x, scale * y) for x, y in vertices]  # noqa: B023
             # vertices_jax = [(x, y) for x, y in vertices]
 
             slab_bounds = (cent_axis - size_axis / 2, cent_axis + size_axis / 2)
@@ -1580,9 +1576,9 @@ def test_num_input_structures(use_emulated_run, tmp_path):
 
     # make sure that the remote web API fails whereas the local one passes
     with pytest.raises(AdjointError):
-        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
-    sim_data = run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+    run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
 
 @pytest.mark.parametrize("strict_binarize", (True, False))
@@ -1623,7 +1619,7 @@ def test_adjoint_utils(strict_binarize):
 @pytest.mark.parametrize(
     "input_size_y, log_level_expected", [(13, None), (12, "WARNING"), (11, "WARNING"), (14, None)]
 )
-def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):
+def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):  # noqa: F811
     """Warn if filter size along a dim is smaller than radius."""
 
     signal_in = np.ones((266, input_size_y))
@@ -1749,17 +1745,17 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
 
 @pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
 def test_no_adjoint_sources(
-    monkeypatch, use_emulated_run, tmp_path, log_capture, has_adj_src, log_level_expected
+    monkeypatch,
+    use_emulated_run,
+    tmp_path,
+    log_capture,  # noqa: F811
+    has_adj_src,
+    log_level_expected,
 ):
     """Make sure warning (not error) if no adjoint sources."""
 
     def make_sim(eps):
         """Make a sim with given sources and fwidth_adjoint specified."""
-        struct = JaxStructure(
-            geometry=JaxBox(center=(0, 0, 0), size=(1, 1, 1)),
-            medium=JaxMedium(permittivity=eps),
-        )
-
         freq0 = 2e14
         mnt = td.ModeMonitor(
             size=(10, 10, 0),
@@ -1790,10 +1786,10 @@ def test_no_adjoint_sources(
     with AssertLogLevel(log_capture, log_level_expected, contains_str="No adjoint sources"):
         data.make_adjoint_simulation(fwidth=src.source_time.fwidth, run_time=sim.run_time)
 
-    power = jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
+    jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
 
-def test_nonlinear_warn(log_capture):
+def test_nonlinear_warn(log_capture):  # noqa: F811
     """Test that simulations warn if nonlinearity is used."""
 
     struct = JaxStructure(
@@ -1829,15 +1825,15 @@ def test_nonlinear_warn(log_capture):
 
     # nonlinear simulation.medium (error)
     with AssertLogLevel(log_capture, "WARNING"):
-        sim = sim_base.updated_copy(medium=nl_medium)
+        sim_base.updated_copy(medium=nl_medium)
 
     # nonlinear structure (warn)
     with AssertLogLevel(log_capture, "WARNING"):
-        sim = sim_base.updated_copy(structures=[struct_static_nl])
+        sim_base.updated_copy(structures=[struct_static_nl])
 
     # nonlinear input_structure (warn)
     with AssertLogLevel(log_capture, "WARNING"):
-        sim = sim_base.updated_copy(input_structures=[input_struct_nl])
+        sim_base.updated_copy(input_structures=[input_struct_nl])
 
 
 @pytest.fixture
@@ -1861,13 +1857,13 @@ def try_tracer_import() -> None:
 
 
 @pytest.mark.usefixtures("hide_jax")
-def test_jax_tracer_import_fail(tmp_path, log_capture):
+def test_jax_tracer_import_fail(tmp_path, log_capture):  # noqa: F811
     """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
     try_tracer_import()
     assert_log_level(log_capture, "WARNING")
 
 
-def test_jax_tracer_import_pass(tmp_path, log_capture):
+def test_jax_tracer_import_pass(tmp_path, log_capture):  # noqa: F811
     """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
     try_tracer_import()
     assert_log_level(log_capture, None)
@@ -1884,7 +1880,7 @@ def test_inf_IO(tmp_path):
 
 
 @pytest.mark.parametrize("sidewall_angle, log_expected", ([0.0, None], [0.1, "WARNING"]))
-def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
+def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):  # noqa: F811
     """Test that the sidewall angle warning works as expected."""
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=VERTICES, slab_bounds=(-1, 1))
@@ -1906,7 +1902,7 @@ def test_package_flux():
     assert res_multi == da_multi
 
 
-def test_vertices_warning(log_capture):
+def test_vertices_warning(log_capture):  # noqa: F811
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
     polyslab = sim.input_structures[3].geometry
@@ -1914,19 +1910,19 @@ def test_vertices_warning(log_capture):
     radius_penalty = RadiusPenalty(min_radius=0.2, wrap=True)
 
     with AssertLogLevel(log_capture, "WARNING"):
-        z = radius_penalty.evaluate(polyslab.vertices)
+        radius_penalty.evaluate(polyslab.vertices)
 
     with AssertLogLevel(log_capture, "WARNING"):
-        z = radius_penalty.evaluate(np.array(jax.lax.stop_gradient(polyslab.vertices)))
+        radius_penalty.evaluate(np.array(jax.lax.stop_gradient(polyslab.vertices)))
 
     def f(vertices):
         return radius_penalty.evaluate(vertices)
 
     with AssertLogLevel(log_capture, None):
-        z = jax.grad(f)(np.random.random((5, 2)))
+        jax.grad(f)(np.random.random((5, 2)))
 
     with AssertLogLevel(log_capture, None):
-        z = jax.grad(f)(np.random.random((5, 2)).tolist())
+        jax.grad(f)(np.random.random((5, 2)).tolist())
 
 
 def test_no_poynting(use_emulated_run):

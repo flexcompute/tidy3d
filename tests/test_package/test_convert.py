@@ -1,7 +1,6 @@
 """Test converting .lsf files to Tidy3D python files."""
 
 import pytest
-import os
 
 from tidy3d.web.cli.app import convert
 

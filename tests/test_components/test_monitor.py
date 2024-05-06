@@ -1,10 +1,13 @@
 """Tests monitors."""
+# ruff: noqa: B018
+
 import pytest
 import pydantic.v1 as pydantic
 import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level
+from ..utils import log_capture  # noqa: F401
 
 
 def test_stop_start():
@@ -23,7 +26,7 @@ time_sampling_tests = [
 
 
 @pytest.mark.parametrize("interval, start, stop, log_desired", time_sampling_tests)
-def test_monitor_interval_warn(log_capture, interval, start, stop, log_desired):
+def test_monitor_interval_warn(log_capture, interval, start, stop, log_desired):  # noqa: F811
     """Assert time monitor interval warning handled as expected."""
 
     mnt = td.FluxTimeMonitor(size=(1, 1, 0), name="f", interval=interval, stop=stop, start=start)
@@ -244,7 +247,7 @@ def test_monitor_freqs_empty():
         )
 
 
-def test_monitor_colocate(log_capture):
+def test_monitor_colocate(log_capture):  # noqa: F811
     """test default colocate value, and warning if not set"""
 
     monitor = td.FieldMonitor(
@@ -269,10 +272,10 @@ def test_monitor_colocate(log_capture):
 @pytest.mark.parametrize(
     "freqs, log_level", [(np.arange(1, 2500), "WARNING"), (np.arange(1, 100), None)]
 )
-def test_monitor_num_freqs(log_capture, freqs, log_level):
+def test_monitor_num_freqs(log_capture, freqs, log_level):  # noqa: F811
     """test default colocate value, and warning if not set"""
 
-    monitor = td.FieldMonitor(
+    td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
         freqs=freqs * 1e12,
         name="test",
@@ -282,10 +285,10 @@ def test_monitor_num_freqs(log_capture, freqs, log_level):
 
 
 @pytest.mark.parametrize("num_modes, log_level", [(101, "WARNING"), (100, None)])
-def test_monitor_num_modes(log_capture, num_modes, log_level):
+def test_monitor_num_modes(log_capture, num_modes, log_level):  # noqa: F811
     """test default colocate value, and warning if not set"""
 
-    monitor = td.ModeMonitor(
+    td.ModeMonitor(
         size=(td.inf, 0, td.inf),
         freqs=np.linspace(1e14, 2e14, 100),
         name="test",

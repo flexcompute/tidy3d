@@ -2,9 +2,6 @@ import os
 
 
 def process_robots_txt(app, exception):
-    # Get the path to the source directory
-    srcdir = app.builder.srcdir
-
     # Get the path to the robots.txt file
     robots_file = os.path.join(app.outdir, "robots.txt")
 

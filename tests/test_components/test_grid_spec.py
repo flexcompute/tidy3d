@@ -1,4 +1,5 @@
 """Tests GridSpec."""
+
 import pytest
 import numpy as np
 
@@ -95,7 +96,6 @@ def test_autogrid_2dmaterials():
     sigma = 0.45
     thickness = 0.01
     medium = td.Medium2D.from_medium(td.Medium(conductivity=sigma), thickness=thickness)
-    grid_dl = 0.03
     box = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 0), center=(0, 0, 1)), medium=medium)
     src = td.UniformCurrentSource(
         source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
@@ -115,7 +115,7 @@ def test_autogrid_2dmaterials():
         run_time=1e-12,
     )
     assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.center[2], 1, rtol=RTOL)
-    grid_dl = sim.discretize(box.geometry).sizes.z[0]
+    sim.discretize(box.geometry).sizes.z[0]
     assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.size[2], 0, rtol=RTOL)
 
     # now if we increase conductivity, the in-plane grid size should decrease
@@ -135,8 +135,8 @@ def test_autogrid_2dmaterials():
         grid_spec=td.GridSpec.auto(),
         run_time=1e-12,
     )
-    grid_dl1_inplane = sim.discretize(box.geometry).sizes.x[0]
-    grid_dl2_inplane = sim2.discretize(box2.geometry).sizes.x[0]
+    grid_dl1_inplane = sim.discretize(box.geometry).sizes.x[0]  # noqa: F841
+    grid_dl2_inplane = sim2.discretize(box2.geometry).sizes.x[0]  # noqa: F841
     # This is commented out until inplane AutoGrid for 2D materials is enabled
     # assert grid_dl1_inplane > grid_dl2_inplane
 

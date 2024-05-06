@@ -1,17 +1,19 @@
 """Tests tidy3d/components/data/dataset.py"""
+
 import pytest
 import numpy as np
 import pydantic.v1 as pd
 from matplotlib import pyplot as plt
 from ..utils import cartesian_to_unstructured
-from ..utils import log_capture, AssertLogLevel
+from ..utils import AssertLogLevel
+from ..utils import log_capture  # noqa: F401
 
 
 np.random.seed(4)
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
+def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):  # noqa: F811
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -189,7 +191,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
     # interpolation
     if no_vtk:
         with pytest.raises(Tidy3dImportError):
-            invariant = tri_grid.interp(
+            tri_grid.interp(
                 x=0.4, y=[0, 1], z=np.linspace(0.2, 0.6, 10), fill_value=-333, use_vtk=True
             )
     else:
@@ -285,7 +287,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
         )
         assert tri_grid == tri_grid_loaded
 
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             tri_grid_loaded = td.TriangularGridDataset.from_vtu(
                 tmp_path / "tri_grid_test.vtu", field=custom_name + "blah"
             )
@@ -302,7 +304,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
+def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):  # noqa: F811
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -539,8 +541,8 @@ def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
         )
         assert tet_grid == tet_grid_loaded
 
-        with pytest.raises(Exception):
-            tet_grid_loaded = td.TetrahedralGridDataset.from_vtu(
+        with pytest.raises(AttributeError):
+            td.TetrahedralGridDataset.from_vtu(
                 tmp_path / "tet_grid_test.vtu", field=custom_name + "blah"
             )
 

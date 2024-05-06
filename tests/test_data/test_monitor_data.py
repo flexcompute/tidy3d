@@ -1,4 +1,5 @@
 """Tests tidy3d/components/data/monitor_data.py"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import pytest
@@ -361,7 +362,7 @@ def test_empty_array():
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
         grid_expanded=SIM.discretize_monitor(monitor),
-        **fields
+        **fields,
     )
 
 
@@ -375,7 +376,7 @@ def _test_empty_list():
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
         grid_expanded=SIM.discretize_monitor(monitor),
-        **fields
+        **fields,
     )
 
 
@@ -389,7 +390,7 @@ def _test_empty_tuple():
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
         grid_expanded=SIM.discretize_monitor(monitor),
-        **fields
+        **fields,
     )
 
 
@@ -402,7 +403,7 @@ def test_empty_io(tmp_path):
         symmetry=SIM.symmetry,
         symmetry_center=SIM.center,
         grid_expanded=SIM.discretize_monitor(monitor),
-        **fields
+        **fields,
     )
     field_data.to_file(str(tmp_path / "field_data.hdf5"))
     field_data = td.FieldTimeData.from_file(str(tmp_path / "field_data.hdf5"))
@@ -431,7 +432,7 @@ def test_field_data_symmetry_present():
             monitor=monitor,
             symmetry=(1, -1, 0),
             grid_expanded=SIM.discretize_monitor(monitor),
-            **fields
+            **fields,
         )
 
     # fails if symmetry specified but missing etended grid
@@ -530,11 +531,11 @@ def test_outer_dot():
     dot = mode_data.outer_dot(mode_data)
     assert "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
     dot = field_data.outer_dot(mode_data)
-    assert not "mode_index_0" in dot.coords and "mode_index_1" in dot.coords
+    assert "mode_index_0" not in dot.coords and "mode_index_1" in dot.coords
     dot = mode_data.outer_dot(field_data)
-    assert "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+    assert "mode_index_0" in dot.coords and "mode_index_1" not in dot.coords
     dot = field_data.outer_dot(field_data)
-    assert not "mode_index_0" in dot.coords and not "mode_index_1" in dot.coords
+    assert "mode_index_0" not in dot.coords and "mode_index_1" not in dot.coords
 
     # test that only common freqs are kept
     inds1 = [0, 1, 3]
@@ -581,4 +582,4 @@ def test_no_nans():
         **{key: eps_nan for key in ["eps_xx", "eps_yy", "eps_zz"]}
     )
     with pytest.raises(pydantic.ValidationError):
-        cm = td.CustomMedium(eps_dataset=eps_dataset_nan)
+        td.CustomMedium(eps_dataset=eps_dataset_nan)

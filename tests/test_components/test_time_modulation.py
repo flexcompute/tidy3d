@@ -1,4 +1,5 @@
 """Tests space time modulation."""
+
 import numpy as np
 import pytest
 from math import isclose
@@ -157,12 +158,12 @@ def test_modulated_medium():
     # unmodulated
     medium = td.Medium()
     assert medium.modulation_spec is None
-    assert medium.is_time_modulated == False
+    assert not medium.is_time_modulated
     reduce(medium)
 
-    assert MODULATION_SPEC.applied_modulation == False
+    assert not MODULATION_SPEC.applied_modulation
     medium = medium.updated_copy(modulation_spec=MODULATION_SPEC)
-    assert medium.is_time_modulated == False
+    assert not medium.is_time_modulated
     reduce(medium)
 
     # permittivity modulated
@@ -207,26 +208,26 @@ def test_unsupported_modulated_medium_types():
 
     # PEC cannot be modulated
     with pytest.raises(pydantic.ValidationError):
-        mat = td.PECMedium(modulation_spec=modulation_spec)
+        td.PECMedium(modulation_spec=modulation_spec)
 
     # For Anisotropic medium, one should modulate the components, not the whole medium
     with pytest.raises(pydantic.ValidationError):
-        mat = td.AnisotropicMedium(
+        td.AnisotropicMedium(
             xx=td.Medium(), yy=td.Medium(), zz=td.Medium(), modulation_spec=modulation_spec
         )
 
     # Modulation to fully Anisotropic medium unsupported
     with pytest.raises(pydantic.ValidationError):
-        mat = td.FullyAnisotropicMedium(modulation_spec=modulation_spec)
+        td.FullyAnisotropicMedium(modulation_spec=modulation_spec)
 
     # 2D material
     with pytest.raises(pydantic.ValidationError):
         drude_medium = td.Drude(eps_inf=2.0, coeffs=[(1, 2), (3, 4)])
-        medium2d = td.Medium2D(ss=drude_medium, tt=drude_medium, modulation_spec=modulation_spec)
+        td.Medium2D(ss=drude_medium, tt=drude_medium, modulation_spec=modulation_spec)
 
     # together with nonlinear_spec
     with pytest.raises(pydantic.ValidationError):
-        mat = td.Medium(
+        td.Medium(
             permittivity=2,
             nonlinear_spec=td.NonlinearSusceptibility(chi3=1),
             modulation_spec=modulation_spec,

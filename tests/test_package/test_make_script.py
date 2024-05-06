@@ -1,4 +1,5 @@
 """Tests generation of pythons script from simulation file."""
+
 import tidy3d as td
 from make_script import main
 

@@ -385,4 +385,4 @@ def test_batch_filename(tmp_path):
 
 
 def test_import_smatrix_smatrix():
-    from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
+    from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler  # noqa: F401

@@ -1,4 +1,5 @@
 """Tests the scene and its validators."""
+
 import pytest
 import pydantic.v1 as pd
 import matplotlib.pyplot as plt

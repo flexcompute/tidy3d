@@ -1,4 +1,4 @@
-""" test the grid operations """
+"""test the grid operations"""
 
 import pytest
 import pydantic.v1 as pydantic
