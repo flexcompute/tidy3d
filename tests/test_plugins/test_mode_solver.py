@@ -12,7 +12,8 @@ from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
 from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
 from tidy3d.plugins.mode.solver import compute_modes
 from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, log_capture, cartesian_to_unstructured  # noqa: F401
+from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
 from tidy3d.web.core.environment import Env
 

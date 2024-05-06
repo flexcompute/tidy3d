@@ -1,4 +1,5 @@
 """Tests generating meshes."""
+
 import numpy as np
 import warnings
 import pytest
@@ -7,7 +8,8 @@ import tidy3d as td
 from tidy3d.constants import fp_eps
 from tidy3d.components.grid.mesher import GradedMesher
 
-from ..utils import assert_log_level, log_capture, cartesian_to_unstructured
+from ..utils import assert_log_level, cartesian_to_unstructured
+from ..utils import log_capture  # noqa: F401
 
 np.random.seed(4)
 
@@ -72,7 +74,7 @@ def validate_dl_in_interval(
 def test_uniform_grid_in_interval():
     """Uniform mesh in an interval"""
 
-    for i in range(100):
+    for _ in range(100):
         len_interval = 10.0 - np.random.random(1)[0]
         # max_scale = 1, but left_dl != right_dl
         left_dl = np.random.random(1)[0]
@@ -131,7 +133,7 @@ def test_asending_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = 10
@@ -170,7 +172,7 @@ def test_asending_plateau_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = 10
@@ -205,7 +207,7 @@ def test_asending_plateau_desending_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = np.random.random(1)[0]
@@ -243,7 +245,7 @@ def test_asending_desending_grid_in_interval():
     # print(dl)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = np.random.random(1)[0]
@@ -266,7 +268,7 @@ def test_grid_in_interval():
     """Nonuniform mesh in an interval"""
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.randint(1, 10) * np.random.random(1)[0]
         right_dl = np.random.randint(1, 10) * np.random.random(1)[0]
@@ -309,7 +311,7 @@ def test_grid_refinement():
 
     num_intervals = 100
     max_shrink = 1
-    for i in range(50):
+    for _ in range(50):
         max_dl_list = np.random.random(num_intervals)
         len_interval_list = np.random.random(num_intervals) * 10
         too_short_ind = len_interval_list < max_dl_list
@@ -621,7 +623,7 @@ def test_mesher_timeout():
     mediums = [td.Medium(permittivity=n**2) for n in (1 + (n_max - 1) * np.random.rand(100))]
 
     boxes = []
-    for i in range(num_boxes):
+    for _ in range(num_boxes):
         center = sim_size * (np.random.rand(3) - 0.5)
         center[0] = 0
         size = np.abs(box_scale * np.random.randn(3))
@@ -649,7 +651,7 @@ def test_mesher_timeout():
     _ = sim.grid
 
 
-def test_small_structure_size(log_capture):
+def test_small_structure_size(log_capture):  # noqa: F811
     """Test that a warning is raised if a structure size is small during the auto meshing"""
     box_size = 0.03
     medium = td.Medium(permittivity=4)
@@ -673,7 +675,7 @@ def test_small_structure_size(log_capture):
     # Warning not raised if structure is higher index
     log_capture.clear()
     box2 = box.updated_copy(medium=td.Medium(permittivity=300))
-    sim2 = sim.updated_copy(structures=[box2])
+    sim.updated_copy(structures=[box2])
     assert len(log_capture) == 0
 
     # Warning not raised if structure is covered by an override structure
@@ -691,7 +693,7 @@ def test_small_structure_size(log_capture):
     box3 = td.Structure(
         geometry=td.Box(center=(box_size, 0, 0), size=(box_size, td.inf, td.inf)), medium=medium
     )
-    sim4 = sim.updated_copy(structures=[box3, box])
+    sim.updated_copy(structures=[box3, box])
     assert_log_level(log_capture, "WARNING")
 
 

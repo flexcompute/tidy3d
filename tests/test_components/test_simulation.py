@@ -1,4 +1,5 @@
 """Tests the simulation and its validators."""
+
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
@@ -10,8 +11,14 @@ from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.components import simulation
 from tidy3d.components.simulation import MAX_NUM_SOURCES
 from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
-from ..utils import assert_log_level, SIM_FULL, run_emulated, AssertLogLevel
-from ..utils import cartesian_to_unstructured, log_capture  # noqa: F401
+from ..utils import (
+    assert_log_level,
+    SIM_FULL,
+    run_emulated,
+    AssertLogLevel,
+    cartesian_to_unstructured,
+)
+from ..utils import log_capture  # noqa: F401
 
 SIM = td.Simulation(size=(1, 1, 1), run_time=1e-12, grid_spec=td.GridSpec(wavelength=1.0))
 
@@ -1278,7 +1285,10 @@ def test_sim_structure_extent(log_capture, box_size, log_level):  # noqa F811
     ],
 )
 def test_sim_validate_structure_bounds_pml(
-    log_capture, box_length, absorb_type, log_level  # noqa: F811
+    log_capture,  # noqa: F811
+    box_length,
+    absorb_type,
+    log_level,
 ):
     """Make sure we warn if structure bounds are within the PML exactly to simulation edges."""
 
@@ -1594,10 +1604,16 @@ def test_tfsf_boundaries(log_capture):  # noqa F811
         sources=[source],
         boundary_spec=td.BoundarySpec(
             x=td.Boundary.bloch_from_source(
-                source=source, domain_size=0.5 * 1.1, axis=0, medium=None  # wrong domain size
+                source=source,
+                domain_size=0.5 * 1.1,
+                axis=0,
+                medium=None,  # wrong domain size
             ),
             y=td.Boundary.bloch_from_source(
-                source=source, domain_size=0.5 * 1.1, axis=1, medium=None  # wrong domain size
+                source=source,
+                domain_size=0.5 * 1.1,
+                axis=1,
+                medium=None,  # wrong domain size
             ),
             z=td.Boundary.pml(),
         ),

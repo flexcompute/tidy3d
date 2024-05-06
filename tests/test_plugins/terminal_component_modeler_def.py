@@ -106,7 +106,7 @@ def make_component_modeler(
     length: float = None,
     port_refinement: bool = True,
     auto_grid: bool = True,
-    **kwargs
+    **kwargs,
 ):
     if length:
         strip_length = length

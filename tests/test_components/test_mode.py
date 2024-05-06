@@ -1,4 +1,5 @@
 """Tests mode objects."""
+
 import pytest
 import pydantic.v1 as pydantic
 import numpy as np

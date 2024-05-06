@@ -1,4 +1,5 @@
 """Tests sources."""
+
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
@@ -6,7 +7,8 @@ import numpy as np
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
-from ..utils import assert_log_level, log_capture, AssertLogLevel
+from ..utils import assert_log_level, AssertLogLevel
+from ..utils import log_capture  # noqa: F401
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -261,7 +263,7 @@ def test_broadband_source():
         )
 
 
-def test_custom_source_time(log_capture):
+def test_custom_source_time(log_capture):  # noqa: F811
     ts = np.linspace(0, 30e-12, 1001)
     amp_time = ts / max(ts)
     freq0 = 1e12
@@ -287,7 +289,6 @@ def test_custom_source_time(log_capture):
 
     # test out of range handling
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
-    monitor = td.FieldMonitor(size=(td.inf, td.inf, 0), freqs=[1e12], name="field")
     sim = td.Simulation(
         size=(10, 10, 10),
         run_time=1e-12,

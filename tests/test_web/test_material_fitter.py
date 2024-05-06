@@ -69,7 +69,8 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
         "tidy3d.web.api.material_fitter.MaterialFitterTask.sync_status", lambda self: None
     )
     task.sync_status()
-    task.status == "running"
+    # FIXME: Check what this tests is supposed to accomplish
+    task.status == "running"  # noqa: B015
 
     responses.add(
         responses.POST,

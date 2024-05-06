@@ -100,7 +100,7 @@ def test_core_profile_small_1_save():
 def test_core_profile_small_2_load():
     with Profile():
         print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-        data = td.FieldTimeData.from_file(PATH)
+        td.FieldTimeData.from_file(PATH)
 
 
 def test_core_profile_large():
@@ -159,7 +159,7 @@ def test_speed_many_datasets():
 
     with Profile():
         sim_data.to_file(PATH)
-        sim_data2 = sim_data.from_file(PATH)
+        sim_data.from_file(PATH)
 
 
 if __name__ == "__main__":

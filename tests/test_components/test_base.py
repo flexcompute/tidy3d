@@ -1,4 +1,6 @@
 """Tests the base model."""
+# ruff: noqa: B015
+
 import pytest
 import numpy as np
 
@@ -177,7 +179,7 @@ def test_equality():
 def test_special_characters_in_name():
     """Test error if special characters are in a component's name."""
     with pytest.raises(ValueError):
-        mnt = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="mnt/flux")
+        td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="mnt/flux")
 
 
 def test_attrs(tmp_path):

@@ -1,4 +1,5 @@
 """Tests type definitions."""
+
 import pytest
 import pydantic.v1 as pydantic
 from tidy3d.components.types import ArrayLike, Complex, constrained_array, Tuple

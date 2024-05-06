@@ -621,7 +621,7 @@ def _get_eme_mode_solver_data():
         monitor=monitor,
         grid_primal_correction=grid_primal_correction,
         grid_dual_correction=grid_dual_correction,
-        **kwargs
+        **kwargs,
     )
 
 

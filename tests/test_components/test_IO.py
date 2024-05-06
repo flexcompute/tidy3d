@@ -1,4 +1,5 @@
 """Tests file export and loading."""
+
 import os
 import json
 
@@ -214,7 +215,7 @@ def test_simulation_updater(sim_file):
     assert sim_updated.version == __version__, "Simulation not converted properly"
 
     # just make sure the loaded sim does something properly using this version
-    sim_updated.grid
+    sim_updated.grid  # noqa: B018
 
 
 def test_yaml(tmp_path):

@@ -1,11 +1,13 @@
 """Tests mediums."""
+
 import numpy as np
 import pytest
 import pydantic.v1 as pydantic
 import matplotlib.pyplot as plt
 import tidy3d as td
 from tidy3d.exceptions import ValidationError, SetupError
-from ..utils import assert_log_level, log_capture, AssertLogLevel
+from ..utils import assert_log_level, AssertLogLevel
+from ..utils import log_capture  # noqa: F401
 from typing import Dict
 
 MEDIUM = td.Medium()
@@ -80,7 +82,7 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
-def test_lorentz_medium_conversions(log_capture):
+def test_lorentz_medium_conversions(log_capture):  # noqa: F811
     freq = 3.0
 
     # lossless, eps_r > 1
@@ -350,7 +352,7 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
-def test_gain_medium(log_capture):
+def test_gain_medium(log_capture):  # noqa: F811
     """Test passive and gain medium validations."""
     # non-dispersive
     with pytest.raises(pydantic.ValidationError):
@@ -394,7 +396,7 @@ def test_gain_medium(log_capture):
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
 
 
-def test_medium2d(log_capture):
+def test_medium2d(log_capture):  # noqa: F811
     sigma = 0.45
     thickness = 0.01
     cond_med = td.Medium(conductivity=sigma)
@@ -500,7 +502,7 @@ def test_fully_anisotropic_media():
     )
 
     # check eps_model can be called with an array of frequencies
-    eps = m.eps_model(np.linspace(1e12, 2e12, 10))
+    m.eps_model(np.linspace(1e12, 2e12, 10))
 
     assert np.allclose(m.permittivity, perm)
     assert np.allclose(m.conductivity, cond)
@@ -605,7 +607,7 @@ def test_perturbation_medium():
         )
 
 
-def test_nonlinear_medium(log_capture):
+def test_nonlinear_medium(log_capture):  # noqa: F811
     med = td.Medium(
         nonlinear_spec=td.NonlinearSpec(
             models=[
@@ -736,9 +738,9 @@ def test_nonlinear_medium(log_capture):
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
     modulated = td.Medium(permittivity=2, modulation_spec=modulation_spec)
     with pytest.raises(ValidationError):
-        medium2d = td.Medium2D(ss=medium, tt=medium)
+        td.Medium2D(ss=medium, tt=medium)
     with pytest.raises(ValidationError):
-        medium2d = td.Medium2D(ss=modulated, tt=modulated)
+        td.Medium2D(ss=modulated, tt=modulated)
 
 
 def test_lumped_resistor():

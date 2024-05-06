@@ -26,7 +26,6 @@ surface_area = 6 * (N_SIDE * BOX_LENGTH**2)
 def make_sim(box_length) -> tda.JaxSimulation:
     """Construct a simulation out of some input parameters."""
 
-    num_structures = int(N_SIDE**2)
     sim_length = N_SIDE * (BOX_LENGTH + SPACE)
     med = tda.JaxMedium(permittivity=2.0)
 
@@ -85,7 +84,7 @@ def test_large_custom_medium(use_emulated_run):
 
     with cProfile.Profile() as pr:
         grad_f = jax.grad(f)
-        df_eps_values = grad_f(BOX_LENGTH)
+        df_eps_values = grad_f(BOX_LENGTH)  # noqa: F841
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
 

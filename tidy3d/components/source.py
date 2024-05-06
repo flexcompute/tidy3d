@@ -415,7 +415,7 @@ class Source(Box, AbstractSource, ABC):
         _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
         return val
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,
@@ -1131,7 +1131,7 @@ class TFSF(AngledFieldSource, VolumeSource):
         center[self.injection_axis] += sign * size[self.injection_axis] / 2
         return tuple(center)
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,
