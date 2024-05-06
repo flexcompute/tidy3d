@@ -4040,7 +4040,9 @@ class Simulation(AbstractSimulation):
 
         return new_sim
 
-    def suggest_mesh_overrides(self, **kwargs) -> List[MeshOverrideStructure]:
+
+
+    def suggest_mesh_overrides(self, **kwargs)-> Dict[Simulation]:
         """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
         from structures in the simulation.
         """
@@ -4050,4 +4052,89 @@ class Simulation(AbstractSimulation):
         for lumped_element in self.lumped_elements:
             mesh_overrides.extend(lumped_element.to_mesh_overrides())
 
-        return mesh_overrides
+        """We suggest MeshOverrideStructures for PEC corners. Most microwave structures use planar metallic geometries with a very thin thickness. 
+        This initial fix will suggest local mesh refinement on the plane that geometries are printed and ignore the direction along the thickness.
+          """
+        
+        def generate_centered_small_boxes(large_box_bounds, ds,cell_number):
+            """Generate smaller boxes centered at each vertex of the large box,
+            ensuring that all parts of the small box stay within the large box.
+
+            Args:
+            large_box_bounds (tuple): Tuple of two tuples, where the first tuple contains the minimum (x, y, z) 
+            coordinates and the second tuple contains the maximum (x, y, z) coordinates of the large box.
+            box_size (float): The edge length of each smaller box.
+
+            Returns:
+            list: A list of bounds for each small box that are adjusted to stay within the large box.
+            """
+            (x_min, y_min, z_min), (x_max, y_max, z_max) = large_box_bounds
+            vertices = [
+                (x_min, y_min, z_min),
+                (x_min, y_min, z_max),
+                (x_min, y_max, z_min),
+                (x_min, y_max, z_max),
+                (x_max, y_min, z_min),
+                (x_max, y_min, z_max),
+                (x_max, y_max, z_min),
+                (x_max, y_max, z_max),
+            ]
+            
+            override_corner_box = []
+            override_corner_boxes = []
+
+            for x, y, z in vertices:
+                # Determine bounds based on the vertex position relative to the min and max of the large box
+                inward_bounds = (
+                    (max(x_min, x - cell_number*ds), max(y_min, y -cell_number*ds), max(z_min, z - cell_number*ds)),
+                    (min(x_max, x + cell_number*ds), min(y_max, y + cell_number*ds), min(z_max, z + cell_number*ds))
+                )
+
+                # Outward box: Vertex acts as the innermost corner, extending outward
+                outward_x_min = x-cell_number*ds if x==x_min else x_max
+                outward_y_min = y-cell_number*ds if y==y_min else y_max
+                outward_z_min = z-cell_number*ds if z==z_min else z_max
+                outward_x_max = x+cell_number*ds if x==x_max else x_min
+                outward_y_max = y+cell_number*ds if y==y_max else y_min
+                outward_z_max = z+cell_number*ds if z==z_max else z_min
+                outward_bounds = (
+                    (outward_x_min, outward_y_min, outward_z_min),
+                    (outward_x_max, outward_y_max, outward_z_max),
+                )
+                # Create a list of bounds for both inward and outward boxes
+                bounds_list = [ inward_bounds,outward_bounds]
+            
+                for bounds in bounds_list:
+                    # Create MeshOverrideStructure for each box type
+                    override_corner_box = MeshOverrideStructure(
+                        geometry = Box.from_bounds(rmin=bounds[0], rmax=bounds[1]),
+                        dl=[ds, ds, ds]
+                    )
+                    override_corner_boxes.append(override_corner_box)
+
+            return override_corner_boxes
+        
+
+        suggested_ds =408
+        cell_number = 2
+
+        for structure in self.structures:
+            for geometry in flatten_groups(structure.geometry,flatten_nonunion_type=True):
+                override_corner_box = generate_centered_small_boxes(geometry.bounds,suggested_ds,cell_number)
+                mesh_overrides.extend(override_corner_box)
+
+        # source's central frequency, to ensure an accurate solution over the entire range
+        grid_spec = self.grid_spec.copy(
+            update={
+                "override_structures": list(self.grid_spec.override_structures)
+                + mesh_overrides,
+            }
+        )
+
+        update_dict = dict(
+                grid_spec=grid_spec,
+            )
+
+        sim_copy = self.copy(update=update_dict)
+
+        return sim_copy
