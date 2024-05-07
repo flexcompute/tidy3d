@@ -833,3 +833,39 @@ def test_coaxial_lumped_resistor():
             normal_axis=1,
             name="R",
         )
+
+
+def test_custom_medium(log_capture):  # noqa: F811
+    Nx, Ny, Nz, Nf = 4, 3, 1, 1
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = [0]
+    freqs = [2e14]
+    n_data = np.ones((Nx, Ny, Nz, Nf))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+
+    def create_mediums(n_dataset):
+        ## Three equivalent ways of defining custom medium for the lens
+
+        # define custom medium with n/k data
+        _ = td.CustomMedium.from_nk(n_dataset, interp_method="nearest")
+
+        # define custom medium with permittivity data
+        eps_dataset = td.ScalarFieldDataArray(n_dataset**2, coords=dict(x=X, y=Y, z=Z, f=freqs))
+        _ = td.CustomMedium.from_eps_raw(eps_dataset, interp_method="nearest")
+
+        # define each component of permittivity via "PermittivityDataset"
+        eps_xyz_dataset = td.PermittivityDataset(
+            eps_xx=eps_dataset, eps_yy=eps_dataset, eps_zz=eps_dataset
+        )
+        _ = td.CustomMedium(eps_dataset=eps_xyz_dataset, interp_method="nearest")
+
+    create_mediums(n_dataset=n_dataset)
+    assert_log_level(log_capture, None)
+
+    with pytest.raises(pydantic.ValidationError):
+        # repeat some entries so data cannot be interpolated
+        X2 = [X[0]] + list(X)
+        n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        create_mediums(n_dataset=n_dataset2)

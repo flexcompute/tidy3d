@@ -16,7 +16,7 @@ from .types import Coordinate, Direction, Polarization, Ax, FreqBound
 from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
 from .validators import assert_plane, assert_volumetric
 from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
-from .data.dataset import FieldDataset, TimeDataset
+from .data.dataset import FieldDataset, TimeDataset, ScalarFieldDataArray
 from .data.validators import validate_no_nans
 from .data.data_array import TimeDataArray
 from .geometry.base import Box
@@ -791,6 +791,15 @@ class CustomFieldSource(FieldSource, PlanarSource):
                 if tangential_field in val.field_components:
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
+
+    @pydantic.validator("field_dataset", always=True)
+    def _check_fields_interpolate(cls, val: FieldDataset) -> FieldDataset:
+        """Checks whether the filds in 'field_dataset' can be interpolated."""
+        if isinstance(val, FieldDataset):
+            for name, data in val.field_components.items():
+                if isinstance(data, ScalarFieldDataArray):
+                    data._interp_validator(name)
+        return val
 
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
