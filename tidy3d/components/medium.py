@@ -1979,6 +1979,15 @@ class CustomMedium(AbstractCustomMedium):
             )
         return val
 
+    @pd.validator("permittivity", "conductivity", always=True)
+    def _check_permittivity_conductivity_interpolate(cls, val, values, field):
+        """Check that the custom medium 'SpatialDataArrays' can be interpolated."""
+
+        if isinstance(val, SpatialDataArray):
+            val._interp_validator(field.name)
+
+        return val
+
     @cached_property
     def is_isotropic(self) -> bool:
         """Check if the medium is isotropic or anisotropic."""

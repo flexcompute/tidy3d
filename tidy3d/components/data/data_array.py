@@ -5,6 +5,7 @@ from abc import ABC
 
 import xarray as xr
 import numpy as np
+import pandas
 import dask
 import h5py
 
@@ -110,6 +111,48 @@ class DataArray(xr.DataArray):
         for attr_name, attr in cls._data_attrs.items():
             val.attrs[attr_name] = attr
         return val
+
+    def _interp_validator(self, field_name: str = None) -> None:
+        """Make sure we can interp()/sel() the data."""
+        # NOTE: this does not check every 'DataArray' by default. Instead, when required, this check can be
+        # called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
+
+        if field_name is None:
+            field_name = "DataArray"
+
+        dims = self.coords.dims
+
+        for dim in dims:
+            # in case we encounter some /0 or /NaN we'll ignore the warnings here
+            with np.errstate(divide="ignore", invalid="ignore"):
+                # check that we can interpolate
+                try:
+                    x0 = np.array(self.coords[dim][0])
+                    self.interp({dim: x0}, method="linear")
+                    self.interp({dim: x0}, method="nearest")
+                    # self.interp_like(self.isel({self.dim: 0}))
+                except pandas.errors.InvalidIndexError as e:
+                    raise DataError(
+                        f"'{field_name}.interp()' fails to interpolate along {dim} which is used by the solver. "
+                        "This may be caused, for instance, by duplicated data "
+                        f"in this dimension (you can verify this by running "
+                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
+                        f"and interpolate with the new '{field_name}'). "
+                        "Plase make sure data can be interpolated."
+                    ) from e
+                # in case it can interpolate, try also to sel
+                try:
+                    x0 = np.array(self.coords[dim][0])
+                    self.sel({dim: x0}, method="nearest")
+                except pandas.errors.InvalidIndexError as e:
+                    raise DataError(
+                        f"'{field_name}.sel()' fails to select along {dim} which is used by the solver. "
+                        "This may be caused, for instance, by duplicated data "
+                        f"in this dimension (you can verify this by running "
+                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
+                        f"and run 'sel()' with the new '{field_name}'). "
+                        "Plase make sure 'sel()' can be used on the 'DataArray'."
+                    ) from e
 
     @classmethod
     def assign_coord_attrs(cls, val):

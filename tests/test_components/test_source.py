@@ -323,3 +323,31 @@ def test_custom_source_time(log_capture):  # noqa: F811
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
+
+
+def test_custom_field_source(log_capture):
+    Nx, Ny, Nz, Nf = 4, 3, 1, 1
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = [0]
+    freqs = [2e14]
+    n_data = np.ones((Nx, Ny, Nz, Nf))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+
+    def make_custom_field_source(field_ds):
+        custom_source = td.CustomFieldSource(
+            center=(1, 1, 1), size=(2, 2, 0), source_time=ST, field_dataset=field_ds
+        )
+        return custom_source
+
+    field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset)
+    make_custom_field_source(field_dataset)
+    assert_log_level(log_capture, None)
+
+    with pytest.raises(pydantic.ValidationError):
+        # repeat some entries so data cannot be interpolated
+        X2 = [X[0]] + list(X)
+        n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset2)
+        make_custom_field_source(field_dataset)
