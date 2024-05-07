@@ -30,7 +30,7 @@ from tidy3d.plugins.adjoint.components.structure import (
     JaxStructureStaticGeometry,
 )
 from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
-from tidy3d.plugins.adjoint.components.simulation import MAX_NUM_INPUT_STRUCTURES
+from tidy3d.plugins.adjoint.components import simulation
 from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
 from tidy3d.plugins.adjoint.components.data.monitor_data import (
     JaxModeData,
@@ -1564,18 +1564,23 @@ def test_jax_sim_io(tmp_path):
     assert sim == sim2
 
 
-def test_num_input_structures(use_emulated_run, tmp_path):
+def test_num_input_structures(use_emulated_run, tmp_path, monkeypatch):
     """Assert proper error is raised if number of input structures is too large."""
 
-    def make_sim_(num_input_structures: int) -> JaxSimulation:
-        sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
+    test_max_num_structs = 3  # monkeypatch for easier testing
+    monkeypatch.setattr(simulation, "MAX_NUM_INPUT_STRUCTURES", test_max_num_structs)
+
+    def make_sim_(permittivity=EPS, num_input_structures: int = 1) -> JaxSimulation:
+        sim = make_sim(
+            permittivity=permittivity, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL
+        )
         struct = sim.input_structures[0]
         return sim.updated_copy(input_structures=num_input_structures * [struct])
 
-    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES)
+    sim = make_sim_(num_input_structures=test_max_num_structs)
     sim._validate_web_adjoint()
 
-    sim = make_sim_(num_input_structures=MAX_NUM_INPUT_STRUCTURES + 1)
+    sim = make_sim_(num_input_structures=test_max_num_structs + 1)
     with pytest.raises(AdjointError):
         sim._validate_web_adjoint()
 
@@ -1583,7 +1588,25 @@ def test_num_input_structures(use_emulated_run, tmp_path):
     with pytest.raises(AdjointError):
         run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
 
-    run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+    # make sure it also errors in a gradient computation
+    def f(permittivity):
+        sim = make_sim_(permittivity=permittivity, num_input_structures=test_max_num_structs + 1)
+        sim_data = run(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+        return objective(extract_amp(sim_data))
+
+    with pytest.raises(AdjointError):
+        _ = grad(f)(EPS)
+
+    # no error when calling run_local directly
+    sim_data = run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE))
+
+    # no error when calling it inside a gradient computation
+    def f(permittivity):
+        sim = make_sim_(permittivity=permittivity, num_input_structures=test_max_num_structs + 1)
+        sim_data = run_local(sim, task_name="test", path=str(tmp_path / RUN_FILE), num_proc=2)
+        return objective(extract_amp(sim_data))
+
+    _ = grad(f)(EPS)
 
 
 @pytest.mark.parametrize("strict_binarize", (True, False))

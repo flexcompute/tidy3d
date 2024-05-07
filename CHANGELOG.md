@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Classmethods in `DispersionFitter` to load complex-valued permittivity or loss tangent data.
 - Pre-upload validator to check that mode sources overlap with more than 2 grid cells.
 - Support `2DMedium` for `Transformed`/`GeometryGroup`/`ClipOperation` geometries.
+- `num_proc` argument to `tidy3d.plugins.adjoint.web.run_local` to control the number of processes used on the local machine for gradient processing.
 
 ### Changed
 - `tidy3d convert` from `.lsf` files to tidy3d scripts is moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.

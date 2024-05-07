@@ -17,7 +17,7 @@ from ...web.api.container import BatchData, DEFAULT_DATA_DIR, Job, Batch
 from ...components.types import Literal
 
 from .components.base import JaxObject
-from .components.simulation import JaxSimulation, JaxInfo
+from .components.simulation import JaxSimulation, JaxInfo, NUM_PROC_LOCAL
 from .components.data.sim_data import JaxSimulationData
 
 
@@ -76,6 +76,31 @@ def tidy3d_run_async_fn(simulations: Dict[str, Simulation], **kwargs) -> BatchDa
 """ Running a single simulation using web.run. """
 
 
+def _run(
+    simulation: JaxSimulation,
+    task_name: str,
+    folder_name: str = "default",
+    path: str = "simulation_data.hdf5",
+    callback_url: str = None,
+    verbose: bool = True,
+) -> JaxSimulationData:
+    """Split the provided ``JaxSimulation`` into a regular ``Simulation`` and a ``JaxInfo`` part,
+    run using ``tidy3d_run_fn``, which runs on the server by default but can be monkeypatched,
+    and recombine into a ``JaxSimulationData``.
+    """
+    sim, jax_info = simulation.to_simulation()
+
+    sim_data = tidy3d_run_fn(
+        simulation=sim,
+        task_name=str(task_name),
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+    )
+    return JaxSimulationData.from_sim_data(sim_data, jax_info)
+
+
 @partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
 def run(
     simulation: JaxSimulation,
@@ -113,18 +138,15 @@ def run(
 
     simulation._validate_web_adjoint()
 
-    sim, jax_info = simulation.to_simulation()
-
-    sim_data = tidy3d_run_fn(
-        simulation=sim,
-        task_name=str(task_name),
+    # TODO: add task_id
+    return _run(
+        simulation=simulation,
+        task_name=task_name,
         folder_name=folder_name,
         path=path,
         callback_url=callback_url,
         verbose=verbose,
     )
-    # TODO: add task_id
-    return JaxSimulationData.from_sim_data(sim_data, jax_info)
 
 
 def run_fwd(
@@ -583,7 +605,7 @@ run_async.defvjp(run_async_fwd, run_async_bwd)
 """ Options to do the previous but all client side (mainly for testing / debugging)."""
 
 
-@partial(custom_vjp, nondiff_argnums=tuple(range(1, 6)))
+@partial(custom_vjp, nondiff_argnums=tuple(range(1, 7)))
 def run_local(
     simulation: JaxSimulation,
     task_name: str,
@@ -591,6 +613,7 @@ def run_local(
     path: str = "simulation_data.hdf5",
     callback_url: str = None,
     verbose: bool = True,
+    num_proc: int = NUM_PROC_LOCAL,
 ) -> JaxSimulationData:
     """Submits a :class:`.JaxSimulation` to server, starts running, monitors progress, downloads,
     and loads results as a :class:`.JaxSimulationData` object.
@@ -611,6 +634,8 @@ def run_local(
         fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
     verbose : bool = True
         If `True`, will print progressbars and status, otherwise, will run silently.
+    num_proc: int = 1
+        Number of processes to use for the gradient computations.
 
     Returns
     -------
@@ -643,6 +668,7 @@ def run_local_fwd(
     path: str,
     callback_url: str,
     verbose: bool,
+    num_proc: int,
 ) -> Tuple[JaxSimulationData, tuple]:
     """Run forward pass and stash extra objects for the backwards pass."""
 
@@ -651,7 +677,7 @@ def run_local_fwd(
         input_structures=simulation.input_structures, freqs_adjoint=simulation.freqs_adjoint
     )
     sim_fwd = simulation.updated_copy(**grad_mnts)
-    sim_data_fwd = run(
+    sim_data_fwd = _run(
         simulation=sim_fwd,
         task_name=_task_name_fwd(task_name),
         folder_name=folder_name,
@@ -671,6 +697,7 @@ def run_local_bwd(
     path: str,
     callback_url: str,
     verbose: bool,
+    num_proc: int,
     res: tuple,
     sim_data_vjp: JaxSimulationData,
 ) -> Tuple[JaxSimulation]:
@@ -685,7 +712,7 @@ def run_local_bwd(
     fwidth_adj = sim_data_fwd.simulation._fwidth_adjoint
     run_time_adj = sim_data_fwd.simulation._run_time_adjoint
     sim_adj = sim_data_vjp.make_adjoint_simulation(fwidth=fwidth_adj, run_time=run_time_adj)
-    sim_data_adj = run(
+    sim_data_adj = _run(
         simulation=sim_adj,
         task_name=_task_name_adj(task_name),
         folder_name=folder_name,
@@ -699,7 +726,12 @@ def run_local_bwd(
     grad_data_adj = sim_data_adj.grad_data_symmetry
 
     # get gradient and insert into the resulting simulation structure medium
-    sim_vjp = sim_data_vjp.simulation.store_vjp(grad_data_fwd, grad_data_adj, grad_eps_data_fwd)
+    sim_vjp = sim_data_vjp.simulation.store_vjp(
+        grad_data_fwd=grad_data_fwd,
+        grad_data_adj=grad_data_adj,
+        grad_eps_data=grad_eps_data_fwd,
+        num_proc=num_proc,
+    )
 
     return (sim_vjp,)
 
