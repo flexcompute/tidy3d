@@ -27,7 +27,6 @@ from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
 from .types import Literal, TYPE_TAG_STR
 from .grid.grid import Coords1D, Grid, Coords
 from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
-from .grid.grid_spec import ConformalMeshSpecType, StaircasingConformalMeshSpec
 from .medium import MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D
 from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
@@ -46,6 +45,7 @@ from .data.dataset import Dataset, CustomSpatialDataType
 from .viz import add_ax_if_none, equal_aspect
 from .scene import Scene, MAX_NUM_MEDIUMS
 from .run_time_spec import RunTimeSpec
+from .subpixel_spec import SubpixelSpec
 from .viz import PlotParams
 from .viz import plot_params_pml, plot_params_override_structures
 from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
@@ -152,15 +152,20 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         * `Using automatic nonuniform meshing <../../notebooks/AutoGrid.html>`_
     """
 
-    subpixel: bool = pydantic.Field(
-        True,
+    subpixel: Union[bool, SubpixelSpec] = pydantic.Field(
+        SubpixelSpec(),
         title="Subpixel Averaging",
-        description="If ``True``, uses subpixel averaging of the permittivity "
-        "based on structure definition, resulting in much higher accuracy for a given grid size.",
+        description="Apply subpixel averaging methods of the permittivity on structure interfaces "
+        "to result in much higher accuracy for a given grid size. Supply a :class:`SubpixelSpec` "
+        "to this field to select subpixel averaging methods separately on dielectric, metal, and "
+        "PEC material interfaces. Alternatively, user may supply a boolean value: "
+        "``True`` to apply the default subpixel averaging methods corresponding to ``SubpixelSpec()`` "
+        ", or ``False`` to apply staircasing.",
     )
     """
-    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
-    higher accuracy for a given grid size.,
+    Supply :class:`SubpixelSpec` to select subpixel averaging methods separately for dielectric, metal, and
+    PEC material interfaces. Alternatively, supply ``True`` to use default subpixel averaging methods,
+    or ``False`` to staircase all structure interfaces.
 
     **1D Illustration**
 
@@ -253,6 +258,19 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         if isinstance(monitor, SurfaceIntegrationMonitor):
             return sum(num_cells_in_monitor(mnt) for mnt in monitor.integration_surfaces)
         return num_cells_in_monitor(monitor)
+
+    @cached_property
+    def _subpixel(self) -> SubpixelSpec:
+        """Subpixel averaging method evaluated based on self.subpixel."""
+        if isinstance(self.subpixel, SubpixelSpec):
+            return self.subpixel
+
+        # self.subpixel is boolean
+        # 1) if it's true, use the default dielectric=True, metal=Staircasing, PEC=Benkler
+        if self.subpixel:
+            return SubpixelSpec()
+        # 2) if it's false, apply staircasing on all material boundaries
+        return SubpixelSpec.staircasing()
 
     @equal_aspect
     @add_ax_if_none
@@ -1857,55 +1875,6 @@ class Simulation(AbstractYeeGridSimulation):
     * `Structures <https://www.flexcompute.com/tidy3d/learning-center/tidy3d-gui/Lecture-3-Structures/#presentation-slides>`_
     """
 
-    subpixel: bool = pydantic.Field(
-        True,
-        title="Subpixel Averaging",
-        description="If ``True``, uses subpixel averaging of the permittivity "
-        "based on structure definition, resulting in much higher accuracy for a given grid size.",
-    )
-    """
-    If ``True``, uses subpixel averaging of the permittivity based on structure definition, resulting in much
-    higher accuracy for a given grid size.,
-
-    **1D Illustration**
-
-    For example, in the image below, two silicon slabs with thicknesses 150nm and 175nm centered in a grid with
-    spatial discretization :math:`\\Delta z = 25\\text{nm}` compute the effective permittivity of each grid point as the
-    average permittivity between the grid points. A simplified equation based on the ratio :math:`\\eta` between the
-    permittivity of the two materials at the interface in this case:
-
-    .. math::
-
-        \\epsilon_{eff} = \\eta \\epsilon_{si} + (1 - \\eta) \\epsilon_{air}
-
-    .. TODO check the actual implementation to be accurate here.
-
-    .. image:: ../../_static/img/subpixel_permittivity_1d.png
-
-    However, in this 1D case, this averaging is accurate because the dominant electric field is parallel to the
-    dielectric grid points.
-
-    You can learn more about the subpixel averaging derivation from Maxwell's equations in 1D in this lecture:
-    `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel
-    -averaging/>`_.
-
-    **2D & 3D Usage Caveats**
-
-    *   In 2D, the subpixel averaging implementation depends on the polarization (:math:`s` or :math:`p`)  of the
-        incident electric field on the interface.
-
-    *   In 3D, the subpixel averaging is implemented with tensorial averaging due to arbitrary surface and field
-        spatial orientations.
-
-
-    See Also
-    --------
-
-    **Lectures:**
-        *  `Introduction to subpixel averaging <https://www.flexcompute.com/fdtd101/Lecture-10-Introduction-to-subpixel-averaging/>`_
-        *  `Dielectric constant assignment on Yee grids <https://www.flexcompute.com/fdtd101/Lecture-9-Dielectric-constant-assignment-on-Yee-grids/>`_
-    """
-
     symmetry: Tuple[Symmetry, Symmetry, Symmetry] = pydantic.Field(
         (0, 0, 0),
         title="Symmetries",
@@ -1917,14 +1886,6 @@ class Simulation(AbstractYeeGridSimulation):
         "Note that the vectorial nature of the fields must be taken into account to correctly "
         "determine the symmetry value.",
     )
-
-    pec_conformal_mesh_spec: ConformalMeshSpecType = pydantic.Field(
-        StaircasingConformalMeshSpec(),
-        title="Conformal mesh specifications",
-        description="Conformal mesh specifications applied to PEC strucures.",
-        discriminator=TYPE_TAG_STR,
-    )
-
     """
     You should set the ``symmetry`` parameter in your :class:`Simulation` object using a tuple of integers
     defining reflection symmetry across a plane bisecting the simulation domain normal to the x-, y-, and z-axis.
@@ -3760,9 +3721,12 @@ class Simulation(AbstractYeeGridSimulation):
     @cached_property
     def scaled_courant(self) -> float:
         """When conformal mesh is applied, courant number is scaled down depending on `conformal_mesh_spec`."""
-        if self.subpixel:
-            return self.courant * self.pec_conformal_mesh_spec.courant_ratio
-        return self.courant
+
+        mediums = self.scene.mediums
+        contain_pec_structures = any(medium.is_pec for medium in mediums)
+        return self.courant * self._subpixel.courant_ratio(
+            contain_pec_structures=contain_pec_structures
+        )
 
     @cached_property
     def dt(self) -> float:

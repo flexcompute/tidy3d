@@ -3,8 +3,11 @@
 # grid
 from .components.grid.grid import Grid, Coords
 from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
-from .components.grid.grid_spec import BenklerConformalMeshSpec, StaircasingConformalMeshSpec
-from .components.grid.grid_spec import HeuristicConformalMeshSpec
+
+# subpixel
+from .components.subpixel_spec import SubpixelSpec, Staircasing
+from .components.subpixel_spec import VolumetricAveraging, PolarizedAveraging
+from .components.subpixel_spec import HeuristicPECStaircasing, PECConformal
 
 # geometry
 from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
@@ -352,9 +355,12 @@ __all__ = [
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",
-    "BenklerConformalMeshSpec",
-    "StaircasingConformalMeshSpec",
-    "HeuristicConformalMeshSpec",
+    "SubpixelSpec",
+    "Staircasing",
+    "VolumetricAveraging",
+    "PolarizedAveraging",
+    "HeuristicPECStaircasing",
+    "PECConformal",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",

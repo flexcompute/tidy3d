@@ -1969,30 +1969,32 @@ def test_dt():
 
 
 def test_conformal_dt():
-    """make sure dt is reduced when BenklerConformalMeshSpec is applied."""
+    """make sure dt is reduced when PEC structures are present and PECConformal is used."""
+    box = td.Structure(
+        geometry=td.Box(size=(1, 1, 1)),
+        medium=td.PECMedium(),
+    )
     sim = td.Simulation(
         size=(2.0, 2.0, 2.0),
         run_time=1e-12,
+        structures=[box],
         grid_spec=td.GridSpec.uniform(dl=0.1),
+        subpixel=td.SubpixelSpec(pec=td.Staircasing()),
     )
     dt = sim.dt
 
-    # Benkler
-    sim_conformal = sim.updated_copy(pec_conformal_mesh_spec=td.BenklerConformalMeshSpec())
+    # Conformal
+    sim_conformal = sim.updated_copy(subpixel=td.SubpixelSpec(pec=td.PECConformal()))
     assert sim_conformal.dt < dt
 
-    # Benkler: same courant
+    # Conformal: same courant
     sim_conformal2 = sim.updated_copy(
-        pec_conformal_mesh_spec=td.BenklerConformalMeshSpec(timestep_reduction=0)
+        subpixel=td.SubpixelSpec(pec=td.PECConformal(timestep_reduction=0))
     )
     assert sim_conformal2.dt == dt
 
-    # staircasing
-    sim_staircasing = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
-    assert sim_staircasing.dt == dt
-
     # heuristic
-    sim_heuristic = sim.updated_copy(pec_conformal_mesh_spec=td.StaircasingConformalMeshSpec())
+    sim_heuristic = sim.updated_copy(subpixel=td.SubpixelSpec(pec=td.HeuristicPECStaircasing()))
     assert sim_heuristic.dt == dt
 
 

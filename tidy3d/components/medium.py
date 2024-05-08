@@ -1107,9 +1107,9 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     subpixel: bool = pd.Field(
         False,
         title="Subpixel averaging",
-        description="If ``True`` and simulation's ``subpixel`` is also ``True``, "
-        "applies subpixel averaging of the permittivity "
-        "on the interface of the structure, including exterior boundary and "
+        description="If ``True``, apply the subpixel averaging method specified by "
+        "``Simulation``'s field ``subpixel`` for this type of material on the "
+        "interface of the structure, including exterior boundary and "
         "intersection interfaces with other structures.",
     )
 
@@ -5249,8 +5249,8 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
         True,
         title="Subpixel averaging",
         description="This value will be transferred to the resulting custom medium. That is, "
-        "if ``True``, the subpixel averaging will be applied to the custom medium provided "
-        "the corresponding ``Simulation``'s field ``subpixel`` is set to ``True`` as well. "
+        "if ``True``, the subpixel averaging will be applied to the custom medium. The type "
+        "of subpixel averaging method applied is specified in ``Simulation``'s field ``subpixel``. "
         "If the resulting medium is not a custom medium (no perturbations), this field does not "
         "have an effect.",
     )

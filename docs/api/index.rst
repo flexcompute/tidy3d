@@ -16,6 +16,7 @@ API |:computer:|
     mode
     lumped_elements
     discretization
+    subpixel_averaging
     output_data
     scene
     logging
@@ -38,6 +39,7 @@ API |:computer:|
 .. include:: /api/mode.rst
 .. include:: /api/lumped_elements.rst
 .. include:: /api/discretization.rst
+.. include:: /api/subpixel_averaging.rst
 .. include:: /api/output_data.rst
 .. include:: /api/scene.rst
 .. include:: /api/logging.rst

@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A batch of `ModeSolver` objects can be run concurrently using `tidy3d.plugins.mode.web.run_batch()`
 - `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
 - `RectangularWaveguide` supports layered cladding above and below core.
+- `SubpixelSpec` accepted by `Simulation.subpixel` to select subpixel averaging methods separately for dielectric, metal, and PEC materials. Specifically, added support for conformal mesh methods near PEC structures that can be specified through the field `pec` in the `SubpixelSpec` class. Note: previously, `subpixel=False` was implementing staircasing for every material except PEC. Now, `subpixel=False` implements direct staircasing for all materials. For PEC, the behavior of `subpixel=False` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=HeuristicPECStaircasing())`, while `subpixel=True` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=Staircasing())`. The default is `subpixel=SubpixelSpec(pec=PECConformal())` for more accurate PEC modelling.
 
 ### Fixed
 - `ModeSolver.plot_field` correctly returning the plot axes.
@@ -52,7 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Introduces the `microwave` plugin which includes `ImpedanceCalculator` for computing the characteristic impedance of transmission lines.
 - `Simulation` now accepts `LumpedElementType`, which currently only supports the `LumpedResistor` type. `LumpedPort` together with `LumpedResistor` make up the new `TerminalComponentModeler` in the `smatrix` plugin.
 - Uniaxial medium Lithium Niobate to material library.
-- Added support for conformal mesh methods near PEC structures that can be specified through the field `pec_conformal_mesh_spec` in the `Simulation` class. Note: previously, `subpixel=False` was implementing staircasing for every material except PEC. Now, `subpixel=False` implements direct staircasing for all materials. For PEC, the behavior of `subpixel=False` in Tidy3D < 2.7 is now achieved through `subpixel=True` and `pec_conformal_mesh_spec=HeuristicConformalMeshSpec()`, while `subpixel=True` in Tidy3D < 2.7 is now achieved through the default settings `subpixel=True` and `pec_conformal_mesh_spec=StaircasingConformalMeshSpec()`. Additionally, a new `BenklerConformalMeshSpec()` was introduced for more accurate PEC modelling.
 - Properties `num_time_steps_adjoint` and `tmesh_adjoint` to `JaxSimulation` to estimate adjoint run time.
 - Ability to add `path` to `updated_copy()` method to recursively update sub-components of a tidy3d model. For example `sim2 = sim.updated_copy(size=new_size, path="structures/0/geometry")` creates a recursively updated copy of `sim` where `sim.structures[0].geometry` is updated with `size=new_size`.
 - Python 3.12 support. Python 3.8 deprecation. Updated dependencies.
