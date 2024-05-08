@@ -130,6 +130,12 @@ def average_relative_speed(Nx, Ny, npml, eps_tensor, mu_tensor):
     """Compute the relative speed of light in the four pml regions by averaging the diagonal
     elements of the relative epsilon and mu within the pml region."""
 
+    def relative_mean(tensor):
+        """Mean for relative parameters. If an empty array just return 1."""
+        if tensor.size == 0:
+            return 1.0
+        return np.mean(tensor)
+
     def pml_average_allsides(tensor):
         """Average ``tensor`` in the PML regions on all four sides. Returns the average values in
         order (xminus, xplus, yminus, yplus)."""
@@ -138,10 +144,10 @@ def average_relative_speed(Nx, Ny, npml, eps_tensor, mu_tensor):
         tensor_diag = np.stack([tensor[i, i, :] for i in range(3)])
         tensor_diag = tensor_diag.reshape((3, Nx, Ny))
 
-        avg_xminus = np.mean(tensor_diag[:, : npml[0], :])
-        avg_xplus = np.mean(tensor_diag[:, Nx - npml[0] + 1 :, :])
-        avg_yminus = np.mean(tensor_diag[:, :, : npml[1]])
-        avg_yplus = np.mean(tensor_diag[:, :, Ny - npml[1] + 1 :])
+        avg_xminus = relative_mean(tensor_diag[:, : npml[0], :])
+        avg_xplus = relative_mean(tensor_diag[:, Nx - npml[0] + 1 :, :])
+        avg_yminus = relative_mean(tensor_diag[:, :, : npml[1]])
+        avg_yplus = relative_mean(tensor_diag[:, :, Ny - npml[1] + 1 :])
         return np.array([avg_xminus, avg_xplus, avg_yminus, avg_yplus])
 
     eps_avg = pml_average_allsides(eps_tensor)
