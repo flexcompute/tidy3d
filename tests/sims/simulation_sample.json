@@ -2722,9 +2722,5 @@
     "courant": 0.8,
     "normalize_index": 0,
     "shutoff": 0.0001,
-    "pec_conformal_mesh_spec": {
-        "attrs": {},
-        "type": "StaircasingConformalMeshSpec"
-    },
     "run_time": 1e-12
 }

@@ -175,13 +175,6 @@ class EMESimulation(AbstractYeeGridSimulation):
         validate_default=True,
     )
 
-    subpixel: bool = pd.Field(
-        True,
-        title="Subpixel Averaging",
-        description="If ``True``, uses subpixel averaging of the permittivity "
-        "based on structure definition, resulting in much higher accuracy for a given grid size.",
-    )
-
     store_port_modes: bool = pd.Field(
         True,
         title="Store Port Modes",

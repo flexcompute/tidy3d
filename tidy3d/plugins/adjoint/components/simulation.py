@@ -17,6 +17,7 @@ from ....components.base import cached_property, Tidy3dBaseModel, skip_if_fields
 from ....components.monitor import FieldMonitor, PermittivityMonitor
 from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
 from ....components.simulation import Simulation
+from ....components.subpixel_spec import SubpixelSpec, Staircasing
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.structure import Structure
 from ....components.medium import AbstractMedium
@@ -177,9 +178,12 @@ class JaxSimulation(Simulation, JaxObject):
 
     @pd.validator("subpixel", always=True)
     def _subpixel_is_on(cls, val):
-        """Assert subpixel is on."""
-        if not val:
-            raise AdjointError("'JaxSimulation.subpixel' must be 'True' to use adjoint plugin.")
+        """Assert dielectric subpixel is on."""
+        if (isinstance(val, SubpixelSpec) and isinstance(val.dielectric, Staircasing)) or not val:
+            raise AdjointError(
+                "'JaxSimulation.subpixel' must be 'True' or a specific 'SubpixelSpec' "
+                "with no dielectric staircasing to use adjoint plugin."
+            )
         return val
 
     @pd.validator("input_structures", always=True)
