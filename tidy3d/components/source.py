@@ -9,7 +9,7 @@ from typing_extensions import Literal
 import pydantic.v1 as pydantic
 import numpy as np
 
-from .base import cached_property, skip_if_fields_missing
+from .base import cached_property, skip_if_fields_missing, Tidy3dBaseModel
 from .base_sim.source import AbstractSource
 from .time import AbstractTimeDependence
 from .types import Coordinate, Direction, Polarization, Ax, FreqBound
@@ -971,6 +971,17 @@ class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
 
 """ Angled Field Sources one can use. """
 
+class AbstractAngularSpec(Tidy3dBaseModel, ABC):
+    """Abstract base for defining angular variability specifications for plane waves."""
+
+
+class FixedInPlaneKSpec(AbstractAngularSpec):
+    """Abstract base for defining angular variability specifications for plane waves."""
+
+
+class FixedAngleSpec(AbstractAngularSpec):
+    """Abstract base for defining angular variability specifications for plane waves."""
+
 
 class PlaneWave(AngledFieldSource, PlanarSource):
     """Uniform current distribution on an infinite extent plane. One element of size must be zero.
@@ -990,6 +1001,12 @@ class PlaneWave(AngledFieldSource, PlanarSource):
         * `Using FDTD to Compute a Transmission Spectrum <https://www.flexcompute.com/fdtd101/Lecture-2-Using-FDTD-to-Compute-a-Transmission-Spectrum/>`__
     """
 
+    angular_spec: Union[FixedInPlaneKSpec, FixedAngleSpec] = pydantic.Field(
+        FixedInPlaneKSpec(),
+        title="Angular Dependence Specification",
+        description="Specification of plane wave propagation direction dependence on wavelength.",
+        discriminator=TYPE_TAG_STR,
+    )
 
 class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """Gaussian distribution on finite extent plane.
