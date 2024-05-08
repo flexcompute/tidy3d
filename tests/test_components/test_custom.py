@@ -31,6 +31,8 @@ freqs = [2e14]
 ST = td.GaussianPulse(freq0=np.mean(freqs), fwidth=np.mean(freqs) / 5)
 SIZE = (2, 0, 2)
 
+RTOL = td.constants.fp_eps
+
 
 def make_scalar_data():
     """Makes a scalar field data array."""
@@ -312,7 +314,7 @@ def test_medium_raw():
     med = CustomMedium.from_eps_raw(eps_raw)
     for field in [eps_raw_s, eps_raw_u]:
         meds = CustomMedium.from_eps_raw(field)
-        assert med.eps_model(1e14) == meds.eps_model(1e14)
+        assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
 
     # lossy
     data = np.random.random((Nx, Ny, Nz, 1)) + 1 + 1e-2 * 1j
@@ -322,7 +324,7 @@ def test_medium_raw():
     med = CustomMedium.from_eps_raw(eps_raw)
     for field in [eps_raw_s, eps_raw_u]:
         meds = CustomMedium.from_eps_raw(field, freq=freqs[0])
-        assert med.eps_model(1e14) == meds.eps_model(1e14)
+        assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
 
     # inconsistent freq
     with pytest.raises(td.exceptions.SetupError):
@@ -347,8 +349,10 @@ def test_medium_interp(unstructured):
 
     data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
     data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
-    assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
-    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
+    assert np.allclose(
+        data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list], rtol=RTOL
+    )
+    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list], rtol=RTOL)
     # maximal or minimal values shouldn't exceed that in the supplied data
     assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(
         _get_numpy_array(orig_data).ravel()
@@ -374,8 +378,10 @@ def test_medium_interp(unstructured):
 
     data_fit_nearest = coord_interp.spatial_interp(orig_data, "nearest")
     data_fit_linear = coord_interp.spatial_interp(orig_data, "linear")
-    assert np.allclose(data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list])
-    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list])
+    assert np.allclose(
+        data_fit_nearest.shape[:3], [len(f) for f in coord_interp.to_list], rtol=RTOL
+    )
+    assert np.allclose(data_fit_linear.shape[:3], [len(f) for f in coord_interp.to_list], rtol=RTOL)
     # maximal or minimal values shouldn't exceed that in the supplied data
     assert max(_get_numpy_array(data_fit_linear).ravel()) <= max(
         _get_numpy_array(orig_data).ravel()
@@ -392,7 +398,9 @@ def test_medium_interp(unstructured):
 
     if not unstructured:
         # original data are not modified
-        assert not np.allclose(orig_data.shape[:3], [len(f) for f in coord_interp.to_list])
+        assert not np.allclose(
+            orig_data.shape[:3], [len(f) for f in coord_interp.to_list], rtol=RTOL
+        )
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -435,7 +443,7 @@ def test_medium_eps_diagonal_on_grid(medium):
     eps_output = medium.eps_diagonal_on_grid(freq_interp, coord_interp)
 
     for i in range(3):
-        assert np.allclose(eps_output[i].shape, [len(f) for f in coord_interp.to_list])
+        assert np.allclose(eps_output[i].shape, [len(f) for f in coord_interp.to_list], rtol=RTOL)
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -452,11 +460,11 @@ def test_medium_nk(unstructured):
     # lossless
     med = CustomMedium.from_nk(n=n)
     meds = CustomMedium.from_nk(n=ns)
-    assert med.eps_model(1e14) == meds.eps_model(1e14)
+    assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
     # lossy
     med = CustomMedium.from_nk(n=n, k=k)
     meds = CustomMedium.from_nk(n=ns, k=ks, freq=freqs[0])
-    assert med.eps_model(1e14) == meds.eps_model(1e14)
+    assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
 
     # gain
     with pytest.raises(pydantic.ValidationError):
@@ -465,7 +473,7 @@ def test_medium_nk(unstructured):
         meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0])
     med = CustomMedium.from_nk(n=n, k=-k, allow_gain=True)
     meds = CustomMedium.from_nk(n=ns, k=-ks, freq=freqs[0], allow_gain=True)
-    assert med.eps_model(1e14) == meds.eps_model(1e14)
+    assert np.isclose(med.eps_model(1e14), meds.eps_model(1e14), rtol=RTOL)
 
     # inconsistent freq
     with pytest.raises(td.exceptions.SetupError):
@@ -523,7 +531,7 @@ def verify_custom_medium_methods(mat, reduced_fields):
     coord_interp = td.Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     eps_grid = mat.eps_diagonal_on_grid(freq, coord_interp)
     for i in range(3):
-        assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list])
+        assert np.allclose(eps_grid[i].shape, [len(f) for f in coord_interp.to_list], rtol=RTOL)
 
     # check reducing data
     subsection = td.Box(size=(0.3, 0.4, 0.35), center=(0.4, 0.4, 0.4))
@@ -666,17 +674,19 @@ def verify_custom_dispersive_medium_methods(mat, reduced_fields):
             assert eps_comp.shape == (Nx, Ny, Nz)
         elif isinstance(eps_comp, UnstructuredGridDataset):
             assert len(eps_comp.points) == Nx * Ny * Nz
-    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq))
+    np.testing.assert_allclose(mat.eps_model(freq), mat.pole_residue.eps_model(freq), rtol=RTOL)
     coord_interp = td.Coords(**{ax: np.linspace(-1, 1, 20 + ind) for ind, ax in enumerate("xyz")})
     np.testing.assert_allclose(
         mat.eps_diagonal_on_grid(freq, coord_interp),
         mat.pole_residue.eps_diagonal_on_grid(freq, coord_interp),
+        rtol=RTOL,
     )
     for col in range(3):
         for row in range(3):
             np.testing.assert_allclose(
                 mat.eps_comp_on_grid(row, col, freq, coord_interp),
                 mat.pole_residue.eps_comp_on_grid(row, col, freq, coord_interp),
+                rtol=RTOL,
             )
 
     # interpolation
@@ -994,13 +1004,13 @@ def test_custom_anisotropic_medium(log_capture, unstructured):  # noqa: F811
         freq,
     )
     eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-    assert eps_interp == eps_nearest.data
+    assert np.isclose(eps_interp, eps_nearest.data, rtol=RTOL)
 
     # 2) xx-component is using `interp_method = nearest`, and mat using `nearest`;
     # so that xx-component is still using "nearest"
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="nearest")
     eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-    assert eps_interp == eps_nearest.data
+    assert np.isclose(eps_interp, eps_nearest.data, rtol=RTOL)
 
     if not unstructured:
         # 3) xx-component is using `interp_method = nearest`, and mat using `linear`;
@@ -1011,7 +1021,7 @@ def test_custom_anisotropic_medium(log_capture, unstructured):  # noqa: F811
         )
         eps_manual_interp = eps_nearest * dist_coeff + eps_second_nearest * (1 - dist_coeff)
         eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-        assert np.isclose(eps_interp, eps_manual_interp.data)
+        assert np.isclose(eps_interp, eps_manual_interp.data, rtol=RTOL)
 
         # 4) xx-component is using `interp_method = linear`, and mat using `None`;
         # so that xx-component is using "linear"
@@ -1020,19 +1030,19 @@ def test_custom_anisotropic_medium(log_capture, unstructured):  # noqa: F811
         )
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz)
         eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-        assert np.isclose(eps_interp, eps_manual_interp.data)
+        assert np.isclose(eps_interp, eps_manual_interp.data, rtol=RTOL)
 
         # 5) xx-component is using `interp_method = linear`, and mat using `linear`;
         # so that xx-component is still using "linear"
         mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="linear")
         eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-        assert np.isclose(eps_interp, eps_manual_interp.data)
+        assert np.isclose(eps_interp, eps_manual_interp.data, rtol=RTOL)
 
     # 6) xx-component is using `interp_method = linear`, and mat using `nearest`;
     # so that xx-component is using "nearest" (overridden by the one in mat)
     mat = CustomAnisotropicMedium(xx=mat_xx, yy=mat_yy, zz=mat_zz, interp_method="nearest")
     eps_interp = mat.eps_comp_on_grid(0, 0, freq, coord_test)[0, 0, 0]
-    assert eps_interp == eps_nearest.data
+    assert np.isclose(eps_interp, eps_nearest.data, rtol=RTOL)
 
     # CustomMedium is anisotropic
     field_components = {f"eps_{d}{d}": make_scalar_data() for d in "xyz"}
