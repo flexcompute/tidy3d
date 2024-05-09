@@ -4058,8 +4058,9 @@ class Simulation(AbstractSimulation):
 
 
     def suggest_mesh_overrides(self,fraction_to_largest_cell,num_cells)-> Dict[Simulation]:
-        """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
-        from structures in the simulation.
+        """
+        Generate a list of MeshOverrideStructures automatically from the structures in the simulation.
+        This function refines the mesh around lumped elements and PEC corners.
         """
         mesh_overrides = []
 
@@ -4070,69 +4071,79 @@ class Simulation(AbstractSimulation):
         """We suggest MeshOverrideStructures for PEC corners. Most microwave structures use planar metallic geometries with a very thin thickness. 
         This initial fix will suggest local mesh refinement on the plane that geometries are printed and ignore the direction along the thickness.
           """
+        
+        # Calculate the minimum number of steps per wavelength across all dimensions
         min_steps_per_wvl = np.max([
             self.grid_spec.grid_x.min_steps_per_wvl,
             self.grid_spec.grid_y.min_steps_per_wvl,
             self.grid_spec.grid_z.min_steps_per_wvl
         ])
 
+        # Determine the mesh size based on the wavelength and configuration parameters
         suggested_ds = self.grid_spec.wavelength/min_steps_per_wvl/fraction_to_largest_cell
+        
+        
+        # Refine mesh around PEC corners
         for structure in self.structures:
             if isinstance (structure.medium, PECMedium):
+                # Process and clean up the geometry
                 processed_geometry =  self.process_geometry(structure.geometry)
                 unifier = ShapeUpgrade_UnifySameDomain(processed_geometry, True, True, True)
                 unifier.Build()
                 cleaned_shape = unifier.Shape()   
 
+                # Extract unique vertices and create override boxes for each
                 vertices = self.extract_unique_vertices(cleaned_shape)
                 for vertice in vertices:
                         override_corner_box = self.generate_override_boxes(vertice,suggested_ds,num_cells)
                         mesh_overrides.extend(override_corner_box)
 
-        # source's central frequency, to ensure an accurate solution over the entire range
-        grid_spec = self.grid_spec.copy(
-            update={
-                "override_structures": list(self.grid_spec.override_structures)
-                + mesh_overrides,
-            }
-        )
+        # Update grid specification to include new overrides
+        updated_grid_spec = self.grid_spec.copy(update={
+            "override_structures": list(self.grid_spec.override_structures) + mesh_overrides,
+        })
 
-        update_dict = dict(
-                grid_spec=grid_spec,
-            )
 
-        sim_copy = self.copy(update=update_dict)
-
+        # Create a new simulation instance with the updated grid spec
+        sim_copy = self.copy(update={"grid_spec": updated_grid_spec})
         return sim_copy
 
 
     def generate_override_boxes(self, vertice, ds, cell_number):
-        """Generate smaller boxes centered at each vertex of the large box,
-        ensuring that all parts of the small box stay within the large box.
+
+        """
+        Generates mesh override boxes both inward and outward centered at the given vertex.
 
         Args:
-        large_box_bounds (tuple): Tuple of two tuples, where the first tuple contains the minimum (x, y, z) 
-        coordinates and the second tuple contains the maximum (x, y, z) coordinates of the large box.
-        box_size (float): The edge length of each smaller box.
+            vertex (tuple): Coordinates (x, y, z) of the vertex.
+            ds (float): Size of the step for box boundaries.
+            cell_number (int): Number of steps to extend from the vertex to create the boxes.
 
         Returns:
-        list: A list of bounds for each small box that are adjusted to stay within the large box.
+            list: A list containing MeshOverrideStructure objects for inward and outward boxes.
         """
         x, y, z = vertice
-        # Calculate the bounds for the inward box centered at the vertex
+
+
+        # Define the inward box extending from the vertex inward by 'cell_number * ds'
         inward_bounds = (
-                (x - cell_number * ds, y - cell_number * ds, z - cell_number * ds),
-                (x, y, z)
-            )               
+            (x - cell_number * ds, y - cell_number * ds, z - cell_number * ds),
+            (x, y, z)
+        )               
+
+        # Define the outward box extending from the vertex outward by 'cell_number * ds'
         outward_bounds = (
                 (x, y, z),
                 (x + cell_number * ds, y + cell_number * ds, z + cell_number * ds)
             )     
-            # Create a list of bounds for both inward and outward boxes
+        
+        # List to hold both sets of bounds
         bounds_list = [ inward_bounds,outward_bounds]
+
+
         override_corner_boxes = []
+        # Create MeshOverrideStructure for each set of bounds
         for bounds in bounds_list:
-            # Create MeshOverrideStructure for each box type
             override_corner_box = MeshOverrideStructure(
                     geometry = Box.from_bounds(rmin=bounds[0], rmax=bounds[1]),
                     dl=[ds, ds, ds]
@@ -4223,25 +4234,29 @@ class Simulation(AbstractSimulation):
 
     def process_geometry(self,geometry):
         """
-        Process a Tidy3D ClipOperation and convert it to the corresponding OCC operation.
+        Recursively process a Tidy3D geometry and convert it to the corresponding OCC operation.
+        Supports basic shapes like Boxes and PolySlabs, as well as boolean operations like union and difference.
 
-        Parameters:
-        - geometry: A Tidy3D geometry object, which is expected to be a ClipOperation.
+        Args:
+            geometry (Geometry): The geometry object to be processed.
 
         Returns:
-        - TopoDS_Shape object representing the result of the boolean operation.
+            TopoDS_Shape: The OpenCASCADE shape resulting from the operation.
         """
-        if isinstance(geometry, Box):  # Replace with actual basic shape type
-            return self.convert_to_topods_shape(geometry)  # Implement this function based on basic shapes
-        elif isinstance(geometry, PolySlab):  # Replace with actual basic shape type
-            return self.convert_polyslab_to_topods_shape(geometry)  # Implement this function based on basic shapes
+        # Handle basic shapes
+        if isinstance(geometry, Box):   
+            return self.convert_to_topods_shape(geometry)   
+        elif isinstance(geometry, PolySlab):   
+            return self.convert_polyslab_to_topods_shape(geometry)   
+        
+        # Handle boolean operations
         elif isinstance(geometry, ClipOperation):
 
-            # Recursively process the sub-geometries
+            # Process the sub-geometries recursively
             shape_a = self.process_geometry(geometry.geometry_a)
             shape_b = self.process_geometry(geometry.geometry_b)
 
-            # Apply the appropriate boolean operation based on the type of operation in ClipOperation
+            # Determine the boolean operation to apply
             if geometry.operation == "union":
                 operator = BRepAlgoAPI_Fuse(shape_a, shape_b)
             elif geometry.operation == "difference":
@@ -4249,23 +4264,38 @@ class Simulation(AbstractSimulation):
             else:
                 raise ValueError(f"Unsupported operation: {geometry.operation}")
 
-            # Build the operator and check if the operation was successful
+            # Execute the operation and check for success
             operator.Build()
             if not operator.IsDone():
                 raise Exception(f"Boolean operation {geometry.operation} failed.")
 
             # Return the resulting shape
             return operator.Shape()
+        # Raise an error if the geometry type is not supported
+        else:
+            raise TypeError("Unsupported geometry type provided to process_geometry.")
 
-    # Function to extract unique vertices from a shape
     def extract_unique_vertices(self, shape):
+
+        """
+        Extracts all unique vertices from a given shape and returns them as a set of coordinates.
+        
+        This function iterates over all vertices in the shape using an OCC Topological Explorer,
+        rounding their coordinates to avoid issues caused by floating-point precision.
+
+        Args:
+        shape (TopoDS_Shape): The OpenCASCADE shape from which to extract vertices.
+
+        Returns:
+        set: A set of tuples, where each tuple represents the (x, y, z) coordinates of a unique vertex.
+        """
         unique_vertices = set()
         explorer = TopExp_Explorer(shape, TopAbs_VERTEX)
         while explorer.More():
+            # Retrieve the current vertex and its point representation
             vertex = topods.Vertex(explorer.Current())
             pnt = BRep_Tool.Pnt(vertex)
-            # Round coordinates to a reasonable precision to avoid floating-point issues
             coord = (pnt.X(), pnt.Y(), pnt.Z())
             unique_vertices.add(coord)
-            explorer.Next()
+            explorer.Next()  # Move to the next vertex
         return unique_vertices
