@@ -26,7 +26,7 @@ from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
 from .grid.grid_spec import ConformalMeshSpecType, StaircasingConformalMeshSpec
 from .medium import MediumType, AbstractMedium
 from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D
-from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
+from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium,PECMedium
 from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic, Boundary
 from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure, MeshOverrideStructure
@@ -4057,7 +4057,7 @@ class Simulation(AbstractSimulation):
 
 
 
-    def suggest_mesh_overrides(self, vertices)-> Dict[Simulation]:
+    def suggest_mesh_overrides(self,fraction_to_largest_cell,num_cells)-> Dict[Simulation]:
         """Generate a :class:.`MeshOverrideStructure` `List` which is automatically generated
         from structures in the simulation.
         """
@@ -4070,16 +4070,24 @@ class Simulation(AbstractSimulation):
         """We suggest MeshOverrideStructures for PEC corners. Most microwave structures use planar metallic geometries with a very thin thickness. 
         This initial fix will suggest local mesh refinement on the plane that geometries are printed and ignore the direction along the thickness.
           """
-        
-        suggested_ds = 308
-        cell_number = 2
-        
+        min_steps_per_wvl = np.max([
+            self.grid_spec.grid_x.min_steps_per_wvl,
+            self.grid_spec.grid_y.min_steps_per_wvl,
+            self.grid_spec.grid_z.min_steps_per_wvl
+        ])
 
+        suggested_ds = self.grid_spec.wavelength/min_steps_per_wvl/fraction_to_largest_cell
+        for structure in self.structures:
+            if isinstance (structure.medium, PECMedium):
+                processed_geometry =  self.process_geometry(structure.geometry)
+                unifier = ShapeUpgrade_UnifySameDomain(processed_geometry, True, True, True)
+                unifier.Build()
+                cleaned_shape = unifier.Shape()   
 
-
-        for vertice in vertices:
-                override_corner_box = self.generate_override_boxes(vertice,suggested_ds,cell_number)
-                mesh_overrides.extend(override_corner_box)
+                vertices = self.extract_unique_vertices(cleaned_shape)
+                for vertice in vertices:
+                        override_corner_box = self.generate_override_boxes(vertice,suggested_ds,num_cells)
+                        mesh_overrides.extend(override_corner_box)
 
         # source's central frequency, to ensure an accurate solution over the entire range
         grid_spec = self.grid_spec.copy(
@@ -4250,7 +4258,7 @@ class Simulation(AbstractSimulation):
             return operator.Shape()
 
     # Function to extract unique vertices from a shape
-    def extract_unique_vertices(shape):
+    def extract_unique_vertices(self, shape):
         unique_vertices = set()
         explorer = TopExp_Explorer(shape, TopAbs_VERTEX)
         while explorer.More():
