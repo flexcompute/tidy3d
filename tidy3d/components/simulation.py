@@ -13,7 +13,8 @@ from .base import cached_property
 from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
 from .validators import validate_mode_objects_symmetry
-from .geometry.base import Geometry, Box
+from .geometry.base import Geometry, Box, ClipOperation
+from .geometry.polyslab import PolySlab
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, increment_float, set_bounds, get_thickened_geom
@@ -51,6 +52,20 @@ from ..log import log
 from ..updater import Updater
 
 from .base_sim.simulation import AbstractSimulation
+
+# OCC imports
+from OCC.Display.SimpleGui import init_display
+from OCC.Core.BRepBuilderAPI import BRepBuilderAPI_MakePolygon, BRepBuilderAPI_MakeFace
+from OCC.Core.BRepPrimAPI import BRepPrimAPI_MakePrism,BRepPrimAPI_MakeBox
+from OCC.Core.gp import gp_Pnt, gp_Vec
+from OCC.Core.TopExp import TopExp_Explorer
+from OCC.Core.TopAbs import TopAbs_VERTEX
+from OCC.Core.TopoDS import topods
+from OCC.Core.BRep import BRep_Tool
+from OCC.Core.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+from OCC.Core.ShapeUpgrade import ShapeUpgrade_UnifySameDomain
+
+
 
 try:
     gdstk_available = True
@@ -4056,47 +4071,14 @@ class Simulation(AbstractSimulation):
         This initial fix will suggest local mesh refinement on the plane that geometries are printed and ignore the direction along the thickness.
           """
         
-        def generate_override_boxes(vertice, ds,cell_number):
-            """Generate smaller boxes centered at each vertex of the large box,
-            ensuring that all parts of the small box stay within the large box.
-
-            Args:
-            large_box_bounds (tuple): Tuple of two tuples, where the first tuple contains the minimum (x, y, z) 
-            coordinates and the second tuple contains the maximum (x, y, z) coordinates of the large box.
-            box_size (float): The edge length of each smaller box.
-
-            Returns:
-            list: A list of bounds for each small box that are adjusted to stay within the large box.
-            """
-            x, y, z = vertice
-            # Calculate the bounds for the inward box centered at the vertex
-            inward_bounds = (
-                    (x - cell_number * ds, y - cell_number * ds, z - cell_number * ds),
-                    (x, y, z)
-                )               
-            outward_bounds = (
-                    (x, y, z),
-                    (x + cell_number * ds, y + cell_number * ds, z + cell_number * ds)
-                )     
-                # Create a list of bounds for both inward and outward boxes
-            bounds_list = [ inward_bounds,outward_bounds]
-            override_corner_boxes = []
-            for bounds in bounds_list:
-                # Create MeshOverrideStructure for each box type
-                override_corner_box = MeshOverrideStructure(
-                        geometry = Box.from_bounds(rmin=bounds[0], rmax=bounds[1]),
-                        dl=[ds, ds, ds]
-                    )
-                override_corner_boxes.append(override_corner_box)
-
-            return override_corner_boxes
+        suggested_ds = 308
+        cell_number = 2
         
 
-        suggested_ds =308
-        cell_number = 2
+
 
         for vertice in vertices:
-                override_corner_box = generate_override_boxes(vertice,suggested_ds,cell_number)
+                override_corner_box = self.generate_override_boxes(vertice,suggested_ds,cell_number)
                 mesh_overrides.extend(override_corner_box)
 
         # source's central frequency, to ensure an accurate solution over the entire range
@@ -4114,3 +4096,168 @@ class Simulation(AbstractSimulation):
         sim_copy = self.copy(update=update_dict)
 
         return sim_copy
+
+
+    def generate_override_boxes(self, vertice, ds, cell_number):
+        """Generate smaller boxes centered at each vertex of the large box,
+        ensuring that all parts of the small box stay within the large box.
+
+        Args:
+        large_box_bounds (tuple): Tuple of two tuples, where the first tuple contains the minimum (x, y, z) 
+        coordinates and the second tuple contains the maximum (x, y, z) coordinates of the large box.
+        box_size (float): The edge length of each smaller box.
+
+        Returns:
+        list: A list of bounds for each small box that are adjusted to stay within the large box.
+        """
+        x, y, z = vertice
+        # Calculate the bounds for the inward box centered at the vertex
+        inward_bounds = (
+                (x - cell_number * ds, y - cell_number * ds, z - cell_number * ds),
+                (x, y, z)
+            )               
+        outward_bounds = (
+                (x, y, z),
+                (x + cell_number * ds, y + cell_number * ds, z + cell_number * ds)
+            )     
+            # Create a list of bounds for both inward and outward boxes
+        bounds_list = [ inward_bounds,outward_bounds]
+        override_corner_boxes = []
+        for bounds in bounds_list:
+            # Create MeshOverrideStructure for each box type
+            override_corner_box = MeshOverrideStructure(
+                    geometry = Box.from_bounds(rmin=bounds[0], rmax=bounds[1]),
+                    dl=[ds, ds, ds]
+                )
+            override_corner_boxes.append(override_corner_box)
+
+        return override_corner_boxes
+
+    def convert_to_topods_shape(self,geometry):
+        """
+        Create an OCC box shape from Tidy3D box bounds.
+
+        Parameters:
+        - min_corner: tuple (x_min, y_min, z_min) representing the minimum corner of the box.
+        - max_corner: tuple (x_max, y_max, z_max) representing the maximum corner of the box.
+
+        Returns:
+        - TopoDS_Shape object representing the box.
+        """
+        # Extract coordinates from tuples
+        box_bounds = geometry.bounds
+        (x_min, y_min, z_min), (x_max, y_max, z_max) = box_bounds
+
+        # Calculate the dimensions of the box
+        dx = x_max - x_min
+        dy = y_max - y_min
+        dz = z_max - z_min
+
+        # Create a point for the lower corner of the box
+        corner_pnt = gp_Pnt(x_min, y_min, z_min)
+
+        # Create the box using the dimensions and the corner point
+        box = BRepPrimAPI_MakeBox(corner_pnt, dx, dy, dz).Shape()
+        
+        return box
+
+    def convert_polyslab_to_topods_shape(self,geometry):
+        """
+        Create an OCC shape from a given geometry defining a polyslab, where vertices are initially 2D.
+
+        Parameters:
+        - geometry: Geometry object containing vertices, slab bounds, and the axis of extrusion.
+
+        Returns:
+        - TopoDS_Shape object representing the polyslab.
+        """
+        # Extract vertices, axis, and bounds from the geometry object
+        poly_vertices = geometry.vertices
+        poly_axis = geometry.axis
+        poly_bounds = geometry.slab_bounds  # Assuming this is a tuple (min_bound, max_bound)
+
+        # Calculate the extrusion length
+        extrusion_length = poly_bounds[1] - poly_bounds[0]  # max_bound - min_bound
+
+        # Create the base polygon with 3D vertices
+        polygon_maker = BRepBuilderAPI_MakePolygon()
+        # Determine which dimension should be filled with the constant from slab bounds
+        for vertex in poly_vertices:
+            if poly_axis == 0:  # Extruding along x-axis
+                point = gp_Pnt(poly_bounds[0], vertex[0], vertex[1])
+            elif poly_axis == 1:  # Extruding along y-axis
+                point = gp_Pnt(vertex[0], poly_bounds[0], vertex[1])
+            elif poly_axis == 2:  # Extruding along z-axis
+                point = gp_Pnt(vertex[0], vertex[1], poly_bounds[0])
+            polygon_maker.Add(point)
+        polygon_maker.Close()
+
+        # Convert the polygon to a wire
+        base_wire = polygon_maker.Wire()
+
+        # Create the base face from the wire
+        face_maker = BRepBuilderAPI_MakeFace(base_wire)
+        if not face_maker.IsDone():
+            raise Exception("Failed to create face from wire")
+
+        base_face = face_maker.Face()
+
+        # Define the extrusion direction based on the axis property
+        directions = [gp_Vec(1, 0, 0), gp_Vec(0, 1, 0), gp_Vec(0, 0, 1)]
+        direction_vec = directions[poly_axis] * extrusion_length  # Apply the extrusion length
+
+        # Perform the extrusion to create a prism or slab
+        prism_maker = BRepPrimAPI_MakePrism(base_face, direction_vec)
+        polyslab_shape = prism_maker.Shape()
+
+        return polyslab_shape
+    
+
+    def process_geometry(self,geometry):
+        """
+        Process a Tidy3D ClipOperation and convert it to the corresponding OCC operation.
+
+        Parameters:
+        - geometry: A Tidy3D geometry object, which is expected to be a ClipOperation.
+
+        Returns:
+        - TopoDS_Shape object representing the result of the boolean operation.
+        """
+        if isinstance(geometry, Box):  # Replace with actual basic shape type
+            return self.convert_to_topods_shape(geometry)  # Implement this function based on basic shapes
+        elif isinstance(geometry, PolySlab):  # Replace with actual basic shape type
+            return self.convert_polyslab_to_topods_shape(geometry)  # Implement this function based on basic shapes
+        elif isinstance(geometry, ClipOperation):
+
+            # Recursively process the sub-geometries
+            shape_a = self.process_geometry(geometry.geometry_a)
+            shape_b = self.process_geometry(geometry.geometry_b)
+
+            # Apply the appropriate boolean operation based on the type of operation in ClipOperation
+            if geometry.operation == "union":
+                operator = BRepAlgoAPI_Fuse(shape_a, shape_b)
+            elif geometry.operation == "difference":
+                operator = BRepAlgoAPI_Cut(shape_a, shape_b)
+            else:
+                raise ValueError(f"Unsupported operation: {geometry.operation}")
+
+            # Build the operator and check if the operation was successful
+            operator.Build()
+            if not operator.IsDone():
+                raise Exception(f"Boolean operation {geometry.operation} failed.")
+
+            # Return the resulting shape
+            return operator.Shape()
+
+    # Function to extract unique vertices from a shape
+    def extract_unique_vertices(shape):
+        unique_vertices = set()
+        explorer = TopExp_Explorer(shape, TopAbs_VERTEX)
+        while explorer.More():
+            vertex = topods.Vertex(explorer.Current())
+            pnt = BRep_Tool.Pnt(vertex)
+            # Round coordinates to a reasonable precision to avoid floating-point issues
+            coord = (pnt.X(), pnt.Y(), pnt.Z())
+            unique_vertices.add(coord)
+            explorer.Next()
+        return unique_vertices
