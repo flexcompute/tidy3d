@@ -34,7 +34,7 @@ from .boundary import PML, StablePML, Absorber, AbsorberSpec
 from .structure import Structure, MeshOverrideStructure
 from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
 from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
-from .source import TFSF, Source, ModeSource
+from .source import TFSF, Source, ModeSource, FixedAngleSpec
 from .monitor import ModeMonitor, MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
 from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor, FieldTimeMonitor
 from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
@@ -2020,24 +2020,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     """
 
-    kx: float = pydantic.Field(
-        0,
-        title="k",
-        description="k.",
-    )
-
-    ky: float = pydantic.Field(
-        0,
-        title="k",
-        description="k.",
-    )
-
-    kz: float = pydantic.Field(
-        0,
-        title="k",
-        description="k.",
-    )
-
     """ Validating setup """
 
     @pydantic.root_validator(pre=True)
@@ -2098,6 +2080,7 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
+
             _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
@@ -2117,14 +2100,24 @@ class Simulation(AbstractYeeGridSimulation):
                 # check the Bloch boundary + angled plane wave case
                 num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
                 if num_bloch > 0:
-                    cls._check_bloch_vec(
-                        source=source,
-                        source_ind=source_ind,
-                        bloch_vec=boundary[0].bloch_vec,
-                        dim=tan_dir,
-                        medium=medium,
-                        domain_size=size[tan_dir],
-                    )
+                    if isinstance(source.angular_spec, FixedAngleSpec):
+                        raise SetupError(
+                            "Angled plane wave sources with 'FixedAngleSpec' specification are "
+                            f"not compatible with the Bloch boundary along dimension {tan_dir}. "
+                            "Either set the boundary conditions to 'Periodic' to simulate a plane "
+                            "wave with frequency-independent propagation direction, or switch to "
+                            "'FixedInPlaneKSpec' specification to simulate a plane wave with "
+                            "frequency-dependent propagation direction."
+                        )
+                    else:
+                        cls._check_bloch_vec(
+                            source=source,
+                            source_ind=source_ind,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
         return val
 
     @pydantic.validator("boundary_spec", always=True)
@@ -2209,6 +2202,39 @@ class Simulation(AbstractYeeGridSimulation):
         for source in val:
             if isinstance(source, TFSF) and not all(sym == 0 for sym in symmetry):
                 raise SetupError("TFSF sources cannot be used with symmetries.")
+        return val
+    
+    @staticmethod
+    def _get_fixed_angle_sources(sources: Tuple[SourceType, ...]):
+        """Get list of plane wave sources with ``FixedAngleSpec``."""
+
+        return [
+            source for source in sources
+            if isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec) and source.anlge_theta != 0.0
+        ]
+    
+    @cached_property
+    def _fixed_angle_sources(self):
+        """List of plane wave sources with ``FixedAngleSpec``."""
+        return self._get_fixed_angle_sources(self.sources)
+
+    @pydantic.validator("sources", always=True)
+    def check_fixed_angle_sources(cls, val):
+        """Error if a fixed-angle plane wave is combined with other sources."""
+
+        fixed_angle_sources = cls._get_fixed_angle_sources(val)
+
+        if len(fixed_angle_sources) > 0:
+            source_0 = fixed_angle_sources[0]
+            for source in val:
+                if (
+                    not isinstance(source, PlaneWave) 
+                    or not isinstance(source.angular_spec, FixedAngleSpec)
+                    or source_0._dir_vector != source._dir_vector
+                    or source_0.size.index(0.0) != source.size.index(0.0)
+                ):
+                    raise SetupError("Fixed-angle plane wave sources cannot be used with other sources.")
+                
         return val
 
     @pydantic.validator("boundary_spec", always=True)

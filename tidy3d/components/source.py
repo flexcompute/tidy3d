@@ -853,26 +853,33 @@ class AngledFieldSource(DirectionalSource, ABC):
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
+
+        # Propagation vector assuming propagation along z
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
+
+        # Move to original injection axis
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
-        normal_dir = [0.0, 0.0, 0.0]
-        normal_dir[int(self._injection_axis)] = 1.0
-        propagation_dir = list(self._dir_vector)
-        if self.angle_theta == 0.0:
-            pol_vector_p = np.array((0, 1, 0)) if self._injection_axis == 0 else np.array((1, 0, 0))
-            pol_vector_p = self.rotate_points(pol_vector_p, normal_dir, angle=self.angle_phi)
-        else:
-            pol_vector_s = np.cross(normal_dir, propagation_dir)
-            pol_vector_p = np.cross(propagation_dir, pol_vector_s)
-            pol_vector_p = np.array(pol_vector_p) / np.linalg.norm(pol_vector_p)
-        return self.rotate_points(pol_vector_p, propagation_dir, angle=self.pol_angle)
+
+        # Polarization vector assuming propagation along z
+        pol_vector_z_normal = np.array([1.0, 0.0, 0.0])
+
+        # Rotate polarization
+        pol_vector_z_normal = self.rotate_points(pol_vector_z_normal, axis=[0, 0, 1], angle=self.pol_angle)
+
+        # Rotate the fields back to the original propagation axes
+        pol_vector_z_normal = self.rotate_points(pol_vector_z_normal, axis=[0, 1, 0], angle=self.angle_theta)
+        pol_vector_z_normal = self.rotate_points(pol_vector_z_normal, axis=[0, 0, 1], angle=self.angle_phi)
+
+        # Move to original injection axis
+        pol_vector = self.unpop_axis(pol_vector_z_normal[2], pol_vector_z_normal[:2], axis=self._injection_axis)
+        return pol_vector
 
 
 class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
@@ -976,11 +983,13 @@ class AbstractAngularSpec(Tidy3dBaseModel, ABC):
 
 
 class FixedInPlaneKSpec(AbstractAngularSpec):
-    """Abstract base for defining angular variability specifications for plane waves."""
-
+    """Plane wave is injected such that its in-plane wavevector is constant. That is,
+    the injected field satisfies Bloch boundary conditions and its propagation direction is
+    frequency dependent.
+    """
 
 class FixedAngleSpec(AbstractAngularSpec):
-    """Abstract base for defining angular variability specifications for plane waves."""
+    """Plane wave is injected such that its propagation direction is frequency independent."""
 
 
 class PlaneWave(AngledFieldSource, PlanarSource):
