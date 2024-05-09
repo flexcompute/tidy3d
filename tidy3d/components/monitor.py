@@ -1074,6 +1074,12 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
+class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
+    """:class:`Monitor` that samples electromagnetic near fields in the frequency domain,
+    projects them at given observation angles,  and computes directivity. [TODO]
+    """
+
+
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them on a Cartesian observation plane.
@@ -1404,6 +1410,7 @@ MonitorType = Union[
     ModeMonitor,
     ModeSolverMonitor,
     FieldProjectionAngleMonitor,
+    DirectivityMonitor,
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,

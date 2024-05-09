@@ -50,7 +50,7 @@ from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, Flu
 from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
 from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
 from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
-from .components.monitor import DiffractionMonitor
+from .components.monitor import DiffractionMonitor, DirectivityMonitor
 
 # lumped elements
 from .components.lumped_element import LumpedResistor
@@ -245,6 +245,7 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "DiffractionMonitor",
+    "DirectivityMonitor",
     "RunTimeSpec",
     "Simulation",
     "FieldProjector",
