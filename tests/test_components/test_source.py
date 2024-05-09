@@ -168,20 +168,20 @@ def test_pol_arrow():
     assert np.allclose(get_pol_dir(axis=0), (0, 1, 0))
     assert np.allclose(get_pol_dir(axis=1), (1, 0, 0))
     assert np.allclose(get_pol_dir(axis=2), (1, 0, 0))
-    assert np.allclose(get_pol_dir(axis=0, angle_phi=np.pi / 2), (0, 0, +1))
-    assert np.allclose(get_pol_dir(axis=1, angle_phi=np.pi / 2), (0, 0, -1))
-    assert np.allclose(get_pol_dir(axis=2, angle_phi=np.pi / 2), (0, +1, 0))
-    assert np.allclose(get_pol_dir(axis=0, pol_angle=np.pi / 2), (0, 0, +1))
-    assert np.allclose(get_pol_dir(axis=1, pol_angle=np.pi / 2), (0, 0, -1))
-    assert np.allclose(get_pol_dir(axis=2, pol_angle=np.pi / 2), (0, +1, 0))
+    assert np.allclose(get_pol_dir(axis=0, angle_phi=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=1, angle_phi=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=2, angle_phi=np.pi / 2), (0, 1, 0))
+    assert np.allclose(get_pol_dir(axis=0, pol_angle=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=1, pol_angle=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=2, pol_angle=np.pi / 2), (0, 1, 0))
     assert np.allclose(
-        get_pol_dir(axis=0, angle_theta=np.pi / 4), (+1 / np.sqrt(2), -1 / np.sqrt(2), 0)
+        get_pol_dir(axis=0, angle_theta=np.pi / 4), (-1 / np.sqrt(2), +1 / np.sqrt(2), 0)
     )
     assert np.allclose(
-        get_pol_dir(axis=1, angle_theta=np.pi / 4), (-1 / np.sqrt(2), +1 / np.sqrt(2), 0)
+        get_pol_dir(axis=1, angle_theta=np.pi / 4), (+1 / np.sqrt(2), -1 / np.sqrt(2), 0)
     )
     assert np.allclose(
-        get_pol_dir(axis=2, angle_theta=np.pi / 4), (-1 / np.sqrt(2), 0, +1 / np.sqrt(2))
+        get_pol_dir(axis=2, angle_theta=np.pi / 4), (+1 / np.sqrt(2), 0, -1 / np.sqrt(2))
     )
 
 
