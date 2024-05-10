@@ -2,13 +2,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable, Optional, Dict, List
+from typing import Tuple, Union, Callable, Optional, Dict, List, Any
 import functools
 from math import isclose
 
 import pydantic.v1 as pd
-import numpy as np
 
+# TODO: it's hard to figure out which functions need this, for now all get it
+import numpy as npo
+import autograd.numpy as np
+import xarray as xr
+
+from .autograd import integrate_within_bounds
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
 from .grid.grid import Coords, Grid
@@ -16,6 +21,7 @@ from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
 from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
 from .types import Axis, TensorReal, Complex
 from .data.dataset import PermittivityDataset, CustomSpatialDataType, CustomSpatialDataTypeAnnotated
+from .data.dataset import ElectromagneticFieldDataset
 from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates, _ones_like
 from .data.dataset import UnstructuredGridDataset
 from .data.validators import validate_no_nans
@@ -32,6 +38,7 @@ from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
 from .heat_spec import HeatSpecType
 from .time_modulation import ModulationSpec
+from .autograd import TracedFloat
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -911,8 +918,9 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Tuple[float, float]
             Real and imaginary parts of refractive index (n & k).
         """
+        eps_c = np.array(eps_c)
         ref_index = np.sqrt(eps_c)
-        return ref_index.real, ref_index.imag
+        return np.real(ref_index), np.imag(ref_index)
 
     @staticmethod
     def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
@@ -1066,6 +1074,21 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             return self.updated_copy(modulation_spec=modulation_reduced)
 
         return self
+
+    """ Autograd code """
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute the adjoint derivative for this geometry."""
+        raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
 
 class AbstractCustomMedium(AbstractMedium, ABC):
@@ -1357,11 +1380,11 @@ class Medium(AbstractMedium):
 
     """
 
-    permittivity: float = pd.Field(
+    permittivity: TracedFloat = pd.Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 
-    conductivity: float = pd.Field(
+    conductivity: TracedFloat = pd.Field(
         0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "
@@ -1463,6 +1486,66 @@ class Medium(AbstractMedium):
                 "function 'td.medium_from_nk()' to automatically return the proper medium type."
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+
+        # get vjps w.r.t. permittivity and conductivity of the bulk
+        vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
+
+        # store the fields asked for by ``field_paths``
+        derivative_map = {}
+        for field_path in field_paths:
+            field_name, *_ = field_path
+            if field_name in vjps_volume:
+                derivative_map[field_path] = vjps_volume[field_name]
+
+        return derivative_map
+
+    def derivative_eps_sigma_volume(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        bounds: Bound,
+    ) -> dict[str, xr.DataArray]:
+        """Get the derivative w.r.t permittivity and conductivity in the volume."""
+
+        vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+
+        freqs = vjp_eps_complex.coords["f"].values
+        values = vjp_eps_complex.values
+
+        eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+
+        eps_vjp = np.sum(eps_vjp)
+        sigma_vjp = np.sum(sigma_vjp)
+
+        return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
+
+    def derivative_eps_complex_volume(
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
+    ) -> xr.DataArray:
+        """Get the derivative w.r.t complex-valued permittivity in the volume."""
+
+        vjp_value = 0.0
+        for field_name in ("Ex", "Ey", "Ez"):
+            fld = E_der_map.field_components[field_name]
+            vjp_value_fld = integrate_within_bounds(
+                arr=fld,
+                dims=("x", "y", "z"),
+                bounds=bounds,
+            )
+            vjp_value += vjp_value_fld
+
+        return vjp_value
 
 
 class CustomIsotropicMedium(AbstractCustomMedium, Medium):
@@ -2310,6 +2393,77 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute the adjoint derivative for this geometry."""
+
+        if len(field_paths) != 1 and field_paths[0] != ("permittivity",):
+            raise NotImplementedError(
+                f"Differentiation with respect to {type(self)} {field_paths} " "not supported."
+            )
+
+        eps_data = self.permittivity
+
+        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
+        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
+
+        # compute sizes along each of the interpolation dimensions
+        sizes_list = []
+        for _, coords in coords_interp.items():
+            num_coords = len(coords)
+            coords = np.array(coords)
+
+            # compute distances between midpoints for all internal coords
+            mid_points = (coords[1:] + coords[:-1]) / 2.0
+            dists = np.diff(mid_points)
+            sizes = np.zeros(num_coords)
+            sizes[1:-1] = dists
+
+            # estimate the sizes on the edges using 2 x the midpoint distance
+            sizes[0] = 2 * abs(mid_points[0] - coords[0])
+            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
+
+            sizes_list.append(sizes)
+
+        # turn this into a volume element, should be re-sizeable to the gradient shape
+        if sizes_list:
+            d_vol = functools.reduce(np.outer, sizes_list)
+        else:
+            # if sizes_list is empty, then reduce() fails
+            d_vol = np.array(1.0)
+
+        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
+        vjp_array = 0.0
+        for dim in "xyz":
+            E_der_dim = E_der_map.field_components[f"E{dim}"]
+            E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+            vjp_array += np.array(E_der_dim_interp.values).astype(float)
+
+        vjp_array = vjp_array.reshape(eps_data.shape)
+
+        # multiply by volume elements (if possible, being defensive here..)
+        try:
+            vjp_array *= d_vol.reshape(vjp_array.shape)
+        except ValueError:
+            log.warning(
+                "Skipping volume element normalization of 'CustomMedium' gradients. "
+                f"Could not reshape the volume elements of shape {d_vol.shape} "
+                f"to the shape of the gradient {vjp_array.shape}. "
+                "If you encounter this warning, gradient direction will be accurate but the norm "
+                "will be inaccurate. Please raise an issue on the tidy3d front end with this "
+                "message and some information about your simulation setup and we will investigate. "
+            )
+
+        return {("permittivity",): vjp_array}
+
 
 """ Dispersive Media """
 
@@ -2698,7 +2852,7 @@ class PoleResidue(DispersiveMedium):
         omegas_lo, gammas_lo, omegas_to, gammas_to = map(np.array, zip(*poles))
 
         # discriminants of quadratic factors of denominator
-        discs = 2 * np.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
+        discs = 2 * npo.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
 
         # require nondegenerate TO poles
         if len({(omega_to, gamma_to) for (_, _, omega_to, gamma_to) in poles}) != len(poles) or any(

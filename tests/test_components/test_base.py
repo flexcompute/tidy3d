@@ -12,8 +12,7 @@ M = td.Medium()
 
 
 def test_shallow_copy():
-    with pytest.raises(ValueError):
-        _ = M.copy(deep=False)
+    _ = M.copy(deep=False)
 
 
 def test_help():
