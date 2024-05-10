@@ -3222,6 +3222,7 @@ class Simulation(AbstractYeeGridSimulation):
         """Construct array full of the differentiable fields in this simulation."""
         # TODO: only include traced ones?
         # TODO: how to encode which structure (indices) map to this array?
+        # TODO: assumes only Medium in the structures
         return npa.array([s.medium.permittivity for s in self.structures])
 
     def to_static(self) -> Simulation:
