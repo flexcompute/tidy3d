@@ -44,6 +44,7 @@ from .components.source import GaussianPulse, ContinuousWave, CustomSourceTime
 from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
 from .components.source import GaussianBeam, AstigmaticGaussianBeam
 from .components.source import CustomFieldSource, TFSF, CustomCurrentSource
+from .components.source import FixedAngleSpec, FixedInPlaneKSpec
 
 # monitors
 from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
@@ -380,4 +381,6 @@ __all__ = [
     "EMESweepSpec",
     "EMELengthSweep",
     "EMEModeSweep",
+    "FixedAngleSpec",
+    "FixedInPlaneKSpec",
 ]

@@ -2098,9 +2098,8 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
-                if num_bloch > 0:
-                    if isinstance(source.angular_spec, FixedAngleSpec):
+                num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                if num_bloch > 0 and isinstance(source.angular_spec, FixedAngleSpec):
                         raise SetupError(
                             "Angled plane wave sources with 'FixedAngleSpec' specification are "
                             f"not compatible with the Bloch boundary along dimension {tan_dir}. "
@@ -2109,15 +2108,17 @@ class Simulation(AbstractYeeGridSimulation):
                             "'FixedInPlaneKSpec' specification to simulate a plane wave with "
                             "frequency-dependent propagation direction."
                         )
-                    else:
-                        cls._check_bloch_vec(
-                            source=source,
-                            source_ind=source_ind,
-                            bloch_vec=boundary[0].bloch_vec,
-                            dim=tan_dir,
-                            medium=medium,
-                            domain_size=size[tan_dir],
-                        )
+                
+                num_bloch += sum(isinstance(bnd, Periodic) for bnd in boundary)
+                if num_bloch > 0:
+                    cls._check_bloch_vec(
+                        source=source,
+                        source_ind=source_ind,
+                        bloch_vec=boundary[0].bloch_vec,
+                        dim=tan_dir,
+                        medium=medium,
+                        domain_size=size[tan_dir],
+                    )
         return val
 
     @pydantic.validator("boundary_spec", always=True)
@@ -2210,7 +2211,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return [
             source for source in sources
-            if isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec) and source.anlge_theta != 0.0
+            if isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec) and source.angle_theta != 0.0
         ]
     
     @cached_property
