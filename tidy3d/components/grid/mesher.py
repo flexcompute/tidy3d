@@ -20,7 +20,7 @@ from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ...exceptions import SetupError, ValidationError
 from ...constants import C_0, fp_eps
 from ...log import log
-from ..autograd import Box
+from ..autograd import get_static
 
 _ROOTS_TOL = 1e-10
 
@@ -437,8 +437,8 @@ class GradedMesher(Mesher):
                 else:
                     eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
                     n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
-                    n = n._value if isinstance(n, Box) else n
-                    k = k._value if isinstance(k, Box) else k
+                    n = get_static(n)
+                    k = get_static(k)
                     # take max among all directions because perpendicular eps defines wavelength
                     index = max(max(abs(n)), max(abs(k)))
                 min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))

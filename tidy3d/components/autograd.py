@@ -1,11 +1,11 @@
 # all the autograd extras
 
-from autograd.extend import primitive, defvjp, Box
-import autograd as ag
+from autograd.extend import Box, primitive, defvjp
 import typing
 
 # TODO: should we use ArrayBox? Box is more general
-TracedFloat = float | Box
+TracedFloat = typing.Union[float, Box]
+
 
 def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
@@ -13,3 +13,10 @@ def get_static(x: typing.Any) -> typing.Any:
         return x._value
     return x
 
+
+__all__ = [
+    "Box",
+    "primitive",
+    "defvjp",
+    "get_static",
+]

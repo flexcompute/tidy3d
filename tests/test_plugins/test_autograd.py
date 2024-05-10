@@ -12,12 +12,15 @@ from ..utils import run_emulated
 
 _run_was_emulated = [False]
 
+
 @pytest.fixture
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
     import tidy3d.web.api.webapi as webapi
+
     monkeypatch.setattr(webapi, "run", run_emulated)
-    run_was_emulated[0] = True
+    _run_was_emulated[0] = True
+
 
 WVL = 1.0
 FREQ0 = td.C_0 / WVL
@@ -25,117 +28,138 @@ FREQ0 = td.C_0 / WVL
 # sim and structure sizes in x
 BX = 2 * WVL
 NUM_STCRS = 5
-LX = 2 * NUM_STCRS * WVL
+LX = 3 * NUM_STCRS * WVL
+LZ = 7 * WVL
 
 NUM_MNTS = 3
-MNT_NAME = 'mnt'
+MNT_NAME = "mnt"
+
+PLOT_SIM = False
+
 
 def mnt_name_i(i: int):
-	return f"{MNT_NAME}_{i}"
+    return f"{MNT_NAME}_{i}"
 
-# for logging output
-td.config.logging_level = "INFO"
 
 def test_autograd_objective(use_emulated_run):
+    # import here so it uses emulated run
+    from tidy3d.web.api.autograd import run as run_ag
 
-	# import here so it uses emulated run
-	from tidy3d.web.api.autograd import run as run_ag
-	run_was_emulated = _run_was_emulated[0]
+    run_was_emulated = _run_was_emulated[0]
 
-	def objective(params):
+    # for logging output
+    td.config.logging_level = "INFO"
 
-		permittivities = params
+    def make_sim(params):
 
-		# medium = td.Medium(permittivity=permittivity)
-		# box = td.Box(size=(BX,1,1), center=(0,0,0))
+        permittivities = params
 
-		structure_centers = npa.linspace(-LX/2 + BX, LX/2 - BX, NUM_STCRS)
+        # medium = td.Medium(permittivity=permittivity)
+        # box = td.Box(size=(BX,1,1), center=(0,0,0))
 
-		structures = [
-			td.Structure(
-				geometry=td.Box(size=(BX,1,1), center=(x0,0,0)),
-				medium=td.Medium(permittivity=eps)
-			)
-		for eps, x0 in zip(params, structure_centers)]
+        structure_centers = npa.linspace(-LX / 2 + BX, LX / 2 - BX, NUM_STCRS)
 
-		mnts = []
-		for i in range(NUM_MNTS):
-			mnt_i = td.ModeMonitor(
-				size=(2,2,0),
-				center=(0,0,1),
-				mode_spec=td.ModeSpec(),
-				freqs=[FREQ0],
-				name=mnt_name_i(i),
-			)
-			mnts.append(mnt_i)
+        structures = [
+            td.Structure(
+                geometry=td.Box(size=(BX, 1, 1), center=(x0, 0, 0)),
+                medium=td.Medium(permittivity=eps),
+            )
+            for eps, x0 in zip(params, structure_centers)
+        ]
 
-		src = td.PointDipole(
-			center=(0,0,-1),
-			polarization="Ey",
-			source_time=td.GaussianPulse(
-				freq0=FREQ0,
-				fwidth=FREQ0/10.0,
-				amplitude=1.0,
-			)
-		)
-		sim = td.Simulation(
-			size=(LX,3,3),
-			run_time=1e-12,
-			grid_spec=td.GridSpec.auto(min_steps_per_wvl=25),
-			structures=structures,
-			sources=[src],
-			monitors=mnts,
-		)
+        mnts = []
+        for i in range(NUM_MNTS):
+            mnt_i = td.ModeMonitor(
+                size=(2, 2, 0),
+                center=(0, 0, LZ / 2 - WVL),
+                mode_spec=td.ModeSpec(),
+                freqs=[FREQ0],
+                name=mnt_name_i(i),
+            )
+            mnts.append(mnt_i)
 
-		data = run_ag(sim)
+        waveguide_out = td.Structure(
+            geometry=td.Box(
+                size=(0.5, 0.5, LZ / 2),
+                center=(0, 0, LZ / 2),
+            ),
+            medium=td.Medium(permittivity=2.0),
+        )
 
-		value = 0.0
-		for i in range(NUM_MNTS):
-			name = mnt_name_i(i)
-			amps_i = data[name].amps
-			value_i = npa.sum(abs(amps_i.values))**2
-			value += value_i
+        src = td.PointDipole(
+            center=(0, 0, -LZ / 2 + WVL),
+            polarization="Ey",
+            source_time=td.GaussianPulse(
+                freq0=FREQ0,
+                fwidth=FREQ0 / 10.0,
+                amplitude=1.0,
+            ),
+        )
+        sim = td.Simulation(
+            size=(LX, 3, LZ),
+            run_time=1e-12,
+            grid_spec=td.GridSpec.uniform(
+                dl=WVL / 25
+            ),  # making this auto hurts the numerical check
+            structures=structures + [waveguide_out],
+            sources=[src],
+            monitors=mnts,
+        )
 
-		return value
+        return sim
 
-	params0 = NUM_STCRS * [2.0]
+    def postprocess(data: td.SimulationData) -> float:
+        value = 0.0
+        for i in range(NUM_MNTS):
+            name = mnt_name_i(i)
+            amps_i = data[name].amps
+            value_i = npa.sum(abs(amps_i.values) ** 2)
+            value += value_i
+        return value        
 
-	if True or run_was_emulated:
-		val, grad = ag.value_and_grad(objective)(params0)
-	else:
-		val = 6.431317914419032e-09
-		grad = npa.array([6.6703622e-05, 3.5446883e-05, 0.00852042, 7.34919959e-05, 7.27415099e-05])
+    def objective(params):
 
-	print(val, grad)
+        sim = make_sim(params)
 
-	assert not npa.allclose(grad, 0.0)
+        if PLOT_SIM:
+            import matplotlib.pylab as plt
 
-	# numerical gradient (if not emulating run)
+            f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
+            sim.plot(x=0, ax=ax1)
+            sim.plot(y=0, ax=ax2)
+            sim.plot(z=0, ax=ax3)
+            plt.show()
 
-	if not run_was_emulated:
+        data = run_ag(sim)
 
-		# grad_numerical = npa.array([-2.72940140e-06, -7.69690465e-06,  7.14835332e-06, -9.46320901e-07, -2.73337469e-06])
+        value = postprocess(data)
 
-		delta = 4e-2
-		grad_numerical = npa.zeros_like(grad)
-		for i in range(NUM_STCRS):
-			for sign in (-1, 1):
-				_params_i = npa.array(params0).copy()
-				_params_i[i] += sign * delta
-				print(f' params {i}: {_params_i}')
-				_val_i = objective(_params_i)
-				print(f' val {i}: {_val_i}')
-				grad_numerical[i] += sign * _val_i / 2 / delta
+        return value
 
-		print(grad_numerical)
-		import pdb; pdb.set_trace()
+    params0 = NUM_STCRS * [2.0]
 
+    if True or run_was_emulated:
+        val, grad = ag.value_and_grad(objective)(params0)
 
+    print(val, grad)
 
+    assert not npa.all(grad == 0.0)
 
+    # numerical gradient (if not emulating run)
 
+    # last computed May 10 at 3pm
+    grad_numerical = npa.array([-0.09250836, -1.89401786, 6.77510484, -1.89459057, -0.09236825])
 
+    if grad_numerical is not None and not run_was_emulated:
+        delta = 1e-3
+        grad_numerical = npa.zeros_like(grad)
+        for i in range(NUM_STCRS):
+            for sign in (-1, 1):
+                _params_i = npa.array(params0).copy()
+                _params_i[i] += sign * delta
+                print(f" params {i}: {_params_i}")
+                _val_i = objective(_params_i)
+                print(f" val {i}: {_val_i}")
+                grad_numerical[i] += sign * _val_i / 2 / delta
 
-
-
-
+    print(grad_numerical)

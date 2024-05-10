@@ -3226,7 +3226,7 @@ class Simulation(AbstractYeeGridSimulation):
         return npa.array([s.medium.permittivity for s in self.structures])
 
     def to_static(self) -> Simulation:
-        """Un-trace all differentiable fields in this Simulation."""   
+        """Un-trace all differentiable fields in this Simulation."""
 
         # TODO: replace with just a json encoder for Box?
         structures = []

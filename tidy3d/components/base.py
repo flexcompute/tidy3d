@@ -19,7 +19,7 @@ import numpy as np
 import h5py
 import xarray as xr
 
-from .autograd import Box, TracedFloat
+from .autograd import Box
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP

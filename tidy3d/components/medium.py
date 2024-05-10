@@ -7,7 +7,8 @@ import functools
 from math import isclose
 
 import pydantic.v1 as pd
-import autograd.numpy as np
+import numpy as np
+import autograd.numpy as npa
 
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
@@ -32,6 +33,7 @@ from .transformation import RotationType
 from .parameter_perturbation import ParameterPerturbation
 from .heat_spec import HeatSpecType
 from .time_modulation import ModulationSpec
+from .autograd import TracedFloat
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -57,13 +59,13 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
     def _eps_model(self, frequency: float) -> complex:
         """New eps_model function."""
         # evaluate infs and None as FREQ_EVAL_INF
-        is_inf_scalar = isinstance(frequency, float) and np.isinf(frequency)
+        is_inf_scalar = isinstance(frequency, float) and npa.isinf(frequency)
         if frequency is None or is_inf_scalar:
             frequency = FREQ_EVAL_INF
 
-        if isinstance(frequency, np.ndarray):
+        if isinstance(frequency, npa.ndarray):
             frequency = frequency.astype(float)
-            frequency[np.where(np.isinf(frequency))] = FREQ_EVAL_INF
+            frequency[npa.where(npa.isinf(frequency))] = FREQ_EVAL_INF
 
         # if frequency range not present just return original function
         if self.frequency_range is None:
@@ -73,7 +75,7 @@ def ensure_freq_in_range(eps_model: Callable[[float], complex]) -> Callable[[flo
         # don't warn for evaluating infinite frequency
         if is_inf_scalar:
             return eps_model(self, frequency)
-        if np.any(frequency < fmin * (1 - fp_eps)) or np.any(frequency > fmax * (1 + fp_eps)):
+        if npa.any(frequency < fmin * (1 - fp_eps)) or npa.any(frequency > fmax * (1 + fp_eps)):
             log.warning(
                 "frequency passed to 'Medium.eps_model()'"
                 f"is outside of 'Medium.frequency_range' = {self.frequency_range}",
@@ -128,7 +130,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
                     f"sources. Please either specify 'freq0' in '{type(self).__name__}' "
                     "or add sources to the simulation."
                 )
-            if not all(np.isclose(freq, freqs[0]) for freq in freqs):
+            if not all(npa.isclose(freq, freqs[0]) for freq in freqs):
                 raise SetupError(
                     f"Class '{type(self).__name__}' cannot determine 'freq0' because the source "
                     f"frequencies '{freqs}' are not all equal. "
@@ -138,7 +140,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
             return freqs[0]
 
         # now, freq0 is specified; we use it, but warn if it might be inconsistent
-        if not all(np.isclose(freq, freq0) for freq in freqs):
+        if not all(npa.isclose(freq, freq0) for freq in freqs):
             log.warning(
                 f"Class '{type(self).__name__}' given 'freq0={freq0}' which is different from "
                 f"the source central frequencies '{freqs}'. In order "
@@ -157,7 +159,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
         freqs: List[pd.PositiveFloat],
     ) -> complex:
         """Get a single value for n0."""
-        freqs = np.array(freqs, dtype=float)
+        freqs = npa.array(freqs, dtype=float)
         ns, ks = medium.nk_model(freqs)
         nks = ns + 1j * ks
 
@@ -169,7 +171,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
                     f"sources. Please either specify 'n0' in '{type(self).__name__}' "
                     "or add sources to the simulation."
                 )
-            if not all(np.isclose(nk, nks[0]) for nk in nks):
+            if not all(npa.isclose(nk, nks[0]) for nk in nks):
                 raise SetupError(
                     f"Class '{type(self).__name__}' cannot determine 'n0' because at the source "
                     f"frequencies '{freqs}' the complex refractive indices '{nks}' of the medium "
@@ -180,7 +182,7 @@ class NonlinearModel(ABC, Tidy3dBaseModel):
             return nks[0]
 
         # now, n0 is specified; we use it, but warn if it might be inconsistent
-        if not all(np.isclose(nk, n0) for nk in nks):
+        if not all(npa.isclose(nk, n0) for nk in nks):
             log.warning(
                 f"Class '{type(self).__name__}' given 'n0={n0}'. At the source frequencies "
                 f"'{freqs}' the medium has complex refractive indices '{nks}'. In order "
@@ -374,7 +376,7 @@ class TwoPhotonAbsorption(NonlinearModel):
         n0 = self._get_n0(self.n0, medium, freqs)
         beta = self.beta
         if not medium.allow_gain:
-            chi_imag = np.real(beta * n0 * np.real(n0))
+            chi_imag = npa.real(beta * n0 * npa.real(n0))
             if chi_imag < 0:
                 raise ValidationError(
                     "For passive medium, 'beta' in 'TwoPhotonAbsorption' must satisfy "
@@ -399,7 +401,7 @@ class TwoPhotonAbsorption(NonlinearModel):
     def _warn_for_complex_beta(cls, val):
         if val is None:
             return val
-        if np.iscomplex(val):
+        if npa.iscomplex(val):
             log.warning(
                 "Complex values of 'beta' in 'TwoPhotonAbsorption' are deprecated "
                 "and may be removed in a future version. The implementation with "
@@ -463,7 +465,7 @@ class KerrNonlinearity(NonlinearModel):
         n0 = self._get_n0(self.n0, medium, freqs)
         n2 = self.n2
         if not medium.allow_gain:
-            chi_imag = np.imag(n2 * n0 * np.real(n0))
+            chi_imag = npa.imag(n2 * n0 * npa.real(n0))
             if chi_imag < 0:
                 raise ValidationError(
                     "For passive medium, 'n2' in 'KerrNonlinearity' must satisfy "
@@ -862,7 +864,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             The supplied or created matplotlib axes.
         """
 
-        freqs = np.array(freqs)
+        freqs = npa.array(freqs)
         eps_complex = self.eps_model(freqs)
         n, k = AbstractMedium.eps_complex_to_nk(eps_complex)
 
@@ -911,12 +913,9 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Tuple[float, float]
             Real and imaginary parts of refractive index (n & k).
         """
-        eps_c = np.array(eps_c)
-        try:
-            ref_index = np.sqrt(eps_c)
-        except TypeError:
-            import pdb; pdb.set_trace()
-        return np.real(ref_index), np.imag(ref_index)
+        eps_c = npa.array(eps_c)
+        ref_index = npa.sqrt(eps_c)
+        return npa.real(ref_index), npa.imag(ref_index)
 
     @staticmethod
     def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
@@ -938,7 +937,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """
         eps_complex = AbstractMedium.nk_to_eps_complex(n, k)
         eps_real, eps_imag = eps_complex.real, eps_complex.imag
-        omega = 2 * np.pi * freq
+        omega = 2 * npa.pi * freq
         sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
 
@@ -963,7 +962,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """
         if freq is None:
             return eps_real
-        omega = 2 * np.pi * freq
+        omega = 2 * npa.pi * freq
 
         return eps_real + 1j * sigma / omega / EPSILON_0
 
@@ -985,7 +984,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             Real part of relative permittivity & electric conductivity.
         """
         eps_real, eps_imag = eps_complex.real, eps_complex.imag
-        omega = 2 * np.pi * freq
+        omega = 2 * npa.pi * freq
         sigma = omega * eps_imag * EPSILON_0
         return eps_real, sigma
 
@@ -1038,9 +1037,9 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         complex
             Complex conductivity at this frequency.
         """
-        omega = freq * 2 * np.pi
+        omega = freq * 2 * npa.pi
         eps_complex = self.eps_model(freq)
-        eps_inf = self.eps_model(np.inf)
+        eps_inf = self.eps_model(npa.inf)
         sigma = (eps_inf - eps_complex) * 1j * omega * EPSILON_0
         return sigma
 
@@ -1204,9 +1203,12 @@ class AbstractCustomMedium(AbstractMedium, ABC):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued spatially averaged permittivity as a function of frequency."""
         if self.is_isotropic:
-            return np.mean(_get_numpy_array(self.eps_dataarray_freq(frequency)[0]))
-        return np.mean(
-            [np.mean(_get_numpy_array(eps_comp)) for eps_comp in self.eps_dataarray_freq(frequency)]
+            return npa.mean(_get_numpy_array(self.eps_dataarray_freq(frequency)[0]))
+        return npa.mean(
+            [
+                npa.mean(_get_numpy_array(eps_comp))
+                for eps_comp in self.eps_dataarray_freq(frequency)
+            ]
         )
 
     @ensure_freq_in_range
@@ -1218,22 +1220,24 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         eps_spatial = self.eps_dataarray_freq(frequency)
         if self.is_isotropic:
             eps_comp = _get_numpy_array(eps_spatial[0]).ravel()
-            eps = eps_comp[np.argmax(np.abs(eps_comp))]
+            eps = eps_comp[npa.argmax(npa.abs(eps_comp))]
             return (eps, eps, eps)
         eps_spatial_array = (_get_numpy_array(eps_comp).ravel() for eps_comp in eps_spatial)
-        return tuple(eps_comp[np.argmax(np.abs(eps_comp))] for eps_comp in eps_spatial_array)
+        return tuple(eps_comp[npa.argmax(npa.abs(eps_comp))] for eps_comp in eps_spatial_array)
 
     @staticmethod
     def _validate_isreal_dataarray(dataarray: CustomSpatialDataType) -> bool:
         """Validate that the dataarray is real"""
-        return np.all(np.isreal(_get_numpy_array(dataarray)))
+        return npa.all(npa.isreal(_get_numpy_array(dataarray)))
 
     @staticmethod
     def _validate_isreal_dataarray_tuple(
         dataarray_tuple: Tuple[CustomSpatialDataType, ...]
     ) -> bool:
         """Validate that the dataarray is real"""
-        return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
+        return npa.all(
+            [AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple]
+        )
 
     @abstractmethod
     def _sel_custom_data_inside(self, bounds: Bound):
@@ -1328,8 +1332,6 @@ class PECMedium(AbstractMedium):
 PEC = PECMedium(name="PEC")
 
 
-from .autograd import TracedFloat
-
 class Medium(AbstractMedium):
     """Dispersionless medium. Mediums define the optical properties of the materials within the simulation.
 
@@ -1395,7 +1397,7 @@ class Medium(AbstractMedium):
         if modulation is None or modulation.permittivity is None:
             return val
 
-        min_eps_inf = np.min(_get_numpy_array(val))
+        min_eps_inf = npa.min(_get_numpy_array(val))
         if min_eps_inf - modulation.permittivity.max_modulation <= 0:
             raise ValidationError(
                 "The minimum permittivity value with modulation applied was found to be negative."
@@ -1410,7 +1412,7 @@ class Medium(AbstractMedium):
         if modulation is None or modulation.conductivity is None:
             return val
 
-        min_sigma = np.min(_get_numpy_array(val))
+        min_sigma = npa.min(_get_numpy_array(val))
         if not values.get("allow_gain") and min_sigma - modulation.conductivity.max_modulation < 0:
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative at any time."
@@ -1478,12 +1480,12 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     Example
     -------
     >>> Nx, Ny, Nz = 10, 9, 8
-    >>> X = np.linspace(-1, 1, Nx)
-    >>> Y = np.linspace(-1, 1, Ny)
-    >>> Z = np.linspace(-1, 1, Nz)
+    >>> X = npa.linspace(-1, 1, Nx)
+    >>> Y = npa.linspace(-1, 1, Ny)
+    >>> Z = npa.linspace(-1, 1, Nz)
     >>> coords = dict(x=X, y=Y, z=Z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> permittivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
     >>> dielectric = CustomIsotropicMedium(permittivity=permittivity, conductivity=conductivity)
     >>> eps = dielectric.eps_model(200e12)
     """
@@ -1513,7 +1515,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         if not CustomIsotropicMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1):
+        if npa.any(_get_numpy_array(val) < 1):
             raise SetupError("'permittivity' must be no less than one.")
 
         return val
@@ -1539,7 +1541,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
         """Assert passive medium if ``allow_gain`` is False."""
         if val is None:
             return val
-        if not values.get("allow_gain") and np.any(_get_numpy_array(val) < 0):
+        if not values.get("allow_gain") and npa.any(_get_numpy_array(val) < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
                 "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -1562,7 +1564,7 @@ class CustomIsotropicMedium(AbstractCustomMedium, Medium):
 
         For dispersiveless medium, it equals ``sqrt(permittivity)``.
         """
-        permittivity = np.min(_get_numpy_array(self.permittivity))
+        permittivity = npa.min(_get_numpy_array(self.permittivity))
         if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
             permittivity -= self.modulation_spec.permittivity.max_modulation
         n, _ = self.eps_complex_to_nk(permittivity)
@@ -1650,12 +1652,12 @@ class CustomMedium(AbstractCustomMedium):
     Example
     -------
     >>> Nx, Ny, Nz = 10, 9, 8
-    >>> X = np.linspace(-1, 1, Nx)
-    >>> Y = np.linspace(-1, 1, Ny)
-    >>> Z = np.linspace(-1, 1, Nz)
+    >>> X = npa.linspace(-1, 1, Nx)
+    >>> Y = npa.linspace(-1, 1, Ny)
+    >>> Z = npa.linspace(-1, 1, Nz)
     >>> coords = dict(x=X, y=Y, z=Z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> permittivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
     >>> dielectric = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> eps = dielectric.eps_model(200e12)
     """
@@ -1712,7 +1714,7 @@ class CustomMedium(AbstractCustomMedium):
                 )
                 fail_load = True
         if fail_load:
-            eps_real = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+            eps_real = SpatialDataArray(npa.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
             return dict(permittivity=eps_real)
         return values
 
@@ -1792,20 +1794,22 @@ class CustomMedium(AbstractCustomMedium):
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(
                 val.field_components[comp], val.field_components[comp].f
             )
-            if np.any(_get_numpy_array(eps_real) < 1):
+            if npa.any(_get_numpy_array(eps_real) < 1):
                 raise SetupError(
                     "Permittivity at infinite frequency at any spatial point "
                     "must be no less than one."
                 )
 
             if modulation is not None and modulation.permittivity is not None:
-                if np.any(_get_numpy_array(eps_real) - modulation.permittivity.max_modulation <= 0):
+                if npa.any(
+                    _get_numpy_array(eps_real) - modulation.permittivity.max_modulation <= 0
+                ):
                     raise ValidationError(
                         "The minimum permittivity value with modulation applied "
                         "was found to be negative."
                     )
 
-            if not values.get("allow_gain") and np.any(_get_numpy_array(sigma) < 0):
+            if not values.get("allow_gain") and npa.any(_get_numpy_array(sigma) < 0):
                 raise ValidationError(
                     "For passive medium, imaginary part of permittivity must be non-negative. "
                     "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -1817,7 +1821,7 @@ class CustomMedium(AbstractCustomMedium):
                 not values.get("allow_gain")
                 and modulation is not None
                 and modulation.conductivity is not None
-                and np.any(_get_numpy_array(sigma) - modulation.conductivity.max_modulation <= 0)
+                and npa.any(_get_numpy_array(sigma) - modulation.conductivity.max_modulation <= 0)
             ):
                 raise ValidationError(
                     "For passive medium, imaginary part of permittivity must be non-negative "
@@ -1839,14 +1843,14 @@ class CustomMedium(AbstractCustomMedium):
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'permittivity' must be real.")
 
-        if np.any(_get_numpy_array(val) < 1):
+        if npa.any(_get_numpy_array(val) < 1):
             raise SetupError("'permittivity' must be no less than one.")
 
         modulation = values.get("modulation_spec")
         if modulation is None or modulation.permittivity is None:
             return val
 
-        if np.any(_get_numpy_array(val) - modulation.permittivity.max_modulation <= 0):
+        if npa.any(_get_numpy_array(val) - modulation.permittivity.max_modulation <= 0):
             raise ValidationError(
                 "The minimum permittivity value with modulation applied was found to be negative."
             )
@@ -1864,7 +1868,7 @@ class CustomMedium(AbstractCustomMedium):
         if not CustomMedium._validate_isreal_dataarray(val):
             raise SetupError("'conductivity' must be real.")
 
-        if not values.get("allow_gain") and np.any(_get_numpy_array(val) < 0):
+        if not values.get("allow_gain") and npa.any(_get_numpy_array(val) < 0):
             raise ValidationError(
                 "For passive medium, 'conductivity' must be non-negative. "
                 "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -1890,7 +1894,7 @@ class CustomMedium(AbstractCustomMedium):
         modulation = values.get("modulation_spec")
         if values.get("allow_gain") or modulation is None or modulation.conductivity is None:
             return val
-        if val is None or np.any(
+        if val is None or npa.any(
             _get_numpy_array(val) - modulation.conductivity.max_modulation < 0
         ):
             raise ValidationError(
@@ -1917,14 +1921,14 @@ class CustomMedium(AbstractCustomMedium):
         return self._medium.is_spatially_uniform
 
     @cached_property
-    def freqs(self) -> np.ndarray:
+    def freqs(self) -> npa.ndarray:
         """float array of frequencies.
         This field is to be deprecated in v3.0.
         """
         # return dummy values in this case
         if self.eps_dataset is None:
-            return np.array([0, 0, 0])
-        return np.array(
+            return npa.array([0, 0, 0])
+        return npa.array(
             [
                 self.eps_dataset.eps_xx.coords["f"],
                 self.eps_dataset.eps_yy.coords["f"],
@@ -1945,7 +1949,7 @@ class CustomMedium(AbstractCustomMedium):
 
         def get_eps_sigma(eps_complex: SpatialDataArray, freq: float) -> tuple:
             """Convert a complex permittivity to real permittivity and conductivity."""
-            eps_values = np.array(eps_complex.values)
+            eps_values = npa.array(eps_complex.values)
 
             eps_real, sigma = CustomMedium.eps_complex_to_eps_sigma(eps_values, freq)
             coords = eps_complex.coords
@@ -2229,7 +2233,7 @@ class CustomMedium(AbstractCustomMedium):
         def make_grid(scalar_field: Union[ScalarFieldDataArray, SpatialDataArray]) -> Grid:
             """Make a grid for a single dataset."""
 
-            def make_bound_coords(coords: np.ndarray, pt_min: float, pt_max: float) -> List[float]:
+            def make_bound_coords(coords: npa.ndarray, pt_min: float, pt_max: float) -> List[float]:
                 """Convert user supplied coords into boundary coords to use in :class:`.Grid`."""
 
                 # get coordinates of the bondaries halfway between user-supplied data
@@ -2243,7 +2247,7 @@ class CustomMedium(AbstractCustomMedium):
                 return [pt_min] + coord_bounds.tolist() + [pt_max]
 
             # grab user supplied data long this dimension
-            coords = {key: np.array(val) for key, val in scalar_field.coords.items()}
+            coords = {key: npa.array(val) for key, val in scalar_field.coords.items()}
             spatial_coords = {key: coords[key] for key in "xyz"}
 
             # convert each spatial coord to boundary coords
@@ -2371,7 +2375,7 @@ class DispersiveMedium(AbstractMedium, ABC):
             if modulation is None or modulation.permittivity is None:
                 return val
 
-            min_eps_inf = np.min(_get_numpy_array(val))
+            min_eps_inf = npa.min(_get_numpy_array(val))
             if min_eps_inf - modulation.permittivity.max_modulation <= 0:
                 raise ValidationError(
                     "The minimum permittivity value with modulation applied was found to be negative."
@@ -2454,7 +2458,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
         For PoleResidue model, it equals ``sqrt(eps_inf)``
         [https://ieeexplore.ieee.org/document/9082879].
         """
-        permittivity = np.min(_get_numpy_array(self.pole_residue.eps_inf))
+        permittivity = npa.min(_get_numpy_array(self.pole_residue.eps_inf))
         if self.modulation_spec is not None and self.modulation_spec.permittivity is not None:
             permittivity -= self.modulation_spec.permittivity.max_modulation
         n, _ = self.eps_complex_to_nk(permittivity)
@@ -2506,7 +2510,7 @@ class CustomDispersiveMedium(AbstractCustomMedium, DispersiveMedium, ABC):
             if fail_load and eps_inf is None:
                 return {nested_tuple_field: ()}
             if fail_load:
-                eps_inf = SpatialDataArray(np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+                eps_inf = SpatialDataArray(npa.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
                 return {"eps_inf": eps_inf, nested_tuple_field: ()}
             return values
 
@@ -2563,7 +2567,7 @@ class PoleResidue(DispersiveMedium):
     def _causality_validation(cls, val):
         """Assert causal medium."""
         for a, _ in val:
-            if np.any(np.real(_get_numpy_array(a)) > 0):
+            if npa.any(npa.real(_get_numpy_array(a)) > 0):
                 raise SetupError("For stable medium, 'Re(a_i)' must be non-positive.")
         return val
 
@@ -2574,11 +2578,11 @@ class PoleResidue(DispersiveMedium):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        omega = 2 * np.pi * frequency
+        omega = 2 * npa.pi * frequency
         eps = self.eps_inf + 0 * frequency + 0.0j
         for a, c in self.poles:
-            a_cc = np.conj(a)
-            c_cc = np.conj(c)
+            a_cc = npa.conj(a)
+            c_cc = npa.conj(c)
             eps = eps - c / (1j * omega + a)
             eps = eps - c_cc / (1j * omega + a_cc)
         return eps
@@ -2635,11 +2639,11 @@ class PoleResidue(DispersiveMedium):
         for a, c in self.poles:
             if abs(a) > fp_eps:
                 raise ValidationError("Cannot convert dispersive 'PoleResidue' to 'Medium'.")
-            res = res + (c + np.conj(c)) / 2
+            res = res + (c + npa.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
         return Medium(
             permittivity=self.eps_inf,
-            conductivity=np.real(sigma),
+            conductivity=npa.real(sigma),
             frequency_range=self.frequency_range,
         )
 
@@ -2668,7 +2672,7 @@ class PoleResidue(DispersiveMedium):
         complex
             The complex permittivity of the given LO-TO model at the given frequency.
         """
-        omega = 2 * np.pi * frequency
+        omega = 2 * npa.pi * frequency
         eps = eps_inf
         for omega_lo, gamma_lo, omega_to, gamma_to in poles:
             eps *= omega_lo**2 - omega**2 - 1j * omega * gamma_lo
@@ -2701,7 +2705,7 @@ class PoleResidue(DispersiveMedium):
             The pole residue equivalent of the LO-TO form provided.
         """
 
-        omegas_lo, gammas_lo, omegas_to, gammas_to = map(np.array, zip(*poles))
+        omegas_lo, gammas_lo, omegas_to, gammas_to = map(npa.array, zip(*poles))
 
         # discriminants of quadratic factors of denominator
         discs = 2 * np.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
@@ -2724,7 +2728,7 @@ class PoleResidue(DispersiveMedium):
             roots.append(-gamma_to / 2 - disc / 2)
 
         # interpolants
-        interpolants = eps_inf * np.ones(len(roots), dtype=complex)
+        interpolants = eps_inf * npa.ones(len(roots), dtype=complex)
         for i, a in enumerate(roots):
             for omega_lo, gamma_lo in zip(omegas_lo, gammas_lo):
                 interpolants[i] *= omega_lo**2 + a**2 + a * gamma_lo
@@ -2736,7 +2740,7 @@ class PoleResidue(DispersiveMedium):
         c_coeffs = []
 
         for i in range(0, len(roots), 2):
-            if not np.isreal(roots[i]):
+            if not npa.isreal(roots[i]):
                 a_coeffs.append(roots[i])
                 c_coeffs.append(interpolants[i])
             else:
@@ -2779,7 +2783,7 @@ class PoleResidue(DispersiveMedium):
         f_rad : float
             Frequency in unit of rad/s
         """
-        return f_rad / 2 / np.pi
+        return f_rad / 2 / npa.pi
 
     @staticmethod
     def Hz_to_angular_freq(f_hz: float):
@@ -2790,7 +2794,7 @@ class PoleResidue(DispersiveMedium):
         f_hz : float
             Frequency in unit of Hz
         """
-        return f_hz * 2 * np.pi
+        return f_hz * 2 * npa.pi
 
     @staticmethod
     def imag_ep_extrema(poles: Tuple[PoleAndResidue, ...]) -> ArrayFloat1D:
@@ -2811,10 +2815,10 @@ class PoleResidue(DispersiveMedium):
             mus = 2 * (areal**2 - aimag**2)
             nus = a_square**2
 
-            numerator = np.array([0])
-            denominator = np.array([1])
+            numerator = npa.array([0])
+            denominator = npa.array([1])
             for i in range(len(creal)):
-                numerator_i = np.array(
+                numerator_i = npa.array(
                     [
                         -alpha[i],
                         alpha[i] * mus[i] - 3 * beta[i],
@@ -2822,40 +2826,40 @@ class PoleResidue(DispersiveMedium):
                         beta[i] * nus[i],
                     ]
                 )
-                denominator_i = np.array(
+                denominator_i = npa.array(
                     [1, 2 * mus[i], 2 * nus[i] + mus[i] ** 2, 2 * mus[i] * nus[i], nus[i] ** 2]
                 )
                 # to avoid divergence, let's renormalize
-                if np.abs(alpha[i]) > 1:
+                if npa.abs(alpha[i]) > 1:
                     numerator_i /= alpha[i]
                     denominator_i /= alpha[i]
 
                 # n/d + ni/di = (n*di+d*ni)/(d*di)
-                n_di = np.polymul(numerator, denominator_i)
-                d_ni = np.polymul(denominator, numerator_i)
-                numerator = np.polyadd(n_di, d_ni)
-                denominator = np.polymul(denominator, denominator_i)
+                n_di = npa.polymul(numerator, denominator_i)
+                d_ni = npa.polymul(denominator, numerator_i)
+                numerator = npa.polyadd(n_di, d_ni)
+                denominator = npa.polymul(denominator, denominator_i)
 
-            roots = np.sqrt(np.roots(numerator) + 0j)
+            roots = npa.sqrt(npa.roots(numerator) + 0j)
             # cutoff to determine if it's a real number
-            r_real = roots.real[np.abs(roots.imag) / (np.abs(roots) + fp_eps) < fp_eps]
+            r_real = roots.real[npa.abs(roots.imag) / (npa.abs(roots) + fp_eps) < fp_eps]
             return r_real[r_real > 0]
 
         try:
             poles_a, poles_c = zip(*poles)
-            poles_a = np.array(poles_a)
-            poles_c = np.array(poles_c)
+            poles_a = npa.array(poles_a)
+            poles_c = npa.array(poles_c)
             extrema_freq = _extrema_loss_freq_finder(
                 poles_a.real, poles_a.imag, poles_c.real, poles_c.imag
             )
             return extrema_freq
-        except np.linalg.LinAlgError:
+        except npa.linalg.LinAlgError:
             log.warning(
                 "'LinAlgError' in computing Im[eps] extrema. "
                 "This can result in inaccurate estimation of lower and upper bound of "
                 "Im[eps]. When used in passivity enforcement, passivity is not guaranteed."
             )
-            return np.array([])
+            return npa.array([])
 
     def _imag_ep_extrema_with_samples(self) -> ArrayFloat1D:
         """Provide a list of frequencies (in unit of rad/s) to probe the possible lower and
@@ -2866,23 +2870,23 @@ class PoleResidue(DispersiveMedium):
 
         # extrema frequencies: in the intermediate stage, convert to the unit eV for
         # better numerical handling, since those quantities will be ~ 1 in photonics
-        extrema_freq = self.imag_ep_extrema(self.angular_freq_to_eV(np.array(self.poles)))
+        extrema_freq = self.imag_ep_extrema(self.angular_freq_to_eV(npa.array(self.poles)))
         extrema_freq = self.eV_to_angular_freq(extrema_freq)
 
         # let's check a big range in addition to the imag_extrema
         if self.frequency_range is None:
-            range_ev = np.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
+            range_ev = npa.logspace(LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM)
             range_omega = self.eV_to_angular_freq(range_ev)
         else:
             fmin, fmax = self.frequency_range
             fmin = max(fmin, fp_eps)
-            range_freq = np.logspace(np.log10(fmin), np.log10(fmax), LOSS_CHECK_NUM)
+            range_freq = npa.logspace(npa.log10(fmin), npa.log10(fmax), LOSS_CHECK_NUM)
             range_omega = self.Hz_to_angular_freq(range_freq)
 
             extrema_freq = extrema_freq[
-                np.logical_and(extrema_freq > range_omega[0], extrema_freq < range_omega[-1])
+                npa.logical_and(extrema_freq > range_omega[0], extrema_freq < range_omega[-1])
             ]
-        return np.concatenate((range_omega, extrema_freq))
+        return npa.concatenate((range_omega, extrema_freq))
 
     @cached_property
     def loss_upper_bound(self) -> float:
@@ -2891,7 +2895,7 @@ class PoleResidue(DispersiveMedium):
         ep = self.eps_model(freq_list)
         # filter `NAN` in case some of freq_list are exactly at the pole frequency
         # of Sellmeier-type poles.
-        ep = ep[~np.isnan(ep)]
+        ep = ep[~npa.isnan(ep)]
         return max(ep.imag)
 
 
@@ -2928,15 +2932,15 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
     Example
     -------
-    >>> x = np.linspace(-1, 1, 5)
-    >>> y = np.linspace(-1, 1, 6)
-    >>> z = np.linspace(-1, 1, 7)
+    >>> x = npa.linspace(-1, 1, 5)
+    >>> y = npa.linspace(-1, 1, 6)
+    >>> z = npa.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)
-    >>> a1 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)
-    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> a2 = SpatialDataArray(-np.random.random((5, 6, 7)), coords=coords)
-    >>> c2 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> eps_inf = SpatialDataArray(npa.ones((5, 6, 7)), coords=coords)
+    >>> a1 = SpatialDataArray(-npa.random.random((5, 6, 7)), coords=coords)
+    >>> c1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
+    >>> a2 = SpatialDataArray(-npa.random.random((5, 6, 7)), coords=coords)
+    >>> c2 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
     >>> pole_res = CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
     >>> eps = pole_res.eps_model(200e12)
 
@@ -2977,7 +2981,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
+        if npa.any(_get_numpy_array(val) < 0):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
@@ -3091,15 +3095,15 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         """
         res = 0
         for a, c in self.poles:
-            if np.any(abs(_get_numpy_array(a)) > fp_eps):
+            if npa.any(abs(_get_numpy_array(a)) > fp_eps):
                 raise ValidationError(
                     "Cannot convert dispersive 'CustomPoleResidue' to 'CustomMedium'."
                 )
-            res = res + (c + np.conj(c)) / 2
+            res = res + (c + npa.conj(c)) / 2
         sigma = res * 2 * EPSILON_0
 
         self_dict = self.dict(exclude={"type", "eps_inf", "poles"})
-        self_dict.update({"permittivity": self.eps_inf, "conductivity": np.real(sigma)})
+        self_dict.update({"permittivity": self.eps_inf, "conductivity": npa.real(sigma)})
         return CustomMedium.parse_obj(self_dict)
 
     @cached_property
@@ -3217,12 +3221,12 @@ class Sellmeier(DispersiveMedium):
     def _n_model(self, frequency: float) -> complex:
         """Complex-valued refractive index as a function of frequency."""
 
-        wvl = C_0 / np.array(frequency)
+        wvl = C_0 / npa.array(frequency)
         wvl2 = wvl**2
         n_squared = 1.0
         for B, C in self.coeffs:
             n_squared = n_squared + B * wvl2 / (wvl2 - C)
-        return np.sqrt(n_squared + 0j)
+        return npa.sqrt(n_squared + 0j)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -3235,7 +3239,7 @@ class Sellmeier(DispersiveMedium):
         """Dict representation of Medium as a pole-residue model"""
         poles = []
         for B, C in self.coeffs:
-            beta = 2 * np.pi * C_0 / np.sqrt(C)
+            beta = 2 * npa.pi * C_0 / npa.sqrt(C)
             alpha = -0.5 * beta * B
             a = 1j * beta
             c = 1j * alpha
@@ -3245,7 +3249,7 @@ class Sellmeier(DispersiveMedium):
     @staticmethod
     def _from_dispersion_to_coeffs(n: float, freq: float, dn_dwvl: float):
         """Compute Sellmeier coefficients from dispersion."""
-        wvl = C_0 / np.array(freq)
+        wvl = C_0 / npa.array(freq)
         nsqm1 = n**2 - 1
         c_coeff = -(wvl**3) * n * dn_dwvl / (nsqm1 - wvl * n * dn_dwvl)
         b_coeff = (wvl**2 - c_coeff) / wvl**2 * nsqm1
@@ -3293,12 +3297,12 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
     Example
     -------
-    >>> x = np.linspace(-1, 1, 5)
-    >>> y = np.linspace(-1, 1, 6)
-    >>> z = np.linspace(-1, 1, 7)
+    >>> x = npa.linspace(-1, 1, 5)
+    >>> y = npa.linspace(-1, 1, 6)
+    >>> z = npa.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> b1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> c1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> b1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
+    >>> c1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
     >>> sellmeier_medium = CustomSellmeier(coeffs=[(b1,c1),])
     >>> eps = sellmeier_medium.eps_model(200e12)
 
@@ -3340,7 +3344,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
                 raise SetupError("Every term in 'coeffs' must have the same coordinates.")
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((B, C)):
                 raise SetupError("'B' and 'C' must be real.")
-            if np.any(_get_numpy_array(C) <= 0):
+            if npa.any(_get_numpy_array(C) <= 0):
                 raise SetupError("'C' must be positive.")
         return val
 
@@ -3351,7 +3355,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         if values.get("allow_gain"):
             return val
         for B, _ in val:
-            if np.any(_get_numpy_array(B) < 0):
+            if npa.any(_get_numpy_array(B) < 0):
                 raise ValidationError(
                     "For passive medium, 'B_i' must be non-negative. "
                     "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -3411,7 +3415,7 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         # if `eps` is simply a float, convert it to a SpatialDataArray ; this is possible when
         # `coeffs` is empty.
         if isinstance(eps, (int, float, complex)):
-            eps = SpatialDataArray(eps * np.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
+            eps = SpatialDataArray(eps * npa.ones((1, 1, 1)), coords=dict(x=[0], y=[0], z=[0]))
         return (eps, eps, eps)
 
     @classmethod
@@ -3455,9 +3459,9 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
 
         if not _check_same_coordinates(n, dn_dwvl):
             raise ValidationError("'n' and'dn_dwvl' must have the same dimension.")
-        if np.any(_get_numpy_array(dn_dwvl) >= 0):
+        if npa.any(_get_numpy_array(dn_dwvl) >= 0):
             raise ValidationError("Dispersion ``dn_dwvl`` must be smaller than zero.")
-        if np.any(_get_numpy_array(n) < 1):
+        if npa.any(_get_numpy_array(n) < 1):
             raise ValidationError("Refractive index ``n`` cannot be smaller than one.")
         return cls(
             coeffs=cls._from_dispersion_to_coeffs(n, freq, dn_dwvl),
@@ -3580,18 +3584,18 @@ class Lorentz(DispersiveMedium):
 
         poles = []
         for de, f, delta in self.coeffs:
-            w = 2 * np.pi * f
-            d = 2 * np.pi * delta
+            w = 2 * npa.pi * f
+            d = 2 * npa.pi * delta
 
             if self._all_larger(d**2, w**2):
-                r = np.sqrt(d * d - w * w) + 0j
+                r = npa.sqrt(d * d - w * w) + 0j
                 a0 = -d + r
                 c0 = de * w**2 / 4 / r
                 a1 = -d - r
                 c1 = -c0
                 poles.extend(((a0, c0), (a1, c1)))
             else:
-                r = np.sqrt(w * w - d * d)
+                r = npa.sqrt(w * w - d * d)
                 a = -d - 1j * r
                 c = 1j * de * w**2 / 2 / r
                 poles.append((a, c))
@@ -3607,7 +3611,7 @@ class Lorentz(DispersiveMedium):
     def _all_larger(coeff_a, coeff_b) -> bool:
         """``coeff_a`` and ``coeff_b`` can be either float or SpatialDataArray."""
         if isinstance(coeff_a, CustomSpatialDataType.__args__):
-            return np.all(_get_numpy_array(coeff_a) > _get_numpy_array(coeff_b))
+            return npa.all(_get_numpy_array(coeff_a) > _get_numpy_array(coeff_b))
         return coeff_a > coeff_b
 
     @classmethod
@@ -3639,7 +3643,7 @@ class Lorentz(DispersiveMedium):
         # first, lossless medium
         if isclose(eps_i, 0):
             if eps_r < 1:
-                fp = np.sqrt((eps_r - 1) / (eps_r - 2)) * freq
+                fp = npa.sqrt((eps_r - 1) / (eps_r - 2)) * freq
                 return cls(
                     eps_inf=1,
                     coeffs=[
@@ -3649,13 +3653,13 @@ class Lorentz(DispersiveMedium):
             return cls(
                 eps_inf=1,
                 coeffs=[
-                    ((eps_r - 1) / 2, np.sqrt(2) * freq, 0),
+                    ((eps_r - 1) / 2, npa.sqrt(2) * freq, 0),
                 ],
             )
         # lossy medium
         alpha = (eps_r - 1) / eps_i
         delta_p = freq / 2 / (alpha**2 - alpha + 1)
-        fp = np.sqrt((alpha**2 + 1) / (alpha**2 - alpha + 1)) * freq
+        fp = npa.sqrt((alpha**2 + 1) / (alpha**2 - alpha + 1)) * freq
         return cls(
             eps_inf=1,
             coeffs=[
@@ -3679,14 +3683,14 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
 
     Example
     -------
-    >>> x = np.linspace(-1, 1, 5)
-    >>> y = np.linspace(-1, 1, 6)
-    >>> z = np.linspace(-1, 1, 7)
+    >>> x = npa.linspace(-1, 1, 5)
+    >>> y = npa.linspace(-1, 1, 6)
+    >>> z = npa.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)
-    >>> d_epsilon = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> f = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)
-    >>> delta = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> eps_inf = SpatialDataArray(npa.ones((5, 6, 7)), coords=coords)
+    >>> d_epsilon = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
+    >>> f = SpatialDataArray(1+npa.random.random((5, 6, 7)), coords=coords)
+    >>> delta = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
     >>> lorentz_medium = CustomLorentz(eps_inf=eps_inf, coeffs=[(d_epsilon,f,delta),])
     >>> eps = lorentz_medium.eps_model(200e12)
 
@@ -3734,7 +3738,7 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
+        if npa.any(_get_numpy_array(val) < 0):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
@@ -3783,9 +3787,9 @@ class CustomLorentz(CustomDispersiveMedium, Lorentz):
         """Assert passive medium if ``allow_gain`` is False."""
         allow_gain = values.get("allow_gain")
         for del_ep, _, delta in val:
-            if np.any(_get_numpy_array(delta) < 0):
+            if npa.any(_get_numpy_array(delta) < 0):
                 raise ValidationError("For stable medium, 'delta_i' must be non-negative.")
-            if not allow_gain and np.any(_get_numpy_array(del_ep) < 0):
+            if not allow_gain and npa.any(_get_numpy_array(del_ep) < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
                     "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -3944,8 +3948,8 @@ class Drude(DispersiveMedium):
         poles = []
 
         for f, delta in self.coeffs:
-            w = 2 * np.pi * f
-            d = 2 * np.pi * delta
+            w = 2 * npa.pi * f
+            d = 2 * npa.pi * delta
 
             c0 = (w**2) / 2 / d + 0j
             c1 = -c0
@@ -3982,13 +3986,13 @@ class CustomDrude(CustomDispersiveMedium, Drude):
 
     Example
     -------
-    >>> x = np.linspace(-1, 1, 5)
-    >>> y = np.linspace(-1, 1, 6)
-    >>> z = np.linspace(-1, 1, 7)
+    >>> x = npa.linspace(-1, 1, 5)
+    >>> y = npa.linspace(-1, 1, 6)
+    >>> z = npa.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> eps_inf = SpatialDataArray(np.ones((5, 6, 7)), coords=coords)
-    >>> f1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> delta1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> eps_inf = SpatialDataArray(npa.ones((5, 6, 7)), coords=coords)
+    >>> f1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
+    >>> delta1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
     >>> drude_medium = CustomDrude(eps_inf=eps_inf, coeffs=[(f1,delta1),])
     >>> eps = drude_medium.eps_model(200e12)
 
@@ -4031,7 +4035,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
+        if npa.any(_get_numpy_array(val) < 0):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
@@ -4049,7 +4053,7 @@ class CustomDrude(CustomDispersiveMedium, Drude):
                 )
             if not CustomDispersiveMedium._validate_isreal_dataarray_tuple((f, delta)):
                 raise SetupError("All terms in 'coeffs' must be real.")
-            if np.any(_get_numpy_array(delta) <= 0):
+            if npa.any(_get_numpy_array(delta) <= 0):
                 raise SetupError("For stable medium, 'delta' must be positive.")
         return val
 
@@ -4211,7 +4215,7 @@ class Debye(DispersiveMedium):
 
         poles = []
         for de, tau in self.coeffs:
-            a = -2 * np.pi / tau + 0j
+            a = -2 * npa.pi / tau + 0j
             c = -0.5 * de * a
 
             poles.append((a, c))
@@ -4239,13 +4243,13 @@ class CustomDebye(CustomDispersiveMedium, Debye):
 
     Example
     -------
-    >>> x = np.linspace(-1, 1, 5)
-    >>> y = np.linspace(-1, 1, 6)
-    >>> z = np.linspace(-1, 1, 7)
+    >>> x = npa.linspace(-1, 1, 5)
+    >>> y = npa.linspace(-1, 1, 6)
+    >>> z = npa.linspace(-1, 1, 7)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> eps_inf = SpatialDataArray(1+np.random.random((5, 6, 7)), coords=coords)
-    >>> eps1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
-    >>> tau1 = SpatialDataArray(np.random.random((5, 6, 7)), coords=coords)
+    >>> eps_inf = SpatialDataArray(1+npa.random.random((5, 6, 7)), coords=coords)
+    >>> eps1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
+    >>> tau1 = SpatialDataArray(npa.random.random((5, 6, 7)), coords=coords)
     >>> debye_medium = CustomDebye(eps_inf=eps_inf, coeffs=[(eps1,tau1),])
     >>> eps = debye_medium.eps_model(200e12)
 
@@ -4288,7 +4292,7 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         """eps_inf must be positive"""
         if not CustomDispersiveMedium._validate_isreal_dataarray(val):
             raise SetupError("'eps_inf' must be real.")
-        if np.any(_get_numpy_array(val) < 0):
+        if npa.any(_get_numpy_array(val) < 0):
             raise SetupError("'eps_inf' must be positive.")
         return val
 
@@ -4314,9 +4318,9 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         """Assert passive medium if ``allow_gain`` is False."""
         allow_gain = values.get("allow_gain")
         for del_ep, tau in val:
-            if np.any(_get_numpy_array(tau) <= 0):
+            if npa.any(_get_numpy_array(tau) <= 0):
                 raise SetupError("For stable medium, 'tau_i' must be positive.")
-            if not allow_gain and np.any(_get_numpy_array(del_ep) < 0):
+            if not allow_gain and npa.any(_get_numpy_array(del_ep) < 0):
                 raise ValidationError(
                     "For passive medium, 'Delta epsilon_i' must be non-negative. "
                     "To simulate a gain medium, please set 'allow_gain=True'. "
@@ -4517,7 +4521,7 @@ class AnisotropicMedium(AbstractMedium):
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        return np.mean(self.eps_diagonal(frequency), axis=0)
+        return npa.mean(self.eps_diagonal(frequency), axis=0)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
@@ -4556,7 +4560,7 @@ class AnisotropicMedium(AbstractMedium):
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot n, k of a :class:`.Medium` as a function of frequency."""
 
-        freqs = np.array(freqs)
+        freqs = npa.array(freqs)
         freqs_thz = freqs / 1e12
 
         for label, medium_component in self.elements.items():
@@ -4684,10 +4688,10 @@ class FullyAnisotropicMedium(AbstractMedium):
         with eigenvalues >= 1.
         """
 
-        if not np.allclose(val, np.transpose(val), atol=fp_eps):
+        if not npa.allclose(val, npa.transpose(val), atol=fp_eps):
             raise ValidationError("Provided permittivity tensor is not symmetric.")
 
-        if np.any(np.linalg.eigvals(val) < 1 - fp_eps):
+        if npa.any(npa.linalg.eigvals(val) < 1 - fp_eps):
             raise ValidationError("Main diagonal of provided permittivity tensor is not >= 1.")
 
         return val
@@ -4701,9 +4705,9 @@ class FullyAnisotropicMedium(AbstractMedium):
 
         perm = values.get("permittivity")
         cond_sym = 0.5 * (val + val.T)
-        comm_diff = np.abs(np.matmul(perm, cond_sym) - np.matmul(cond_sym, perm))
+        comm_diff = npa.abs(npa.matmul(perm, cond_sym) - npa.matmul(cond_sym, perm))
 
-        if not np.allclose(comm_diff, 0, atol=fp_eps):
+        if not npa.allclose(comm_diff, 0, atol=fp_eps):
             raise ValidationError(
                 "Main directions of conductivity and permittivity tensor do not coincide."
             )
@@ -4718,7 +4722,7 @@ class FullyAnisotropicMedium(AbstractMedium):
             return val
 
         cond_sym = 0.5 * (val + val.T)
-        if np.any(np.linalg.eigvals(cond_sym) < -fp_eps):
+        if npa.any(npa.linalg.eigvals(cond_sym) < -fp_eps):
             raise ValidationError(
                 "For passive medium, main diagonal of provided conductivity tensor "
                 "must be non-negative. "
@@ -4748,8 +4752,8 @@ class FullyAnisotropicMedium(AbstractMedium):
             Resulting fully anisotropic medium.
         """
 
-        permittivity_diag = np.diag([comp.permittivity for comp in [xx, yy, zz]]).tolist()
-        conductivity_diag = np.diag([comp.conductivity for comp in [xx, yy, zz]]).tolist()
+        permittivity_diag = npa.diag([comp.permittivity for comp in [xx, yy, zz]]).tolist()
+        conductivity_diag = npa.diag([comp.conductivity for comp in [xx, yy, zz]]).tolist()
 
         permittivity = rotation.rotate_tensor(permittivity_diag)
         conductivity = rotation.rotate_tensor(conductivity_diag)
@@ -4780,8 +4784,8 @@ class FullyAnisotropicMedium(AbstractMedium):
     ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float], TensorReal]:
         """Main components of permittivity and conductivity tensors and their directions."""
 
-        perm_diag, vecs = np.linalg.eig(self.permittivity)
-        cond_diag = np.diag(np.matmul(np.transpose(vecs), np.matmul(self.conductivity, vecs)))
+        perm_diag, vecs = npa.linalg.eig(self.permittivity)
+        cond_diag = npa.diag(npa.matmul(npa.transpose(vecs), npa.matmul(self.conductivity, vecs)))
 
         return (perm_diag, cond_diag, vecs)
 
@@ -4790,11 +4794,11 @@ class FullyAnisotropicMedium(AbstractMedium):
         """Complex-valued permittivity as a function of frequency."""
         perm_diag, cond_diag, _ = self.eps_sigma_diag
 
-        if not np.isscalar(frequency):
+        if not npa.isscalar(frequency):
             perm_diag = perm_diag[:, None]
             cond_diag = cond_diag[:, None]
         eps_diag = AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
-        return np.mean(eps_diag)
+        return npa.mean(eps_diag)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex, complex]:
@@ -4802,7 +4806,7 @@ class FullyAnisotropicMedium(AbstractMedium):
 
         perm_diag, cond_diag, _ = self.eps_sigma_diag
 
-        if not np.isscalar(frequency):
+        if not npa.isscalar(frequency):
             perm_diag = perm_diag[:, None]
             cond_diag = cond_diag[:, None]
         return AbstractMedium.eps_sigma_to_eps_complex(perm_diag, cond_diag, frequency)
@@ -4839,7 +4843,7 @@ class FullyAnisotropicMedium(AbstractMedium):
         """
 
         perm_diag, _, _ = self.eps_sigma_diag
-        return min(np.sqrt(perm_diag))
+        return min(npa.sqrt(perm_diag))
 
     @add_ax_if_none
     def plot(self, freqs: float, ax: Ax = None) -> Ax:
@@ -4872,17 +4876,17 @@ class CustomAnisotropicMedium(AbstractCustomMedium, AnisotropicMedium):
     Example
     -------
     >>> Nx, Ny, Nz = 10, 9, 8
-    >>> x = np.linspace(-1, 1, Nx)
-    >>> y = np.linspace(-1, 1, Ny)
-    >>> z = np.linspace(-1, 1, Nz)
+    >>> x = npa.linspace(-1, 1, Nx)
+    >>> y = npa.linspace(-1, 1, Ny)
+    >>> z = npa.linspace(-1, 1, Nz)
     >>> coords = dict(x=x, y=y, z=z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> permittivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
     >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> d_epsilon = SpatialDataArray(npa.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> f = SpatialDataArray(1+npa.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> delta = SpatialDataArray(npa.random.random((Nx, Ny, Nz)), coords=coords)
     >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
 
@@ -5054,17 +5058,17 @@ class CustomAnisotropicMediumInternal(CustomAnisotropicMedium):
     Example
     -------
     >>> Nx, Ny, Nz = 10, 9, 8
-    >>> X = np.linspace(-1, 1, Nx)
-    >>> Y = np.linspace(-1, 1, Ny)
-    >>> Z = np.linspace(-1, 1, Nz)
+    >>> X = npa.linspace(-1, 1, Nx)
+    >>> Y = npa.linspace(-1, 1, Ny)
+    >>> Z = npa.linspace(-1, 1, Nz)
     >>> coords = dict(x=X, y=Y, z=Z)
-    >>> permittivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
-    >>> conductivity= SpatialDataArray(np.ones((Nx, Ny, Nz)), coords=coords)
+    >>> permittivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
+    >>> conductivity= SpatialDataArray(npa.ones((Nx, Ny, Nz)), coords=coords)
     >>> medium_xx = CustomMedium(permittivity=permittivity, conductivity=conductivity)
     >>> medium_yy = CustomMedium(permittivity=permittivity, conductivity=conductivity)
-    >>> d_epsilon = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> f = SpatialDataArray(1+np.random.random((Nx, Ny, Nz)), coords=coords)
-    >>> delta = SpatialDataArray(np.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> d_epsilon = SpatialDataArray(npa.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> f = SpatialDataArray(1+npa.random.random((Nx, Ny, Nz)), coords=coords)
+    >>> delta = SpatialDataArray(npa.random.random((Nx, Ny, Nz)), coords=coords)
     >>> medium_zz = CustomLorentz(eps_inf=permittivity, coeffs=[(d_epsilon,f,delta),])
     >>> anisotropic_dielectric = CustomAnisotropicMedium(xx=medium_xx, yy=medium_yy, zz=medium_zz)
     """
@@ -5492,14 +5496,14 @@ class Medium2D(AbstractMedium):
                 eps_inf += weight * (med.pole_residue.eps_inf - 1)
             elif isinstance(med, Medium):
                 pole_res = PoleResidue.from_medium(med)
-                eps_inf += weight * (med.eps_model(np.inf) - 1)
+                eps_inf += weight * (med.eps_model(npa.inf) - 1)
             elif isinstance(med, PECMedium):
                 # special treatment for PEC
                 return med
             else:
                 raise ValidationError("Invalid medium type for the components of 'Medium2D'.")
             poles += [(a, weight * c) for (a, c) in pole_res.poles if c != 0.0]
-        return PoleResidue(eps_inf=np.real(eps_inf), poles=poles)
+        return PoleResidue(eps_inf=npa.real(eps_inf), poles=poles)
 
     def volumetric_equivalent(
         self,
@@ -5550,7 +5554,7 @@ class Medium2D(AbstractMedium):
             # in the medium on the + side
             if comp == axis:
                 return meds[1]
-            weights = np.array(adjacent_dls) / np.sum(adjacent_dls)
+            weights = npa.array(adjacent_dls) / npa.sum(adjacent_dls)
             return self._weighted_avg(meds, weights)
 
         dl = (adjacent_dls[0] + adjacent_dls[1]) / 2
@@ -5706,7 +5710,7 @@ class Medium2D(AbstractMedium):
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
-        return np.mean(self.eps_diagonal(frequency=frequency), axis=0)
+        return npa.mean(self.eps_diagonal(frequency=frequency), axis=0)
 
     @ensure_freq_in_range
     def eps_diagonal(self, frequency: float) -> Tuple[complex, complex]:
@@ -5731,7 +5735,7 @@ class Medium2D(AbstractMedium):
             "to obtain the physical refractive index."
         )
 
-        freqs = np.array(freqs)
+        freqs = npa.array(freqs)
         freqs_thz = freqs / 1e12
 
         for label, medium_component in self.elements.items():
@@ -5749,13 +5753,13 @@ class Medium2D(AbstractMedium):
     @add_ax_if_none
     def plot_sigma(self, freqs: float, ax: Ax = None) -> Ax:
         """Plot the surface conductivity of the 2D material."""
-        freqs = np.array(freqs)
+        freqs = npa.array(freqs)
         freqs_thz = freqs / 1e12
 
         for label, medium_component in self.elements.items():
             sigma = medium_component.sigma_model(freqs)
-            ax.plot(freqs_thz, np.real(sigma) * 1e6, label=f"Re($\\sigma$) ($\\mu$S), eps_{label}")
-            ax.plot(freqs_thz, np.imag(sigma) * 1e6, label=f"Im($\\sigma$) ($\\mu$S), eps_{label}")
+            ax.plot(freqs_thz, npa.real(sigma) * 1e6, label=f"Re($\\sigma$) ($\\mu$S), eps_{label}")
+            ax.plot(freqs_thz, npa.imag(sigma) * 1e6, label=f"Im($\\sigma$) ($\\mu$S), eps_{label}")
 
         ax.set_xlabel("frequency (THz)")
         ax.set_title("surface conductivity")
@@ -5777,7 +5781,7 @@ class Medium2D(AbstractMedium):
         complex
             Complex conductivity at this frequency.
         """
-        return np.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
+        return npa.mean([self.ss.sigma_model(freq), self.tt.sigma_model(freq)], axis=0)
 
     @property
     def elements(self) -> Dict[str, IsotropicUniformMediumType]:
