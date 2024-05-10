@@ -33,28 +33,31 @@ def adjoint_mnt_eps_name(i: int) -> str:
     """Name of permittivity monitor for adjoint gradient for structure i"""
     return f"adjoint_eps_{i}"
 
-def split_list(x: list, index: int) -> (list, list):
+def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
     """Split a list at a given index."""
     x = list(x)
     return x[:index], x[index:]
 
-@primitive
-def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
-    """Autograd-traced running function, runs a simulation under the hood and stitches in data."""
-    td.log.info('running primitive _run()')
+def generate_adjoint_monitors(sim: td.Simulation) -> (list[td.FieldMonitor], list[td.PermittivityMonitor]):
+    """Get lists of field and permittivity monitors for this simulation."""
 
-    # TODO: refactor this into somewhere else
-    # TODO: use a mapping between fields and structure
+    sim_fields = sim.traced_fields()
+
     adjoint_mnts_fld = []
     adjoint_mnts_eps = []
     for i, (structure, permittivity) in enumerate(zip(sim.structures, sim_fields)):
+
+        # TODO: eventually, only include if this is traced in `sim_fields`
+
         box = structure.geometry.bounding_box
+
         mnt_fld = td.FieldMonitor(
             size=box.size, # TODO: expand slightly?
             center=box.center,
             freqs=[FREQ0], # TODO: determine adjoint freqs
             name=adjoint_mnt_fld_name(i),
         )
+
         mnt_eps = td.PermittivityMonitor(
             size=box.size, # TODO: expand slightly?
             center=box.center,
@@ -64,11 +67,104 @@ def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
         adjoint_mnts_fld.append(mnt_fld)
         adjoint_mnts_eps.append(mnt_eps)
 
-    # TODO: is this messy? getting into JaxInfo territory
+    assert len(adjoint_mnts_fld) == len(adjoint_mnts_eps), "Different # of field and permittivity adjoint monitors"
+
+    return adjoint_mnts_fld, adjoint_mnts_eps
+
+
+def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> (list, list, list):
+    """Split data list into original, adjoint field, and adjoint permittivity."""
+
+    data_all = list(sim_data.data)
+    num_mnts_adjoint = (len(data_all) - num_mnts_original) // 2
+
+    td.log.info(f' -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {num_mnts_adjoint} adjoint eps monitors.')
+
+    data_original, data_adjoint = split_list(data_all, index=num_mnts_original)
+    data_adjoint_fld, data_adjoint_eps = split_list(data_adjoint, index=num_mnts_adjoint)
+
+    return data_original, data_adjoint_fld, data_adjoint_eps
+
+def generate_adjoint_sources(sim: td.Simulation, data_fields_vjp: list[npa.ndarray]) -> list[td.Source]:
+    """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
+
+    sources_adj = []
+
+    # TODO: this is the ModeData -> ModeSource only for now
+    for mnt, amps in zip(sim.monitors, data_fields_vjp):
+
+        # NOTE: should we just silently exclude, or raise here?
+        if not isinstance(mnt, td.ModeMonitor):
+            log.warning(
+                f"No adjoint source rule for {mnt.type}. "
+                f"Skipping adjoint for data associated with monitor named '{mmt.name}'. "
+                "If the objective function depends on the data associated with this monitor, it "
+                "will not contribute to the gradient."
+            )
+            continue
+
+        amps *= -1 # comes from adjoint math, might need a 1j from the source in FDTD
+
+        # TODO: we'll have to iterate over the other dims eventually
+        for direction, amp in zip('+-', amps):
+
+            if npa.isclose(amp, 0.0):
+                continue
+
+            amplitude = float(npa.abs(amp))
+            phase = float(npa.angle(amp))
+
+            src_adj = td.ModeSource(
+                source_time=td.GaussianPulse(
+                    amplitude=amplitude,
+                    phase=phase,
+                    freq0=FREQ0,
+                    fwidth=FREQ0/10
+                ),
+                mode_spec=mnt.mode_spec,
+                size=mnt.size,
+                center=mnt.center,
+                direction=direction,
+            )
+            sources_adj.append(src_adj)
+        return sources_adj
+
+def make_adjoint_sim(sim: td.Simulation, data_fields_vjp: list[npa.ndarray]) -> td.Simulation:
+    """Make the adjoint simulation from the original simulation and the VJP-containing data."""
+    sources_adj = generate_adjoint_sources(sim=sim, data_fields_vjp=data_fields_vjp)
+    adjoint_mnts_fld, adjoint_mnts_eps = generate_adjoint_monitors(sim=sim)
+    monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
+    sim_adj = sim.copy(update=dict(
+        sources=sources_adj,
+        monitors=monitors_adj,
+    ))
+    return sim_adj
+
+def compute_derivative(
+    sim: td.Simulation,
+    structure_index: int,
+    fwd_fld: td.FieldData,
+    fwd_eps: td.PermittivityData,
+    adj_fld: td.FieldData,
+    adj_eps: td.PermittivityData
+) -> float:
+    """Compute the derivative for this structure given forward and adjoint fields."""
+    vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
+    vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
+    vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
+    vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
+    vjp_value = npa.abs(vjp_value)
+    return vjp_value
+
+
+@primitive
+def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
+    """Autograd-traced running function, runs a simulation under the hood and stitches in data."""
+
+    td.log.info('running primitive _run()')
+
+    adjoint_mnts_fld, adjoint_mnts_eps = generate_adjoint_monitors(sim)
     num_mnts_original = len(sim.monitors)
-    num_mnts_adjoint = len(adjoint_mnts_fld)
-    assert num_mnts_adjoint == len(adjoint_mnts_eps), "Different # of field and permittivity mnts."
-    td.log.info(f' -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {len(adjoint_mnts_eps)} adjoint eps monitors.')
 
     monitors = list(sim.monitors) + adjoint_mnts_fld + adjoint_mnts_eps
     sim = sim.copy(update=dict(monitors=monitors))
@@ -77,14 +173,10 @@ def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
     sim_static = sim #sim.to_static()
     sim_data = _run_static(sim_static)
 
-    # TODO: is this messy? getting into JaxInfo territory
-    # TODO: refactor this stuff out?
-    data_all = list(sim_data.data)
-    data_original, data_adjoint = split_list(data_all, index=num_mnts_original)
-    data_adjoint_fld, data_adjoint_eps = split_list(data_adjoint, index=num_mnts_adjoint)
+    data_original, data_adjoint_fld, data_adjoint_eps = split_data_list(sim_data=sim_data, num_mnts_original=num_mnts_original)
     sim_data = sim_data.copy(update=dict(data=data_original))
 
-    # store the SimulationData stuff for later (can't return it or autograd complains)
+    # store the forward simulation data for later (can't return it directly or autograd complains)
     aux_data[AUX_KEY_SIM_DATA] = sim_data
     aux_data[AUX_KEY_DATA_FLD] = data_adjoint_fld
     aux_data[AUX_KEY_DATA_EPS] = data_adjoint_eps
@@ -118,99 +210,41 @@ def run(sim: td.Simulation) -> td.SimulationData:
 def _run_bwd(data_fields_fwd: npa.ndarray, sim_fields_fwd : npa.ndarray, sim: td.Simulation, aux_data: dict) -> typing.Callable[[npa.ndarray], npa.ndarray]:
     """VJP-maker for _run(). Constructs and runs adjoint simulation, does postprocessing."""
 
-    sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
-    mnts = sim.monitors
+    # get the fwd epsilon and field data from the cached aux_data
+    data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
+    data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
 
     td.log.info('constructing custom vjp')
 
     def vjp(data_fields_vjp: list) -> list:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
         td.log.info('running custom vjp')
-        amps_adj = [-1 * data_vjp for data_vjp in data_fields_vjp]
-        sources_adj = []
-        for mnt, amps in zip(mnts, amps_adj):
 
-            for direction, amp in zip('+-', amps):
-
-                amplitude = float(npa.abs(amp))
-                phase = float(npa.angle(amp))
-
-                src_adj = td.ModeSource(
-                    source_time=td.GaussianPulse(
-                        amplitude=amplitude,
-                        phase=phase,
-                        freq0=FREQ0,
-                        fwidth=FREQ0/10
-                    ),
-                    size=mnt.size,
-                    center=mnt.center,
-                    direction=direction,
-                )
-                sources_adj.append(src_adj)
-
-        # TODO: add grad and grad_eps monitors to sim_adj
-        # construct and run adjoint simulation, grab data fields
-        # TODO: refactor this into somewhere else
-        # TODO: use a mapping between fields and structure
-        sim_fields = sim.traced_fields()
-        adjoint_mnts_fld = []
-        adjoint_mnts_eps = []
-        for i, (structure, permittivity) in enumerate(zip(sim.structures, sim_fields)):
-            box = structure.geometry.bounding_box
-            mnt_fld = td.FieldMonitor(
-                size=box.size, # TODO: expand slightly?
-                center=box.center,
-                freqs=[FREQ0], # TODO: determine adjoint freqs
-                name=adjoint_mnt_fld_name(i),
-            )
-            mnt_eps = td.PermittivityMonitor(
-                size=box.size, # TODO: expand slightly?
-                center=box.center,
-                freqs=[FREQ0], # TODO: determine adjoint freqs
-                name=adjoint_mnt_eps_name(i),
-            )       
-            adjoint_mnts_fld.append(mnt_fld)
-            adjoint_mnts_eps.append(mnt_eps)
-
-        monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
-
-        sim_adj = sim.copy(update=dict(
-            sources=sources_adj,
-            monitors=monitors_adj,
-            # monitors=[],
-        ))
-
+        # make and run adjoint simulation
+        sim_adj = make_adjoint_sim(sim=sim, data_fields_vjp=data_fields_vjp)
         sim_data_adj = _run_static(sim_adj)
 
-        # sim_data_adj = run(sim_adj)
+        # split into field and epsilon values
+        _,  data_adj_fld, data_adj_eps = split_data_list(sim_data=sim_data_adj, num_mnts_original=0)
 
-        # TODO: fix this, need to run sim_adj normally i think and get the regular data
-        # data_fields_adj = sim_data_adj.traced_fields()
-
-        assert len(monitors_adj) % 2 == 0, "Odd number of adjoint fields."
-
-        num_mnts_adjoint = len(monitors_adj) // 2
-        data_adj_fld, data_adj_eps = split_list(sim_data_adj.data, index=num_mnts_adjoint)
-
-        # get the fwd epsilon and field data
-        data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
-        data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
-
-        # TODO: write the actual VJP rules
+        # compute the VJP output for all of the traced structures using forward and adjoint fields
         vjp_iters = (data_fwd_fld, data_fwd_eps, data_adj_fld, data_adj_eps)
         vjp_values = []
 
-        for fwd_fld, fwd_eps, adj_fld, adj_eps in zip(*vjp_iters):
+        for structure_index, (fwd_fld, fwd_eps, adj_fld, adj_eps) in enumerate(zip(*vjp_iters)):
+
             assert npa.all(fwd_eps == adj_eps), "different forward and adjoint permittivity."
 
-            vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
-            vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
-            vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
+            vjp_value_i = compute_derivative(
+                sim=sim,
+                structure_index=structure_index,
+                fwd_fld=fwd_fld,
+                fwd_eps=fwd_eps,
+                adj_fld=adj_fld,
+                adj_eps=adj_eps
+            )
 
-            vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
-
-            vjp_value = npa.abs(vjp_value)
-            vjp_values.append(vjp_value)
+            vjp_values.append(vjp_value_i)
 
         return vjp_values
 
