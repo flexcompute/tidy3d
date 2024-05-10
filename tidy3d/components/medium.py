@@ -7,7 +7,7 @@ import functools
 from math import isclose
 
 import pydantic.v1 as pd
-import numpy as np
+import autograd.numpy as np
 
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
@@ -911,8 +911,12 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         Tuple[float, float]
             Real and imaginary parts of refractive index (n & k).
         """
-        ref_index = np.sqrt(eps_c)
-        return ref_index.real, ref_index.imag
+        eps_c = np.array(eps_c)
+        try:
+            ref_index = np.sqrt(eps_c)
+        except TypeError:
+            import pdb; pdb.set_trace()
+        return np.real(ref_index), np.imag(ref_index)
 
     @staticmethod
     def nk_to_eps_sigma(n: float, k: float, freq: float) -> Tuple[float, float]:
@@ -1324,6 +1328,8 @@ class PECMedium(AbstractMedium):
 PEC = PECMedium(name="PEC")
 
 
+from .autograd import TracedFloat
+
 class Medium(AbstractMedium):
     """Dispersionless medium. Mediums define the optical properties of the materials within the simulation.
 
@@ -1357,7 +1363,7 @@ class Medium(AbstractMedium):
 
     """
 
-    permittivity: float = pd.Field(
+    permittivity: TracedFloat = pd.Field(
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 

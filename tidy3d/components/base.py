@@ -19,6 +19,8 @@ import numpy as np
 import h5py
 import xarray as xr
 
+from .autograd import Box, TracedFloat
+
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
 from .file_util import compress_file_to_gzip, extract_gzip_file
@@ -174,6 +176,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             np.ndarray: ndarray_encoder,
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: DataArray._json_encoder,
+            Box: lambda x: x._value,
         }
         frozen = True
         allow_mutation = False

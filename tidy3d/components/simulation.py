@@ -12,6 +12,9 @@ import matplotlib as mpl
 import math
 import pathlib
 
+import autograd.numpy as npa
+from .autograd import get_static
+
 from .base import cached_property
 from .base import skip_if_fields_missing
 from .validators import assert_objects_in_sim_bounds
@@ -3214,6 +3217,24 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
     """ Accounting """
+
+    def traced_fields(self) -> npa.ndarray:
+        """Construct array full of the differentiable fields in this simulation."""
+        # TODO: only include traced ones?
+        # TODO: how to encode which structure (indices) map to this array?
+        return npa.array([s.medium.permittivity for s in self.structures])
+
+    def to_static(self) -> Simulation:
+        """Un-trace all differentiable fields in this Simulation."""   
+
+        # TODO: replace with just a json encoder for Box?
+        structures = []
+        for s in self.structures:
+            permittivity = get_static(s.medium.permittivity)
+            medium = s.medium.copy(update=dict(permittivity=permittivity))
+            structure = s.copy(update=dict(medium=medium))
+            structures.append(structure)
+        return self.copy(update=dict(structures=structures))
 
     @cached_property
     def _run_time(self) -> float:
