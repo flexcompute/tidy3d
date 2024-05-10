@@ -7,10 +7,15 @@ import pytest
 import numpy as np
 import tidy3d as td
 import xarray as xr
+
+from autograd.core import vspace, VJPNode, backward_pass
+from autograd.tracer import trace, new_box
+
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
 from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d import ModeIndexDataArray
+
 
 """ utilities shared between all tests """
 np.random.seed(4)
@@ -389,10 +394,31 @@ custom_sellmeier_u = td.CustomSellmeier(
     ),
 )
 
+# Make a few autograd ArrayBoxes for testing
+start_node = VJPNode.new_root()
+tracer = new_box(1.0, 0, start_node)
+tracer_arr = new_box([[[1.0]]], 0, start_node)
+
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),
     run_time=1e-12,
     structures=[
+        td.Structure(
+            geometry=td.Box(size=(1, tracer, tracer), center=(-1 * tracer, 0, 0)),
+            medium=td.Medium(permittivity=1 + tracer, name="dieletric"),
+            name="traced_dieletric_box",
+        ),
+        td.Structure(
+            geometry=td.PolySlab(
+                vertices=[[-1 + tracer * 0.1, 0], [-1 + tracer * 0.1, 0.1], [-1, 0.1]],
+                axis=1,
+                slab_bounds=(-0.1, 0.1),
+            ),
+            medium=td.CustomMedium(
+                permittivity=td.SpatialDataArray(tracer_arr, coords=dict(x=[-1], y=[0], z=[0]))
+            ),
+            name="traced custom polyslab",
+        ),
         td.Structure(
             geometry=td.Box(size=(1, 1, 1), center=(-1, 0, 0)),
             medium=td.Medium(permittivity=2.0, name="dieletric"),

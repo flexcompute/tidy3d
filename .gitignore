@@ -112,7 +112,7 @@ _autosummary
 
 # Test and temporary files
 tests/tmp/*
-tests/data/invdes_history.pkl
+tests/data/invdes_history.*
 
 # Translations
 *.mo
@@ -134,3 +134,6 @@ htmlcov/
 # Specific file and folder exclusions
 .idea
 .vscode
+
+# cProfile output
+*.prof

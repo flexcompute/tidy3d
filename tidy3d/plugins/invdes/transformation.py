@@ -3,17 +3,25 @@
 import typing
 import abc
 
-import jax.numpy as jnp
+import autograd.numpy as anp
 import pydantic.v1 as pd
 
 import tidy3d as td
-import tidy3d.plugins.adjoint.utils.filter as tda_filter
+from tidy3d.plugins.autograd.invdes import make_filter_and_project, get_kernel_size_px
+from tidy3d.plugins.autograd.functions import threshold
 
 from .base import InvdesBaseModel
 
 
 class AbstractTransformation(InvdesBaseModel, abc.ABC):
     """Base class for transformations."""
+
+    @abc.abstractmethod
+    def evaluate(self) -> float:
+        """Evaluate the penalty on supplied values."""
+
+    def __call__(self, *args, **kwargs) -> float:
+        return self.evaluate(*args, **kwargs)
 
 
 class FilterProject(InvdesBaseModel):
@@ -54,23 +62,15 @@ class FilterProject(InvdesBaseModel):
         "If ``True``, the values are snapped to the min and max values after projection.",
     )
 
-    def to_filter(self, design_region_dl: float) -> tda_filter.ConicFilter:
-        """Get the conic filter associated with this transformation (after supplying grid size)."""
-        return tda_filter.ConicFilter(radius=self.radius, design_region_dl=design_region_dl)
-
-    def to_projector(self) -> tda_filter.BinaryProjector:
-        """Get the binary projector associated with this transformation."""
-        return tda_filter.BinaryProjector(
-            beta=self.beta, eta=self.eta, strict_binarize=self.strict_binarize, vmin=0, vmax=1
-        )
-
-    def evaluate(self, spatial_data: jnp.ndarray, design_region_dl: float) -> jnp.ndarray:
+    def evaluate(self, spatial_data: anp.ndarray, design_region_dl: float) -> anp.ndarray:
         """Evaluate this transformation on spatial data, given some grid size in the region."""
-        conic_filter = self.to_filter(design_region_dl=design_region_dl)
-        binary_projector = self.to_projector()
+        filter_size = get_kernel_size_px(self.radius, design_region_dl)
+        filt_proj = make_filter_and_project(filter_size, beta=self.beta, eta=self.eta)
+        data_projected = filt_proj(spatial_data)
 
-        data_filtered = conic_filter.evaluate(spatial_data)
-        data_projected = binary_projector.evaluate(data_filtered)
+        if self.strict_binarize:
+            data_projected = threshold(data_projected)
+
         return data_projected
 
 

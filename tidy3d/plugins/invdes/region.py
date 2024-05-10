@@ -3,17 +3,17 @@
 import abc
 import typing
 
-import jax.numpy as jnp
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.components.types import Coordinate
-import tidy3d.plugins.adjoint as tda
+from tidy3d.components.types import Coordinate, Size
+
 
 from .base import InvdesBaseModel
-from .transformation import FilterProject, TransformationType
-from .penalty import ErosionDilationPenalty, PenaltyType
+from .penalty import PenaltyType
+from .transformation import TransformationType
 
 # TODO: support auto handling of symmetry in parameters
 
@@ -21,7 +21,7 @@ from .penalty import ErosionDilationPenalty, PenaltyType
 class DesignRegion(InvdesBaseModel, abc.ABC):
     """Base class for design regions in the ``invdes`` plugin."""
 
-    size: typing.Tuple[pd.PositiveFloat, pd.PositiveFloat, pd.PositiveFloat] = pd.Field(
+    size: Size = pd.Field(
         ...,
         title="Size",
         description="Size in x, y, and z directions.",
@@ -64,13 +64,13 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         """``Box`` corresponding to this design region."""
         return td.Box(center=self.center, size=self.size)
 
-    def material_density(self, params: jnp.ndarray) -> jnp.ndarray:
+    def material_density(self, params: anp.ndarray) -> anp.ndarray:
         """Evaluate the transformations on a parameter array to give the material density (0,1)."""
         for transformation in self.transformations:
             params = self.evaluate_transformation(transformation=transformation, params=params)
         return params
 
-    def penalty_value(self, data: jnp.ndarray) -> jnp.ndarray:
+    def penalty_value(self, data: anp.ndarray) -> anp.ndarray:
         """Evaluate the transformations on a dataset."""
 
         if not self.penalties:
@@ -82,23 +82,19 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
             self.evaluate_penalty(penalty=penalty, material_density=material_density)
             for penalty in self.penalties
         ]
-        return jnp.sum(jnp.array(penalty_values))
+        return anp.sum(anp.array(penalty_values))
 
     @abc.abstractmethod
-    def evaluate_transformation(self, transformation: TransformationType) -> float:
+    def evaluate_transformation(self, transformation: None) -> float:
         """How this design region evaluates a transformation given some passed information."""
 
     @abc.abstractmethod
-    def evaluate_penalty(self, penalty: PenaltyType) -> float:
+    def evaluate_penalty(self, penalty: None) -> float:
         """How this design region evaluates a penalty given some passed information."""
 
     @abc.abstractmethod
-    def to_jax_structure(self, *args, **kwargs) -> tda.JaxStructure:
-        """Convert this ``DesignRegion`` into a custom ``JaxStructure``. Implement in subclass."""
-
     def to_structure(self, *args, **kwargs) -> td.Structure:
-        """Convert this ``DesignRegion`` into a ``Structure``. Implement in subclass."""
-        return self.to_jax_structure(*args, **kwargs).to_structure()
+        """Convert this ``DesignRegion`` into a ``Structure`` with tracers. Implement in subs."""
 
 
 class TopologyDesignRegion(DesignRegion):
@@ -115,7 +111,7 @@ class TopologyDesignRegion(DesignRegion):
         "a value on the same order as the grid size.",
     )
 
-    transformations: typing.Tuple[FilterProject, ...] = pd.Field(
+    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -124,7 +120,7 @@ class TopologyDesignRegion(DesignRegion):
         "permittivity and 1 corresponds to the maximum relative permittivity. "
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
-    penalties: typing.Tuple[ErosionDilationPenalty, ...] = pd.Field(
+    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -144,7 +140,7 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     @staticmethod
-    def _check_params(params: jnp.ndarray = None):
+    def _check_params(params: anp.ndarray = None):
         """Ensure ``params`` are between 0 and 1."""
         if params is None:
             return
@@ -208,31 +204,27 @@ class TopologyDesignRegion(DesignRegion):
                 coord_vals = coord_vals.tolist()
             coords[dim] = coord_vals
 
-        coords["f"] = [td.C_0]  # TODO: is this a safe choice?
         return coords
 
-    def eps_values(self, params: jnp.ndarray) -> jnp.ndarray:
+    def eps_values(self, params: anp.ndarray) -> anp.ndarray:
         """Values for the custom medium permittivity."""
 
         self._check_params(params)
 
         material_density = self.material_density(params)
         eps_min, eps_max = self.eps_bounds
-        arr_3d = eps_min + material_density * (eps_max - eps_min)
-        arr_3d = arr_3d.reshape(params.shape)
-        return jnp.expand_dims(arr_3d, axis=-1)
+        eps_arr = eps_min + material_density * (eps_max - eps_min)
+        return eps_arr.reshape(params.shape)
 
-    def to_jax_structure(self, params: jnp.ndarray) -> tda.JaxStructureStaticGeometry:
+    def to_structure(self, params: anp.ndarray) -> td.Structure:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
         self._check_params(params)
 
         coords = self.coords
         eps_values = self.eps_values(params)
-        data_array = tda.JaxDataArray(values=eps_values, coords=coords)
-        field_components = {f"eps_{dim}{dim}": data_array for dim in "xyz"}
-        eps_dataset = tda.JaxPermittivityDataset(**field_components)
-        medium = tda.JaxCustomMedium(eps_dataset=eps_dataset)
-        return tda.JaxStructureStaticGeometry(geometry=self.geometry, medium=medium)
+        eps_data_array = td.SpatialDataArray(eps_values, coords=coords)
+        medium = td.CustomMedium(permittivity=eps_data_array)
+        return td.Structure(geometry=self.geometry, medium=medium)
 
     @property
     def _override_structure_dl(self) -> float:
@@ -259,15 +251,13 @@ class TopologyDesignRegion(DesignRegion):
         )
 
     def evaluate_transformation(
-        self, transformation: TransformationType, params: jnp.ndarray
-    ) -> jnp.ndarray:
+        self, transformation: TransformationType, params: anp.ndarray
+    ) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
         return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
 
-    def evaluate_penalty(
-        self, penalty: ErosionDilationPenalty, material_density: jnp.ndarray
-    ) -> float:
+    def evaluate_penalty(self, penalty: PenaltyType, material_density: anp.ndarray) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
         return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 

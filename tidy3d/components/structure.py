@@ -1,20 +1,24 @@
 """Defines Geometric objects with Medium properties."""
 from __future__ import annotations
 
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, Callable, Any
+from collections import defaultdict
 import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
 
+from .autograd import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .validators import validate_name_str
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
-from .types import Ax, TYPE_TAG_STR, Axis
+from .monitor import FieldMonitor, PermittivityMonitor
+from .types import Ax, TYPE_TAG_STR, Axis, Bound
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
+from .data.monitor_data import PermittivityData, FieldData
 
 try:
     gdstk_available = True
@@ -171,6 +175,120 @@ class Structure(AbstractStructure):
         ):
             return False
         return True
+
+    """ Begin autograd code."""
+
+    @staticmethod
+    def get_monitor_name(index: int, data_type: str) -> str:
+        """Get the monitor name for either a field or permittivity monitor at given index."""
+
+        monitor_name_map = dict(
+            fld=f"adjoint_fld_{index}",
+            eps=f"adjoint_eps_{index}",
+        )
+
+        if data_type not in monitor_name_map:
+            raise KeyError(f"'data_type' must be in {monitor_name_map.keys()}")
+
+        return monitor_name_map[data_type]
+
+    def make_adjoint_monitors(
+        self, freqs: list[float], index: int
+    ) -> (FieldMonitor, PermittivityMonitor):
+        """Generate the field and permittivity monitor for this structure."""
+
+        box = self.geometry.bounding_box
+
+        # we dont want these fields getting traced by autograd, otherwise it messes stuff up
+        size = tuple(get_static(x) for x in box.size)  # TODO: expand slightly?
+        center = tuple(get_static(x) for x in box.center)
+
+        mnt_fld = FieldMonitor(
+            size=size,
+            center=center,
+            freqs=freqs,
+            name=self.get_monitor_name(index=index, data_type="fld"),
+            colocate=False,
+        )
+
+        mnt_eps = PermittivityMonitor(
+            size=size,
+            center=center,
+            freqs=freqs,
+            name=self.get_monitor_name(index=index, data_type="eps"),
+            colocate=False,
+        )
+
+        return mnt_fld, mnt_eps
+
+    @property
+    def derivative_function_map(self) -> dict[tuple[str, str], Callable]:
+        """Map path to the right derivative function function."""
+        return {
+            ("medium", "permittivity"): self.derivative_medium_permittivity,
+            ("medium", "conductivity"): self.derivative_medium_conductivity,
+            ("geometry", "size"): self.derivative_geometry_size,
+            ("geometry", "center"): self.derivative_geometry_center,
+        }
+
+    def get_derivative_function(self, path: tuple[str, ...]) -> Callable:
+        """Get the derivative function function."""
+
+        derivative_map = self.derivative_function_map
+        if path not in derivative_map:
+            raise NotImplementedError(f"Can't compute derivative for structure field path: {path}.")
+        return derivative_map[path]
+
+    def compute_derivatives(
+        self,
+        structure_paths: list[tuple[str, ...]],
+        E_der_map: FieldData,
+        D_der_map: FieldData,
+        eps_data: PermittivityData,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[tuple[str, ...], Any]:
+        """Compute adjoint gradients given the forward and adjoint fields"""
+
+        # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
+        structure_fields_map = defaultdict(list)
+        for structure_path in structure_paths:
+            med_or_geo, *field_path = structure_path
+            field_path = tuple(field_path)
+            if med_or_geo not in ("geometry", "medium"):
+                raise ValueError(
+                    f"Something went wrong in the structure VJP calculation, "
+                    f"got a 'structure_path: {structure_path}' with first element '{med_or_geo}', "
+                    "which should be 'medium' or 'geometry. "
+                    "If you encounter this error, please raise an issue on the tidy3d GitHub "
+                    "repository so we can investigate."
+                )
+            structure_fields_map[med_or_geo].append(field_path)
+
+        # loop through sub fields, compute VJPs, and store in the derivative map {path -> vjp_value}
+        derivative_map = {}
+        for med_or_geo, field_paths in structure_fields_map.items():
+            # grab derivative values {field_name -> vjp_value}
+            med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
+            derivative_values_map = med_or_geo_field.compute_derivatives(
+                field_paths=field_paths,
+                E_der_map=E_der_map,
+                D_der_map=D_der_map,
+                eps_data=eps_data,
+                eps_in=eps_in,
+                eps_out=eps_out,
+                bounds=bounds,
+            )
+
+            # construct map of {field path -> derivative value}
+            for field_path, derivative_value in derivative_values_map.items():
+                path = tuple([med_or_geo] + list(field_path))
+                derivative_map[path] = derivative_value
+
+        return derivative_map
+
+    """ End autograd code."""
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.

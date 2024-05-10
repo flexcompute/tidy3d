@@ -14,7 +14,7 @@ from shapely.geometry import box as shapely_box
 from shapely.errors import ShapelyDeprecationWarning
 
 from ..base import Tidy3dBaseModel
-from ..types import Axis, ArrayFloat1D
+from ..types import Axis, ArrayFloat1D, Bound
 from ..structure import Structure, MeshOverrideStructure, StructureType
 from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ...exceptions import SetupError, ValidationError
@@ -52,6 +52,11 @@ class Mesher(Tidy3dBaseModel, ABC):
         is_periodic: bool,
     ) -> List[ArrayFloat1D]:
         """Create grid steps in multiple connecting intervals."""
+
+    @staticmethod
+    def make_shapely_box(bbox: Bound) -> shapely_box:
+        """Make a shapely box out of bounds."""
+        return shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
 
 
 class GradedMesher(Mesher):
@@ -170,7 +175,7 @@ class GradedMesher(Mesher):
                 if bbox is None:
                     # Structure has been removed because it is completely contained
                     continue
-                bbox_2d = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+                bbox_2d = self.make_shapely_box(bbox)
 
                 # List of structure indexes that may intersect the current structure in 2D
                 try:
@@ -223,12 +228,12 @@ class GradedMesher(Mesher):
             # if there are any enforced structure in the interval, use the last structure
             if max(intervals["structs"][coord_ind]) >= num_unenforced:
                 max_step = structure_steps[max(intervals["structs"][coord_ind])]
-                max_steps.append(float(max_step))
+                max_steps.append(max_step)
             # otherwise, define the max step as the minimum over all medium steps
             # of media in this interval
             else:
                 max_step = np.amin(structure_steps[intervals["structs"][coord_ind]])
-                max_steps.append(float(max_step))
+                max_steps.append(max_step)
 
         # Re-evaluate the absolute smallest min_step and remove intervals that are smaller than that
         intervals["coords"], max_steps = self.filter_min_step(intervals["coords"], max_steps)
@@ -434,11 +439,14 @@ class GradedMesher(Mesher):
                     # in simulation.py
                     index = 1.0
                 else:
-                    n, k = structure.medium.eps_complex_to_nk(
-                        structure.medium.eps_diagonal(C_0 / wavelength)
-                    )
+                    eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
+                    n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
+
                     # take max among all directions because perpendicular eps defines wavelength
-                    index = max(max(abs(n)), max(abs(k)))
+                    max_n_abs = np.max(np.abs(n))
+                    max_k_abs = np.max(np.abs(k))
+                    index = np.max([max_n_abs, max_k_abs])
+
                 min_steps.append(max(dl_min, wavelength / index / min_steps_per_wvl))
             elif isinstance(structure, MeshOverrideStructure):
                 min_steps.append(max(dl_min, structure.dl[axis]))
@@ -478,7 +486,7 @@ class GradedMesher(Mesher):
 
         boxes_2d = []
         for bbox in struct_bbox:
-            box = shapely_box(bbox[0, 0], bbox[0, 1], bbox[1, 0], bbox[1, 1])
+            box = Mesher.make_shapely_box(bbox)
             boxes_2d.append(box)
 
         with warnings.catch_warnings():

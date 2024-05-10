@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Automatic differentiation supported natively in Tidy3D components, and through the `web.run()` and `web.run_async()` functions through `autograd`.
 - A batch of `ModeSolver` objects can be run concurrently using `tidy3d.plugins.mode.web.run_batch()`
 - `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
 - `RectangularWaveguide` supports layered cladding above and below core.
