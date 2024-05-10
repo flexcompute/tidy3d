@@ -94,6 +94,9 @@ NUM_STRUCTURES_WARN_EPSILON = 10_000
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
 PML_HEIGHT_FOR_0_DIMS = 0.02
 
+# additional (safety) time step reduction factor for fixed angle simulations
+FIXED_ANGLE_DT_SAFETY_FACTOR = 0.9
+
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):
     """
@@ -2098,8 +2101,9 @@ class Simulation(AbstractYeeGridSimulation):
                     )
 
                 # check the Bloch boundary + angled plane wave case
-                num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
-                if num_bloch > 0 and isinstance(source.angular_spec, FixedAngleSpec):
+                if isinstance(source.angular_spec, FixedAngleSpec):
+                    num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
+                    if num_bloch > 0:
                         raise SetupError(
                             "Angled plane wave sources with 'FixedAngleSpec' specification are "
                             f"not compatible with the Bloch boundary along dimension {tan_dir}. "
@@ -2108,17 +2112,17 @@ class Simulation(AbstractYeeGridSimulation):
                             "'FixedInPlaneKSpec' specification to simulate a plane wave with "
                             "frequency-dependent propagation direction."
                         )
-                
-                num_bloch += sum(isinstance(bnd, Periodic) for bnd in boundary)
-                if num_bloch > 0:
-                    cls._check_bloch_vec(
-                        source=source,
-                        source_ind=source_ind,
-                        bloch_vec=boundary[0].bloch_vec,
-                        dim=tan_dir,
-                        medium=medium,
-                        domain_size=size[tan_dir],
-                    )
+                else:
+                    num_bloch = sum(isinstance(bnd, (Periodic, BlochBoundary)) for bnd in boundary)
+                    if num_bloch > 0:
+                        cls._check_bloch_vec(
+                            source=source,
+                            source_ind=source_ind,
+                            bloch_vec=boundary[0].bloch_vec,
+                            dim=tan_dir,
+                            medium=medium,
+                            domain_size=size[tan_dir],
+                        )
         return val
 
     @pydantic.validator("boundary_spec", always=True)
@@ -2213,11 +2217,6 @@ class Simulation(AbstractYeeGridSimulation):
             source for source in sources
             if isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec) and source.angle_theta != 0.0
         ]
-    
-    @cached_property
-    def _fixed_angle_sources(self):
-        """List of plane wave sources with ``FixedAngleSpec``."""
-        return self._get_fixed_angle_sources(self.sources)
 
     @pydantic.validator("sources", always=True)
     def check_fixed_angle_sources(cls, val):
@@ -3342,6 +3341,11 @@ class Simulation(AbstractYeeGridSimulation):
             "Use 'Simulation.scene.background_structure' instead."
         )
         return self.scene.background_structure
+    
+    @cached_property
+    def _fixed_angle_sources(self):
+        """List of plane wave sources with ``FixedAngleSpec``."""
+        return self._get_fixed_angle_sources(self.sources)
 
     # candidate for removal in 3.0
     @staticmethod
@@ -3761,6 +3765,14 @@ class Simulation(AbstractYeeGridSimulation):
         return plot_sim_3d(self, width=width, height=height)
 
     """ Discretization """
+    
+    @cached_property
+    def _dt_fixed_angle_reduction_factor(self):
+        """Reduction in time step due to plane wave source with ``FixedAngleSpec``."""
+        if len(self._fixed_angle_sources) > 0:
+            theta = self._fixed_angle_sources[0].angle_theta
+            return FIXED_ANGLE_DT_SAFETY_FACTOR * (1 - np.sin(theta))
+        return 1
 
     @cached_property
     def scaled_courant(self) -> float:
@@ -3783,7 +3795,7 @@ class Simulation(AbstractYeeGridSimulation):
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
         n_cfl = min(min(mat.n_cfl for mat in self.scene.mediums), 1)
-        return n_cfl * self.scaled_courant * dl_avg / C_0
+        return self._dt_fixed_angle_reduction_factor * n_cfl * self.scaled_courant * dl_avg / C_0
 
     @cached_property
     def tmesh(self) -> Coords1D:
