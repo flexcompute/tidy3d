@@ -8,6 +8,8 @@ import numpy as np
 import dask
 import h5py
 
+from autograd.tracer import isbox, getval
+
 from ...constants import (
     HERTZ,
     MICROMETER,
@@ -48,6 +50,9 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
+# name for the autograd-traced part of the DataArray
+AUTOGRAD_KEY = "AUTOGRAD"
+
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -58,6 +63,19 @@ class DataArray(xr.DataArray):
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
+
+    def __init__(self, data, *args, **kwargs):
+        """Initialize ``DataArray``."""
+
+        # initialize with untraced data
+        data_untraced = getval(data)
+        super().__init__(data_untraced, *args, **kwargs)
+
+        # if the passed data has tracers, store them in attrs dict
+        if isbox(data):
+            self.attrs[AUTOGRAD_KEY] = data
+            # NOTE: this is done because if we pass the traced array directly, it will create a
+            # numpy array of `ArrayBox`, which is extremely slow
 
     @classmethod
     def __get_validators__(cls):

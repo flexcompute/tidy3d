@@ -1,20 +1,24 @@
 """Functional utilities that help define postprocessing functions more simply in ``invdes``."""
 
+# TODO: improve these?
+
 import typing
 
 import tidy3d as td
-import tidy3d.plugins.adjoint as tda
-import jax.numpy as jnp
+
+import autograd.numpy as npa
+
+import xarray as xr
 
 
-def make_array(arr: typing.Any) -> jnp.ndarray:
-    """Turn something into a ``jnp.ndarray``."""
-    if hasattr(arr, "values"):
-        return jnp.array(arr.values)
-    return jnp.array(arr)
+def make_array(arr: typing.Any) -> npa.ndarray:
+    """Turn something into a ``npa.ndarray``."""
+    if isinstance(arr, xr.DataArray):
+        return npa.array(arr.values)
+    return npa.array(arr)
 
 
-def get_amps(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -> jnp.ndarray:
+def get_amps(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> npa.ndarray:
     """Grab amplitudes from a ``ModeMonitorData`` and select out values."""
 
     monitor_data = sim_data[monitor_name]
@@ -28,11 +32,11 @@ def get_amps(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -
 
 
 def get_field_component(
-    sim_data: tda.JaxSimulationData,
+    sim_data: td.SimulationData,
     monitor_name: str,
     field_component: td.components.types.EMField,
     **sel_kwargs
-) -> jnp.ndarray:
+) -> npa.ndarray:
     """Grab field component from a ``FieldMonitorData`` and select out values."""
 
     monitor_data = sim_data[monitor_name]
@@ -45,28 +49,28 @@ def get_field_component(
     return field_component_sel
 
 
-def get_intensity(sim_data: tda.JaxSimulationData, monitor_name: str, **sel_kwargs) -> jnp.ndarray:
+def get_intensity(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> npa.ndarray:
     """Grab field intensity from a ``FieldMonitorData`` and select out values."""
     intensity = sim_data.get_intensity(monitor_name)
     intensity_sel = intensity.sel(**sel_kwargs)
     return intensity_sel
 
 
-def sum_array(arr: tda.JaxDataArray) -> float:
-    """Sum values in the ``tda.JaxDataArray``."""
+def sum_array(arr: xr.DataArray) -> float:
+    """Sum values in the ``td.DataArray``."""
 
     arr = make_array(arr)
-    return jnp.sum(arr)
+    return npa.sum(arr)
 
 
-def sum_abs_squared(arr: tda.JaxDataArray) -> float:
-    """Sum the absolute value squared of a ``tda.JaxDataArray``."""
+def sum_abs_squared(arr: xr.DataArray) -> float:
+    """Sum the absolute value squared of a ``td.DataArray``."""
     arr = make_array(arr)
-    arr_abs_squared = jnp.abs(arr) ** 2
+    arr_abs_squared = npa.abs(arr) ** 2
     return sum_array(arr_abs_squared)
 
 
-def get_phase(arr: tda.JaxDataArray) -> jnp.ndarray:
-    """Get ``jnp.angle`` of a ``tda.JaxDataArray`` as an array."""
+def get_phase(arr: xr.DataArray) -> npa.ndarray:
+    """Get ``npa.angle`` of a ``td.DataArray`` as an array."""
     arr = make_array(arr)
-    return jnp.angle(arr)
+    return npa.angle(arr)

@@ -6,11 +6,13 @@ from typing import Dict, Tuple, List, Set, Union
 from abc import ABC, abstractmethod
 
 import pydantic.v1 as pydantic
-import numpy as np
+import autograd.numpy as np
 import xarray as xr
 import matplotlib as mpl
 import math
 import pathlib
+
+from .autograd import AutogradFieldMap
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -594,6 +596,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             thick_l = boundaries[num_layer[0]] - boundaries[0]
             thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
             pml_thicknesses.append((thick_l, thick_r))
+
         return pml_thicknesses
 
     @equal_aspect
@@ -2673,7 +2676,7 @@ class Simulation(AbstractYeeGridSimulation):
         structures = values.get("structures")
         structures = structures or []
         medium_bg = values.get("medium")
-        mediums = [medium_bg] + [structure.medium for structure in structures]
+        mediums = [medium_bg] + [structure.to_static().medium for structure in structures]
 
         with log as consolidated_logger:
             for source_index, source in enumerate(values.get("sources")):
@@ -3083,6 +3086,11 @@ class Simulation(AbstractYeeGridSimulation):
                 )
 
     @cached_property
+    def static_structures(self) -> list[Structure]:
+        """Structures in simulation with all autograd tracers removed."""
+        return [structure.to_static() for structure in self.structures]
+
+    @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
         """Dictionary mapping monitor names to their estimated storage size in bytes."""
         data_size = {}
@@ -3195,6 +3203,52 @@ class Simulation(AbstractYeeGridSimulation):
                         f"the simulation run time {self._run_time:1.2e}s. No data will be recorded."
                     )
 
+    """ Autograd adjoint support """
+
+    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
+        """Copy of self with adjoint field and permittivity monitors for every traced structure."""
+
+        # set of indices in the structures needing adjoint monitors
+        structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
+
+        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
+        monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
+        return self.copy(update=dict(monitors=monitors))
+
+    def make_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
+        """Get lists of field and permittivity monitors for this simulation."""
+
+        freqs = self.freqs_adjoint
+
+        adjoint_monitors_fld = []
+        adjoint_monitors_eps = []
+
+        # make a field and permittivity monitor for every structure needing one
+        for i in structure_indices:
+            structure = self.structures[i]
+
+            mnt_fld, mnt_eps = structure.make_adjoint_monitors(freqs=freqs, index=i)
+
+            adjoint_monitors_fld.append(mnt_fld)
+            adjoint_monitors_eps.append(mnt_eps)
+
+        return adjoint_monitors_fld, adjoint_monitors_eps
+
+    @property
+    def freqs_adjoint(self) -> list[float]:
+        """Unique list of all frequencies. For now should be only one."""
+        freqs = []
+        for mnt in self.monitors:
+            if isinstance(mnt, FreqMonitor):
+                for f in mnt.freqs:
+                    if f not in freqs:
+                        freqs.append(f)
+        freqs.sort()
+
+        assert len(freqs) == 1, "Only support single frequency right now."
+
+        return freqs
+
     """ Accounting """
 
     @cached_property
@@ -3227,7 +3281,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         # get the maximum refractive index evaluated over each of all the source central frequencies
         all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
-        avg_ref_inds = [np.mean(n) for n in all_ref_inds]
+        avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
         max_ref_ind = np.max(avg_ref_inds)
 
         propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
@@ -3816,7 +3870,8 @@ class Simulation(AbstractYeeGridSimulation):
 
         # Add a simulation Box as the first structure
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.structures
+
+        structures += self.static_structures
 
         grid = self.grid_spec.make_grid(
             structures=structures,

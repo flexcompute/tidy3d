@@ -10,14 +10,23 @@ import numpy as np
 import h5py
 import json
 
-from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
+
+from .monitor_data import (
+    MonitorDataTypes,
+    MonitorDataType,
+    AbstractFieldData,
+    FieldTimeData,
+)
+
 from ..simulation import Simulation
+from ..structure import Structure
+from ..monitor import Monitor
+from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
 from ..base import JSON_TAG
-
 from ..base_sim.data.sim_data import AbstractSimulationData
 
 
@@ -804,3 +813,60 @@ class SimulationData(AbstractYeeGridSimulationData):
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
+
+    def make_adjoint_sim(
+        self, data_vjp_paths: set[tuple], adjoint_monitors: list[Monitor]
+    ) -> Simulation:
+        """Make the adjoint simulation from the original simulation and the VJP-containing data."""
+
+        sim_original = self.simulation
+
+        # generate the adjoint sources
+        sources_adj = self.make_adjoint_sources(data_vjp_paths=data_vjp_paths)
+
+        # grab boundary conditions with flipped Bloch vectors (for adjoint)
+        bc_adj = sim_original.boundary_spec.flipped_bloch_vecs
+
+        # fields to update the 'fwd' simulation with to make it 'adj'
+        sim_adj_update_dict = dict(
+            sources=sources_adj,
+            boundary_spec=bc_adj,
+            monitors=adjoint_monitors,
+        )
+
+        # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
+        grid_spec_original = sim_original.grid_spec
+        if len(sim_original.sources) and grid_spec_original.wavelength is None:
+            wavelength_original = grid_spec_original.wavelength_from_sources(sim_original.sources)
+            grid_spec_adj = grid_spec_original.updated_copy(wavelength=wavelength_original)
+            sim_adj_update_dict["grid_spec"] = grid_spec_adj
+
+        return sim_original.updated_copy(**sim_adj_update_dict)
+
+    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> list[Source]:
+        """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
+
+        # TODO: determine if we can do multi-frequency sources
+
+        # map of index into 'self.data' to the list of datasets we need adjoint sources for
+        adj_src_map = {}
+        for _, index, dataset_name in data_vjp_paths:
+            if index in adj_src_map:
+                adj_src_map[index].append(dataset_name)
+            else:
+                adj_src_map[index] = [dataset_name]
+
+        # gather a list of adjoint sources for every monitor data in the VJP that needs one
+        sources_adj_all = []
+        for data_index, dataset_names in adj_src_map.items():
+            mnt_data = self.data[data_index]
+            sources_adj = mnt_data.make_adjoint_sources(dataset_names=dataset_names)
+            sources_adj_all += sources_adj
+
+        return sources_adj_all
+
+    def get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
+        """Grab the field or permittivity data for a given structure index."""
+
+        monitor_name = Structure.get_monitor_name(index=structure_index, data_type=data_type)
+        return self[monitor_name]

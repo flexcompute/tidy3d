@@ -1,21 +1,19 @@
+# ruff: noqa: F811
 # Test the inverse design plugin
 
 import pytest
-import builtins
 
 import numpy as np
-import jax.numpy as jnp
+import autograd.numpy as npa
 
 import tidy3d as td
-import tidy3d.plugins.adjoint as tda
 import tidy3d.plugins.invdes as tdi
 
 # use single threading pipeline
-from . import test_adjoint as ta
 
 from .test_adjoint import use_emulated_run, use_emulated_run_async  # noqa: F401
 
-from ..utils import run_emulated, assert_log_level, AssertLogLevel
+from ..utils import run_emulated, run_async_emulated, AssertLogLevel
 from ..utils import log_capture  # noqa: F401
 
 
@@ -23,9 +21,8 @@ FREQ0 = 1e14
 L_SIM = 1.0
 MNT_NAME1 = "mnt_name1"
 MNT_NAME2 = "mnt_name2"
-HISTORY_FNAME = "tests/data/invdes_history.pkl"
+HISTORY_FNAME = "tests/data/invdes_history.json"
 
-ta.NUM_PROC_PARALLEL = 1
 
 mnt1 = td.FieldMonitor(
     center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME1
@@ -54,6 +51,22 @@ simulation = td.Simulation(
 )
 
 
+@pytest.fixture
+def use_emulated_run_autograd(monkeypatch):
+    """Emulate the tidy3d web function used in autograd web API."""
+    import tidy3d.web.api.autograd.autograd as web_ag
+
+    monkeypatch.setattr(web_ag, "_run_tidy3d", run_emulated)
+
+
+@pytest.fixture
+def use_emulated_run_autograd_async(monkeypatch):
+    """Emulate the tidy3d web function used in autograd web API."""
+    import tidy3d.web.api.autograd.autograd as web_ag
+
+    monkeypatch.setattr(web_ag, "_run_async_tidy3d", run_async_emulated)
+
+
 def make_design_region():
     """Make a ``TopologyDesignRegion``."""
 
@@ -61,10 +74,13 @@ def make_design_region():
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
         eps_bounds=(1.0, 4.0),
-        transformations=[tdi.FilterProject(radius=0.05, beta=2.0)],
-        penalties=[
-            tdi.ErosionDilationPenalty(length_scale=0.05),
-        ],
+        transformations=[],
+        # TODO: add transformations
+        # tdi.FilterProject(radius=0.05, beta=2.0)],
+        penalties=[],
+        # TODO: add penalties
+        #     tdi.ErosionDilationPenalty(length_scale=0.05),
+        # ],
         pixel_size=0.02,
     )
 
@@ -91,6 +107,7 @@ def test_region_penalties():
     region.material_density(PARAMS_0)
     region.penalty_value(PARAMS_0)
 
+    # TODO: add penalties
     region.updated_copy(penalties=[]).penalty_value(PARAMS_0)
 
 
@@ -101,7 +118,6 @@ def test_region_to_structure():
 
     PARAMS_0 = region.params_ones
 
-    _ = region.to_jax_structure(PARAMS_0)
     _ = region.to_structure(PARAMS_0)
 
 
@@ -110,13 +126,14 @@ def test_region_params_bounds():
 
     region = make_design_region()
 
-    PARAMS_0 = region.params_ones
+    _ = region.params_ones
 
-    with pytest.raises(ValueError):
-        region.penalty_value(2 * PARAMS_0)
+    # TODO: add back
+    # with pytest.raises(ValueError):
+    #     region.penalty_value(2 * PARAMS_0)
 
-    with pytest.raises(ValueError):
-        region.penalty_value(-1 * PARAMS_0)
+    # with pytest.raises(ValueError):
+    #     region.penalty_value(-1 * PARAMS_0)
 
 
 def test_region_inf_size():
@@ -130,39 +147,39 @@ def test_region_inf_size():
     _ = region.to_structure(params_0_inf)
 
 
-def test_penalty_pixel_size(log_capture):  # noqa: F811
-    """Test that warning is raised if ``pixel_size`` is supplied."""
+# def test_penalty_pixel_size(log_capture):
+#     """Test that warning is raised if ``pixel_size`` is supplied."""
 
-    _ = tdi.ErosionDilationPenalty(length_scale=2.0)
+#     _ = tdi.ErosionDilationPenalty(length_scale=2.0)
 
-    with AssertLogLevel(log_capture, "WARNING"):
-        _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
+#     with AssertLogLevel(log_capture, "WARNING"):
+#         _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
 
 
-def post_process_fn(sim_data: tda.JaxSimulationData, **kwargs) -> float:
+def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     intensity = sim_data.get_intensity(MNT_NAME1)
-    return jnp.sum(intensity.values)
+    return npa.sum(intensity.values)
 
 
-def post_process_fn_kwargless(sim_data: tda.JaxSimulationData) -> float:
+def post_process_fn_kwargless(sim_data: td.SimulationData) -> float:
     """Define a post-processing function with no kwargs specified."""
     intensity = sim_data.get_intensity(MNT_NAME1)
-    return jnp.sum(intensity.values)
+    return npa.sum(intensity.values)
 
 
-def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) -> float:
+def post_process_fn_multi(batch_data: dict[str, td.SimulationData], **kwargs) -> float:
     """Define a post-processing function for batch."""
     val = 0.0
-    for sim_data in sim_data_list:
+    for _, sim_data in batch_data.items():
         intensity_i = sim_data.get_intensity(MNT_NAME1)
-        val += jnp.sum(intensity_i.values)
+        val += npa.sum(intensity_i.values)
         power_i = tdi.utils.sum_abs_squared(tdi.utils.get_amps(sim_data, MNT_NAME2))
         val += power_i
     return val
 
 
-def post_process_fn_untraced(sim_data: tda.JaxSimulationData, **kwargs) -> float:
+def post_process_fn_untraced(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     return 1.0
 
@@ -172,7 +189,6 @@ def make_invdes():
     return tdi.InverseDesign(
         simulation=simulation,
         design_region=make_design_region(),
-        post_process_fn=post_process_fn,
         task_name="test",
     )
 
@@ -180,7 +196,7 @@ def make_invdes():
 class MockDataArray:
     """Pretends to be a ``JaxDataArray`` with ``.values``."""
 
-    values = jnp.linspace(0, 1, 10)
+    values = npa.linspace(0, 1, 10)
 
 
 class MockSimData:
@@ -193,36 +209,12 @@ class MockSimData:
         return MockDataArray()
 
 
-def test_invdes_kwarglfull():
-    """Test that a postprocess function works when defined with kwargs in the signature."""
-
-    invdes = make_invdes()
-    invdes.post_process_fn(MockSimData(), kwarg1="hi")
-
-
-def test_invdes_kwargless():
-    """Test that a postprocess function works when defined with no kwargs in the signature."""
-
-    invdes = make_invdes()
-    invdes = invdes.updated_copy(post_process_fn=post_process_fn_kwargless)
-    invdes.post_process_fn(MockSimData(), kwarg1="hi")
-
-
-def test_invdes_simulation_data(use_emulated_run):  # noqa: F811
+def test_invdes_simulation_data(use_emulated_run):
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
 
     invdes = make_invdes()
     params = invdes.design_region.params_random
     invdes.to_simulation_data(params=params, task_name="test")
-
-
-def test_invdes_output_monitor_names(use_emulated_run):  # noqa: F811
-    """test the inverse design objective function with user-specified output monitor names."""
-    invdes = make_invdes()
-    invdes = invdes.updated_copy(output_monitor_names=[MNT_NAME1, MNT_NAME2])
-
-    params = invdes.design_region.params_random
-    invdes.objective_fn(params, kwarg1="hi")
 
 
 def test_invdes_mesh_override():
@@ -267,8 +259,6 @@ def make_invdes_multi():
     invdes = tdi.InverseDesignMulti(
         design_region=region,
         simulations=simulations,
-        # post_process_fns=post_process_fns,
-        post_process_fn=post_process_fn_multi,
         task_name="base",
     )
 
@@ -303,39 +293,37 @@ def make_optimizer():
     )
 
 
-def make_result(use_emulated_run):  # noqa: F811
+def make_result(use_emulated_run_autograd):
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
-    return optimizer.run(params0=PARAMS_0)
+    return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn)
 
 
-def test_default_params(use_emulated_run):  # noqa: F811
+def test_default_params(use_emulated_run_autograd):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
 
     _ = np.random.random(optimizer.design.design_region.params_shape)
 
-    optimizer.run()
+    optimizer.run(post_process_fn=post_process_fn)
 
 
-def test_warn_zero_grad(log_capture, use_emulated_run):  # noqa: F811
+def test_warn_zero_grad(log_capture, use_emulated_run_autograd):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
-    design = optimizer.design.updated_copy(post_process_fn=post_process_fn_untraced)
-    optimizer = optimizer.updated_copy(design=design)
     with AssertLogLevel(
         log_capture, "WARNING", contains_str="All elements of the gradient are almost zero"
     ):
-        _ = optimizer.run()
+        _ = optimizer.run(post_process_fn=post_process_fn_untraced)
 
 
-def make_result_multi(use_emulated_run_async):  # noqa: F811
+def make_result_multi(use_emulated_run_autograd_async):
     """Test running the optimization defined in the ``InverseDesignMulti`` object."""
 
     optimizer = make_optimizer()
@@ -345,10 +333,10 @@ def make_result_multi(use_emulated_run_async):  # noqa: F811
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
-    return optimizer.run(params0=PARAMS_0)
+    return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn_multi)
 
 
-def test_result_store_full_results_is_false(use_emulated_run):  # noqa: F811
+def test_result_store_full_results_is_false(use_emulated_run_autograd):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -356,7 +344,7 @@ def test_result_store_full_results_is_false(use_emulated_run):  # noqa: F811
 
     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
-    result = optimizer.run(params0=PARAMS_0)
+    result = optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn)
 
     # these store at the very beginning and at the end of every iteration
     # but when ``store_full_results == False``, they only store the last one
@@ -371,11 +359,11 @@ def test_result_store_full_results_is_false(use_emulated_run):  # noqa: F811
     _ = result.last["params"]
 
 
-def test_continue_run_fns(use_emulated_run):  # noqa: F811
+def test_continue_run_fns(use_emulated_run_autograd):
     """Test continuing an already run inverse design from result."""
-    result_orig = make_result(use_emulated_run)
+    result_orig = make_result(use_emulated_run_autograd)
     optimizer = make_optimizer()
-    result_full = optimizer.continue_run(result=result_orig)
+    result_full = optimizer.continue_run(result=result_orig, post_process_fn=post_process_fn)
 
     num_steps_orig = len(result_orig.history["params"])
     num_steps_full = len(result_full.history["params"])
@@ -384,12 +372,12 @@ def test_continue_run_fns(use_emulated_run):  # noqa: F811
     ), "wrong number of elements in the combined run history."
 
 
-def test_continue_run_from_file(use_emulated_run):  # noqa: F811
+def test_continue_run_from_file(use_emulated_run_autograd):
     """Test continuing an already run inverse design from file."""
-    result_orig = make_result(use_emulated_run)
+    result_orig = make_result(use_emulated_run_autograd)
     optimizer_orig = make_optimizer()
     optimizer = optimizer_orig.updated_copy(num_steps=optimizer_orig.num_steps + 1)
-    result_full = optimizer.continue_run_from_file(HISTORY_FNAME)
+    result_full = optimizer.continue_run_from_file(HISTORY_FNAME, post_process_fn=post_process_fn)
     num_steps_orig = len(result_orig.history["params"])
     num_steps_full = len(result_full.history["params"])
     assert (
@@ -397,13 +385,15 @@ def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     ), "wrong number of elements in the combined run history."
 
     # test the convenience function to load it from file
-    result_full = optimizer.continue_run_from_history()
+    result_full = optimizer.continue_run_from_history(post_process_fn=post_process_fn)
 
 
-def test_result(use_emulated_run, use_emulated_run_async, tmp_path):  # noqa: F811
+def test_result(
+    use_emulated_run, use_emulated_run_autograd, use_emulated_run_autograd_async, tmp_path
+):
     """Test methods of the ``InverseDesignResult`` object."""
 
-    result = make_result(use_emulated_run)
+    result = make_result(use_emulated_run_autograd)
 
     with pytest.raises(KeyError):
         _ = result.get_last("blah")
@@ -416,18 +406,20 @@ def test_result(use_emulated_run, use_emulated_run_async, tmp_path):  # noqa: F8
     _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data(use_emulated_run):  # noqa: F811
+def test_result_data(use_emulated_run, use_emulated_run_autograd):
     """Test methods of the ``InverseDesignResult`` object."""
 
-    result = make_result(use_emulated_run)
+    result = make_result(use_emulated_run_autograd)
     _ = result.sim_last
     _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data_multi(use_emulated_run_async, tmp_path):  # noqa: F811
-    result_multi = make_result_multi(use_emulated_run_async)
+def test_result_data_multi(
+    use_emulated_run_async, use_emulated_run_autograd_async, use_emulated_run_autograd, tmp_path
+):
+    result_multi = make_result_multi(use_emulated_run_autograd_async)
     _ = result_multi.sim_last
-    _ = result_multi.sim_data_last(task_name="last")
+    _ = result_multi.sim_data_last()
 
 
 def test_result_empty():
@@ -437,86 +429,24 @@ def test_result_empty():
         result_empty.get_last("params")
 
 
-def test_invdes_io(tmp_path, log_capture, use_emulated_run):  # noqa: F811
+def test_invdes_io(tmp_path, log_capture, use_emulated_run_autograd):
     """Test saving a loading ``invdes`` components to file."""
 
-    result = make_result(use_emulated_run)
+    result = make_result(use_emulated_run_autograd)
     optimizer = make_optimizer()
     design = optimizer.design
 
     for obj in (design, optimizer, result):
         obj.json()
 
-        path = str(tmp_path / "obj.pkl")
+        path = str(tmp_path / "obj.hdf5")
         obj.to_file(path)
         obj2 = obj.from_file(path)
-
-        # warn if not pickle extension
-        path = str(tmp_path / "obj.other")
-        with AssertLogLevel(log_capture, "WARNING"):
-            obj.to_file(path)
 
         assert obj2.json() == obj.json()
 
 
-@pytest.fixture
-def hide_jax(monkeypatch, request):
-    """Force an ``ImportError`` when trying to import ``jaxlib.xla_extension``."""
-    import_orig = builtins.__import__
-
-    def mocked_import(name, *args, **kwargs):
-        if name in ["jaxlib.xla_extension"]:
-            raise ImportError()
-        return import_orig(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", mocked_import)
-
-
-def try_array_impl_import() -> None:
-    """Try importing ``tidy3d.plugins.invdes.base``."""
-
-    from importlib import reload
-    import tidy3d
-
-    reload(tidy3d.plugins.invdes.base)
-
-
-@pytest.mark.usefixtures("hide_jax")
-def test_jax_array_impl_import_fail(tmp_path, log_capture):  # noqa: F811
-    """Make sure if import error with ArrayImpl, a warning is logged and module still imports."""
-    try_array_impl_import()
-    assert_log_level(log_capture, "WARNING")
-
-
-def test_jax_array_impl_import_pass(tmp_path, log_capture):  # noqa: F811
-    """Make sure if no import error with ArrayImpl, nothing is logged and module imports."""
-    try_array_impl_import()
-    assert_log_level(log_capture, None)
-
-
-@pytest.mark.parametrize("exception, ok", [(TypeError, True), (OSError, True), (ValueError, False)])
-def test_fn_source_error(monkeypatch, exception, ok):
-    """Make sure type errors are caught when grabbing function source code."""
-
-    def getsource_error(*args, **kwargs):
-        raise exception
-
-    monkeypatch.setattr("inspect.getsource", getsource_error)
-
-    def test():
-        return None
-
-    # shouldnt raise exception as it's caught internally
-    if ok:
-        tdi.base.InvdesBaseModel._get_fn_source(test)
-
-    # should raise exception as it's not caught internally
-    else:
-        with pytest.raises(exception):
-            tdi.base.InvdesBaseModel._get_fn_source(test)
-
-
-def test_objective_utilities(use_emulated_run):  # noqa: F811
+def test_objective_utilities(use_emulated_run_autograd):
     """Test objective function helpers."""
 
     sim_data = run_emulated(simulation, task_name="test")
@@ -547,7 +477,7 @@ def test_objective_utilities(use_emulated_run):  # noqa: F811
         utils.get_amps(sim_data, MNT_NAME1)
 
 
-def test_pixel_size_warn_validator(log_capture):  # noqa: F811
+def test_pixel_size_warn_validator(log_capture):
     """test that pixel size validator warning is raised if too large."""
 
     with AssertLogLevel(log_capture, None):

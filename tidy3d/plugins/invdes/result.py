@@ -1,12 +1,13 @@
 # convenient container for the output of the inverse design (specifically the history)
 
 import typing
+import numpy as np
 
 import matplotlib.pyplot as plt
-import jax.numpy as jnp
 import pydantic.v1 as pd
 
 import tidy3d as td
+from tidy3d.components.types import ArrayLike
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -24,7 +25,7 @@ class InverseDesignResult(InvdesBaseModel):
         description="Specification describing the inverse design problem we wish to optimize.",
     )
 
-    params: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+    params: typing.Tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Parameter History",
         description="History of parameter arrays throughout the optimization.",
@@ -36,7 +37,7 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of objective function values throughout the optimization.",
     )
 
-    grad: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+    grad: typing.Tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Gradient History",
         description="History of objective function gradient arrays throughout the optimization.",
@@ -60,12 +61,10 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
-    # simulations: tt
-
-    opt_state: typing.Tuple[tuple, ...] = pd.Field(
+    opt_state: typing.Tuple[dict, ...] = pd.Field(
         (),
         title="Optimizer State History",
-        description="History of ``optax`` optimizer states throughout the optimization.",
+        description="History of optimizer states throughout the optimization.",
     )
 
     @property
@@ -105,24 +104,24 @@ class InverseDesignResult(InvdesBaseModel):
 
     def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
-        params = self.get(key="params", index=index)
-        return self.design.to_simulation(params)
+        params = np.array(self.get(key="params", index=index))
+        return self.design.to_simulation(params=params)
 
     def get_sim_data(
-        self, task_name: str, index: int = -1, **kwargs
+        self, index: int = -1, **kwargs
     ) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
-        params = self.get(key="params", index=index)
-        return self.design.to_simulation_data(params=params, task_name=task_name, **kwargs)
+        params = np.array(self.get(key="params", index=index))
+        return self.design.to_simulation_data(params=params, **kwargs)
 
     @property
     def sim_last(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """The last simulation."""
         return self.get_sim(index=-1)
 
-    def sim_data_last(self, task_name: str, **kwargs) -> td.SimulationData:
+    def sim_data_last(self, **kwargs) -> td.SimulationData:
         """Run the last simulation and return its data."""
-        return self.get_sim_data(index=-1, task_name=task_name, **kwargs)
+        return self.get_sim_data(index=-1, **kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

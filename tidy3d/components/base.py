@@ -19,8 +19,12 @@ import numpy as np
 import h5py
 import xarray as xr
 
+from .autograd import Box, AutogradFieldMap, get_static
+from autograd.tracer import isbox
+from autograd.builtins import dict as dict_ag
+
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from .data.data_array import DataArray, DATA_ARRAY_MAP
+from .data.data_array import DataArray, DATA_ARRAY_MAP, AUTOGRAD_KEY
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
@@ -174,6 +178,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             np.ndarray: ndarray_encoder,
             complex: lambda x: ComplexNumber(real=x.real, imag=x.imag),
             xr.DataArray: DataArray._json_encoder,
+            Box: lambda x: x._value,
         }
         frozen = True
         allow_mutation = False
@@ -205,15 +210,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
-        if "deep" in kwargs and kwargs["deep"] is False:
-            raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
-        kwargs.update(dict(deep=True))
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
-    def updated_copy(self, path: str = None, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -228,7 +230,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         if not path:
-            return self._updated_copy(**kwargs)
+            return self._updated_copy(**kwargs, deep=deep)
 
         path_components = path.split("/")
 
@@ -267,9 +269,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(**{field_name: new_component})
 
-    def _updated_copy(self, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
-        return self.copy(update=kwargs)
+        return self.copy(update=kwargs, deep=deep)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -856,6 +858,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 val1 = dict1[key]
                 val2 = dict2[key]
 
+                val1 = get_static(val1)
+                val2 = get_static(val2)
+
                 # if one of val1 or val2 is None (exclusive OR)
                 if (val1 is None) != (val2 is None):
                     return False
@@ -921,6 +926,129 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
         json_string = make_json_compatible(json_string)
         return json_string
+
+    def strip_traced_fields(
+        self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
+    ) -> AutogradFieldMap:
+        """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
+
+        Parameters
+        ----------
+        starting_path : tuple[str, ...] = ()
+            If provided, starts recursing in self.dict() from this path of field names
+        include_untraced_data_arrays : bool = False
+            Whether to include ``DataArray`` objects without tracers.
+            We need to include these when returning data, but are unnecessary for structures.
+
+        Returns
+        -------
+        dict
+            mapping of traced fields used by ``autograd``
+
+        """
+
+        field_mapping = {}
+
+        def handle_value(x: Any, path: tuple[str, ...]) -> None:
+            """recursively update ``field_mapping`` with path to the autograd data."""
+
+            # this is a leaf node that we want to trace, add this path and data to the mapping
+            if isbox(x):
+                field_mapping[path] = x
+
+            # for data arrays, need to be more careful as their tracers are stored in attrs
+            elif isinstance(x, DataArray):
+                # try to grab the traced values from the `attrs` (if traced)
+                if AUTOGRAD_KEY in x.attrs:
+                    field_mapping[path] = x.attrs[AUTOGRAD_KEY]
+
+                # or just grab the static value out of the values
+                elif include_untraced_data_arrays:
+                    field_mapping[path] = get_static(x.values)
+
+            # for sequences, add (i,) to the path and handle each value individually
+            elif isinstance(x, (list, tuple)):
+                for i, val in enumerate(x):
+                    sub_paths = tuple(list(path) + [i])
+                    handle_value(val, path=sub_paths)
+
+            # for dictionaries, add the (key,) to the path and handle each value individually
+            elif isinstance(x, dict):
+                for key, val in x.items():
+                    sub_paths = tuple(list(path) + [key])
+                    handle_value(val, path=sub_paths)
+
+        # recursively parse the dictionary of this object
+        self_dict = self.dict()
+
+        # if an include_only string was provided, only look at that subset of the dict
+        if starting_path:
+            for key in starting_path:
+                self_dict = self_dict[key]
+
+        handle_value(self_dict, path=starting_path)
+
+        # convert the resulting field_mapping to an autograd-traced dictionary
+        return dict_ag(field_mapping)
+
+    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+        """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
+
+        # ``def insert_value()`` will insert into this dictionary
+        self_dict = self.dict()
+
+        def insert_value(x, path: tuple[str, ...], sub_dict: dict):
+            """Recursively insert a value into the path into a dictionary."""
+
+            # get the first and rest of the path
+            key, *sub_path = path
+            len_sub_path = len(sub_path)
+
+            # if sub_dict[key] is a tuple, immediately convert it to a list so we can assign to it
+            if isinstance(sub_dict[key], tuple):
+                sub_dict[key] = list(sub_dict[key])
+
+            # only one element in path => leaf node. insert into the sub dict and don't recurse
+            if len_sub_path == 0:
+                sub_element = sub_dict[key]
+
+                # if data array, we copy it and insert x into the data slot
+                if isinstance(sub_element, DataArray):
+                    sub_dict[key] = sub_element.copy(deep=False, data=x)
+
+                    # if the element is traced, we also insert the data into the attrs
+                    if "AUTOGRAD" in sub_element.attrs:
+                        sub_dict[key].attrs["AUTOGRAD"] = x
+
+                # if not a data array, just save x to the dictionary
+                else:
+                    sub_dict[key] = x
+
+                # don't recurse as this is a leaf node
+                return
+
+            # if 1 or more more elements in the path, and they aren't a tuple index (above), recurse
+            sub_dict = sub_dict[key]
+            insert_value(value, path=sub_path, sub_dict=sub_dict)
+
+        # iterate through field mapping. Insert each ``value`` into the ``self_dict`` at ``path``
+        for path, value in field_mapping.items():
+            insert_value(value, path=path, sub_dict=self_dict)
+
+        # parse the dict with inserted fields to return an updated copy of ``self``
+        return self.parse_obj(self_dict)
+
+    def to_static(self) -> Tidy3dBaseModel:
+        """Version of object with all autograd-traced fields removed."""
+
+        # get dictionary of all traced fields
+        field_mapping = self.strip_traced_fields()
+
+        # convert all fields to static values
+        field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
+
+        # insert the static values into a copy of self
+        return self.insert_traced_fields(field_mapping_static)
 
     @classmethod
     def add_type_field(cls) -> None:

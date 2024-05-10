@@ -36,6 +36,8 @@ pydantic = "^2.0"
 PyYAML = "*"
 dask = "*"
 toml = "*"
+autograd = "1.6.2"
+
 ### NOT CORE
 scipy = "*"
 boto3 = "^1.28.0"
