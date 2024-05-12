@@ -12,6 +12,18 @@ from tidy3d.plugins.smatrix import (
 )
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from ..utils import run_emulated
+from ..test_web.test_webapi import (
+    mock_upload,
+    mock_metadata,
+    mock_get_info,
+    mock_start,
+    mock_monitor,
+    mock_download,
+    mock_load,
+    mock_job_status,
+    mock_load,
+    set_api_key,
+)
 
 # Waveguide height
 wg_height = 0.22
@@ -386,3 +398,19 @@ def test_batch_filename(tmp_path):
 
 def test_import_smatrix_smatrix():
     from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler  # noqa: F401
+
+
+def test_to_from_file_batch(monkeypatch, tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    s_matrix = run_component_modeler(monkeypatch, modeler)
+
+    batch = td.web.Batch(simulations=dict())
+
+    modeler._cached_properties["batch"] = batch
+
+    fname = str(tmp_path) + "/modeler.json"
+
+    modeler.to_file(fname)
+    modeler2 = modeler.from_file(fname)
+
+    assert modeler2.batch_cached == modeler2.batch == batch

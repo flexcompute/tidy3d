@@ -541,12 +541,14 @@ def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
     fname = str(tmp_path / "batch.json")
 
     b.to_file(fname)
-    b = b.from_file(fname)
+    b2 = b.from_file(fname)
 
-    b.estimate_cost()
-    b.run(path_dir=str(tmp_path))
-    _ = b.get_info()
-    assert b.real_cost() == FLEX_UNIT * len(sims)
+    assert all(j.task_id == j2.task_id for j, j2 in zip(b.jobs.values(), b2.jobs.values()))
+
+    b2.estimate_cost()
+    b2.run(path_dir=str(tmp_path))
+    _ = b2.get_info()
+    assert b2.real_cost() == FLEX_UNIT * len(sims)
 
 
 """ Async """
