@@ -494,6 +494,15 @@ class Batch(WebContainer):
         "number of threads available on the system.",
     )
 
+    jobs_cached: Dict[TaskName, Job] = pd.Field(
+        None,
+        title="Jobs (Cached)",
+        description="Optional field to specify ``jobs``. Only used as a workaround internally "
+        "so that ``jobs`` is written when ``Batch.to_file()`` and then the proper task is loaded "
+        "from ``Batch.from_file()``. We recommend leaving unset as setting this field along with "
+        "fields that were not used to create the task will cause errors.",
+    )
+
     _job_type = Job
 
     @staticmethod
@@ -547,6 +556,9 @@ class Batch(WebContainer):
         To start the simulations running, must call :meth:`Batch.start` after uploaded.
         """
 
+        if self.jobs_cached is not None:
+            return self.jobs_cached
+
         # the type of job to upload (to generalize to subclasses)
         JobType = self._job_type
         self_dict = self.dict()
@@ -568,6 +580,20 @@ class Batch(WebContainer):
             job = JobType(**job_kwargs)
             jobs[task_name] = job
         return jobs
+
+    def json(self, **kwargs):
+        """Save ``Batch`` to dictionary. Add the ``jobs`` if they have been cached."""
+
+        self_json = super().json(**kwargs)
+
+        jobs = self._cached_properties.get("jobs")
+
+        if not jobs:
+            return self_json
+
+        self_dict = json.loads(self_json)
+        self_dict["jobs_cached"] = {k: json.loads(j.json()) for k, j in jobs.items()}
+        return json.dumps(self_dict)
 
     @property
     def num_jobs(self) -> int:

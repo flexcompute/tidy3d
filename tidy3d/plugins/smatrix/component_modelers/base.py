@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Tuple, Dict, Union
 import os
 from abc import ABC, abstractmethod
+import json
 
 import pydantic.v1 as pd
 import numpy as np
@@ -91,6 +92,15 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         "If not supplied, uses default for the current front end version.",
     )
 
+    batch_cached: Batch = pd.Field(
+        None,
+        title="Batch (Cached)",
+        description="Optional field to specify ``batch``. Only used as a workaround internally "
+        "so that ``batch`` is written when ``.to_file()`` and then the proper batch is loaded "
+        "from ``.from_file()``. We recommend leaving unset as setting this field along with "
+        "fields that were not used to create the task will cause errors.",
+    )
+
     @pd.validator("simulation", always=True)
     def _sim_has_no_sources(cls, val):
         """Make sure simulation has no sources as they interfere with tool."""
@@ -109,12 +119,30 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def sim_dict(self) -> Dict[str, Simulation]:
         """Generate all the :class:`Simulation` objects for the S matrix calculation."""
 
+    def json(self, **kwargs):
+        """Save component to dictionary. Add the ``batch`` if it has been cached."""
+
+        self_json = super().json(**kwargs)
+
+        batch = self._cached_properties.get("batch")
+
+        if not batch:
+            return self_json
+
+        self_dict = json.loads(self_json)
+        self_dict["batch_cached"] = json.loads(batch.json())
+        return json.dumps(self_dict)
+
     @cached_property
     def batch(self) -> Batch:
         """Batch associated with this component modeler."""
 
+        if self.batch_cached is not None:
+            return self.batch_cached
+
         # first try loading the batch from file, if it exists
         batch_path = self._batch_path
+
         if os.path.exists(batch_path):
             return Batch.from_file(fname=batch_path)
 
@@ -175,7 +203,6 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
     def run(self, path_dir: str = DEFAULT_DATA_DIR) -> DataArray:
         """Solves for the scattering matrix of the system."""
         path_dir = self.get_path_dir(path_dir)
-
         batch_data = self._run_sims(path_dir=path_dir)
         return self._construct_smatrix(batch_data=batch_data)
 
