@@ -27,62 +27,10 @@ def _run_static(sim: td.Simulation) -> td.SimulationData:
     return run_webapi(sim, task_name="autograd my life", verbose=False)
 
 
-def adjoint_mnt_fld_name(i: int) -> str:
-    """Name of field monitor for adjoint gradient for structure i"""
-    return f"adjoint_fld_{i}"
-
-
-def adjoint_mnt_eps_name(i: int) -> str:
-    """Name of permittivity monitor for adjoint gradient for structure i"""
-    return f"adjoint_eps_{i}"
-
-
 def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
     """Split a list at a given index."""
     x = list(x)
     return x[:index], x[index:]
-
-
-# TODO: probably all of the below should be methods of the class type passed as first args
-
-
-def generate_adjoint_monitors(
-    sim: td.Simulation,
-) -> (list[td.FieldMonitor], list[td.PermittivityMonitor]):
-    """Get lists of field and permittivity monitors for this simulation."""
-
-    sim_fields = sim.traced_fields()
-
-    adjoint_mnts_fld = []
-    adjoint_mnts_eps = []
-    for i, (structure, permittivity) in enumerate(zip(sim.structures, sim_fields)):  # noqa: B007
-        # TODO: eventually, only include if this is traced in `sim_fields`
-
-        box = structure.geometry.bounding_box
-
-        # TODO: refactor this as Structure method(s)?
-
-        mnt_fld = td.FieldMonitor(
-            size=box.size,  # TODO: expand slightly?
-            center=box.center,
-            freqs=[FREQ0],  # TODO: determine adjoint freqs
-            name=adjoint_mnt_fld_name(i),
-        )
-
-        mnt_eps = td.PermittivityMonitor(
-            size=box.size,  # TODO: expand slightly?
-            center=box.center,
-            freqs=[FREQ0],  # TODO: determine adjoint freqs
-            name=adjoint_mnt_eps_name(i),
-        )
-        adjoint_mnts_fld.append(mnt_fld)
-        adjoint_mnts_eps.append(mnt_eps)
-
-    assert len(adjoint_mnts_fld) == len(
-        adjoint_mnts_eps
-    ), "Different # of field and permittivity adjoint monitors"
-
-    return adjoint_mnts_fld, adjoint_mnts_eps
 
 
 def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> (list, list, list):
@@ -101,92 +49,13 @@ def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> (lis
     return data_original, data_adjoint_fld, data_adjoint_eps
 
 
-def generate_adjoint_sources(
-    sim: td.Simulation, data_fields_vjp: list[npa.ndarray]
-) -> list[td.Source]:
-    """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
-
-    sources_adj = []
-
-    # TODO: this is the ModeData -> ModeSource only for now, refactor as MonitorData methods
-    for mnt, amps in zip(sim.monitors, data_fields_vjp):
-        # NOTE: should we just silently exclude, or raise here?
-        # TODO: write as the default method NotImplementedError in MonitorData base class
-        if not isinstance(mnt, td.ModeMonitor):
-            td.log.warning(
-                f"No adjoint source rule for {mnt.type}. "
-                f"Skipping adjoint for data associated with monitor named '{mnt.name}'. "
-                "If the objective function depends on the data associated with this monitor, it "
-                "will not contribute to the gradient."
-            )
-            continue
-
-        # TODO: we'll have to iterate over the other dims eventually
-        for direction, amp in zip("+-", amps):
-            # td.log.info(f"monitor '{mnt.name}', direction '{direction}', amp '{amp}'")
-
-            if npa.isclose(amp, 0.0):
-                continue
-
-            amplitude = float(npa.abs(amp))  # TODO: there are constants
-            phase = float(npa.angle(1j * amp))
-
-            src_adj = td.ModeSource(
-                source_time=td.GaussianPulse(
-                    amplitude=amplitude,
-                    phase=phase,
-                    freq0=FREQ0,
-                    fwidth=FREQ0 / 10,  # TODO: how to set this?
-                ),
-                mode_spec=mnt.mode_spec,
-                size=mnt.size,
-                center=mnt.center,
-                direction={"-": "+", "+": "-"}[direction],  # flip source direction
-            )
-            sources_adj.append(src_adj)
-
-    return sources_adj
-
-
-def make_adjoint_sim(sim: td.Simulation, data_fields_vjp: list[npa.ndarray]) -> td.Simulation:
-    """Make the adjoint simulation from the original simulation and the VJP-containing data."""
-    sources_adj = generate_adjoint_sources(sim=sim, data_fields_vjp=data_fields_vjp)
-    adjoint_mnts_fld, adjoint_mnts_eps = generate_adjoint_monitors(sim=sim)
-    monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
-    sim_adj = sim.copy(
-        update=dict(
-            sources=sources_adj,
-            monitors=monitors_adj,
-        )
-    )
-    return sim_adj
-
-
-def compute_derivative(
-    sim: td.Simulation,
-    structure_index: int,
-    fwd_fld: td.FieldData,
-    fwd_eps: td.PermittivityData,
-    adj_fld: td.FieldData,
-    adj_eps: td.PermittivityData,
-) -> float:
-    """Compute the derivative for this structure given forward and adjoint fields."""
-    vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
-    vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
-    vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
-    vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
-    # TODO: put these at the same positions, sum and real, refactor
-    vjp_value = npa.real(vjp_value)
-    return vjp_value
-
-
 @primitive
 def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
     """Autograd-traced running function, runs a simulation under the hood and stitches in data."""
 
     td.log.info("running primitive _run()")
 
-    adjoint_mnts_fld, adjoint_mnts_eps = generate_adjoint_monitors(sim)
+    adjoint_mnts_fld, adjoint_mnts_eps = sim.generate_adjoint_monitors()
     num_mnts_original = len(sim.monitors)
 
     monitors = list(sim.monitors) + adjoint_mnts_fld + adjoint_mnts_eps
@@ -246,6 +115,7 @@ def _run_bwd(
     # get the fwd epsilon and field data from the cached aux_data
     data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
     data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
+    sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
 
     td.log.info("constructing custom vjp")
 
@@ -254,7 +124,8 @@ def _run_bwd(
         td.log.info("running custom vjp")
 
         # make and run adjoint simulation
-        sim_adj = make_adjoint_sim(sim=sim, data_fields_vjp=data_fields_vjp)
+        sim_adj = sim_data_fwd.make_adjoint_sim(data_fields_vjp=data_fields_vjp)
+
         if not len(sim_adj.sources):
             td.log.warning(
                 "No adjoint sources generated. "
@@ -276,8 +147,7 @@ def _run_bwd(
         for structure_index, (fwd_fld, fwd_eps, adj_fld, adj_eps) in enumerate(zip(*vjp_iters)):
             assert npa.all(fwd_eps == adj_eps), "different forward and adjoint permittivity."
 
-            vjp_value_i = compute_derivative(
-                sim=sim,
+            vjp_value_i = sim_data_fwd.compute_derivative(
                 structure_index=structure_index,
                 fwd_fld=fwd_fld,
                 fwd_eps=fwd_eps,

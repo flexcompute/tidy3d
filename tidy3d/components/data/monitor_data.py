@@ -9,6 +9,7 @@ import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
 from pandas import DataFrame
+import autograd.numpy as npa
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeAmpsDataArray
@@ -26,6 +27,7 @@ from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Nump
 from ..types import EpsSpecType, Literal
 from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
+from ..source import GaussianPulse, ModeSource, Source
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
@@ -76,6 +78,10 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict = self.dict()
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
+
+    def generate_adjoint_sources(self) -> list[Source]:
+        """Make list of adjoint sources associated with the data stored in this monitor data."""
+        raise NotImplementedError("No adjoint source for {self.type}.")
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -1560,6 +1566,40 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             drop.append("loss (dB/cm)")
 
         return dataset.drop_vars(drop).to_dataframe()
+
+    def generate_adjoint_sources(self, data_vjp: npa.ndarray) -> list[ModeSource]:
+        """Generate adjoint sources for this MonitorData instance."""
+
+        mnt = self.monitor
+
+        amps = self.amps
+
+        freq0 = amps.coords["f"]
+
+        sources_adj = []
+
+        # TODO: we'll have to iterate over the other dims eventually
+        for direction, amp in zip("+-", amps):
+            # td.log.info(f"monitor '{mnt.name}', direction '{direction}', amp '{amp}'")
+
+            amplitude = float(npa.abs(amp))  # TODO: there are constants
+            phase = float(npa.angle(1j * amp))
+
+            src_adj = ModeSource(
+                source_time=GaussianPulse(
+                    amplitude=amplitude,
+                    phase=phase,
+                    freq0=freq0,
+                    fwidth=freq0 / 10,  # TODO: how to set this?
+                ),
+                mode_spec=mnt.mode_spec,
+                size=mnt.size,
+                center=mnt.center,
+                direction={"-": "+", "+": "-"}[direction],  # flip source direction
+            )
+            sources_adj.append(src_adj)
+
+        return sources_adj
 
 
 class ModeSolverData(ModeData):

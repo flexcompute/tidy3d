@@ -1,6 +1,7 @@
 # test autograd integration into tidy3d
 
 import pytest
+import matplotlib.pylab as plt
 
 import autograd as ag
 import autograd.numpy as npa
@@ -9,17 +10,6 @@ from tidy3d.components.autograd import primitive, defvjp
 import typing
 
 from ..utils import run_emulated
-
-_run_was_emulated = [False]
-
-
-@pytest.fixture
-def use_emulated_run(monkeypatch):
-    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-    import tidy3d.web.api.webapi as webapi
-
-    monkeypatch.setattr(webapi, "run", run_emulated)
-    _run_was_emulated[0] = True
 
 
 WVL = 1.0
@@ -36,12 +26,22 @@ MNT_NAME = "mnt"
 
 PLOT_SIM = False
 
+# variable to store whether the emulated run as used
+_run_was_emulated = [False]
 
-def mnt_name_i(i: int):
-    return f"{MNT_NAME}_{i}"
+
+@pytest.fixture
+def use_emulated_run(monkeypatch):
+    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    import tidy3d.web.api.webapi as webapi
+
+    monkeypatch.setattr(webapi, "run", run_emulated)
+    _run_was_emulated[0] = True
 
 
 def test_autograd_objective(use_emulated_run):
+    """Test an objective function through tidy3d autograd."""
+
     # import here so it uses emulated run
     from tidy3d.web.api.autograd import run as run_ag
 
@@ -50,12 +50,19 @@ def test_autograd_objective(use_emulated_run):
     # for logging output
     td.config.logging_level = "INFO"
 
+    def mnt_name_i(i: int) -> str:
+        """Name of the ith monitor."""
+        return f"{MNT_NAME}_{i}"
+
+    def plot_sim(sim: td.Simulation) -> None:
+        f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
+        sim.plot(x=0, ax=ax1)
+        sim.plot(y=0, ax=ax2)
+        sim.plot(z=0, ax=ax3)
+        plt.show()
+
     def make_sim(params):
-
         permittivities = params
-
-        # medium = td.Medium(permittivity=permittivity)
-        # box = td.Box(size=(BX,1,1), center=(0,0,0))
 
         structure_centers = npa.linspace(-LX / 2 + BX, LX / 2 - BX, NUM_STCRS)
 
@@ -115,20 +122,13 @@ def test_autograd_objective(use_emulated_run):
             amps_i = data[name].amps
             value_i = npa.sum(abs(amps_i.values) ** 2)
             value += value_i
-        return value        
+        return value
 
     def objective(params):
-
         sim = make_sim(params)
 
         if PLOT_SIM:
-            import matplotlib.pylab as plt
-
-            f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
-            sim.plot(x=0, ax=ax1)
-            sim.plot(y=0, ax=ax2)
-            sim.plot(z=0, ax=ax3)
-            plt.show()
+            plot_sim(sim)
 
         data = run_ag(sim)
 
@@ -143,11 +143,11 @@ def test_autograd_objective(use_emulated_run):
 
     print(val, grad)
 
-    assert not npa.all(grad == 0.0)
+    assert not npa.any(grad == 0.0)
 
     # numerical gradient (if not emulating run)
 
-    # last computed May 10 at 3pm
+    # last computed May 10 at 3pm EST
     grad_numerical = npa.array([-0.09250836, -1.89401786, 6.77510484, -1.89459057, -0.09236825])
 
     if grad_numerical is not None and not run_was_emulated:

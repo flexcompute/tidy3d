@@ -3216,7 +3216,7 @@ class Simulation(AbstractYeeGridSimulation):
                         f"the simulation run time {self._run_time:1.2e}s. No data will be recorded."
                     )
 
-    """ Accounting """
+    """ Autograd adjoint support """
 
     def traced_fields(self) -> npa.ndarray:
         """Construct array full of the differentiable fields in this simulation."""
@@ -3224,6 +3224,42 @@ class Simulation(AbstractYeeGridSimulation):
         # TODO: how to encode which structure (indices) map to this array?
         # TODO: assumes only Medium in the structures
         return npa.array([s.medium.permittivity for s in self.structures])
+
+    @property
+    def freqs_adjoint(self) -> list[float]:
+        freqs = []
+        for mnt in self.monitors:
+            if isinstance(mnt, FreqMonitor):
+                for f in mnt.freqs:
+                    if f not in freqs:
+                        freqs.append(f)
+        freqs.sort()
+        return freqs
+
+    def generate_adjoint_monitors(self) -> (list[FieldMonitor], list[PermittivityMonitor]):
+        """Get lists of field and permittivity monitors for this simulation."""
+
+        sim_fields = self.traced_fields()
+
+        freqs = self.freqs_adjoint
+
+        adjoint_mnts_fld = []
+        adjoint_mnts_eps = []
+        for i, (structure, _) in enumerate(zip(self.structures, sim_fields)):
+            # TODO: eventually, only include if this is traced in `sim_fields`
+
+            mnt_fld, mnt_eps = structure.generate_adjoint_monitors(freqs=freqs, index=i)
+
+            adjoint_mnts_fld.append(mnt_fld)
+            adjoint_mnts_eps.append(mnt_eps)
+
+        assert len(adjoint_mnts_fld) == len(
+            adjoint_mnts_eps
+        ), "Different # of field and permittivity adjoint monitors"
+
+        return adjoint_mnts_fld, adjoint_mnts_eps
+
+    """ Accounting """
 
     def to_static(self) -> Simulation:
         """Un-trace all differentiable fields in this Simulation."""

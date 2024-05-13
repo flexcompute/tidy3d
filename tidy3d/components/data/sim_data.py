@@ -12,8 +12,16 @@ import json
 
 import autograd.numpy as npa
 
-from .monitor_data import MonitorDataTypes, MonitorDataType, AbstractFieldData, FieldTimeData
+from .monitor_data import (
+    MonitorDataTypes,
+    MonitorDataType,
+    AbstractFieldData,
+    FieldTimeData,
+    PermittivityData,
+    FieldData,
+)
 from ..simulation import Simulation
+from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
@@ -825,3 +833,46 @@ class SimulationData(AbstractYeeGridSimulationData):
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
+
+    def make_adjoint_sim(self, data_fields_vjp: list[npa.ndarray]) -> Simulation:
+        """Make the adjoint simulation from the original simulation and the VJP-containing data."""
+        sources_adj = self.generate_adjoint_sources(data_fields_vjp=data_fields_vjp)
+        adjoint_mnts_fld, adjoint_mnts_eps = self.simulation.generate_adjoint_monitors()
+        monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
+        sim_adj = self.simulation.copy(
+            update=dict(
+                sources=sources_adj,
+                monitors=monitors_adj,
+            )
+        )
+        return sim_adj
+
+    def generate_adjoint_sources(self, data_fields_vjp: list[npa.ndarray]) -> list[Source]:
+        """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
+
+        sources_adj_all = []
+
+        # TODO: this is the ModeData -> ModeSource only for now, refactor as MonitorData methods
+        for mnt_data, data_vjp in zip(self.data, data_fields_vjp):
+            sources_adj = mnt_data.generate_adjoint_sources(data_vjp)
+
+            sources_adj_all += sources_adj
+
+        return sources_adj_all
+
+    def compute_derivative(
+        self: SimulationData,
+        structure_index: int,
+        fwd_fld: FieldData,
+        fwd_eps: PermittivityData,
+        adj_fld: FieldData,
+        adj_eps: PermittivityData,
+    ) -> float:
+        structure = self.simulation.structures[structure_index]
+        return structure.compute_derivative(
+            fwd_fld=fwd_fld,
+            fwd_eps=fwd_eps,
+            adj_fld=adj_fld,
+            adj_eps=adj_eps,
+            # Add other fields here? from simulation?
+        )

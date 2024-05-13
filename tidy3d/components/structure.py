@@ -5,16 +5,20 @@ from typing import Union, Tuple, Optional
 import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
+import autograd.numpy as npa
 
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .validators import validate_name_str
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
+from .monitor import FieldMonitor, PermittivityMonitor
 from .types import Ax, TYPE_TAG_STR, Axis
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
+from .autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name
+from .data.monitor_data import PermittivityData, FieldData
 
 try:
     gdstk_available = True
@@ -171,6 +175,49 @@ class Structure(AbstractStructure):
         ):
             return False
         return True
+
+    def generate_adjoint_monitors(
+        self, freqs: list[float], index: int
+    ) -> (FieldMonitor, PermittivityMonitor):
+        box = self.geometry.bounding_box
+
+        # TODO: refactor this as Structure method(s)?
+
+        mnt_fld = FieldMonitor(
+            size=box.size,  # TODO: expand slightly?
+            center=box.center,
+            freqs=freqs,
+            name=adjoint_mnt_fld_name(index),
+        )
+
+        mnt_eps = PermittivityMonitor(
+            size=box.size,  # TODO: expand slightly?
+            center=box.center,
+            freqs=freqs,
+            name=adjoint_mnt_eps_name(index),
+        )
+
+        return mnt_fld, mnt_eps
+
+    def compute_derivative(
+        self,
+        fwd_fld: FieldData,
+        fwd_eps: PermittivityData,
+        adj_fld: FieldData,
+        adj_eps: PermittivityData,
+        **kwargs,
+    ) -> float:
+        """Compute adjoint gradients given the forward and adjoint fields"""
+        # TODO: this is only for .medium.permittivity
+
+        """Compute the derivative for this structure given forward and adjoint fields."""
+        vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
+        vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
+        vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
+        vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
+        # TODO: put these at the same positions, sum and real, refactor
+        vjp_value = npa.real(vjp_value)
+        return vjp_value
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.
