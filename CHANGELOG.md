@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Simulation.to_gdspy()` and `Simulation.to_gdstk()` now place polygons in GDS layer `(0, 0)` when no `gds_layer_dtype_map` is provided instead of erroring.
 - `task_id` now properly stored in `JaxSimulationData`.
 - Bug in `FastDispersionFitter` when poles move close to input frequencies.
+- Bug in plotting polarization vector of angled sources.
+- Bug in `SpatialDataArray.reflect()` that was causing errors for older versions of `xarray`.
 
 ## [2.7.0rc1] - 2024-04-22
 

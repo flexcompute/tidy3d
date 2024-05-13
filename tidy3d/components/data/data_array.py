@@ -412,7 +412,7 @@ class SpatialDataArray(AbstractSpatialDataArray):
         coords = [sorted_self.x.values, sorted_self.y.values, sorted_self.z.values]
         data = np.array(sorted_self.data)
 
-        data_left_bound = coords[axis].data[0]
+        data_left_bound = coords[axis][0]
 
         if np.isclose(center, data_left_bound):
             num_duplicates = 1
