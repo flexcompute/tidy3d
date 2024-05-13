@@ -10,7 +10,7 @@ on:
       - develop
       - 'pre/*'
       - 'v*'
-      - 'production/test/*'
+      - 'docs/demo/*'
 jobs:
   extract_branch:
     outputs:
