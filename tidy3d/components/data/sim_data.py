@@ -746,25 +746,6 @@ class SimulationData(AbstractYeeGridSimulationData):
         description="A boolean flag denoting whether the simulation run diverged.",
     )
 
-    def traced_fields(self) -> npa.ndarray:
-        """Construct array full of the differentiable fields in this simulation data."""
-        # TODO: only include traced ones?
-        # TODO: how to encode which structure (indices) map to this array?
-        # TODO: assumes only ModeMonitorData in the dataset
-        return [npa.array(d.amps.values) for d in self.data]
-
-    def with_traced_fields(self, data_fields: list) -> SimulationData:
-        """Copy of this object with the autograd-traced data_fields added in the .data."""
-
-        data_traced = []
-        for d, values in zip(self.data, data_fields):
-            amps = d.amps.copy()
-            amps.values = values
-            d_traced = d.copy(update=dict(amps=amps))
-            data_traced.append(d_traced)
-
-        return self.copy(update=dict(data=data_traced))
-
     @property
     def final_decay_value(self) -> float:
         """Returns value of the field decay at the final time step."""
@@ -833,6 +814,29 @@ class SimulationData(AbstractYeeGridSimulationData):
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
+
+    def traced_fields(self) -> npa.ndarray:
+        """Construct array full of the differentiable fields in this simulation data."""
+        # TODO: only include traced ones?
+        # TODO: how to encode which structure (indices) map to this array?
+        # TODO: assumes only ModeMonitorData in the dataset
+
+        traced_fields = []
+        for i, d in enumerate(self.data):
+            traced_fields.append(d.amps.values)
+        return [npa.array(x) for x in traced_fields]
+
+    def with_traced_fields(self, data_fields: list) -> SimulationData:
+        """Copy of this object with the autograd-traced data_fields added in the .data."""
+
+        data_traced = []
+        for d, values in zip(self.data, data_fields):
+            amps = d.amps.copy()
+            amps.values = values
+            d_traced = d.copy(update=dict(amps=amps))
+            data_traced.append(d_traced)
+
+        return self.copy(update=dict(data=data_traced))
 
     def make_adjoint_sim(self, data_fields_vjp: list[npa.ndarray]) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""

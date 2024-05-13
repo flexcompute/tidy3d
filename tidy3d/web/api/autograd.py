@@ -79,7 +79,7 @@ def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
     # TODO: traced_fields needs to generate a mapping to the traced data objects
     data_fields = sim_data.traced_fields()
 
-    return npa.array(data_fields)
+    return data_fields
 
 
 def run(sim: td.Simulation) -> td.SimulationData:
@@ -125,6 +125,8 @@ def _run_bwd(
     def vjp(data_fields_vjp: list) -> list:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
         td.log.info("running custom vjp")
+
+        import pdb; pdb.set_trace()
 
         # make and run adjoint simulation
         sim_adj = sim_data_fwd.make_adjoint_sim(data_fields_vjp=data_fields_vjp)

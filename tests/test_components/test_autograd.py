@@ -119,10 +119,12 @@ def test_autograd_objective(use_emulated_run):
     def postprocess(data: td.SimulationData) -> float:
         value = 0.0
         for i in range(NUM_MNTS):
-            name = mnt_name_i(i)
-            amps_i = data[name].amps
-            value_i = npa.sum(abs(amps_i.values) ** 2)
-            value += value_i
+            if i % 2 == 0:
+                name = mnt_name_i(i)
+                amps_i = data[name].amps
+                value_i = npa.sum(abs(amps_i.values) ** 2)
+                print(value_i)
+                value += value_i
         return value
 
     def objective(params):
