@@ -18,6 +18,7 @@ MNT_NAME = "mnt"
 AUX_KEY_SIM_DATA = "sim_data"
 AUX_KEY_DATA_EPS = "adjoint_eps"
 AUX_KEY_DATA_FLD = "adjoint_fld"
+AUX_KEY_SIM_FIELD_MAPPING = "traced_sim_fields"
 
 
 # TODO: pass all the kwargs
@@ -86,12 +87,13 @@ def run(sim: td.Simulation) -> td.SimulationData:
     td.log.info("running user-facing run()")
 
     # TODO: traced_fields needs to generate a mapping to the traced structures
-    sim_fields = sim.traced_fields()
+    sim_fields, sim_field_mapping = sim.traced_fields()
 
     # TODO: if no tracers (sim_fields empty?) probably can just run normally, although should generalize
 
     # TODO: hide this aux data stuff?
     aux_data = {}
+    aux_data[AUX_KEY_SIM_FIELD_MAPPING] = sim_field_mapping
 
     data_fields = _run(sim_fields, sim=sim, aux_data=aux_data)
 
@@ -116,6 +118,7 @@ def _run_bwd(
     data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
     data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
     sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
+    # sim_field_mapping = aux_data[AUX_KEY_SIM_FIELD_MAPPING]
 
     td.log.info("constructing custom vjp")
 

@@ -66,13 +66,14 @@ def test_autograd_objective(use_emulated_run):
 
         structure_centers = npa.linspace(-LX / 2 + BX, LX / 2 - BX, NUM_STCRS)
 
-        structures = [
-            td.Structure(
+        structures = []
+        for i, (eps, x0) in enumerate(zip(params, structure_centers)):
+            eps_i = eps if (i % 2 == 0) else 2.0
+            s = td.Structure(
                 geometry=td.Box(size=(BX, 1, 1), center=(x0, 0, 0)),
-                medium=td.Medium(permittivity=eps),
+                medium=td.Medium(permittivity=eps_i),
             )
-            for eps, x0 in zip(params, structure_centers)
-        ]
+            structures.append(s)
 
         mnts = []
         for i in range(NUM_MNTS):
