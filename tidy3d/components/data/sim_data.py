@@ -20,6 +20,7 @@ from .monitor_data import (
     PermittivityData,
     FieldData,
 )
+from ..autograd import get_structure_index
 from ..simulation import Simulation
 from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
@@ -822,7 +823,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         # TODO: assumes only ModeMonitorData in the dataset
 
         traced_fields = []
-        for i, d in enumerate(self.data):
+        for _, d in enumerate(self.data):
             traced_fields.append(d.amps.values)
         return [npa.array(x) for x in traced_fields]
 
@@ -866,14 +867,17 @@ class SimulationData(AbstractYeeGridSimulationData):
 
     def compute_derivative(
         self: SimulationData,
-        structure_index: int,
+        field_map: str,
         fwd_fld: FieldData,
         fwd_eps: PermittivityData,
         adj_fld: FieldData,
         adj_eps: PermittivityData,
     ) -> float:
-        structure = self.simulation.structures[structure_index]
+        structure_index = get_structure_index(field_map)
+
+        structure = self.simulation.structures[int(structure_index)]
         return structure.compute_derivative(
+            field_map=field_map,
             fwd_fld=fwd_fld,
             fwd_eps=fwd_eps,
             adj_fld=adj_fld,

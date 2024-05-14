@@ -69,9 +69,10 @@ def test_autograd_objective(use_emulated_run):
         structures = []
         for i, (eps, x0) in enumerate(zip(params, structure_centers)):
             eps_i = eps if (i % 2 == 0) else 2.0
+            sigma_i = eps / 10.0 if i > 2 else 0.0
             s = td.Structure(
                 geometry=td.Box(size=(BX, 1, 1), center=(x0, 0, 0)),
-                medium=td.Medium(permittivity=eps_i),
+                medium=td.Medium(permittivity=eps_i, conductivity=sigma_i),
             )
             structures.append(s)
 

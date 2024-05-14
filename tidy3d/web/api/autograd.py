@@ -2,7 +2,7 @@
 
 import autograd.numpy as npa
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp
+from tidy3d.components.autograd import primitive, defvjp, get_structure_indices, get_structure_index
 import typing
 
 from .webapi import run as run_webapi
@@ -118,15 +118,13 @@ def _run_bwd(
     data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
     data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
     sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
-    # sim_field_mapping = aux_data[AUX_KEY_SIM_FIELD_MAPPING]
+    sim_field_mapping = aux_data[AUX_KEY_SIM_FIELD_MAPPING]
 
     td.log.info("constructing custom vjp")
 
     def vjp(data_fields_vjp: list) -> list:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
         td.log.info("running custom vjp")
-
-        import pdb; pdb.set_trace()
 
         # make and run adjoint simulation
         sim_adj = sim_data_fwd.make_adjoint_sim(data_fields_vjp=data_fields_vjp)
@@ -145,15 +143,25 @@ def _run_bwd(
         # split into field and epsilon values
         _, data_adj_fld, data_adj_eps = split_data_list(sim_data=sim_data_adj, num_mnts_original=0)
 
-        # compute the VJP output for all of the traced structures using forward and adjoint fields
-        vjp_iters = (data_fwd_fld, data_fwd_eps, data_adj_fld, data_adj_eps)
-        vjp_values = []
+        # Map the index of each structure to the index into the data from the adjoint and forward
+        structure_indices = get_structure_indices(sim_field_mapping)
+        data_indices = npa.arange(len(data_adj_fld))
+        structure_index_to_data_index = dict(zip(structure_indices, data_indices))
 
-        for structure_index, (fwd_fld, fwd_eps, adj_fld, adj_eps) in enumerate(zip(*vjp_iters)):
+        vjp_values = []
+        for field_map_i in sim_field_mapping:
+            structure_index = get_structure_index(field_map_i)
+            data_index = structure_index_to_data_index[structure_index]
+
+            fwd_fld = data_fwd_fld[data_index]
+            fwd_eps = data_fwd_eps[data_index]
+            adj_fld = data_adj_fld[data_index]
+            adj_eps = data_adj_eps[data_index]
+
             assert npa.all(fwd_eps == adj_eps), "different forward and adjoint permittivity."
 
             vjp_value_i = sim_data_fwd.compute_derivative(
-                structure_index=structure_index,
+                field_map=field_map_i,
                 fwd_fld=fwd_fld,
                 fwd_eps=fwd_eps,
                 adj_fld=adj_fld,

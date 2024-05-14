@@ -1369,7 +1369,7 @@ class Medium(AbstractMedium):
         1.0, ge=1.0, title="Permittivity", description="Relative permittivity.", units=PERMITTIVITY
     )
 
-    conductivity: float = pd.Field(
+    conductivity: TracedFloat = pd.Field(
         0.0,
         title="Conductivity",
         description="Electric conductivity. Defined such that the imaginary part of the complex "

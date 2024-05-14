@@ -1,7 +1,7 @@
 """Defines Geometric objects with Medium properties."""
 from __future__ import annotations
 
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, Callable
 import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
@@ -17,7 +17,7 @@ from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
-from .autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name
+from .autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name, get_field_key, Box
 from .data.monitor_data import PermittivityData, FieldData
 
 try:
@@ -176,6 +176,16 @@ class Structure(AbstractStructure):
             return False
         return True
 
+    """ Begin autograd code."""
+
+    def traced_fields(self) -> dict[tuple[str, str], Box]:
+        """Get the traced fields and fields for all traced fields in a structure."""
+        all_fields = {
+            ("medium", "permittivity"): self.medium.permittivity,
+            ("medium", "conductivity"): self.medium.conductivity,
+        }
+        return {key: val for key, val in all_fields.items() if isinstance(val, Box)}
+
     def generate_adjoint_monitors(
         self, freqs: list[float], index: int
     ) -> (FieldMonitor, PermittivityMonitor):
@@ -199,7 +209,23 @@ class Structure(AbstractStructure):
 
         return mnt_fld, mnt_eps
 
-    def compute_derivative(
+    @property
+    def derivative_function_map(self) -> dict[tuple[str, str], Callable]:
+        """Map path to the right derivative function function."""
+        return {
+            ("medium", "permittivity"): self.derivative_medium_permittivity,
+            ("medium", "conductivity"): self.derivative_medium_conductivity,
+        }
+
+    def get_derivative_function(self, key: str) -> Callable:
+        """Get the derivative function function."""
+
+        derivative_map = self.derivative_function_map
+        if key not in derivative_map:
+            raise NotImplementedError(f"Can't compute derivative for structure field {key}.")
+        return derivative_map[key]
+
+    def derivative_medium_permittivity(
         self,
         fwd_fld: FieldData,
         fwd_eps: PermittivityData,
@@ -207,10 +233,7 @@ class Structure(AbstractStructure):
         adj_eps: PermittivityData,
         **kwargs,
     ) -> float:
-        """Compute adjoint gradients given the forward and adjoint fields"""
-        # TODO: this is only for .medium.permittivity
-
-        """Compute the derivative for this structure given forward and adjoint fields."""
+        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
         vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
         vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
         vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
@@ -218,6 +241,46 @@ class Structure(AbstractStructure):
         # TODO: put these at the same positions, sum and real, refactor
         vjp_value = npa.real(vjp_value)
         return vjp_value
+
+    def derivative_medium_conductivity(
+        self,
+        fwd_fld: FieldData,
+        fwd_eps: PermittivityData,
+        adj_fld: FieldData,
+        adj_eps: PermittivityData,
+        **kwargs,
+    ) -> float:
+        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
+        vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
+        vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
+        vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
+        vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
+        # TODO: put these at the same positions, sum and real, refactor
+        vjp_value = npa.real(vjp_value)
+        return vjp_value
+
+    def compute_derivative(
+        self,
+        field_map: str,
+        fwd_fld: FieldData,
+        fwd_eps: PermittivityData,
+        adj_fld: FieldData,
+        adj_eps: PermittivityData,
+        **kwargs,
+    ) -> float:
+        """Compute adjoint gradients given the forward and adjoint fields"""
+
+        field_key = get_field_key(field_map)
+
+        derivative_function = self.get_derivative_function(field_key)
+
+        derivative_value = derivative_function(
+            fwd_fld=fwd_fld, fwd_eps=fwd_eps, adj_fld=adj_fld, adj_eps=adj_eps, **kwargs
+        )
+
+        return derivative_value
+
+    """ End autograd code."""
 
     def eps_comp(self, row: Axis, col: Axis, frequency: float, coords: Coords) -> complex:
         """Single component of the complex-valued permittivity tensor as a function of frequency.

@@ -13,8 +13,7 @@ import math
 import pathlib
 
 import autograd.numpy as npa
-from .autograd import get_static
-from .autograd import Box as AutogradBox
+from .autograd import get_static, get_structure_indices, make_field_path
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -3219,7 +3218,11 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def traced_fields(self) -> (npa.ndarray, list[str]):
+    # @staticmethod
+    # def get_traced_fields(structure: Structure, index: int) -> list[tuple[AutogradBox, str]]:
+    #     """Get the traced field and mapping for all traced fields in a structure."""
+
+    def traced_fields(self) -> (list[Box], list[str]):
         """Construct array full of the differentiable fields in this simulation."""
         # TODO: only include traced ones?
         # TODO: how to encode which structure (indices) map to this array?
@@ -3227,11 +3230,11 @@ class Simulation(AbstractYeeGridSimulation):
         traced_fields = []
         mapping = []
         for i, s in enumerate(self.structures):
-            permittivity = s.medium.permittivity
+            fields_i = s.traced_fields()
 
-            if isinstance(permittivity, AutogradBox):
-                path = f"structures/{i}/medium/permittivity"
-                traced_fields.append(permittivity)
+            for key, val in fields_i.items():
+                path = make_field_path(index=i, key=key)
+                traced_fields.append(val)
                 mapping.append(path)
 
         return npa.array(traced_fields), mapping
@@ -3250,20 +3253,17 @@ class Simulation(AbstractYeeGridSimulation):
     def generate_adjoint_monitors(self) -> (list[FieldMonitor], list[PermittivityMonitor]):
         """Get lists of field and permittivity monitors for this simulation."""
 
-        sim_fields, sim_field_mapping = self.traced_fields()
+        _, sim_field_mapping = self.traced_fields()
 
         freqs = self.freqs_adjoint
 
         adjoint_mnts_fld = []
         adjoint_mnts_eps = []
 
-        for path in sim_field_mapping:
-            # for i, (structure, _) in enumerate(zip(self.structures, sim_fields)):
-            #     # TODO: eventually, only include if this is traced in `sim_fields`
+        structure_indices = get_structure_indices(sim_field_mapping)
 
-            _, i, *details = path.split("/")
-
-            structure = self.structures[int(i)]
+        for i in structure_indices:
+            structure = self.structures[i]
 
             mnt_fld, mnt_eps = structure.generate_adjoint_monitors(freqs=freqs, index=i)
 
