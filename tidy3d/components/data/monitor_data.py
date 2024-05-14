@@ -83,6 +83,10 @@ class MonitorData(AbstractMonitorData, ABC):
         """Make list of adjoint sources associated with the data stored in this monitor data."""
         raise NotImplementedError("No adjoint source for {self.type}.")
 
+    def traced_fields(self) -> dict[str, np.ndarray]:
+        """Get the traced fields and fields for all traced fields in a structure."""
+        return {}
+
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
     """Collection of scalar fields with some symmetry properties."""
@@ -1600,6 +1604,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             sources_adj.append(src_adj)
 
         return sources_adj
+
+    def traced_fields(self) -> dict[tuple[str], np.ndarray]:
+        """Get the traced fields and fields for all traced fields in a structure."""
+        return {("amps",): self.amps}
 
 
 class ModeSolverData(ModeData):

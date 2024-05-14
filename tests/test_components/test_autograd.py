@@ -167,3 +167,6 @@ def test_autograd_objective(use_emulated_run):
                 grad_numerical[i] += sign * _val_i / 2 / delta
 
     print(grad_numerical)
+
+    # for logging output
+    td.config.logging_level = "WARNING"

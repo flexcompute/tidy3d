@@ -20,7 +20,7 @@ from .monitor_data import (
     PermittivityData,
     FieldData,
 )
-from ..autograd import get_structure_index
+from ..autograd import get_index, make_field_path, get_field_key
 from ..simulation import Simulation
 from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
@@ -816,26 +816,42 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
-    def traced_fields(self) -> npa.ndarray:
-        """Construct array full of the differentiable fields in this simulation data."""
+    def traced_fields(self) -> (list[npa.ndarray], list[str]):
+        """Construct array full of the differentiable fields in this simulation."""
         # TODO: only include traced ones?
         # TODO: how to encode which structure (indices) map to this array?
-        # TODO: assumes only ModeMonitorData in the dataset
-
+        # TODO: assumes only Medium in the structures
         traced_fields = []
-        for _, d in enumerate(self.data):
-            traced_fields.append(d.amps.values)
-        return [npa.array(x) for x in traced_fields]
+        mapping = []
+        for i, mnt_data in enumerate(self.data):
+            fields_i = mnt_data.traced_fields()
 
-    def with_traced_fields(self, data_fields: list) -> SimulationData:
+            for key, dataset in fields_i.items():
+                path = make_field_path(pre="data", index=i, key=key)
+                traced_fields.append(dataset.values)
+                mapping.append(path)
+
+        return traced_fields, mapping
+
+    def with_traced_fields(self, data_fields: list, field_map: list[str]) -> SimulationData:
         """Copy of this object with the autograd-traced data_fields added in the .data."""
 
-        data_traced = []
-        for d, values in zip(self.data, data_fields):
-            amps = d.amps.copy()
-            amps.values = values
-            d_traced = d.copy(update=dict(amps=amps))
-            data_traced.append(d_traced)
+        data_traced = list(self.data)
+
+        for values_i, field_map_i in zip(data_fields, field_map):
+            data_index = get_index(field_map_i)
+            dataset_key = get_field_key(field_map_i)
+            dataset_name = dataset_key[0]
+
+            mnt_data = self.data[data_index]
+
+            dataset = mnt_data.traced_fields()[dataset_key]
+
+            dataset_traced = dataset.copy()
+            dataset_traced.values = values_i
+
+            mnt_data_traced = mnt_data.copy(update={dataset_name: dataset_traced})
+            data_traced[data_index] = mnt_data_traced
 
         return self.copy(update=dict(data=data_traced))
 
@@ -873,7 +889,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         adj_fld: FieldData,
         adj_eps: PermittivityData,
     ) -> float:
-        structure_index = get_structure_index(field_map)
+        structure_index = get_index(field_map)
 
         structure = self.simulation.structures[int(structure_index)]
         return structure.compute_derivative(

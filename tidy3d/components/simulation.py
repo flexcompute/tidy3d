@@ -13,7 +13,7 @@ import math
 import pathlib
 
 import autograd.numpy as npa
-from .autograd import get_static, get_structure_indices, make_field_path
+from .autograd import get_static, get_indices, make_field_path
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -3218,10 +3218,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    # @staticmethod
-    # def get_traced_fields(structure: Structure, index: int) -> list[tuple[AutogradBox, str]]:
-    #     """Get the traced field and mapping for all traced fields in a structure."""
-
     def traced_fields(self) -> (list[Box], list[str]):
         """Construct array full of the differentiable fields in this simulation."""
         # TODO: only include traced ones?
@@ -3233,7 +3229,7 @@ class Simulation(AbstractYeeGridSimulation):
             fields_i = s.traced_fields()
 
             for key, val in fields_i.items():
-                path = make_field_path(index=i, key=key)
+                path = make_field_path(pre="structures", index=i, key=key)
                 traced_fields.append(val)
                 mapping.append(path)
 
@@ -3260,7 +3256,7 @@ class Simulation(AbstractYeeGridSimulation):
         adjoint_mnts_fld = []
         adjoint_mnts_eps = []
 
-        structure_indices = get_structure_indices(sim_field_mapping)
+        structure_indices = get_indices(sim_field_mapping)
 
         for i in structure_indices:
             structure = self.structures[i]

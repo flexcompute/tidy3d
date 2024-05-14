@@ -2,7 +2,7 @@
 
 import autograd.numpy as npa
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp, get_structure_indices, get_structure_index
+from tidy3d.components.autograd import primitive, defvjp, get_indices, get_index
 import typing
 
 from .webapi import run as run_webapi
@@ -19,6 +19,7 @@ AUX_KEY_SIM_DATA = "sim_data"
 AUX_KEY_DATA_EPS = "adjoint_eps"
 AUX_KEY_DATA_FLD = "adjoint_fld"
 AUX_KEY_SIM_FIELD_MAPPING = "traced_sim_fields"
+AUX_KEY_DATA_FIELD_MAPPING = "traced_sim_data_fields"
 
 
 # TODO: pass all the kwargs
@@ -77,7 +78,8 @@ def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
     aux_data[AUX_KEY_DATA_EPS] = data_adjoint_eps
 
     # TODO: traced_fields needs to generate a mapping to the traced data objects
-    data_fields = sim_data.traced_fields()
+    data_fields, data_field_mapping = sim_data.traced_fields()
+    aux_data[AUX_KEY_DATA_FIELD_MAPPING] = data_field_mapping
 
     return data_fields
 
@@ -105,7 +107,10 @@ def run(sim: td.Simulation) -> td.SimulationData:
     sim_data = aux_data[AUX_KEY_SIM_DATA]
 
     # TODO: with_traced_fields needs a mapping to handle arbitrary data
-    sim_data_traced = sim_data.with_traced_fields(data_fields=data_fields)
+    data_field_mapping = aux_data[AUX_KEY_DATA_FIELD_MAPPING]
+    sim_data_traced = sim_data.with_traced_fields(
+        data_fields=data_fields, field_map=data_field_mapping
+    )
     return sim_data_traced
 
 
@@ -144,13 +149,13 @@ def _run_bwd(
         _, data_adj_fld, data_adj_eps = split_data_list(sim_data=sim_data_adj, num_mnts_original=0)
 
         # Map the index of each structure to the index into the data from the adjoint and forward
-        structure_indices = get_structure_indices(sim_field_mapping)
+        structure_indices = get_indices(sim_field_mapping)
         data_indices = npa.arange(len(data_adj_fld))
         structure_index_to_data_index = dict(zip(structure_indices, data_indices))
 
         vjp_values = []
         for field_map_i in sim_field_mapping:
-            structure_index = get_structure_index(field_map_i)
+            structure_index = get_index(field_map_i)
             data_index = structure_index_to_data_index[structure_index]
 
             fwd_fld = data_fwd_fld[data_index]

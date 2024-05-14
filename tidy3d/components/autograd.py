@@ -25,26 +25,26 @@ def adjoint_mnt_eps_name(i: int) -> str:
     return f"adjoint_eps_{i}"
 
 
-def get_structure_indices(sim_field_mapping: list[str]) -> list[int]:
+def get_indices(sim_field_mapping: list[str]) -> list[int]:
     """Get unique list of structures indices from a list of field mapping paths."""
-    structure_indices = [get_structure_index(path) for path in sim_field_mapping]
+    structure_indices = [get_index(path) for path in sim_field_mapping]
     return np.unique(structure_indices)
 
 
-def get_structure_index(field_mapping: str) -> int:
+def get_index(field_mapping: str) -> int:
     """Get the index of a structure from a specific field map."""
     return int(field_mapping.split("/")[1])
 
 
 def get_field_key(field_mapping: str) -> tuple[str, ...]:
     """Get the key for this specific field."""
-    return tuple(field_mapping.split("/")[-2:])
+    return tuple(field_mapping.split("/")[2:])
 
 
-def make_field_path(index: int, key: str) -> str:
+def make_field_path(pre: str, index: int, key: str) -> str:
     """Turn an index and a field tuple into a path into the structures list."""
     field_key = "/".join(key)
-    return f"structures/{index}/{field_key}"
+    return f"{pre}/{index}/{field_key}"
 
 
 __all__ = [
