@@ -55,7 +55,7 @@ class Job(WebContainer):
 
         It will not run until you explicitly tell it to do so with:
 
-         .. code-block:: python
+        .. code-block:: python
 
             tidy3d.web.api.webapi.start(job.task_id)
 
@@ -128,7 +128,7 @@ class Job(WebContainer):
     solver_version: str = pd.Field(
         None,
         title="Solver Version",
-        description_str="Custom solver version to use, "
+        description="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
@@ -438,7 +438,7 @@ class Batch(WebContainer):
     solver_version: str = pd.Field(
         None,
         title="Solver Version",
-        description_str="Custom solver version to use, "
+        description="Custom solver version to use, "
         "otherwise uses default for the current front end version.",
     )
 
