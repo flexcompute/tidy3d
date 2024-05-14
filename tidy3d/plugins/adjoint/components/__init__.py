@@ -1,7 +1,7 @@
 """Component imports for adjoint plugin. from tidy3d.plugins.adjoint.components import *"""
 
 # import the jax version of tidy3d components
-from .geometry import JaxBox, JaxPolySlab
+from .geometry import JaxBox, JaxPolySlab, JaxComplexPolySlab
 from .medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium
 from .structure import JaxStructure, JaxStructureStaticMedium, JaxStructureStaticGeometry
 from .simulation import JaxSimulation
@@ -13,6 +13,7 @@ from .data.data_array import JaxDataArray
 __all__ = [
     "JaxBox",
     "JaxPolySlab",
+    "JaxComplexPolySlab",
     "JaxGeometryGroup",
     "JaxMedium",
     "JaxAnisotropicMedium",

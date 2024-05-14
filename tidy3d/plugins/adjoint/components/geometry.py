@@ -1,4 +1,5 @@
 """Defines jax-compatible geometries and their conversion to grad monitors."""
+
 from __future__ import annotations
 
 from abc import ABC
@@ -10,17 +11,25 @@ import numpy as np
 import xarray as xr
 from jax.tree_util import register_pytree_node_class
 import jax
+import jax.numpy as jnp
+import shapely
 
 from ....components.base import cached_property
 from ....components.types import Bound, Coordinate2D  # , annotate_type
 from ....components.geometry.base import Geometry, Box, GeometryGroup
-from ....components.geometry.polyslab import PolySlab
+from ....components.geometry.polyslab import (
+    PolySlab,
+    _IS_CLOSE_RTOL,
+    _COMPLEX_POLYSLAB_DIVISIONS_WARN,
+)
 from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
 from ....components.monitor import FieldMonitor, PermittivityMonitor
+from ....components.types import ArrayFloat2D
 from ....constants import fp_eps, MICROMETER
 from ....exceptions import AdjointError
 from ....log import log
+from ...polyslab import ComplexPolySlab
 
 from .base import JaxObject, WEB_ADJOINT_MESSAGE
 from .types import JaxFloat
@@ -279,6 +288,24 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         stores_jax_for="vertices",
     )
 
+    slab_bounds_jax: Tuple[JaxFloat, JaxFloat] = pd.Field(
+        ...,
+        title="Slab bounds (Jax)",
+        description="Jax-traced list of (h1, h2) defining the minimum and maximum positions "
+        "of the slab along the ``axis`` dimension. ",
+        units=MICROMETER,
+        stores_jax_for="slab_bounds",
+    )
+
+    sidewall_angle_jax: JaxFloat = pd.Field(
+        default=0.0,
+        title="Sidewall angle (Jax)",
+        description="Jax-traced float defining the sidewall angle of the slab "
+        "along the ``axis`` dimension. ",
+        units=MICROMETER,
+        stores_jax_for="sidewall_angle",
+    )
+
     @pd.validator("sidewall_angle", always=True)
     def no_sidewall(cls, val):
         """Warn if sidewall angle present."""
@@ -290,7 +317,8 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 "to shifting boundaries of the geometry. Therefore, as 'sidewall_angle' becomes "
                 "further from '0.0', the gradient error can be significant. "
                 "If high gradient accuracy is needed, please either reduce your 'sidewall_angle' "
-                "or wait until this feature is supported fully in a later version."
+                "or wait until this feature is supported fully in a later version.",
+                log_once=True,
             )
         return val
 
@@ -312,6 +340,212 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
                 f"For performance, a maximum of {MAX_NUM_VERTICES} are allowed in 'JaxPolySlab'. "
                 + WEB_ADJOINT_MESSAGE
             )
+
+    def _extrusion_length_to_offset_distance(self, extrusion: float) -> float:
+        """Convert extrusion length to offset distance."""
+        if jnp.isclose(self.sidewall_angle_jax, 0):
+            return 0.0
+        return -extrusion * self._tanq
+
+    @staticmethod
+    def _orient(vertices: jnp.ndarray) -> jnp.ndarray:
+        """Return a CCW-oriented polygon.
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        np.ndarray
+            Vertices of a CCW-oriented polygon.
+        """
+        return vertices if JaxPolySlab._area(vertices) > 0 else vertices[::-1, :]
+
+    @staticmethod
+    def _area(vertices: jnp.ndarray) -> float:
+        """Compute the signed polygon area (positive for CCW orientation).
+
+        Parameters
+        ----------
+        vertices : np.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        float
+            Signed polygon area (positive for CCW orientation).
+        """
+        x = vertices[:, 0]
+        y = vertices[:, 1]
+        return jnp.dot(x, jnp.roll(y, -1)) - jnp.dot(y, jnp.roll(x, -1)) / 2
+
+    @staticmethod
+    def _shift_vertices(
+        vertices: jnp.ndarray, dist
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, Tuple[jnp.ndarray, jnp.ndarray]]:
+        """Shifts the vertices of a polygon outward uniformly by distances
+        `dists`.
+
+        Parameters
+        ----------
+        jnp.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+        dist : float
+            Distance to offset.
+
+        Returns
+        -------
+        Tuple[jnp.ndarray, jnp.narray, Tuple[jnp.ndarray, jnp.ndarray]]
+            New polygon vertices;
+            and the shift of vertices in direction parallel to the edges.
+            Shift along x and y direction.
+        """
+
+        if jnp.isclose(dist, 0):
+            return vertices, jnp.zeros(vertices.shape[0], dtype=float), None
+
+        def rot90(v):
+            return jnp.array([-v[1], v[0]])
+
+        def normalize(v):
+            return v / jnp.linalg.norm(v, axis=0)
+
+        vs = vertices.T
+        vs_next = jnp.roll(vs, axis=-1, shift=-1)
+        vs_previous = jnp.roll(vs, axis=-1, shift=+1)
+
+        asp = normalize(vs_next - vs)
+        asm = normalize(vs - vs_previous)
+
+        # the vertex shift is decomposed into parallel and perpendicular directions
+        perpendicular_shift = -dist
+        det = jnp.cross(asm, asp, axis=0)
+
+        tan_half_angle = jnp.where(
+            jnp.isclose(det, 0, rtol=_IS_CLOSE_RTOL),
+            0.0,
+            jnp.cross(asm, rot90(asm - asp), axis=0)
+            / (det + jnp.isclose(det, 0, rtol=_IS_CLOSE_RTOL)),
+        )
+        parallel_shift = dist * tan_half_angle
+
+        shift_total = perpendicular_shift * rot90(asm) + parallel_shift * asm
+
+        return jnp.swapaxes(vs + shift_total, -2, -1), parallel_shift, shift_total
+
+    @staticmethod
+    def _neighbor_vertices_crossing_detection(
+        vertices: jnp.ndarray, dist: float, ignore_at_dist: bool = True
+    ) -> float:
+        """Detect if neighboring vertices will cross after a dilation distance dist.
+
+        Parameters
+        ----------
+        vertices : jnp.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+        dist : float
+            Distance to offset.
+        ignore_at_dist : bool, optional
+            whether to ignore the event right at ``dist`.
+
+        Returns
+        -------
+        float
+            the absolute value of the maximal allowed dilation
+            if there are any crossing, otherwise return ``None``.
+        """
+        # ignore the event that occurs right at the offset distance
+        if ignore_at_dist:
+            dist -= fp_eps * dist / jnp.abs(dist)
+
+        edge_length, edge_reduction = JaxPolySlab._edge_length_and_reduction_rate(vertices)
+        length_remaining = edge_length - edge_reduction * dist
+
+        mask = length_remaining < 0
+        if jnp.any(mask):
+            return jnp.min(jnp.abs(edge_length[mask] / edge_reduction[mask]))
+        return None
+
+    @staticmethod
+    def _edge_length_and_reduction_rate(vertices: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """Edge length of reduction rate of each edge with unit offset length.
+
+        Parameters
+        ----------
+        vertices : jnp.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        Tuple[jnp.ndarray, jnp.narray]
+            edge length, and reduction rate
+        """
+
+        # edge length
+        vs = vertices.T
+        vs_next = jnp.roll(vs, axis=-1, shift=-1)
+        edge_length = jnp.linalg.norm(vs_next - vs, axis=0)
+
+        # edge length remaining
+        parallel_shift = JaxPolySlab._shift_vertices(vertices, 1.0)[1]
+        parallel_shift_p = jnp.roll(parallel_shift, shift=-1)
+        edge_reduction = -(parallel_shift + parallel_shift_p)
+        return edge_length, edge_reduction
+
+    @staticmethod
+    def _remove_duplicate_vertices(vertices: jnp.ndarray) -> jnp.ndarray:
+        """Remove redundant/identical nearest neighbour vertices.
+
+        Parameters
+        ----------
+        vertices : jnp.ndarray
+            Shape (N, 2) defining the polygon vertices in the xy-plane.
+
+        Returns
+        -------
+        np.ndarray
+            Vertices of polygon.
+        """
+
+        vertices_f = jnp.roll(vertices, shift=-1, axis=0)
+        vertices_diff = jnp.linalg.norm(vertices - vertices_f, axis=1)
+        return vertices[~jnp.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
+
+    @staticmethod
+    def _proper_vertices(vertices: ArrayFloat2D) -> jnp.ndarray:
+        """convert vertices to jnp.array format,
+        removing duplicate neighbouring vertices,
+        and oriented in CCW direction.
+
+        Returns
+        -------
+        ArrayLike[float, float]
+           The vertices of the polygon for internal use.
+        """
+
+        vertices_np = JaxPolySlab.vertices_to_array(vertices)
+        return JaxPolySlab._orient(JaxPolySlab._remove_duplicate_vertices(vertices_np))
+
+    @staticmethod
+    def vertices_to_array(vertices_tuple: ArrayFloat2D) -> jnp.ndarray:
+        """Converts a list of tuples (vertices) to a jax array."""
+        return jnp.asarray(vertices_tuple)
+
+    @cached_property
+    def reference_polygon(self) -> jnp.ndarray:
+        """The polygon at the reference plane.
+
+        Returns
+        -------
+        ArrayLike[float, float]
+            The vertices of the polygon at the reference plane.
+        """
+        vertices = JaxPolySlab._proper_vertices(self.vertices_jax)
+        if jnp.isclose(self.dilation, 0):
+            return vertices
+        raise NotImplementedError("JaxPolySlab does not support dilation!")
 
     def edge_contrib(
         self,
@@ -359,7 +593,7 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
             return (1 - s) * vertex_stat[:, None] + s * vertex_grad[:, None]
 
         def edge_basis(
-            xyz_components: Tuple[FieldData, FieldData, FieldData]
+            xyz_components: Tuple[FieldData, FieldData, FieldData],
         ) -> Tuple[FieldData, FieldData, FieldData]:
             """Puts a field component from the (x, y, z) basis to the (t, n, z) basis."""
             cmp_z, (cmp_x_edge, cmp_y_edge) = self.pop_axis(xyz_components, axis=self.axis)
@@ -587,6 +821,155 @@ class JaxPolySlab(JaxGeometry, PolySlab, JaxObject):
         return self.updated_copy(vertices_jax=vertices_vjp)
 
 
+@register_pytree_node_class
+class JaxComplexPolySlab(JaxPolySlab, ComplexPolySlab):
+    """A :class:`.ComplexPolySlab` registered with jax."""
+
+    _tidy3d_class = ComplexPolySlab
+
+    @pd.validator("vertices", always=True)
+    def no_self_intersecting_polygon_during_extrusion(cls, val, values):
+        """Turn off the validation for this class."""
+        return val
+
+    @property
+    def geometry_group(self) -> None:
+        """Divide a complex jax polyslab into a list of simple polyslabs, which
+        are assembled into a :class:`.JaxGeometryGroup`.
+
+        Returns
+        -------
+        :class:`.JaxGeometryGroup`
+            JaxGeometryGroup for a list of simple jax polyslabs divided from the complex
+            polyslab.
+        """
+        return JaxGeometryGroup(geometries=self.sub_polyslabs)
+
+    def _dilation_value_at_reference_to_coord(self, dilation: float) -> float:
+        """Compute the coordinate based on the dilation value to the reference plane."""
+
+        z_coord = -dilation / self._tanq + self.slab_bounds_jax[0]
+        if self.reference_plane == "middle":
+            return z_coord + self.finite_length_axis / 2
+        if self.reference_plane == "top":
+            return z_coord + self.finite_length_axis
+        # bottom case
+        return z_coord
+
+    @property
+    def sub_polyslabs(self) -> List[JaxPolySlab]:
+        """Divide a complex polyslab into a list of simple polyslabs.
+        Only neighboring vertex-vertex crossing events are treated in this
+        version.
+
+        Returns
+        -------
+        List[JaxPolySlab]
+            A list of simple jax polyslabs.
+        """
+        sub_polyslab_list = []
+        num_division_count = 0
+
+        # initialize sub-polyslab parameters
+
+        sub_polyslab_dict = self.dict(
+            exclude={  # all of these NEED to be overwritten, so best to exclude them
+                "type",
+                "vertices",
+                "vertices_jax",
+                "slab_bounds",
+                "slab_bounds_jax",
+                "sidewall_angle",
+                "sidewall_angle_jax",
+                "dilation",
+                "reference_plane",
+            }
+        )
+        if jnp.isclose(self.sidewall_angle_jax, 0):
+            return [
+                JaxPolySlab(
+                    vertices=tuple(map(tuple, self.vertices_jax)),
+                    slab_bounds=tuple(self.slab_bounds_jax),
+                    sidewall_angle=self.sidewall_angle_jax,
+                    dilation=self.dilation,
+                    reference_plane=self.reference_plane,
+                    **sub_polyslab_dict,
+                )
+            ]
+
+        # initialize offset distance
+        offset_distance = 0.0
+
+        for dist_val in self._dilation_length:
+            dist_now = 0.0
+            vertices_now = self.reference_polygon
+
+            # constructing sub-polyslabs until reaching the base/top
+            while not jnp.isclose(dist_now, dist_val):
+                # bounds for sub-polyslabs assuming no self-intersection
+                slab_bounds = [
+                    self._dilation_value_at_reference_to_coord(dist_now),
+                    self._dilation_value_at_reference_to_coord(dist_val),
+                ]
+                # 1) find out any vertices touching events between the current
+                # position to the base/top
+                max_dist = JaxPolySlab._neighbor_vertices_crossing_detection(
+                    vertices_now, dist_val - dist_now
+                )
+
+                # vertices touching events captured, update bounds for sub-polyslab
+                if max_dist is not None:
+                    # max_dist doesn't have sign, so construct signed offset distance
+                    offset_distance = max_dist * dist_val / jnp.abs(dist_val)
+                    slab_bounds = [
+                        self._dilation_value_at_reference_to_coord(dist_now),
+                        self._dilation_value_at_reference_to_coord(dist_now + offset_distance),
+                    ]
+
+                # 2) construct sub-polyslab
+                slab_bounds = jnp.sort(
+                    jnp.asarray(slab_bounds)
+                )  # for reference_plane=top/bottom, bounds need to be ordered
+                # direction of marching
+                reference_plane = "bottom" if dist_val / self._tanq < 0 else "top"
+
+                sub_polyslab_list.append(
+                    JaxPolySlab(
+                        vertices=tuple(map(tuple, vertices_now)),
+                        slab_bounds=tuple(slab_bounds),
+                        sidewall_angle=self.sidewall_angle_jax,
+                        dilation=0.0,  # dilation accounted for in setup
+                        reference_plane=reference_plane,
+                        **sub_polyslab_dict,
+                    )
+                )
+
+                # Now Step 3
+                if max_dist is None:
+                    break
+                dist_now += offset_distance
+                # new polygon vertices where collapsing vertices are removed but keep one
+                vertices_now = JaxPolySlab._shift_vertices(vertices_now, offset_distance)[0]
+                vertices_now = JaxPolySlab._remove_duplicate_vertices(vertices_now)
+                # all vertices collapse
+                if len(vertices_now) < 3:
+                    break
+                # polygon collapse into 1D
+                if shapely.Polygon(jax.lax.stop_gradient(vertices_now)).buffer(0).area < fp_eps:
+                    raise RuntimeError("Unhandled shapely transformation in JaxComplexPolySlab.")
+                vertices_now = JaxPolySlab._orient(vertices_now)
+                num_division_count += 1
+
+        if num_division_count > _COMPLEX_POLYSLAB_DIVISIONS_WARN:
+            log.warning(
+                f"Too many self-intersecting events: the polyslab has been divided into "
+                f"{num_division_count} polyslabs; more than {_COMPLEX_POLYSLAB_DIVISIONS_WARN} may "
+                f"slow down the simulation."
+            )
+
+        return sub_polyslab_list
+
+
 JaxSingleGeometryType = Union[JaxBox, JaxPolySlab]
 
 
@@ -673,5 +1056,6 @@ JaxGeometryType = Union[JaxSingleGeometryType, JaxGeometryGroup]
 JAX_GEOMETRY_MAP = {
     Box: JaxBox,
     PolySlab: JaxPolySlab,
+    ComplexPolySlab: JaxComplexPolySlab,
     GeometryGroup: JaxGeometryGroup,
 }
