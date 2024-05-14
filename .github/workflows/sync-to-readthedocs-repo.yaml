@@ -9,8 +9,9 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'v*'
       - 'production/test/*'
+    tags:
+      - 'v*'
 jobs:
   extract_branch:
     outputs:
