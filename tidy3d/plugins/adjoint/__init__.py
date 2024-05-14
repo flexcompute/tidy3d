@@ -12,7 +12,7 @@ except ImportError as e:
         "for example: $pip install 'tidy3d[jax]'."
     ) from e
 
-from .components.geometry import JaxBox, JaxPolySlab, JaxGeometryGroup
+from .components.geometry import JaxBox, JaxPolySlab, JaxComplexPolySlab, JaxGeometryGroup
 from .components.medium import JaxMedium, JaxAnisotropicMedium, JaxCustomMedium
 from .components.structure import (
     JaxStructure,
@@ -29,6 +29,7 @@ from .web import run, run_async
 __all__ = [
     "JaxBox",
     "JaxPolySlab",
+    "JaxComplexPolySlab",
     "JaxGeometryGroup",
     "JaxMedium",
     "JaxAnisotropicMedium",
