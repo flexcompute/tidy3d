@@ -63,6 +63,7 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 autodoc_class_signature = "separated"
 autodoc_default_options = {
     "members": True,
+    "inherited-members": True,
     "member-order": "bysource",
     "undoc-members": True,
     "exclude-members": "SchemaConfig,__init__,Config",
