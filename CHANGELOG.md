@@ -5,9 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0rc2] - 2024-05-14
+
 ### Added
-- Support for `.gz` files in `Simulation` version updater.
-- Warning if a nonuniform custom medium is intersecting `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`, `FieldProjectionCartesianMonitor`, `FieldProjectionAngleMonitor`, `FieldProjectionKSpaceMonitor`, and `DiffractionMonitor`.
 - Tidy3D objects may store arbitrary metadata in an `.attrs` dictionary.
 - `JaxSimulation` now supports the following GDS export methods: `to_gds()`, `to_gds_file()`, `to_gdspy()`, and `to_gdstk()`.
 - `RunTimeSpec` accepted by `Simulation.run_time` to adaptively set the run time based on Q-factor, propagation length, and other factors.
@@ -17,15 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pre-upload validator to check that mode sources overlap with more than 2 grid cells.
 - Support `2DMedium` for `Transformed`/`GeometryGroup`/`ClipOperation` geometries.
 - `num_proc` argument to `tidy3d.plugins.adjoint.web.run_local` to control the number of processes used on the local machine for gradient processing.
-- Support for complex polyslabs in adjoint module via `JaxComplexPolySlab`.
+- Support for complex and self-intersecting polyslabs in adjoint module via `JaxComplexPolySlab`.
+- Support for `.gz` files in `Simulation` version updater.
+- Warning if a nonuniform custom medium is intersecting `PlaneWave`, `GaussianBeam`, `AstigmaticGaussianBeam`, `FieldProjectionCartesianMonitor`, `FieldProjectionAngleMonitor`, `FieldProjectionKSpaceMonitor`, and `DiffractionMonitor`.
 
 ### Changed
-- `tidy3d convert` from `.lsf` files to tidy3d scripts is moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.
-- Relax validation of smallest triangles area in `TriangleMesh`.
+- `tidy3d convert` from `.lsf` files to tidy3d scripts has moved to another repository at `https://github.com/hirako22/Lumerical-to-Tidy3D-Converter`.
+- Relax validation of smallest triangle area in `TriangleMesh`.
 
 ### Fixed
 - Bug in plotting and computing tilted plane intersections of transformed 0 thickness geometries.
-- `Simulation.to_gdspy()` and `Simulation.to_gdstk()` now place polygons in GDS layer `(0, 0)` when no `gds_layer_dtype_map` is provided instead of erroring.
+- `Simulation.to_gdspy()` and `Simulation.to_gdstk()` now place polygons in GDS layer `(0, 0)` when no `gds_layer_dtype_map` is provided, instead of erroring.
 - `task_id` now properly stored in `JaxSimulationData`.
 - Bug in `FastDispersionFitter` when poles move close to input frequencies.
 - Bug in plotting polarization vector of angled sources.
@@ -1209,7 +1211,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0rc1...pre/2.7
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0rc2...pre/2.7
+[2.7.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0rc2
 [2.7.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.7.0rc1
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3
