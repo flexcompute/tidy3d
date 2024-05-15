@@ -17,7 +17,6 @@ from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
-from .autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name
 from .data.monitor_data import PermittivityData, FieldData
 
 try:
@@ -178,25 +177,39 @@ class Structure(AbstractStructure):
 
     """ Begin autograd code."""
 
+    @staticmethod
+    def get_monitor_name(index: int, data_type: str) -> str:
+        """Get the monitor name for either a field or permittivity monitor at given index."""
+
+        monitor_name_map = dict(
+            fld=f"adjoint_fld_{index}",
+            eps=f"adjoint_eps_{index}",
+        )
+
+        if data_type not in monitor_name_map:
+            raise KeyError(f"'data_type' must be in {monitor_name_map.keys()}")
+
+        return monitor_name_map[data_type]
+
     def generate_adjoint_monitors(
         self, freqs: list[float], index: int
     ) -> (FieldMonitor, PermittivityMonitor):
-        box = self.geometry.bounding_box
+        """Generate the field and permittivity monitor for this structure."""
 
-        # TODO: refactor this as Structure method(s)?
+        box = self.geometry.bounding_box
 
         mnt_fld = FieldMonitor(
             size=box.size,  # TODO: expand slightly?
             center=box.center,
             freqs=freqs,
-            name=adjoint_mnt_fld_name(index),
+            name=self.get_monitor_name(index=index, data_type="fld"),
         )
 
         mnt_eps = PermittivityMonitor(
             size=box.size,  # TODO: expand slightly?
             center=box.center,
             freqs=freqs,
-            name=adjoint_mnt_eps_name(index),
+            name=self.get_monitor_name(index=index, data_type="eps"),
         )
 
         return mnt_fld, mnt_eps

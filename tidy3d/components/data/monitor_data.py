@@ -80,9 +80,28 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    def generate_adjoint_sources(self) -> list[Source]:
-        """Make list of adjoint sources associated with the data stored in this monitor data."""
-        raise NotImplementedError("No adjoint source for {self.type}.")
+    @property
+    def adjoint_source_function_map(self) -> dict[tuple[str], Callable]:
+        """Map path to the right adjoint source creation function."""
+        return {}
+
+    def get_adjoint_source_function(self, path: tuple[str, ...]) -> Callable:
+        """Get the derivative function function."""
+
+        adjoint_source_function_map = self.adjoint_source_function_map
+
+        if path not in adjoint_source_function_map:
+            raise NotImplementedError(
+                f"Can't compute adjoint source for monitor data: {self.type} and field path: {path}."
+            )
+
+        return adjoint_source_function_map[path]
+
+    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[Source]:
+        """Generate adjoint sources for this MonitorData instance."""
+
+        adjoint_source_function = self.get_adjoint_source_function(path=path)
+        return adjoint_source_function(path=path, data_vjp=data_vjp)
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -1568,45 +1587,74 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
-        """Generate adjoint sources for this MonitorData instance."""
+    @property
+    def adjoint_source_function_map(self) -> dict[tuple[str], Callable]:
+        """Map path to the right adjoint source creation function."""
+        return {
+            ("amps",): self.adjoint_sources_amps,
+        }
 
-        mnt = self.monitor
+    def adjoint_sources_amps(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
+        """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-        amps = self.amps
+        amps = self.amps.copy()
+        amps.values = get_static(data_vjp)
 
-        freq0 = amps.coords["f"]
+        coords = amps.coords
 
-        sources_adj = []
+        adjoint_sources = []
 
-        # TODO: we'll have to iterate over the other dims eventually
-        for direction, amp in zip("+-", data_vjp._value):
-            # td.log.info(f"monitor '{mnt.name}', direction '{direction}', amp '{amp}'")
+        for freq in coords["f"]:
+            for direction in coords["direction"]:
+                for mode_index in coords["mode_index"]:
+                    amp_single = amps.sel(f=freq, direction=direction, mode_index=mode_index)
 
-            amp = get_static(npa.array(amp))
+                    if get_static(amp_single.values) == 0.0:
+                        continue
 
-            amplitude = float(npa.abs(amp))  # TODO: there are constants
-            phase = float(npa.angle(1j * amp))
+                    adjoint_source = self.adjoint_source_amp(amp=amp_single)
+                    adjoint_sources.append(adjoint_source)
 
-            if amplitude == 0.0:
-                continue
+        return adjoint_sources
 
-            src_adj = ModeSource(
-                source_time=GaussianPulse(
-                    amplitude=amplitude,
-                    phase=phase,
-                    freq0=freq0,
-                    fwidth=freq0 / 10,  # TODO: how to set this?
-                ),
-                mode_spec=mnt.mode_spec,
-                size=mnt.size,
-                center=mnt.center,
-                direction={"-": "+", "+": "-"}[direction],  # flip source direction
-            )
+    def adjoint_source_amp(self, amp: DataArray) -> ModeSource:
+        """Generate an adjoint ``ModeSource`` for a single amplitude."""
 
-            sources_adj.append(src_adj)
+        monitor = self.monitor
 
-        return sources_adj
+        # compute coordinates
+        coords = amp.coords
+        freq0 = coords["f"]
+        direction = "-" if coords["direction"] == "+" else "-"  # flip source direction
+        mode_index = coords["mode_index"]
+
+        # compute amplitude and phase
+        def get_amplitude(x) -> complex:
+            return 1j * complex(get_static(amp.values))
+
+        amp_complex = get_amplitude(amp.values)
+        k0 = 2 * np.pi * freq0 / C_0
+        grad_const = k0 / 4 / ETA_0
+        src_amp = grad_const * amp_complex
+        amplitude = abs(src_amp)
+        phase = np.angle(src_amp)
+
+        # construct source
+        src_adj = ModeSource(
+            source_time=GaussianPulse(
+                amplitude=amplitude,
+                phase=phase,
+                freq0=freq0,
+                fwidth=freq0 / 10,  # TODO: how to set this properly?
+            ),
+            mode_spec=monitor.mode_spec,
+            size=monitor.size,
+            center=monitor.center,
+            direction=direction,
+            mode_index=mode_index,
+        )
+
+        return src_adj
 
 
 class ModeSolverData(ModeData):

@@ -17,12 +17,10 @@ from .monitor_data import (
     MonitorDataType,
     AbstractFieldData,
     FieldTimeData,
-    PermittivityData,
-    FieldData,
 )
-from ..autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name
 
 from ..simulation import Simulation
+from ..structure import Structure
 from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
@@ -852,25 +850,23 @@ class SimulationData(AbstractYeeGridSimulationData):
             if path[0] != "data":
                 continue
 
-            _, index, *rest = path  # TODO: handle datasets more generally
-            mnt_data = self.data[index]
+            _, data_index, *sub_path = path
+            mnt_data = self.data[data_index]
 
-            sources_adj = mnt_data.generate_adjoint_sources(path=path, data_vjp=value)
-
-            sources_adj_all += sources_adj
+            # TODO: ugly, fix later
+            # TODO: Do I need to pass the value? or just need the path and use existing data. I think path is enough.
+            try:
+                sources_adj = mnt_data.generate_adjoint_sources(
+                    path=tuple(sub_path), data_vjp=value
+                )
+                sources_adj_all += sources_adj
+            except NotImplementedError:
+                continue
 
         return sources_adj_all
 
     def get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
-        if data_type not in ("fld", "eps"):
-            raise KeyError("'data_type' must be 'fld' or 'eps'")
+        """Grab the field or permittivity data for a given structure index."""
 
-        # get name of the monitor
-        mnt_name = dict(
-            fld=adjoint_mnt_fld_name,
-            eps=adjoint_mnt_eps_name,
-        )[
-            data_type
-        ](structure_index)
-
-        return self[mnt_name]
+        monitor_name = Structure.get_monitor_name(index=structure_index, data_type=data_type)
+        return self[monitor_name]
