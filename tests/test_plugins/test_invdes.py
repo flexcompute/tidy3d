@@ -9,21 +9,23 @@ import jax.numpy as jnp
 import tidy3d as td
 import tidy3d.plugins.adjoint as tda
 import tidy3d.plugins.invdes as tdi
-import matplotlib.pyplot as plt
 
 # use single threading pipeline
 from . import test_adjoint as ta
 
-ta.NUM_PROC_PARALLEL = 1
+from .test_adjoint import use_emulated_run, use_emulated_run_async  # noqa: F401
 
-from .test_adjoint import use_emulated_run, use_emulated_run_async
-from ..utils import run_emulated, log_capture, assert_log_level, AssertLogLevel
+from ..utils import run_emulated, assert_log_level, AssertLogLevel
+from ..utils import log_capture  # noqa: F401
+
 
 FREQ0 = 1e14
 L_SIM = 1.0
 MNT_NAME1 = "mnt_name1"
 MNT_NAME2 = "mnt_name2"
 HISTORY_FNAME = "tests/data/invdes_history.pkl"
+
+ta.NUM_PROC_PARALLEL = 1
 
 mnt1 = td.FieldMonitor(
     center=(L_SIM / 3.0, 0, 0), size=(0, td.inf, td.inf), freqs=[FREQ0], name=MNT_NAME1
@@ -72,10 +74,10 @@ def test_region_params():
 
     design_region = make_design_region()
 
-    PARAMS_0 = np.random.random(design_region.params_shape)
-    PARAMS_0 = design_region.params_random
-    PARAMS_0 = design_region.params_ones
-    PARAMS_0 = design_region.params_zeros
+    _ = np.random.random(design_region.params_shape)
+    _ = design_region.params_random
+    _ = design_region.params_ones
+    _ = design_region.params_zeros
 
 
 def test_region_penalties():
@@ -128,7 +130,7 @@ def test_region_inf_size():
     _ = region.to_structure(params_0_inf)
 
 
-def test_penalty_pixel_size(log_capture):
+def test_penalty_pixel_size(log_capture):  # noqa: F811
     """Test that warning is raised if ``pixel_size`` is supplied."""
 
     _ = tdi.ErosionDilationPenalty(length_scale=2.0)
@@ -206,7 +208,7 @@ def test_invdes_kwargless():
     invdes.post_process_fn(MockSimData(), kwarg1="hi")
 
 
-def test_invdes_simulation_data(use_emulated_run):
+def test_invdes_simulation_data(use_emulated_run):  # noqa: F811
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
 
     invdes = make_invdes()
@@ -214,7 +216,7 @@ def test_invdes_simulation_data(use_emulated_run):
     invdes.to_simulation_data(params=params, task_name="test")
 
 
-def test_invdes_output_monitor_names(use_emulated_run):
+def test_invdes_output_monitor_names(use_emulated_run):  # noqa: F811
     """test the inverse design objective function with user-specified output monitor names."""
     invdes = make_invdes()
     invdes = invdes.updated_copy(output_monitor_names=[MNT_NAME1, MNT_NAME2])
@@ -287,7 +289,7 @@ def test_invdes_multi_same_length():
     output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-    ds = invdes.designs
+    _ = invdes.designs
 
 
 def make_optimizer():
@@ -301,7 +303,7 @@ def make_optimizer():
     )
 
 
-def make_result(use_emulated_run):
+def make_result(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -311,17 +313,17 @@ def make_result(use_emulated_run):
     return optimizer.run(params0=PARAMS_0)
 
 
-def test_default_params(use_emulated_run):
+def test_default_params(use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
 
-    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
+    _ = np.random.random(optimizer.design.design_region.params_shape)
 
     optimizer.run()
 
 
-def test_warn_zero_grad(log_capture, use_emulated_run):
+def test_warn_zero_grad(log_capture, use_emulated_run):  # noqa: F811
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -333,7 +335,7 @@ def test_warn_zero_grad(log_capture, use_emulated_run):
         _ = optimizer.run()
 
 
-def make_result_multi(use_emulated_run_async):
+def make_result_multi(use_emulated_run_async):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesignMulti`` object."""
 
     optimizer = make_optimizer()
@@ -346,7 +348,7 @@ def make_result_multi(use_emulated_run_async):
     return optimizer.run(params0=PARAMS_0)
 
 
-def test_result_store_full_results_is_false(use_emulated_run):
+def test_result_store_full_results_is_false(use_emulated_run):  # noqa: F811
     """Test running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -366,10 +368,10 @@ def test_result_store_full_results_is_false(use_emulated_run):
         assert len(result.history[key]) == optimizer.num_steps
 
     # this should still work, even if ``store_full_results == False``
-    val_last1 = result.last["params"]
+    _ = result.last["params"]
 
 
-def test_continue_run_fns(use_emulated_run):
+def test_continue_run_fns(use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from result."""
     result_orig = make_result(use_emulated_run)
     optimizer = make_optimizer()
@@ -382,7 +384,7 @@ def test_continue_run_fns(use_emulated_run):
     ), "wrong number of elements in the combined run history."
 
 
-def test_continue_run_from_file(use_emulated_run):
+def test_continue_run_from_file(use_emulated_run):  # noqa: F811
     """Test continuing an already run inverse design from file."""
     result_orig = make_result(use_emulated_run)
     optimizer_orig = make_optimizer()
@@ -398,7 +400,7 @@ def test_continue_run_from_file(use_emulated_run):
     result_full = optimizer.continue_run_from_history()
 
 
-def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
+def test_result(use_emulated_run, use_emulated_run_async, tmp_path):  # noqa: F811
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run)
@@ -411,21 +413,21 @@ def test_result(use_emulated_run, use_emulated_run_async, tmp_path):
     assert np.allclose(val_last1, val_last2)
 
     result.plot_optimization()
-    sim_data_last = result.sim_data_last(task_name="last")
+    _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data(use_emulated_run):
+def test_result_data(use_emulated_run):  # noqa: F811
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run)
-    sim_last = result.sim_last
-    sim_data_last = result.sim_data_last(task_name="last")
+    _ = result.sim_last
+    _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data_multi(use_emulated_run_async, tmp_path):
+def test_result_data_multi(use_emulated_run_async, tmp_path):  # noqa: F811
     result_multi = make_result_multi(use_emulated_run_async)
-    sim_last = result_multi.sim_last
-    sim_data_last = result_multi.sim_data_last(task_name="last")
+    _ = result_multi.sim_last
+    _ = result_multi.sim_data_last(task_name="last")
 
 
 def test_result_empty():
@@ -435,7 +437,7 @@ def test_result_empty():
         result_empty.get_last("params")
 
 
-def test_invdes_io(tmp_path, log_capture, use_emulated_run):
+def test_invdes_io(tmp_path, log_capture, use_emulated_run):  # noqa: F811
     """Test saving a loading ``invdes`` components to file."""
 
     result = make_result(use_emulated_run)
@@ -480,13 +482,13 @@ def try_array_impl_import() -> None:
 
 
 @pytest.mark.usefixtures("hide_jax")
-def test_jax_array_impl_import_fail(tmp_path, log_capture):
+def test_jax_array_impl_import_fail(tmp_path, log_capture):  # noqa: F811
     """Make sure if import error with ArrayImpl, a warning is logged and module still imports."""
     try_array_impl_import()
     assert_log_level(log_capture, "WARNING")
 
 
-def test_jax_array_impl_import_pass(tmp_path, log_capture):
+def test_jax_array_impl_import_pass(tmp_path, log_capture):  # noqa: F811
     """Make sure if no import error with ArrayImpl, nothing is logged and module imports."""
     try_array_impl_import()
     assert_log_level(log_capture, None)
@@ -495,8 +497,6 @@ def test_jax_array_impl_import_pass(tmp_path, log_capture):
 @pytest.mark.parametrize("exception, ok", [(TypeError, True), (OSError, True), (ValueError, False)])
 def test_fn_source_error(monkeypatch, exception, ok):
     """Make sure type errors are caught when grabbing function source code."""
-
-    import inspect
 
     def getsource_error(*args, **kwargs):
         raise exception
@@ -516,7 +516,7 @@ def test_fn_source_error(monkeypatch, exception, ok):
             tdi.base.InvdesBaseModel._get_fn_source(test)
 
 
-def test_objective_utilities(use_emulated_run):
+def test_objective_utilities(use_emulated_run):  # noqa: F811
     """Test objective function helpers."""
 
     sim_data = run_emulated(simulation, task_name="test")
@@ -547,7 +547,7 @@ def test_objective_utilities(use_emulated_run):
         utils.get_amps(sim_data, MNT_NAME1)
 
 
-def test_pixel_size_warn_validator(log_capture):
+def test_pixel_size_warn_validator(log_capture):  # noqa: F811
     """test that pixel size validator warning is raised if too large."""
 
     with AssertLogLevel(log_capture, None):
