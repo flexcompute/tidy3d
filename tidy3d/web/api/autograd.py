@@ -1,8 +1,7 @@
 # test autograd integration into tidy3d
 
-import autograd.numpy as npa
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp, get_indices, get_index
+from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap
 import typing
 
 from .webapi import run as run_webapi
@@ -16,8 +15,7 @@ MNT_NAME = "mnt"
 
 
 AUX_KEY_SIM_DATA = "sim_data"
-AUX_KEY_DATA_EPS = "adjoint_eps"
-AUX_KEY_DATA_FLD = "adjoint_fld"
+AUX_KEY_DATA_FWD = "sim_data_fwd_adjoint"
 AUX_KEY_SIM_FIELD_MAPPING = "traced_sim_fields"
 AUX_KEY_DATA_FIELD_MAPPING = "traced_sim_data_fields"
 
@@ -52,16 +50,14 @@ def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> (lis
 
 
 @primitive
-def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
+def _run(sim_fields: AutogradFieldMap, sim: td.Simulation, aux_data: dict) -> AutogradFieldMap:
     """Autograd-traced running function, runs a simulation under the hood and stitches in data."""
 
     td.log.info("running primitive _run()")
 
-    adjoint_mnts_fld, adjoint_mnts_eps = sim.generate_adjoint_monitors()
     num_mnts_original = len(sim.monitors)
 
-    monitors = list(sim.monitors) + adjoint_mnts_fld + adjoint_mnts_eps
-    sim = sim.copy(update=dict(monitors=monitors))
+    sim = sim.with_adjoint_monitors(sim_fields)
 
     # NOTE: do we really need to sanitize the sim? maybe it's fine to just run it as is
     sim_static = sim  # sim.to_static()
@@ -72,16 +68,19 @@ def _run(sim_fields: npa.ndarray, sim: td.Simulation, aux_data: dict) -> tuple:
     )
     sim_data = sim_data.copy(update=dict(data=data_original))
 
+    sim_data_fwd = sim_data.copy(update=dict(data=data_adjoint_fld + data_adjoint_eps))
+
     # store the forward simulation data for later (can't return it directly or autograd complains)
     aux_data[AUX_KEY_SIM_DATA] = sim_data
-    aux_data[AUX_KEY_DATA_FLD] = data_adjoint_fld
-    aux_data[AUX_KEY_DATA_EPS] = data_adjoint_eps
+    aux_data[AUX_KEY_DATA_FWD] = sim_data_fwd
 
     # TODO: traced_fields needs to generate a mapping to the traced data objects
-    data_fields, data_field_mapping = sim_data.traced_fields()
-    aux_data[AUX_KEY_DATA_FIELD_MAPPING] = data_field_mapping
+    # data_fields, data_field_mapping = sim_data.traced_fields()
+    # aux_data[AUX_KEY_DATA_FIELD_MAPPING] = data_field_mapping
 
-    return data_fields
+    traced_fields_data = sim_data.strip_traced_fields()
+
+    return traced_fields_data
 
 
 def run(sim: td.Simulation) -> td.SimulationData:
@@ -89,51 +88,51 @@ def run(sim: td.Simulation) -> td.SimulationData:
     td.log.info("running user-facing run()")
 
     # TODO: traced_fields needs to generate a mapping to the traced structures
-    sim_fields, sim_field_mapping = sim.traced_fields()
+    traced_fields_sim = sim.strip_traced_fields()
 
     # TODO: if no tracers (sim_fields empty?) probably can just run normally, although should generalize
 
     # TODO: hide this aux data stuff?
     aux_data = {}
-    aux_data[AUX_KEY_SIM_FIELD_MAPPING] = sim_field_mapping
 
-    data_fields = _run(sim_fields, sim=sim, aux_data=aux_data)
+    traced_fields_data = _run(traced_fields_sim, sim=sim, aux_data=aux_data)
 
     # TODO: hide this aux data stuff?
     if AUX_KEY_SIM_DATA not in aux_data:
         raise KeyError(
             f"Could not grab 'td.SimulationData' from 'aux_data[{AUX_KEY_SIM_DATA}]'. It might not have been properly stored."
         )
+
     sim_data = aux_data[AUX_KEY_SIM_DATA]
 
-    # TODO: with_traced_fields needs a mapping to handle arbitrary data
-    data_field_mapping = aux_data[AUX_KEY_DATA_FIELD_MAPPING]
-    sim_data_traced = sim_data.with_traced_fields(
-        data_fields=data_fields, field_map=data_field_mapping
-    )
+    sim_data_traced = sim_data.insert_traced_fields(traced_fields_data)
+
     return sim_data_traced
 
 
 def _run_bwd(
-    data_fields_fwd: npa.ndarray, sim_fields_fwd: npa.ndarray, sim: td.Simulation, aux_data: dict
-) -> typing.Callable[[npa.ndarray], npa.ndarray]:
+    data_fields_fwd: AutogradFieldMap,
+    sim_fields_fwd: AutogradFieldMap,
+    sim: td.Simulation,
+    aux_data: dict,
+) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for _run(). Constructs and runs adjoint simulation, does postprocessing."""
 
     # get the fwd epsilon and field data from the cached aux_data
-    data_fwd_fld = aux_data[AUX_KEY_DATA_FLD]
-    data_fwd_eps = aux_data[AUX_KEY_DATA_EPS]
+    sim_data_fwd_adjoint = aux_data[AUX_KEY_DATA_FWD]
     sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
-    sim_field_mapping = aux_data[AUX_KEY_SIM_FIELD_MAPPING]
 
     td.log.info("constructing custom vjp")
 
-    def vjp(data_fields_vjp: list) -> list:
+    def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
+
         td.log.info("running custom vjp")
 
-        # make and run adjoint simulation
+        # make adjoint simulation
         sim_adj = sim_data_fwd.make_adjoint_sim(data_fields_vjp=data_fields_vjp)
 
+        # no adjoint sources, no gradient :(
         if not len(sim_adj.sources):
             td.log.warning(
                 "No adjoint sources generated. "
@@ -141,41 +140,52 @@ def _run_bwd(
                 "The gradient will be 0.0 for all input elements. "
                 "Skipping adjoint simulation."
             )
-            return [0.0 for _ in range(len(data_fields_vjp))]
 
+            sim_fields_vjp = {}
+            for path, _ in data_fields_vjp.items():
+                key, *sim_path = path
+                if key == "simulation":
+                    sim_fields_vjp[tuple(sim_path)] = 0.0
+
+            # TODO: add a test
+            return sim_fields_vjp
+
+        # run adjoint simulation
         sim_data_adj = _run_static(sim_adj)
 
         # split into field and epsilon values
         _, data_adj_fld, data_adj_eps = split_data_list(sim_data=sim_data_adj, num_mnts_original=0)
 
-        # Map the index of each structure to the index into the data from the adjoint and forward
-        structure_indices = get_indices(sim_field_mapping)
-        data_indices = npa.arange(len(data_adj_fld))
-        structure_index_to_data_index = dict(zip(structure_indices, data_indices))
+        sim_fields_vjp = {}
 
-        vjp_values = []
-        for field_map_i in sim_field_mapping:
-            structure_index = get_index(field_map_i)
-            data_index = structure_index_to_data_index[structure_index]
+        for path, _ in data_fields_vjp.items():
+            # skip non simulation fields
+            key, *sim_path = path
+            if key != "simulation":
+                continue
 
-            fwd_fld = data_fwd_fld[data_index]
-            fwd_eps = data_fwd_eps[data_index]
-            adj_fld = data_adj_fld[data_index]
-            adj_eps = data_adj_eps[data_index]
+            # grab the correct structure and field data
+            _, structure_index, *sub_path = sim_path
 
-            assert npa.all(fwd_eps == adj_eps), "different forward and adjoint permittivity."
+            fwd_fld = sim_data_fwd_adjoint.get_adjoint_data(structure_index, data_type="fld")
+            fwd_eps = sim_data_fwd_adjoint.get_adjoint_data(structure_index, data_type="eps")
+            adj_fld = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
+            adj_eps = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
-            vjp_value_i = sim_data_fwd.compute_derivative(
-                field_map=field_map_i,
+            # compute and store the derivative
+            structure = sim_adj.structures[structure_index]
+            vjp_value = structure.compute_derivative(
+                path=tuple(sub_path),
                 fwd_fld=fwd_fld,
                 fwd_eps=fwd_eps,
                 adj_fld=adj_fld,
                 adj_eps=adj_eps,
+                **{},
             )
 
-            vjp_values.append(vjp_value_i)
+            sim_fields_vjp[tuple(sim_path)] = vjp_value  # TODO: actually compute this
 
-        return npa.stack(vjp_values)
+        return sim_fields_vjp
 
     return vjp
 

@@ -20,6 +20,7 @@ import h5py
 import xarray as xr
 
 from .autograd import Box
+from autograd.builtins import dict as dict_ag
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
@@ -924,6 +925,52 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = self.json(indent=indent, exclude_unset=exclude_unset, **kwargs)
         json_string = make_json_compatible(json_string)
         return json_string
+
+    def strip_traced_fields(self) -> dict_ag:
+        field_mapping = {}
+
+        def handle_value(x, path: tuple) -> None:
+            if isinstance(
+                x, (Box, DataArray)
+            ):  # TODO: better way to decide whether this decides a mapping
+                if isinstance(x, Box):
+                    field_mapping[path] = x
+                elif isinstance(x, DataArray):
+                    field_mapping[path] = x.values
+            elif isinstance(x, (list, tuple)):
+                for i, val in enumerate(x):
+                    _path = tuple(list(path) + [i])
+                    handle_value(val, path=_path)
+            elif isinstance(x, dict):
+                for key, val in x.items():
+                    _path = tuple(list(path) + [key])
+                    handle_value(val, path=_path)
+
+        self_dict = self.dict()
+        handle_value(self_dict, path=())
+
+        return dict_ag(field_mapping)
+
+    def insert_traced_fields(self, field_mapping: dict) -> Tidy3dBaseModel:
+        self_dict = self.dict()
+
+        def insert_value(value, path: tuple, sub_dict: dict):
+            key, *sub_path = path
+
+            if not sub_path:
+                if isinstance(sub_dict[key], DataArray):
+                    sub_dict[key].values = value
+                else:
+                    sub_dict[key] = value
+
+            else:
+                sub_dict = sub_dict[key]
+                insert_value(value=value, path=sub_path, sub_dict=sub_dict)
+
+        for path, value in field_mapping.items():
+            insert_value(value=value, path=path, sub_dict=self_dict)
+
+        return self.parse_obj(self_dict)
 
     @classmethod
     def add_type_field(cls) -> None:

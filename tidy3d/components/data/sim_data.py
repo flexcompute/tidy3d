@@ -20,7 +20,8 @@ from .monitor_data import (
     PermittivityData,
     FieldData,
 )
-from ..autograd import get_index, make_field_path, get_field_key
+from ..autograd import adjoint_mnt_fld_name, adjoint_mnt_eps_name
+
 from ..simulation import Simulation
 from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
@@ -816,50 +817,22 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
-    def traced_fields(self) -> (list[npa.ndarray], list[str]):
-        """Construct array full of the differentiable fields in this simulation."""
-        # TODO: only include traced ones?
-        # TODO: how to encode which structure (indices) map to this array?
-        # TODO: assumes only Medium in the structures
-        traced_fields = []
-        mapping = []
-        for i, mnt_data in enumerate(self.data):
-            fields_i = mnt_data.traced_fields()
-
-            for key, dataset in fields_i.items():
-                path = make_field_path(pre="data", index=i, key=key)
-                traced_fields.append(dataset.values)
-                mapping.append(path)
-
-        return traced_fields, mapping
-
-    def with_traced_fields(self, data_fields: list, field_map: list[str]) -> SimulationData:
-        """Copy of this object with the autograd-traced data_fields added in the .data."""
-
-        data_traced = list(self.data)
-
-        for values_i, field_map_i in zip(data_fields, field_map):
-            data_index = get_index(field_map_i)
-            dataset_key = get_field_key(field_map_i)
-            dataset_name = dataset_key[0]
-
-            mnt_data = self.data[data_index]
-
-            dataset = mnt_data.traced_fields()[dataset_key]
-
-            dataset_traced = dataset.copy()
-            dataset_traced.values = values_i
-
-            mnt_data_traced = mnt_data.copy(update={dataset_name: dataset_traced})
-            data_traced[data_index] = mnt_data_traced
-
-        return self.copy(update=dict(data=data_traced))
-
-    def make_adjoint_sim(self, data_fields_vjp: list[npa.ndarray]) -> Simulation:
+    def make_adjoint_sim(self, data_fields_vjp: dict[tuple, npa.ndarray]) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
+
         sources_adj = self.generate_adjoint_sources(data_fields_vjp=data_fields_vjp)
-        adjoint_mnts_fld, adjoint_mnts_eps = self.simulation.generate_adjoint_monitors()
+
+        sim_fields_vjp = {
+            tuple(sub_path): val
+            for (key, *sub_path), val in data_fields_vjp.items()
+            if key == "simulation"
+        }
+
+        adjoint_mnts_fld, adjoint_mnts_eps = self.simulation.generate_adjoint_monitors(
+            sim_fields=sim_fields_vjp
+        )
         monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
+
         sim_adj = self.simulation.copy(
             update=dict(
                 sources=sources_adj,
@@ -868,35 +841,36 @@ class SimulationData(AbstractYeeGridSimulationData):
         )
         return sim_adj
 
-    def generate_adjoint_sources(self, data_fields_vjp: list[npa.ndarray]) -> list[Source]:
+    def generate_adjoint_sources(self, data_fields_vjp: dict[tuple, npa.ndarray]) -> list[Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
         sources_adj_all = []
 
         # TODO: this is the ModeData -> ModeSource only for now, refactor as MonitorData methods
-        for mnt_data, data_vjp in zip(self.data, data_fields_vjp):
-            sources_adj = mnt_data.generate_adjoint_sources(data_vjp)
+        for path, value in data_fields_vjp.items():
+            # ignore anything not related to monitor data
+            if path[0] != "data":
+                continue
+
+            _, index, *rest = path  # TODO: handle datasets more generally
+            mnt_data = self.data[index]
+
+            sources_adj = mnt_data.generate_adjoint_sources(path=path, data_vjp=value)
 
             sources_adj_all += sources_adj
 
         return sources_adj_all
 
-    def compute_derivative(
-        self: SimulationData,
-        field_map: str,
-        fwd_fld: FieldData,
-        fwd_eps: PermittivityData,
-        adj_fld: FieldData,
-        adj_eps: PermittivityData,
-    ) -> float:
-        structure_index = get_index(field_map)
+    def get_adjoint_data(self, structure_index: int, data_type: str) -> MonitorDataType:
+        if data_type not in ("fld", "eps"):
+            raise KeyError("'data_type' must be 'fld' or 'eps'")
 
-        structure = self.simulation.structures[int(structure_index)]
-        return structure.compute_derivative(
-            field_map=field_map,
-            fwd_fld=fwd_fld,
-            fwd_eps=fwd_eps,
-            adj_fld=adj_fld,
-            adj_eps=adj_eps,
-            # Add other fields here? from simulation?
-        )
+        # get name of the monitor
+        mnt_name = dict(
+            fld=adjoint_mnt_fld_name,
+            eps=adjoint_mnt_eps_name,
+        )[
+            data_type
+        ](structure_index)
+
+        return self[mnt_name]

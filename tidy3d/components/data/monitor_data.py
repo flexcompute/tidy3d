@@ -22,6 +22,7 @@ from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
 from .data_array import EMEFreqModeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
+from ..autograd import get_static
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
 from ..types import EpsSpecType, Literal
@@ -82,10 +83,6 @@ class MonitorData(AbstractMonitorData, ABC):
     def generate_adjoint_sources(self) -> list[Source]:
         """Make list of adjoint sources associated with the data stored in this monitor data."""
         raise NotImplementedError("No adjoint source for {self.type}.")
-
-    def traced_fields(self) -> dict[str, np.ndarray]:
-        """Get the traced fields and fields for all traced fields in a structure."""
-        return {}
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -1571,7 +1568,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def generate_adjoint_sources(self, data_vjp: npa.ndarray) -> list[ModeSource]:
+    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
         """Generate adjoint sources for this MonitorData instance."""
 
         mnt = self.monitor
@@ -1583,11 +1580,16 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         sources_adj = []
 
         # TODO: we'll have to iterate over the other dims eventually
-        for direction, amp in zip("+-", amps):
+        for direction, amp in zip("+-", data_vjp._value):
             # td.log.info(f"monitor '{mnt.name}', direction '{direction}', amp '{amp}'")
+
+            amp = get_static(npa.array(amp))
 
             amplitude = float(npa.abs(amp))  # TODO: there are constants
             phase = float(npa.angle(1j * amp))
+
+            if amplitude == 0.0:
+                continue
 
             src_adj = ModeSource(
                 source_time=GaussianPulse(
@@ -1601,13 +1603,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
                 center=mnt.center,
                 direction={"-": "+", "+": "-"}[direction],  # flip source direction
             )
+
             sources_adj.append(src_adj)
 
         return sources_adj
-
-    def traced_fields(self) -> dict[tuple[str], np.ndarray]:
-        """Get the traced fields and fields for all traced fields in a structure."""
-        return {("amps",): self.amps}
 
 
 class ModeSolverData(ModeData):

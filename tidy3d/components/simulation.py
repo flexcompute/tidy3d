@@ -12,8 +12,7 @@ import matplotlib as mpl
 import math
 import pathlib
 
-import autograd.numpy as npa
-from .autograd import get_static, get_indices, make_field_path
+from .autograd import get_static, AutogradFieldMap
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -3218,23 +3217,6 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    def traced_fields(self) -> (list[Box], list[str]):
-        """Construct array full of the differentiable fields in this simulation."""
-        # TODO: only include traced ones?
-        # TODO: how to encode which structure (indices) map to this array?
-        # TODO: assumes only Medium in the structures
-        traced_fields = []
-        mapping = []
-        for i, s in enumerate(self.structures):
-            fields_i = s.traced_fields()
-
-            for key, val in fields_i.items():
-                path = make_field_path(pre="structures", index=i, key=key)
-                traced_fields.append(val)
-                mapping.append(path)
-
-        return npa.array(traced_fields), mapping
-
     @property
     def freqs_adjoint(self) -> list[float]:
         freqs = []
@@ -3246,31 +3228,38 @@ class Simulation(AbstractYeeGridSimulation):
         freqs.sort()
         return freqs
 
-    def generate_adjoint_monitors(self) -> (list[FieldMonitor], list[PermittivityMonitor]):
+    def generate_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
-
-        _, sim_field_mapping = self.traced_fields()
 
         freqs = self.freqs_adjoint
 
-        adjoint_mnts_fld = []
-        adjoint_mnts_eps = []
+        adjoint_monitors_fld = []
+        adjoint_monitors_eps = []
 
-        structure_indices = get_indices(sim_field_mapping)
+        seen_structures = []
 
-        for i in structure_indices:
+        for path, _ in sim_fields.items():
+            _, i, *rest = path
+
+            if i in seen_structures:
+                continue
+
             structure = self.structures[i]
-
             mnt_fld, mnt_eps = structure.generate_adjoint_monitors(freqs=freqs, index=i)
 
-            adjoint_mnts_fld.append(mnt_fld)
-            adjoint_mnts_eps.append(mnt_eps)
+            adjoint_monitors_fld.append(mnt_fld)
+            adjoint_monitors_eps.append(mnt_eps)
 
-        assert len(adjoint_mnts_fld) == len(
-            adjoint_mnts_eps
-        ), "Different # of field and permittivity adjoint monitors"
+            seen_structures.append(i)
 
-        return adjoint_mnts_fld, adjoint_mnts_eps
+        return adjoint_monitors_fld, adjoint_monitors_eps
+
+    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
+        """Copy of self with adjoint field and permittivity monitors for every traced structure."""
+
+        adjoint_mnts_fld, adjoint_mnts_eps = self.generate_adjoint_monitors(sim_fields=sim_fields)
+        monitors = list(self.monitors) + adjoint_mnts_fld + adjoint_mnts_eps
+        return self.copy(update=dict(monitors=monitors))
 
     """ Accounting """
 

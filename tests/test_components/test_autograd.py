@@ -124,7 +124,6 @@ def test_autograd_objective(use_emulated_run):
                 name = mnt_name_i(i)
                 amps_i = data[name].amps
                 value_i = npa.sum(abs(amps_i.values) ** 2)
-                print(value_i)
                 value += value_i
         return value
 
@@ -141,6 +140,8 @@ def test_autograd_objective(use_emulated_run):
         return value
 
     params0 = NUM_STCRS * [2.0]
+
+    objective(params0)
 
     if True or run_was_emulated:
         val, grad = ag.value_and_grad(objective)(params0)
