@@ -19,7 +19,7 @@ import numpy as np
 import h5py
 import xarray as xr
 
-from .autograd import Box
+from .autograd import Box, AutogradFieldMap
 from autograd.builtins import dict as dict_ag
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
@@ -926,50 +926,71 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(self) -> dict_ag:
+    def strip_traced_fields(self) -> AutogradFieldMap:
+        """Extract a dictionary mapping paths in the model to the data traced by autograd."""
+
         field_mapping = {}
 
-        def handle_value(x, path: tuple) -> None:
-            if isinstance(
-                x, (Box, DataArray)
-            ):  # TODO: better way to decide whether this decides a mapping
+        def handle_value(x: Any, path: tuple[str, ...]) -> None:
+            """recursively update ``field_mapping`` with path to the autograd data."""
+
+            # this is a leaf node that we want to trace, add this path and data to the mapping
+            if isinstance(x, (Box, DataArray)):
+                # TODO: better way to decide whether this field deserves a mapping.
                 if isinstance(x, Box):
                     field_mapping[path] = x
                 elif isinstance(x, DataArray):
                     field_mapping[path] = x.values
+
+            # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
                     _path = tuple(list(path) + [i])
                     handle_value(val, path=_path)
+
+            # for dictionaries, add the (key,) to the path and handle each value
             elif isinstance(x, dict):
                 for key, val in x.items():
                     _path = tuple(list(path) + [key])
                     handle_value(val, path=_path)
 
+        # recursively parse the dictionary of this object
         self_dict = self.dict()
         handle_value(self_dict, path=())
 
+        # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def insert_traced_fields(self, field_mapping: dict) -> Tidy3dBaseModel:
+    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+        """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
+
+        # ``def insert_value()`` will insert into this dictionary
         self_dict = self.dict()
 
-        def insert_value(value, path: tuple, sub_dict: dict):
+        def insert_value(value, path: tuple[str, ...], sub_dict: dict):
+            """Recursively insert a value into the path into a dictionary."""
+
+            # get the first and rest of the path
             key, *sub_path = path
 
+            # if there is only one element in path, insert into the sub dict at this key
             if not sub_path:
+                # TODO: handle DataArray more cleanly
                 if isinstance(sub_dict[key], DataArray):
                     sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
 
+            # if there are more elements in the path, recurse
             else:
                 sub_dict = sub_dict[key]
                 insert_value(value=value, path=sub_path, sub_dict=sub_dict)
 
+        # iterate through field mapping. Insert each ``value`` into the ``self_dict`` at ``path``
         for path, value in field_mapping.items():
             insert_value(value=value, path=path, sub_dict=self_dict)
 
+        # parse the dict with inserted fields to return an updated copy of ``self``
         return self.parse_obj(self_dict)
 
     @classmethod

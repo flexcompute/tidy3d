@@ -6,8 +6,6 @@ import matplotlib.pylab as plt
 import autograd as ag
 import autograd.numpy as npa
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp
-import typing
 
 from ..utils import run_emulated
 
