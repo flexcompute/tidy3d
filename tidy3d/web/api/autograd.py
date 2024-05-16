@@ -119,8 +119,8 @@ def _run_bwd(
     """VJP-maker for _run(). Constructs and runs adjoint simulation, does postprocessing."""
 
     # get the fwd epsilon and field data from the cached aux_data
-    sim_data_fwd_adjoint = aux_data[AUX_KEY_DATA_FWD]
-    sim_data_fwd = aux_data[AUX_KEY_SIM_DATA]
+    sim_data_orig = aux_data[AUX_KEY_SIM_DATA]
+    sim_data_fwd = aux_data[AUX_KEY_DATA_FWD]
 
     td.log.info("constructing custom vjp")
 
@@ -129,10 +129,15 @@ def _run_bwd(
 
         td.log.info("running custom vjp")
 
-        # make adjoint simulation
-        sim_adj = sim_data_fwd.make_adjoint_sim(data_fields_vjp=data_fields_vjp)
+        # insert the VJP data into a SimulationData
+        sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
 
-        # no adjoint sources, no gradient :(
+        # make adjoint simulation from that SimulationData
+        sim_adj = sim_data_vjp.make_adjoint_sim(
+            sim_fields_fwd=sim_fields_fwd, data_fields_vjp=data_fields_vjp
+        )
+
+        # no adjoint sources, no gradient for you :(
         if not len(sim_adj.sources):
             td.log.warning(
                 "No adjoint sources generated. "
@@ -141,6 +146,7 @@ def _run_bwd(
                 "Skipping adjoint simulation."
             )
 
+            # make empty VJP
             sim_fields_vjp = {}
             for path, _ in data_fields_vjp.items():
                 key, *sim_path = path
@@ -158,17 +164,12 @@ def _run_bwd(
 
         sim_fields_vjp = {}
 
-        for path, _ in data_fields_vjp.items():
-            # skip non simulation fields
-            key, *sim_path = path
-            if key != "simulation":
-                continue
-
+        for path, _ in sim_fields_fwd.items():
             # grab the correct structure and field data
-            _, structure_index, *sub_path = sim_path
+            _, structure_index, *sub_path = path
 
-            fwd_fld = sim_data_fwd_adjoint.get_adjoint_data(structure_index, data_type="fld")
-            fwd_eps = sim_data_fwd_adjoint.get_adjoint_data(structure_index, data_type="eps")
+            fwd_fld = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
+            fwd_eps = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
             adj_fld = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
             adj_eps = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
@@ -180,10 +181,10 @@ def _run_bwd(
                 fwd_eps=fwd_eps,
                 adj_fld=adj_fld,
                 adj_eps=adj_eps,
-                **{},
+                **{},  # pass kwargs later if we want
             )
 
-            sim_fields_vjp[tuple(sim_path)] = vjp_value  # TODO: actually compute this
+            sim_fields_vjp[tuple(path)] = vjp_value  # TODO: actually compute this
 
         return sim_fields_vjp
 

@@ -85,6 +85,16 @@ def test_autograd_objective(use_emulated_run):
             )
             mnts.append(mnt_i)
 
+        mnts.append(
+            td.DiffractionMonitor(
+                size=(td.inf, td.inf, 0),
+                center=(0, 0, -LZ / 2 + WVL),
+                freqs=[FREQ0],
+                normal_dir="+",
+                name="diffraction_monitor",
+            )
+        )
+
         waveguide_out = td.Structure(
             geometry=td.Box(
                 size=(0.5, 0.5, LZ / 2),
@@ -111,6 +121,7 @@ def test_autograd_objective(use_emulated_run):
             structures=structures + [waveguide_out],
             sources=[src],
             monitors=mnts,
+            boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True),
         )
 
         return sim
@@ -123,6 +134,8 @@ def test_autograd_objective(use_emulated_run):
                 amps_i = data[name].amps
                 value_i = npa.sum(abs(amps_i.values) ** 2)
                 value += value_i
+        amps = data["diffraction_monitor"]
+        value += npa.sum(abs(amps.amps.values) ** 2)
         return value
 
     def objective(params):

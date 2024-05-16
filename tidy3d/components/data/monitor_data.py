@@ -6,10 +6,9 @@ from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
 
 import xarray as xr
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 from pandas import DataFrame
-import autograd.numpy as npa
 
 from .data_array import FluxTimeDataArray, FluxDataArray
 from .data_array import MixedModeDataArray, ModeAmpsDataArray
@@ -28,7 +27,7 @@ from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Nump
 from ..types import EpsSpecType, Literal
 from ..grid.grid import Grid, Coords
 from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
-from ..source import GaussianPulse, ModeSource, Source
+from ..source import GaussianPulse, ModeSource, Source, PlaneWave
 from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
 from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
 from ..monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
@@ -80,7 +79,7 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[Source]:
+    def generate_adjoint_sources(self) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
         return []
 
@@ -1580,14 +1579,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
+    def generate_adjoint_sources(self) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-        if path[0] != "amps":
-            return []
-
         amps = self.amps.copy()
-        amps.values = get_static(data_vjp)
 
         coords = amps.coords
 
@@ -1617,14 +1612,25 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         direction = coords["direction"]
         mode_index = coords["mode_index"]
 
+        # # compute amplitude and phase
+        # def get_amplitude(x) -> complex:
+        #     return 1j * complex(get_static(x.values))
+
         # compute amplitude and phase
         def get_amplitude(x) -> complex:
-            return 1j * complex(get_static(amp.values))
+            """Get the complex amplitude out of the data."""
+            try:
+                xc = x.values.tolist()._value.astype(complex)
+            except AttributeError:
+                xc = x.values.tolist()
 
-        amp_complex = get_amplitude(amp.values)
+            return 1j * complex(xc)
+
+        amp_complex = get_amplitude(amp)
         k0 = 2 * np.pi * freq0 / C_0
         grad_const = k0 / 4 / ETA_0
         src_amp = grad_const * amp_complex
+
         amplitude = abs(src_amp)
         phase = np.angle(src_amp)
 
@@ -2665,122 +2671,94 @@ class DiffractionData(AbstractFieldProjectionData):
             data_arrays.append(xr.DataArray(data=field, coords=self.coords, dims=self.dims))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
-    # TODO: add this into the framework
-    # @property
-    # def adjoint_source_function_map(self) -> dict[tuple[str], Callable]:
-    #     """Map path to the right adjoint source creation function."""
-    #     return {
-    #         ("amps",): self.adjoint_sources_amps,
-    #     }
+    def generate_adjoint_sources(self) -> list[PlaneWave]:
+        """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-    # def adjoint_sources_amps(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
-    #     """Get all adjoint sources for the ``ModeMonitor.amps``."""
+        amps = self.amps.copy()
 
-    #     amps = self.amps.copy()
-    #     amps.values = get_static(data_vjp)
+        coords = amps.coords
 
-    #     coords = amps.coords
+        adjoint_sources = []
 
-    #     adjoint_sources = []
+        for freq in coords["f"]:
+            for pol in coords["polarization"]:
+                for order_x in coords["orders_x"]:
+                    for order_y in coords["orders_y"]:
+                        amp_single = amps.sel(
+                            f=freq,
+                            polarization=pol,
+                            orders_x=order_x,
+                            orders_y=order_y,
+                        )
 
-    #     for freq in coords["f"]:
-    #         for direction in coords["direction"]:
-    #             for mode_index in coords["mode_index"]:
-    #                 amp_single = amps.sel(f=freq, direction=direction, mode_index=mode_index)
+                        if get_static(amp_single.values) == 0.0:
+                            continue
 
-    #                 if get_static(amp_single.values) == 0.0:
-    #                     continue
+                        adjoint_source = self.adjoint_source_amp(amp=amp_single)
+                        if adjoint_source is not None:
+                            adjoint_sources.append(adjoint_source)
 
-    #                 adjoint_source = self.adjoint_source_amp(amp=amp_single)
-    #                 adjoint_sources.append(adjoint_source)
+        return adjoint_sources
 
-    #     return adjoint_sources
+    def adjoint_source_amp(self, amp: DataArray) -> PlaneWave:
+        """Generate an adjoint ``PlaneWave`` for a single amplitude."""
 
-    # def adjoint_source_amp(self, amp: DataArray) -> ModeSource:
-    #     """Generate an adjoint ``ModeSource`` for a single amplitude."""
+        monitor = self.monitor
 
-    #     monitor = self.monitor
+        # compute coordinates
+        coords = amp.coords
+        freq0 = coords["f"]
+        pol = coords["polarization"]
+        order_x = coords["orders_x"]
+        order_y = coords["orders_y"]
 
-    #     # compute coordinates
-    #     coords = amp.coords
-    #     freq0 = coords["f"]
-    #     direction = "-" if coords["direction"] == "+" else "-"  # flip source direction
-    #     mode_index = coords["mode_index"]
+        # compute amplitude and phase
+        def get_amplitude(x) -> complex:
+            """Get the complex amplitude out of the data."""
+            xc = x.values.tolist()._value.astype(complex)
 
-    #     # compute amplitude and phase
-    #     def get_amplitude(x) -> complex:
-    #         return 1j * complex(get_static(amp.values))
+            return 1j * complex(xc)
 
-    #     amp_complex = get_amplitude(amp.values)
-    #     k0 = 2 * np.pi * freq0 / C_0
-    #     grad_const = k0 / 4 / ETA_0
-    #     src_amp = grad_const * amp_complex
-    #     amplitude = abs(src_amp)
-    #     phase = np.angle(src_amp)
+        amp_complex = get_amplitude(amp)
 
-    #     # construct source
-    #     src_adj = ModeSource(
-    #         source_time=GaussianPulse(
-    #             amplitude=amplitude,
-    #             phase=phase,
-    #             freq0=freq0,
-    #             fwidth=freq0 / 10,  # TODO: how to set this properly?
-    #         ),
-    #         mode_spec=monitor.mode_spec,
-    #         size=monitor.size,
-    #         center=monitor.center,
-    #         direction=direction,
-    #         mode_index=mode_index,
-    #     )
+        theta_data, phi_data = self.angles
 
-    #     return src_adj
+        angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
+        angle_theta = float(theta_data.sel(**angle_sel_kwargs))
+        angle_phi = float(phi_data.sel(**angle_sel_kwargs))
 
-    #     # extract the values coordinates of the non-zero amplitudes
-    #     amp_vals, sel_coords = self.amps.nonzero_val_coords
-    #     pols = sel_coords["polarization"]
-    #     freqs = sel_coords["f"]
-    #     orders_x = sel_coords["orders_x"]
-    #     orders_y = sel_coords["orders_y"]
+        # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
+        if np.isnan(angle_theta):
+            return None
 
-    #     # prepare some "global", "monitor-level" parameters for the source
-    #     src_direction = self.flip_direction(self.monitor.normal_dir)
-    #     theta_data, phi_data = self.angles
+        # get the polarization angle from the data
+        pol_angle = 0.0 if str(pol).lower() == "p" else np.pi / 2
 
-    #     adjoint_sources = []
-    #     for amp, order_x, order_y, freq, pol in zip(amp_vals, orders_x, orders_y, freqs, pols):
-    #         if jnp.isnan(amp):
-    #             continue
+        # TODO: understand better where this factor comes from
+        k0 = 2 * np.pi * freq0 / C_0
+        bck_eps = self.medium.eps_model(freq0)
+        grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
+        src_amp = grad_const * amp_complex
 
-    #         # select the propagation angles from the data
-    #         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq))
-    #         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
-    #         angle_phi = float(phi_data.sel(**angle_sel_kwargs))
+        amplitude = abs(src_amp)
+        phase = np.angle(src_amp)
 
-    #         # if the angle is nan, this amplitude is set to 0 in the fwd pass, so should skip adj
-    #         if np.isnan(angle_theta):
-    #             continue
+        adj_src = PlaneWave(
+            size=self.monitor.size,
+            center=self.monitor.center,
+            source_time=GaussianPulse(
+                amplitude=amplitude,
+                phase=phase,
+                freq0=freq0,
+                fwidth=freq0 / 10,  # TODO: how to set this properly?
+            ),
+            direction=self.flip_direction(monitor.normal_dir),
+            angle_theta=angle_theta,
+            angle_phi=angle_phi,
+            pol_angle=pol_angle,
+        )
 
-    #         # get the polarization angle from the data
-    #         pol_angle = 0.0 if str(pol).lower() == "p" else np.pi / 2
-
-    #         # TODO: understand better where this factor comes from
-    #         k0 = 2 * np.pi * freq / C_0
-    #         bck_eps = self.medium.eps_model(freq)
-    #         grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
-    #         src_amp = grad_const * amp
-
-    #         adj_plane_wave_src = PlaneWave(
-    #             size=self.monitor.size,
-    #             center=self.monitor.center,
-    #             source_time=self.make_source_time(amp_complex=src_amp, freq=freq, fwidth=fwidth),
-    #             direction=src_direction,
-    #             angle_theta=angle_theta,
-    #             angle_phi=angle_phi,
-    #             pol_angle=pol_angle,
-    #         )
-    #         adjoint_sources.append(adj_plane_wave_src)
-
-    #     return adjoint_sources
+        return adj_src
 
 
 MonitorDataTypes = (

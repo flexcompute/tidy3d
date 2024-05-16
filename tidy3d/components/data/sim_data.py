@@ -27,7 +27,7 @@ from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
 from ..base import JSON_TAG
-
+from ..autograd import AutogradFieldMap
 from ..base_sim.data.sim_data import AbstractSimulationData
 
 
@@ -815,19 +815,15 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
-    def make_adjoint_sim(self, data_fields_vjp: dict[tuple, npa.ndarray]) -> Simulation:
+    def make_adjoint_sim(
+        self, sim_fields_fwd: AutogradFieldMap, data_fields_vjp: AutogradFieldMap
+    ) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
 
         sources_adj = self.generate_adjoint_sources(data_fields_vjp=data_fields_vjp)
 
-        sim_fields_vjp = {
-            tuple(sub_path): val
-            for (key, *sub_path), val in data_fields_vjp.items()
-            if key == "simulation"
-        }
-
         adjoint_mnts_fld, adjoint_mnts_eps = self.simulation.generate_adjoint_monitors(
-            sim_fields=sim_fields_vjp
+            sim_fields=sim_fields_fwd
         )
         monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
 
@@ -844,25 +840,21 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         sources_adj_all = []
 
-        # TODO: this is the ModeData -> ModeSource only for now, refactor as MonitorData methods
-        for path, value in data_fields_vjp.items():
+        data_indices = []
+        for path, _ in data_fields_vjp.items():
+            key, data_index, *sub_path = path
+
+            if key == "data" and data_index not in data_indices:
+                data_indices.append(data_index)
+
+        for data_index in data_indices:
             # ignore anything not related to monitor data
 
-            if path[0] != "data":
-                continue
-
-            _, data_index, *sub_path = path
             mnt_data = self.data[data_index]
 
-            # TODO: ugly, fix later
-            # TODO: Do I need to pass the value? or just need the path and use existing data. I think path is enough.
-            try:
-                sources_adj = mnt_data.generate_adjoint_sources(
-                    path=tuple(sub_path), data_vjp=value
-                )
-                sources_adj_all += sources_adj
-            except NotImplementedError:
-                continue
+            # TODO: dont need to pass path or data vjp
+            sources_adj = mnt_data.generate_adjoint_sources()
+            sources_adj_all += sources_adj
 
         return sources_adj_all
 

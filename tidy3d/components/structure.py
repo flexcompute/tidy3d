@@ -239,13 +239,16 @@ class Structure(AbstractStructure):
         **kwargs,
     ) -> float:
         """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
-        vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
-        vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
-        vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
-        vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
-        # TODO: put these at the same positions, sum and real, refactor
-        vjp_value = npa.real(vjp_value)
-        return vjp_value
+        fld_mult_ex = fwd_fld.Ex * adj_fld.Ex
+        fld_mult_ey = fwd_fld.Ey * adj_fld.Ey
+        fld_mult_ez = fwd_fld.Ez * adj_fld.Ez
+
+        vjp_value = 0.0
+        for fld in (fld_mult_ex, fld_mult_ey, fld_mult_ez):
+            vjp_value_fld = fld.integrate(coord=("x", "y", "z"))
+            vjp_value += vjp_value_fld
+
+        return float(npa.real(vjp_value.values))  # todo: handle freq
 
     def derivative_medium_conductivity(
         self,
