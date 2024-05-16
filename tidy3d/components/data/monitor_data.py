@@ -80,28 +80,9 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    @property
-    def adjoint_source_function_map(self) -> dict[tuple[str], Callable]:
-        """Map path to the right adjoint source creation function."""
-        return {}
-
-    def get_adjoint_source_function(self, path: tuple[str, ...]) -> Callable:
-        """Get the derivative function function."""
-
-        adjoint_source_function_map = self.adjoint_source_function_map
-
-        if path not in adjoint_source_function_map:
-            raise NotImplementedError(
-                f"Can't compute adjoint source for monitor data: {self.type} and field path: {path}."
-            )
-
-        return adjoint_source_function_map[path]
-
     def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[Source]:
-        """Generate adjoint sources for this MonitorData instance."""
-
-        adjoint_source_function = self.get_adjoint_source_function(path=path)
-        return adjoint_source_function(path=path, data_vjp=data_vjp)
+        """Generate adjoint sources for this ``MonitorData`` instance."""
+        return []
 
     @staticmethod
     def flip_direction(direction: str) -> str:
@@ -1599,15 +1580,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    @property
-    def adjoint_source_function_map(self) -> dict[tuple[str], Callable]:
-        """Map path to the right adjoint source creation function."""
-        return {
-            ("amps",): self.adjoint_sources_amps,
-        }
-
-    def adjoint_sources_amps(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
+    def generate_adjoint_sources(self, path: tuple, data_vjp: npa.ndarray) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
+
+        if path[0] != "amps":
+            return []
 
         amps = self.amps.copy()
         amps.values = get_static(data_vjp)

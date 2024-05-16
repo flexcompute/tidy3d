@@ -847,6 +847,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         # TODO: this is the ModeData -> ModeSource only for now, refactor as MonitorData methods
         for path, value in data_fields_vjp.items():
             # ignore anything not related to monitor data
+
             if path[0] != "data":
                 continue
 
