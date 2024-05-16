@@ -6,13 +6,13 @@ from typing import Dict, Tuple, List, Set, Union
 from abc import ABC, abstractmethod
 
 import pydantic.v1 as pydantic
-import numpy as np
+import autograd.numpy as np
 import xarray as xr
 import matplotlib as mpl
 import math
 import pathlib
 
-from .autograd import get_static, AutogradFieldMap
+from .autograd import AutogradFieldMap
 
 from .base import cached_property
 from .base import skip_if_fields_missing
@@ -3262,18 +3262,6 @@ class Simulation(AbstractYeeGridSimulation):
         return self.copy(update=dict(monitors=monitors))
 
     """ Accounting """
-
-    def to_static(self) -> Simulation:
-        """Un-trace all differentiable fields in this Simulation."""
-
-        # TODO: replace with just a json encoder for Box?
-        structures = []
-        for s in self.structures:
-            permittivity = get_static(s.medium.permittivity)
-            medium = s.medium.copy(update=dict(permittivity=permittivity))
-            structure = s.copy(update=dict(medium=medium))
-            structures.append(structure)
-        return self.copy(update=dict(structures=structures))
 
     @cached_property
     def _run_time(self) -> float:

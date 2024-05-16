@@ -1622,7 +1622,10 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
             try:
                 xc = x.values.tolist()._value.astype(complex)
             except AttributeError:
-                xc = x.values.tolist()
+                try:
+                    xc = x.values.tolist()
+                except AttributeError:
+                    xc = complex(x)
 
             return 1j * complex(xc)
 
@@ -2715,7 +2718,14 @@ class DiffractionData(AbstractFieldProjectionData):
         # compute amplitude and phase
         def get_amplitude(x) -> complex:
             """Get the complex amplitude out of the data."""
-            xc = x.values.tolist()._value.astype(complex)
+
+            try:
+                xc = x.values.tolist()._value.astype(complex)
+            except AttributeError:
+                try:
+                    xc = x.values.tolist()
+                except AttributeError:
+                    xc = complex(x)
 
             return 1j * complex(xc)
 

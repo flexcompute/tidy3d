@@ -60,7 +60,7 @@ def _run(sim_fields: AutogradFieldMap, sim: td.Simulation, aux_data: dict) -> Au
     sim = sim.with_adjoint_monitors(sim_fields)
 
     # NOTE: do we really need to sanitize the sim? maybe it's fine to just run it as is
-    sim_static = sim  # sim.to_static()
+    sim_static = sim.to_static()
     sim_data = _run_static(sim_static)
 
     data_original, data_adjoint_fld, data_adjoint_eps = split_data_list(
@@ -68,7 +68,12 @@ def _run(sim_fields: AutogradFieldMap, sim: td.Simulation, aux_data: dict) -> Au
     )
     sim_data = sim_data.copy(update=dict(data=data_original))
 
-    sim_data_fwd = sim_data.copy(update=dict(data=data_adjoint_fld + data_adjoint_eps))
+    sim_fwd = sim.updated_copy(monitors=list(sim.monitors[num_mnts_original:]))
+
+    sim_data_fwd = sim_data.updated_copy(
+        data=(data_adjoint_fld + data_adjoint_eps),
+        simulation=sim_fwd,
+    )
 
     # store the forward simulation data for later (can't return it directly or autograd complains)
     aux_data[AUX_KEY_SIM_DATA] = sim_data
@@ -90,7 +95,9 @@ def run(sim: td.Simulation) -> td.SimulationData:
     # TODO: traced_fields needs to generate a mapping to the traced structures
     traced_fields_sim = sim.strip_traced_fields()
 
-    # TODO: if no tracers (sim_fields empty?) probably can just run normally, although should generalize
+    if not traced_fields_sim:
+        td.log.info("no tracers found, just running normally (non-autograd).")
+        return _run_static(sim)
 
     # TODO: hide this aux data stuff?
     aux_data = {}
@@ -105,6 +112,9 @@ def run(sim: td.Simulation) -> td.SimulationData:
 
     sim_data = aux_data[AUX_KEY_SIM_DATA]
 
+    traced_fields_data = {
+        path: val for path, val in traced_fields_data.items() if path[0] == "data"
+    }
     sim_data_traced = sim_data.insert_traced_fields(traced_fields_data)
 
     return sim_data_traced
@@ -130,6 +140,7 @@ def _run_bwd(
         td.log.info("running custom vjp")
 
         # insert the VJP data into a SimulationData
+        data_fields_vjp = {path: val for path, val in data_fields_vjp.items() if path[0] == "data"}
         sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
 
         # make adjoint simulation from that SimulationData
@@ -168,20 +179,20 @@ def _run_bwd(
             # grab the correct structure and field data
             _, structure_index, *sub_path = path
 
-            fwd_fld = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
-            fwd_eps = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
-            adj_fld = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
-            adj_eps = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
+            fld_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
+            eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
+            fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
+            eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
             # compute and store the derivative
-            structure = sim_adj.structures[structure_index]
+            structure = sim_data_fwd.simulation.structures[structure_index]
             vjp_value = structure.compute_derivative(
                 path=tuple(sub_path),
-                fwd_fld=fwd_fld,
-                fwd_eps=fwd_eps,
-                adj_fld=adj_fld,
-                adj_eps=adj_eps,
-                **{},  # pass kwargs later if we want
+                fld_fwd=fld_fwd,
+                eps_fwd=eps_fwd,
+                fld_adj=fld_adj,
+                eps_adj=eps_adj,
+                eps_sim=sim_data_orig.simulation.medium.permittivity,
             )
 
             sim_fields_vjp[tuple(path)] = vjp_value  # TODO: actually compute this

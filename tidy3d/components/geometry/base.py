@@ -9,10 +9,11 @@ import functools
 import pathlib
 
 import pydantic.v1 as pydantic
-import numpy as np
+import autograd.numpy as np
 import shapely
 from matplotlib import patches
 
+from ..autograd import TracedSize, TracedCoordinate
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
@@ -1448,7 +1449,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 class Centered(Geometry, ABC):
     """Geometry with a well defined center."""
 
-    center: Coordinate = pydantic.Field(
+    center: TracedCoordinate = pydantic.Field(
         (0.0, 0.0, 0.0),
         title="Center",
         description="Center of object in x, y, and z.",
@@ -1741,7 +1742,7 @@ class Box(SimplePlaneIntersection, Centered):
     >>> b = Box(center=(1,2,3), size=(2,2,2))
     """
 
-    size: Size = pydantic.Field(
+    size: TracedSize = pydantic.Field(
         ...,
         title="Size",
         description="Size in x, y, and z directions.",

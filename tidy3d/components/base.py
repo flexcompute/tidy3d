@@ -19,7 +19,7 @@ import numpy as np
 import h5py
 import xarray as xr
 
-from .autograd import Box, AutogradFieldMap
+from .autograd import Box, AutogradFieldMap, get_static
 from autograd.builtins import dict as dict_ag
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
@@ -973,18 +973,27 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # get the first and rest of the path
             key, *sub_path = path
 
+            len_sub_path = len(sub_path)
+
             # if there is only one element in path, insert into the sub dict at this key
-            if not sub_path:
+            if len_sub_path == 0:
                 # TODO: handle DataArray more cleanly
                 if isinstance(sub_dict[key], DataArray):
                     sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
+                return
+
+            if len(sub_path) == 1:
+                (sub_key,) = sub_path
+                if isinstance(sub_key, int):
+                    sub_dict[key] = list(sub_dict[key])
+                    sub_dict[key][sub_key] = value
+                    return
 
             # if there are more elements in the path, recurse
-            else:
-                sub_dict = sub_dict[key]
-                insert_value(value=value, path=sub_path, sub_dict=sub_dict)
+            sub_dict = sub_dict[key]
+            insert_value(value=value, path=sub_path, sub_dict=sub_dict)
 
         # iterate through field mapping. Insert each ``value`` into the ``self_dict`` at ``path``
         for path, value in field_mapping.items():
@@ -992,6 +1001,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # parse the dict with inserted fields to return an updated copy of ``self``
         return self.parse_obj(self_dict)
+
+    def to_static(self) -> Tidy3dBaseModel:
+        """Version of self with all autograd-traced fields removed."""
+        field_mapping = self.strip_traced_fields()
+        field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
+        return self.insert_traced_fields(field_mapping_static)
 
     @classmethod
     def add_type_field(cls) -> None:

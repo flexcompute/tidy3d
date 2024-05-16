@@ -6,7 +6,9 @@ import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
 import autograd.numpy as npa
+import xarray as xr
 
+from .autograd import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .validators import validate_name_str
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
@@ -198,18 +200,24 @@ class Structure(AbstractStructure):
 
         box = self.geometry.bounding_box
 
+        # we dont want these fields getting traced by autograd, otherwise it messes stuff up
+        size = tuple(get_static(x) for x in box.size)
+        center = tuple(get_static(x) for x in box.center)
+
         mnt_fld = FieldMonitor(
-            size=box.size,  # TODO: expand slightly?
-            center=box.center,
+            size=size,  # TODO: expand slightly?
+            center=center,
             freqs=freqs,
             name=self.get_monitor_name(index=index, data_type="fld"),
+            colocate=False,
         )
 
         mnt_eps = PermittivityMonitor(
-            size=box.size,  # TODO: expand slightly?
-            center=box.center,
+            size=size,  # TODO: expand slightly?
+            center=center,
             freqs=freqs,
             name=self.get_monitor_name(index=index, data_type="eps"),
+            colocate=False,
         )
 
         return mnt_fld, mnt_eps
@@ -220,6 +228,8 @@ class Structure(AbstractStructure):
         return {
             ("medium", "permittivity"): self.derivative_medium_permittivity,
             ("medium", "conductivity"): self.derivative_medium_conductivity,
+            ("geometry", "size"): self.derivative_geometry_size,
+            ("geometry", "center"): self.derivative_geometry_center,
         }
 
     def get_derivative_function(self, path: tuple[str, ...]) -> Callable:
@@ -230,58 +240,239 @@ class Structure(AbstractStructure):
             raise NotImplementedError(f"Can't compute derivative for structure field path: {path}.")
         return derivative_map[path]
 
-    def derivative_medium_permittivity(
+    def E_to_D(self, fld_data: FieldData, eps_data: PermittivityData) -> FieldData:
+        """Convert electric field to displacement field."""
+        field_components = {}
+        for dim in "xyz":
+            field_name = f"E{dim}"
+            fld_E = fld_data.field_components[field_name]
+            eps_name = f"eps_{dim}{dim}"
+            fld_eps = eps_data.field_components[eps_name]
+            fld_D = fld_eps * fld_E
+            field_components[field_name] = fld_D
+        return fld_data.updated_copy(**field_components)
+
+    def derivative_map_E(self, fld_fwd: FieldData, fld_adj: FieldData) -> FieldData:
+        """Get FieldData where the Ex, Ey, Ez components store the gradients w.r.t. these."""
+        field_components = {}
+        for field_name in ("Ex", "Ey", "Ez"):
+            fwd = fld_fwd.field_components[field_name]
+            adj = fld_adj.field_components[field_name]
+            mult = fwd * adj
+            field_components[field_name] = mult
+        return fld_fwd.updated_copy(**field_components)
+
+    def derivative_map_D(
         self,
-        fwd_fld: FieldData,
-        fwd_eps: PermittivityData,
-        adj_fld: FieldData,
-        adj_eps: PermittivityData,
-        **kwargs,
-    ) -> float:
-        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
-        fld_mult_ex = fwd_fld.Ex * adj_fld.Ex
-        fld_mult_ey = fwd_fld.Ey * adj_fld.Ey
-        fld_mult_ez = fwd_fld.Ez * adj_fld.Ez
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+    ) -> FieldData:
+        """Get FieldData where the Ex, Ey, Ez components store the gradients w.r.t. D fields."""
+        fwd_D = self.E_to_D(fld_data=fld_fwd, eps_data=eps_fwd)
+        adj_D = self.E_to_D(fld_data=fld_adj, eps_data=eps_adj)
+        field_components = {}
+        for field_name in ("Ex", "Ey", "Ez"):
+            fwd = fwd_D.field_components[field_name]
+            adj = adj_D.field_components[field_name]
+            mult = fwd * adj
+            field_components[field_name] = mult
+
+        return fld_fwd.updated_copy(**field_components)
+
+    def derivative_eps_complex_volume(
+        self,
+        fld_fwd: FieldData,
+        fld_adj: FieldData,
+    ) -> xr.DataArray:
+        """Get the derivative w.r.t complex permittivity in the volume vs frequency."""
+
+        der_E = self.derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
 
         vjp_value = 0.0
-        for fld in (fld_mult_ex, fld_mult_ey, fld_mult_ez):
+        for field_name in ("Ex", "Ey", "Ez"):
+            fld = der_E.field_components[field_name]
             vjp_value_fld = fld.integrate(coord=("x", "y", "z"))
             vjp_value += vjp_value_fld
 
-        return float(npa.real(vjp_value.values))  # todo: handle freq
+        return vjp_value
 
-    def derivative_medium_conductivity(
+    def derivative_eps_sigma_volume(
         self,
-        fwd_fld: FieldData,
-        fwd_eps: PermittivityData,
-        adj_fld: FieldData,
-        adj_eps: PermittivityData,
+        fld_fwd: FieldData,
+        fld_adj: FieldData,
+    ) -> xr.DataArray:
+        """Get the derivative w.r.t permittivity and conductivity in the volume vs frequency."""
+
+        vjp_eps_complex = self.derivative_eps_complex_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
+
+        freqs = get_static(vjp_eps_complex.coords["f"]).values
+        values = get_static(vjp_eps_complex.values)
+
+        eps_vjp, sigma_vjp = self.medium.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+
+        return eps_vjp, sigma_vjp
+
+    def derivative_medium_permittivity(
+        self,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
         **kwargs,
     ) -> float:
         """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
-        vjp_value_x = npa.array(fwd_fld.Ex.values * adj_fld.Ex.values)
-        vjp_value_y = npa.array(fwd_fld.Ey.values * adj_fld.Ey.values)
-        vjp_value_z = npa.array(fwd_fld.Ez.values * adj_fld.Ez.values)
-        vjp_value = npa.sum([vjp_value_x, vjp_value_y, vjp_value_z])
-        # TODO: put these at the same positions, sum and real, refactor
-        vjp_value = npa.real(vjp_value)
-        return vjp_value
+
+        eps_vjp, _ = self.derivative_eps_sigma_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
+
+        return npa.sum(eps_vjp)
+
+    def derivative_medium_conductivity(
+        self,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
+        **kwargs,
+    ) -> float:
+        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
+
+        _, sigma_vjp = self.derivative_eps_sigma_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
+
+        return npa.sum(sigma_vjp)
+
+    def derivative_geometry_box_faces(
+        self,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
+        **kwargs,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """Derivative with respect to min and max faces of ``Box`` along all 3 dims."""
+
+        # get E and D fields [forward * adjoint, element-wise, (x, y, z) components].
+        der_E = self.derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
+
+        der_D = self.derivative_map_D(
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
+        )
+
+        # change in permittivity between inside and outside
+        # TODO: assumes non-dispersive here and eps_sim, generalize
+        eps_in = get_static(self.medium.permittivity)
+        eps_out = eps_sim
+        delta_eps = eps_in - eps_out
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+
+        vjp_faces = np.zeros((2, 3))
+
+        for min_max_index, isel_value in enumerate((0, -1)):
+            for axis, dim_normal in enumerate("xyz"):
+                # get normal D and tangential Es
+                fld_normal, flds_tangential = self.geometry.pop_axis(("Ex", "Ey", "Ez"), axis=axis)
+                D_normal = der_D.field_components[fld_normal]
+                Es_tangential = [der_E.field_components[key] for key in flds_tangential]
+
+                # evaluate all fields at the face location in this min/max and axis
+                isel_kwargs_face = {dim_normal: isel_value}
+                D_normal = D_normal.isel(**isel_kwargs_face)
+
+                Es_tangential = [E.isel(**isel_kwargs_face) for E in Es_tangential]
+                _, dims_integrate = self.geometry.pop_axis("xyz", axis=axis)
+
+                # start recording VJP at this surface
+                vjp_value_face = 0.0
+
+                # compute normal contribution
+                D_integrated = get_static(D_normal.integrate(coord=dims_integrate).values)
+                D_contribution = -delta_eps_inv * D_integrated
+                vjp_value_face += D_contribution
+
+                # compute tangential contributions
+                for E_tangential in Es_tangential:
+                    E_integrated = get_static(E_tangential.integrate(coord=dims_integrate).values)
+                    E_contribution = delta_eps * E_integrated
+                    vjp_value_face += E_contribution
+
+                # record vjp for this face
+                vjp_faces[min_max_index, axis] = float(np.real(vjp_value_face).astype(float))
+
+        return vjp_faces
+
+    def derivative_geometry_size(
+        self,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
+    ) -> tuple[float, float, float]:
+        """Derivative of self.geometry w.r.t. ``size``."""
+
+        derivative_faces = self.derivative_geometry_box_faces(
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
+            eps_sim=eps_sim,
+        )
+
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
+
+        return (0.5 * (xmax + xmin), 0.5 * (ymax + ymin), 0.5 * (zmax + zmin))
+
+    def derivative_geometry_center(
+        self,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
+    ) -> tuple[float, float, float]:
+        """Derivative of self.geometry w.r.t. ``center``."""
+
+        derivative_faces = self.derivative_geometry_box_faces(
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
+            eps_sim=eps_sim,
+        )
+
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
+
+        return (xmax - xmin, ymax - ymin, zmax - zmin)
 
     def compute_derivative(
         self,
         path: tuple[str],
-        fwd_fld: FieldData,
-        fwd_eps: PermittivityData,
-        adj_fld: FieldData,
-        adj_eps: PermittivityData,
-        **kwargs,
+        fld_fwd: FieldData,
+        eps_fwd: PermittivityData,
+        fld_adj: FieldData,
+        eps_adj: PermittivityData,
+        eps_sim: float,
     ) -> float:
         """Compute adjoint gradients given the forward and adjoint fields"""
+
+        if isinstance(path[-1], int):
+            path = path[:-1]
 
         derivative_function = self.get_derivative_function(path)
 
         derivative_value = derivative_function(
-            fwd_fld=fwd_fld, fwd_eps=fwd_eps, adj_fld=adj_fld, adj_eps=adj_eps, **kwargs
+            fld_fwd=fld_fwd,
+            eps_fwd=eps_fwd,
+            fld_adj=fld_adj,
+            eps_adj=eps_adj,
+            eps_sim=eps_sim,
         )
 
         return derivative_value

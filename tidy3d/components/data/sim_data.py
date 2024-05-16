@@ -827,12 +827,21 @@ class SimulationData(AbstractYeeGridSimulationData):
         )
         monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
 
-        sim_adj = self.simulation.copy(
-            update=dict(
-                sources=sources_adj,
-                monitors=monitors_adj,
-            )
+        update_dict = dict(
+            sources=sources_adj,
+            monitors=monitors_adj,
         )
+
+        # set the ADJ grid spec wavelength to the FWD wavelength (for same meshing)
+        # sim_fwd = self.simulation
+        # grid_spec_fwd = sim_fwd.grid_spec
+        # if len(sim_fwd.sources) and grid_spec_fwd.wavelength is None:
+        #     wavelength_fwd = grid_spec_fwd.wavelength_from_sources(sim_fwd.sources)
+        #     grid_spec_adj = grid_spec_fwd.updated_copy(wavelength=wavelength_fwd)
+        #     update_dict.update(dict(grid_spec=grid_spec_adj))
+
+        sim_adj = self.simulation.updated_copy(**update_dict)
+
         return sim_adj
 
     def generate_adjoint_sources(self, data_fields_vjp: dict[tuple, npa.ndarray]) -> list[Source]:
