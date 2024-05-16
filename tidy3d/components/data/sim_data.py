@@ -21,6 +21,7 @@ from .monitor_data import (
 
 from ..simulation import Simulation
 from ..structure import Structure
+from ..monitor import Monitor
 from ..source import Source
 from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
 from ..viz import equal_aspect, add_ax_if_none
@@ -816,52 +817,54 @@ class SimulationData(AbstractYeeGridSimulationData):
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
     def make_adjoint_sim(
-        self, sim_fields_fwd: AutogradFieldMap, data_fields_vjp: AutogradFieldMap
+        self, data_fields_vjp: AutogradFieldMap, adjoint_monitors: list[Monitor]
     ) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
 
-        sources_adj = self.generate_adjoint_sources(data_fields_vjp=data_fields_vjp)
+        sim_fwd = self.simulation
 
-        adjoint_mnts_fld, adjoint_mnts_eps = self.simulation.generate_adjoint_monitors(
-            sim_fields=sim_fields_fwd
-        )
-        monitors_adj = adjoint_mnts_fld + adjoint_mnts_eps
+        # generate the adjoint sources
+        data_indices = {index for (_, index, *_), _ in data_fields_vjp.items()}
+        sources_adj = self.generate_adjoint_sources(data_indices=data_indices)
 
-        update_dict = dict(
+        # generate the adjoint field and permittivity monitors
+
+        # grab boundary conditions with flipped bloch vectors (for adjoint)
+        bc_adj = self.simulation.boundary_spec.flipped_bloch_vecs
+
+        # fields to update the fwd simulation with
+        sim_adj_update_dict = dict(
             sources=sources_adj,
-            monitors=monitors_adj,
+            boundary_spec=bc_adj,
+            monitors=adjoint_monitors,
         )
 
         # set the ADJ grid spec wavelength to the FWD wavelength (for same meshing)
-        # sim_fwd = self.simulation
-        # grid_spec_fwd = sim_fwd.grid_spec
-        # if len(sim_fwd.sources) and grid_spec_fwd.wavelength is None:
-        #     wavelength_fwd = grid_spec_fwd.wavelength_from_sources(sim_fwd.sources)
-        #     grid_spec_adj = grid_spec_fwd.updated_copy(wavelength=wavelength_fwd)
-        #     update_dict.update(dict(grid_spec=grid_spec_adj))
+        sim_fwd = self.simulation
+        grid_spec_fwd = sim_fwd.grid_spec
+        if len(sim_fwd.sources) and grid_spec_fwd.wavelength is None:
+            wavelength_fwd = grid_spec_fwd.wavelength_from_sources(sim_fwd.sources)
+            grid_spec_adj = grid_spec_fwd.updated_copy(wavelength=wavelength_fwd)
+            sim_adj_update_dict["grid_spec"] = grid_spec_adj
 
-        sim_adj = self.simulation.updated_copy(**update_dict)
+        return self.simulation.updated_copy(**sim_adj_update_dict)
 
-        return sim_adj
-
-    def generate_adjoint_sources(self, data_fields_vjp: dict[tuple, npa.ndarray]) -> list[Source]:
+    def generate_adjoint_sources(self, data_indices: set[tuple, npa.ndarray]) -> list[Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
+        # # grab the indices of the monitor data found in the VJP
+        # data_indices = []
+        # for path, _ in data_fields_vjp.items():
+        #     key, data_index, *sub_path = path
+
+        #     # ignore if this path is not into the .data list
+        #     if data_index not in data_indices:
+        #         data_indices.append(data_index)
+
+        # gather a list of adjoint sources for every monitor data in the VJP that needs one
         sources_adj_all = []
-
-        data_indices = []
-        for path, _ in data_fields_vjp.items():
-            key, data_index, *sub_path = path
-
-            if key == "data" and data_index not in data_indices:
-                data_indices.append(data_index)
-
         for data_index in data_indices:
-            # ignore anything not related to monitor data
-
             mnt_data = self.data[data_index]
-
-            # TODO: dont need to pass path or data vjp
             sources_adj = mnt_data.generate_adjoint_sources()
             sources_adj_all += sources_adj
 

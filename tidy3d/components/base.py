@@ -955,7 +955,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     handle_value(val, path=_path)
 
         # recursively parse the dictionary of this object
-        self_dict = self.dict()
+        self_dict = self.dict()  # TODO: need copy here?
         handle_value(self_dict, path=())
 
         # convert the resulting field_mapping to an autograd-traced dictionary
@@ -977,13 +977,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             # if there is only one element in path, insert into the sub dict at this key
             if len_sub_path == 0:
-                # TODO: handle DataArray more cleanly
                 if isinstance(sub_dict[key], DataArray):
+                    sub_dict[key] = sub_dict[key].copy()
                     sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
                 return
 
+            # if there's only one element of the sub path, and its an int, insert into the tuple
             if len(sub_path) == 1:
                 (sub_key,) = sub_path
                 if isinstance(sub_key, int):
@@ -991,7 +992,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     sub_dict[key][sub_key] = value
                     return
 
-            # if there are more elements in the path, recurse
+            # if there are 1 or more more elements in the path, and not tuple, recurse
             sub_dict = sub_dict[key]
             insert_value(value=value, path=sub_path, sub_dict=sub_dict)
 

@@ -6,7 +6,7 @@ from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
 
 import xarray as xr
-import autograd.numpy as np
+import numpy as np
 import pydantic.v1 as pd
 from pandas import DataFrame
 
@@ -21,7 +21,6 @@ from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
 from .data_array import EMEFreqModeDataArray
 from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
 from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..autograd import get_static
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
 from ..types import EpsSpecType, Literal
@@ -85,7 +84,7 @@ class MonitorData(AbstractMonitorData, ABC):
 
     @staticmethod
     def flip_direction(direction: str) -> str:
-        """Flip the direction of a string ('+', '-') -> ('-', '+')."""
+        """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
 
         if isinstance(direction, DataArray):
             direction = str(direction.values)
@@ -94,6 +93,15 @@ class MonitorData(AbstractMonitorData, ABC):
             raise ValueError(f"Direction must be in {('+', '-')}, got '{direction}'.")
 
         return "-" if direction == "+" else "+"
+
+    @staticmethod
+    def get_amplitude(x) -> complex:
+        """Get the complex amplitude out of some data."""
+
+        if isinstance(x, DataArray):
+            x = complex(x.values)
+
+        return 1j * complex(x)
 
 
 class AbstractFieldData(MonitorData, AbstractFieldDataset, ABC):
@@ -1582,18 +1590,16 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
     def generate_adjoint_sources(self) -> list[ModeSource]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-        amps = self.amps.copy()
-
-        coords = amps.coords
+        coords = self.amps.coords
 
         adjoint_sources = []
 
         for freq in coords["f"]:
             for direction in coords["direction"]:
                 for mode_index in coords["mode_index"]:
-                    amp_single = amps.sel(f=freq, direction=direction, mode_index=mode_index)
+                    amp_single = self.amps.sel(f=freq, direction=direction, mode_index=mode_index)
 
-                    if get_static(amp_single.values) == 0.0:
+                    if self.get_amplitude(amp_single) == 0.0:
                         continue
 
                     adjoint_source = self.adjoint_source_amp(amp=amp_single)
@@ -1606,42 +1612,23 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         monitor = self.monitor
 
-        # compute coordinates
+        # grab coordinates
         coords = amp.coords
         freq0 = coords["f"]
         direction = coords["direction"]
         mode_index = coords["mode_index"]
 
-        # # compute amplitude and phase
-        # def get_amplitude(x) -> complex:
-        #     return 1j * complex(get_static(x.values))
-
-        # compute amplitude and phase
-        def get_amplitude(x) -> complex:
-            """Get the complex amplitude out of the data."""
-            try:
-                xc = x.values.tolist()._value.astype(complex)
-            except AttributeError:
-                try:
-                    xc = x.values.tolist()
-                except AttributeError:
-                    xc = complex(x)
-
-            return 1j * complex(xc)
-
-        amp_complex = get_amplitude(amp)
+        # determine the complex amplitude
+        amp_complex = self.get_amplitude(amp)
         k0 = 2 * np.pi * freq0 / C_0
         grad_const = k0 / 4 / ETA_0
         src_amp = grad_const * amp_complex
 
-        amplitude = abs(src_amp)
-        phase = np.angle(src_amp)
-
         # construct source
         src_adj = ModeSource(
             source_time=GaussianPulse(
-                amplitude=amplitude,
-                phase=phase,
+                amplitude=abs(src_amp),
+                phase=np.angle(src_amp),
                 freq0=freq0,
                 fwidth=freq0 / 10,  # TODO: how to set this properly?
             ),
@@ -2677,9 +2664,7 @@ class DiffractionData(AbstractFieldProjectionData):
     def generate_adjoint_sources(self) -> list[PlaneWave]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-        amps = self.amps.copy()
-
-        coords = amps.coords
+        coords = self.amps.coords
 
         adjoint_sources = []
 
@@ -2687,14 +2672,14 @@ class DiffractionData(AbstractFieldProjectionData):
             for pol in coords["polarization"]:
                 for order_x in coords["orders_x"]:
                     for order_y in coords["orders_y"]:
-                        amp_single = amps.sel(
+                        amp_single = self.amps.sel(
                             f=freq,
                             polarization=pol,
                             orders_x=order_x,
                             orders_y=order_y,
                         )
 
-                        if get_static(amp_single.values) == 0.0:
+                        if self.get_amplitude(amp_single) == 0.0:
                             continue
 
                         adjoint_source = self.adjoint_source_amp(amp=amp_single)
@@ -2708,31 +2693,15 @@ class DiffractionData(AbstractFieldProjectionData):
 
         monitor = self.monitor
 
-        # compute coordinates
+        # grab the coordinates
         coords = amp.coords
         freq0 = coords["f"]
         pol = coords["polarization"]
         order_x = coords["orders_x"]
         order_y = coords["orders_y"]
 
-        # compute amplitude and phase
-        def get_amplitude(x) -> complex:
-            """Get the complex amplitude out of the data."""
-
-            try:
-                xc = x.values.tolist()._value.astype(complex)
-            except AttributeError:
-                try:
-                    xc = x.values.tolist()
-                except AttributeError:
-                    xc = complex(x)
-
-            return 1j * complex(xc)
-
-        amp_complex = get_amplitude(amp)
-
+        # compute the angle corresponding to this amplitude
         theta_data, phi_data = self.angles
-
         angle_sel_kwargs = dict(orders_x=int(order_x), orders_y=int(order_y), f=float(freq0))
         angle_theta = float(theta_data.sel(**angle_sel_kwargs))
         angle_phi = float(phi_data.sel(**angle_sel_kwargs))
@@ -2744,21 +2713,24 @@ class DiffractionData(AbstractFieldProjectionData):
         # get the polarization angle from the data
         pol_angle = 0.0 if str(pol).lower() == "p" else np.pi / 2
 
-        # TODO: understand better where this factor comes from
+        # compute the source amplitude
+        amp_complex = self.get_amplitude(amp)
         k0 = 2 * np.pi * freq0 / C_0
         bck_eps = self.medium.eps_model(freq0)
         grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
         src_amp = grad_const * amp_complex
 
-        amplitude = abs(src_amp)
-        phase = np.angle(src_amp)
+        # TODO: why????
+        magical_constant = 2 * np.pi * freq0 * 11.3
+        src_amp *= magical_constant
 
+        # construct plane wave source
         adj_src = PlaneWave(
             size=self.monitor.size,
             center=self.monitor.center,
             source_time=GaussianPulse(
-                amplitude=amplitude,
-                phase=phase,
+                amplitude=abs(src_amp),
+                phase=np.angle(src_amp),
                 freq0=freq0,
                 fwidth=freq0 / 10,  # TODO: how to set this properly?
             ),

@@ -153,7 +153,7 @@ def test_autograd_objective(use_emulated_run):
     params0 = NUM_STCRS * [2.0]
     center0 = (0.0, 0.0, 0.0)
 
-    # objective(params0)
+    objective(params0, center0)
 
     if True or run_was_emulated:
         val, grad = ag.value_and_grad(objective, argnum=(0, 1))(params0, center0)

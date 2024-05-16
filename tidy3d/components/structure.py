@@ -14,7 +14,7 @@ from .validators import validate_name_str
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .medium import MediumType, AbstractCustomMedium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import Ax, TYPE_TAG_STR, Axis
+from .types import Ax, TYPE_TAG_STR, Axis, Bound
 from .viz import add_ax_if_none, equal_aspect
 from .grid.grid import Coords
 from ..constants import MICROMETER
@@ -201,11 +201,11 @@ class Structure(AbstractStructure):
         box = self.geometry.bounding_box
 
         # we dont want these fields getting traced by autograd, otherwise it messes stuff up
-        size = tuple(get_static(x) for x in box.size)
+        size = tuple(get_static(x) for x in box.size)  # TODO: expand slightly?
         center = tuple(get_static(x) for x in box.center)
 
         mnt_fld = FieldMonitor(
-            size=size,  # TODO: expand slightly?
+            size=size,
             center=center,
             freqs=freqs,
             name=self.get_monitor_name(index=index, data_type="fld"),
@@ -213,7 +213,7 @@ class Structure(AbstractStructure):
         )
 
         mnt_eps = PermittivityMonitor(
-            size=size,  # TODO: expand slightly?
+            size=size,
             center=center,
             freqs=freqs,
             name=self.get_monitor_name(index=index, data_type="eps"),
@@ -281,6 +281,31 @@ class Structure(AbstractStructure):
 
         return fld_fwd.updated_copy(**field_components)
 
+    @staticmethod
+    def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:
+        """integrate a data array within bounds, assumes bounds are [2, N] for N dims."""
+
+        _arr = arr.copy()
+
+        # order bounds with dimension first (N, 2)
+        bounds = np.array(bounds).T
+
+        # loop over all dimensions
+        for dim, (bmin, bmax) in zip(dims, bounds):
+            bmin = get_static(bmin)
+            bmax = get_static(bmax)
+
+            coord_values = _arr.coords[dim].values
+
+            # reset all coordinates outside of bounds to the bounds, so that dL = 0 in integral
+            coord_values[coord_values < bmin] = bmin
+            coord_values[coord_values > bmax] = bmax
+            _arr = _arr.assign_coords(**{dim: coord_values})
+
+        # uses trapezoidal rule
+        # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
+        return _arr.integrate(coord=dims)
+
     def derivative_eps_complex_volume(
         self,
         fld_fwd: FieldData,
@@ -293,7 +318,11 @@ class Structure(AbstractStructure):
         vjp_value = 0.0
         for field_name in ("Ex", "Ey", "Ez"):
             fld = der_E.field_components[field_name]
-            vjp_value_fld = fld.integrate(coord=("x", "y", "z"))
+            vjp_value_fld = self.integrate_within_bounds(
+                arr=fld,
+                dims=("x", "y", "z"),
+                bounds=self.geometry.bounds,
+            )
             vjp_value += vjp_value_fld
 
         return vjp_value
@@ -307,7 +336,7 @@ class Structure(AbstractStructure):
 
         vjp_eps_complex = self.derivative_eps_complex_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
 
-        freqs = get_static(vjp_eps_complex.coords["f"]).values
+        freqs = get_static(vjp_eps_complex.coords["f"].values)
         values = get_static(vjp_eps_complex.values)
 
         eps_vjp, sigma_vjp = self.medium.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
@@ -323,7 +352,7 @@ class Structure(AbstractStructure):
         eps_sim: float,
         **kwargs,
     ) -> float:
-        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
+        """Compute the derivative for the medium.permittivity given forward and adjoint fields."""
 
         eps_vjp, _ = self.derivative_eps_sigma_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
 
@@ -338,7 +367,7 @@ class Structure(AbstractStructure):
         eps_sim: float,
         **kwargs,
     ) -> float:
-        """Compute the derivative for this structure.medium.permittivity given forward and adjoint fields."""
+        """Compute the derivative for the medium.conductivity given forward and adjoint fields."""
 
         _, sigma_vjp = self.derivative_eps_sigma_volume(fld_fwd=fld_fwd, fld_adj=fld_adj)
 
@@ -353,7 +382,7 @@ class Structure(AbstractStructure):
         eps_sim: float,
         **kwargs,
     ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Derivative with respect to min and max faces of ``Box`` along all 3 dims."""
+        """Derivative with respect to positions of min and max faces of ``Box`` along all 3 dims."""
 
         # get E and D fields [forward * adjoint, element-wise, (x, y, z) components].
         der_E = self.derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
@@ -374,7 +403,7 @@ class Structure(AbstractStructure):
 
         vjp_faces = np.zeros((2, 3))
 
-        for min_max_index, isel_value in enumerate((0, -1)):
+        for min_max_index, _ in enumerate((0, -1)):
             for axis, dim_normal in enumerate("xyz"):
                 # get normal D and tangential Es
                 fld_normal, flds_tangential = self.geometry.pop_axis(("Ex", "Ey", "Ez"), axis=axis)
@@ -382,23 +411,44 @@ class Structure(AbstractStructure):
                 Es_tangential = [der_E.field_components[key] for key in flds_tangential]
 
                 # evaluate all fields at the face location in this min/max and axis
-                isel_kwargs_face = {dim_normal: isel_value}
-                D_normal = D_normal.isel(**isel_kwargs_face)
+                bounds_normal, bounds_tangential = self.geometry.pop_axis(
+                    np.array(self.geometry.bounds).T, axis=axis
+                )
+                bounds_tangential = np.array(bounds_tangential).T
+                pos_normal = get_static(
+                    bounds_normal[min_max_index]
+                )  # TODO: no need for autograd here
+                interp_kwargs_face = {dim_normal: pos_normal}
+                D_normal = D_normal.interp(**interp_kwargs_face)
 
-                Es_tangential = [E.isel(**isel_kwargs_face) for E in Es_tangential]
-                _, dims_integrate = self.geometry.pop_axis("xyz", axis=axis)
+                Es_tangential = [E.interp(**interp_kwargs_face) for E in Es_tangential]
+                _, dims_tangential = self.geometry.pop_axis("xyz", axis=axis)
 
                 # start recording VJP at this surface
                 vjp_value_face = 0.0
 
                 # compute normal contribution
-                D_integrated = get_static(D_normal.integrate(coord=dims_integrate).values)
+                D_integrated = self.integrate_within_bounds(
+                    arr=D_normal,
+                    dims=dims_tangential,
+                    bounds=bounds_tangential,
+                )
+                D_integrated = get_static(D_integrated.values)
+
+                # D_integrated = get_static(D_normal.integrate(coord=dims_tangential).values)
                 D_contribution = -delta_eps_inv * D_integrated
                 vjp_value_face += D_contribution
 
                 # compute tangential contributions
                 for E_tangential in Es_tangential:
-                    E_integrated = get_static(E_tangential.integrate(coord=dims_integrate).values)
+                    E_integrated = self.integrate_within_bounds(
+                        arr=E_tangential,
+                        dims=dims_tangential,
+                        bounds=bounds_tangential,
+                    )
+                    E_integrated = get_static(E_integrated.values)
+                    # E_integrated = get_static(E_tangential.integrate(coord=dims_tangential).values)
+
                     E_contribution = delta_eps * E_integrated
                     vjp_value_face += E_contribution
 
