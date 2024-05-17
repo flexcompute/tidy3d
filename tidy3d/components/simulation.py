@@ -3217,20 +3217,15 @@ class Simulation(AbstractYeeGridSimulation):
 
     """ Autograd adjoint support """
 
-    @property
-    def freqs_adjoint(self) -> list[float]:
-        """Unique list of all frequencies. For now should be only one."""
-        freqs = []
-        for mnt in self.monitors:
-            if isinstance(mnt, FreqMonitor):
-                for f in mnt.freqs:
-                    if f not in freqs:
-                        freqs.append(f)
-        freqs.sort()
+    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
+        """Copy of self with adjoint field and permittivity monitors for every traced structure."""
 
-        assert len(freqs) == 1, "Only support single frequency right now."
+        # set of indices in the structures needing adjoint monitors
+        structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
 
-        return freqs
+        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
+        monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
+        return self.copy(update=dict(monitors=monitors))
 
     def make_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
@@ -3251,15 +3246,20 @@ class Simulation(AbstractYeeGridSimulation):
 
         return adjoint_monitors_fld, adjoint_monitors_eps
 
-    def with_adjoint_monitors(self, sim_fields: AutogradFieldMap) -> Simulation:
-        """Copy of self with adjoint field and permittivity monitors for every traced structure."""
+    @property
+    def freqs_adjoint(self) -> list[float]:
+        """Unique list of all frequencies. For now should be only one."""
+        freqs = []
+        for mnt in self.monitors:
+            if isinstance(mnt, FreqMonitor):
+                for f in mnt.freqs:
+                    if f not in freqs:
+                        freqs.append(f)
+        freqs.sort()
 
-        # set of indices in the structures needing adjoint monitors
-        structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
+        assert len(freqs) == 1, "Only support single frequency right now."
 
-        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
-        monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
-        return self.copy(update=dict(monitors=monitors))
+        return freqs
 
     """ Accounting """
 

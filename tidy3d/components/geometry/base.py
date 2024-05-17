@@ -13,7 +13,7 @@ import autograd.numpy as np
 import shapely
 from matplotlib import patches
 
-from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds, get_static
+from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
@@ -1370,16 +1370,17 @@ class Geometry(Tidy3dBaseModel, ABC):
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def compute_derivative(
+    def compute_derivatives(
         self,
-        field_name: str,
+        field_name: list[str],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
         eps_sim: float,
         bounds: Bound,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
+
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
 
     def _as_union(self) -> List[Geometry]:
@@ -2279,21 +2280,19 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    # TODO: add to abstract class with NotImplementedError? and for Medium
-
-    def compute_derivative(
+    def compute_derivatives(
         self,
-        field_name: str,
+        field_names: list[str],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
         eps_sim: float,
         bounds: Bound,
-    ) -> Any:
-        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``field_names``."""
 
-        derivative_fn = self.get_derivative_function(field_name)
-        return derivative_fn(
+        # get gradients w.r.t. each of the 6 faces (in normal direction)
+        vjps_faces = self.derivative_faces(
             E_der_map=E_der_map,
             D_der_map=D_der_map,
             eps_structure=eps_structure,
@@ -2301,80 +2300,45 @@ class Box(SimplePlaneIntersection, Centered):
             bounds=bounds,
         )
 
-    def get_derivative_function(self, field_name: str) -> Callable:
-        """Get the derivative function."""
+        # post-process these values to give the gradients w.r.t. center and size
+        vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
 
-        derivative_map = self.derivative_function_map
-        if field_name not in derivative_map:
-            raise NotImplementedError(f"Can't compute derivative for {type(self)}.{field_name}.")
-        return derivative_map[field_name]
+        # store only the gradients asked for in 'field_names'
+        derivative_map = {}
+        for field_name in field_names:
+            if field_name in vjps_center_size:
+                derivative_map[field_name] = vjps_center_size[field_name]
 
-    @property
-    def derivative_function_map(self) -> dict[str, Callable]:
-        """Map path to the right derivative function function."""
-        return {
-            "center": self.derivative_center,
-            "size": self.derivative_size,
-        }
+        return derivative_map
 
-    def derivative_size(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
-        bounds: Bound,
-    ) -> tuple[float, float, float]:
-        """Derivative of self.geometry w.r.t. ``size``."""
+    @staticmethod
+    def derivatives_center_size(vjps_faces: Bound) -> dict[str, Coordinate]:
+        """Derivatives with respect to the ``center`` and ``size`` fields in the ``Box``."""
 
-        derivative_faces = self.derivative_box_faces(
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_structure=eps_structure,
-            eps_sim=eps_sim,
-            bounds=bounds,
+        vjps_faces_min, vjps_faces_max = np.array(vjps_faces)
+
+        # post-process min and max face gradients into center and size
+        vjp_center = vjps_faces_max - vjps_faces_min
+        vjp_size = (vjps_faces_min + vjps_faces_max) / 2.0
+
+        return dict(
+            center=tuple(vjp_center.tolist()),
+            size=tuple(vjp_size.tolist()),
         )
 
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
-
-        return (0.5 * (xmax + xmin), 0.5 * (ymax + ymin), 0.5 * (zmax + zmin))
-
-    def derivative_center(
+    def derivative_faces(
         self,
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
         eps_sim: float,
         bounds: Bound,
-    ) -> tuple[float, float, float]:
-        """Derivative of self.geometry w.r.t. ``center``."""
-
-        derivative_faces = self.derivative_box_faces(
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_structure=eps_structure,
-            eps_sim=eps_sim,
-            bounds=bounds,
-        )
-
-        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
-
-        return (xmax - xmin, ymax - ymin, zmax - zmin)
-
-    def derivative_box_faces(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
-        bounds: Bound,
-    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-        """Derivative with respect to positions of min and max faces of ``Box`` along all 3 dims."""
+    ) -> Bound:
+        """Derivative with respect to normal position of 6 faces of ``Box``."""
 
         # change in permittivity between inside and outside
         # TODO: assumes non-dispersive here and eps_sim, generalize
-
-        eps_in = np.mean(eps_structure.eps_xx.values)  # TODO: generalize
+        eps_in = np.mean(eps_structure.eps_xx.values)
 
         eps_out = eps_sim
         delta_eps = eps_in - eps_out
@@ -2394,9 +2358,7 @@ class Box(SimplePlaneIntersection, Centered):
                     np.array(self.geometry.bounds).T, axis=axis
                 )
                 bounds_tangential = np.array(bounds_tangential).T
-                pos_normal = get_static(
-                    bounds_normal[min_max_index]
-                )  # TODO: no need for autograd here
+                pos_normal = bounds_normal[min_max_index]  # TODO: no need for autograd here
                 interp_kwargs_face = {dim_normal: pos_normal}
                 D_normal = D_normal.interp(**interp_kwargs_face)
 
@@ -2412,9 +2374,8 @@ class Box(SimplePlaneIntersection, Centered):
                     dims=dims_tangential,
                     bounds=bounds_tangential,
                 )
-                D_integrated = get_static(D_integrated.values)
+                D_integrated = D_integrated.values
 
-                # D_integrated = get_static(D_normal.integrate(coord=dims_tangential).values)
                 D_contribution = -delta_eps_inv * D_integrated
                 vjp_value_face += D_contribution
 
@@ -2425,8 +2386,7 @@ class Box(SimplePlaneIntersection, Centered):
                         dims=dims_tangential,
                         bounds=bounds_tangential,
                     )
-                    E_integrated = get_static(E_integrated.values)
-                    # E_integrated = get_static(E_tangential.integrate(coord=dims_tangential).values)
+                    E_integrated = E_integrated.values
 
                     E_contribution = delta_eps * E_integrated
                     vjp_value_face += E_contribution

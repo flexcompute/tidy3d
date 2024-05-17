@@ -2679,8 +2679,10 @@ class DiffractionData(AbstractFieldProjectionData):
             data_arrays.append(xr.DataArray(data=field, coords=self.coords, dims=self.dims))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
+    """ Autograd code """
+
     def make_adjoint_sources(self, dataset_names: list[str]) -> list[PlaneWave]:
-        """Get all adjoint sources for the ``ModeMonitor.amps``."""
+        """Get all adjoint sources for the ``DiffractionMonitor.amps``."""
 
         # NOTE: everything just goes through `.amps`, any post-processing is encoded in E-fields
         return self.make_adjoint_sources_amps()
@@ -2693,6 +2695,7 @@ class DiffractionData(AbstractFieldProjectionData):
 
         adjoint_sources = []
 
+        # loop over all coordinates in the diffraction amplitudes
         for freq in coords["f"]:
             for pol in coords["polarization"]:
                 for order_x in coords["orders_x"]:
@@ -2704,9 +2707,12 @@ class DiffractionData(AbstractFieldProjectionData):
                             orders_y=order_y,
                         )
 
-                        if self.get_amplitude(amp_single) == 0.0:
+                        # ignore any amplitudes of 0.0 or nan
+                        amp_complex = self.get_amplitude(amp_single)
+                        if (amp_complex == 0.0) or np.isnan(amp_complex):
                             continue
 
+                        # compute a plane wave for this amplitude (if propagating / not None)
                         adjoint_source = self.adjoint_source_amp(amp=amp_single)
                         if adjoint_source is not None:
                             adjoint_sources.append(adjoint_source)

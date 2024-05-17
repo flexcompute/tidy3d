@@ -936,7 +936,6 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             # this is a leaf node that we want to trace, add this path and data to the mapping
             if isinstance(x, (Box, DataArray)):
-                # TODO: better way to decide whether this field deserves a mapping.
                 if isinstance(x, Box):
                     field_mapping[path] = x
                 elif isinstance(x, DataArray):
@@ -945,14 +944,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
-                    _path = tuple(list(path) + [i])
-                    handle_value(val, path=_path)
+                    sub_paths = tuple(list(path) + [i])
+                    handle_value(val, path=sub_paths)
 
             # for dictionaries, add the (key,) to the path and handle each value
             elif isinstance(x, dict):
                 for key, val in x.items():
-                    _path = tuple(list(path) + [key])
-                    handle_value(val, path=_path)
+                    sub_paths = tuple(list(path) + [key])
+                    handle_value(val, path=sub_paths)
 
         # recursively parse the dictionary of this object
         self_dict = self.dict()  # TODO: need copy here?
@@ -972,19 +971,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             # get the first and rest of the path
             key, *sub_path = path
-
             len_sub_path = len(sub_path)
 
-            # if there is only one element in path, insert into the sub dict at this key
+            # only one element in path => leaf node. insert into the sub dict and don't recurse
             if len_sub_path == 0:
                 if isinstance(sub_dict[key], DataArray):
+                    # ensure you copy() because DataArrays are mutable and setting would affect self
                     sub_dict[key] = sub_dict[key].copy()
                     sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
                 return
 
-            # if there's only one element of the sub path, and its an int, insert into the tuple
+            # one integer sub-path => index into tuple leaf node. insert value and don't recurse
             if len(sub_path) == 1:
                 (sub_key,) = sub_path
                 if isinstance(sub_key, int):
@@ -992,7 +991,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     sub_dict[key][sub_key] = value
                     return
 
-            # if there are 1 or more more elements in the path, and not tuple, recurse
+            # if 1 or more more elements in the path, and they aren't a tuple index (above), recurse
             sub_dict = sub_dict[key]
             insert_value(value=value, path=sub_path, sub_dict=sub_dict)
 

@@ -28,6 +28,7 @@ def get_static(x: typing.Any) -> typing.Any:
     return x
 
 
+# TODO: could we move this into a DataArray method?
 def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:
     """integrate a data array within bounds, assumes bounds are [2, N] for N dims."""
 
@@ -58,4 +59,5 @@ __all__ = [
     "primitive",
     "defvjp",
     "get_static",
+    "integrate_within_bounds",
 ]

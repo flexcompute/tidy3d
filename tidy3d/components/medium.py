@@ -12,7 +12,7 @@ import pydantic.v1 as pd
 import autograd.numpy as np
 import xarray as xr
 
-from .autograd import integrate_within_bounds, get_static
+from .autograd import integrate_within_bounds
 from .base import Tidy3dBaseModel, cached_property
 from .base import skip_if_fields_missing
 from .grid.grid import Coords, Grid
@@ -1076,15 +1076,15 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     """ Autograd code """
 
-    def compute_derivative(
+    def compute_derivatives(
         self,
-        field_name: str,
+        field_names: list[str],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
         eps_sim: float,
         bounds: Bound,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
@@ -1485,90 +1485,50 @@ class Medium(AbstractMedium):
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
-    def compute_derivative(
+    def compute_derivatives(
         self,
-        field_name: str,
+        field_names: list[str],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
         eps_sim: float,
         bounds: Bound,
-    ) -> Any:
+    ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
-        derivative_fn = self.get_derivative_function(field_name)
-        return derivative_fn(
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_structure=eps_structure,
-            eps_sim=eps_sim,
-            bounds=bounds,
-        )
+        # get vjps w.r.t. permittivity and conductivity of the bulk
+        vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
 
-    def get_derivative_function(self, field_name: str) -> Callable:
-        """Get the derivative function."""
-
-        derivative_map = self.derivative_function_map
-        if field_name not in derivative_map:
-            raise NotImplementedError(f"Can't compute derivative for {type(self)}.{field_name}.")
-        return derivative_map[field_name]
-
-    @property
-    def derivative_function_map(self) -> dict[str, Callable]:
-        """Map path to the right derivative function function."""
-        return {
-            "permittivity": self.derivative_medium_permittivity,
-            "conductivity": self.derivative_medium_conductivity,
-        }
-
-    def derivative_medium_permittivity(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
-        bounds: Bound,
-    ) -> float:
-        """Compute the derivative for the medium.permittivity given forward and adjoint fields."""
-
-        eps_vjp, _ = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
-
-        return np.sum(eps_vjp)
-
-    def derivative_medium_conductivity(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
-        bounds: Bound,
-    ) -> float:
-        """Compute the derivative for the medium.conductivity given forward and adjoint fields."""
-
-        _, sigma_vjp = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
-
-        return np.sum(sigma_vjp)
+        # store the fields asked for by ``field_names``
+        derivative_map = {}
+        for field_name in field_names:
+            if field_name in vjps_volume:
+                derivative_map[field_name] = vjps_volume[field_name]
+        return derivative_map
 
     def derivative_eps_sigma_volume(
         self,
         E_der_map: ElectromagneticFieldDataset,
         bounds: Bound,
-    ) -> tuple[xr.DataArray, xr.DataArray]:
-        """Get the derivative w.r.t permittivity and conductivity in the volume vs frequency."""
+    ) -> dict[str, xr.DataArray]:
+        """Get the derivative w.r.t permittivity and conductivity in the volume."""
 
         vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
-        freqs = get_static(vjp_eps_complex.coords["f"].values)
-        values = get_static(vjp_eps_complex.values)
+        freqs = vjp_eps_complex.coords["f"].values
+        values = vjp_eps_complex.values
 
         eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
 
-        return eps_vjp, sigma_vjp
+        eps_vjp = np.sum(eps_vjp)
+        sigma_vjp = np.sum(sigma_vjp)
+
+        return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
 
     def derivative_eps_complex_volume(
         self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
     ) -> xr.DataArray:
-        """Get the derivative w.r.t complex permittivity in the volume vs frequency."""
+        """Get the derivative w.r.t complex-valued permittivity in the volume."""
 
         vjp_value = 0.0
         for field_name in ("Ex", "Ey", "Ez"):
