@@ -2742,7 +2742,11 @@ class DiffractionData(AbstractFieldProjectionData):
             return None
 
         # get the polarization angle from the data
-        pol_angle = 0.0 if str(pol).lower() == "p" else np.pi / 2
+        pol_str = str(pol.values)
+        if pol_str not in ("p", "s"):
+            raise ValueError(f"Something went wrong, given pol='{pol_str}' in adjoint source.")
+
+        pol_angle = 0.0 if pol_str == "p" else np.pi / 2
 
         # compute the source amplitude
         amp_complex = self.get_amplitude(amp)
@@ -2750,10 +2754,6 @@ class DiffractionData(AbstractFieldProjectionData):
         bck_eps = self.medium.eps_model(freq0)
         grad_const = 0.5 * k0 / np.sqrt(bck_eps) * np.cos(angle_theta)
         src_amp = grad_const * amp_complex
-
-        # TODO: why????
-        magical_constant = 2 * np.pi * freq0 * 11.3
-        src_amp *= magical_constant
 
         # construct plane wave source
         adj_src = PlaneWave(

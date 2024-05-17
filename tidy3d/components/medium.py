@@ -9,6 +9,7 @@ from math import isclose
 import pydantic.v1 as pd
 
 # TODO: it's hard to figure out which functions need this, for now all get it
+import numpy as npo
 import autograd.numpy as np
 import xarray as xr
 
@@ -2776,7 +2777,7 @@ class PoleResidue(DispersiveMedium):
         omegas_lo, gammas_lo, omegas_to, gammas_to = map(np.array, zip(*poles))
 
         # discriminants of quadratic factors of denominator
-        discs = 2 * np.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
+        discs = 2 * npo.emath.sqrt((gammas_to / 2) ** 2 - omegas_to**2)
 
         # require nondegenerate TO poles
         if len({(omega_to, gamma_to) for (_, _, omega_to, gamma_to) in poles}) != len(poles) or any(
