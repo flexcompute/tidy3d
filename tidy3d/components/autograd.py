@@ -3,9 +3,11 @@
 from autograd.extend import Box, primitive, defvjp
 from autograd.builtins import dict as dict_ag
 
+import xarray as xr
+import numpy as np
 
 import typing
-from .types import Size1D
+from .types import Size1D, Bound
 
 # TODO: should we use ArrayBox? Box is more general
 
@@ -24,6 +26,31 @@ def get_static(x: typing.Any) -> typing.Any:
     if isinstance(x, Box):
         return get_static(x._value)
     return x
+
+
+def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -> xr.DataArray:
+    """integrate a data array within bounds, assumes bounds are [2, N] for N dims."""
+
+    _arr = arr.copy()
+
+    # order bounds with dimension first (N, 2)
+    bounds = np.array(bounds).T
+
+    # loop over all dimensions
+    for dim, (bmin, bmax) in zip(dims, bounds):
+        bmin = get_static(bmin)
+        bmax = get_static(bmax)
+
+        coord_values = _arr.coords[dim].values
+
+        # reset all coordinates outside of bounds to the bounds, so that dL = 0 in integral
+        coord_values[coord_values < bmin] = bmin
+        coord_values[coord_values > bmax] = bmax
+        _arr = _arr.assign_coords(**{dim: coord_values})
+
+    # uses trapezoidal rule
+    # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
+    return _arr.integrate(coord=dims)
 
 
 __all__ = [

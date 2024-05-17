@@ -13,7 +13,7 @@ import autograd.numpy as np
 import shapely
 from matplotlib import patches
 
-from ..autograd import TracedSize, TracedCoordinate
+from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds, get_static
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
@@ -21,6 +21,7 @@ from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4
 from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
 from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
 from ..transformation import RotationAroundAxis
+from ..data.dataset import PermittivityDataset, ElectromagneticFieldDataset
 from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
@@ -1369,6 +1370,18 @@ class Geometry(Tidy3dBaseModel, ABC):
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
+    def compute_derivative(
+        self,
+        field_name: str,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> Any:
+        """Compute the adjoint derivative for this geometry."""
+        raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
+
     def _as_union(self) -> List[Geometry]:
         """Return a list of geometries that, united, make up the given geometry."""
         if isinstance(self, GeometryGroup):
@@ -2263,6 +2276,165 @@ class Box(SimplePlaneIntersection, Centered):
             + length[1] * length[2] * in_bounds_factor[0]
             + length[2] * length[0] * in_bounds_factor[1]
         )
+
+    """ Autograd code """
+
+    # TODO: add to abstract class with NotImplementedError? and for Medium
+
+    def compute_derivative(
+        self,
+        field_name: str,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> Any:
+        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+
+        derivative_fn = self.get_derivative_function(field_name)
+        return derivative_fn(
+            E_der_map=E_der_map,
+            D_der_map=D_der_map,
+            eps_structure=eps_structure,
+            eps_sim=eps_sim,
+            bounds=bounds,
+        )
+
+    def get_derivative_function(self, field_name: str) -> Callable:
+        """Get the derivative function."""
+
+        derivative_map = self.derivative_function_map
+        if field_name not in derivative_map:
+            raise NotImplementedError(f"Can't compute derivative for {type(self)}.{field_name}.")
+        return derivative_map[field_name]
+
+    @property
+    def derivative_function_map(self) -> dict[str, Callable]:
+        """Map path to the right derivative function function."""
+        return {
+            "center": self.derivative_center,
+            "size": self.derivative_size,
+        }
+
+    def derivative_size(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> tuple[float, float, float]:
+        """Derivative of self.geometry w.r.t. ``size``."""
+
+        derivative_faces = self.derivative_box_faces(
+            E_der_map=E_der_map,
+            D_der_map=D_der_map,
+            eps_structure=eps_structure,
+            eps_sim=eps_sim,
+            bounds=bounds,
+        )
+
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
+
+        return (0.5 * (xmax + xmin), 0.5 * (ymax + ymin), 0.5 * (zmax + zmin))
+
+    def derivative_center(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> tuple[float, float, float]:
+        """Derivative of self.geometry w.r.t. ``center``."""
+
+        derivative_faces = self.derivative_box_faces(
+            E_der_map=E_der_map,
+            D_der_map=D_der_map,
+            eps_structure=eps_structure,
+            eps_sim=eps_sim,
+            bounds=bounds,
+        )
+
+        (xmin, ymin, zmin), (xmax, ymax, zmax) = derivative_faces
+
+        return (xmax - xmin, ymax - ymin, zmax - zmin)
+
+    def derivative_box_faces(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+        """Derivative with respect to positions of min and max faces of ``Box`` along all 3 dims."""
+
+        # change in permittivity between inside and outside
+        # TODO: assumes non-dispersive here and eps_sim, generalize
+
+        eps_in = np.mean(eps_structure.eps_xx.values)  # TODO: generalize
+
+        eps_out = eps_sim
+        delta_eps = eps_in - eps_out
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+
+        vjp_faces = np.zeros((2, 3))
+
+        for min_max_index, _ in enumerate((0, -1)):
+            for axis, dim_normal in enumerate("xyz"):
+                # get normal D and tangential Es
+                fld_normal, flds_tangential = self.geometry.pop_axis(("Ex", "Ey", "Ez"), axis=axis)
+                D_normal = D_der_map.field_components[fld_normal]
+                Es_tangential = [E_der_map.field_components[key] for key in flds_tangential]
+
+                # evaluate all fields at the face location in this min/max and axis
+                bounds_normal, bounds_tangential = self.geometry.pop_axis(
+                    np.array(self.geometry.bounds).T, axis=axis
+                )
+                bounds_tangential = np.array(bounds_tangential).T
+                pos_normal = get_static(
+                    bounds_normal[min_max_index]
+                )  # TODO: no need for autograd here
+                interp_kwargs_face = {dim_normal: pos_normal}
+                D_normal = D_normal.interp(**interp_kwargs_face)
+
+                Es_tangential = [E.interp(**interp_kwargs_face) for E in Es_tangential]
+                _, dims_tangential = self.geometry.pop_axis("xyz", axis=axis)
+
+                # start recording VJP at this surface
+                vjp_value_face = 0.0
+
+                # compute normal contribution
+                D_integrated = integrate_within_bounds(
+                    arr=D_normal,
+                    dims=dims_tangential,
+                    bounds=bounds_tangential,
+                )
+                D_integrated = get_static(D_integrated.values)
+
+                # D_integrated = get_static(D_normal.integrate(coord=dims_tangential).values)
+                D_contribution = -delta_eps_inv * D_integrated
+                vjp_value_face += D_contribution
+
+                # compute tangential contributions
+                for E_tangential in Es_tangential:
+                    E_integrated = integrate_within_bounds(
+                        arr=E_tangential,
+                        dims=dims_tangential,
+                        bounds=bounds_tangential,
+                    )
+                    E_integrated = get_static(E_integrated.values)
+                    # E_integrated = get_static(E_tangential.integrate(coord=dims_tangential).values)
+
+                    E_contribution = delta_eps * E_integrated
+                    vjp_value_face += E_contribution
+
+                # record vjp for this face
+                vjp_faces[min_max_index, axis] = float(np.real(vjp_value_face).astype(float))
+
+        return vjp_faces
 
 
 """Compound subclasses"""

@@ -257,6 +257,7 @@ def _run_bwd(
                 D_der_map=D_der_map,
                 eps_structure=eps_fwd,
                 eps_sim=sim_data_orig.simulation.medium.permittivity,
+                bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
             )
 
             # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
