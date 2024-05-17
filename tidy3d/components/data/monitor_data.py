@@ -2682,12 +2682,14 @@ class DiffractionData(AbstractFieldProjectionData):
     def make_adjoint_sources(self, dataset_names: list[str]) -> list[PlaneWave]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
-        # NOTE: everything just goes through `.amps`, any post-processing encoded in E-fields
+        # NOTE: everything just goes through `.amps`, any post-processing is encoded in E-fields
         return self.make_adjoint_sources_amps()
 
     def make_adjoint_sources_amps(self) -> list[PlaneWave]:
         """Make adjoint sources for outputs that depend on DiffractionData.`amps`."""
-        coords = self.amps.coords
+
+        amps = self.amps
+        coords = amps.coords
 
         adjoint_sources = []
 
@@ -2695,7 +2697,7 @@ class DiffractionData(AbstractFieldProjectionData):
             for pol in coords["polarization"]:
                 for order_x in coords["orders_x"]:
                     for order_y in coords["orders_y"]:
-                        amp_single = self.amps.sel(
+                        amp_single = amps.sel(
                             f=freq,
                             polarization=pol,
                             orders_x=order_x,

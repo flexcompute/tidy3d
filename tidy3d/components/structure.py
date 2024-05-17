@@ -1,7 +1,7 @@
 """Defines Geometric objects with Medium properties."""
 from __future__ import annotations
 
-from typing import Union, Tuple, Optional, Callable
+from typing import Union, Tuple, Optional, Callable, Any
 import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
@@ -501,31 +501,33 @@ class Structure(AbstractStructure):
 
         return (xmax - xmin, ymax - ymin, zmax - zmin)
 
-    def compute_derivative(
+    def compute_derivatives(
         self,
-        path: tuple[str],
+        structure_paths: list[tuple[str, ...]],
         fld_fwd: FieldData,
         eps_fwd: PermittivityData,
         fld_adj: FieldData,
         eps_adj: PermittivityData,
         eps_sim: float,
-    ) -> float:
+    ) -> dict[tuple[str, ...], Any]:
         """Compute adjoint gradients given the forward and adjoint fields"""
 
-        if isinstance(path[-1], int):
-            path = path[:-1]
+        derivative_map = {}
+        for structure_path in structure_paths:
+            # TODO: maybe construct E_der and D_der and pass them to derivative functions?
 
-        derivative_function = self.get_derivative_function(path)
+            derivative_function = self.get_derivative_function(structure_path)
+            derivative_value = derivative_function(
+                fld_fwd=fld_fwd,
+                eps_fwd=eps_fwd,
+                fld_adj=fld_adj,
+                eps_adj=eps_adj,
+                eps_sim=eps_sim,
+            )
 
-        derivative_value = derivative_function(
-            fld_fwd=fld_fwd,
-            eps_fwd=eps_fwd,
-            fld_adj=fld_adj,
-            eps_adj=eps_adj,
-            eps_sim=eps_sim,
-        )
+            derivative_map[structure_path] = derivative_value
 
-        return derivative_value
+        return derivative_map
 
     """ End autograd code."""
 

@@ -155,12 +155,6 @@ def _run_bwd(
         # insert the raw VJP data into the .data of the original SimulationData
         sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
 
-        # TODO: would be better to just do the VJPs mnt_data by mnt_data
-        # and just pass all of the datasets needing adjoint sources via the sub-paths
-        # eg. monitor_data.make_adjoint_sources(
-        #    ('amps'), ('n_complex')
-        # then just skip any datasets not included
-
         # make adjoint simulation from that SimulationData
         data_vjp_paths = set(data_fields_vjp.keys())
         sim_adj = sim_data_vjp.make_adjoint_sim(
@@ -187,31 +181,30 @@ def _run_bwd(
         # run adjoint simulation
         sim_data_adj = _run_tidy3d(sim_adj)
 
+        # map of index into 'structures' to the list of paths we need vjps for
+        sim_vjp_map = {}
+        for _, structure_index, *structure_path in sim_fields_original.keys():
+            structure_path = tuple(structure_path)
+            if structure_index in sim_vjp_map:
+                sim_vjp_map[structure_index].append(structure_path)
+            else:
+                sim_vjp_map[structure_index] = [structure_path]
+
         # store the derivative values given the forward and adjoint data
-
         sim_fields_vjp = {}
-        for path, _ in sim_fields_original.items():
-            # TODO: would be better to just do the VJPs structure-by structure
-            # and just pass all of the components needing VJPs via the sub-paths
-            # eg. structure.compute_derivatives(
-            #    ('medium', 'permittivity'), ('geometry', 'size'))
-            # the vjp-maker can return a dict mapping these sub-paths to the vjp values
-            #    {
-            #       ('medium', 'permittivity') : 2.0,
-            #       ('geometry', 'size') : 3.2
-            #    }
-
-            # grab the correct structure and field / permittivity data
-            _, structure_index, *sub_path = path
+        for structure_index, structure_paths in sim_vjp_map.items():
+            # grab the forward and adjoint data
             fld_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="fld")
             eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
             fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
             eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
-            # compute and store the derivative
+            # TODO: construct E_der and D_der maps here and pass in?
+
+            # compute the derivatives for this structure
             structure = sim_data_fwd.simulation.structures[structure_index]
-            vjp_value = structure.compute_derivative(
-                path=tuple(sub_path),
+            vjp_value_map = structure.compute_derivatives(
+                structure_paths=structure_paths,
                 fld_fwd=fld_fwd,
                 eps_fwd=eps_fwd,
                 fld_adj=fld_adj,
@@ -219,7 +212,10 @@ def _run_bwd(
                 eps_sim=sim_data_orig.simulation.medium.permittivity,
             )
 
-            sim_fields_vjp[path] = vjp_value
+            # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
+            for structure_path, vjp_value in vjp_value_map.items():
+                sim_path = tuple(["structures", structure_index] + list(structure_path))
+                sim_fields_vjp[sim_path] = vjp_value
 
         return sim_fields_vjp
 
