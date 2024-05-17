@@ -7,7 +7,7 @@ from itertools import compress
 import warnings
 
 import pydantic.v1 as pd
-import numpy as np
+import autograd.numpy as np
 from pyroots import Brentq
 from shapely.strtree import STRtree
 from shapely.geometry import box as shapely_box

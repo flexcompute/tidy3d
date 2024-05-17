@@ -12,6 +12,7 @@ import pydantic.v1 as pydantic
 import autograd.numpy as np
 import shapely
 from matplotlib import patches
+import xarray as xr
 
 from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
@@ -1372,7 +1373,7 @@ class Geometry(Tidy3dBaseModel, ABC):
 
     def compute_derivatives(
         self,
-        field_name: list[str],
+        field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
@@ -2282,7 +2283,7 @@ class Box(SimplePlaneIntersection, Centered):
 
     def compute_derivatives(
         self,
-        field_names: list[str],
+        field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
@@ -2303,11 +2304,22 @@ class Box(SimplePlaneIntersection, Centered):
         # post-process these values to give the gradients w.r.t. center and size
         vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
 
-        # store only the gradients asked for in 'field_names'
+        # store only the gradients asked for in 'field_paths'
         derivative_map = {}
-        for field_name in field_names:
+        for field_path in field_paths:
+            field_name, *index = field_path
+            field_name = field_name
+
             if field_name in vjps_center_size:
-                derivative_map[field_name] = vjps_center_size[field_name]
+                # if the vjp calls for a specific index into the tuple
+                if index and len(index) == 1:
+                    index = int(index[0])
+                    if field_path not in derivative_map:
+                        derivative_map[field_path] = vjps_center_size[field_name][index]
+
+                # otherwise, just grab the whole array
+                else:
+                    derivative_map[field_path] = vjps_center_size[field_name]
 
         return derivative_map
 
@@ -2338,63 +2350,124 @@ class Box(SimplePlaneIntersection, Centered):
 
         # change in permittivity between inside and outside
         # TODO: assumes non-dispersive here and eps_sim, generalize
-        eps_in = np.mean(eps_structure.eps_xx.values)
-
-        eps_out = eps_sim
-        delta_eps = eps_in - eps_out
-        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
-
         vjp_faces = np.zeros((2, 3))
 
         for min_max_index, _ in enumerate((0, -1)):
-            for axis, dim_normal in enumerate("xyz"):
-                # get normal D and tangential Es
-                fld_normal, flds_tangential = self.geometry.pop_axis(("Ex", "Ey", "Ez"), axis=axis)
-                D_normal = D_der_map.field_components[fld_normal]
-                Es_tangential = [E_der_map.field_components[key] for key in flds_tangential]
-
-                # evaluate all fields at the face location in this min/max and axis
-                bounds_normal, bounds_tangential = self.geometry.pop_axis(
-                    np.array(self.geometry.bounds).T, axis=axis
+            for axis in range(3):
+                vjp_face = self.derivative_face(
+                    min_max_index=min_max_index,
+                    axis_normal=axis,
+                    E_der_map=E_der_map,
+                    D_der_map=D_der_map,
+                    eps_structure=eps_structure,
+                    eps_sim=eps_sim,
+                    bounds=bounds,
                 )
-                bounds_tangential = np.array(bounds_tangential).T
-                pos_normal = bounds_normal[min_max_index]  # TODO: no need for autograd here
-                interp_kwargs_face = {dim_normal: pos_normal}
-                D_normal = D_normal.interp(**interp_kwargs_face)
-
-                Es_tangential = [E.interp(**interp_kwargs_face) for E in Es_tangential]
-                _, dims_tangential = self.geometry.pop_axis("xyz", axis=axis)
-
-                # start recording VJP at this surface
-                vjp_value_face = 0.0
-
-                # compute normal contribution
-                D_integrated = integrate_within_bounds(
-                    arr=D_normal,
-                    dims=dims_tangential,
-                    bounds=bounds_tangential,
-                )
-                D_integrated = D_integrated.values
-
-                D_contribution = -delta_eps_inv * D_integrated
-                vjp_value_face += D_contribution
-
-                # compute tangential contributions
-                for E_tangential in Es_tangential:
-                    E_integrated = integrate_within_bounds(
-                        arr=E_tangential,
-                        dims=dims_tangential,
-                        bounds=bounds_tangential,
-                    )
-                    E_integrated = E_integrated.values
-
-                    E_contribution = delta_eps * E_integrated
-                    vjp_value_face += E_contribution
 
                 # record vjp for this face
-                vjp_faces[min_max_index, axis] = float(np.real(vjp_value_face).astype(float))
+                vjp_faces[min_max_index, axis] = vjp_face
 
         return vjp_faces
+
+    def derivative_face(
+        self,
+        min_max_index: int,
+        axis_normal: Axis,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> float:
+        """Compute the derivative w.r.t. shifting a face in the normal direction."""
+
+        # normal and tangential dims
+        dim_normal, dims_perp = self.pop_axis("xyz", axis=axis_normal)
+        fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
+
+        # normal and tangential fields
+        D_normal = D_der_map.field_components[fld_normal]
+        Es_perp = tuple(E_der_map.field_components[key] for key in flds_perp)
+
+        # normal and tangential bounds
+        bounds_T = np.array(bounds).T  # put (xyz) first dimension
+        bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
+
+        # define the integration plane
+        coord_normal_face = bounds_normal[min_max_index]
+        bounds_perp = np.array(bounds_perp).T  # put (min / max) first dimension for integrator
+
+        # normal field data coordinates
+        fld_coords_normal = D_normal.coords[dim_normal]
+
+        # condition: a face is entirely outside of the domain, skip!
+        sign = (-1, 1)[min_max_index]
+        normal_coord_positive = sign * coord_normal_face
+        fld_coords_positive = sign * fld_coords_normal
+        if all(fld_coords_positive < normal_coord_positive):
+            log.info(
+                f"skipping VJP for 'Box' face '{dim_normal}{'-+'[min_max_index]}' "
+                "as it is entirely outside of the simulation domain."
+            )
+            return 0.0
+
+        # grab permittivity data inside and outside edge in normal direction
+        eps_xyz = [eps_structure.field_components[f"eps_{dim}{dim}"] for dim in "xyz"]
+
+        # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
+        num_cells_in = 4
+
+        # if not enough data, just use best guess using average permittivity at face and eps in sim medium
+        if any(len(eps.coords[dim_normal]) < num_cells_in for eps in eps_xyz):
+            eps_xyz_inside = [eps.mean(dim=dim_normal) for eps in eps_xyz]
+            eps_xyz_outside = 3 * [eps_sim]
+            # TODO: not tested...
+
+        # otherwise, try to grab the data at the edges
+        else:
+            if min_max_index == 0:
+                index_out, index_in = (0, num_cells_in - 1)
+            else:
+                index_out, index_in = (-1, -num_cells_in - 1)
+            eps_xyz_inside = [eps.isel(**{dim_normal: index_in}) for eps in eps_xyz]
+            eps_xyz_outside = [eps.isel(**{dim_normal: index_out}) for eps in eps_xyz]
+
+        # put in normal / tangential basis
+        eps_in_normal, eps_in_perps = self.pop_axis(eps_xyz_inside, axis=axis_normal)
+        eps_out_normal, eps_out_perps = self.pop_axis(eps_xyz_outside, axis=axis_normal)
+
+        # compute integration pre-factors
+        delta_eps_perps = [eps_in - eps_out for eps_in, eps_out in zip(eps_in_perps, eps_out_perps)]
+        delta_eps_inv_normal = 1.0 / eps_in_normal - 1.0 / eps_out_normal
+
+        def integrate_face(arr: xr.DataArray) -> complex:
+            """Interpolate and integrate a scalar field data over the face using bounds."""
+
+            arr_at_face = arr.interp(**{dim_normal: coord_normal_face})
+
+            integral_result = integrate_within_bounds(
+                arr=arr_at_face,
+                dims=dims_perp,
+                bounds=bounds_perp,
+            )
+
+            return complex(integral_result.sum(dim="f"))
+
+        # put together VJP using D_normal and E_perp integration
+        vjp_value = 0.0
+
+        # perform D-normal integral
+        integrand_D = -delta_eps_inv_normal * D_normal
+        integral_D = integrate_face(integrand_D)
+        vjp_value += integral_D
+
+        # perform E-perpendicular integrals
+        for E_perp, delta_eps_perp in zip(Es_perp, delta_eps_perps):
+            integrand_E = E_perp * delta_eps_perp
+            integral_E = integrate_face(integrand_E)
+            vjp_value += integral_E
+
+        return np.real(vjp_value)
 
 
 """Compound subclasses"""

@@ -252,7 +252,8 @@ class Structure(AbstractStructure):
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
         structure_fields_map = {}
         for structure_path in structure_paths:
-            med_or_geo, field_name = structure_path
+            med_or_geo, *field_path = structure_path
+            field_path = tuple(field_path)
             if med_or_geo not in ("geometry", "medium"):
                 raise ValueError(
                     f"Something went wrong in the structure VJP calculation, "
@@ -262,17 +263,17 @@ class Structure(AbstractStructure):
                     "repository so we can investigate."
                 )
             if med_or_geo not in structure_fields_map:
-                structure_fields_map[med_or_geo] = [field_name]
+                structure_fields_map[med_or_geo] = [field_path]
             else:
-                structure_fields_map[med_or_geo].append(field_name)
+                structure_fields_map[med_or_geo].append(field_path)
 
         # loop through sub fields, compute VJPs, and store in the derivative map {path -> vjp_value}
         derivative_map = {}
-        for med_or_geo, field_names in structure_fields_map.items():
+        for med_or_geo, field_paths in structure_fields_map.items():
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
             derivative_values_map = med_or_geo_field.compute_derivatives(
-                field_names=field_names,
+                field_paths=field_paths,
                 E_der_map=E_der_map,
                 D_der_map=D_der_map,
                 eps_structure=eps_structure,
@@ -281,8 +282,8 @@ class Structure(AbstractStructure):
             )
 
             # construct map of {field path -> derivative value}
-            for field_name, derivative_value in derivative_values_map.items():
-                path = (med_or_geo, field_name)
+            for field_path, derivative_value in derivative_values_map.items():
+                path = tuple([med_or_geo] + list(field_path))
                 derivative_map[path] = derivative_value
 
         return derivative_map

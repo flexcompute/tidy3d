@@ -59,7 +59,7 @@ def test_autograd_objective(use_emulated_run):
         sim.plot(z=0, ax=ax3)
         plt.show()
 
-    def make_sim(eps_list, center):
+    def make_sim(eps_list, center, sy):
         permittivities = eps_list
 
         structure_centers = npa.linspace(-LX / 2 + BX, LX / 2 - BX, NUM_STCRS)
@@ -69,7 +69,7 @@ def test_autograd_objective(use_emulated_run):
             eps_i = eps if (i % 2 == 0) else 2.0
             sigma_i = eps / 10.0 if i > 2 else 0.0
             s = td.Structure(
-                geometry=td.Box(size=(BX, 1, 1), center=center),
+                geometry=td.Box(size=(BX, sy, 1), center=center),
                 medium=td.Medium(permittivity=eps_i, conductivity=sigma_i),
             )
             structures.append(s)
@@ -138,8 +138,8 @@ def test_autograd_objective(use_emulated_run):
         value += npa.sum(abs(amps.amps.values) ** 2)
         return value
 
-    def objective(eps_list, center):
-        sim = make_sim(eps_list, center)
+    def objective(eps_list, center, sy):
+        sim = make_sim(eps_list, center, sy)
 
         if PLOT_SIM:
             plot_sim(sim)
@@ -152,11 +152,12 @@ def test_autograd_objective(use_emulated_run):
 
     params0 = NUM_STCRS * [2.0]
     center0 = (0.0, 0.0, 0.0)
+    sy0 = 1.0
 
-    objective(params0, center0)
+    objective(params0, center0, sy0)
 
     if True or run_was_emulated:
-        val, grad = ag.value_and_grad(objective, argnum=(0, 1))(params0, center0)
+        val, grad = ag.value_and_grad(objective, argnum=(0, 1, 2))(params0, center0, sy0)
 
     print(val, grad)
 

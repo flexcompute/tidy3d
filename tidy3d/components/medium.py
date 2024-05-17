@@ -1079,7 +1079,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     def compute_derivatives(
         self,
-        field_names: list[str],
+        field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
@@ -1488,7 +1488,7 @@ class Medium(AbstractMedium):
 
     def compute_derivatives(
         self,
-        field_names: list[str],
+        field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
         eps_structure: PermittivityDataset,
@@ -1500,11 +1500,13 @@ class Medium(AbstractMedium):
         # get vjps w.r.t. permittivity and conductivity of the bulk
         vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
 
-        # store the fields asked for by ``field_names``
+        # store the fields asked for by ``field_paths``
         derivative_map = {}
-        for field_name in field_names:
+        for field_path in field_paths:
+            field_name, *_ = field_path
             if field_name in vjps_volume:
-                derivative_map[field_name] = vjps_volume[field_name]
+                derivative_map[field_path] = vjps_volume[field_name]
+
         return derivative_map
 
     def derivative_eps_sigma_volume(
