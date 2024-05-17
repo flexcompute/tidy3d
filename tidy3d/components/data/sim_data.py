@@ -10,7 +10,6 @@ import numpy as np
 import h5py
 import json
 
-import autograd.numpy as npa
 
 from .monitor_data import (
     MonitorDataTypes,
@@ -28,7 +27,6 @@ from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
 from ..base import JSON_TAG
-from ..autograd import AutogradFieldMap
 from ..base_sim.data.sim_data import AbstractSimulationData
 
 
@@ -817,55 +815,52 @@ class SimulationData(AbstractYeeGridSimulationData):
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
 
     def make_adjoint_sim(
-        self, data_fields_vjp: AutogradFieldMap, adjoint_monitors: list[Monitor]
+        self, data_vjp_paths: set[tuple], adjoint_monitors: list[Monitor]
     ) -> Simulation:
         """Make the adjoint simulation from the original simulation and the VJP-containing data."""
 
-        sim_fwd = self.simulation
+        sim_original = self.simulation
 
         # generate the adjoint sources
-        data_indices = {index for (_, index, *_), _ in data_fields_vjp.items()}
-        sources_adj = self.generate_adjoint_sources(data_indices=data_indices)
+        sources_adj = self.make_adjoint_sources(data_vjp_paths=data_vjp_paths)
 
-        # generate the adjoint field and permittivity monitors
+        # grab boundary conditions with flipped Bloch vectors (for adjoint)
+        bc_adj = sim_original.boundary_spec.flipped_bloch_vecs
 
-        # grab boundary conditions with flipped bloch vectors (for adjoint)
-        bc_adj = self.simulation.boundary_spec.flipped_bloch_vecs
-
-        # fields to update the fwd simulation with
+        # fields to update the 'fwd' simulation with to make it 'adj'
         sim_adj_update_dict = dict(
             sources=sources_adj,
             boundary_spec=bc_adj,
             monitors=adjoint_monitors,
         )
 
-        # set the ADJ grid spec wavelength to the FWD wavelength (for same meshing)
-        sim_fwd = self.simulation
-        grid_spec_fwd = sim_fwd.grid_spec
-        if len(sim_fwd.sources) and grid_spec_fwd.wavelength is None:
-            wavelength_fwd = grid_spec_fwd.wavelength_from_sources(sim_fwd.sources)
-            grid_spec_adj = grid_spec_fwd.updated_copy(wavelength=wavelength_fwd)
+        # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
+        grid_spec_original = sim_original.grid_spec
+        if len(sim_original.sources) and grid_spec_original.wavelength is None:
+            wavelength_original = grid_spec_original.wavelength_from_sources(sim_original.sources)
+            grid_spec_adj = grid_spec_original.updated_copy(wavelength=wavelength_original)
             sim_adj_update_dict["grid_spec"] = grid_spec_adj
 
-        return self.simulation.updated_copy(**sim_adj_update_dict)
+        return sim_original.updated_copy(**sim_adj_update_dict)
 
-    def generate_adjoint_sources(self, data_indices: set[tuple, npa.ndarray]) -> list[Source]:
+    def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> list[Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
 
-        # # grab the indices of the monitor data found in the VJP
-        # data_indices = []
-        # for path, _ in data_fields_vjp.items():
-        #     key, data_index, *sub_path = path
+        # TODO: determine if we can do multi-frequency sources
 
-        #     # ignore if this path is not into the .data list
-        #     if data_index not in data_indices:
-        #         data_indices.append(data_index)
+        # map of index into 'self.data' to the list of datasets we need adjoint sources for
+        adj_src_map = {}
+        for _, index, dataset_name in data_vjp_paths:
+            if index in adj_src_map:
+                adj_src_map[index].append(dataset_name)
+            else:
+                adj_src_map[index] = [dataset_name]
 
         # gather a list of adjoint sources for every monitor data in the VJP that needs one
         sources_adj_all = []
-        for data_index in data_indices:
+        for data_index, dataset_names in adj_src_map.items():
             mnt_data = self.data[data_index]
-            sources_adj = mnt_data.generate_adjoint_sources()
+            sources_adj = mnt_data.make_adjoint_sources(dataset_names=dataset_names)
             sources_adj_all += sources_adj
 
         return sources_adj_all

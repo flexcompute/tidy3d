@@ -3232,7 +3232,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         return freqs
 
-    def generate_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
+    def make_adjoint_monitors(self, structure_indices: set[int]) -> tuple[list, list]:
         """Get lists of field and permittivity monitors for this simulation."""
 
         freqs = self.freqs_adjoint
@@ -3244,7 +3244,7 @@ class Simulation(AbstractYeeGridSimulation):
         for i in structure_indices:
             structure = self.structures[i]
 
-            mnt_fld, mnt_eps = structure.generate_adjoint_monitors(freqs=freqs, index=i)
+            mnt_fld, mnt_eps = structure.make_adjoint_monitors(freqs=freqs, index=i)
 
             adjoint_monitors_fld.append(mnt_fld)
             adjoint_monitors_eps.append(mnt_eps)
@@ -3257,7 +3257,7 @@ class Simulation(AbstractYeeGridSimulation):
         # set of indices in the structures needing adjoint monitors
         structure_indices = {index for (_, index, *_), _ in sim_fields.items()}
 
-        mnts_fld, mnts_eps = self.generate_adjoint_monitors(structure_indices=structure_indices)
+        mnts_fld, mnts_eps = self.make_adjoint_monitors(structure_indices=structure_indices)
         monitors = list(self.monitors) + list(mnts_fld) + list(mnts_eps)
         return self.copy(update=dict(monitors=monitors))
 

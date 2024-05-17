@@ -193,7 +193,7 @@ class Structure(AbstractStructure):
 
         return monitor_name_map[data_type]
 
-    def generate_adjoint_monitors(
+    def make_adjoint_monitors(
         self, freqs: list[float], index: int
     ) -> (FieldMonitor, PermittivityMonitor):
         """Generate the field and permittivity monitor for this structure."""

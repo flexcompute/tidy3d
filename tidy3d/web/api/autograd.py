@@ -4,6 +4,8 @@ import tidy3d as td
 from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_static  # noqa: 401
 import typing
 
+import numpy as np
+
 from .webapi import run as run_webapi
 
 """ Auxiliary Data Dictionary Keys """
@@ -96,7 +98,7 @@ def _run_primitive(
 
 
 def run(simulation: td.Simulation) -> td.SimulationData:
-    """User-facing run function, passes autograd primitive _run_primitive() the array of traced fields."""
+    """User-facing run function, compatible with autograd."""
 
     td.log.info("running user-facing run()")
 
@@ -145,18 +147,24 @@ def _run_bwd(
 
         td.log.info("Running custom vjp (adjoint) pipeline.")
 
+        # immediately filter out any data_vjps with all 0's in the data
+        data_fields_vjp = {
+            key: value for key, value in data_fields_vjp.items() if not np.all(value == 0.0)
+        }
+
         # insert the raw VJP data into the .data of the original SimulationData
         sim_data_vjp = sim_data_orig.insert_traced_fields(field_mapping=data_fields_vjp)
 
         # TODO: would be better to just do the VJPs mnt_data by mnt_data
         # and just pass all of the datasets needing adjoint sources via the sub-paths
-        # eg. monitor_data.generate_adjoint_sources(
+        # eg. monitor_data.make_adjoint_sources(
         #    ('amps'), ('n_complex')
         # then just skip any datasets not included
 
         # make adjoint simulation from that SimulationData
+        data_vjp_paths = set(data_fields_vjp.keys())
         sim_adj = sim_data_vjp.make_adjoint_sim(
-            data_fields_vjp=data_fields_vjp, adjoint_monitors=sim_data_fwd.simulation.monitors
+            data_vjp_paths=data_vjp_paths, adjoint_monitors=sim_data_fwd.simulation.monitors
         )
 
         td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")

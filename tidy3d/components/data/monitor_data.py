@@ -78,7 +78,7 @@ class MonitorData(AbstractMonitorData, ABC):
         data_dict.update(update)
         return type(self).parse_obj(data_dict)
 
-    def generate_adjoint_sources(self) -> list[Source]:
+    def make_adjoint_sources(self, dataset_names: list[str]) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
         return []
 
@@ -1587,8 +1587,26 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         return dataset.drop_vars(drop).to_dataframe()
 
-    def generate_adjoint_sources(self) -> list[ModeSource]:
-        """Get all adjoint sources for the ``ModeMonitor.amps``."""
+    def make_adjoint_sources(self, dataset_names: list[str]) -> list[ModeSource]:
+        """Get all adjoint sources for the ``ModeMonitorData``."""
+
+        adjoint_sources = []
+
+        for name in dataset_names:
+            if name == "amps":
+                adjoint_sources += self.make_adjoint_sources_amps()
+            else:
+                log.warning(
+                    f"Can't create adjoint source for 'ModeData.{type(self)}.{name}'. "
+                    f"for monitor '{self.monitor.name}'. "
+                    "It's likely your objective function depends on sim data that is un-traced. "
+                    "Double check your post-processing function to confirm. "
+                )
+
+        return adjoint_sources
+
+    def make_adjoint_sources_amps(self) -> list[ModeSource]:
+        """Generate adjoint sources for ``ModeMonitorData.amps``."""
 
         coords = self.amps.coords
 
@@ -2661,9 +2679,14 @@ class DiffractionData(AbstractFieldProjectionData):
             data_arrays.append(xr.DataArray(data=field, coords=self.coords, dims=self.dims))
         return xr.Dataset(dict(zip(keys, data_arrays)))
 
-    def generate_adjoint_sources(self) -> list[PlaneWave]:
+    def make_adjoint_sources(self, dataset_names: list[str]) -> list[PlaneWave]:
         """Get all adjoint sources for the ``ModeMonitor.amps``."""
 
+        # NOTE: everything just goes through `.amps`, any post-processing encoded in E-fields
+        return self.make_adjoint_sources_amps()
+
+    def make_adjoint_sources_amps(self) -> list[PlaneWave]:
+        """Make adjoint sources for outputs that depend on DiffractionData.`amps`."""
         coords = self.amps.coords
 
         adjoint_sources = []
