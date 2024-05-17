@@ -37,6 +37,50 @@ def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tupl
     return data_original, data_adjoint
 
 
+def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldData:
+    """Convert electric field to displacement field."""
+
+    field_components = {}
+    for dim in "xyz":
+        field_name = f"E{dim}"
+        fld_E = fld_data.field_components[field_name]
+        eps_name = f"eps_{dim}{dim}"
+        fld_eps = eps_data.field_components[eps_name]
+        fld_D = fld_eps * fld_E
+        field_components[field_name] = fld_D
+    return fld_data.updated_copy(**field_components)
+
+
+def derivative_map_E(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:
+    """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. these."""
+    field_components = {}
+    for field_name in ("Ex", "Ey", "Ez"):
+        fwd = fld_fwd.field_components[field_name]
+        adj = fld_adj.field_components[field_name]
+        mult = fwd * adj
+        field_components[field_name] = mult
+    return fld_fwd.updated_copy(**field_components)
+
+
+def derivative_map_D(
+    fld_fwd: td.FieldData,
+    eps_fwd: td.PermittivityData,
+    fld_adj: td.FieldData,
+    eps_adj: td.PermittivityData,
+) -> td.FieldData:
+    """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. D fields."""
+    fwd_D = E_to_D(fld_data=fld_fwd, eps_data=eps_fwd)
+    adj_D = E_to_D(fld_data=fld_adj, eps_data=eps_adj)
+    field_components = {}
+    for field_name in ("Ex", "Ey", "Ez"):
+        fwd = fwd_D.field_components[field_name]
+        adj = adj_D.field_components[field_name]
+        mult = fwd * adj
+        field_components[field_name] = mult
+
+    return fld_fwd.updated_copy(**field_components)
+
+
 """ Run Functions """
 
 # TODO: pass through all of the web.run kwargs
@@ -199,16 +243,19 @@ def _run_bwd(
             fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
             eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
-            # TODO: construct E_der and D_der maps here and pass in?
+            # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
+            E_der_map = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
+            D_der_map = derivative_map_D(
+                fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj
+            )
 
             # compute the derivatives for this structure
             structure = sim_data_fwd.simulation.structures[structure_index]
             vjp_value_map = structure.compute_derivatives(
                 structure_paths=structure_paths,
-                fld_fwd=fld_fwd,
-                eps_fwd=eps_fwd,
-                fld_adj=fld_adj,
-                eps_adj=eps_adj,
+                E_der_map=E_der_map,
+                D_der_map=D_der_map,
+                eps_structure=eps_fwd,
                 eps_sim=sim_data_orig.simulation.medium.permittivity,
             )
 
