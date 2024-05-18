@@ -596,6 +596,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             thick_l = boundaries[num_layer[0]] - boundaries[0]
             thick_r = boundaries[-1] - boundaries[-1 - num_layer[1]]
             pml_thicknesses.append((thick_l, thick_r))
+
         return pml_thicknesses
 
     @equal_aspect
@@ -3882,7 +3883,10 @@ class Simulation(AbstractYeeGridSimulation):
 
         # Add a simulation Box as the first structure
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
-        structures += self.structures
+
+        # make structures static before meshing
+        self_structures = [s.to_static() for s in self.structures]
+        structures += self_structures
 
         grid = self.grid_spec.make_grid(
             structures=structures,

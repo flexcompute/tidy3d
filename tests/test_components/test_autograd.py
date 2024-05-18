@@ -2,9 +2,11 @@
 
 import pytest
 import matplotlib.pylab as plt
+import numpy as np
 
 import autograd as ag
 import autograd.numpy as npa
+
 import tidy3d as td
 
 from ..utils import run_emulated
@@ -23,6 +25,8 @@ NUM_MNTS = 3
 MNT_NAME = "mnt"
 
 PLOT_SIM = False
+
+DA_SHAPE = (3, 4, 5)
 
 # variable to store whether the emulated run as used
 _run_was_emulated = [False]
@@ -59,7 +63,7 @@ def test_autograd_objective(use_emulated_run):
         sim.plot(z=0, ax=ax3)
         plt.show()
 
-    def make_sim(eps_list, center, sy):
+    def make_sim(eps_list, center, sy, eps_arr):
         permittivities = eps_list
 
         structure_centers = npa.linspace(-LX / 2 + BX, LX / 2 - BX, NUM_STCRS)
@@ -73,6 +77,26 @@ def test_autograd_objective(use_emulated_run):
                 medium=td.Medium(permittivity=eps_i, conductivity=sigma_i),
             )
             structures.append(s)
+
+        # custom medium
+
+        nx, ny, nz = DA_SHAPE
+        permittivity_data = td.SpatialDataArray(
+            eps_arr.reshape((nx, ny, nz)),
+            coords=dict(
+                x=np.linspace(-1, 1, nx),
+                y=np.linspace(-1, 1, ny),
+                z=np.linspace(-1, 1, nz),
+            ),
+        )
+        custom_med = td.CustomMedium(permittivity=permittivity_data)
+        struct_custom_med = td.Structure(
+            geometry=td.Box(
+                size=(2, 2, 2),
+                center=(0, 0, 0),
+            ),
+            medium=custom_med,
+        )
 
         mnts = []
         for i in range(NUM_MNTS):
@@ -115,13 +139,14 @@ def test_autograd_objective(use_emulated_run):
         sim = td.Simulation(
             size=(LX, 3, LZ),
             run_time=1e-12,
-            grid_spec=td.GridSpec.uniform(
-                dl=WVL / 25
-            ),  # making this auto hurts the numerical check
-            structures=structures + [waveguide_out],
+            # grid_spec=td.GridSpec.uniform(
+            #     dl=WVL / 25
+            # ),  # making this auto hurts the numerical check
+            structures=structures + [waveguide_out] + [struct_custom_med],
             sources=[src],
             monitors=mnts,
             boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True),
+            attrs=dict(test=None),
         )
 
         return sim
@@ -138,8 +163,8 @@ def test_autograd_objective(use_emulated_run):
         value += npa.sum(abs(amps.amps.values) ** 2)
         return value
 
-    def objective(eps_list, center, sy):
-        sim = make_sim(eps_list, center, sy)
+    def objective(*args):
+        sim = make_sim(*args)
 
         if PLOT_SIM:
             plot_sim(sim)
@@ -153,11 +178,15 @@ def test_autograd_objective(use_emulated_run):
     params0 = NUM_STCRS * [2.0]
     center0 = (0.0, 0.0, 0.0)
     sy0 = 1.0
+    eps_arr0 = np.random.random(DA_SHAPE) + 1.0
 
-    objective(params0, center0, sy0)
+    args0 = (params0, center0, sy0, eps_arr0)
+    argnum = tuple(range(len(args0)))
+
+    val = objective(*args0)
 
     if True or run_was_emulated:
-        val, grad = ag.value_and_grad(objective, argnum=(0, 1, 2))(params0, center0, sy0)
+        val, grad = ag.value_and_grad(objective, argnum=argnum)(*args0)
 
     print(val, grad)
 

@@ -25,6 +25,11 @@ def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
     if isinstance(x, Box):
         return get_static(x._value)
+    if isinstance(x, np.ndarray):
+        # TODO: how to convert a np.ndarray of AutogradBox to np.ndarray in one shot?
+        all_values = x.flatten()
+        all_values_static = [get_static(val) for val in all_values]
+        return np.array(all_values_static).reshape(x.shape)
     return x
 
 

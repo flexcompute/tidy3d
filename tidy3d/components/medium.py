@@ -2012,10 +2012,15 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
-        self_dict = self.dict(exclude={"type", "eps_dataset"})
+
+        _self = self.to_static()
+
+        self_dict = _self.dict(exclude={"type", "eps_dataset"})
         # isotropic
-        if self.eps_dataset is None:
-            self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
+        if _self.eps_dataset is None:
+            self_dict.update(
+                {"permittivity": _self.permittivity, "conductivity": _self.conductivity}
+            )
             return CustomIsotropicMedium.parse_obj(self_dict)
 
         def get_eps_sigma(eps_complex: SpatialDataArray, freq: float) -> tuple:
@@ -2390,6 +2395,34 @@ class CustomMedium(AbstractCustomMedium):
             conductivity=cond_reduced,
             eps_dataset=eps_reduced,
         )
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute the adjoint derivative for this geometry."""
+
+        if len(field_paths) != 1 and field_paths[0] != ("permittivity",):
+            raise NotImplementedError(
+                f"Differentiation with respect to {type(self)} {field_paths} " "not supported."
+            )
+
+        eps_data = self.permittivity
+        coords = eps_data.coords
+
+        vjp_array = 0.0
+
+        for dim in "xyz":
+            E_der_dim = E_der_map.field_components[f"E{dim}"]
+            E_der_dim_interp = E_der_dim.interp(**coords).sum("f")
+            vjp_array += E_der_dim_interp.values
+
+        return {("permittivity",): vjp_array.real}
 
 
 """ Dispersive Media """

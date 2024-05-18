@@ -973,6 +973,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             key, *sub_path = path
             len_sub_path = len(sub_path)
 
+            # if sub_dict[key] is a tuple, immediately convert it to a list so we can assign to it
+            if isinstance(sub_dict[key], tuple):
+                sub_dict[key] = list(sub_dict[key])
+
             # only one element in path => leaf node. insert into the sub dict and don't recurse
             if len_sub_path == 0:
                 if isinstance(sub_dict[key], DataArray):
@@ -984,12 +988,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 return
 
             # one integer sub-path => index into tuple leaf node. insert value and don't recurse
-            if len(sub_path) == 1:
-                (sub_key,) = sub_path
-                if isinstance(sub_key, int):
-                    sub_dict[key] = list(sub_dict[key])
-                    sub_dict[key][sub_key] = value
-                    return
+            # if len(sub_path) == 1:
+            #     (sub_key,) = sub_path
+            #     if isinstance(sub_key, int):
+            #         sub_dict[key][sub_key] = value
+            #         return
 
             # if 1 or more more elements in the path, and they aren't a tuple index (above), recurse
             sub_dict = sub_dict[key]
