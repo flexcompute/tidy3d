@@ -20,6 +20,9 @@ LZ = 7 * WVL
 
 # NOTE: regular stuff is broken in 2D need to change volume and face integration to handle this
 IS_3D = True
+
+# TODO: test 2D and 3D parameterized
+
 LX = 4 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 

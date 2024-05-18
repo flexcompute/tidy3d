@@ -2412,17 +2412,20 @@ class CustomMedium(AbstractCustomMedium):
                 f"Differentiation with respect to {type(self)} {field_paths} " "not supported."
             )
 
-        coords_interp = {key: val for key, val in self.permittivity.coords.items() if len(val) > 1}
+        eps_data = self.permittivity
+
+        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
+        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
 
         # TODO: probably this could be more robust. eg if the DataArray has weird data, edge cases
         # in he coords
         vjp_array = 0.0
         for dim in "xyz":
             E_der_dim = E_der_map.field_components[f"E{dim}"]
-            E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum("f")
-            vjp_array += E_der_dim_interp.values
+            E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+            vjp_array += np.array(E_der_dim_interp.values).astype(float)
 
-        vjp_array = vjp_array.real.reshape(self.permittivity.shape)
+        vjp_array = vjp_array.reshape(eps_data.shape)
 
         return {("permittivity",): vjp_array}
 
