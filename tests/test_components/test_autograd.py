@@ -15,19 +15,17 @@ from ..utils import run_emulated
 WVL = 1.0
 FREQ0 = td.C_0 / WVL
 
-# sim and structure sizes in x
-BX = 2 * WVL
-NUM_STCRS = 5
-LX = 3 * NUM_STCRS * WVL
+# sim sizes
 LZ = 7 * WVL
 
-NUM_MNTS = 3
-MNT_NAME = "mnt"
+IS_3D = False
+LX = 4 * WVL if IS_3D else 0.0
+PML_X = True if IS_3D else False
 
 PLOT_SIM = False
 
-DA_SHAPE = (3, 4, 1)
-
+DA_SHAPE_X = 12 if IS_3D else 1
+DA_SHAPE = (DA_SHAPE_X, 11, 10)
 
 SIM_BASE = td.Simulation(
     size=(LX, 3, LZ),
@@ -54,10 +52,10 @@ SIM_BASE = td.Simulation(
     ],
     monitors=[
         td.FieldMonitor(
-            center=(0,0,0),
+            center=(0, 0, 0),
             size=(0, 0, 0),
             freqs=[FREQ0],
-            name='extraneous',
+            name="extraneous",
         )
     ],
     boundary_spec=td.BoundarySpec.pml(x=False, y=False, z=True),
@@ -71,6 +69,7 @@ _run_was_emulated = [False]
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
     import tidy3d.web.api.webapi as webapi
+
     monkeypatch.setattr(webapi, "run", run_emulated)
     _run_was_emulated[0] = True
 
@@ -83,27 +82,27 @@ eps_arr0 = np.random.random(DA_SHAPE) + 1.0
 args0 = (eps0, center0, size_y0, eps_arr0)
 argnum = tuple(range(len(args0)))
 
+
 def make_structures(eps, center, size_y, eps_arr) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
-    box = td.Box(center=(0,0,0), size=(1,1,1))
+    box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
     med = td.Medium(permittivity=2.0)
 
     medium = td.Structure(
         geometry=box,
-        medium=td.Medium(permittivity=eps, conductivity=eps/10.0),
+        medium=td.Medium(permittivity=eps, conductivity=eps / 10.0),
     )
 
     center_list = td.Structure(
-        geometry=td.Box(center=center, size=(1,1,1)),
+        geometry=td.Box(center=center, size=(1, 1, 1)),
         medium=med,
     )
 
     size_element = td.Structure(
-        geometry=td.Box(center=(0,0,0), size=(1,size_y,1)),
+        geometry=td.Box(center=(0, 0, 0), size=(1, size_y, 1)),
         medium=med,
     )
-
 
     nx, ny, nz = eps_arr.shape
     custom_med = td.Structure(
@@ -127,6 +126,7 @@ def make_structures(eps, center, size_y, eps_arr) -> dict[str, td.Structure]:
         custom_med=custom_med,
     )
 
+
 def make_monitors() -> dict[str, td.Monitor]:
     """Make a dictionary of all the possible monitors in the simulation."""
 
@@ -138,7 +138,7 @@ def make_monitors() -> dict[str, td.Monitor]:
         name="mode",
     )
 
-    mode_pp = lambda mnt_data: npa.sum(abs(mnt_data.amps.values)**2)
+    mode_pp = lambda mnt_data: npa.sum(abs(mnt_data.amps.values) ** 2)
 
     diff = td.DiffractionMonitor(
         size=(td.inf, td.inf, 0),
@@ -148,26 +148,30 @@ def make_monitors() -> dict[str, td.Monitor]:
         name="diff",
     )
 
-    diff_pp = lambda mnt_data: npa.sum(abs(mnt_data.amps.values)**2)
+    diff_pp = lambda mnt_data: npa.sum(abs(mnt_data.amps.values) ** 2)
 
     return dict(
         mode=(mode, mode_pp),
         diff=(diff, diff_pp),
     )
 
-def plot_sim(sim: td.Simulation) -> None:
+
+def plot_sim(sim: td.Simulation, plot_eps: bool = False) -> None:
+    plot_fn = sim.plot_eps if plot_eps else sim.plot
+
     f, (ax1, ax2, ax3) = plt.subplots(1, 3, tight_layout=True)
-    sim.plot(x=0, ax=ax1)
-    sim.plot(y=0, ax=ax2)
-    sim.plot(z=0, ax=ax3)
+    plot_fn(x=0, ax=ax1)
+    plot_fn(y=0, ax=ax2)
+    plot_fn(z=0, ax=ax3)
     plt.show()
 
+
 # TODO: grab these automatically
-structure_keys_ = ('medium', 'center_list', 'size_element', 'custom_med')
-monitor_keys_ = ('mode', 'diff')
+structure_keys_ = ("medium", "center_list", "size_element", "custom_med")
+monitor_keys_ = ("mode", "diff")
 
+# generate combos of all structures with each monitor and all monitors with each structure
 ALL_KEY = "<ALL>"
-
 args = []
 for s in structure_keys_:
     args.append((s, ALL_KEY))
@@ -175,7 +179,11 @@ for s in structure_keys_:
 for m in monitor_keys_:
     args.append((ALL_KEY, m))
 
-@pytest.mark.parametrize('structure_key, monitor_key', args)
+# or just set args manually to test certain things
+# args = [("custom_med", "mode")]
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
@@ -193,7 +201,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     from tidy3d.web.api.autograd import run as run_ag
 
     # for logging output
-    td.config.logging_level = "INFO"
+    td.config.logging_level = "ERROR"
 
     monitor_dict = make_monitors()
 
@@ -213,22 +221,18 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         for structure_key in structure_keys:
             structures.append(structures_traced_dict[structure_key])
 
-        return SIM_BASE.updated_copy(
-            structures=structures,
-            monitors=monitors
-        )
+        return SIM_BASE.updated_copy(structures=structures, monitors=monitors)
 
     def postprocess(data: td.SimulationData) -> float:
         """Postprocess the dataset."""
         mnt_data = data[monitor_key]
         return monitor_pp_fn(mnt_data)
 
-
     def objective(*args):
         """Objective function."""
         sim = make_sim(*args)
         if PLOT_SIM:
-            plot_sim(sim)
+            plot_sim(sim, plot_eps=True)
         data = run_ag(sim)
         value = postprocess(data)
         return value

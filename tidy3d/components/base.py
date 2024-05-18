@@ -21,6 +21,7 @@ import xarray as xr
 
 from .autograd import Box, AutogradFieldMap, get_static
 from autograd.builtins import dict as dict_ag
+import autograd.numpy as npa
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
@@ -939,7 +940,8 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 if isinstance(x, Box):
                     field_mapping[path] = x
                 elif isinstance(x, DataArray):
-                    field_mapping[path] = x.values
+                    # NOTE: for some reason if I dont do `npa.array(x.tolist()) it wont trace
+                    field_mapping[path] = npa.array(x.values.tolist())
 
             # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):

@@ -5,7 +5,6 @@ from autograd.builtins import dict as dict_ag
 
 import xarray as xr
 import numpy as np
-import autograd.numpy as npa
 
 import typing
 from .types import Size1D, Bound
@@ -26,11 +25,6 @@ def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
     if isinstance(x, Box):
         return get_static(x._value)
-    if isinstance(x, np.ndarray):
-        # TODO: how to convert a np.ndarray of AutogradBox to np.ndarray in one shot?
-        all_values = x.flatten()
-        all_values_static = [get_static(val) for val in all_values]
-        return npa.array(all_values_static).reshape(x.shape)
     return x
 
 

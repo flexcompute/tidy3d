@@ -5,7 +5,6 @@ from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_
 import typing
 
 import numpy as np
-import autograd.numpy as npa
 
 from .webapi import run as run_webapi
 
@@ -137,8 +136,9 @@ def _run_primitive(
     # need to get the static version of the arrays, otherwise get ArrayBox of ArrayBox
     # NOTE: this is a bit confusing to me, why does autograd make them ArrayBox out of _run_tidy3d?
 
-    data_traced = {path: get_static(value) for path, value in data_traced.items() if path[0] == 'data'}
-
+    data_traced = {
+        path: get_static(value) for path, value in data_traced.items() if path[0] == "data"
+    }
 
     # return the AutogradFieldMap that autograd registers as the "output" of the primitive
     return data_traced
@@ -151,23 +151,6 @@ def run(simulation: td.Simulation) -> td.SimulationData:
 
     # get a mapping of all the traced fields in the provided simulation
     traced_fields_sim = simulation.strip_traced_fields()
-
-
-    # TODO: remove later
-    traced_fields_sim2 = {key: val for key, val in traced_fields_sim.items()}
-    for key, value in traced_fields_sim.items():
-        try:
-            arr = traced_fields_sim[key]
-            arr2 = arr.flatten()
-            arr3 = [a._value for a in arr2]
-            arr4 = npa.array(arr3).reshape(arr.shape)
-            traced_fields_sim2[key] = arr4
-        except:
-            continue
-    from autograd.builtins import dict as dict_ag
-    traced_fields_sim = dict_ag(traced_fields_sim2)
-
-    # DATA FOR CUSTOM MEDIUM is ARRAYBox of ArrayBox of ArrayBox
 
     # if we register this as not needing adjoint at all (no tracers), call regular run function
     if not traced_fields_sim:
@@ -186,12 +169,11 @@ def run(simulation: td.Simulation) -> td.SimulationData:
 
     # run our custom @primitive, passing the traced fields first to register with autograd
     traced_fields_data = _run_primitive(traced_fields_sim, simulation=simulation, aux_data=aux_data)
-    traced_fields_data = {key: val for key, val in traced_fields_data.items() if key[0] == 'data'}
+    traced_fields_data = {key: val for key, val in traced_fields_data.items() if key[0] == "data"}
 
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
     return sim_data_original.insert_traced_fields(traced_fields_data)
-
 
 
 def _run_bwd(
