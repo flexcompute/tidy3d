@@ -18,7 +18,8 @@ FREQ0 = td.C_0 / WVL
 # sim sizes
 LZ = 7 * WVL
 
-IS_3D = False
+# NOTE: regular stuff is broken in 2D need to change volume and face integration to handle this
+IS_3D = True
 LX = 4 * WVL if IS_3D else 0.0
 PML_X = True if IS_3D else False
 
