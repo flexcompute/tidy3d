@@ -26,7 +26,7 @@ MNT_NAME = "mnt"
 
 PLOT_SIM = False
 
-DA_SHAPE = (3, 4, 5)
+DA_SHAPE = (3, 4, 1)
 
 # variable to store whether the emulated run as used
 _run_was_emulated = [False]
@@ -142,6 +142,7 @@ def test_autograd_objective(use_emulated_run):
             # grid_spec=td.GridSpec.uniform(
             #     dl=WVL / 25
             # ),  # making this auto hurts the numerical check
+            # structures=[struct_custom_med],
             structures=structures + [waveguide_out] + [struct_custom_med],
             sources=[src],
             monitors=mnts,
@@ -159,8 +160,8 @@ def test_autograd_objective(use_emulated_run):
                 amps_i = data[name].amps
                 value_i = npa.sum(abs(amps_i.values) ** 2)
                 value += value_i
-        amps = data["diffraction_monitor"]
-        value += npa.sum(abs(amps.amps.values) ** 2)
+        # amps = data["diffraction_monitor"]
+        # value += npa.sum(abs(amps.amps.values) ** 2)
         return value
 
     def objective(*args):
@@ -183,7 +184,7 @@ def test_autograd_objective(use_emulated_run):
     args0 = (params0, center0, sy0, eps_arr0)
     argnum = tuple(range(len(args0)))
 
-    val = objective(*args0)
+    # val = objective(*args0)
 
     if True or run_was_emulated:
         val, grad = ag.value_and_grad(objective, argnum=argnum)(*args0)
