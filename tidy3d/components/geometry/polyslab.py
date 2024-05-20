@@ -1380,90 +1380,37 @@ class PolySlab(base.Planar):
         eps_sim: float,
         bounds: Bound,
     ) -> TracedVertices:
-        num_vertices, _ = self.vertices.shape
+        # derivative w.r.t each edge
 
-        vjp_edges = np.zeros((num_vertices,))
+        vertices = np.array(self.vertices)
+        num_vertices, _ = vertices.shape
 
-        # compute VJP with respect to each of the edges
-        for index in range(num_vertices):
-            vjp_edge = self.compute_derivative_edge(
-                index=index,
-                E_der_map=E_der_map,
-                D_der_map=D_der_map,
-                eps_structure=eps_structure,
-                eps_sim=eps_sim,
-            )
-            vjp_edges[index] = vjp_edge
+        # compute edges between vertices
 
-        # postprocess edge vjp into vertex
+        vertices_next = np.roll(self.vertices, axis=0, shift=1)
+        edges = vertices_next - vertices
 
-        vjp_vertices = np.zeros_like(self.vertices)
+        # compute center positions between each edge
+        edge_centers_plane = (vertices_next + vertices) / 2.0
+        edge_centers_axis = np.mean(self.slab_bounds) * np.ones(num_vertices)
 
-        for index, vjp_edge in enumerate(vjp_edges):
-            index_next = (index + 1) % num_vertices
+        edge_centers_xyz = self.unpop_axis_vect(edge_centers_axis, edge_centers_plane)
 
-            # get the in-plane component of the normal vector
-            vertex = np.array(self.vertices[index])
-            vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
-            edge = vertex_next - vertex
-            edge_basis_dict = self.edge_basis(edge)
-            normal_norm_xyz = edge_basis_dict["normal"]
-            _, normal_plane = self.pop_axis(normal_norm_xyz, axis=self.axis)
+        assert edge_centers_xyz.shape == (num_vertices, 3), "something bad happened"
 
-            vjp_normal_component = vjp_edge * np.array(normal_plane)
+        # compute the E and D fields at the edge centers
+        E_der_at_edges = self.der_at_centers(der_map=E_der_map, edge_centers=edge_centers_xyz)
+        D_der_at_edges = self.der_at_centers(der_map=D_der_map, edge_centers=edge_centers_xyz)
 
-            # each edge contributes to vertex i and i+1 (but each vertex gets two edge contribs)
-            vjp_vertices[index] += vjp_normal_component
-            vjp_vertices[index_next] += vjp_normal_component
+        # compute the basis vectors along each edge
+        basis_vectors = self.edge_basis_vectors(edges=edges)
 
-        return vjp_vertices
+        # project the D and E fields into the basis vectors
+        D_der_norm = self.project_in_basis(D_der_at_edges, basis_vector=basis_vectors["norm"])
+        E_der_edge = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["edge"])
+        E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
 
-    def compute_derivative_edge(
-        self,
-        index: int,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
-    ) -> float:
-        """Compute the derivative w.r.t. moving an edge outward in the normal direction."""
-
-        num_vertices, _ = self.vertices.shape
-
-        # compute the edge connecting vertex ``index`` and ``index+1``
-        vertex = np.array(self.vertices[index])
-        vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
-        edge = vertex_next - vertex
-        edge_center_plane = (vertex_next + vertex) / 2.0
-
-        # compute the center position of the edge in (x,y,z) coordinates
-        slab_center_pos = np.mean(self.slab_bounds)
-        edge_center_xyz = self.unpop_axis(slab_center_pos, edge_center_plane, axis=self.axis)
-
-        # compute the normal vectors in the edge basis (along 'slab', 'edge', and 'normal')
-        edge_basis_dict = self.edge_basis(edge)
-
-        # evaluate E_der and D_der at the edge center location
-        edge_coords_interp = dict(zip("xyz", edge_center_xyz))
-
-        E_der_at_edge = {}
-        D_der_at_edge = {}
-        for fld_name in ("Ex", "Ey", "Ez"):
-            E_der = E_der_map.field_components[fld_name]
-            D_der = D_der_map.field_components[fld_name]
-            E_der_at_edge[fld_name] = self.interpolate_at_coords(
-                arr=E_der, interp_coords=edge_coords_interp
-            ).sum()
-            D_der_at_edge[fld_name] = self.interpolate_at_coords(
-                arr=D_der, interp_coords=edge_coords_interp
-            ).sum()
-
-        # put them in the edge basis (get contribution from each component in the normal vectors)
-        E_der_edge_basis = self.rotate_to_basis(E_der_at_edge, bases=edge_basis_dict)
-        D_der_edge_basis = self.rotate_to_basis(D_der_at_edge, bases=edge_basis_dict)
-
-        # use adjoint shifting boundaries to compute derivative w.r.t this edge
-        # TODO: actually compute these
+        # approximate permittivity in and out
         eps_in = complex(
             np.sum(np.mean([np.mean(val) for _, val in eps_structure.field_components.items()]))
         )
@@ -1472,77 +1419,296 @@ class PolySlab(base.Planar):
         delta_eps = eps_in - eps_out
 
         # put together VJP using D_normal and E_perp integration
-        vjp_value = 0.0
+        vjps_edges = 0.0
 
         # perform D-normal integral
-        D_normal = D_der_edge_basis["normal"]
-        contrib_D = -delta_eps_inv * D_normal
-        vjp_value += contrib_D
+        contrib_D = -delta_eps_inv * D_der_norm
+        vjps_edges += contrib_D
 
         # perform E-perpendicular integrals
-        for key in ("edge", "slab"):
-            E_perp = E_der_edge_basis[key]
-            contrib_E = E_perp * delta_eps
-            vjp_value += contrib_E
+        for E_der in (E_der_edge, E_der_slab):
+            contrib_E = E_der * delta_eps
+            vjps_edges += contrib_E
 
         # scale by edge area
-        edge_area = np.linalg.norm(edge)
-        dim_axis = "xyz"[self.axis]
-        if len(E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]):
-            edge_area *= abs(float(np.diff(self.slab_bounds)) * np.cos(self.sidewall_angle))
+        edge_lengths = np.linalg.norm(edges)
+        slab_height = float(np.squeeze(np.diff(self.slab_bounds)))
+        edge_areas = edge_lengths * slab_height / np.cos(self.sidewall_angle)
 
-        return edge_area * vjp_value.real
+        vjps_edges *= edge_areas
 
-    @staticmethod
-    def interpolate_at_coords(
-        arr: xr.DataArray,
-        interp_coords: dict[str, list[float]],
-    ) -> xr.DataArray:
-        """Interpolate ``arr`` at a set of ``interp_coords``. Handle where one coord exists."""
+        _, normal_vectors_in_plane = self.pop_axis_vect(basis_vectors["norm"])
+
+        vjps_edges_in_plane = vjps_edges.values.reshape((num_vertices, 1)) * normal_vectors_in_plane
+
+        vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=-1)
+
+        return vjps_vertices.real
+
+    def der_at_centers(
+        self,
+        der_map: ElectromagneticFieldDataset,
+        edge_centers: np.ndarray,  # (N, 3)
+    ) -> xr.Dataset:
+        """Compute the value of an ``ElectromagneticFieldDataset`` at a set of edge centers."""
+
+        xs, ys, zs = edge_centers.T
+        edge_index_dim = "edge_index"
 
         interp_kwargs = {}
+        for dim, centers_dim in zip("xyz", edge_centers.T):
+            # only include dims where the data has more than 1 coord, to avoid warnings and errors
+            coords_data = der_map.field_components[f"E{dim}"].coords
+            if np.array(coords_data).size > 1:
+                interp_kwargs[dim] = xr.DataArray(centers_dim, dims=edge_index_dim)
 
-        for dim, coords in interp_coords.items():
-            if np.array(coords) > 1 and arr.coords[dim].size > 1:
-                interp_kwargs[dim] = coords
+        components = {}
+        for fld_name, arr in der_map.field_components.items():
+            components[fld_name] = arr.interp(**interp_kwargs).sum("f")
 
-        return arr.interp(**interp_coords)
+        return xr.Dataset(components)
+
+    def project_in_basis(
+        self,
+        der_dataset: xr.Dataset,
+        basis_vector: np.ndarray,
+    ) -> xr.DataArray:
+        """Project a derivative dataset along a supplied basis vector."""
+
+        value = 0.0
+        for coeffs, dim in zip(basis_vector.T, "xyz"):
+            value += coeffs * der_dataset.data_vars[f"E{dim}"]
+        return value
+
+    def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        ax_coords.shape == [N] or [N, 1]
+        plane_coords.shape == [N, 2]
+        return shape == [N, 3]
+
+        """
+        arr_xyz = self.unpop_axis(ax_coords, plane_coords.T, axis=self.axis)
+        arr_xyz = np.stack(arr_xyz, axis=-1)
+        return arr_xyz
+
+    def pop_axis_vect(self, coord: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        coord.shape == [N, 3]
+        return shape == ([N], [N, 2]
+
+        """
+
+        arr_axis, arrs_plane = self.pop_axis(coord.T, axis=self.axis)
+        arrs_plane = np.array(arrs_plane).T
+
+        return arr_axis, arrs_plane
 
     @staticmethod
-    def rotate_to_basis(
-        arr_dict: dict[str, xr.DataArray],
-        bases: dict[str, tuple[float, float, float]],
-    ) -> xr.DataArray:
-        """Rotate components of ``arr`` using a set of basis vectors."""
+    def normalize_vect(arr: np.ndarray) -> np.ndarray:
+        """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
+        return arr / np.linalg.norm(arr, axis=-1)[..., None]
 
-        arr_dict_in_basis = {}
-        for basis_name, basis_vector in bases.items():
-            value = 0.0
-            for coefficient, (_, val) in zip(basis_vector, arr_dict.items()):
-                value += coefficient * val
-            arr_dict_in_basis[basis_name] = value
+    def edge_basis_vectors(
+        self,
+        edges: np.ndarray,  # (N, 2)
+    ) -> dict[str, np.ndarray]:  # (N, 3)
+        """Normalized basis vectors for 'normal' direction, 'slab' tangent direction and 'edge'."""
 
-        return arr_dict_in_basis
+        num_vertices, _ = edges.shape
+        zeros = np.zeros(num_vertices)
+        ones = np.ones(num_vertices)
 
-    def edge_basis(self, edge: tuple[float, float]) -> dict[str, tuple[float, float, float]]:
-        """Get normalized basis vectors for edge."""
+        # normalized vectors along edges
+        edges_norm_in_plane = self.normalize_vect(edges)
+        edges_norm_xyz = self.unpop_axis_vect(zeros, edges_norm_in_plane)
 
-        # 'slab' axis.
-        edge_slab_projection = np.sin(self.sidewall_angle)
-        axis_slab_projection = np.cos(self.sidewall_angle)
+        # normalized vectors from base of edges to tops of edges
+        slabs_axis_components = np.cos(self.sidewall_angle) * ones
+        axis_norm = self.unpop_axis(1.0, (0.0, 0.0), axis=self.axis)
+        slab_normal_xyz = -np.sin(self.sidewall_angle) * np.cross(edges_norm_xyz, axis_norm)
+        _, slab_normal_in_plane = self.pop_axis_vect(slab_normal_xyz)
+        slabs_norm_xyz = self.unpop_axis_vect(slabs_axis_components, slab_normal_in_plane)
 
-        edge_normalized = np.array(edge) / np.linalg.norm(edge)
-        edge_tangent_norm = edge_slab_projection * edge_normalized
+        # normalized vectors pointing in normal direction of edge
+        normals_norm_xyz = np.cross(edges_norm_xyz, slabs_norm_xyz)
 
-        slab_norm_xyz = self.unpop_axis(axis_slab_projection, edge_tangent_norm, axis=self.axis)
+        return dict(edge=edges_norm_xyz, norm=normals_norm_xyz, slab=slabs_norm_xyz)
 
-        edge_norm_xyz = self.unpop_axis(0.0, edge, axis=self.axis)
+    # # OLD CODE
 
-        # TODO: sign for IN vs. OUT depending on clockwise or anti-clockwise?
-        normal_xyz = -np.cross(edge_norm_xyz, slab_norm_xyz)
-        normal_norm_xyz = np.array(normal_xyz) / np.linalg.norm(normal_xyz)
+    # def _compute_derivative_vertices(
+    #     self,
+    #     E_der_map: ElectromagneticFieldDataset,
+    #     D_der_map: ElectromagneticFieldDataset,
+    #     eps_structure: PermittivityDataset,
+    #     eps_sim: float,
+    #     bounds: Bound,
+    # ) -> TracedVertices:
 
-        return dict(normal=normal_norm_xyz, slab=slab_norm_xyz, edge=edge_norm_xyz)
+    #     num_vertices, _ = self.vertices.shape
+    #     vjp_edges = np.zeros((num_vertices,))
+
+    #     # compute VJP with respect to each of the edges
+    #     for index in range(num_vertices):
+    #         vjp_edge = self.compute_derivative_edge(
+    #             index=index,
+    #             E_der_map=E_der_map,
+    #             D_der_map=D_der_map,
+    #             eps_structure=eps_structure,
+    #             eps_sim=eps_sim,
+    #         )
+    #         vjp_edges[index] = vjp_edge
+
+    #     # postprocess edge vjp into vertex
+
+    #     vjp_vertices = np.zeros_like(self.vertices)
+
+    #     for index, vjp_edge in enumerate(vjp_edges):
+    #         index_next = (index + 1) % num_vertices
+
+    #         # get the in-plane component of the normal vector
+    #         vertex = np.array(self.vertices[index])
+    #         vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
+    #         edge = vertex_next - vertex
+    #         edge_basis_dict = self.edge_basis(edge)
+    #         normal_norm_xyz = edge_basis_dict["normal"]
+    #         _, normal_plane = self.pop_axis(normal_norm_xyz, axis=self.axis)
+
+    #         vjp_normal_component = vjp_edge * np.array(normal_plane)
+
+    #         # each edge contributes to vertex i and i+1 (but each vertex gets two edge contribs)
+    #         vjp_vertices[index] += vjp_normal_component
+    #         vjp_vertices[index_next] += vjp_normal_component
+
+    #     return vjp_vertices
+
+    # def compute_derivative_edge(
+    #     self,
+    #     index: int,
+    #     E_der_map: ElectromagneticFieldDataset,
+    #     D_der_map: ElectromagneticFieldDataset,
+    #     eps_structure: PermittivityDataset,
+    #     eps_sim: float,
+    # ) -> float:
+    #     """Compute the derivative w.r.t. moving an edge outward in the normal direction."""
+
+    #     num_vertices, _ = self.vertices.shape
+
+    #     # compute the edge connecting vertex ``index`` and ``index+1``
+    #     vertex = np.array(self.vertices[index])
+    #     vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
+    #     edge = vertex_next - vertex
+    #     edge_center_plane = (vertex_next + vertex) / 2.0
+
+    #     # compute the center position of the edge in (x,y,z) coordinates
+    #     slab_center_pos = np.mean(self.slab_bounds)
+    #     edge_center_xyz = self.unpop_axis(slab_center_pos, edge_center_plane, axis=self.axis)
+
+    #     # compute the normal vectors in the edge basis (along 'slab', 'edge', and 'normal')
+    #     edge_basis_dict = self.edge_basis(edge)
+
+    #     # evaluate E_der and D_der at the edge center location
+    #     edge_coords_interp = dict(zip("xyz", edge_center_xyz))
+
+    #     E_der_at_edge = {}
+    #     D_der_at_edge = {}
+    #     for fld_name in ("Ex", "Ey", "Ez"):
+    #         E_der = E_der_map.field_components[fld_name]
+    #         D_der = D_der_map.field_components[fld_name]
+    #         E_der_at_edge[fld_name] = self.interpolate_at_coords(
+    #             arr=E_der, interp_coords=edge_coords_interp
+    #         ).sum()
+    #         D_der_at_edge[fld_name] = self.interpolate_at_coords(
+    #             arr=D_der, interp_coords=edge_coords_interp
+    #         ).sum()
+
+    #     # put them in the edge basis (get contribution from each component in the normal vectors)
+    #     E_der_edge_basis = self.rotate_to_basis(E_der_at_edge, bases=edge_basis_dict)
+    #     D_der_edge_basis = self.rotate_to_basis(D_der_at_edge, bases=edge_basis_dict)
+
+    #     # use adjoint shifting boundaries to compute derivative w.r.t this edge
+    #     # TODO: actually compute these
+    #     eps_in = complex(
+    #         np.sum(np.mean([np.mean(val) for _, val in eps_structure.field_components.items()]))
+    #     )
+    #     eps_out = eps_sim
+    #     delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+    #     delta_eps = eps_in - eps_out
+
+    #     # put together VJP using D_normal and E_perp integration
+    #     vjp_value = 0.0
+
+    #     # perform D-normal integral
+    #     D_normal = D_der_edge_basis["normal"]
+    #     contrib_D = -delta_eps_inv * D_normal
+    #     vjp_value += contrib_D
+
+    #     # perform E-perpendicular integrals
+    #     for key in ("edge", "slab"):
+    #         E_perp = E_der_edge_basis[key]
+    #         contrib_E = E_perp * delta_eps
+    #         vjp_value += contrib_E
+
+    #     # scale by edge area
+    #     edge_area = np.linalg.norm(edge)
+    #     dim_axis = "xyz"[self.axis]
+    #     if len(E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]):
+    #         edge_area *= abs(float(np.diff(self.slab_bounds)) * np.cos(self.sidewall_angle))
+
+    #     return edge_area * vjp_value.real
+
+    # @staticmethod
+    # def interpolate_at_coords(
+    #     arr: xr.DataArray,
+    #     interp_coords: dict[str, list[float]],
+    # ) -> xr.DataArray:
+    #     """Interpolate ``arr`` at a set of ``interp_coords``. Handle where one coord exists."""
+
+    #     interp_kwargs = {}
+
+    #     for dim, coords in interp_coords.items():
+    #         if np.array(coords) > 1 and arr.coords[dim].size > 1:
+    #             interp_kwargs[dim] = coords
+
+    #     return arr.interp(**interp_coords)
+
+    # @staticmethod
+    # def rotate_to_basis(
+    #     arr_dict: dict[str, xr.DataArray],
+    #     bases: dict[str, tuple[float, float, float]],
+    # ) -> xr.DataArray:
+    #     """Rotate components of ``arr`` using a set of basis vectors."""
+
+    #     arr_dict_in_basis = {}
+    #     for basis_name, basis_vector in bases.items():
+    #         value = 0.0
+    #         for coefficient, (_, val) in zip(basis_vector, arr_dict.items()):
+    #             value += coefficient * val
+    #         arr_dict_in_basis[basis_name] = value
+
+    #     return arr_dict_in_basis
+
+    # def edge_basis(self, edge: tuple[float, float]) -> dict[str, tuple[float, float, float]]:
+    #     """Get normalized basis vectors for edge."""
+
+    #     # 'slab' axis.
+    #     edge_slab_projection = np.sin(self.sidewall_angle)
+    #     axis_slab_projection = np.cos(self.sidewall_angle)
+
+    #     edge_normalized = np.array(edge) / np.linalg.norm(edge)
+    #     edge_tangent_norm = edge_slab_projection * edge_normalized
+
+    #     slab_norm_xyz = self.unpop_axis(axis_slab_projection, edge_tangent_norm, axis=self.axis)
+
+    #     edge_norm_xyz = self.unpop_axis(0.0, edge, axis=self.axis)
+
+    #     # TODO: sign for IN vs. OUT depending on clockwise or anti-clockwise?
+    #     normal_xyz = -np.cross(edge_norm_xyz, slab_norm_xyz)
+    #     normal_norm_xyz = np.array(normal_xyz) / np.linalg.norm(normal_xyz)
+
+    #     return dict(normal=normal_norm_xyz, slab=slab_norm_xyz, edge=edge_norm_xyz)
 
 
 class ComplexPolySlabBase(PolySlab):
