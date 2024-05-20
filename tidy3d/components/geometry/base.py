@@ -2290,7 +2290,7 @@ class Box(SimplePlaneIntersection, Centered):
         eps_sim: float,
         bounds: Bound,
     ) -> dict[str, Any]:
-        """Compute adjoint derivatives for each of the ``field_names``."""
+        """Compute adjoint derivatives for each of the ``field_path``s."""
 
         # get gradients w.r.t. each of the 6 faces (in normal direction)
         vjps_faces = self.derivative_faces(

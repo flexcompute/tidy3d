@@ -7,7 +7,7 @@ import xarray as xr
 import numpy as np
 
 import typing
-from .types import Size1D, Bound
+from .types import Size1D, Bound, ArrayFloat2D
 
 # TODO: should we use ArrayBox? Box is more general
 
@@ -16,6 +16,7 @@ TracedFloat = typing.Union[float, Box]
 TracedSize1D = typing.Union[Size1D, Box]
 TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
 TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
+TracedVertices = typing.Union[ArrayFloat2D, Box]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
 AutogradFieldMap = dict_ag[tuple[str, ...], TracedFloat]

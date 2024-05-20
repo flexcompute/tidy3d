@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
+from typing import List, Tuple, Any
 from math import isclose
 
 import pydantic.v1 as pydantic
-import numpy as np
+import autograd.numpy as np
 import shapely
 from matplotlib import path
 
+from ..autograd import TracedVertices, get_static
 from ..base import cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
 from ..types import MatrixReal4x4, Shapely
+from ..data.dataset import PermittivityDataset, ElectromagneticFieldDataset
 from ...log import log
 from ...exceptions import SetupError, ValidationError
 from ...constants import MICROMETER, fp_eps, LARGE_NUMBER
@@ -59,7 +61,7 @@ class PolySlab(base.Planar):
         units=MICROMETER,
     )
 
-    vertices: ArrayFloat2D = pydantic.Field(
+    vertices: TracedVertices = pydantic.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
@@ -93,7 +95,7 @@ class PolySlab(base.Planar):
             )
 
         # make sure no polygon splitting, islands, 0 area
-        poly_heal = shapely.make_valid(shapely.Polygon(val))
+        poly_heal = shapely.make_valid(shapely.Polygon(get_static(val)))
         if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
@@ -1343,6 +1345,183 @@ class PolySlab(base.Planar):
         area += 0.5 * (top_perim + base_perim) * length
 
         return area
+
+    """ Autograd code """
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``field_path``s."""
+
+        assert field_paths == [("vertices",)], "only support derivative wrt 'PolySlab.vertices'."
+
+        vjp_vertices = self.compute_derivative_vertices(
+            E_der_map=E_der_map,
+            D_der_map=D_der_map,
+            eps_structure=eps_structure,
+            eps_sim=eps_sim,
+            bounds=bounds,
+        )
+
+        return {("vertices",): vjp_vertices}
+
+    def compute_derivative_vertices(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
+        bounds: Bound,
+    ) -> TracedVertices:
+        num_vertices, _ = self.vertices.shape
+
+        vjp_edges = np.zeros((num_vertices,))
+
+        # compute VJP with respect to each of the edges
+        for index in range(num_vertices):
+            vjp_edge = self.compute_derivative_edge(
+                index=index,
+                E_der_map=E_der_map,
+                D_der_map=D_der_map,
+            )
+            vjp_edges[index] = vjp_edge
+
+        # postprocess edge vjp into vertex
+
+        vjp_vertices = np.zeros_like(self.vertices)
+
+        for index, vjp_edge in enumerate(vjp_edges):
+            index_next = (index + 1) % num_vertices
+
+            # get the in-plane component of the normal vector
+            vertex = np.array(self.vertices[index])
+            vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
+            edge = vertex_next - vertex
+            edge_basis_dict = self.edge_basis(edge)
+            normal_norm_xyz = edge_basis_dict["normal"]
+            _, normal_plane = self.pop_axis(normal_norm_xyz, axis=self.axis)
+
+            vjp_normal_component = vjp_edge * np.array(normal_plane)
+
+            # each edge contributes to vertex i and i+1 (but each vertex gets two edge contribs)
+            vjp_vertices[index] += vjp_normal_component
+            vjp_vertices[index_next] += vjp_normal_component
+
+        return vjp_vertices
+
+    def compute_derivative_edge(
+        self,
+        index: int,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+    ) -> float:
+        """Compute the derivative w.r.t. moving an edge outward in the normal direction."""
+
+        num_vertices, _ = self.vertices.shape
+
+        # compute the edge connecting vertex ``index`` and ``index+1``
+        vertex = np.array(self.vertices[index])
+        vertex_next = np.array(self.vertices[(index + 1) % num_vertices])
+        edge = vertex_next - vertex
+        edge_center_plane = (vertex_next + vertex) / 2.0
+
+        # compute the center position of the edge in (x,y,z) coordinates
+        slab_center_pos = np.mean(self.slab_bounds)
+        edge_center_xyz = self.unpop_axis(slab_center_pos, edge_center_plane, axis=self.axis)
+
+        # compute the normal vectors in the edge basis (along 'slab', 'edge', and 'normal')
+        edge_basis_dict = self.edge_basis(edge)
+
+        # evaluate E_der and D_der at the edge center location
+        edge_coords_interp = dict(zip("xyz", edge_center_xyz))
+
+        E_der_at_edge = {}
+        D_der_at_edge = {}
+        for fld_name in ("Ex", "Ey", "Ez"):
+            E_der = E_der_map.field_components[fld_name]
+            D_der = D_der_map.field_components[fld_name]
+
+            # TODO: refactor some of this dimension-aware interpolation?
+            # similar to integration helper
+
+            edge_coords_interp = {
+                key: val for key, val in edge_coords_interp.items() if len(E_der.coords[key]) > 1
+            }
+
+            E_der_at_edge[fld_name] = complex(E_der.interp(**edge_coords_interp).values)
+            D_der_at_edge[fld_name] = complex(D_der.interp(**edge_coords_interp).values)
+
+        # put them in the edge basis (get contribution from each component in the normal vectors)
+        E_der_edge_basis = {}
+        D_der_edge_basis = {}
+        for key, norm_vec in edge_basis_dict.items():
+            E_value = 0.0
+            D_value = 0.0
+            for fld_name, dim_contribution in zip(("Ex", "Ey", "Ez"), norm_vec):
+                E_value += dim_contribution * E_der_at_edge[fld_name]
+                D_value += dim_contribution * D_der_at_edge[fld_name]
+
+            E_der_edge_basis[key] = E_value.real
+            D_der_edge_basis[key] = D_value.real
+
+        # use adjoint shifting boundaries to compute derivative w.r.t this edge
+        # TODO: actually compute these
+        eps_in = 2.0
+        eps_out = 1.0
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+        delta_eps = eps_in - eps_out
+
+        # put together VJP using D_normal and E_perp integration
+        vjp_value = 0.0
+
+        # perform D-normal integral
+        D_normal = D_der_edge_basis["normal"]
+        contrib_D = -delta_eps_inv * D_normal
+        vjp_value += contrib_D
+
+        # perform E-perpendicular integrals
+        for key in ("edge", "slab"):
+            E_perp = E_der_edge_basis[key]
+            contrib_E = E_perp * delta_eps
+            vjp_value += contrib_E
+
+        # scale by edge area
+        len_axis = np.linalg.norm(np.diff(self.slab_bounds))
+        len_edge = np.linalg.norm(edge)
+        edge_area = len_axis * len_edge / np.cos(self.sidewall_angle)
+
+        return edge_area * vjp_value
+
+    def edge_basis(self, edge: tuple[float, float]) -> dict[str, tuple[float, float, float]]:
+        """Get normalized basis vectors for edge."""
+
+        # compute tangent vector along edge with maximum projection in axis dimension
+        edge_t1, edge_t2 = edge
+        edge_angle_plane = np.arctan(edge_t2 / edge_t1)
+
+        # TODO: sign for sidewall angle?
+        edge_slab_projection = np.sin(self.sidewall_angle)
+        axis_slab_projection = np.cos(self.sidewall_angle)
+
+        edge_slab_projection_t1 = edge_slab_projection * np.cos(edge_angle_plane)
+        edge_slab_projection_t2 = edge_slab_projection * np.sin(edge_angle_plane)
+
+        slab_norm_xyz = self.unpop_axis(
+            axis_slab_projection, (edge_slab_projection_t1, edge_slab_projection_t2), axis=self.axis
+        )
+
+        edge_norm_xyz = self.unpop_axis(0.0, edge / np.linalg.norm(edge), axis=self.axis)
+
+        # TODO: sign for IN vs. OUT depending on clockwise or anti-clockwise?
+        normal_norm_xyz = -np.cross(edge_norm_xyz, slab_norm_xyz)
+
+        return dict(normal=normal_norm_xyz, slab=slab_norm_xyz, edge=edge_norm_xyz)
 
 
 class ComplexPolySlabBase(PolySlab):

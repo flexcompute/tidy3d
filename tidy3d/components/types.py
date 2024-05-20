@@ -11,7 +11,7 @@ except ImportError:
 from typing_extensions import Annotated
 
 import pydantic.v1 as pydantic
-import numpy as np
+import autograd.numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
 from ..exceptions import ValidationError
@@ -69,9 +69,10 @@ class ArrayLike:
     def convert_to_numpy(cls, val):
         """Convert the value to np.ndarray and provide some casting."""
         arr_numpy = np.array(val, ndmin=1, dtype=cls.dtype, copy=True)
-        arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
-        arr_tidy3d[:] = arr_numpy
-        return arr_tidy3d
+        try:
+            return arr_numpy.astype(arr_numpy.dtype)
+        except TypeError:
+            return arr_numpy
 
     @classmethod
     def check_dims(cls, val):

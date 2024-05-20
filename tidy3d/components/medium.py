@@ -2427,6 +2427,9 @@ class CustomMedium(AbstractCustomMedium):
 
         vjp_array = vjp_array.reshape(eps_data.shape)
 
+        # TODO: scale by the volume of each cell?
+        # if we do, the gradient becomes discretization-dependent, which could be annoying?
+
         return {("permittivity",): vjp_array}
 
 
