@@ -20,6 +20,12 @@ class UnstructuredGrid(Tidy3dBaseModel, ABC):
         "Use ``relative_min_dl=0`` to remove this constraint.",
     )
 
+    anisotropy: Tuple[float, float, float] = pd.Field(
+        (1, 1, 1),
+        title="Grid Anisotropy",
+        description="Grid Anisotropy.",
+    )
+
 
 class UniformUnstructuredGrid(UnstructuredGrid):
     """Uniform grid.
