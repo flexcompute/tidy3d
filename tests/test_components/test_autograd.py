@@ -31,6 +31,8 @@ PLOT_SIM = False
 DA_SHAPE_X = 12 if IS_3D else 1
 DA_SHAPE = (DA_SHAPE_X, 11, 10)
 
+NUM_VERTICES = 42
+
 SIM_BASE = td.Simulation(
     size=(LX, 3, LZ),
     run_time=1e-12,
@@ -83,11 +85,13 @@ eps0 = 2.0
 center0 = (0.0, 0.0, 0.0)
 size_y0 = 1.0
 eps_arr0 = np.random.random(DA_SHAPE) + 1.0
-args0 = (eps0, center0, size_y0, eps_arr0)
+radius0 = 0.8
+
+args0 = (eps0, center0, size_y0, eps_arr0, radius0)
 argnum = tuple(range(len(args0)))
 
 
-def make_structures(eps, center, size_y, eps_arr) -> dict[str, td.Structure]:
+def make_structures(eps, center, size_y, eps_arr, radius) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
@@ -123,11 +127,26 @@ def make_structures(eps, center, size_y, eps_arr) -> dict[str, td.Structure]:
         ),
     )
 
+    phis = 2 * npa.pi * npa.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
+    xs = radius * npa.cos(phis)
+    ys = radius * npa.sin(phis)
+    vertices = npa.stack((xs, ys), axis=-1)
+
+    polyslab = td.Structure(
+        geometry=td.PolySlab(
+            vertices=vertices,
+            slab_bounds=(-0.5, 0.5),
+            axis=1,
+        ),
+        medium=med,
+    )
+
     return dict(
         medium=medium,
         center_list=center_list,
         size_element=size_element,
         custom_med=custom_med,
+        polyslab=polyslab,
     )
 
 
@@ -171,7 +190,7 @@ def plot_sim(sim: td.Simulation, plot_eps: bool = False) -> None:
 
 
 # TODO: grab these automatically
-structure_keys_ = ("medium", "center_list", "size_element", "custom_med")
+structure_keys_ = ("medium", "center_list", "size_element", "custom_med", "polyslab")
 monitor_keys_ = ("mode", "diff")
 
 # generate combos of all structures with each monitor and all monitors with each structure
@@ -184,7 +203,7 @@ for m in monitor_keys_:
     args.append((ALL_KEY, m))
 
 # or just set args manually to test certain things
-# args = [("custom_med", "mode")]
+args = [("polyslab", "mode")]
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
@@ -216,10 +235,10 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         monitors.append(monitor_traced)
         monitor_pp_fns[monitor_key] = monitor_pp_fn
 
-    def make_sim(eps, center, size_y, eps_arr) -> td.Simulation:
+    def make_sim(*args) -> td.Simulation:
         """Make the simulation with all of the fields."""
 
-        structures_traced_dict = make_structures(eps, center, size_y, eps_arr)
+        structures_traced_dict = make_structures(*args)
 
         structures = list(SIM_BASE.structures)
         for structure_key in structure_keys:
