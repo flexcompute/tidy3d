@@ -970,7 +970,7 @@ class ModeSolver(Tidy3dBaseModel):
         """
 
         sim_data = self.sim_data
-        sim_data.plot_field(
+        return sim_data.plot_field(
             field_monitor_name=MODE_MONITOR_NAME,
             field_name=field_name,
             val=val,
