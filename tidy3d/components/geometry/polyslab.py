@@ -1492,29 +1492,24 @@ class PolySlab(base.Planar):
             vjp_value += contrib_E
 
         # scale by edge area
-        len_axis = np.linalg.norm(np.diff(self.slab_bounds))
-        len_edge = np.linalg.norm(edge)
-        edge_area = len_axis * len_edge / np.cos(self.sidewall_angle)
+        edge_area = np.linalg.norm(edge)
+        dim_axis = "xyz"[self.axis]
+        if len(E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]):
+            edge_area *= abs(float(np.diff(self.slab_bounds)))
 
         return edge_area * vjp_value
 
     def edge_basis(self, edge: tuple[float, float]) -> dict[str, tuple[float, float, float]]:
         """Get normalized basis vectors for edge."""
 
-        # compute tangent vector along edge with maximum projection in axis dimension
-        edge_t1, edge_t2 = edge
-        edge_angle_plane = np.arctan(edge_t2 / edge_t1)
-
-        # TODO: sign for sidewall angle?
+        # 'slab' axis.
         edge_slab_projection = np.sin(self.sidewall_angle)
         axis_slab_projection = np.cos(self.sidewall_angle)
 
-        edge_slab_projection_t1 = edge_slab_projection * np.cos(edge_angle_plane)
-        edge_slab_projection_t2 = edge_slab_projection * np.sin(edge_angle_plane)
+        edge_normalized = np.array(edge) / np.linalg.norm(edge)
+        edge_tangent_norm = edge_slab_projection * edge_normalized
 
-        slab_norm_xyz = self.unpop_axis(
-            axis_slab_projection, (edge_slab_projection_t1, edge_slab_projection_t2), axis=self.axis
-        )
+        slab_norm_xyz = self.unpop_axis(axis_slab_projection, edge_tangent_norm, axis=self.axis)
 
         edge_norm_xyz = self.unpop_axis(0.0, edge / np.linalg.norm(edge), axis=self.axis)
 
