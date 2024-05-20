@@ -9,6 +9,7 @@ import pydantic.v1 as pydantic
 import autograd.numpy as np
 import shapely
 from matplotlib import path
+import xarray as xr
 
 from ..autograd import TracedVertices, get_static
 from ..base import cached_property
@@ -1389,6 +1390,8 @@ class PolySlab(base.Planar):
                 index=index,
                 E_der_map=E_der_map,
                 D_der_map=D_der_map,
+                eps_structure=eps_structure,
+                eps_sim=eps_sim,
             )
             vjp_edges[index] = vjp_edge
 
@@ -1420,6 +1423,8 @@ class PolySlab(base.Planar):
         index: int,
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
+        eps_structure: PermittivityDataset,
+        eps_sim: float,
     ) -> float:
         """Compute the derivative w.r.t. moving an edge outward in the normal direction."""
 
@@ -1446,34 +1451,23 @@ class PolySlab(base.Planar):
         for fld_name in ("Ex", "Ey", "Ez"):
             E_der = E_der_map.field_components[fld_name]
             D_der = D_der_map.field_components[fld_name]
-
-            # TODO: refactor some of this dimension-aware interpolation?
-            # similar to integration helper
-
-            edge_coords_interp = {
-                key: val for key, val in edge_coords_interp.items() if len(E_der.coords[key]) > 1
-            }
-
-            E_der_at_edge[fld_name] = complex(E_der.interp(**edge_coords_interp).values)
-            D_der_at_edge[fld_name] = complex(D_der.interp(**edge_coords_interp).values)
+            E_der_at_edge[fld_name] = self.interpolate_at_coords(
+                arr=E_der, interp_coords=edge_coords_interp
+            ).sum()
+            D_der_at_edge[fld_name] = self.interpolate_at_coords(
+                arr=D_der, interp_coords=edge_coords_interp
+            ).sum()
 
         # put them in the edge basis (get contribution from each component in the normal vectors)
-        E_der_edge_basis = {}
-        D_der_edge_basis = {}
-        for key, norm_vec in edge_basis_dict.items():
-            E_value = 0.0
-            D_value = 0.0
-            for fld_name, dim_contribution in zip(("Ex", "Ey", "Ez"), norm_vec):
-                E_value += dim_contribution * E_der_at_edge[fld_name]
-                D_value += dim_contribution * D_der_at_edge[fld_name]
-
-            E_der_edge_basis[key] = E_value.real
-            D_der_edge_basis[key] = D_value.real
+        E_der_edge_basis = self.rotate_to_basis(E_der_at_edge, bases=edge_basis_dict)
+        D_der_edge_basis = self.rotate_to_basis(D_der_at_edge, bases=edge_basis_dict)
 
         # use adjoint shifting boundaries to compute derivative w.r.t this edge
         # TODO: actually compute these
-        eps_in = 2.0
-        eps_out = 1.0
+        eps_in = complex(
+            np.sum(np.mean([np.mean(val) for _, val in eps_structure.field_components.items()]))
+        )
+        eps_out = eps_sim
         delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
         delta_eps = eps_in - eps_out
 
@@ -1495,9 +1489,40 @@ class PolySlab(base.Planar):
         edge_area = np.linalg.norm(edge)
         dim_axis = "xyz"[self.axis]
         if len(E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]):
-            edge_area *= abs(float(np.diff(self.slab_bounds)))
+            edge_area *= abs(float(np.diff(self.slab_bounds)) * np.cos(self.sidewall_angle))
 
-        return edge_area * vjp_value
+        return edge_area * vjp_value.real
+
+    @staticmethod
+    def interpolate_at_coords(
+        arr: xr.DataArray,
+        interp_coords: dict[str, list[float]],
+    ) -> xr.DataArray:
+        """Interpolate ``arr`` at a set of ``interp_coords``. Handle where one coord exists."""
+
+        interp_kwargs = {}
+
+        for dim, coords in interp_coords.items():
+            if np.array(coords) > 1 and arr.coords[dim].size > 1:
+                interp_kwargs[dim] = coords
+
+        return arr.interp(**interp_coords)
+
+    @staticmethod
+    def rotate_to_basis(
+        arr_dict: dict[str, xr.DataArray],
+        bases: dict[str, tuple[float, float, float]],
+    ) -> xr.DataArray:
+        """Rotate components of ``arr`` using a set of basis vectors."""
+
+        arr_dict_in_basis = {}
+        for basis_name, basis_vector in bases.items():
+            value = 0.0
+            for coefficient, (_, val) in zip(basis_vector, arr_dict.items()):
+                value += coefficient * val
+            arr_dict_in_basis[basis_name] = value
+
+        return arr_dict_in_basis
 
     def edge_basis(self, edge: tuple[float, float]) -> dict[str, tuple[float, float, float]]:
         """Get normalized basis vectors for edge."""
@@ -1511,10 +1536,11 @@ class PolySlab(base.Planar):
 
         slab_norm_xyz = self.unpop_axis(axis_slab_projection, edge_tangent_norm, axis=self.axis)
 
-        edge_norm_xyz = self.unpop_axis(0.0, edge / np.linalg.norm(edge), axis=self.axis)
+        edge_norm_xyz = self.unpop_axis(0.0, edge, axis=self.axis)
 
         # TODO: sign for IN vs. OUT depending on clockwise or anti-clockwise?
-        normal_norm_xyz = -np.cross(edge_norm_xyz, slab_norm_xyz)
+        normal_xyz = -np.cross(edge_norm_xyz, slab_norm_xyz)
+        normal_norm_xyz = np.array(normal_xyz) / np.linalg.norm(normal_xyz)
 
         return dict(normal=normal_norm_xyz, slab=slab_norm_xyz, edge=edge_norm_xyz)
 
