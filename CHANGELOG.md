@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
+
+### Fixed
+- `ModeSolver.plot_field` correctly returning the plot axes.
+
 ## [2.7.0rc2] - 2024-05-14
 
 ### Added
