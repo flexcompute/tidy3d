@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
+- `RectangularWaveguide` supports layered cladding above and below core.
 
 ### Fixed
 - `ModeSolver.plot_field` correctly returning the plot axes.
