@@ -22,7 +22,6 @@ import xarray as xr
 from .autograd import Box, AutogradFieldMap, get_static
 from autograd.tracer import isbox
 from autograd.builtins import dict as dict_ag
-import autograd.numpy as npa
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
 from .data.data_array import DataArray, DATA_ARRAY_MAP
@@ -944,9 +943,19 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     field_mapping[path] = x.values.copy()
 
                 else:
-                    values = x.values
-                    x_list = values.tolist()
-                    field_mapping[path] = npa.array(x_list)
+                    if "AUTOGRAD" in x.attrs:
+                        field_mapping[path] = x.attrs["AUTOGRAD"]
+
+                    else:
+                        field_mapping[path] = get_static(x.values)
+
+                    # if isbox(x.values.flat[0]):
+
+                    #     import pdb; pdb.set_trace()
+
+                    # values = x.values
+                    # x_list = values.tolist()
+                    # field_mapping[path] = npa.array(x_list)
 
             # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):
@@ -995,9 +1004,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                         sub_dict[key].values = value
                     else:
                         # values = sub_element.values
-                        sub_dict[key] = sub_element.copy(
-                            deep=False, data=value.reshape(sub_element.shape)
-                        )
+                        sub_dict[key] = sub_element.copy(deep=False, data=value)
+
+                        if "AUTOGRAD" in sub_element.attrs:
+                            sub_dict[key].attrs["AUTOGRAD"] = value
+
                         # sub_dict[key].values = value
                 else:
                     sub_dict[key] = value

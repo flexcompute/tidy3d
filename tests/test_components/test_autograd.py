@@ -24,7 +24,7 @@ from ..utils import run_emulated
 """
 
 # make it faster to toggle this
-TEST_CUSTOM_MEDIUM_SPEED = True
+TEST_CUSTOM_MEDIUM_SPEED = False
 
 
 TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
@@ -317,6 +317,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         if CALL_OBJECTIVE:
             val = objective(params0)
         val, grad = ag.value_and_grad(objective)(params0)
+        print(val, grad)
         assert npa.all(grad != 0.0), "some gradients are 0"
 
     # if 'numerical', we do a numerical gradient check

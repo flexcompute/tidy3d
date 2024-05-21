@@ -1,7 +1,7 @@
 # autograd wrapper for web functions
 
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap  # noqa: 401
+from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_static  # noqa: 401
 import typing
 
 import numpy as np
@@ -198,7 +198,9 @@ def _run_bwd(
 
         # immediately filter out any data_vjps with all 0's in the data
         data_fields_vjp = {
-            key: value for key, value in data_fields_vjp.items() if not np.all(value == 0.0)
+            key: get_static(value)
+            for key, value in data_fields_vjp.items()
+            if not np.all(value == 0.0)
         }
 
         # insert the raw VJP data into the .data of the original SimulationData

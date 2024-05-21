@@ -8,6 +8,8 @@ import numpy as np
 import dask
 import h5py
 
+from autograd.tracer import isbox
+
 from ...constants import (
     HERTZ,
     MICROMETER,
@@ -58,6 +60,14 @@ class DataArray(xr.DataArray):
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
+
+    def __init__(self, values, *args, **kwargs):
+        values_ag = values if isbox(values) else None
+
+        super().__init__(values, *args, **kwargs)
+
+        if values_ag is not None:
+            self.attrs["AUTOGRAD"] = values_ag
 
     @classmethod
     def __get_validators__(cls):
