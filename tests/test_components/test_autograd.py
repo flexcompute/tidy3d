@@ -24,14 +24,14 @@ from ..utils import run_emulated
 """
 
 # make it faster to toggle this
-TEST_CUSTOM_MEDIUM_SPEED = False
+TEST_CUSTOM_MEDIUM_SPEED = True
 
 
 TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
 TEST_MODE = "speed" if TEST_CUSTOM_MEDIUM_SPEED else "pipeline"
 
 # number of elements in the parameters / input to the objective function
-N_PARAMS = 10
+N_PARAMS = 1
 
 # default starting args
 np.random.seed(1)
@@ -62,7 +62,7 @@ PML_X = True if IS_3D else False
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
-DA_SHAPE = (DA_SHAPE_X, 500, 500) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
+DA_SHAPE = (DA_SHAPE_X, 5_000, 2_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
 
 # number of vertices in the polyslab
 NUM_VERTICES = 12
@@ -151,7 +151,12 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
 
     # custom medium with variable permittivity data
     len_arr = np.prod(DA_SHAPE)
+    num_params = len_arr // N_PARAMS
+
+    # eps_arr = 1.0 + npa.stack(num_params * [params]).flatten()
+    # eps_arr = eps_arr.reshape(DA_SHAPE)
     eps_arr = 1.0 + npa.dot(np.random.random((len_arr, N_PARAMS)), params).reshape(DA_SHAPE)
+
     nx, ny, nz = eps_arr.shape
     custom_med = td.Structure(
         geometry=box,
@@ -248,7 +253,9 @@ for m in monitor_keys_:
 # or just set args manually to test certain things
 if TEST_CUSTOM_MEDIUM_SPEED:
     args = [("custom_med", "mode")]
-# args = [(ALL_KEY, "mode")]
+
+if TEST_POLYSLAB_SPEED:
+    args = [("polyslab", "mode")]
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)

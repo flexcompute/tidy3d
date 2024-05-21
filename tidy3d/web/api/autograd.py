@@ -90,7 +90,10 @@ def derivative_map_D(
 def _run_tidy3d(sim: td.Simulation) -> td.SimulationData:
     """Run a simulation without any tracers using regular web.run()."""
     td.log.info("running regular simulation with '_run_tidy3d()'")
-    return run_webapi(sim, task_name="autograd my life", verbose=False)
+    td.log.warning("running sim")
+    data = run_webapi(sim, task_name="autograd my life", verbose=False)
+    td.log.warning("finished with sim")
+    return data
 
 
 @primitive

@@ -8,7 +8,7 @@ import numpy as np
 import dask
 import h5py
 
-from autograd.tracer import isbox
+from autograd.tracer import isbox, getval
 
 from ...constants import (
     HERTZ,
@@ -64,10 +64,12 @@ class DataArray(xr.DataArray):
     def __init__(self, values, *args, **kwargs):
         values_ag = values if isbox(values) else None
 
-        super().__init__(values, *args, **kwargs)
-
         if values_ag is not None:
+            super().__init__(getval(values), *args, **kwargs)
             self.attrs["AUTOGRAD"] = values_ag
+
+        else:
+            super().__init__(values, *args, **kwargs)
 
     @classmethod
     def __get_validators__(cls):
