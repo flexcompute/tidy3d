@@ -2013,14 +2013,10 @@ class CustomMedium(AbstractCustomMedium):
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
 
-        _self = self.to_static()
-
-        self_dict = _self.dict(exclude={"type", "eps_dataset"})
+        self_dict = self.dict(exclude={"type", "eps_dataset"})
         # isotropic
-        if _self.eps_dataset is None:
-            self_dict.update(
-                {"permittivity": _self.permittivity, "conductivity": _self.conductivity}
-            )
+        if self.eps_dataset is None:
+            self_dict.update({"permittivity": self.permittivity, "conductivity": self.conductivity})
             return CustomIsotropicMedium.parse_obj(self_dict)
 
         def get_eps_sigma(eps_complex: SpatialDataArray, freq: float) -> tuple:

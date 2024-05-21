@@ -134,3 +134,6 @@ htmlcov/
 # Specific file and folder exclusions
 .idea
 .vscode
+
+# cProfile output
+*.prof

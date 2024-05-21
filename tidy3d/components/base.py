@@ -940,7 +940,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 if isinstance(x, Box):
                     field_mapping[path] = x
                 elif isinstance(x, DataArray):
-                    # NOTE: for some reason if I dont do `npa.array(x.tolist()) it wont trace
+                    # NOTE: here be dragons, if you dont copy it this way (tolist()) it will break
                     field_mapping[path] = npa.array(x.values.tolist())
 
             # for sequences, add (i,) to the path and handle each value
@@ -956,7 +956,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     handle_value(val, path=sub_paths)
 
         # recursively parse the dictionary of this object
-        self_dict = self.dict()  # TODO: need copy here?
+        self_dict = self.dict()
         handle_value(self_dict, path=())
 
         # convert the resulting field_mapping to an autograd-traced dictionary
@@ -981,20 +981,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
             # only one element in path => leaf node. insert into the sub dict and don't recurse
             if len_sub_path == 0:
-                if isinstance(sub_dict[key], DataArray):
-                    # ensure you copy() because DataArrays are mutable and setting would affect self
-                    sub_dict[key] = sub_dict[key].copy()
+                sub_element = sub_dict[key]
+                if isinstance(sub_element, DataArray):
+                    # NOTE: if you don't copy, you'll mutate data in self and bad stuff will occur
+                    sub_dict[key] = sub_element.copy()
                     sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
                 return
-
-            # one integer sub-path => index into tuple leaf node. insert value and don't recurse
-            # if len(sub_path) == 1:
-            #     (sub_key,) = sub_path
-            #     if isinstance(sub_key, int):
-            #         sub_dict[key][sub_key] = value
-            #         return
 
             # if 1 or more more elements in the path, and they aren't a tuple index (above), recurse
             sub_dict = sub_dict[key]

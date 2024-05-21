@@ -1411,6 +1411,8 @@ class PolySlab(base.Planar):
         E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
 
         # approximate permittivity in and out
+
+        # TODO: not a good approximation at all. better to use `medium.eps_model`
         eps_in = complex(
             np.sum(np.mean([np.mean(val) for _, val in eps_structure.field_components.items()]))
         )
