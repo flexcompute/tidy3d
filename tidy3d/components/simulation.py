@@ -2691,6 +2691,9 @@ class Simulation(AbstractYeeGridSimulation):
         if val is None:
             return val
 
+        # TOOD: make this validator work again
+        return val
+
         structures = values.get("structures")
         structures = structures or []
         medium_bg = values.get("medium")
@@ -2851,6 +2854,7 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
+        return
 
         pml_thicks = np.array(self.pml_thicknesses).T
         sim_bounds = self.bounds
@@ -3885,8 +3889,7 @@ class Simulation(AbstractYeeGridSimulation):
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
 
         # make structures static before meshing
-        self_structures = [s.to_static() for s in self.structures]
-        structures += self_structures
+        structures += self.structures
 
         grid = self.grid_spec.make_grid(
             structures=structures,

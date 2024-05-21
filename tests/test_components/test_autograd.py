@@ -23,8 +23,12 @@ from ..utils import run_emulated
     speed: pipeline with cProfile to analyze performance
 """
 
+# make it faster to toggle this
+TEST_CUSTOM_MEDIUM_SPEED = True
+
+
 TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
-TEST_MODE = TEST_MODES[-1]
+TEST_MODE = "speed" if TEST_CUSTOM_MEDIUM_SPEED else "pipeline"
 
 # number of elements in the parameters / input to the objective function
 N_PARAMS = 10
@@ -58,7 +62,7 @@ PML_X = True if IS_3D else False
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
-DA_SHAPE = (DA_SHAPE_X, 500, 500)
+DA_SHAPE = (DA_SHAPE_X, 500, 500) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
 
 # number of vertices in the polyslab
 NUM_VERTICES = 12
@@ -242,9 +246,9 @@ for m in monitor_keys_:
     args.append((ALL_KEY, m))
 
 # or just set args manually to test certain things
-args = [("custom_med", "mode")]
+if TEST_CUSTOM_MEDIUM_SPEED:
+    args = [("custom_med", "mode")]
 # args = [(ALL_KEY, "mode")]
-# args = [("medium", "mode")]
 
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)

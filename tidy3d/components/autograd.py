@@ -2,6 +2,7 @@
 
 from autograd.extend import Box, primitive, defvjp
 from autograd.builtins import dict as dict_ag
+from autograd.tracer import getval
 
 import xarray as xr
 import numpy as np
@@ -24,9 +25,10 @@ AutogradFieldMap = dict_ag[tuple[str, ...], TracedFloat]
 
 def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
-    if isinstance(x, Box):
-        return get_static(x._value)
-    return x
+    return getval(x)
+    # if isinstance(x, Box):
+    #     return get_static(x._value)
+    # return x
 
 
 # TODO: could we move this into a DataArray method?

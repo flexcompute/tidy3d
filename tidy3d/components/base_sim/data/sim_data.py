@@ -44,7 +44,7 @@ class AbstractSimulationData(Tidy3dBaseModel, ABC):
     def __getitem__(self, monitor_name: str) -> AbstractMonitorData:
         """Get a :class:`.AbstractMonitorData` by name. Apply symmetry if applicable."""
         monitor_data = self.monitor_data[monitor_name]
-        return monitor_data.symmetry_expanded_copy
+        return monitor_data.symmetry_expanded
 
     @property
     def monitor_data(self) -> Dict[str, AbstractMonitorData]:

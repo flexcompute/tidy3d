@@ -1,7 +1,7 @@
 # autograd wrapper for web functions
 
 import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_static  # noqa: 401
+from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap  # noqa: 401
 import typing
 
 import numpy as np
@@ -103,7 +103,7 @@ def _run_primitive(
 
     # rid passed simulation of tracers and record how many monitors are in it (for reconstruction)
     # NOTE: will also validate that the un-traced simulation is valid before running
-    sim_original = simulation.to_static()
+    sim_original = simulation.to_static(mutate=False)
     num_mnts_original = len(sim_original.monitors)
 
     # make and run a sim with combined original & adjoint monitors
@@ -117,13 +117,16 @@ def _run_primitive(
     _, monitors_fwd = split_list(sim_combined.monitors, index=num_mnts_original)
 
     # reconstruct the simulation data for the user, using original sim, and data for original mnts
-    sim_data_original = sim_data_combined.updated_copy(simulation=sim_original, data=data_original)
+    sim_data_original = sim_data_combined.updated_copy(
+        simulation=sim_original, data=data_original, deep=False
+    )
 
     # construct the 'forward' simulation and its data, which is only used for for gradient calc.
     sim_fwd = sim_combined.updated_copy(monitors=monitors_fwd)
     sim_data_fwd = sim_data_combined.updated_copy(
         simulation=sim_fwd,
         data=data_fwd,
+        deep=False,
     )
 
     # cache these two SimulationData objects for later (note: the Simulations are already inside)
@@ -136,9 +139,7 @@ def _run_primitive(
     # need to get the static version of the arrays, otherwise get ArrayBox of ArrayBox
     # NOTE: this is a bit confusing to me, why does autograd make them ArrayBox out of _run_tidy3d?
 
-    data_traced = {
-        path: get_static(value) for path, value in data_traced.items() if path[0] == "data"
-    }
+    data_traced = {path: value for path, value in data_traced.items() if path[0] == "data"}
 
     # return the AutogradFieldMap that autograd registers as the "output" of the primitive
     return data_traced

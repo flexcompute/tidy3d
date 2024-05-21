@@ -20,6 +20,7 @@ import h5py
 import xarray as xr
 
 from .autograd import Box, AutogradFieldMap, get_static
+from autograd.tracer import isbox
 from autograd.builtins import dict as dict_ag
 import autograd.numpy as npa
 
@@ -210,15 +211,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
-        if "deep" in kwargs and kwargs["deep"] is False:
-            raise ValueError("Can't do shallow copy of component, set `deep=True` in copy().")
-        kwargs.update(dict(deep=True))
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
-    def updated_copy(self, path: str = None, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -233,7 +231,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         """
 
         if not path:
-            return self._updated_copy(**kwargs)
+            return self._updated_copy(**kwargs, deep=deep)
 
         path_components = path.split("/")
 
@@ -272,9 +270,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(**{field_name: new_component})
 
-    def _updated_copy(self, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
-        return self.copy(update=kwargs)
+        return self.copy(update=kwargs, deep=deep)
 
     def help(self, methods: bool = False) -> None:
         """Prints message describing the fields and methods of a :class:`Tidy3dBaseModel`.
@@ -927,21 +925,28 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(self) -> AutogradFieldMap:
+    def strip_traced_fields(self, mutate: bool = False) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by autograd."""
 
-        field_mapping = {}
+        field_mapping = dict_ag()  # {}
 
         def handle_value(x: Any, path: tuple[str, ...]) -> None:
             """recursively update ``field_mapping`` with path to the autograd data."""
 
             # this is a leaf node that we want to trace, add this path and data to the mapping
-            if isinstance(x, (Box, DataArray)):
-                if isinstance(x, Box):
-                    field_mapping[path] = x
-                elif isinstance(x, DataArray):
-                    # NOTE: here be dragons, if you dont copy it this way (tolist()) it will break
-                    field_mapping[path] = npa.array(x.values.tolist())
+            if isbox(x):
+                field_mapping[path] = x
+
+            elif isinstance(x, DataArray):
+                # NOTE: here be dragons, if you dont copy it this way (tolist()) it will break
+
+                if mutate:
+                    field_mapping[path] = x.values.copy()
+
+                else:
+                    values = x.values
+                    x_list = values.tolist()
+                    field_mapping[path] = npa.array(x_list)
 
             # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):
@@ -962,7 +967,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
+    def insert_traced_fields(
+        self, field_mapping: AutogradFieldMap, mutate: bool = False
+    ) -> Tidy3dBaseModel:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
         # ``def insert_value()`` will insert into this dictionary
@@ -984,8 +991,14 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 sub_element = sub_dict[key]
                 if isinstance(sub_element, DataArray):
                     # NOTE: if you don't copy, you'll mutate data in self and bad stuff will occur
-                    sub_dict[key] = sub_element.copy()
-                    sub_dict[key].values = value
+                    if mutate:
+                        sub_dict[key].values = value
+                    else:
+                        # values = sub_element.values
+                        sub_dict[key] = sub_element.copy(
+                            deep=False, data=value.reshape(sub_element.shape)
+                        )
+                        # sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
                 return
@@ -1001,11 +1014,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # parse the dict with inserted fields to return an updated copy of ``self``
         return self.parse_obj(self_dict)
 
-    def to_static(self) -> Tidy3dBaseModel:
+    def to_static(self, mutate: bool = False) -> Tidy3dBaseModel:
         """Version of self with all autograd-traced fields removed."""
-        field_mapping = self.strip_traced_fields()
+        field_mapping = self.strip_traced_fields(mutate=mutate)
+        field_mapping = {key: val for key, val in field_mapping.items() if isbox(val)}
         field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
-        return self.insert_traced_fields(field_mapping_static)
+        return self.insert_traced_fields(field_mapping_static, mutate=mutate)
 
     @classmethod
     def add_type_field(cls) -> None:
