@@ -1,6 +1,7 @@
 # convenient container for the output of the inverse design (specifically the history)
 
 import typing
+import numpy as np
 
 import matplotlib.pyplot as plt
 import pydantic.v1 as pd
@@ -42,18 +43,17 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of objective function gradient arrays throughout the optimization.",
     )
 
-    # TODO: add in when aux_data figured out
-    # penalty: typing.Tuple[float, ...] = pd.Field(
-    #     (),
-    #     title="Penalty History",
-    #     description="History of weighted sum of penalties throughout the optimization.",
-    # )
+    penalty: typing.Tuple[float, ...] = pd.Field(
+        (),
+        title="Penalty History",
+        description="History of weighted sum of penalties throughout the optimization.",
+    )
 
-    # post_process_val: typing.Tuple[float, ...] = pd.Field(
-    #     (),
-    #     title="Post-Process Function History",
-    #     description="History of return values from ``post_process_fn`` throughout the optimization.",
-    # )
+    post_process_val: typing.Tuple[float, ...] = pd.Field(
+        (),
+        title="Post-Process Function History",
+        description="History of return values from ``post_process_fn`` throughout the optimization.",
+    )
 
     simulation: typing.Tuple[td.Simulation, ...] = pd.Field(
         (),
@@ -74,8 +74,8 @@ class InverseDesignResult(InvdesBaseModel):
             params=list(self.params),
             objective_fn_val=list(self.objective_fn_val),
             grad=list(self.grad),
-            # penalty=list(self.penalty),
-            # post_process_val=list(self.post_process_val),
+            penalty=list(self.penalty),
+            post_process_val=list(self.post_process_val),
             opt_state=list(self.opt_state),
         )
 
@@ -105,7 +105,7 @@ class InverseDesignResult(InvdesBaseModel):
     def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
         params = self.get(key="params", index=index)
-        return self.design.to_simulation(params)
+        return self.design.to_simulation(np.array(params))
 
     def get_sim_data(
         self, task_name: str, index: int = -1, **kwargs
@@ -126,8 +126,8 @@ class InverseDesignResult(InvdesBaseModel):
     def plot_optimization(self):
         """Plot the optimization progress from the history."""
         plt.plot(self.objective_fn_val, label="objective function")
-        # plt.plot(self.post_process_val, label="post process function")
-        # plt.plot(self.penalty, label="combined penalty")
+        plt.plot(self.post_process_val, label="post process function")
+        plt.plot(self.penalty, label="combined penalty")
         plt.xlabel("iteration number")
         plt.ylabel("value")
         plt.legend()

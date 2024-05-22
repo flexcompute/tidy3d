@@ -16,6 +16,9 @@ AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 """ Helper Functions """
 
 
+# TODO: move these somewhere else
+
+
 def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
     """Split a list at a given index."""
     x = list(x)
@@ -83,16 +86,14 @@ def derivative_map_D(
 
 """ Run Functions """
 
-# TODO: pass through all of the web.run kwargs
 # TODO: run_batch version
 
 
 def _run_tidy3d(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.SimulationData:
     """Run a simulation without any tracers using regular web.run()."""
     td.log.info("running regular simulation with '_run_tidy3d()'")
-    td.log.warning("running sim")
+    # TODO: set task_type to "tidy3d adjoint autograd?"
     data = run_webapi(simulation, task_name=task_name, **run_kwargs)
-    td.log.warning("finished with sim")
     return data
 
 

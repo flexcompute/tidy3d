@@ -69,8 +69,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         print(f"step ({step_index + 1}/{self.num_steps})")
         print(f"\tobjective_fn_val = {result.objective_fn_val[-1]:.3e}")
         print(f"\tgrad_norm = {npa.linalg.norm(result.grad[-1]):.3e}")
-        # print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
-        # print(f"\tpenalty = {result.penalty[-1]:.3e}")
+        print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
+        print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
     def _initialize_result(self, params0: npa.ndarray = None) -> InverseDesignResult:
         """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
@@ -104,19 +104,15 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         history = deepcopy(result.history)
 
         # use jax to grad the objective function
-        objective_fn = self.design.objective_fn(post_process_fn)
+        objective_fn = self.design.make_objective_fn(post_process_fn)
         val_and_grad_fn = ag.value_and_grad(objective_fn)
 
         # main optimization loop
         for step_index in range(self.num_steps):
             # evaluate gradient
 
-            val, grad = val_and_grad_fn(params, step_index=step_index, history=history)
-
-            # TODO: figure out aux data
-
-            # (val, aux_data), grad = val_and_grad_fn(params, step_index=step_index, history=history)
-            # TODO: add more kwargs here?
+            aux_data = {}
+            val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
             if npa.allclose(grad, 0.0):
                 td.log.warning(
@@ -133,8 +129,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
                 )
 
             # strip out auxiliary data
-            # penalty = aux_data["penalty"]
-            # post_process_val = aux_data["post_process_val"]
+            penalty = aux_data["penalty"]
+            post_process_val = aux_data["post_process_val"]
 
             # update optimizer and parameters
             params, opt_state = self.update(parameters=params, state=opt_state, gradient=-grad)
@@ -144,8 +140,8 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
 
             # save the history of scalar values
             history["objective_fn_val"].append(val)
-            # history["penalty"].append(penalty)
-            # history["post_process_val"].append(post_process_val)
+            history["penalty"].append(penalty)
+            history["post_process_val"].append(post_process_val)
 
             # save the state of vector values
             for key, value in zip(("params", "opt_state", "grad"), (params, opt_state, grad)):

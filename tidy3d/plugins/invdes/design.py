@@ -7,7 +7,8 @@ import abc
 import autograd.numpy as npa
 
 import tidy3d as td
-
+from tidy3d.web import run_autograd
+from tidy3d.components.autograd import get_static
 
 from .base import InvdesBaseModel
 from .region import DesignRegionType
@@ -40,7 +41,7 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
     @property
     @abc.abstractmethod
-    def objective_fn(self) -> typing.Callable[[npa.ndarray], float]:
+    def make_objective_fn(self) -> typing.Callable[[npa.ndarray], float]:
         """construct the objective function for this ``InverseDesign`` object."""
 
 
@@ -109,30 +110,29 @@ class InverseDesign(AbstractInverseDesign):
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         simulation = self.to_simulation(params=params)
         kwargs.setdefault("task_name", self.task_name)
-        sim_data = td.web.run_autograd(simulation, verbose=self.verbose, **kwargs)
+        sim_data = run_autograd(simulation, verbose=self.verbose, **kwargs)
         return sim_data
 
-    def objective_fn(
+    def make_objective_fn(
         self, post_process_fn: typing.Callable
     ) -> typing.Callable[[npa.ndarray], tuple[float, dict]]:
         """construct the objective function for this ``InverseDesign`` object."""
 
-        def objective_fn(params: npa.ndarray, **kwargs) -> float:
+        def objective_fn(params: npa.ndarray, aux_data: dict = None) -> float:
             """Full objective function."""
 
             sim_data = self.to_simulation_data(params=params)
 
             # construct objective function values
-            post_process_val = post_process_fn(sim_data, **kwargs)
+            post_process_val = post_process_fn(sim_data)
+
             penalty_value = self.design_region.penalty_value(params)
             objective_fn_val = post_process_val - penalty_value
 
-            # return objective value and auxiliary data
-
-            # TODO: figure out aux_data
-            aux_data = {}
-            aux_data["penalty"] = penalty_value
-            aux_data["post_process_val"] = post_process_val
+            # store things in ``aux_data`` passed by reference
+            if aux_data is not None:
+                aux_data["penalty"] = get_static(penalty_value)
+                aux_data["post_process_val"] = get_static(post_process_val)
 
             return objective_fn_val
 

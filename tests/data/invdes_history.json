@@ -26896,6 +26896,12 @@
             ]
         ]
     ],
+    "penalty": [
+        0.0
+    ],
+    "post_process_val": [
+        NaN
+    ],
     "simulation": [],
     "opt_state": [
         {

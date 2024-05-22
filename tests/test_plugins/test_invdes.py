@@ -108,6 +108,7 @@ def test_region_penalties():
     region.material_density(PARAMS_0)
     region.penalty_value(PARAMS_0)
 
+    # TODO: add penalties
     region.updated_copy(penalties=[]).penalty_value(PARAMS_0)
 
 
@@ -381,8 +382,7 @@ def test_result_store_full_results_is_false(use_emulated_run_autograd):
         assert len(result.history[key]) == 1
 
     # these store at the end of each iteration
-    # for key in ("penalty", "objective_fn_val", "post_process_val"):
-    for key in ("objective_fn_val",):
+    for key in ("penalty", "objective_fn_val", "post_process_val"):
         assert len(result.history[key]) == optimizer.num_steps
 
     # this should still work, even if ``store_full_results == False``
@@ -470,41 +470,6 @@ def test_invdes_io(tmp_path, log_capture, use_emulated_run_autograd):
         obj2 = obj.from_file(path)
 
         assert obj2.json() == obj.json()
-
-
-# @pytest.fixture
-# def hide_jax(monkeypatch, request):
-#     """Force an ``ImportError`` when trying to import ``jaxlib.xla_extension``."""
-#     import_orig = builtins.__import__
-
-#     def mocked_import(name, *args, **kwargs):
-#         if name in ["jaxlib.xla_extension"]:
-#             raise ImportError()
-#         return import_orig(name, *args, **kwargs)
-
-#     monkeypatch.setattr(builtins, "__import__", mocked_import)
-
-
-# def try_array_impl_import() -> None:
-#     """Try importing ``tidy3d.plugins.invdes.base``."""
-
-#     from importlib import reload
-#     import tidy3d
-
-#     reload(tidy3d.plugins.invdes.base)
-
-
-# @pytest.mark.usefixtures("hide_jax")
-# def test_jax_array_impl_import_fail(tmp_path, log_capture):
-#     """Make sure if import error with ArrayImpl, a warning is logged and module still imports."""
-#     try_array_impl_import()
-#     assert_log_level(log_capture, "WARNING")
-
-
-# def test_jax_array_impl_import_pass(tmp_path, log_capture):
-#     """Make sure if no import error with ArrayImpl, nothing is logged and module imports."""
-#     try_array_impl_import()
-#     assert_log_level(log_capture, None)
 
 
 @pytest.mark.parametrize("exception, ok", [(TypeError, True), (OSError, True), (ValueError, False)])
