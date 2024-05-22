@@ -2418,7 +2418,7 @@ class Box(SimplePlaneIntersection, Centered):
         num_cells_in = 4
 
         # if not enough data, just use best guess using average permittivity at face and eps in sim medium
-        if any(len(eps.coords[dim_normal]) < num_cells_in for eps in eps_xyz):
+        if any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz):
             eps_xyz_inside = [eps.mean(dim=dim_normal) for eps in eps_xyz]
             eps_xyz_outside = 3 * [eps_sim]
             # TODO: not tested...

@@ -32,11 +32,12 @@ TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
 TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
 
 # number of elements in the parameters / input to the objective function
-N_PARAMS = 100
+N_PARAMS = 10
 
 # default starting args
 np.random.seed(1)
-params0 = np.random.random(N_PARAMS)
+params0 = np.random.random(N_PARAMS) - 0.5
+params0 /= np.linalg.norm(params0)
 
 # whether to plot the simulation within the objective function
 PLOT_SIM = False
@@ -122,13 +123,15 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
     params_average = npa.mean(params)
+    vector = np.random.random(N_PARAMS) - 0.5
+    vector /= np.linalg.norm(vector)
 
     # static components
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
     med = td.Medium(permittivity=2.0)
 
     # Structure with variable .medium
-    eps = 1 + np.random.random(N_PARAMS) @ params
+    eps = 1 + npa.abs(vector @ params)
     conductivity = eps / 10.0
     medium = td.Structure(
         geometry=box,
@@ -136,7 +139,9 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     )
 
     # Structure with variable Box.center
-    center = (np.random.random((3, N_PARAMS)) - 0.5) @ params
+    matrix = np.random.random((3, N_PARAMS)) - 0.5
+    matrix /= np.linalg.norm(matrix)
+    center = npa.tanh(matrix @ params)
     x0, y0, z0 = center
     center_list = td.Structure(
         geometry=td.Box(center=(x0, y0, z0), size=(1, 1, 1)),
@@ -144,7 +149,7 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     )
 
     # Structure with variable Box.center
-    size_y = 1 + np.random.random(N_PARAMS) @ params
+    size_y = npa.abs(vector @ params)
     size_element = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, size_y, 1)),
         medium=med,
@@ -153,12 +158,13 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     # custom medium with variable permittivity data
     len_arr = np.prod(DA_SHAPE)
     num_params = len_arr // N_PARAMS
+    matrix = np.random.random((len_arr, N_PARAMS))
+    matrix /= np.linalg.norm(matrix)
 
-    # eps_arr = 1.0 + npa.stack(num_params * [params]).flatten()
-    # eps_arr = eps_arr.reshape(DA_SHAPE)
-    eps_arr = 1.0 + npa.dot(np.random.random((len_arr, N_PARAMS)), params).reshape(DA_SHAPE)
+    eps_arr = 1.01 + 0.5 * (npa.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
 
     nx, ny, nz = eps_arr.shape
+
     custom_med = td.Structure(
         geometry=box,
         medium=td.CustomMedium(
@@ -174,7 +180,10 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     )
 
     # Polyslab with variable radius about origin
-    radii = 1 + 0.1 * npa.dot(np.random.random((NUM_VERTICES, N_PARAMS)), params)
+    matrix = np.random.random((NUM_VERTICES, N_PARAMS))
+    params_01 = 0.5 * (npa.tanh(matrix @ params) + 1)
+    radii = 1.0 + 0.1 * params_01
+
     phis = 2 * npa.pi * npa.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
     xs = radii * npa.cos(phis)
     ys = radii * npa.sin(phis)

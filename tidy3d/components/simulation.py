@@ -2667,7 +2667,7 @@ class Simulation(AbstractYeeGridSimulation):
     @pydantic.validator("monitors", always=True)
     @skip_if_fields_missing(["medium", "structures"])
     def diffraction_monitor_medium(cls, val, values):
-        """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""        
+        """If any :class:`.DiffractionMonitor` exists, ensure is does not lie in a lossy medium."""
         monitors = val
         structures = values.get("structures")
         medium = values.get("medium")
