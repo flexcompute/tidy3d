@@ -1909,7 +1909,7 @@ class CustomMedium(AbstractCustomMedium):
     def _eps_inf_greater_no_less_than_one(cls, val, values):
         """Assert any eps_inf must be >=1"""
 
-        return val
+        # return val
 
         if val is None:
             return val

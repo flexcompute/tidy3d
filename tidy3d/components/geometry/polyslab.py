@@ -1016,6 +1016,7 @@ class PolySlab(base.Planar):
         float
             Signed polygon area (positive for CCW orientation).
         """
+        vertices = get_static(vertices)
         vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
         term1 = vertices[:, 0] * vert_shift[:, 1]
         term2 = vertices[:, 1] * vert_shift[:, 0]
@@ -1036,6 +1037,7 @@ class PolySlab(base.Planar):
         float
             Polygon perimeter.
         """
+        vertices = get_static(vertices)
         vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
         dx = vertices[:, 0] - vert_shift[:, 0]
         dy = vertices[:, 1] - vert_shift[:, 1]
@@ -1073,6 +1075,7 @@ class PolySlab(base.Planar):
             Vertices of polygon.
         """
 
+        vertices = get_static(vertices)
         vertices_f = np.roll(vertices.copy(), shift=-1, axis=0)
         vertices_diff = np.linalg.norm(vertices - vertices_f, axis=1)
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]

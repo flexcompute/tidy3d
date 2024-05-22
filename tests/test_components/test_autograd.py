@@ -24,7 +24,7 @@ from ..utils import run_emulated
 """
 
 # make it faster to toggle this
-TEST_CUSTOM_MEDIUM_SPEED = True
+TEST_CUSTOM_MEDIUM_SPEED = False
 TEST_POLYSLAB_SPEED = False
 
 
