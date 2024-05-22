@@ -1,6 +1,6 @@
 """Rectangular dielectric waveguide utilities."""
 
-from typing import List, Any, Union
+from typing import List, Any, Union, Tuple
 from typing_extensions import Annotated
 
 import numpy
@@ -29,6 +29,9 @@ from ...log import log
 from ..mode.mode_solver import ModeSolver
 
 AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]
+
+
+EVANESCENT_TAIL = 1.5
 
 
 class RectangularDielectric(Tidy3dBaseModel):
@@ -71,14 +74,14 @@ class RectangularDielectric(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
-    clad_medium: Union[AnnotatedMedium, List[AnnotatedMedium]] = pydantic.Field(
+    clad_medium: Union[AnnotatedMedium, Tuple[AnnotatedMedium, ...]] = pydantic.Field(
         ...,
         title="Clad Medium",
         description="Medium associated with the upper cladding layer. A sequence of mediums can "
         "be used to create a layered clad.",
     )
 
-    box_medium: Union[AnnotatedMedium, List[AnnotatedMedium]] = pydantic.Field(
+    box_medium: Union[AnnotatedMedium, Tuple[AnnotatedMedium, ...]] = pydantic.Field(
         None,
         title="Box Medium",
         description="Medium associated with the lower cladding layer. A sequence of mediums can "
@@ -215,18 +218,16 @@ class RectangularDielectric(Tidy3dBaseModel):
             raise ValidationError("Values may not be negative.")
         return result
 
-    @pydantic.validator("clad_medium", always=True)
-    def _set_medium_list(cls, val):
-        """Normalize individual medium to single-element list."""
-        if isinstance(val, MediumType):
-            return [val]
-        return list(val)
-
     @pydantic.validator("box_medium", always=True)
     @skip_if_fields_missing(["clad_medium"])
     def _set_box_medium(cls, val, values):
         """Set BOX medium same as cladding as default value."""
-        return values["clad_medium"][:1] if val is None else cls._set_medium_list(val)
+        if val is None:
+            clad_medium = values["clad_medium"]
+            if isinstance(clad_medium, MediumType):
+                return clad_medium
+            return clad_medium[:1]
+        return val
 
     @pydantic.validator("clad_thickness", always=True)
     @skip_if_fields_missing(["clad_medium", "wavelength"])
@@ -234,11 +235,18 @@ class RectangularDielectric(Tidy3dBaseModel):
         """Set default cladding thickness based on the max wavelength in the cladding medium."""
         if val is None:
             wavelength = values["wavelength"]
-            medium = values["clad_medium"][0]
+            medium = values["clad_medium"]
+            if not isinstance(medium, MediumType):
+                medium = medium[0]
             n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
             lda = wavelength / n
-            return numpy.array([1.5 * lda.max()])
-        return cls._set_array(val)
+            val = EVANESCENT_TAIL * lda.max()
+        elif isinstance(val, float):
+            if val < 0:
+                raise ValidationError("Thickness may not be negative.")
+        else:
+            val = cls._set_array(val)
+        return val
 
     @pydantic.validator("box_thickness", always=True)
     @skip_if_fields_missing(["clad_medium", "wavelength"])
@@ -246,20 +254,34 @@ class RectangularDielectric(Tidy3dBaseModel):
         """Set default BOX thickness based on the max wavelength in the BOX medium."""
         if val is None:
             wavelength = values["wavelength"]
-            medium = values["box_medium"][0]
+            medium = values["box_medium"]
+            if not isinstance(medium, MediumType):
+                medium = medium[0]
             n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
             lda = wavelength / n
-            return numpy.array([1.5 * lda.max()])
-        return cls._set_array(val)
+            val = EVANESCENT_TAIL * lda.max()
+        elif isinstance(val, float):
+            if val < 0:
+                raise ValidationError("Thickness may not be negative.")
+        else:
+            val = cls._set_array(val)
+        return val
 
     @pydantic.validator("side_margin", always=True)
     def _set_side_margin(cls, val, values):
         """Set default side margin based on BOX and cladding thicknesses."""
-        return (
-            max(values["clad_thickness"].sum(), values["box_thickness"].sum())
-            if val is None
-            else val
-        )
+        clad_thickness = values.get("clad_thickness")
+        box_thickness = values.get("box_thickness")
+        if clad_thickness is None or box_thickness is None:
+            # Other validators failed already
+            return None
+        if val is None:
+            if not isinstance(clad_thickness, float):
+                clad_thickness = clad_thickness.sum()
+            if not isinstance(box_thickness, float):
+                box_thickness = box_thickness.sum()
+            val = max(clad_thickness, box_thickness)
+        return val
 
     @pydantic.validator("gap", always=True)
     @skip_if_fields_missing(["core_width"])
@@ -276,8 +298,13 @@ class RectangularDielectric(Tidy3dBaseModel):
     def _validate_layers(cls, values):
         """Ensure the number of clad media is compatible with the number of layers supplied."""
         for side in ("clad", "box"):
-            num_layers = values[side + "_thickness"].size
-            num_media = len(values[side + "_medium"])
+            thickness = values.get(side + "_thickness")
+            medium = values.get(side + "_medium")
+            if thickness is None or medium is None:
+                # Other validators failed already
+                return None
+            num_layers = 1 if isinstance(thickness, float) else thickness.size
+            num_media = 1 if isinstance(medium, MediumType) else len(medium)
             if num_layers != num_media:
                 raise ValidationError(
                     f"Number of '{side}_thickness' values ({num_layers}) must be equal to that of "
@@ -316,6 +343,34 @@ class RectangularDielectric(Tidy3dBaseModel):
 
         return values
 
+    @property
+    def _clad_medium(self) -> Tuple[MediumType, ...]:
+        """Normalize data type to tuple."""
+        if isinstance(self.clad_medium, MediumType):
+            return (self.clad_medium,)
+        return self.clad_medium
+
+    @property
+    def _box_medium(self) -> Tuple[MediumType, ...]:
+        """Normalize data type to tuple."""
+        if isinstance(self.box_medium, MediumType):
+            return (self.box_medium,)
+        return self.box_medium
+
+    @property
+    def _clad_thickness(self) -> ArrayFloat1D:
+        """Normalize data type to array."""
+        if isinstance(self.clad_thickness, float):
+            return numpy.array([self.clad_thickness])
+        return self.clad_thickness
+
+    @property
+    def _box_thickness(self) -> ArrayFloat1D:
+        """Normalize data type to array."""
+        if isinstance(self.box_thickness, float):
+            return numpy.array([self.box_thickness])
+        return self.box_thickness
+
     @cached_property
     def lateral_axis(self) -> Axis:
         """Lateral direction axis."""
@@ -348,7 +403,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @cached_property
     def height(self) -> Size1D:
         """Domain height (size in the normal direction)."""
-        return self.box_thickness.sum() + self.core_thickness + self.clad_thickness.sum()
+        return self._box_thickness.sum() + self.core_thickness + self._clad_thickness.sum()
 
     @cached_property
     def width(self) -> Size1D:
@@ -376,8 +431,8 @@ class RectangularDielectric(Tidy3dBaseModel):
         freqs = C_0 / self.wavelength
         nk_core = numpy.array([self.core_medium.nk_model(f) for f in freqs])
         # Dimensions: (medium, wavelength, n/k)
-        nk_clad = numpy.array([[m.nk_model(f) for f in freqs] for m in self.clad_medium])
-        nk_box = numpy.array([[m.nk_model(f) for f in freqs] for m in self.box_medium])
+        nk_clad = numpy.array([[m.nk_model(f) for f in freqs] for m in self._clad_medium])
+        nk_box = numpy.array([[m.nk_model(f) for f in freqs] for m in self._box_medium])
         lda_core = self.wavelength / nk_core[:, 0]
         lda_clad = self.wavelength / nk_clad[:, :, 0]
         lda_box = self.wavelength / nk_box[:, :, 0]
@@ -474,10 +529,10 @@ class RectangularDielectric(Tidy3dBaseModel):
                 medium=lo_index,
             )
             for (a, b, lo_index) in (
-                (-2 * self.box_thickness.sum(), -corner_margin, lo_index_box),
+                (-2 * self._box_thickness.sum(), -corner_margin, lo_index_box),
                 (
                     self.core_thickness + corner_margin,
-                    self.core_thickness + 2 * self.clad_thickness.sum(),
+                    self.core_thickness + 2 * self._clad_thickness.sum(),
                     lo_index_clad,
                 ),
             )
@@ -505,11 +560,11 @@ class RectangularDielectric(Tidy3dBaseModel):
         structures = []
 
         # Lower cladding
-        thicknesses = self.box_thickness.tolist()
+        thicknesses = self._box_thickness.tolist()
         # Make sure the last layer extends into the PML
         thicknesses[-1] += 2.0 * self.wavelength.max()
         total = 0
-        for medium, thickness in zip(self.box_medium, thicknesses):
+        for medium, thickness in zip(self._box_medium, thicknesses):
             structures.append(
                 Structure(
                     geometry=Box(
@@ -522,12 +577,12 @@ class RectangularDielectric(Tidy3dBaseModel):
             total += thickness
 
         # Upper cladding
-        thicknesses = self.clad_thickness.tolist()
+        thicknesses = self._clad_thickness.tolist()
         thicknesses[0] += self.core_thickness
         # Make sure the last layer extends into the PML
         thicknesses[-1] += 2.0 * self.wavelength.max()
         total = 0
-        for medium, thickness in zip(self.clad_medium, thicknesses):
+        for medium, thickness in zip(self._clad_medium, thicknesses):
             structures.append(
                 Structure(
                     geometry=Box(
@@ -708,7 +763,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         fwidth = max(0.1 * freq0, f_max - f_min)
 
         plane = Box(
-            center=self._translate(0, 0.5 * self.height - self.box_thickness.sum(), 0),
+            center=self._translate(0, 0.5 * self.height - self._box_thickness.sum(), 0),
             size=self._swap_axis(self.width, self.height, 0),
         )
 
@@ -724,7 +779,7 @@ class RectangularDielectric(Tidy3dBaseModel):
         simulation = Simulation(
             center=plane.center,
             size=plane.size,
-            medium=self.clad_medium[-1],
+            medium=self._clad_medium[-1],
             structures=self.structures,
             boundary_spec=BoundarySpec.all_sides(Periodic()),
             grid_spec=self.grid_spec,
@@ -998,22 +1053,22 @@ class RectangularDielectric(Tidy3dBaseModel):
             x0 = self.origin[self.lateral_axis]
             ax.axvline(x0, **kwargs)
             x = x0
-            for t in self.box_thickness:
+            for t in self._box_thickness:
                 x -= t
                 ax.axvline(x, **kwargs)
             x = x0 + self.core_thickness
-            for t in self.clad_thickness:
+            for t in self._clad_thickness:
                 x += t
                 ax.axvline(x, **kwargs)
         else:
             y0 = self.origin[self.normal_axis]
             ax.axhline(y0, **kwargs)
             y = y0
-            for t in self.box_thickness:
+            for t in self._box_thickness:
                 y -= t
                 ax.axhline(y, **kwargs)
             y = y0 + self.core_thickness
-            for t in self.clad_thickness:
+            for t in self._clad_thickness:
                 y += t
                 ax.axhline(y, **kwargs)
 
