@@ -106,7 +106,7 @@ def _run_primitive(
 
     # rid passed simulation of tracers and record how many monitors are in it (for reconstruction)
     # NOTE: will also validate that the un-traced simulation is valid before running
-    sim_original = simulation.to_static(mutate=False)
+    sim_original = simulation.to_static()
     num_mnts_original = len(sim_original.monitors)
 
     # make and run a sim with combined original & adjoint monitors

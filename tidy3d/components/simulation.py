@@ -2854,14 +2854,13 @@ class Simulation(AbstractYeeGridSimulation):
 
     def _validate_no_structures_pml(self) -> None:
         """Ensure no structures terminate / have bounds inside of PML."""
-        return
 
         pml_thicks = np.array(self.pml_thicknesses).T
         sim_bounds = self.bounds
         bound_spec = self.boundary_spec.to_list
 
         with log as consolidated_logger:
-            for i, structure in enumerate(self.structures):
+            for i, structure in enumerate(self.static_structures):
                 geo_bounds = structure.geometry.bounds
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
                     sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)
@@ -3106,6 +3105,11 @@ class Simulation(AbstractYeeGridSimulation):
                     "or use 'start', 'stop', and 'interval' to reduce the number of time steps "
                     "at which the monitor stores data."
                 )
+
+    @cached_property
+    def static_structures(self) -> list[Structure]:
+        """Structures in simulation with all autograd tracers removed."""
+        return [structure.to_static() for structure in self.structures]
 
     @cached_property
     def monitors_data_size(self) -> Dict[str, float]:
@@ -3888,8 +3892,7 @@ class Simulation(AbstractYeeGridSimulation):
         # Add a simulation Box as the first structure
         structures = [Structure(geometry=self.geometry, medium=self.medium)]
 
-        # make structures static before meshing
-        structures += self.structures
+        structures += self.static_structures
 
         grid = self.grid_spec.make_grid(
             structures=structures,

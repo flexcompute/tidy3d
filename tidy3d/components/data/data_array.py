@@ -50,6 +50,9 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
+# name for the autograd-traced part of the DataArray
+AUTOGRAD_KEY = "AUTOGRAD"
+
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -66,7 +69,7 @@ class DataArray(xr.DataArray):
 
         if values_ag is not None:
             super().__init__(getval(values), *args, **kwargs)
-            self.attrs["AUTOGRAD"] = values_ag
+            self.attrs[AUTOGRAD_KEY] = values_ag
 
         else:
             super().__init__(values, *args, **kwargs)

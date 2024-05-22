@@ -25,13 +25,14 @@ from ..utils import run_emulated
 
 # make it faster to toggle this
 TEST_CUSTOM_MEDIUM_SPEED = True
+TEST_POLYSLAB_SPEED = False
 
 
 TEST_MODES = ("pipeline", "adjoint", "numerical", "speed")
-TEST_MODE = "speed" if TEST_CUSTOM_MEDIUM_SPEED else "pipeline"
+TEST_MODE = "speed" if TEST_POLYSLAB_SPEED else "pipeline"
 
 # number of elements in the parameters / input to the objective function
-N_PARAMS = 1
+N_PARAMS = 100
 
 # default starting args
 np.random.seed(1)
@@ -62,10 +63,10 @@ PML_X = True if IS_3D else False
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
-DA_SHAPE = (DA_SHAPE_X, 5_000, 2_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
+DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
 
 # number of vertices in the polyslab
-NUM_VERTICES = 12
+NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 12
 
 # sim that we add traced structures and monitors to
 SIM_BASE = td.Simulation(

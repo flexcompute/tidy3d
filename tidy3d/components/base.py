@@ -24,7 +24,7 @@ from autograd.tracer import isbox
 from autograd.builtins import dict as dict_ag
 
 from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from .data.data_array import DataArray, DATA_ARRAY_MAP
+from .data.data_array import DataArray, DATA_ARRAY_MAP, AUTOGRAD_KEY
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
@@ -924,7 +924,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(self, mutate: bool = False) -> AutogradFieldMap:
+    def strip_traced_fields(self) -> AutogradFieldMap:
         """Extract a dictionary mapping paths in the model to the data traced by autograd."""
 
         field_mapping = dict_ag()  # {}
@@ -939,23 +939,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             elif isinstance(x, DataArray):
                 # NOTE: here be dragons, if you dont copy it this way (tolist()) it will break
 
-                if mutate:
-                    field_mapping[path] = x.values.copy()
+                if AUTOGRAD_KEY in x.attrs:
+                    field_mapping[path] = x.attrs[AUTOGRAD_KEY]
 
                 else:
-                    if "AUTOGRAD" in x.attrs:
-                        field_mapping[path] = x.attrs["AUTOGRAD"]
-
-                    else:
-                        field_mapping[path] = get_static(x.values)
-
-                    # if isbox(x.values.flat[0]):
-
-                    #     import pdb; pdb.set_trace()
-
-                    # values = x.values
-                    # x_list = values.tolist()
-                    # field_mapping[path] = npa.array(x_list)
+                    field_mapping[path] = get_static(x.values)
 
             # for sequences, add (i,) to the path and handle each value
             elif isinstance(x, (list, tuple)):
@@ -976,9 +964,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)
 
-    def insert_traced_fields(
-        self, field_mapping: AutogradFieldMap, mutate: bool = False
-    ) -> Tidy3dBaseModel:
+    def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
         # ``def insert_value()`` will insert into this dictionary
@@ -999,17 +985,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             if len_sub_path == 0:
                 sub_element = sub_dict[key]
                 if isinstance(sub_element, DataArray):
-                    # NOTE: if you don't copy, you'll mutate data in self and bad stuff will occur
-                    if mutate:
-                        sub_dict[key].values = value
-                    else:
-                        # values = sub_element.values
-                        sub_dict[key] = sub_element.copy(deep=False, data=value)
+                    # values = sub_element.values
+                    sub_dict[key] = sub_element.copy(deep=False, data=value)
 
-                        if "AUTOGRAD" in sub_element.attrs:
-                            sub_dict[key].attrs["AUTOGRAD"] = value
+                    if "AUTOGRAD" in sub_element.attrs:
+                        sub_dict[key].attrs["AUTOGRAD"] = value
 
-                        # sub_dict[key].values = value
                 else:
                     sub_dict[key] = value
                 return
@@ -1025,12 +1006,12 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # parse the dict with inserted fields to return an updated copy of ``self``
         return self.parse_obj(self_dict)
 
-    def to_static(self, mutate: bool = False) -> Tidy3dBaseModel:
+    def to_static(self) -> Tidy3dBaseModel:
         """Version of self with all autograd-traced fields removed."""
-        field_mapping = self.strip_traced_fields(mutate=mutate)
+        field_mapping = self.strip_traced_fields()
         field_mapping = {key: val for key, val in field_mapping.items() if isbox(val)}
         field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
-        return self.insert_traced_fields(field_mapping_static, mutate=mutate)
+        return self.insert_traced_fields(field_mapping_static)
 
     @classmethod
     def add_type_field(cls) -> None:
