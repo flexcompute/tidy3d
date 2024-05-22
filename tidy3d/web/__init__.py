@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """ imports interfaces for interacting with server """
 from .core import core_config
 from ..log import log, get_logging_console
@@ -6,10 +7,10 @@ from ..version import __version__
 # set logger to tidy3d.log before it's invoked in other imports
 core_config.set_config(log, get_logging_console(), __version__)
 
-from .api.container import Job, Batch, BatchData  # noqa: E402
-from .cli.migrate import migrate  # noqa: E402
-from .cli.app import configure_fn as configure  # noqa: E402
-from .api.webapi import (  # noqa: E402
+from .api.container import Job, Batch, BatchData
+from .cli.migrate import migrate
+from .cli.app import configure_fn as configure
+from .api.webapi import (
     run,
     upload,
     get_info,
@@ -28,8 +29,9 @@ from .api.webapi import (  # noqa: E402
     real_cost,
     test,
 )
-from .cli import tidy3d_cli  # noqa: E402
-from .api.asynchronous import run_async  # noqa: E402
+from .cli import tidy3d_cli
+from .api.asynchronous import run_async
+from .api.autograd import run as run_autograd
 
 migrate()
 
@@ -56,5 +58,6 @@ __all__ = [
     "tidy3d_cli",
     "configure",
     "run_async",
+    "run_autograd",
     "test",
 ]

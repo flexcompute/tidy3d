@@ -87,18 +87,22 @@ def derivative_map_D(
 # TODO: run_batch version
 
 
-def _run_tidy3d(sim: td.Simulation) -> td.SimulationData:
+def _run_tidy3d(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.SimulationData:
     """Run a simulation without any tracers using regular web.run()."""
     td.log.info("running regular simulation with '_run_tidy3d()'")
     td.log.warning("running sim")
-    data = run_webapi(sim, task_name="autograd my life", verbose=False)
+    data = run_webapi(simulation, task_name=task_name, **run_kwargs)
     td.log.warning("finished with sim")
     return data
 
 
 @primitive
 def _run_primitive(
-    sim_fields: AutogradFieldMap, simulation: td.Simulation, aux_data: dict
+    sim_fields: AutogradFieldMap,
+    simulation: td.Simulation,
+    task_name: str,
+    aux_data: dict,
+    **run_kwargs,
 ) -> AutogradFieldMap:
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
 
@@ -111,7 +115,7 @@ def _run_primitive(
 
     # make and run a sim with combined original & adjoint monitors
     sim_combined = sim_original.with_adjoint_monitors(sim_fields)
-    sim_data_combined = _run_tidy3d(sim_combined)
+    sim_data_combined = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
 
     # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
     data_original, data_fwd = split_data_list(
@@ -148,8 +152,83 @@ def _run_primitive(
     return data_traced
 
 
-def run(simulation: td.Simulation) -> td.SimulationData:
+def run(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.SimulationData:
     """User-facing run function, compatible with autograd."""
+    """
+    Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
+    and loads results as a :class:`.SimulationDataType` object.
+
+    Parameters
+    ----------
+    simulation : :class:`.Simulation`
+        Simulation to upload to server.
+    task_name : str
+        Name of task.
+    folder_name : str = "default"
+        Name of folder to store task on web UI.
+    path : str = "simulation_data.hdf5"
+        Path to download results file (.hdf5), including filename.
+    callback_url : str = None
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    progress_callback_upload : Callable[[float], None] = None
+        Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    progress_callback_download : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+    solver_version: str = None
+        target solver version.
+    worker_group: str = None
+        worker group
+
+    Returns
+    -------
+    :class:`.SimulationData`
+        Object containing solver results for the supplied simulation.
+
+    Notes
+    -----
+
+        Submitting a simulation to our cloud server is very easily done by a simple web API call.
+
+        .. code-block:: python
+
+            sim_data = tidy3d.web.api.webapi.run(simulation, task_name='my_task', path='out/data.hdf5')
+
+        The :meth:`tidy3d.web.api.webapi.run()` method shows the simulation progress by default.  When uploading a
+        simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
+        :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
+        display the progress of your simulation(s).
+
+    Examples
+    --------
+
+        To differentiate an objective function depending on some parameters through ``run_adjoint`
+
+        .. code-block:: python
+
+            def objective_funcion(params):
+
+                sim = make_simulation(params)
+
+                # Run the simulation.
+                sim_data = web.run_autograd(simulation, task_name='task_name', path='out/sim.hdf5')
+
+                return postprocess(sim_data)
+
+            import autograd as ag
+            ag.grad(objective_function)(parameters)
+
+    See Also
+    --------
+
+    :meth:`tidy3d.web.api.webapi.run`
+        Run a task (without autograd)
+
+    """
 
     td.log.info("running user-facing run()")
 
@@ -164,7 +243,7 @@ def run(simulation: td.Simulation) -> td.SimulationData:
             "to the 'Simulation'. If this is unexpected, double check your objective function "
             "pre-processing. Running regular tidy3d simulation."
         )
-        return _run_tidy3d(simulation)
+        return _run_tidy3d(simulation, task_name=task_name, **run_kwargs)
 
     td.log.info("Found derivative tracers in the 'Simulation', running adjoint forward pass.")
 
@@ -172,7 +251,13 @@ def run(simulation: td.Simulation) -> td.SimulationData:
     aux_data = {}
 
     # run our custom @primitive, passing the traced fields first to register with autograd
-    traced_fields_data = _run_primitive(traced_fields_sim, simulation=simulation, aux_data=aux_data)
+    traced_fields_data = _run_primitive(
+        traced_fields_sim,
+        simulation=simulation,
+        task_name=task_name,
+        aux_data=aux_data,
+        **run_kwargs,
+    )
     traced_fields_data = {key: val for key, val in traced_fields_data.items() if key[0] == "data"}
 
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
@@ -184,7 +269,9 @@ def _run_bwd(
     data_fields_original: AutogradFieldMap,
     sim_fields_original: AutogradFieldMap,
     simulation: td.Simulation,
+    task_name: str,
     aux_data: dict,
+    **run_kwargs,
 ) -> typing.Callable[[AutogradFieldMap], AutogradFieldMap]:
     """VJP-maker for ``_run_primitive()``. Constructs and runs adjoint simulation, computes grad."""
 
@@ -233,7 +320,8 @@ def _run_bwd(
             return {path: 0 * value for path, value in sim_fields_original.items()}
 
         # run adjoint simulation
-        sim_data_adj = _run_tidy3d(sim_adj)
+        task_name_adj = task_name + "_adjoint"
+        sim_data_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
 
         # map of index into 'structures' to the list of paths we need vjps for
         sim_vjp_map = {}

@@ -10,7 +10,7 @@ import autograd as ag
 import autograd.numpy as npa
 
 import tidy3d as td
-import tidy3d.web as web
+from tidy3d.web import run_autograd
 
 from ..utils import run_emulated
 
@@ -283,7 +283,10 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         monitor_keys = [monitor_key]
 
     # import here so it uses emulated run
-    from tidy3d.web.api.autograd import run as run_ag
+    from importlib import reload
+    from tidy3d.web.api import autograd
+
+    reload(autograd)
 
     # for logging output
     td.config.logging_level = "ERROR"
@@ -318,7 +321,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         sim = make_sim(*args)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
-        data = run_ag(sim)
+        data = run_autograd(sim, task_name="autograd_test", verbose=False)
         value = postprocess(data)
         return value
 
@@ -339,6 +342,8 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
     # if 'numerical', we do a numerical gradient check
     if TEST_MODE == "numerical":
+        import tidy3d.web as web
+
         delta = 1e-8
         sims_numerical = {}
 
