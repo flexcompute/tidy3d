@@ -97,7 +97,7 @@ Next we want to define the base `td.Simulation` that contains the static portion
 
 For this, we will make a bunch of regular `tidy3d` components (excluding the design region) and put them into a `td.Simulation`.
 
-> Note: we don't need to use `adjoint` components, such as `tda.JaxSimulation` in the `invdes` plugin. These components are created behind the scenes by the higher level wrappers that we define here.
+> Note: we don't need to use `adjoint` components, such as `td.Simulation` in the `invdes` plugin. These components are created behind the scenes by the higher level wrappers that we define here.
 
 ```py
 
@@ -239,7 +239,7 @@ jax_structure = design_region.to_jax_structure(params0)
 
 ### Post-Process Function
 
-The next step of this process is to define a post-processing function, which tells our optimizer how we want it to interpret a `SimulationData` that corresponds to this design. We write this as a regular python function that takes a `tda.JaxSimulationData` as first argument. The function can accept optional keyword arguments involving the optimization history for more control over the objective function.
+The next step of this process is to define a post-processing function, which tells our optimizer how we want it to interpret a `SimulationData` that corresponds to this design. We write this as a regular python function that takes a `td.SimulationData` as first argument. The function can accept optional keyword arguments involving the optimization history for more control over the objective function.
 
 > Reminder that the objective function will be **maximized** by our objective, minus any penalty values from the `DesignRegion`. So the sign of this function should take this into account.
 
@@ -252,11 +252,11 @@ First we will grab the power at each of the waveguides from the `JaxSimulationDa
 > Note: If doing more complex operations in the postprocess function, be sure to use `jax.numpy` instead of regular `numpy` to ensure that the function is differentiable by `jax`.
 
 ```py
-import jax.numpy as jnp
-import tidy3d.plugins.adjoint as tda
-import jax
+import autograd.numpy as npa
 
-def post_process_fn(sim_data: tda.JaxSimulationData, step_index:int, history: dict) -> float:
+import autograd as ag
+
+def post_process_fn(sim_data: td.SimulationData, step_index:int, history: dict) -> float:
     ```Function called internally to compute contribution to the objective function from the data.```
 
     amps = [tdi.get_amps(sim_data, monitor_name=mnt.name, direction="+") for mnt in monitors_out]
@@ -264,11 +264,11 @@ def post_process_fn(sim_data: tda.JaxSimulationData, step_index:int, history: di
 
     # # or, when written in more low-level syntax
     # amps = [sim_data[mnt.name].amps.sel(direction="+") for mnt in monitors_out]
-    # powers = [jnp.sum(abs(jnp.array(amp.values))**2) for amp in amps]
+    # powers = [npa.sum(abs(npa.array(amp.values))**2) for amp in amps]
 
-    powers = jnp.array(powers)
+    powers = npa.array(powers)
     softmin_weights = jax.nn.softmax(-powers)
-    return num_output_waveguides * jnp.sum(jnp.array(powers) * softmin_weights)
+    return num_output_waveguides * npa.sum(npa.array(powers) * softmin_weights)
 
 ```
 > Note: the extra `**kwargs` contain information passed during optimization about the history and the index of the step. They can be used to schedule changes into the post processing function as a function of the optimization state.
@@ -488,7 +488,7 @@ def post_process_fn(sim_data_list: list, **kwargs) -> float:
 
         # # or, when written in more low-level syntax
         # amp = sim_data[mnt_name_left].amps.sel(direction="-")
-        # power = abs(jnp.sum(jnp.array(amp.values)))**2
+        # power = abs(npa.sum(npa.array(amp.values)))**2
 
         power_left += power
     return power_left
@@ -505,7 +505,7 @@ output_monitor_names = [[mnt_name_left], [mnt_name_left], [mnt_name_left]]
 
 Finally, we combine everything into an `InverseDesignMulti` object.
 
-In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `JaxSimulationData` objects under the hood and use `tda.web.run_async` to run each of them in parallel.
+In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `JaxSimulationData` objects under the hood and use `td.web.run_async` to run each of them in parallel.
 
 After the simulations are run, the combined post-processing function will be applied to the combined data to give the last value, minus any penalties in the shared `DesignRegion`.
 

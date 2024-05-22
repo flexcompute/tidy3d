@@ -3,10 +3,10 @@
 import typing
 
 import matplotlib.pyplot as plt
-import jax.numpy as jnp
 import pydantic.v1 as pd
 
 import tidy3d as td
+from tidy3d.components.types import ArrayLike
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
@@ -24,7 +24,7 @@ class InverseDesignResult(InvdesBaseModel):
         description="Specification describing the inverse design problem we wish to optimize.",
     )
 
-    params: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+    params: typing.Tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Parameter History",
         description="History of parameter arrays throughout the optimization.",
@@ -36,23 +36,24 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of objective function values throughout the optimization.",
     )
 
-    grad: typing.Tuple[jnp.ndarray, ...] = pd.Field(
+    grad: typing.Tuple[ArrayLike, ...] = pd.Field(
         (),
         title="Gradient History",
         description="History of objective function gradient arrays throughout the optimization.",
     )
 
-    penalty: typing.Tuple[float, ...] = pd.Field(
-        (),
-        title="Penalty History",
-        description="History of weighted sum of penalties throughout the optimization.",
-    )
+    # TODO: add in when aux_data figured out
+    # penalty: typing.Tuple[float, ...] = pd.Field(
+    #     (),
+    #     title="Penalty History",
+    #     description="History of weighted sum of penalties throughout the optimization.",
+    # )
 
-    post_process_val: typing.Tuple[float, ...] = pd.Field(
-        (),
-        title="Post-Process Function History",
-        description="History of return values from ``post_process_fn`` throughout the optimization.",
-    )
+    # post_process_val: typing.Tuple[float, ...] = pd.Field(
+    #     (),
+    #     title="Post-Process Function History",
+    #     description="History of return values from ``post_process_fn`` throughout the optimization.",
+    # )
 
     simulation: typing.Tuple[td.Simulation, ...] = pd.Field(
         (),
@@ -60,12 +61,10 @@ class InverseDesignResult(InvdesBaseModel):
         description="History of ``td.Simulation`` instances throughout the optimization.",
     )
 
-    # simulations: tt
-
-    opt_state: typing.Tuple[tuple, ...] = pd.Field(
+    opt_state: typing.Tuple[dict, ...] = pd.Field(
         (),
         title="Optimizer State History",
-        description="History of ``optax`` optimizer states throughout the optimization.",
+        description="History of optimizer states throughout the optimization.",
     )
 
     @property
@@ -75,8 +74,8 @@ class InverseDesignResult(InvdesBaseModel):
             params=list(self.params),
             objective_fn_val=list(self.objective_fn_val),
             grad=list(self.grad),
-            penalty=list(self.penalty),
-            post_process_val=list(self.post_process_val),
+            # penalty=list(self.penalty),
+            # post_process_val=list(self.post_process_val),
             opt_state=list(self.opt_state),
         )
 
@@ -127,8 +126,8 @@ class InverseDesignResult(InvdesBaseModel):
     def plot_optimization(self):
         """Plot the optimization progress from the history."""
         plt.plot(self.objective_fn_val, label="objective function")
-        plt.plot(self.post_process_val, label="post process function")
-        plt.plot(self.penalty, label="combined penalty")
+        # plt.plot(self.post_process_val, label="post process function")
+        # plt.plot(self.penalty, label="combined penalty")
         plt.xlabel("iteration number")
         plt.ylabel("value")
         plt.legend()
