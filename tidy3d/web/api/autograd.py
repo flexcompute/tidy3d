@@ -42,27 +42,12 @@ def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tupl
 
 def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldData:
     """Convert electric field to displacement field."""
-
-    field_components = {}
-    for dim in "xyz":
-        field_name = f"E{dim}"
-        fld_E = fld_data.field_components[field_name]
-        eps_name = f"eps_{dim}{dim}"
-        fld_eps = eps_data.field_components[eps_name]
-        fld_D = fld_eps * fld_E
-        field_components[field_name] = fld_D
-    return fld_data.updated_copy(**field_components)
+    return multiply_field_data(fld_data, eps_data)
 
 
 def derivative_map_E(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. these."""
-    field_components = {}
-    for field_name in ("Ex", "Ey", "Ez"):
-        fwd = fld_fwd.field_components[field_name]
-        adj = fld_adj.field_components[field_name]
-        mult = fwd * adj
-        field_components[field_name] = mult
-    return fld_fwd.updated_copy(**field_components)
+    return multiply_field_data(fld_fwd, fld_adj)
 
 
 def derivative_map_D(
@@ -74,14 +59,27 @@ def derivative_map_D(
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. D fields."""
     fwd_D = E_to_D(fld_data=fld_fwd, eps_data=eps_fwd)
     adj_D = E_to_D(fld_data=fld_adj, eps_data=eps_adj)
-    field_components = {}
-    for field_name in ("Ex", "Ey", "Ez"):
-        fwd = fwd_D.field_components[field_name]
-        adj = adj_D.field_components[field_name]
-        mult = fwd * adj
-        field_components[field_name] = mult
+    return multiply_field_data(fwd_D, adj_D)
 
-    return fld_fwd.updated_copy(**field_components)
+
+def multiply_field_data(
+    fld_1: td.FieldData, fld_2: td.FieldData | td.PermittivityData
+) -> td.FieldData:
+    """Elementwise multiply two field data objects, writes data into ``fld_1`` copy."""
+
+    def get_field_key(dim: str, fld_data: td.FieldData | td.PermittivityData) -> str:
+        """Get the key corresponding to the scalar field along this dimension."""
+        return f"E{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
+
+    field_components = {}
+    for dim in "xyz":
+        key_1 = get_field_key(dim=dim, fld_data=fld_1)
+        key_2 = get_field_key(dim=dim, fld_data=fld_2)
+        cmp_1 = fld_1.field_components[key_1]
+        cmp_2 = fld_2.field_components[key_2]
+        mult = cmp_1 * cmp_2
+        field_components[key_1] = mult
+    return fld_1.updated_copy(**field_components)
 
 
 """ Run Functions """
