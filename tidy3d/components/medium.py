@@ -1082,8 +1082,9 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
@@ -1491,8 +1492,9 @@ class Medium(AbstractMedium):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
@@ -2400,8 +2402,9 @@ class CustomMedium(AbstractCustomMedium):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
@@ -2416,8 +2419,28 @@ class CustomMedium(AbstractCustomMedium):
         coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
         dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
 
-        # TODO: probably this could be more robust. eg if the DataArray has weird data, edge cases
-        # in he coords
+        # compute sizes along each of the interpolation dimensions
+        sizes_list = []
+        for _, coords in coords_interp.items():
+            num_coords = len(coords)
+            coords = np.array(coords)
+
+            # compute distances between midpoints for all internal coords
+            mid_points = (coords[1:] + coords[:-1]) / 2.0
+            dists = np.diff(mid_points)
+            sizes = np.zeros(num_coords)
+            sizes[1:-1] = dists
+
+            # estimate the sizes on the edges using 2 x the midpoint distance
+            sizes[0] = 2 * abs(mid_points[0] - coords[0])
+            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
+
+            sizes_list.append(sizes)
+
+        # turn this into a volume element, should be re-sizeable to the gradient shape
+        d_vol = functools.reduce(np.outer, sizes_list)
+
+        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         vjp_array = 0.0
         for dim in "xyz":
             E_der_dim = E_der_map.field_components[f"E{dim}"]
@@ -2426,8 +2449,18 @@ class CustomMedium(AbstractCustomMedium):
 
         vjp_array = vjp_array.reshape(eps_data.shape)
 
-        # TODO: scale by the volume of each cell?
-        # if we do, the gradient becomes discretization-dependent, which could be annoying?
+        # multiply by volume elements (if possible, being defensive here..)
+        try:
+            vjp_array *= d_vol.reshape(vjp_array.shape)
+        except ValueError:
+            log.warning(
+                "Skipping volume element normalization of 'CustomMedium' gradients. "
+                f"Could not reshape the volume elements of shape {d_vol.shape} "
+                f"to the shape of the gradient {vjp_array.shape}. "
+                "If you encounter this warning, gradient direction will be accurate but the norm "
+                "will be inaccurate. Please raise an issue on the tidy3d front end with this "
+                "message and some information about your simulation setup and we will investigate. "
+            )
 
         return {("permittivity",): vjp_array}
 

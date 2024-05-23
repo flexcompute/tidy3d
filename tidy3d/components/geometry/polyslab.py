@@ -1357,8 +1357,9 @@ class PolySlab(base.Planar):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``field_path``s."""
@@ -1368,8 +1369,9 @@ class PolySlab(base.Planar):
         vjp_vertices = self.compute_derivative_vertices(
             E_der_map=E_der_map,
             D_der_map=D_der_map,
-            eps_structure=eps_structure,
-            eps_sim=eps_sim,
+            eps_data=eps_data,
+            eps_in=eps_in,
+            eps_out=eps_out,
             bounds=bounds,
         )
 
@@ -1379,8 +1381,9 @@ class PolySlab(base.Planar):
         self,
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> TracedVertices:
         # derivative w.r.t each edge
@@ -1414,12 +1417,6 @@ class PolySlab(base.Planar):
         E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
 
         # approximate permittivity in and out
-
-        # TODO: not a good approximation at all. better to use `medium.eps_model`
-        eps_in = complex(
-            np.sum(np.mean([np.mean(val) for _, val in eps_structure.field_components.items()]))
-        )
-        eps_out = eps_sim
         delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
         delta_eps = eps_in - eps_out
 

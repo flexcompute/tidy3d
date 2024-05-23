@@ -5,6 +5,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import cProfile
 import typing
+from importlib import reload
 
 import autograd as ag
 import autograd.numpy as npa
@@ -118,21 +119,33 @@ def use_emulated_run(monkeypatch):
         monkeypatch.setattr(webapi, "run", run_emulated)
         _run_was_emulated[0] = True
 
+        # import here so it uses emulated run
+        from tidy3d.web.api.autograd import autograd
+
+        reload(autograd)
+
 
 @pytest.fixture
 def use_emulated_run_async(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
-    import tidy3d.web.api.asynchronous as asynchronous
+    if TEST_MODE in ("pipeline", "speed"):
+        import tidy3d.web.api.asynchronous as asynchronous
 
-    def run_async_emulated(simulations, **kwargs):
-        return {
-            task_name: run_emulated(sim, task_name=task_name)
-            for task_name, sim in simulations.items()
-        }
+        def run_async_emulated(simulations, **kwargs):
+            """Mock version of ``run_async``."""
+            return {
+                task_name: run_emulated(sim, task_name=task_name)
+                for task_name, sim in simulations.items()
+            }
 
-    monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
-    _run_was_emulated[0] = True
+        monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
+        _run_was_emulated[0] = True
+
+        # import here so it uses emulated run
+        from tidy3d.web.api.autograd import autograd
+
+        reload(autograd)
 
 
 def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
@@ -326,12 +339,6 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
 @pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
-
-    # import here so it uses emulated run
-    from importlib import reload
-    from tidy3d.web.api.autograd import autograd
-
-    reload(autograd)
 
     # for logging output
     td.config.logging_level = "ERROR"

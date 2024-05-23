@@ -243,8 +243,9 @@ class Structure(AbstractStructure):
         structure_paths: list[tuple[str, ...]],
         E_der_map: FieldData,
         D_der_map: FieldData,
-        eps_structure: PermittivityData,
-        eps_sim: float,
+        eps_data: PermittivityData,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[tuple[str, ...], Any]:
         """Compute adjoint gradients given the forward and adjoint fields"""
@@ -276,8 +277,9 @@ class Structure(AbstractStructure):
                 field_paths=field_paths,
                 E_der_map=E_der_map,
                 D_der_map=D_der_map,
-                eps_structure=eps_structure,
-                eps_sim=eps_sim,
+                eps_data=eps_data,
+                eps_in=eps_in,
+                eps_out=eps_out,
                 bounds=bounds,
             )
 

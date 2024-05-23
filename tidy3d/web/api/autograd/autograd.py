@@ -392,12 +392,18 @@ def postprocess_adj(
 
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
+
+        # replace C_0 with some frequency info
+        eps_in = np.mean(structure.medium.eps_model(td.C_0))
+        eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(td.C_0))
+
         vjp_value_map = structure.compute_derivatives(
             structure_paths=structure_paths,
             E_der_map=E_der_map,
             D_der_map=D_der_map,
-            eps_structure=eps_fwd,
-            eps_sim=sim_data_orig.simulation.medium.permittivity,
+            eps_data=eps_fwd,
+            eps_in=eps_in,
+            eps_out=eps_out,
             bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
         )
 

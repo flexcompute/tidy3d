@@ -1376,8 +1376,9 @@ class Geometry(Tidy3dBaseModel, ABC):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
@@ -2286,8 +2287,9 @@ class Box(SimplePlaneIntersection, Centered):
         field_paths: list[tuple[str, ...]],
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``field_path``s."""
@@ -2296,8 +2298,9 @@ class Box(SimplePlaneIntersection, Centered):
         vjps_faces = self.derivative_faces(
             E_der_map=E_der_map,
             D_der_map=D_der_map,
-            eps_structure=eps_structure,
-            eps_sim=eps_sim,
+            eps_data=eps_data,
+            eps_in=eps_in,
+            eps_out=eps_out,
             bounds=bounds,
         )
 
@@ -2342,14 +2345,14 @@ class Box(SimplePlaneIntersection, Centered):
         self,
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> Bound:
         """Derivative with respect to normal position of 6 faces of ``Box``."""
 
         # change in permittivity between inside and outside
-        # TODO: assumes non-dispersive here and eps_sim, generalize
         vjp_faces = np.zeros((2, 3))
 
         for min_max_index, _ in enumerate((0, -1)):
@@ -2359,8 +2362,9 @@ class Box(SimplePlaneIntersection, Centered):
                     axis_normal=axis,
                     E_der_map=E_der_map,
                     D_der_map=D_der_map,
-                    eps_structure=eps_structure,
-                    eps_sim=eps_sim,
+                    eps_data=eps_data,
+                    eps_in=eps_in,
+                    eps_out=eps_out,
                     bounds=bounds,
                 )
 
@@ -2375,8 +2379,9 @@ class Box(SimplePlaneIntersection, Centered):
         axis_normal: Axis,
         E_der_map: ElectromagneticFieldDataset,
         D_der_map: ElectromagneticFieldDataset,
-        eps_structure: PermittivityDataset,
-        eps_sim: float,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
         bounds: Bound,
     ) -> float:
         """Compute the derivative w.r.t. shifting a face in the normal direction."""
@@ -2412,15 +2417,15 @@ class Box(SimplePlaneIntersection, Centered):
             return 0.0
 
         # grab permittivity data inside and outside edge in normal direction
-        eps_xyz = [eps_structure.field_components[f"eps_{dim}{dim}"] for dim in "xyz"]
+        eps_xyz = [eps_data.field_components[f"eps_{dim}{dim}"] for dim in "xyz"]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
         num_cells_in = 4
 
-        # if not enough data, just use best guess using average permittivity at face and eps in sim medium
+        # if not enough data, just use best guess using eps in medium and simulation
         if any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz):
-            eps_xyz_inside = [eps.mean(dim=dim_normal) for eps in eps_xyz]
-            eps_xyz_outside = 3 * [eps_sim]
+            eps_xyz_inside = 3 * [eps_in]
+            eps_xyz_outside = 3 * [eps_out]
             # TODO: not tested...
 
         # otherwise, try to grab the data at the edges
