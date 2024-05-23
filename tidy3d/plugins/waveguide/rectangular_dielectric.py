@@ -254,7 +254,10 @@ class RectangularDielectric(Tidy3dBaseModel):
         """Set default BOX thickness based on the max wavelength in the BOX medium."""
         if val is None:
             wavelength = values["wavelength"]
-            medium = values["box_medium"]
+            medium = values.get("box_medium")
+            if medium is None:
+                # Other validators failed already
+                return None
             if not isinstance(medium, MediumType):
                 medium = medium[0]
             n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
