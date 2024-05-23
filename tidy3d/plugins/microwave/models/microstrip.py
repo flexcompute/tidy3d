@@ -14,7 +14,6 @@ References
 import numpy as np
 
 from ....constants import ETA_0
-from typing import Tuple
 
 
 def _f(normalized_width: float) -> float:
@@ -73,7 +72,7 @@ def _wcorr_mixed(width_correction_homo: float, relative_permittivity: float) -> 
 
 def compute_line_params(
     relative_permittivity: float, width: float, height: float, thickness: float
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Computes an approximation for the characteristic impedance and effective
     electric permittivity of a microstrip line [1].
 
