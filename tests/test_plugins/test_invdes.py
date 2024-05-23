@@ -17,7 +17,7 @@ from . import test_adjoint as ta
 ta.NUM_PROC_PARALLEL = 1
 
 # from .test_adjoint import use_emulated_run_autograd, use_emulated_run_autograd_async
-from ..utils import run_emulated, log_capture, assert_log_level, AssertLogLevel
+from ..utils import run_emulated, run_async_emulated, log_capture, assert_log_level, AssertLogLevel
 
 FREQ0 = 1e14
 L_SIM = 1.0
@@ -63,9 +63,9 @@ def use_emulated_run_autograd(monkeypatch):
 @pytest.fixture
 def use_emulated_run_autograd_async(monkeypatch):
     """Emulate the tidy3d web function used in autograd web API."""
-    # TODO: Implement
-    # import tidy3d.web.api.autograd as web_ag
-    # monkeypatch.setattr(web_ag, "_run_tidy3d", run_emulated)
+    import tidy3d.web.api.autograd.autograd as web_ag
+
+    monkeypatch.setattr(web_ag, "_run_async_tidy3d", run_async_emulated)
 
 
 def make_design_region():
@@ -157,22 +157,22 @@ def test_region_inf_size():
 #         _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
 
 
-def post_process_fn(sim_data: tda.JaxSimulationData, **kwargs) -> float:
+def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     intensity = sim_data.get_intensity(MNT_NAME1)
     return npa.sum(intensity.values)
 
 
-def post_process_fn_kwargless(sim_data: tda.JaxSimulationData) -> float:
+def post_process_fn_kwargless(sim_data: td.SimulationData) -> float:
     """Define a post-processing function with no kwargs specified."""
     intensity = sim_data.get_intensity(MNT_NAME1)
     return npa.sum(intensity.values)
 
 
-def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) -> float:
+def post_process_fn_multi(batch_data: dict[str, td.SimulationData], **kwargs) -> float:
     """Define a post-processing function for batch."""
     val = 0.0
-    for sim_data in sim_data_list:
+    for task_name, sim_data in batch_data.items():
         intensity_i = sim_data.get_intensity(MNT_NAME1)
         val += npa.sum(intensity_i.values)
         power_i = tdi.utils.sum_abs_squared(tdi.utils.get_amps(sim_data, MNT_NAME2))
@@ -180,7 +180,7 @@ def post_process_fn_multi(sim_data_list: list[tda.JaxSimulationData], **kwargs) 
     return val
 
 
-def post_process_fn_untraced(sim_data: tda.JaxSimulationData, **kwargs) -> float:
+def post_process_fn_untraced(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     return 1.0
 
@@ -273,41 +273,38 @@ def test_invdes_mesh_override():
     assert sim.grid_spec.override_structures[-1].dl == (dl, dl, dl)
 
 
-# TODO: make this work
-# def make_invdes_multi():
-#     n = 7
+def make_invdes_multi():
+    n = 7
 
-#     region = make_design_region()
+    region = make_design_region()
 
-#     simulations = n * [simulation]
-#     # post_process_fns = n * [post_process_fn]
+    simulations = n * [simulation]
+    # post_process_fns = n * [post_process_fn]
 
-#     invdes = tdi.InverseDesignMulti(
-#         design_region=region,
-#         simulations=simulations,
-#         # post_process_fns=post_process_fns,
-#         post_process_fn=post_process_fn_multi,
-#         task_name="base",
-#     )
+    invdes = tdi.InverseDesignMulti(
+        design_region=region,
+        simulations=simulations,
+        task_name="base",
+    )
 
-#     return invdes
+    return invdes
 
-# TODO: make this work
-# def test_invdes_multi_same_length():
-#     """Test validator ensuring all multi fields have the same lengths, if applicable."""
 
-#     invdes = make_invdes_multi()
-#     n = len(invdes.simulations)
+def test_invdes_multi_same_length():
+    """Test validator ensuring all multi fields have the same lengths, if applicable."""
 
-#     output_monitor_names = (n + 1) * [["test"]]
+    invdes = make_invdes_multi()
+    n = len(invdes.simulations)
 
-#     with pytest.raises(ValueError):
-#         _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
+    output_monitor_names = (n + 1) * [["test"]]
 
-#     output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
-#     invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
+    with pytest.raises(ValueError):
+        _ = invdes.updated_copy(output_monitor_names=output_monitor_names)
 
-#     ds = invdes.designs
+    output_monitor_names = [([MNT_NAME1, MNT_NAME2], None)[i % 2] for i in range(n)]
+    invdes = invdes.updated_copy(output_monitor_names=output_monitor_names)
+
+    ds = invdes.designs
 
 
 def make_optimizer():
@@ -345,25 +342,23 @@ def test_warn_zero_grad(log_capture, use_emulated_run_autograd):
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
-    # design = optimizer.design.updated_copy(post_process_fn=post_process_fn_untraced)
-    # optimizer = optimizer.updated_copy(design=design)
     with AssertLogLevel(
         log_capture, "WARNING", contains_str="All elements of the gradient are almost zero"
     ):
         _ = optimizer.run(post_process_fn=post_process_fn_untraced)
 
 
-# def make_result_multi(use_emulated_run_autograd_async):
-#     """Test running the optimization defined in the ``InverseDesignMulti`` object."""
+def make_result_multi(use_emulated_run_autograd_async):
+    """Test running the optimization defined in the ``InverseDesignMulti`` object."""
 
-#     optimizer = make_optimizer()
-#     design = make_invdes_multi()
+    optimizer = make_optimizer()
+    design = make_invdes_multi()
 
-#     optimizer = optimizer.updated_copy(design=design)
+    optimizer = optimizer.updated_copy(design=design)
 
-#     PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
+    PARAMS_0 = np.random.random(optimizer.design.design_region.params_shape)
 
-#     return optimizer.run(params0=PARAMS_0)
+    return optimizer.run(params0=PARAMS_0, post_process_fn=post_process_fn_multi)
 
 
 def test_result_store_full_results_is_false(use_emulated_run_autograd):
@@ -442,10 +437,10 @@ def test_result_data(use_emulated_run_autograd):
     sim_data_last = result.sim_data_last(task_name="last")
 
 
-# def test_result_data_multi(use_emulated_run_autograd_async, tmp_path):
-#     result_multi = make_result_multi(use_emulated_run_autograd_async)
-#     sim_last = result_multi.sim_last
-#     sim_data_last = result_multi.sim_data_last(task_name="last")
+def test_result_data_multi(use_emulated_run_autograd_async, tmp_path):
+    result_multi = make_result_multi(use_emulated_run_autograd_async)
+    sim_last = result_multi.sim_last
+    sim_data_last = result_multi.sim_data_last(task_name="last")
 
 
 def test_result_empty():
@@ -514,8 +509,8 @@ def test_pixel_size_warn_validator(log_capture):
     with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
         invdes = invdes.updated_copy(design_region=region_too_coarse)
 
-    # with AssertLogLevel(log_capture, None):
-    #     invdes_multi = make_invdes_multi()
+    with AssertLogLevel(log_capture, None):
+        invdes_multi = make_invdes_multi()
 
-    # with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
-    #     invdes_multi = invdes_multi.updated_copy(design_region=region_too_coarse)
+    with AssertLogLevel(log_capture, "WARNING", contains_str="pixel_size"):
+        invdes_multi = invdes_multi.updated_copy(design_region=region_too_coarse)

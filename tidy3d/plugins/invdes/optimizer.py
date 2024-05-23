@@ -103,14 +103,12 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         params = result.get_last("params")
         history = deepcopy(result.history)
 
-        # use jax to grad the objective function
+        # use autograd to take gradient the objective function
         objective_fn = self.design.make_objective_fn(post_process_fn)
         val_and_grad_fn = ag.value_and_grad(objective_fn)
 
         # main optimization loop
         for step_index in range(self.num_steps):
-            # evaluate gradient
-
             aux_data = {}
             val, grad = val_and_grad_fn(params, aux_data=aux_data)
 

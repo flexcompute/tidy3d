@@ -4,7 +4,7 @@
 
 This describes the "Inverse Design" (`invdes`) plugin of Tidy3D.
 
-The goal of `invdes` is to provide a simpler interface for setting up most practical inverse design problems. It wraps the lower-level `adjoint` plugin of Tidy3D to perform the gradient calculations, but allows the user to focus on the important aspects of their design without getting into the details of `jax`.
+The goal of `invdes` is to provide a simpler interface for setting up most practical inverse design problems. It wraps the lower-level `adjoint` plugin of Tidy3D to perform the gradient calculations, but allows the user to focus on the important aspects of their design without getting into the details of `autograd`.
 
 In this notebook, we'll give a simple demo showing the inverse design of a 1 -> 3 splitter using the inverse design plugin.
 
@@ -229,12 +229,12 @@ print(params0.shape)
 
 ```
 
-Given an array of parameter values, this `TopologyDesignRegion` object can be exported to a `JaxStructureStaticGeometry` from the `adjoint` plugin.
+Given an array of parameter values, this `TopologyDesignRegion` object can be exported to a `td.Structure`.
 
 Here's an example using the `params0` array we just defined.
 
 ```py
-jax_structure = design_region.to_jax_structure(params0)
+structure = design_region.to_structure(params0)
 ```
 
 ### Post-Process Function
@@ -245,19 +245,19 @@ The next step of this process is to define a post-processing function, which tel
 
 In this example, we will try to maximize the minimum power in each of the three output waveguides. This is to ensure that we get an even distribution of power and no ports are ignored.
 
-First we will grab the power at each of the waveguides from the `JaxSimulationData`. Then, we'll pass the negative of each power to `jax.nn.softmax()` to get a differentiable set of normalized weights for each of the ports, with more weight on the smallest values. We'll take the dot product of our powers with these weights and try to maximize this. Normalizing so that a "perfect" splitter gives a value of 1.
+First we will grab the power at each of the waveguides from the `td.SimulationData`. Then, we'll pass the negative of each power to a softmax function to get a differentiable set of normalized weights for each of the ports, with more weight on the smallest values. We'll take the dot product of our powers with these weights and try to maximize this. Normalizing so that a "perfect" splitter gives a value of 1.
 
-> Note: there are some utility functions included in the `tdi` namespace that can make postprocessing a bit easier. Such as `.get_amps(sim_data, monitor_name, **sel_kwargs)`, and `sum_abs_squared(arr)`. We'll demonstrate both these in the function, along with the (commented out) equivalent approach using `jax`.
+> Note: there are some utility functions included in the `tdi` namespace that can make postprocessing a bit easier. Such as `.get_amps(sim_data, monitor_name, **sel_kwargs)`, and `sum_abs_squared(arr)`. We'll demonstrate both these in the function, along with the (commented out) equivalent approach using `autograd`.
 
-> Note: If doing more complex operations in the postprocess function, be sure to use `jax.numpy` instead of regular `numpy` to ensure that the function is differentiable by `jax`.
+> Note: If doing more complex operations in the postprocess function, be sure to use `autograd.numpy` instead of regular `numpy` to ensure that the function is differentiable by `autograd`.
 
 ```py
 import autograd.numpy as npa
 
 import autograd as ag
 
-def post_process_fn(sim_data: td.SimulationData, step_index:int, history: dict) -> float:
-    ```Function called internally to compute contribution to the objective function from the data.```
+def post_process_fn(sim_data: td.SimulationData) -> float:
+    """Function called internally to compute contribution to the objective function from the data."""
 
     amps = [tdi.get_amps(sim_data, monitor_name=mnt.name, direction="+") for mnt in monitors_out]
     powers = [tdi.sum_abs_squared(amp) for amp in amps]
@@ -267,7 +267,7 @@ def post_process_fn(sim_data: td.SimulationData, step_index:int, history: dict) 
     # powers = [npa.sum(abs(npa.array(amp.values))**2) for amp in amps]
 
     powers = npa.array(powers)
-    softmin_weights = jax.nn.softmax(-powers)
+    softmin_weights = npa.exp(-powers) / npa.sum(npa.exp(-powerss))
     return num_output_waveguides * npa.sum(npa.array(powers) * softmin_weights)
 
 ```
@@ -275,13 +275,12 @@ def post_process_fn(sim_data: td.SimulationData, step_index:int, history: dict) 
 
 ## Inverse Design object
 
-Next, we put the design region, simulation, and post-processing function together into an `InverseDesign` object, which captures everything we need to define our inverse design problem before running it.
+Next, we put the design region and simulation together into an `InverseDesign` object, which captures everything we need to define our inverse design problem before running it.
 
 ```py
 design = tdi.InverseDesign(
     simulation=simulation,
     design_region=design_region,
-    post_process_fn=post_process_fn,
     task_name="invdes",
     output_monitor_names=[mnt.name for mnt in monitors_out],
 )
@@ -331,11 +330,11 @@ optimizer = tdi.AdamOptimizer(
 
 Finally, we can use `result = Optimizer.run(params0)` on our initial parameters to run the inverse design problem.
 
-This will construct our combined objective funciton behind the scenes, including the penalties and our post-processing function, use `jax` to differentiate it, and feed it to a gradient-descent optimizer from the `optax` package.
+This will construct our combined objective function behind the scenes, including the penalties and our post-processing function, use `autograd` to differentiate it, and feed it to a gradient-descent optimizer.
 
 ```py
 
-result = optimizer.run(params0)
+result = optimizer.run(params0, post_process_fn=post_process_fn)
 
 ```
 ## Optimization Results
@@ -429,7 +428,7 @@ sim_last.to_gds_file(
 
 In many cases, one would like to perform an optimization with more than one base simulation. For example, if optimizing a multi-port device, it is very common to have objective functions that share a single design region, but each simulation involves a source placed at a different port, to compute a scattering matrix, for example.
 
-To handle this use-case, the `invdes` plugin includes an `InverseDesignMulti` class. This object behaves similarly to the `InverseDesign` class, except it allows for a set of multiple `Simulation` instances. Additionally, the `postprocess_fn` now accepts a list of `JaxSimulationData` objects as first argument, which allows the user to write an objective function over all simulation results.
+To handle this use-case, the `invdes` plugin includes an `InverseDesignMulti` class. This object behaves similarly to the `InverseDesign` class, except it allows for a set of multiple `Simulation` instances. Additionally, the `postprocess_fn` now accepts a dictionary of `td.SimulationData` objects as first argument, which allows the user to write an objective function over all simulation results.
 
 Here we'll run through a simple example, where we'll place a source at each of the 3 waveguides on the right (each in a different simulation) and then measure the sum of the power measured on the waveguide on the left. Note that this objective function is similar to the one we optimized earlier, but involves three separate simulations, just for demonstration purposes.
 
@@ -479,10 +478,10 @@ We also need to construct a post-processing function that will tell the optimize
 
 ```py
 
-def post_process_fn(sim_data_list: list, **kwargs) -> float:
+def post_process_fn(batch_data: dict[str, td.SimulationData]) -> float:
     ```Grab the power going left at the single waveguide monitor```
     power_left = 0.0
-    for sim_data in sim_data_list:
+    for _, sim_data in batch_data.items():
         amps = tdi.get_amps(sim_data, monitor_name=mnt_name_left, direction="-")
         power = tdi.sum_abs_squared(amps)
 
@@ -505,7 +504,7 @@ output_monitor_names = [[mnt_name_left], [mnt_name_left], [mnt_name_left]]
 
 Finally, we combine everything into an `InverseDesignMulti` object.
 
-In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `JaxSimulationData` objects under the hood and use `td.web.run_async` to run each of them in parallel.
+In an analogy to the `InverseDesign` from the previous section, this object will generate a set of `td.SimulationData` objects under the hood and use `td.web.run_async` to run each of them in parallel.
 
 After the simulations are run, the combined post-processing function will be applied to the combined data to give the last value, minus any penalties in the shared `DesignRegion`.
 
