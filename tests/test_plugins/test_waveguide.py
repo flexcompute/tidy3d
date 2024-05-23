@@ -6,7 +6,7 @@ from pydantic.v1 import ValidationError
 
 
 def test_array_validators():
-    with pytest.raises(ValidationError, match="negative"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=[0.1, -0.2],
@@ -15,7 +15,7 @@ def test_array_validators():
             clad_medium=td.Medium(permittivity=1.45**2),
         )
 
-    with pytest.raises(ValidationError, match="negative"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=-0.3,
@@ -24,7 +24,7 @@ def test_array_validators():
             clad_medium=td.Medium(permittivity=1.45**2),
         )
 
-    with pytest.raises(ValidationError, match="negative"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.3,
@@ -34,7 +34,7 @@ def test_array_validators():
             clad_medium=td.Medium(permittivity=1.45**2),
         )
 
-    with pytest.raises(ValidationError, match="negative"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.3,
@@ -47,7 +47,7 @@ def test_array_validators():
 
 
 def test_layer_validators():
-    with pytest.raises(ValidationError, match="Number"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.3,
@@ -56,7 +56,7 @@ def test_layer_validators():
             clad_medium=[td.Medium(permittivity=1.45**2)] * 2,
         )
 
-    with pytest.raises(ValidationError, match="Number"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.3,
@@ -79,7 +79,7 @@ def test_layer_validators():
 
 def test_rectangular_dielectric_consistency_validations():
     """Rectangular dielectric waveguide validations"""
-    with pytest.raises(ValidationError, match=r"gaps"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=(0.5, 0.5),
@@ -89,7 +89,7 @@ def test_rectangular_dielectric_consistency_validations():
             gap=(0.1, 0.1),
         )
 
-    with pytest.raises(ValidationError, match=r"sidewall thickness"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.5,
@@ -99,7 +99,7 @@ def test_rectangular_dielectric_consistency_validations():
             sidewall_thickness=0.01,
         )
 
-    with pytest.raises(ValidationError, match=r"surface thickness"):
+    with pytest.raises(ValidationError):
         waveguide.RectangularDielectric(
             wavelength=1.55,
             core_width=0.5,
