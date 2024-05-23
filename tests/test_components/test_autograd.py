@@ -11,7 +11,7 @@ import autograd as ag
 import autograd.numpy as npa
 
 import tidy3d as td
-from tidy3d.web import run_autograd, run_async_autograd
+from tidy3d.web import run, run_async
 
 from ..utils import run_emulated
 
@@ -352,7 +352,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         sim = make_sim(*args)
         if PLOT_SIM:
             plot_sim(sim, plot_eps=True)
-        data = run_autograd(sim, task_name="autograd_test", verbose=False)
+        data = run(sim, task_name="autograd_test", verbose=False)
         value = postprocess(data)
         return value
 
@@ -414,11 +414,11 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
-    # import here so it uses emulated run
-    from importlib import reload
-    from tidy3d.web.api.autograd import autograd
+    # # import here so it uses emulated run
+    # from importlib import reload
+    # from tidy3d.web.api.autograd import autograd
 
-    reload(autograd)
+    # reload(autograd)
 
     # for logging output
     td.config.logging_level = "ERROR"
@@ -433,7 +433,7 @@ def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
         """Objective function."""
 
         sims = {task_name: make_sim(*args) for task_name in task_names}
-        batch_data = run_async_autograd(sims, verbose=False)
+        batch_data = run_async(sims, verbose=False)
         value = 0.0
         for task_name, sim_data in batch_data.items():
             value += postprocess(sim_data)

@@ -3,13 +3,16 @@
 import tidy3d as td
 from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_static  # noqa: 401
 import typing
+import traceback
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
 
 from ..webapi import run as run_webapi
 from ..asynchronous import run_async as run_async_webapi
+from ..asynchronous import DEFAULT_DATA_DIR
 from ..container import BatchData
+from ..tidy3d_stub import SimulationType
 
 from .utils import split_list, split_data_list, get_derivative_maps
 
@@ -17,11 +20,119 @@ from .utils import split_list, split_data_list, get_derivative_maps
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
+ISSUE_URL = "https://github.com/flexcompute/tidy3d/issues/new?assignees=&labels=feature&projects=&template=autograd_bug.md"
+URL_LINK = f"[blue underline][link={ISSUE_URL}]'{ISSUE_URL}'[/link][/blue underline]"
+
+
+def warn_autograd(fn_name: str, exc: Exception) -> str:
+    """Get warning message."""
+
+    exc_str = exc.__repr__()
+    traceback_str = "".join(traceback.format_tb(exc.__traceback__))
+
+    td.log.warning(
+        f"Autograd compatible '{fn_name}' failed, running original '{fn_name}'. "
+        "If you received this warning, please file an issue at the tidy3d front end with this "
+        f"message pasted in and we will investigate. \n\n "
+        f"{URL_LINK}.\n\n"
+        f"{exc_str} {traceback_str}.\n\n"
+    )
+
+
+def run(
+    simulation: SimulationType,
+    task_name: str,
+    folder_name: str = "default",
+    path: str = "simulation_data.hdf5",
+    callback_url: str = None,
+    verbose: bool = True,
+    progress_callback_upload: typing.Callable[[float], None] = None,
+    progress_callback_download: typing.Callable[[float], None] = None,
+    solver_version: str = None,
+    worker_group: str = None,
+    simulation_type: str = "tidy3d",
+    parent_tasks: list[str] = None,
+) -> td.SimulationData:
+    """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
+    if isinstance(simulation, td.Simulation):
+        try:
+            dict()["a"]
+            return _run(
+                simulation=simulation,
+                task_name=task_name,
+                folder_name=folder_name,
+                path=path,
+                callback_url=callback_url,
+                verbose=verbose,
+                progress_callback_upload=progress_callback_upload,
+                progress_callback_download=progress_callback_download,
+                solver_version=solver_version,
+                worker_group=worker_group,
+                simulation_type="tidy3d_autograd",
+                parent_tasks=parent_tasks,
+            )
+        except Exception as exc:
+            warn_autograd("web.run()", exc=exc)
+
+    return run_webapi(
+        simulation=simulation,
+        task_name=task_name,
+        folder_name=folder_name,
+        path=path,
+        callback_url=callback_url,
+        verbose=verbose,
+        progress_callback_upload=progress_callback_upload,
+        progress_callback_download=progress_callback_download,
+        solver_version=solver_version,
+        worker_group=worker_group,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+    )
+
+
+def run_async(
+    simulations: dict[str, SimulationType],
+    folder_name: str = "default",
+    path_dir: str = DEFAULT_DATA_DIR,
+    callback_url: str = None,
+    num_workers: int = None,
+    verbose: bool = True,
+    simulation_type: str = "tidy3d",
+    parent_tasks: dict[str, list[str]] = None,
+) -> BatchData:
+    """User-facing ``run_async`` function."""
+
+    if all(isinstance(sim, td.Simulation) for sim in simulations.values()):
+        try:
+            return _run_async(
+                simulations=simulations,
+                folder_name=folder_name,
+                path_dir=path_dir,
+                callback_url=callback_url,
+                num_workers=num_workers,
+                verbose=verbose,
+                simulation_type="tidy3d_autograd_async",
+                parent_tasks=parent_tasks,
+            )
+        except Exception as exc:
+            warn_autograd("web.run_async()", exc=exc)
+
+    return run_async_webapi(
+        simulations=simulations,
+        folder_name=folder_name,
+        path_dir=path_dir,
+        callback_url=callback_url,
+        num_workers=num_workers,
+        verbose=verbose,
+        simulation_type=simulation_type,
+        parent_tasks=parent_tasks,
+    )
+
 
 """ User-facing ``run`` and `run_async`` functions, compatible with ``autograd`` """
 
 
-def run(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.SimulationData:
+def _run(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.SimulationData:
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
 
     traced_fields_sim = setup_run(simulation=simulation)
@@ -51,7 +162,7 @@ def run(simulation: td.Simulation, task_name: str, **run_kwargs) -> td.Simulatio
     return postprocess_run(traced_fields_data=traced_fields_data, aux_data=aux_data)
 
 
-def run_async(
+def _run_async(
     simulations: dict[str, td.Simulation], **run_async_kwargs
 ) -> dict[str, td.SimulationData]:
     """User-facing ``web.run_async`` function, compatible with ``autograd`` differentiation."""
