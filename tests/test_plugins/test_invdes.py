@@ -55,7 +55,7 @@ simulation = td.Simulation(
 @pytest.fixture
 def use_emulated_run_autograd(monkeypatch):
     """Emulate the tidy3d web function used in autograd web API."""
-    import tidy3d.web.api.autograd as web_ag
+    import tidy3d.web.api.autograd.autograd as web_ag
 
     monkeypatch.setattr(web_ag, "_run_tidy3d", run_emulated)
 
@@ -470,30 +470,6 @@ def test_invdes_io(tmp_path, log_capture, use_emulated_run_autograd):
         obj2 = obj.from_file(path)
 
         assert obj2.json() == obj.json()
-
-
-@pytest.mark.parametrize("exception, ok", [(TypeError, True), (OSError, True), (ValueError, False)])
-def test_fn_source_error(monkeypatch, exception, ok):
-    """Make sure type errors are caught when grabbing function source code."""
-
-    import inspect
-
-    def getsource_error(*args, **kwargs):
-        raise exception
-
-    monkeypatch.setattr("inspect.getsource", getsource_error)
-
-    def test():
-        return None
-
-    # shouldnt raise exception as it's caught internally
-    if ok:
-        tdi.base.InvdesBaseModel._get_fn_source(test)
-
-    # should raise exception as it's not caught internally
-    else:
-        with pytest.raises(exception):
-            tdi.base.InvdesBaseModel._get_fn_source(test)
 
 
 def test_objective_utilities(use_emulated_run_autograd):

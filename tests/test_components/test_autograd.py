@@ -284,7 +284,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
     # import here so it uses emulated run
     from importlib import reload
-    from tidy3d.web.api import autograd
+    from tidy3d.web.api.autograd import autograd
 
     reload(autograd)
 
