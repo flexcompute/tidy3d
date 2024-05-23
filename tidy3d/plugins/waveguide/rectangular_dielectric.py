@@ -237,7 +237,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             clad_medium = values.get("clad_medium")
             if clad_medium is None:
                 return values
-            if not isinstance(clad_medium, MediumType):
+            if isinstance(clad_medium, tuple):
                 clad_medium = clad_medium[0]
             values["box_medium"] = clad_medium
         return values
@@ -252,7 +252,7 @@ class RectangularDielectric(Tidy3dBaseModel):
                 medium = values.get(side + "_medium")
                 if wavelength is None or medium is None:
                     return values
-                if not isinstance(medium, MediumType):
+                if isinstance(medium, tuple):
                     medium = medium[0]
                 n = numpy.array([medium.nk_model(f)[0] for f in C_0 / wavelength])
                 lda = wavelength / n
@@ -273,7 +273,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             if thickness is None or medium is None:
                 return values
             num_layers = 1 if isinstance(thickness, float) else thickness.size
-            num_media = 1 if isinstance(medium, MediumType) else len(medium)
+            num_media = 1 if not isinstance(medium, tuple) else len(medium)
             if num_layers != num_media:
                 raise ValidationError(
                     f"Number of '{side}_thickness' values ({num_layers}) must be equal to that of "
@@ -330,14 +330,14 @@ class RectangularDielectric(Tidy3dBaseModel):
     @property
     def _clad_medium(self) -> Tuple[MediumType, ...]:
         """Normalize data type to tuple."""
-        if isinstance(self.clad_medium, MediumType):
+        if not isinstance(self.clad_medium, tuple):
             return (self.clad_medium,)
         return self.clad_medium
 
     @property
     def _box_medium(self) -> Tuple[MediumType, ...]:
         """Normalize data type to tuple."""
-        if isinstance(self.box_medium, MediumType):
+        if not isinstance(self.box_medium, tuple):
             return (self.box_medium,)
         return self.box_medium
 
