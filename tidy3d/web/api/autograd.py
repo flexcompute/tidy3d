@@ -8,10 +8,6 @@ import numpy as np
 
 from .webapi import run as run_webapi
 
-""" Auxiliary Data Dictionary Keys """
-
-AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
-AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 
 """ Helper Functions """
 
@@ -83,6 +79,10 @@ def multiply_field_data(
 
 
 """ Run Functions """
+
+# keys for data into auxiliary dictionary
+AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
+AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
 
 # TODO: run_batch version
 
