@@ -32,6 +32,7 @@ from .api.webapi import (
 from .cli import tidy3d_cli
 from .api.asynchronous import run_async
 from .api.autograd.autograd import run as run_autograd
+from .api.autograd.autograd import run_async as run_async_autograd
 
 migrate()
 
@@ -59,5 +60,6 @@ __all__ = [
     "configure",
     "run_async",
     "run_autograd",
+    "run_async_autograd",
     "test",
 ]

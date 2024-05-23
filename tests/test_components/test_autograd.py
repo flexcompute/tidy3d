@@ -10,7 +10,7 @@ import autograd as ag
 import autograd.numpy as npa
 
 import tidy3d as td
-from tidy3d.web import run_autograd
+from tidy3d.web import run_autograd, run_async_autograd
 
 from ..utils import run_emulated
 
@@ -117,6 +117,22 @@ def use_emulated_run(monkeypatch):
 
         monkeypatch.setattr(webapi, "run", run_emulated)
         _run_was_emulated[0] = True
+
+
+@pytest.fixture
+def use_emulated_run_async(monkeypatch):
+    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+
+    import tidy3d.web.api.asynchronous as asynchronous
+
+    def run_async_emulated(simulations, **kwargs):
+        return {
+            task_name: run_emulated(sim, task_name=task_name)
+            for task_name, sim in simulations.items()
+        }
+
+    monkeypatch.setattr(asynchronous, "run_async", run_async_emulated)
+    _run_was_emulated[0] = True
 
 
 def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
@@ -268,10 +284,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-@pytest.mark.parametrize("structure_key, monitor_key", args)
-def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
-    """Test an objective function through tidy3d autograd."""
-
+def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
     else:
@@ -281,15 +294,6 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         monitor_keys = monitor_keys_
     else:
         monitor_keys = [monitor_key]
-
-    # import here so it uses emulated run
-    from importlib import reload
-    from tidy3d.web.api.autograd import autograd
-
-    reload(autograd)
-
-    # for logging output
-    td.config.logging_level = "ERROR"
 
     monitor_dict = make_monitors()
 
@@ -315,6 +319,26 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
         """Postprocess the dataset."""
         mnt_data = data[monitor_key]
         return monitor_pp_fn(mnt_data)
+
+    return dict(sim=make_sim, postprocess=postprocess)
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
+    """Test an objective function through tidy3d autograd."""
+
+    # import here so it uses emulated run
+    from importlib import reload
+    from tidy3d.web.api.autograd import autograd
+
+    reload(autograd)
+
+    # for logging output
+    td.config.logging_level = "ERROR"
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
 
     def objective(*args):
         """Objective function."""
@@ -377,3 +401,37 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
     # for logging output
     td.config.logging_level = "WARNING"
+
+
+@pytest.mark.parametrize("structure_key, monitor_key", args)
+def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
+    """Test an objective function through tidy3d autograd."""
+
+    # import here so it uses emulated run
+    from importlib import reload
+    from tidy3d.web.api.autograd import autograd
+
+    reload(autograd)
+
+    # for logging output
+    td.config.logging_level = "ERROR"
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    task_names = {"1", "2", "3", "4"}
+
+    def objective(*args):
+        """Objective function."""
+
+        sims = {task_name: make_sim(*args) for task_name in task_names}
+        batch_data = run_async_autograd(sims, verbose=False)
+        value = 0.0
+        for task_name, sim_data in batch_data.items():
+            value += postprocess(sim_data)
+        return value
+
+    val, grad = ag.value_and_grad(objective)(params0)
+    print(val, grad)
+    assert npa.all(grad != 0.0), "some gradients are 0"

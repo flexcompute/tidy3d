@@ -6,6 +6,7 @@ import tidy3d as td
 
 """ generic data manipulation """
 
+
 def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tuple[list, list]:
     """Split data list into original, adjoint field, and adjoint permittivity."""
 
@@ -20,12 +21,15 @@ def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tupl
 
     return data_original, data_adjoint
 
+
 def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
     """Split a list at a given index."""
     x = list(x)
     return x[:index], x[index:]
 
+
 """ E and D field gradient map calculation helpers. """
+
 
 def get_derivative_maps(
     fld_fwd: td.FieldData,
@@ -37,6 +41,7 @@ def get_derivative_maps(
     der_map_E = derivative_map_E(fld_fwd=fld_fwd, fld_adj=fld_adj)
     der_map_D = derivative_map_D(fld_fwd=fld_fwd, eps_fwd=eps_fwd, fld_adj=fld_adj, eps_adj=eps_adj)
     return dict(E=der_map_E, D=der_map_D)
+
 
 def derivative_map_E(fld_fwd: td.FieldData, fld_adj: td.FieldData) -> td.FieldData:
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. these."""
@@ -52,7 +57,7 @@ def derivative_map_D(
     """Get td.FieldData where the Ex, Ey, Ez components store the gradients w.r.t. D fields."""
     fwd_D = E_to_D(fld_data=fld_fwd, eps_data=eps_fwd)
     adj_D = E_to_D(fld_data=fld_adj, eps_data=eps_adj)
-    return multiply_field_data(fwd_D, adj_D)    
+    return multiply_field_data(fwd_D, adj_D)
 
 
 def E_to_D(fld_data: td.FieldData, eps_data: td.PermittivityData) -> td.FieldData:
