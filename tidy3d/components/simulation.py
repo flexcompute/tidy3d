@@ -2083,10 +2083,37 @@ class Simulation(AbstractYeeGridSimulation):
             if not isinstance(source, PlaneWave):
                 continue
 
-
-            _, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
+            norm_dir, tan_dirs = cls.pop_axis([0, 1, 2], axis=source.injection_axis)
             medium_set = Scene.intersecting_media(source, structures)
             medium = medium_set.pop() if medium_set else sim_medium
+
+            # disallow absorber or pml with alpha > 0 for fixed angle plane waves
+            if source.is_fixed_angle:
+
+                boundary = boundaries[norm_dir]
+
+                for bnd in boundary:
+                    if isinstance(bnd, Absorber):
+                        raise SetupError(
+                            "Fixed angle plane wave sources ('FixedAngleSpec' and `angle_theta != 0`) are "
+                            f"not compatible with the 'Absorder' boundary along dimension {norm_dir}. "
+                            "Either set the boundary conditions to 'PML' to proceed to simulate a plane "
+                            "wave with frequency-independent propagation direction, or switch to "
+                            "'FixedInPlaneKSpec' specification to simulate a plane wave with "
+                            "frequency-dependent propagation direction."
+                        )
+                    elif isinstance(bnd, (PML, StablePML)) and (
+                        bnd.parameters.alpha_min > 0 or bnd.parameters.alpha_max > 0
+                    ):
+                        raise SetupError(
+                            "Fixed angle plane wave sources ('FixedAngleSpec' and `angle_theta != 0`) are "
+                            f"not compatible with the 'PML' boundary with non-zero 'alpha' values along dimension {norm_dir}. "
+                            "Either set parameters 'alpha_min=0' and 'alpha_max=0' of the 'PML' boundary to proceed to simulate a plane "
+                            "wave with frequency-independent propagation direction, or switch to "
+                            "'FixedInPlaneKSpec' specification to simulate a plane wave with "
+                            "frequency-dependent propagation direction."
+                        )
+
 
             for tan_dir in tan_dirs:
                 boundary = boundaries[tan_dir]
@@ -2105,9 +2132,9 @@ class Simulation(AbstractYeeGridSimulation):
                     num_bloch = sum(isinstance(bnd, BlochBoundary) for bnd in boundary)
                     if num_bloch > 0:
                         raise SetupError(
-                            "Angled plane wave sources with 'FixedAngleSpec' specification are "
-                            f"not compatible with the Bloch boundary along dimension {tan_dir}. "
-                            "Either set the boundary conditions to 'Periodic' to simulate a plane "
+                            "Fixed angle plane wave sources ('FixedAngleSpec' and `angle_theta != 0`) do "
+                            f"not require the Bloch boundary along dimension {tan_dir}. "
+                            "Either set the boundary conditions to 'Periodic' to proceed to simulate a plane "
                             "wave with frequency-independent propagation direction, or switch to "
                             "'FixedInPlaneKSpec' specification to simulate a plane wave with "
                             "frequency-dependent propagation direction."
@@ -2215,27 +2242,54 @@ class Simulation(AbstractYeeGridSimulation):
 
         return [
             source for source in sources
-            if isinstance(source, PlaneWave) and isinstance(source.angular_spec, FixedAngleSpec) and source.angle_theta != 0.0
+            if isinstance(source, PlaneWave) and source.is_fixed_angle
         ]
 
-    @pydantic.validator("sources", always=True)
-    def check_fixed_angle_sources(cls, val):
-        """Error if a fixed-angle plane wave is combined with other sources."""
+    @pydantic.root_validator(skip_on_failure=True)
+    def check_fixed_angle_components(cls, values):
+        """Error if a fixed-angle plane wave is combined with other sources
+        or fully anisotropic mediums or gain mediums."""
 
-        fixed_angle_sources = cls._get_fixed_angle_sources(val)
+        fixed_angle_sources = cls._get_fixed_angle_sources(values["sources"])
 
         if len(fixed_angle_sources) > 0:
-            source_0 = fixed_angle_sources[0]
-            for source in val:
-                if (
-                    not isinstance(source, PlaneWave) 
-                    or not isinstance(source.angular_spec, FixedAngleSpec)
-                    or source_0._dir_vector != source._dir_vector
-                    or source_0.size.index(0.0) != source.size.index(0.0)
-                ):
-                    raise SetupError("Fixed-angle plane wave sources cannot be used with other sources.")
+            if len(fixed_angle_sources) > 1:
+                raise SetupError("A fixed-angle plane wave source cannot be combined with other sources.")
+            # disallow other types of 
+            # source_0 = fixed_angle_sources[0]
+            # for source in val:
+            #     if (
+            #         not isinstance(source, PlaneWave) 
+            #         or not isinstance(source.angular_spec, FixedAngleSpec)
+            #         or source_0._dir_vector != source._dir_vector
+            #         or source_0.size.index(0.0) != source.size.index(0.0)
+            #     ):
+            #         raise SetupError("Fixed-angle plane wave sources cannot be used with other sources.")
                 
-        return val
+            structures = values.get("structures")
+            structures = structures or []
+            medium_bg = values.get("medium")
+            mediums = [medium_bg] + [structure.medium for structure in structures]
+
+            if any(med.is_fully_anisotropic for med in mediums):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of 'FullyAnisotropicMedium'.")
+
+            if any(med.is_nonlinear for med in mediums):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of nonlinear materials.")
+
+            if any(med.is_time_modulated for med in mediums):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of time-modulated materials.")
+
+            if any(med.allow_gain for med in mediums):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of gain materials.")
+
+            if any(med.allow_gain for med in mediums):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of gain materials.")
+
+            if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
+                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of temporal monitors.")
+                
+        return values
 
     @pydantic.validator("boundary_spec", always=True)
     @skip_if_fields_missing(["size", "symmetry"])
@@ -2825,7 +2879,8 @@ class Simulation(AbstractYeeGridSimulation):
                             "indicating an unexpected error. Please create a github issue so "
                             "that the problem can be investigated."
                         )
-                    if isinstance(list(mediums)[0], (AnisotropicMedium, FullyAnisotropicMedium)):
+                    src_medium = list(mediums)[0]
+                    if isinstance(src_medium, (AnisotropicMedium, FullyAnisotropicMedium)):
                         raise SetupError(
                             f"An anisotropic medium is detected on plane intersecting a {source.type} "
                             f"source. Injection of {source.type} into anisotropic media currently is "
@@ -2833,13 +2888,21 @@ class Simulation(AbstractYeeGridSimulation):
                         )
 
                     # check if the medium is spatially uniform
-                    if not list(mediums)[0].is_spatially_uniform:
+                    if not src_medium.is_spatially_uniform:
                         consolidated_logger.warning(
                             f"Nonuniform custom medium detected on plane intersecting a {source.type}. "
                             "Plane must be homogeneous. Make sure custom medium is uniform on the plane.",
                             custom_loc=["sources", source_id],
                         )
 
+                    if isinstance(source, PlaneWave) and source.is_fixed_angle:
+                        is_lossless_dieletric = isinstance(src_medium, Medium) and src_medium.conductivity == 0
+
+                        if not is_lossless_dieletric:
+                            raise SetupError(
+                                "A fixed angle plane wave can only be injected into a homogeneous isotropic"
+                                "dispersionless medium."
+                            )
         return val
 
     @pydantic.validator("normalize_index", always=True)

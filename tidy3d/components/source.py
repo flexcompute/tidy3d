@@ -1017,6 +1017,11 @@ class PlaneWave(AngledFieldSource, PlanarSource):
         discriminator=TYPE_TAG_STR,
     )
 
+    @cached_property
+    def is_fixed_angle(self) -> bool:
+        """Whether the plane wave is at a fixed non-zero angle."""
+        return isinstance(self.angular_spec, FixedAngleSpec) and self.angle_theta != 0.0
+
 class GaussianBeam(AngledFieldSource, PlanarSource, BroadbandSource):
     """Gaussian distribution on finite extent plane.
 
