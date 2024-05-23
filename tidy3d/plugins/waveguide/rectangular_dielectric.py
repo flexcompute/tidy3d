@@ -213,6 +213,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @pydantic.validator("wavelength", "core_width", "gap", always=True)
     def _set_array(cls, val):
         """Ensure values are not negative and convert to numpy arrays."""
+        print("_set_array", repr(val), flush=True)
         result = numpy.array(val, ndmin=1)
         if any(result < 0):
             raise ValidationError("Values may not be negative.")
@@ -222,6 +223,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @skip_if_fields_missing(["clad_medium"])
     def _set_box_medium(cls, val, values):
         """Set BOX medium same as cladding as default value."""
+        print("_set_box_medium", repr(val), flush=True)
         if val is None:
             clad_medium = values["clad_medium"]
             if isinstance(clad_medium, MediumType):
@@ -233,6 +235,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @skip_if_fields_missing(["clad_medium", "wavelength"])
     def _set_clad_thickness(cls, val, values):
         """Set default cladding thickness based on the max wavelength in the cladding medium."""
+        print("_set_clad_thickness", repr(val), repr(values), flush=True)
         if val is None:
             wavelength = values["wavelength"]
             medium = values["clad_medium"]
@@ -252,6 +255,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @skip_if_fields_missing(["clad_medium", "wavelength"])
     def _set_box_thickness(cls, val, values):
         """Set default BOX thickness based on the max wavelength in the BOX medium."""
+        print("_set_box_thickness", repr(val), repr(values), flush=True)
         if val is None:
             wavelength = values["wavelength"]
             medium = values.get("box_medium")
@@ -273,6 +277,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @pydantic.validator("side_margin", always=True)
     def _set_side_margin(cls, val, values):
         """Set default side margin based on BOX and cladding thicknesses."""
+        print("_set_side_margin", repr(val), repr(values), flush=True)
         clad_thickness = values.get("clad_thickness")
         box_thickness = values.get("box_thickness")
         if clad_thickness is None or box_thickness is None:
@@ -290,6 +295,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @skip_if_fields_missing(["core_width"])
     def _validate_gaps(cls, val, values):
         """Ensure the number of gaps is compatible with the number of cores supplied."""
+        print("_validate_gaps", repr(val), repr(values), flush=True)
         if val.size == 1 and values["core_width"].size != 2:
             # If a single value is defined, use it for all gaps
             return numpy.array([val[0]] * (values["core_width"].size - 1))
@@ -300,6 +306,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @pydantic.root_validator
     def _validate_layers(cls, values):
         """Ensure the number of clad media is compatible with the number of layers supplied."""
+        print("_validate_layers", repr(values), flush=True)
         for side in ("clad", "box"):
             thickness = values.get(side + "_thickness")
             medium = values.get(side + "_medium")
@@ -318,6 +325,7 @@ class RectangularDielectric(Tidy3dBaseModel):
     @pydantic.root_validator
     def _ensure_consistency(cls, values):
         """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
+        print("_ensure_consistency", repr(values), flush=True)
         sidewall_thickness = values["sidewall_thickness"]
         sidewall_medium = values["sidewall_medium"]
         surface_thickness = values["surface_thickness"]
