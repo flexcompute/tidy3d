@@ -311,8 +311,7 @@ class RectangularDielectric(Tidy3dBaseModel):
             thickness = values.get(side + "_thickness")
             medium = values.get(side + "_medium")
             if thickness is None or medium is None:
-                # Other validators failed already
-                return None
+                return values
             num_layers = 1 if isinstance(thickness, float) else thickness.size
             num_media = 1 if isinstance(medium, MediumType) else len(medium)
             if num_layers != num_media:
@@ -325,7 +324,6 @@ class RectangularDielectric(Tidy3dBaseModel):
     @pydantic.root_validator
     def _ensure_consistency(cls, values):
         """Ensure consistency in setting surface/sidewall models and propagation/normal axes."""
-        print("_ensure_consistency", repr(values), flush=True)
         sidewall_thickness = values["sidewall_thickness"]
         sidewall_medium = values["sidewall_medium"]
         surface_thickness = values["surface_thickness"]
