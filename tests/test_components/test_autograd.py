@@ -12,6 +12,7 @@ import autograd.numpy as npa
 
 import tidy3d as td
 from tidy3d.web import run, run_async
+from tidy3d.web.api.autograd.autograd import run
 
 from ..utils import run_emulated
 
@@ -341,7 +342,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
     # for logging output
-    td.config.logging_level = "ERROR"
+    td.config.logging_level = "INFO"
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -414,14 +415,8 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
-    # # import here so it uses emulated run
-    # from importlib import reload
-    # from tidy3d.web.api.autograd import autograd
-
-    # reload(autograd)
-
     # for logging output
-    td.config.logging_level = "ERROR"
+    td.config.logging_level = "INFO"
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -442,3 +437,42 @@ def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
     val, grad = ag.value_and_grad(objective)(params0)
     print(val, grad)
     assert npa.all(grad != 0.0), "some gradients are 0"
+
+
+def test_autograd_speed_num_structures(use_emulated_run):
+    """Test an objective function through tidy3d autograd."""
+
+    num_structures_test = 10
+
+    import time
+
+    # for logging output
+    td.config.logging_level = "ERROR"
+
+    fn_dict = get_functions(ALL_KEY, ALL_KEY)
+    make_sim = fn_dict["sim"]
+
+    monitor_key = "mode"
+    structure_key = "size_element"
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sim(*args):
+        structure = make_structures(*args)[structure_key]
+        structures = num_structures_test * [structure]
+        return SIM_BASE.updated_copy(structures=structures, monitors=[monitor])
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data[monitor_key])
+        return value
+
+    # if speed test, get the profile
+    with cProfile.Profile() as pr:
+        t = time.time()
+        val, grad = ag.value_and_grad(objective)(params0)
+        t2 = time.time() - t
+        pr.print_stats(sort="cumtime")
+        pr.dump_stats("results.prof")
+        print(f"{num_structures_test} structures took {t2:.2e} seconds")

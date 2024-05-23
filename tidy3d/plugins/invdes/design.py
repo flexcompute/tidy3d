@@ -7,7 +7,7 @@ import abc
 import autograd.numpy as npa
 
 import tidy3d as td
-from tidy3d.web import run_autograd
+import tidy3d.web as web
 from tidy3d.components.autograd import get_static
 
 from .base import InvdesBaseModel
@@ -130,7 +130,7 @@ class InverseDesign(AbstractInverseDesign):
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         simulation = self.to_simulation(params=params)
         kwargs.setdefault("task_name", self.task_name)
-        sim_data = run_autograd(simulation, verbose=self.verbose, **kwargs)
+        sim_data = web.run(simulation, verbose=self.verbose, **kwargs)
         return sim_data
 
 
@@ -201,14 +201,11 @@ class InverseDesignMulti(AbstractInverseDesign):
         simulation_list = [design.to_simulation(params) for design in self.designs]
         return dict(zip(self.task_names, simulation_list))
 
-    def to_simulation_data(self, params: npa.ndarray, **kwargs) -> dict[str, td.SimulationData]:
+    def to_simulation_data(self, params: npa.ndarray, **kwargs) -> web.BatchData:
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
         kwargs.setdefault("verbose", self.verbose)
-        batch_data = td.web.run_async_autograd(simulations, **kwargs)
-
-        # TODO: should we yield each one here instead? for memory saving?
-        return {task_name: batch_data[task_name] for task_name in self.task_names}
+        return web.run_async(simulations, **kwargs)
 
 
 InverseDesignType = typing.Union[InverseDesign, InverseDesignMulti]

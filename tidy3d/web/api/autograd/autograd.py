@@ -20,7 +20,10 @@ from .utils import split_list, split_data_list, get_derivative_maps
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
 AUX_KEY_SIM_DATA_FWD = "sim_data_fwd_adjoint"
-ISSUE_URL = "https://github.com/flexcompute/tidy3d/issues/new?assignees=&labels=feature&projects=&template=autograd_bug.md"
+ISSUE_URL = (
+    "https://github.com/flexcompute/tidy3d/issues/new?"
+    "assignees=tylerflex&labels=adjoint&projects=&template=autograd_bug.md"
+)
 URL_LINK = f"[blue underline][link={ISSUE_URL}]'{ISSUE_URL}'[/link][/blue underline]"
 
 
@@ -56,7 +59,6 @@ def run(
     """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
     if isinstance(simulation, td.Simulation):
         try:
-            dict()["a"]
             return _run(
                 simulation=simulation,
                 task_name=task_name,
@@ -102,7 +104,13 @@ def run_async(
 ) -> BatchData:
     """User-facing ``run_async`` function."""
 
-    if all(isinstance(sim, td.Simulation) for sim in simulations.values()):
+    def is_valid_for_autograd(simulations: dict[str, td.Simulation]) -> bool:
+        """Check whether the supplied simulations dict can use autograd run."""
+        if not isinstance(simulations, dict):
+            return False
+        return all(isinstance(sim, td.Simulation) for sim in simulations.values())
+
+    if is_valid_for_autograd(simulations):
         try:
             return _run_async(
                 simulations=simulations,

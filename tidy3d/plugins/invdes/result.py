@@ -104,24 +104,22 @@ class InverseDesignResult(InvdesBaseModel):
 
     def get_sim(self, index: int = -1) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """Get the simulation at a specific index in the history (list of sims if multi)."""
-        params = self.get(key="params", index=index)
-        return self.design.to_simulation(np.array(params))
+        params = np.array(self.get(key="params", index=index))
+        return self.design.to_simulation(params=params)
 
-    def get_sim_data(
-        self, task_name: str, index: int = -1, **kwargs
-    ) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
+    def get_sim_data(self, index: int = -1, **kwargs) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
-        params = self.get(key="params", index=index)
-        return self.design.to_simulation_data(params=params, task_name=task_name, **kwargs)
+        params = np.array(self.get(key="params", index=index))
+        return self.design.to_simulation_data(params=params, **kwargs)
 
     @property
     def sim_last(self) -> typing.Union[td.Simulation, typing.List[td.Simulation]]:
         """The last simulation."""
         return self.get_sim(index=-1)
 
-    def sim_data_last(self, task_name: str, **kwargs) -> td.SimulationData:
+    def sim_data_last(self, **kwargs) -> td.SimulationData:
         """Run the last simulation and return its data."""
-        return self.get_sim_data(index=-1, task_name=task_name, **kwargs)
+        return self.get_sim_data(index=-1, **kwargs)
 
     def plot_optimization(self):
         """Plot the optimization progress from the history."""

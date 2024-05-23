@@ -437,10 +437,10 @@ def test_result_data(use_emulated_run_autograd):
     sim_data_last = result.sim_data_last(task_name="last")
 
 
-def test_result_data_multi(use_emulated_run_autograd_async, tmp_path):
+def test_result_data_multi(use_emulated_run_autograd_async, use_emulated_run_autograd, tmp_path):
     result_multi = make_result_multi(use_emulated_run_autograd_async)
     sim_last = result_multi.sim_last
-    sim_data_last = result_multi.sim_data_last(task_name="last")
+    sim_data_last = result_multi.sim_data_last()
 
 
 def test_result_empty():
