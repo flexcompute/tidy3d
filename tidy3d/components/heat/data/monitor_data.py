@@ -90,22 +90,6 @@ class TemperatureData(HeatMonitorData):
 
         return val
 
-    @property
-    def symmetry_expanded(self):
-        """Return the :class:`.AbstractFieldData` with fields expanded based on symmetry. If
-        any symmetry is nonzero (i.e. expanded), the interpolation implicitly creates a copy of the
-        data array. However, if symmetry is not expanded, the returned array contains a view of
-        the data, not a copy.
-
-        Returns
-        -------
-        :class:`AbstractFieldData`
-            A data object with the symmetry expanded fields.
-        """
-
-        # TODO: actually implement this
-        return self.symmetry_expanded_copy
-
     @cached_property
     def symmetry_expanded_copy(self) -> TemperatureData:
         """Return copy of self with symmetry applied."""
