@@ -1,5 +1,11 @@
+"""Test the microwave plugin."""
+
 import pytest
 import numpy as np
+import pydantic.v1 as pydantic
+
+from skrf import Frequency
+from skrf.media import MLine
 
 import tidy3d as td
 from tidy3d import FieldData
@@ -9,10 +15,11 @@ from tidy3d.plugins.microwave import (
     CurrentIntegralAxisAligned,
     ImpedanceCalculator,
 )
-import pydantic.v1 as pydantic
+
+from tidy3d.plugins.microwave.models import microstrip, coupled_microstrip
+
 from tidy3d.exceptions import DataError
 from ..utils import run_emulated
-
 
 # Using similar code as "test_data/test_data_arrays.py"
 MON_SIZE = (2, 1, 0)
@@ -112,6 +119,7 @@ def make_field_data():
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
 def test_voltage_integral_axes(axis):
+    """Check VoltageIntegralAxisAligned runs."""
     length = 0.5
     size = [0, 0, 0]
     size[axis] = length
@@ -127,6 +135,7 @@ def test_voltage_integral_axes(axis):
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
 def test_current_integral_axes(axis):
+    """Check CurrentIntegralAxisAligned runs."""
     length = 0.5
     size = [length, length, length]
     size[axis] = 0.0
@@ -140,6 +149,7 @@ def test_current_integral_axes(axis):
 
 
 def test_voltage_integral_toggles():
+    """Check VoltageIntegralAxisAligned runs with toggles."""
     length = 0.5
     size = [0, 0, 0]
     size[0] = length
@@ -155,6 +165,7 @@ def test_voltage_integral_toggles():
 
 
 def test_current_integral_toggles():
+    """Check CurrentIntegralAxisAligned runs with toggles."""
     length = 0.5
     size = [length, length, length]
     size[0] = 0.0
@@ -170,6 +181,7 @@ def test_current_integral_toggles():
 
 
 def test_voltage_missing_fields():
+    """Check validation of VoltageIntegralAxisAligned with missing fields."""
     length = 0.5
     size = [0, 0, 0]
     size[1] = length
@@ -185,6 +197,7 @@ def test_voltage_missing_fields():
 
 
 def test_current_missing_fields():
+    """Check validation of CurrentIntegralAxisAligned with missing fields."""
     length = 0.5
     size = [length, length, length]
     size[0] = 0.0
@@ -200,6 +213,7 @@ def test_current_missing_fields():
 
 
 def test_time_monitor_voltage_integral():
+    """Check VoltageIntegralAxisAligned runs on time domain data."""
     length = 0.5
     size = [0, 0, 0]
     size[1] = length
@@ -214,6 +228,7 @@ def test_time_monitor_voltage_integral():
 
 
 def test_mode_solver_monitor_voltage_integral():
+    """Check VoltageIntegralAxisAligned runs on mode solver data."""
     length = 0.5
     size = [0, 0, 0]
     size[1] = length
@@ -228,6 +243,7 @@ def test_mode_solver_monitor_voltage_integral():
 
 
 def test_tiny_voltage_path():
+    """Check VoltageIntegralAxisAligned runs when given a very short path."""
     length = 0.02
     size = [0, 0, 0]
     size[1] = length
@@ -240,11 +256,13 @@ def test_tiny_voltage_path():
 
 
 def test_impedance_calculator():
+    """Check validation of ImpedanceCalculator when integrals are missing."""
     with pytest.raises(pydantic.ValidationError):
         _ = ImpedanceCalculator(voltage_integral=None, current_integral=None)
 
 
 def test_impedance_calculator_on_time_data():
+    """Check ImpedanceCalculator runs on time domain data."""
     # Setup path integrals
     length = 0.5
     size = [0, length, 0]
@@ -269,6 +287,7 @@ def test_impedance_calculator_on_time_data():
 
 
 def test_impedance_accuracy():
+    """Test the accuracy of the ImpedanceCalculator."""
     field_data = make_field_data()
     # Setup path integrals
     size = [0, STRIP_HEIGHT / 2, 0]
@@ -303,3 +322,60 @@ def test_impedance_accuracy():
     assert np.all(np.isclose(Z1, analytic_impedance, rtol=0.02))
     assert np.all(np.isclose(Z2, analytic_impedance, atol=3.5))
     assert np.all(np.isclose(Z3, analytic_impedance, atol=3.5))
+
+
+def test_microstrip_models():
+    """Test that the microstrip model computes transmission line parameters accurately."""
+    width = 3.0
+    height = 1.0
+    thickness = 0.0
+    eps_r = 4.4
+
+    # Check zero thickness parameters
+    Z0, eps_eff = microstrip.compute_line_params(eps_r, width, height, thickness)
+    freqs = Frequency(start=1, stop=1, npoints=1, unit="ghz")
+    mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
+
+    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(eps_eff, mline.ep_reff[0])
+
+    # Check end effect length computation
+    dL = microstrip.compute_end_effect_length(eps_r, eps_eff, width, height)
+    assert np.isclose(dL, 0.54, rtol=0.01)
+
+    # Check finite thickness parameters
+    thickness = 0.1
+    Z0, eps_eff = microstrip.compute_line_params(eps_r, width, height, thickness)
+    mline = MLine(frequency=freqs, w=width, h=height, t=thickness, ep_r=eps_r, disp="none")
+
+    assert np.isclose(Z0, mline.Z0[0])
+    assert np.isclose(eps_eff, mline.ep_reff[0])
+
+
+def test_coupled_microstrip_model():
+    """Test that the coupled microstrip model computes transmission line parameters accurately."""
+    w1 = 1.416
+    w2 = 2.396
+    height = 1.56
+    g1 = 0.134
+    g2 = 0.386
+    eps_r = 4.3
+    # Compare to:   Taoufik, Ragani, N. Amar Touhami, and M. Agoutane. "Designing a Microstrip coupled line bandpass filter."
+    #               International Journal of Engineering & Technology 2, no. 4 (2013): 266.
+    # and notebook "CoupledLineBandpassFilter"
+
+    (Z_even, Z_odd, eps_even, eps_odd) = coupled_microstrip.compute_line_params(
+        eps_r, w1, height, g1
+    )
+    assert np.isclose(Z_even, 101.5, rtol=0.01)
+    assert np.isclose(Z_odd, 38.5, rtol=0.01)
+    assert np.isclose(eps_even, 3.26, rtol=0.01)
+    assert np.isclose(eps_odd, 2.71, rtol=0.01)
+
+    (Z_even, Z_odd, eps_even, eps_odd) = coupled_microstrip.compute_line_params(
+        eps_r, w2, height, g2
+    )
+    assert np.isclose(Z_even, 71, rtol=0.01)
+    assert np.isclose(Z_odd, 39, rtol=0.01)
+    assert np.isclose(eps_even, 3.42, rtol=0.01)
+    assert np.isclose(eps_odd, 2.80, rtol=0.01)

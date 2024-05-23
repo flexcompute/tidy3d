@@ -9,7 +9,6 @@ References
 
 import numpy as np
 from . import microstrip
-from typing import Tuple
 
 
 def _epsilon_e_even(relative_permittivity: float, width: float, height: float, gap: float) -> float:
@@ -51,7 +50,7 @@ def _z0_even_odd(
     e_eff_odd: float,
     z0: float,
     e_eff: float,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Computes the characteristic impedance of the even and odd modes for coupled microstrip lines.
     Equations 8 and 9 [1]"""
     normalized_width = width / height
@@ -79,7 +78,7 @@ def _z0_even_odd(
 
 def compute_line_params(
     relative_permittivity: float, width: float, height: float, gap: float
-) -> Tuple[float, float, float, float]:
+) -> tuple[float, float, float, float]:
     """Computes an approximation for the parameters of coupled microstrip lines
     assuming the quasistatic regime and 0 thickness [1].
 
