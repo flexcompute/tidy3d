@@ -433,6 +433,9 @@ def test_medium2d(log_capture):  # noqa: F811
     plt.close()
     assert_log_level(log_capture, "WARNING")
 
+    with pytest.raises(pydantic.ValidationError):
+        _ = td.Medium2D(ss=td.PECMedium(), tt=td.Medium())
+
 
 def test_rotation():
     # check that transpose is inverse

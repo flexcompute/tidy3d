@@ -5473,6 +5473,17 @@ class Medium2D(AbstractMedium):
             )
         return val
 
+    @skip_if_fields_missing(["ss"])
+    @pd.validator("tt", always=True)
+    def _validate_inplane_pec(cls, val, values):
+        """ss/tt components must be both PEC or non-PEC."""
+        if isinstance(val, PECMedium) != isinstance(values["ss"], PECMedium):
+            raise ValidationError(
+                "Materials describing ss- and tt-components must be "
+                "either both 'PECMedium', or non-'PECMedium'."
+            )
+        return val
+
     @classmethod
     def _weighted_avg(
         cls, meds: List[IsotropicUniformMediumType], weights: List[float]
