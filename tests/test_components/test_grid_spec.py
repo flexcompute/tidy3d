@@ -29,7 +29,71 @@ def test_make_coords():
         periodic=(True, False, False),
         wavelength=1.0,
         num_pml_layers=(10, 4),
+        snapping_points=(),
     )
+
+
+def test_make_coords_with_snapping_points():
+    """Test the behavior of snapping points"""
+    gs = make_grid_spec()
+    make_coords_args = dict(
+        structures=[
+            td.Structure(geometry=td.Box(size=(2, 2, 1)), medium=td.Medium()),
+            td.Structure(geometry=td.Box(size=(1, 1, 1)), medium=td.Medium(permittivity=4)),
+        ],
+        symmetry=(0, 0, 0),
+        periodic=(False, False, False),
+        wavelength=1.0,
+        num_pml_layers=(0, 0),
+        axis=0,
+    )
+
+    # 1) no snapping points, 0.85 is not on any grid boundary
+    coord_original = gs.grid_x.make_coords(
+        snapping_points=(),
+        **make_coords_args,
+    )
+    assert not np.any(np.isclose(coord_original, 0.85))
+
+    # 2) with snapping points at 0.85, grid should pass through 0.85
+    coord = gs.grid_x.make_coords(
+        snapping_points=((0.85, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, 0.85))
+
+    #  snapping still takes effect if the point is completely outside along other axes
+    coord = gs.grid_x.make_coords(
+        snapping_points=((0.85, 10, 0),),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, 0.85))
+
+    coord = gs.grid_x.make_coords(
+        snapping_points=((0.85, 0, -10),),
+        **make_coords_args,
+    )
+    assert np.any(np.isclose(coord, 0.85))
+
+    # 3) snapping takes no effect if it's too close to interval boundaries
+    coord = gs.grid_x.make_coords(
+        snapping_points=((0.98, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.allclose(coord_original, coord)
+
+    # and no snapping if it's compeletely outside the simulation domain
+    coord = gs.grid_x.make_coords(
+        snapping_points=((10, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.allclose(coord_original, coord)
+
+    coord = gs.grid_x.make_coords(
+        snapping_points=((-10, 0, 0),),
+        **make_coords_args,
+    )
+    assert np.allclose(coord_original, coord)
 
 
 def test_make_coords_2d():
@@ -44,6 +108,7 @@ def test_make_coords_2d():
         periodic=(True, True, False),
         wavelength=1.0,
         num_pml_layers=(10, 4),
+        snapping_points=(),
     )
 
 

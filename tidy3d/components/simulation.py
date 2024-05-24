@@ -774,6 +774,12 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             )
             ax.add_patch(rect)
 
+        # Plot snapping points
+        for point in self.grid_spec.snapping_points:
+            _, (x_point, y_point) = Geometry.pop_axis(point, axis=axis)
+            x_point, y_point = (self._evaluate_inf(v) for v in (x_point, y_point))
+            ax.scatter(x_point, y_point, color=plot_params.edgecolor)
+
         ax = Scene._set_plot_bounds(
             bounds=self.simulation_bounds, ax=ax, x=x, y=y, z=z, hlim=hlim, vlim=vlim
         )

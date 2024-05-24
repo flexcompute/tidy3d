@@ -19,7 +19,7 @@ from ...log import log
 from ..base import Tidy3dBaseModel
 from ..medium import AnisotropicMedium, Medium2D, PECMedium
 from ..structure import MeshOverrideStructure, Structure, StructureType
-from ..types import ArrayFloat1D, Axis, Bound
+from ..types import ArrayFloat1D, Axis, Bound, Coordinate
 
 _ROOTS_TOL = 1e-10
 
@@ -44,6 +44,16 @@ class Mesher(Tidy3dBaseModel, ABC):
         """Calculate the positions of all bounding box interfaces along a given axis."""
 
     @abstractmethod
+    def insert_snapping_points(
+        self,
+        axis: Axis,
+        interval_coords: ArrayFloat1D,
+        max_dl_list: ArrayFloat1D,
+        snapping_points: List[Coordinate],
+    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+        """Insert snapping_points to the intervals."""
+
+    @abstractmethod
     def make_grid_multiple_intervals(
         self,
         max_dl_list: ArrayFloat1D,
@@ -62,6 +72,63 @@ class Mesher(Tidy3dBaseModel, ABC):
 class GradedMesher(Mesher):
     """Implements automatic nonuniform meshing with a set minimum steps per wavelength and
     a graded mesh expanding from higher- to lower-resolution regions."""
+
+    def insert_snapping_points(
+        self,
+        axis: Axis,
+        interval_coords: ArrayFloat1D,
+        max_dl_list: ArrayFloat1D,
+        snapping_points: List[Coordinate],
+    ) -> Tuple[ArrayFloat1D, ArrayFloat1D]:
+        """Insert snapping_points to the intervals.
+
+        Parameters
+        ----------
+        axis : Axis
+            Axis index along which to operate.
+        interval_coords : ArrayFloat1D
+            Coordinate of interval boundaries.
+        max_dl_list : ArrayFloat1D
+            Maximal allowed step size of each interval generated from `parse_structures`.
+        snapping_points : List[Coordinate]
+            A set of points that enforce grid boundaries to pass through them.
+
+        Returns
+        -------
+        interval_coords : Array
+            An array of coordinates, where the first element is the simulation min boundary, the
+            last element is the simulation max boundary, and the intermediate coordinates are all
+            locations with a fixpoint or a structure has a bounding box edge along the specified axis.
+            The boundaries are filtered such that no interval is smaller than the smallest
+            of the ``max_steps``.
+        max_steps : array_like
+            An array of size ``interval_coords.size - 1`` giving the maximum grid step required in
+            each ``interval_coords[i]:interval_coords[i+1]`` interval, depending on the materials
+            in that interval, the supplied wavelength, and the minimum required step per wavelength.
+
+        """
+        # Don't do anything for a 2D-like simulation, or no fix points
+        if interval_coords.size == 1 or len(snapping_points) < 1:
+            return interval_coords, max_dl_list
+
+        min_step = np.amin(max_dl_list) * 0.5
+        for point in snapping_points:
+            new_coord = point[axis]
+            # Skip if the point is outside the domain
+            if new_coord >= interval_coords[-1] or new_coord <= interval_coords[0]:
+                continue
+            # search insertion location
+            ind = np.searchsorted(interval_coords, new_coord, side="left")
+            # Skip snapping_points if the distance to the existing interval boundarires are
+            # smaller than `min_step` defined above.
+            if abs(new_coord - interval_coords[ind]) < min_step:
+                continue
+            if abs(new_coord - interval_coords[ind - 1]) < min_step:
+                continue
+            # insertion
+            interval_coords = np.insert(interval_coords, ind, new_coord)
+            max_dl_list = np.insert(max_dl_list, ind - 1, max_dl_list[ind - 1])
+        return interval_coords, max_dl_list
 
     def parse_structures(
         self,
