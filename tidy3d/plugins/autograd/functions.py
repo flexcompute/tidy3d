@@ -1,16 +1,8 @@
-from typing import Iterable, Union, Tuple, Literal
+from typing import Iterable, Union, Tuple, Literal, List
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
 from .types import _pad_modes
-
-_mode_to_scipy = {
-    "constant": "constant",
-    "edge": "nearest",
-    "reflect": "mirror",
-    "symmetric": "reflect",
-    "wrap": "wrap",
-}
 
 
 def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
@@ -165,15 +157,6 @@ def _wrap_pad(array: np.ndarray, pad_width: Tuple[int, int], axis: int) -> np.nd
     return np.concatenate([array[left], array, array[right]], axis=axis)
 
 
-_mode_map = {
-    "constant": _constant_pad,
-    "edge": _edge_pad,
-    "reflect": _reflect_pad,
-    "symmetric": _symmetric_pad,
-    "wrap": _wrap_pad,
-}
-
-
 def pad(
     array: np.ndarray,
     pad_width: Union[int, Tuple[int, int]],
@@ -248,6 +231,14 @@ def pad(
     if axis is None:
         axis = range(array.ndim)
 
+    _mode_map = {
+        "constant": _constant_pad,
+        "edge": _edge_pad,
+        "reflect": _reflect_pad,
+        "symmetric": _symmetric_pad,
+        "wrap": _wrap_pad,
+    }
+
     try:
         pad_fun = _mode_map[mode]
     except KeyError as e:
@@ -269,60 +260,324 @@ def convolve(
     kernel: np.ndarray,
     *,
     padding: _pad_modes = "constant",
+    axes: Union[Tuple[List[int], List[int]], None] = None,
     mode: Literal["full", "valid", "same"] = "same",
 ) -> np.ndarray:
+    """Convolve an array with a given kernel.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to be convolved.
+    kernel : np.ndarray
+        The kernel to convolve with the input array. All dimensions of the kernel must be odd.
+    padding : _pad_modes, optional
+        The padding mode to use. Default is "constant".
+    axes : Union[Tuple[List[int], List[int]], None], optional
+        The axes along which to perform the convolution. Default is None (all axes).
+    mode : Literal["full", "valid", "same"], optional
+        The convolution mode. Default is "same".
+
+    Returns
+    -------
+    np.ndarray
+        The result of the convolution.
+
+    Raises
+    ------
+    ValueError
+        If any dimension of the kernel is even.
+        If the dimensions of the kernel do not match the dimensions of the array.
+    """
     if any(k % 2 == 0 for k in kernel.shape):
         raise ValueError(f"All kernel dimensions must be odd, got {kernel.shape}.")
 
-    if len(set(kernel.shape)) != 1:
-        raise ValueError(f"All kernel dimensions must be the same, got {kernel.shape}.")
-
-    if kernel.ndim != array.ndim:
+    if kernel.ndim != array.ndim and axes is None:
         raise ValueError(
             f"Kernel dimensions must match array dimensions, got kernel {kernel.shape} and array {array.shape}."
         )
 
     if mode in ("same", "full"):
-        array = pad(array, kernel.shape[0] // 2, mode=padding)
-        mode = "valid" if mode == "same" else "full"
+        kernel_dims = kernel.shape if axes is None else [kernel.shape[d] for d in axes[1]]
+        pad_widths = [(ks // 2, ks // 2) for ks in kernel_dims]
+        for axis, pad_width in enumerate(pad_widths):
+            array = pad(array, pad_width, mode=padding, axis=axis)
+        mode = "valid" if mode == "same" else mode
 
-    return convolve_ag(array, kernel, mode=mode)
-
-
-def grey_dilation(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    h, w = k.shape
-    bias = np.reshape(np.where(k == 0, -1, 0), (-1, 1, 1))
-    k = np.reshape(np.eye(h * w), (h * w, h, w))
-
-    x = convolve(x, k, axes=([0, 1], [1, 2]), mode=mode) + bias
-    x = np.max(x, axis=0) + 1
-
-    return x
+    return convolve_ag(array, kernel, axes=axes, mode=mode)
 
 
-def grey_erosion(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    return -grey_dilation(-x, k, mode)
+def grey_dilation(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Perform grey dilation on an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to perform grey dilation on.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The result of the grey dilation operation.
+
+    Raises
+    ------
+    ValueError
+        If both `size` and `structure` are None.
+    """
+    if size is None and structure is None:
+        raise ValueError("Either size or structure must be provided.")
+
+    if size is not None:
+        size = np.atleast_1d(size)
+        shape = (size[0], size[-1])
+        nb = np.zeros(shape)
+    elif np.all(structure == 0):
+        nb = np.zeros_like(structure)
+    else:
+        nb = np.copy(structure)
+        nb[structure == 0] = -maxval
+
+    h, w = nb.shape
+    bias = np.reshape(nb, (-1, 1, 1))
+    kernel = np.reshape(np.eye(h * w), (h * w, h, w))
+
+    array = convolve(array, kernel, axes=((0, 1), (1, 2)), padding=mode) + bias
+    return np.max(array, axis=0)
 
 
-def grey_opening(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    x = grey_erosion(x, k, mode)
-    x = grey_dilation(x, k, mode)
-    return x
+def grey_erosion(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Perform grey erosion on an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to perform grey dilation on.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The result of the grey dilation operation.
+
+    Raises
+    ------
+    ValueError
+        If both `size` and `structure` are None.
+    """
+    if size is None and structure is None:
+        raise ValueError("Either size or structure must be provided.")
+
+    if size is not None:
+        size = np.atleast_1d(size)
+        shape = (size[0], size[-1])
+        nb = np.zeros(shape)
+    elif np.all(structure == 0):
+        nb = np.zeros_like(structure)
+    else:
+        nb = np.copy(structure)
+        nb[structure == 0] = -maxval
+
+    h, w = nb.shape
+    bias = np.reshape(nb, (-1, 1, 1))
+    kernel = np.reshape(np.eye(h * w), (h * w, h, w))
+
+    array = convolve(array, kernel, axes=((0, 1), (1, 2)), padding=mode) - bias
+    return np.min(array, axis=0)
 
 
-def grey_closing(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    x = grey_dilation(x, k, mode)
-    x = grey_erosion(x, k, mode)
-    return x
+def grey_opening(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Perform grey opening on an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to perform grey opening on.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The result of the grey opening operation.
+    """
+    array = grey_erosion(array, size, structure, mode=mode, maxval=maxval)
+    array = grey_dilation(array, size, structure, mode=mode, maxval=maxval)
+    return array
 
 
-def morphological_gradient(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    return grey_dilation(x, k, mode) - grey_erosion(x, k, mode)
+def grey_closing(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Perform grey closing on an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to perform grey closing on.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The result of the grey closing operation.
+    """
+    array = grey_dilation(array, size, structure, mode=mode, maxval=maxval)
+    array = grey_erosion(array, size, structure, mode=mode, maxval=maxval)
+    return array
 
 
-def morphological_gradient_internal(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    return x - grey_erosion(x, k, mode)
+def morphological_gradient(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Compute the morphological gradient of an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to compute the morphological gradient of.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The morphological gradient of the input array.
+    """
+    return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - grey_erosion(
+        array, size, structure, mode=mode, maxval=maxval
+    )
 
 
-def morphological_gradient_external(x: np.ndarray, k: np.ndarray, mode="reflect") -> np.ndarray:
-    return grey_dilation(x, k, mode) - x
+def morphological_gradient_internal(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Compute the internal morphological gradient of an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to compute the internal morphological gradient of.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The internal morphological gradient of the input array.
+    """
+    return array - grey_erosion(array, size, structure, mode=mode, maxval=maxval)
+
+
+def morphological_gradient_external(
+    array: np.ndarray,
+    size: Union[Union[int, Tuple[int, int]], None] = None,
+    structure: Union[np.ndarray, None] = None,
+    *,
+    mode: _pad_modes = "reflect",
+    maxval: float = 1e4,
+) -> np.ndarray:
+    """Compute the external morphological gradient of an array.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        The input array to compute the external morphological gradient of.
+    size : Union[Union[int, Tuple[int, int]], None], optional
+        The size of the structuring element. If None, `structure` must be provided.
+        Default is None.
+    structure : Union[np.ndarray, None], optional
+        The structuring element. If None, `size` must be provided. Default is None.
+    mode : _pad_modes, optional
+        The padding mode to use. Default is "reflect".
+    maxval : float, optional
+        Value to assume for infinite elements in the kernel. Default is 1e4.
+
+    Returns
+    -------
+    np.ndarray
+        The external morphological gradient of the input array.
+    """
+    return grey_dilation(array, size, structure, mode=mode, maxval=maxval) - array
