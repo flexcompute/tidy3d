@@ -80,6 +80,11 @@ class MonitorData(AbstractMonitorData, ABC):
 
     def make_adjoint_sources(self, dataset_names: list[str]) -> list[Source]:
         """Generate adjoint sources for this ``MonitorData`` instance."""
+
+        # TODO: if there's data in the MonitorData, but no adjoint source, then
+        # user is trying to differentiate something that is un-supported by us
+        # warn?
+
         return []
 
     @staticmethod

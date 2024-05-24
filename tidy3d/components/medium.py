@@ -2438,7 +2438,11 @@ class CustomMedium(AbstractCustomMedium):
             sizes_list.append(sizes)
 
         # turn this into a volume element, should be re-sizeable to the gradient shape
-        d_vol = functools.reduce(np.outer, sizes_list)
+        if sizes_list:
+            d_vol = functools.reduce(np.outer, sizes_list)
+        else:
+            # if sizes_list is empty, then reduce() fails
+            d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         vjp_array = 0.0

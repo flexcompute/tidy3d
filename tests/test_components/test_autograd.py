@@ -67,7 +67,7 @@ PML_X = True if IS_3D else False
 
 # shape of the custom medium
 DA_SHAPE_X = 1 if IS_3D else 1
-DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 50, 50)
+DA_SHAPE = (DA_SHAPE_X, 1_000, 1_000) if TEST_CUSTOM_MEDIUM_SPEED else (DA_SHAPE_X, 12, 12)
 
 # number of vertices in the polyslab
 NUM_VERTICES = 100_000 if TEST_POLYSLAB_SPEED else 12
