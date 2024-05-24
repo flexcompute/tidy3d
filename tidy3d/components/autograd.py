@@ -8,7 +8,7 @@ import xarray as xr
 import numpy as np
 
 import typing
-from .types import Size1D, Bound, ArrayFloat2D
+from .types import Size1D, Bound, ArrayFloat2D, ArrayLike
 
 # TODO: should we use ArrayBox? Box is more general
 
@@ -19,16 +19,15 @@ TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
 TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
 TracedVertices = typing.Union[ArrayFloat2D, Box]
 
+
 # The data type that we pass in and out of the web.run() @autograd.primitive
-AutogradFieldMap = dict_ag[tuple[str, ...], TracedFloat]
+AutogradTraced = typing.Union[Box, ArrayLike]
+AutogradFieldMap = dict_ag[tuple[str, ...], AutogradTraced]
 
 
 def get_static(x: typing.Any) -> typing.Any:
     """Get the 'static' (untraced) version of some value."""
     return getval(x)
-    # if isinstance(x, Box):
-    #     return get_static(x._value)
-    # return x
 
 
 # TODO: could we move this into a DataArray method?
@@ -50,6 +49,8 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
         # reset all coordinates outside of bounds to the bounds, so that dL = 0 in integral
         coord_values[coord_values < bmin] = bmin
         coord_values[coord_values > bmax] = bmax
+
+        # TODO: this can be a little bit slow, might be a faster implementation
         _arr = _arr.assign_coords(**{dim: coord_values})
 
     # uses trapezoidal rule

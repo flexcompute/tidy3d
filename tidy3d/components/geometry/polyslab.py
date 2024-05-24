@@ -15,7 +15,7 @@ from ..autograd import TracedVertices, get_static
 from ..base import cached_property
 from ..base import skip_if_fields_missing
 from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
-from ..types import MatrixReal4x4, Shapely
+from ..types import MatrixReal4x4, Shapely, ArrayLike
 from ..data.dataset import PermittivityDataset, ElectromagneticFieldDataset
 from ...log import log
 from ...exceptions import SetupError, ValidationError
@@ -72,6 +72,12 @@ class PolySlab(base.Planar):
         units=MICROMETER,
     )
 
+    @staticmethod
+    def make_shapely_polygon(vertices: ArrayLike) -> shapely.Polygon:
+        """Make a shapely polygon from some vertices, first ensures they are untraced."""
+        vertices = get_static(vertices)
+        return shapely.Polygon(vertices)
+
     @pydantic.validator("slab_bounds", always=True)
     def slab_bounds_order(cls, val):
         """Maximum position of the slab should be no smaller than its minimal position."""
@@ -96,7 +102,7 @@ class PolySlab(base.Planar):
             )
 
         # make sure no polygon splitting, islands, 0 area
-        poly_heal = shapely.make_valid(shapely.Polygon(get_static(val)))
+        poly_heal = shapely.make_valid(cls.make_shapely_polygon(val))
         if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
@@ -141,7 +147,7 @@ class PolySlab(base.Planar):
             raise SetupError("Erosion value is too large. The polygon is fully eroded.")
 
         # edge events
-        poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
+        poly_offset = shapely.make_valid(cls.make_shapely_polygon(poly_offset))
         # 1) polygon split or create holes/islands
         if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
             raise SetupError(
@@ -341,7 +347,7 @@ class PolySlab(base.Planar):
         )
 
         # convert vertices into polyslabs
-        polygons = [shapely.Polygon(vertices).buffer(0) for vertices in all_vertices]
+        polygons = [PolySlab.make_shapely_polygon(vertices).buffer(0) for vertices in all_vertices]
         polys_union = shapely.unary_union(polygons, grid_size=base.POLY_GRID_SIZE)
 
         if polys_union.geom_type == "Polygon":
@@ -501,7 +507,7 @@ class PolySlab(base.Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                # face_polygon = shapely.Polygon(self.reference_polygon)
+                # face_polygon = self.make_shapely_polygon(self.reference_polygon)
                 # fun_contain = contains_pointwise(face_polygon)
                 # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                 poly_path = path.Path(self.reference_polygon)
@@ -528,7 +534,7 @@ class PolySlab(base.Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    # face_polygon = shapely.Polygon(vertices_z)
+                    # face_polygon = self.make_shapely_polygon(vertices_z)
                     # fun_contain = contains_pointwise(face_polygon)
                     # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                     poly_path = path.Path(vertices_z)
@@ -541,7 +547,7 @@ class PolySlab(base.Planar):
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
             vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-            face_polygon = shapely.Polygon(vertices_z)
+            face_polygon = self.make_shapely_polygon(vertices_z)
             point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
@@ -617,13 +623,13 @@ class PolySlab(base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if isclose(self.sidewall_angle, 0):
-            return [shapely.Polygon(self.reference_polygon)]
+            return [self.make_shapely_polygon(self.reference_polygon)]
 
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-        return [shapely.Polygon(vertices_z)]
+        return [self.make_shapely_polygon(vertices_z)]
 
     def _intersections_side(self, position, axis) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
@@ -719,7 +725,7 @@ class PolySlab(base.Planar):
                         plane_val=y_min + dy_min, axis_val=z_max, axis=axis
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
-                    polys.append(shapely.Polygon(vertices).buffer(0))
+                    polys.append(self.make_shapely_polygon(vertices).buffer(0))
             # update the base coordinate for the next subsection
             h_base = h_top
 
@@ -1016,11 +1022,13 @@ class PolySlab(base.Planar):
         float
             Signed polygon area (positive for CCW orientation).
         """
-        vertices = get_static(vertices)
-        vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
-        term1 = vertices[:, 0] * vert_shift[:, 1]
-        term2 = vertices[:, 1] * vert_shift[:, 0]
+        vert_shift = np.roll(vertices, axis=0, shift=-1)
 
+        xs, ys = vertices.T
+        xs_shift, ys_shift = vert_shift.T
+
+        term1 = xs * ys_shift
+        term2 = ys * xs_shift
         return np.sum(term1 - term2) * 0.5
 
     @staticmethod
@@ -1037,12 +1045,15 @@ class PolySlab(base.Planar):
         float
             Polygon perimeter.
         """
-        vertices = get_static(vertices)
-        vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
-        dx = vertices[:, 0] - vert_shift[:, 0]
-        dy = vertices[:, 1] - vert_shift[:, 1]
 
-        return np.sum(np.sqrt(dx**2 + dy**2))
+        vert_shift = np.roll(vertices, axis=0, shift=-1)
+        squared_diffs = (vertices - vert_shift) ** 2
+
+        # distance along each edge
+        dists = np.sqrt(squared_diffs.sum(axis=-1))
+
+        # total distance along all edges
+        return np.sum(dists)
 
     @staticmethod
     def _orient(vertices: np.ndarray) -> np.ndarray:
@@ -1075,8 +1086,7 @@ class PolySlab(base.Planar):
             Vertices of polygon.
         """
 
-        vertices = get_static(vertices)
-        vertices_f = np.roll(vertices.copy(), shift=-1, axis=0)
+        vertices_f = np.roll(vertices, shift=-1, axis=0)
         vertices_diff = np.linalg.norm(vertices - vertices_f, axis=1)
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
@@ -1124,7 +1134,7 @@ class PolySlab(base.Planar):
             if PolySlab._area(poly_offset) < fp_eps**2:
                 return True
 
-            poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
+            poly_offset = shapely.make_valid(PolySlab.make_shapely_polygon(poly_offset))
             # 1) polygon split or create holes/islands
             if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
                 return True
@@ -1137,7 +1147,7 @@ class PolySlab(base.Planar):
             # 3) some split polygon might fully disappear after the offset, but they
             # can be detected if we offset back.
             poly_offset_back = shapely.make_valid(
-                shapely.Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
+                PolySlab.make_shapely_polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
             )
             if poly_offset_back.geom_type == "MultiPolygon" or len(poly_offset_back.interiors) > 0:
                 return True
@@ -1295,7 +1305,7 @@ class PolySlab(base.Planar):
     @staticmethod
     def _heal_polygon(vertices: np.ndarray) -> np.ndarray:
         """heal a self-intersecting polygon."""
-        shapely_poly = shapely.Polygon(vertices)
+        shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
         # perform healing
@@ -1444,6 +1454,11 @@ class PolySlab(base.Planar):
         vjps_edges_in_plane = vjps_edges.values.reshape((num_vertices, 1)) * normal_vectors_in_plane
 
         vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=-1)
+
+        # sign change if counter clockwise, because normal direction is flipped
+        if self.is_ccw:
+            vjps_vertices *= -1
+            # TODO: verify sign, or if this is rather when `not self.is_ccw`
 
         return vjps_vertices.real
 
@@ -1700,7 +1715,7 @@ class ComplexPolySlabBase(PolySlab):
                 if len(vertices_now) < 3:
                     break
                 # polygon collapse into 1D
-                if shapely.Polygon(vertices_now).buffer(0).area < fp_eps:
+                if self.make_shapely_polygon(vertices_now).buffer(0).area < fp_eps:
                     break
                 vertices_now = PolySlab._orient(vertices_now)
                 num_division_count += 1
