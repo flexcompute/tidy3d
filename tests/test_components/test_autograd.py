@@ -341,9 +341,6 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
 def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
 
-    # for logging output
-    td.config.logging_level = "INFO"
-
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
     postprocess = fn_dict["postprocess"]
@@ -407,16 +404,10 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
         assert np.allclose(grad, grad_num), "gradients dont match"
 
-    # for logging output
-    td.config.logging_level = "WARNING"
-
 
 @pytest.mark.parametrize("structure_key, monitor_key", args)
 def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
     """Test an objective function through tidy3d autograd."""
-
-    # for logging output
-    td.config.logging_level = "INFO"
 
     fn_dict = get_functions(structure_key, monitor_key)
     make_sim = fn_dict["sim"]
@@ -445,9 +436,6 @@ def test_autograd_speed_num_structures(use_emulated_run):
     num_structures_test = 10
 
     import time
-
-    # for logging output
-    td.config.logging_level = "ERROR"
 
     fn_dict = get_functions(ALL_KEY, ALL_KEY)
     make_sim = fn_dict["sim"]
