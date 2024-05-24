@@ -107,7 +107,9 @@ class InverseDesignResult(InvdesBaseModel):
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation(params=params)
 
-    def get_sim_data(self, index: int = -1, **kwargs) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
+    def get_sim_data(
+        self, index: int = -1, **kwargs
+    ) -> typing.Union[td.SimulationData, typing.List[td.SimulationData]]:
         """Get the simulation data at a specific index in the history (list of simdata if multi)."""
         params = np.array(self.get(key="params", index=index))
         return self.design.to_simulation_data(params=params, **kwargs)
