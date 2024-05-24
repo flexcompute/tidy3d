@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import Tuple, List, Union
 
-import autograd.numpy as np
+import numpy as np
 import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel

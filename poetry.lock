@@ -341,17 +341,17 @@ css = ["tinycss2 (>=1.1.0,<1.3)"]
 
 [[package]]
 name = "boto3"
-version = "1.34.111"
+version = "1.34.112"
 description = "The AWS SDK for Python"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "boto3-1.34.111-py3-none-any.whl", hash = "sha256:d6a8e77db316c6e1d9a25f77c795ed1e0a8bc621f863ce26d04b2225d30f2dce"},
-    {file = "boto3-1.34.111.tar.gz", hash = "sha256:8f18d212b9199dbbd9d596dd5929685b583ac938c60cceeac2e045c0c5d10323"},
+    {file = "boto3-1.34.112-py3-none-any.whl", hash = "sha256:4cf28ce2c19a4e4963f1cb1f9b659a548f840f88af3e2da727b35ceb104f9223"},
+    {file = "boto3-1.34.112.tar.gz", hash = "sha256:1092ac6c68acdd33051ed0d2b7cb6f5a4527c5d1535a48cda53f7012accde206"},
 ]
 
 [package.dependencies]
-botocore = ">=1.34.111,<1.35.0"
+botocore = ">=1.34.112,<1.35.0"
 jmespath = ">=0.7.1,<2.0.0"
 s3transfer = ">=0.10.0,<0.11.0"
 
@@ -360,13 +360,13 @@ crt = ["botocore[crt] (>=1.21.0,<2.0a0)"]
 
 [[package]]
 name = "botocore"
-version = "1.34.111"
+version = "1.34.112"
 description = "Low-level, data-driven core of boto 3."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "botocore-1.34.111-py3-none-any.whl", hash = "sha256:e10affb7f372d50da957260adf2753a3f153bf90abe6910e11f09d1e443b5515"},
-    {file = "botocore-1.34.111.tar.gz", hash = "sha256:0e0fb9b605c46393d5c7c69bd516b36058334bdc8f389e680c6efcf0727f25db"},
+    {file = "botocore-1.34.112-py3-none-any.whl", hash = "sha256:637f568a6c3322fb7e5ee55e0c5367324a15a331e87a497783ac6209253dde30"},
+    {file = "botocore-1.34.112.tar.gz", hash = "sha256:053495953910bcf95d336ab1adb13efb70edc5462932eff180560737ad069319"},
 ]
 
 [package.dependencies]
@@ -1271,52 +1271,52 @@ numpy = "*"
 
 [[package]]
 name = "gdstk"
-version = "0.9.51"
+version = "0.9.52"
 description = "Python module for creation and manipulation of GDSII files."
 optional = true
 python-versions = ">=3.8"
 files = [
-    {file = "gdstk-0.9.51-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:f91b2b6fc35ee913ae7fe1c921ee54aff9c402706db9aa3f8bd7d924fb26a5d1"},
-    {file = "gdstk-0.9.51-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:d7e8f153cdb4a3a6bd1ed40582438423ef453b3f505a9d36e652c640de1cf923"},
-    {file = "gdstk-0.9.51-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:11f30d91834106777092c4cb793bb2ae3f4f65b54a06a4741106e8db91acc01e"},
-    {file = "gdstk-0.9.51-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:74fdfd89d0018588bdb39c902dd2c903a2b6d4c0e4c767f2ddec62a84f20d815"},
-    {file = "gdstk-0.9.51-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:23bf2ed424e05aca3d2db30f665bf86a9d63cf4060bf7aaedf2585574e93b1f4"},
-    {file = "gdstk-0.9.51-cp310-cp310-musllinux_1_1_i686.whl", hash = "sha256:3b476b56e515bc997c050eacf4c57297e419f8e178ec64999198b4ab6471bcd8"},
-    {file = "gdstk-0.9.51-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:dc2d81fcdc48c64a58343412b3bf1fb5f8893c8a258867da84ac2da480b514ba"},
-    {file = "gdstk-0.9.51-cp310-cp310-win_amd64.whl", hash = "sha256:0a7e7bebb2b6753846be003c9e1724b9dc6a58a08885f0de068145fbe2eb075f"},
-    {file = "gdstk-0.9.51-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:8118562aea63f727375dcc7299316f8ef6c29352aad47747c812fa29434688b5"},
-    {file = "gdstk-0.9.51-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:56ccfe2654d09104b22f5c9a168c2d2ea90318788e948875ef6ea3994b494a3e"},
-    {file = "gdstk-0.9.51-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5f459e7d17e0ce47e1e665cfde329c30c5d48be4f702178fca8b5066771ee05b"},
-    {file = "gdstk-0.9.51-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:26e5cd968ca4d0aced92bbfd9c56d6b1590287790b053b02cffb8ab356baf39d"},
-    {file = "gdstk-0.9.51-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:d382edf4e11aece09c547d5a4e363040fc2acb31ba9ae2817f3f35383956029f"},
-    {file = "gdstk-0.9.51-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:8ec45b81d1997149fce0cc06ff8da12a11b835f701b36fffb4267ab0674f3b02"},
-    {file = "gdstk-0.9.51-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:2be4705e85ed692a62139fca89bd467dcdac4bd872bdae592bf7be6d67fde299"},
-    {file = "gdstk-0.9.51-cp311-cp311-win_amd64.whl", hash = "sha256:74cfb8a036c87bba99498ce105bdb346f09c59bbc8efaea1b571f5b726b94506"},
-    {file = "gdstk-0.9.51-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:984c4667bc2e7b8423f3d4bf8156a1bc2f04fde3a12d76e84d8c2c4b8712a0e9"},
-    {file = "gdstk-0.9.51-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:fafbaefa618b8a1fd697415ba4d095b33b7181f5055127746b7effacfd60f27b"},
-    {file = "gdstk-0.9.51-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:981197b7a836bea81d19398ede9ade7bf4038d08c426d3eeaa5954bc8b6fefa9"},
-    {file = "gdstk-0.9.51-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0f163a2bd106ce8a94748c27ad1f70e7d8f1cc585c076b4691177916e4b06a40"},
-    {file = "gdstk-0.9.51-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:ced619db65125c29b1791cc9cd945f5f1d235e0f6efd920ceb53d12fdc9d248f"},
-    {file = "gdstk-0.9.51-cp312-cp312-musllinux_1_1_i686.whl", hash = "sha256:f6a67e9b0e633df2312759ebd7874ec48c95cee9225f5b9184f1e84a016759a4"},
-    {file = "gdstk-0.9.51-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:e95cc81468eac77a7a4762123fdfe060b37fe69b9b511cd20b3991c1f7d6c6d3"},
-    {file = "gdstk-0.9.51-cp312-cp312-win_amd64.whl", hash = "sha256:08443b4146fa00b0a4b7c27aee736406be5765307c0919cd6780a8c5f5d6470e"},
-    {file = "gdstk-0.9.51-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:4b11631159da7570dff04361b03981c75b8a720e03ac55cfb3566745cd5de5bf"},
-    {file = "gdstk-0.9.51-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:d83efd00e9cbef4e94801cda55db90b72713ffd4d92c6597fa358ab87a0ee11c"},
-    {file = "gdstk-0.9.51-cp38-cp38-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:fd6c958b72b5d7c98b34751328a2de7da4bdab8dac67f8f0a398a253d5cd4ff1"},
-    {file = "gdstk-0.9.51-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3d4eb9ec4118ef59155437b3c3ab985323b7b2f3da7198ed9a76fa246c7160ff"},
-    {file = "gdstk-0.9.51-cp38-cp38-manylinux_2_28_x86_64.whl", hash = "sha256:58ef1ba3937bd22bbe3846f925e4f57c6af3c27524bd8a32bcc7972e4ddfa7b4"},
-    {file = "gdstk-0.9.51-cp38-cp38-musllinux_1_1_i686.whl", hash = "sha256:e10775206ef3798b232e5d2502a4bcc9993e34c1d556800f2fa130447db0a425"},
-    {file = "gdstk-0.9.51-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:d299626f6b379384afd45a28fbc0914cf8b685c6e718a257e141c63e48b64a15"},
-    {file = "gdstk-0.9.51-cp38-cp38-win_amd64.whl", hash = "sha256:cfee715da4dc96a1d6ecc88a71cf643df25001797d803b7af8176475e55ddc0d"},
-    {file = "gdstk-0.9.51-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:ee60d6490914ca3cda12255d420f38e256b110242f2f798ac76d4a3a4c04be20"},
-    {file = "gdstk-0.9.51-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:75bb0192e1ae350c9d0c35bf01735b8da381ff2525408b02f84ae211cb8533f5"},
-    {file = "gdstk-0.9.51-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:c795cf5c87a77c3cb66d76fd1c41b62bbf43ff0f085231aee68e86e2202cc8d7"},
-    {file = "gdstk-0.9.51-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:84ee24531b0cbc9132fd17b62b2c06a5da14121c1a8b2c42637cec23fae51ca0"},
-    {file = "gdstk-0.9.51-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:d37891fcb19ce62baf573d77b5ea8374d2776c9dce6d1362e115fac351449fe9"},
-    {file = "gdstk-0.9.51-cp39-cp39-musllinux_1_1_i686.whl", hash = "sha256:6582bcae58b234d42ff27ceb034b9690dd478f64f5a82af59a94e7aabd68a16c"},
-    {file = "gdstk-0.9.51-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:96a33e87b7dc3d85c33ea7fa20c2579e2334aa840140bb3eafae4b859e7e1a07"},
-    {file = "gdstk-0.9.51-cp39-cp39-win_amd64.whl", hash = "sha256:113ddbe0e045192d3a9d2f1a161ba7c357b319208aea6da72c11046498146f1f"},
-    {file = "gdstk-0.9.51.tar.gz", hash = "sha256:2ce26b76c333965a78183eddc83ad306ced53091cac9dc41b2fd75c6c70a5556"},
+    {file = "gdstk-0.9.52-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:011a1f0262e98560235ec3ad0b4fd5bcd8e2edfcbddbff2461639a41a6d5c636"},
+    {file = "gdstk-0.9.52-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:c067e3210100572535aeeb799a3394ee5568f22bdfc8f8cd0cf6af7c93c5acca"},
+    {file = "gdstk-0.9.52-cp310-cp310-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:f5c671e3ae43a4add65e621b62509eb8a180786df39084e8a32788eb87b789c5"},
+    {file = "gdstk-0.9.52-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:87f71699f9e2b57f4d2446aee200f3eaf2177371f3487dbb9f93c7498df92c39"},
+    {file = "gdstk-0.9.52-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:2cd8fdd3597903f0b2787c46dbb757beb1f8f67db024ed469e9247c2128bb0f1"},
+    {file = "gdstk-0.9.52-cp310-cp310-musllinux_1_1_i686.whl", hash = "sha256:925f247cf5ae909eed7ae2b36b6a5c955c84f0759c5c93950cf82fbd7ea23e28"},
+    {file = "gdstk-0.9.52-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:9e51720729cbaf3207b23f097227914d56bc33924d2543f11ea09574231d70ba"},
+    {file = "gdstk-0.9.52-cp310-cp310-win_amd64.whl", hash = "sha256:6942790ed4726eb144faeebf4ac8fe4c99844b42096e603e36f5464aa3c0d5f0"},
+    {file = "gdstk-0.9.52-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:ffad7c8840487c278a43bb8b174620846365ec74040da3a16286efc2e3fee7bd"},
+    {file = "gdstk-0.9.52-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:63590f8e49cd79f4ba65fcc446f24504ce00060996c75a97ec6a4b27a7e1c741"},
+    {file = "gdstk-0.9.52-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:17b470464b0f0183d154ec408cf7d598c28c4046943f33268d365da4777be1e7"},
+    {file = "gdstk-0.9.52-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:69ff0c7298a985f963a51a5f72361c34f12ef24b9a28b9103ea30c9487d32a47"},
+    {file = "gdstk-0.9.52-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:e302e5d5cc5778fb850be09142a847214c2cf2541cdfb4bcd9348e149951893e"},
+    {file = "gdstk-0.9.52-cp311-cp311-musllinux_1_1_i686.whl", hash = "sha256:77ab1f9ddbe1f785983b8cd8f7f2036d19efd5f0850d0020bb2dd26fbdb35652"},
+    {file = "gdstk-0.9.52-cp311-cp311-musllinux_1_1_x86_64.whl", hash = "sha256:f42e7adf82f08079fe57c3ef6c68a23a4159c543a3bbb84f536f4e973346809f"},
+    {file = "gdstk-0.9.52-cp311-cp311-win_amd64.whl", hash = "sha256:10672321feed94e5af595a75320bc18a84f2b4294c41e4bc3dcf532cfdea658c"},
+    {file = "gdstk-0.9.52-cp312-cp312-macosx_10_9_universal2.whl", hash = "sha256:047206af3da3d94adaf9cb67c1b3940770d33c56c009dbb68dfae98b1ed4941e"},
+    {file = "gdstk-0.9.52-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:002030d6c589855d3ae510f2dd17348c8a7ad4c4e3b8b8b27598821748205376"},
+    {file = "gdstk-0.9.52-cp312-cp312-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:51cdeada08efe081813fa37e0f4404c1ffb50c5c99d934767ea8685e42fa15ff"},
+    {file = "gdstk-0.9.52-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:739a0f776693d2614f08696d9722361a05acd10c7b371bf8ef2e8737d44b38a7"},
+    {file = "gdstk-0.9.52-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:e89c9acf1c48c1d6c10fa544074c94d355ecff659b7f64e7b424efcc62368f7d"},
+    {file = "gdstk-0.9.52-cp312-cp312-musllinux_1_1_i686.whl", hash = "sha256:224ab8601bc1103fcfb632d3232b11f9775f419147f90b11676e6e98ca972822"},
+    {file = "gdstk-0.9.52-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:bca1ab5608280359ad6a978838482991105ed92e57daf02c0930ba45b359af9e"},
+    {file = "gdstk-0.9.52-cp312-cp312-win_amd64.whl", hash = "sha256:bc740b987cd3eb4bea1772ed4d41a9f0ed392f03ca74957426bb6a307d20a280"},
+    {file = "gdstk-0.9.52-cp38-cp38-macosx_10_9_universal2.whl", hash = "sha256:8eae4f74de7ec13777911ffde4b39995a2e80002f46cdf99b554fb3c49ffb491"},
+    {file = "gdstk-0.9.52-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:0a26d3e50eac2d20eb972c9336af1799cfa51e0b9728977adb0483a900a8d733"},
+    {file = "gdstk-0.9.52-cp38-cp38-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:5135523068cac26d0d95131ede5b9a3cfd92b692e6b1b1997a8a789fad79d174"},
+    {file = "gdstk-0.9.52-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dc83dddbdbcf79ffa5ad0c61f85998ce491051c16a997ae10e4786645d91a10e"},
+    {file = "gdstk-0.9.52-cp38-cp38-manylinux_2_28_x86_64.whl", hash = "sha256:ad9585af28159e107ff1f6718e449efd72f0288f04491f0f3b72547f79e42cf4"},
+    {file = "gdstk-0.9.52-cp38-cp38-musllinux_1_1_i686.whl", hash = "sha256:7e03728fb96a2fae84c94ab90db7e684b908683589eaf26f7e60ad20f01bda69"},
+    {file = "gdstk-0.9.52-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:021bb96867296a20a3fa535395b856c3f9064710dd213ae10f78e32fbebc4bd3"},
+    {file = "gdstk-0.9.52-cp38-cp38-win_amd64.whl", hash = "sha256:7d05586e9856376fdbd04a51687e1dd6615b31d585ac410c06a4c1803d406d6a"},
+    {file = "gdstk-0.9.52-cp39-cp39-macosx_10_9_universal2.whl", hash = "sha256:b38db67c19a59d1bd1773e86a670ea85823fd089e8e6f0d33446476ce6c5115b"},
+    {file = "gdstk-0.9.52-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:45daa3a257f8c9ebebb0cc699d2a9d649b46651922a113cb9c3e098f82a37063"},
+    {file = "gdstk-0.9.52-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:b547a4b3cbd1ccafa86fa23a5508d98d0e435f37c38110147979c452a4233c9f"},
+    {file = "gdstk-0.9.52-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:616b4b3bf36b0a5c831bfc72e4b3e89def532f75c8a81ed4d62773ab7ed4e76b"},
+    {file = "gdstk-0.9.52-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:c572518979b4ae46a4181424cf2ffd0d3f5b8c6fb1446a7216746b6d24b0ca0a"},
+    {file = "gdstk-0.9.52-cp39-cp39-musllinux_1_1_i686.whl", hash = "sha256:82f81acb0347ba0676933d1a1821d025c13a8abcce169889d18075b39ee5f031"},
+    {file = "gdstk-0.9.52-cp39-cp39-musllinux_1_1_x86_64.whl", hash = "sha256:888a7b13e765627ab9035bf0d182aae0148289ee0b1fb5d3d9963894cf728881"},
+    {file = "gdstk-0.9.52-cp39-cp39-win_amd64.whl", hash = "sha256:5feca63421434f6f1a283d31153275fe83bd93a1338a8a0363ffb1bcf1a04ef9"},
+    {file = "gdstk-0.9.52.tar.gz", hash = "sha256:42267292d272f4a4c8229091dc83a496d0a15f969cf36693b5597d3fe8efb92f"},
 ]
 
 [package.dependencies]
@@ -3058,13 +3058,13 @@ test = ["dm-tree (>=0.1.7)", "flax (>=0.5.3)"]
 
 [[package]]
 name = "orbax-checkpoint"
-version = "0.5.13"
+version = "0.5.14"
 description = "Orbax Checkpoint"
 optional = true
 python-versions = ">=3.9"
 files = [
-    {file = "orbax_checkpoint-0.5.13-py3-none-any.whl", hash = "sha256:201d00cae5c086ad9120ee0f75bd79f8c1f3b5a44d62f07bc12ae8db2505e7ff"},
-    {file = "orbax_checkpoint-0.5.13.tar.gz", hash = "sha256:b55c94df29e07bb68dcf3d6cdd6ae825c7c69ddbf0dd45e1ab18e0431cc54e02"},
+    {file = "orbax_checkpoint-0.5.14-py3-none-any.whl", hash = "sha256:78669617821081f5e455d50bf576891f1b60ca018262502584b6febc65b4881e"},
+    {file = "orbax_checkpoint-0.5.14.tar.gz", hash = "sha256:97a42597fa2fcbe7de914decd6aefbf8303216f3a66af02ab0c5a0ca0811facd"},
 ]
 
 [package.dependencies]
@@ -5282,13 +5282,13 @@ files = [
 
 [[package]]
 name = "typing-extensions"
-version = "4.11.0"
+version = "4.12.0"
 description = "Backported and Experimental Type Hints for Python 3.8+"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "typing_extensions-4.11.0-py3-none-any.whl", hash = "sha256:c1f94d72897edaf4ce775bb7558d5b79d8126906a14ea5ed1635921406c0387a"},
-    {file = "typing_extensions-4.11.0.tar.gz", hash = "sha256:83f085bd5ca59c80295fc2a82ab5dac679cbe02b9f33f7d83af68e241bea51b0"},
+    {file = "typing_extensions-4.12.0-py3-none-any.whl", hash = "sha256:b349c66bea9016ac22978d800cfff206d5f9816951f12a7d0ec5578b0a819594"},
+    {file = "typing_extensions-4.12.0.tar.gz", hash = "sha256:8cbcdc8606ebcb0d95453ad7dc5065e6237b6aa230a31e81d0f440c30fed5fd8"},
 ]
 
 [[package]]
@@ -5540,4 +5540,4 @@ vtk = ["vtk"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.9,<4.0.0"
-content-hash = "189b32daf32c9bf21ea3a147046b8ca67121041d4f0b5d462d068282f77e8fa9"
+content-hash = "0f9ea6ada9a7b1d6748afd60ff6873a0287e51ba9e23b868ede9c53c147ffbe9"

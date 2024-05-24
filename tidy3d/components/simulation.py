@@ -2857,7 +2857,7 @@ class Simulation(AbstractYeeGridSimulation):
         bound_spec = self.boundary_spec.to_list
 
         with log as consolidated_logger:
-            for i, structure in enumerate(self.static_structures):
+            for i, structure in enumerate(self.structures):
                 geo_bounds = structure.geometry.bounds
                 for sim_bound, geo_bound, pml_thick, bound_dim, pm_val in zip(
                     sim_bounds, geo_bounds, pml_thicks, bound_spec, (-1, 1)

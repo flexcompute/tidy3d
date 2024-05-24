@@ -801,7 +801,8 @@ class PolySlab(base.Planar):
             List of angles between plane and edges.
         """
 
-        vertices_axis = vertices.copy()
+        vertices_axis = vertices
+
         # flip vertices x,y for axis = y
         if axis == 1:
             vertices_axis = np.roll(vertices_axis, shift=1, axis=1)
@@ -810,8 +811,8 @@ class PolySlab(base.Planar):
         vertices_f = np.roll(vertices_axis, shift=-1, axis=0)
 
         # x coordinate of the two sets of vertices
-        x_vertices_f = vertices_f[:, 0]
-        x_vertices_axis = vertices_axis[:, 0]
+        x_vertices_f, _ = vertices_f.T
+        x_vertices_axis, _ = vertices_axis.T
 
         # find which segments intersect
         f_left_to_intersect = x_vertices_f <= position

@@ -14,7 +14,7 @@ import tidy3d as td
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.autograd import run
 
-from ..utils import run_emulated
+from ..utils import run_emulated, SIM_FULL
 
 """ Test configuration """
 
@@ -464,3 +464,24 @@ def test_autograd_speed_num_structures(use_emulated_run):
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
+
+
+@pytest.mark.parametrize("structure_key", structure_keys_)
+def test_sim_full_ops(structure_key):
+    """make sure the autograd operations don't error on a simulation containing everything."""
+
+    def objective(*params):
+        s = make_structures(*params)[structure_key]
+        sim_full_traced = SIM_FULL.updated_copy()  # structures=list(SIM_FULL.structures) + [s])
+
+        sim_full_static = sim_full_traced.to_static()
+
+        sim_fields = sim_full_traced.strip_traced_fields()
+
+        assert len(sim_fields) == 0
+
+        sim_traced = sim_full_static.insert_traced_fields(sim_fields)
+
+        assert sim_traced == sim_full_traced
+
+    ag.grad(objective)(params0)
