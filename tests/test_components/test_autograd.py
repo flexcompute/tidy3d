@@ -478,6 +478,8 @@ def test_sim_full_ops(structure_key):
 
         sim_fields = sim_full_traced.strip_traced_fields()
 
+        import pdb; pdb.set_trace()
+
         assert len(sim_fields) == 0
 
         sim_traced = sim_full_static.insert_traced_fields(sim_fields)
