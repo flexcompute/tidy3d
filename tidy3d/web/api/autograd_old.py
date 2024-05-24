@@ -59,11 +59,11 @@ def derivative_map_D(
 
 
 def multiply_field_data(
-    fld_1: td.FieldData, fld_2: td.FieldData | td.PermittivityData
+    fld_1: td.FieldData, fld_2: typing.Union[td.FieldData, td.PermittivityData]
 ) -> td.FieldData:
     """Elementwise multiply two field data objects, writes data into ``fld_1`` copy."""
 
-    def get_field_key(dim: str, fld_data: td.FieldData | td.PermittivityData) -> str:
+    def get_field_key(dim: str, fld_data: typing.Union[td.FieldData, td.PermittivityData]) -> str:
         """Get the key corresponding to the scalar field along this dimension."""
         return f"E{dim}" if isinstance(fld_data, td.FieldData) else f"eps_{dim}{dim}"
 
