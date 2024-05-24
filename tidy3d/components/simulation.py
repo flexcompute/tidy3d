@@ -2694,7 +2694,7 @@ class Simulation(AbstractYeeGridSimulation):
         structures = values.get("structures")
         structures = structures or []
         medium_bg = values.get("medium")
-        mediums = [medium_bg] + [structure.medium for structure in structures]
+        mediums = [medium_bg] + [structure.to_static().medium for structure in structures]
 
         with log as consolidated_logger:
             for source_index, source in enumerate(values.get("sources")):

@@ -924,8 +924,25 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         json_string = make_json_compatible(json_string)
         return json_string
 
-    def strip_traced_fields(self) -> AutogradFieldMap:
-        """Extract a dictionary mapping paths in the model to the data traced by autograd."""
+    def strip_traced_fields(
+        self, starting_path: tuple[str] = (), include_untraced_data_arrays: bool = False
+    ) -> AutogradFieldMap:
+        """Extract a dictionary mapping paths in the model to the data traced by ``autograd``.
+
+        Parameters
+        ----------
+        starting_path : tuple[str, ...] = ()
+            If provided, starts recursing in self.dict() from this path of field names
+        include_untraced_data_arrays : bool = False
+            Whether to include ``DataArray`` objects without tracers.
+            We need to include these when returning data, but are unnecessary for structures.
+
+        Returns
+        -------
+        dict
+            mapping of traced fields used by ``autograd``
+
+        """
 
         field_mapping = {}
 
@@ -943,7 +960,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                     field_mapping[path] = x.attrs[AUTOGRAD_KEY]
 
                 # or just grab the static value out of the values
-                else:
+                elif include_untraced_data_arrays:
                     field_mapping[path] = get_static(x.values)
 
             # for sequences, add (i,) to the path and handle each value individually
@@ -960,7 +977,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         # recursively parse the dictionary of this object
         self_dict = self.dict()
-        handle_value(self_dict, path=())
+
+        # if an include_only string was provided, only look at that subset of the dict
+        if starting_path:
+            for key in starting_path:
+                self_dict = self_dict[key]
+
+        handle_value(self_dict, path=starting_path)
 
         # convert the resulting field_mapping to an autograd-traced dictionary
         return dict_ag(field_mapping)

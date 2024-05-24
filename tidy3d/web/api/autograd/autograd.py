@@ -318,13 +318,13 @@ def setup_run(simulation: td.Simulation) -> AutogradFieldMap:
     """Process a user-supplied ``Simulation`` into inputs to ``_run_primitive``."""
 
     # get a mapping of all the traced fields in the provided simulation
-    return simulation.strip_traced_fields()
+    return simulation.strip_traced_fields(
+        include_untraced_data_arrays=False, starting_path=("structures",)
+    )
 
 
 def postprocess_run(traced_fields_data: AutogradFieldMap, aux_data: dict) -> td.SimulationData:
     """Process the return from ``_run_primitive`` into ``SimulationData`` for user."""
-
-    traced_fields_data = {key: val for key, val in traced_fields_data.items() if key[0] == "data"}
 
     # grab the user's 'SimulationData' and return with the autograd-tracers inserted
     sim_data_original = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
@@ -421,12 +421,9 @@ def postprocess_fwd(
     aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim
-    data_traced = sim_data_original.strip_traced_fields()
-
-    # need to get the static version of the arrays, otherwise get ArrayBox of ArrayBox
-    # NOTE: this is a bit confusing to me, why does autograd make them ArrayBox out of _run_tidy3d?
-
-    data_traced = {path: value for path, value in data_traced.items() if path[0] == "data"}
+    data_traced = sim_data_original.strip_traced_fields(
+        include_untraced_data_arrays=True, starting_path=("data",)
+    )
 
     # return the AutogradFieldMap that autograd registers as the "output" of the primitive
     return data_traced

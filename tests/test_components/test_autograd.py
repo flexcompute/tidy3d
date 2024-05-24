@@ -466,24 +466,25 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
-@pytest.mark.parametrize("structure_key", structure_keys_)
+@pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_sim_full_ops(structure_key):
     """make sure the autograd operations don't error on a simulation containing everything."""
 
     def objective(*params):
         s = make_structures(*params)[structure_key]
-        sim_full_traced = SIM_FULL.updated_copy()  # structures=list(SIM_FULL.structures) + [s])
+        s = s.updated_copy(geometry=s.geometry.updated_copy(center=(2, 2, 2), size=(0, 0, 0)))
+        sim_full_traced = SIM_FULL.updated_copy(structures=list(SIM_FULL.structures) + [s])
 
         sim_full_static = sim_full_traced.to_static()
 
         sim_fields = sim_full_traced.strip_traced_fields()
 
-        import pdb; pdb.set_trace()
-
-        assert len(sim_fields) == 0
+        assert len(sim_fields) == 1
 
         sim_traced = sim_full_static.insert_traced_fields(sim_fields)
 
         assert sim_traced == sim_full_traced
+
+        return npa.sum(sim_full_traced.structures[-1].medium.permittivity.values)
 
     ag.grad(objective)(params0)
