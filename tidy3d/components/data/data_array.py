@@ -64,15 +64,24 @@ class DataArray(xr.DataArray):
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
 
-    def __init__(self, values, *args, **kwargs):
-        values_ag = values if isbox(values) else None
+    def __init__(self, data, *args, **kwargs):
+        """Initialize ``DataArray``."""
 
-        if values_ag is not None:
-            super().__init__(getval(values), *args, **kwargs)
-            self.attrs[AUTOGRAD_KEY] = values_ag
+        # if data contains tracers?
+        data_ag = data if isbox(data) else None
+        if data_ag is not None:
+            # initialize with the un-traced data
+            super().__init__(getval(data), *args, **kwargs)
+
+            # but save the traced array to ``attrs[AUTOGRAD_KEY]``
+            self.attrs[AUTOGRAD_KEY] = data_ag
+
+            # NOTE: this is done because if we pass the traced array directly, it will create a
+            # numpy array of `ArrayBox`, which is extremely slow.
 
         else:
-            super().__init__(values, *args, **kwargs)
+            # in typical cases, just call regular initializer
+            super().__init__(data, *args, **kwargs)
 
     @classmethod
     def __get_validators__(cls):

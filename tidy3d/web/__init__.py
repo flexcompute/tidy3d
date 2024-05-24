@@ -11,7 +11,7 @@ from .api.container import Job, Batch, BatchData
 from .cli.migrate import migrate
 from .cli.app import configure_fn as configure
 from .api.webapi import (
-    # run, # note: use autograd one
+    # run, # NOTE: use autograd one now (see below)
     upload,
     get_info,
     start,
@@ -31,7 +31,7 @@ from .api.webapi import (
 )
 from .cli import tidy3d_cli
 
-# from .api.asynchronous import run_async # noteL use autograd one
+# from .api.asynchronous import run_async # NOTE: we use autograd one now (see below)
 
 # autograd compatible wrappers for run and run_async
 from .api.autograd.autograd import run
@@ -62,7 +62,5 @@ __all__ = [
     "tidy3d_cli",
     "configure",
     "run_async",
-    "run_autograd",
-    "run_async_autograd",
     "test",
 ]

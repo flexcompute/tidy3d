@@ -12,7 +12,7 @@ from ..webapi import run as run_webapi
 from ..asynchronous import run_async as run_async_webapi
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..container import BatchData
-from ..tidy3d_stub import SimulationType
+from ..tidy3d_stub import SimulationType, SimulationDataType
 
 from .utils import split_list, split_data_list, get_derivative_maps
 
@@ -55,8 +55,82 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
-) -> td.SimulationData:
-    """User-facing ``web.run`` function, compatible with ``autograd`` differentiation."""
+) -> SimulationDataType:
+    """
+    Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
+    and loads results as a :class:`.SimulationDataType` object.
+
+    Parameters
+    ----------
+    simulation : Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]
+        Simulation to upload to server.
+    task_name : str
+        Name of task.
+    folder_name : str = "default"
+        Name of folder to store task on web UI.
+    path : str = "simulation_data.hdf5"
+        Path to download results file (.hdf5), including filename.
+    callback_url : str = None
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+    simulation_type : str = "tidy3d"
+        Type of simulation being uploaded.
+    progress_callback_upload : Callable[[float], None] = None
+        Optional callback function called when uploading file with ``bytes_in_chunk`` as argument.
+    progress_callback_download : Callable[[float], None] = None
+        Optional callback function called when downloading file with ``bytes_in_chunk`` as argument.
+    solver_version: str = None
+        target solver version.
+    worker_group: str = None
+        worker group
+
+    Returns
+    -------
+    Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+        Object containing solver results for the supplied simulation.
+
+    Notes
+    -----
+
+        Submitting a simulation to our cloud server is very easily done by a simple web API call.
+
+        .. code-block:: python
+
+            sim_data = tidy3d.web.api.webapi.run(simulation, task_name='my_task', path='out/data.hdf5')
+
+        The :meth:`tidy3d.web.api.webapi.run()` method shows the simulation progress by default.  When uploading a
+        simulation to the server without running it, you can use the :meth:`tidy3d.web.api.webapi.monitor`,
+        :meth:`tidy3d.web.api.container.Job.monitor`, or :meth:`tidy3d.web.api.container.Batch.monitor` methods to
+        display the progress of your simulation(s).
+
+    Examples
+    --------
+
+        To access the original :class:`.Simulation` object that created the simulation data you can use:
+
+        .. code-block:: python
+
+            # Run the simulation.
+            sim_data = web.run(simulation, task_name='task_name', path='out/sim.hdf5')
+
+            # Get a copy of the original simulation object.
+            sim_copy = sim_data.simulation
+
+    See Also
+    --------
+
+    :meth:`tidy3d.web.api.webapi.monitor`
+        Print the real time task progress until completion.
+
+    :meth:`tidy3d.web.api.container.Job.monitor`
+        Monitor progress of running :class:`Job`.
+
+    :meth:`tidy3d.web.api.container.Batch.monitor`
+        Monitor progress of each of the running tasks.
+    """
+
     if isinstance(simulation, td.Simulation):
         try:
             return _run(
@@ -102,7 +176,42 @@ def run_async(
     simulation_type: str = "tidy3d",
     parent_tasks: dict[str, list[str]] = None,
 ) -> BatchData:
-    """User-facing ``run_async`` function."""
+    """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
+    starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
+
+    .. TODO add example and see also reference.
+
+    Parameters
+    ----------
+    simulations : Dict[str, Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`]]
+        Mapping of task name to simulation.
+    folder_name : str = "default"
+        Name of folder to store each task on web UI.
+    path_dir : str
+        Base directory where data will be downloaded, by default current working directory.
+    callback_url : str = None
+        Http PUT url to receive simulation finish event. The body content is a json file with
+        fields ``{'id', 'status', 'name', 'workUnit', 'solverVersion'}``.
+    num_workers: int = None
+        Number of tasks to submit at once in a batch, if None, will run all at the same time.
+    verbose : bool = True
+        If ``True``, will print progressbars and status, otherwise, will run silently.
+
+    Returns
+    ------
+    :class:`BatchData`
+        Contains the Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
+        Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
+
+    See Also
+    --------
+
+    :class:`Job`:
+        Interface for managing the running of a Simulation on server.
+
+    :class:`Batch`
+        Interface for submitting several :class:`Simulation` objects to sever.
+    """
 
     def is_valid_for_autograd(simulations: dict[str, td.Simulation]) -> bool:
         """Check whether the supplied simulations dict can use autograd run."""

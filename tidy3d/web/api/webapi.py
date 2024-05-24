@@ -57,7 +57,7 @@ def run(
     solver_version: str = None,
     worker_group: str = None,
     simulation_type: str = "tidy3d",
-    parent_tasks: List[str] = None,
+    parent_tasks: list[str] = None,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
