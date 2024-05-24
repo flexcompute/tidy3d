@@ -215,13 +215,23 @@ elif current_tag:
 # version = tidy3d.__version__
 
 latex_elements = {
-    "preamble": r"""
-    \usepackage[utf8]{inputenc}
-    \usepackage[T1]{fontenc}
-    \usepackage[pdfa=true]{hyperref}
-    \usepackage{cmap}
-    """
+    "fontpkg": r"""\usepackage{tgtermes}
+    \usepackage{tgheros}
+    \renewcommand\ttdefault{txtt}
+    """,
+    "papersize": "a4paper",
+    "pointsize": "12pt",
 }
+latex_additional_files = ["_latex/tidy3d.sty"]
+
+# latex_elements = {
+#     "preamble": r"""
+#     \usepackage[utf8]{inputenc}
+#     \usepackage[T1]{fontenc}
+#     \usepackage[pdfa=true]{hyperref}
+#     \usepackage{cmap}
+#     """
+# }
 
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
