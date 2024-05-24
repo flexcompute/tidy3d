@@ -1,3 +1,4 @@
+# ruff: noqa: F811
 # test autograd integration into tidy3d
 
 import pytest
@@ -152,7 +153,6 @@ def use_emulated_run_async(monkeypatch):
 def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
-    params_average = npa.mean(params)
     vector = np.random.random(N_PARAMS) - 0.5
     vector /= np.linalg.norm(vector)
 
@@ -187,7 +187,6 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
 
     # custom medium with variable permittivity data
     len_arr = np.prod(DA_SHAPE)
-    num_params = len_arr // N_PARAMS
     matrix = np.random.random((len_arr, N_PARAMS))
     matrix /= np.linalg.norm(matrix)
 
@@ -247,7 +246,8 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         name="mode",
     )
 
-    mode_postprocess_fn = lambda mnt_data: npa.sum(abs(mnt_data.amps.values) ** 2)
+    def mode_postprocess_fn(mnt_data):
+        return npa.sum(abs(mnt_data.amps.values) ** 2)
 
     diff_mnt = td.DiffractionMonitor(
         size=(td.inf, td.inf, 0),
@@ -257,7 +257,8 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         name="diff",
     )
 
-    diff_postprocess_fn = lambda mnt_data: npa.sum(abs(mnt_data.amps.values) ** 2)
+    def diff_postprocess_fn(mnt_data):
+        return npa.sum(abs(mnt_data.amps.values) ** 2)
 
     return dict(
         mode=(mode_mnt, mode_postprocess_fn),
@@ -421,7 +422,7 @@ def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
         sims = {task_name: make_sim(*args) for task_name in task_names}
         batch_data = run_async(sims, verbose=False)
         value = 0.0
-        for task_name, sim_data in batch_data.items():
+        for _, sim_data in batch_data.items():
             value += postprocess(sim_data)
         return value
 
