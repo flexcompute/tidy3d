@@ -112,7 +112,7 @@ _autosummary
 
 # Test and temporary files
 tests/tmp/*
-tests/data/invdes_history.pkl
+tests/data/invdes_history.*
 
 # Translations
 *.mo
