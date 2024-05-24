@@ -480,7 +480,8 @@ def test_sim_full_ops(structure_key):
 
         sim_fields = sim_full_traced.strip_traced_fields()
 
-        assert len(sim_fields) == 1
+        # note: there is one traced structure in SIM_FULL already with 6 fields + 1 = 7
+        assert len(sim_fields) == 7
 
         sim_traced = sim_full_static.insert_traced_fields(sim_fields)
 

@@ -858,6 +858,9 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 val1 = dict1[key]
                 val2 = dict2[key]
 
+                val1 = get_static(val1)
+                val2 = get_static(val2)
+
                 # if one of val1 or val2 is None (exclusive OR)
                 if (val1 is None) != (val2 is None):
                     return False

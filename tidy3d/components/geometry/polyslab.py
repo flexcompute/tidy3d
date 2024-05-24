@@ -705,7 +705,7 @@ class PolySlab(base.Planar):
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
                 if isclose(self.sidewall_angle, 0):
-                    polys.append(shapely.box(minx, miny, maxx, maxy))
+                    polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
                     angle_max = ints_angle[2 * y_index + 1]

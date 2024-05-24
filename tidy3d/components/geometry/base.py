@@ -14,7 +14,7 @@ import shapely
 from matplotlib import patches
 import xarray as xr
 
-from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds
+from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds, get_static
 from ..base import Tidy3dBaseModel, cached_property
 from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
 from ..types import Bound, Size, Coordinate, Coordinate2D
@@ -98,6 +98,17 @@ class Geometry(Tidy3dBaseModel, ABC):
         shapes = {np.array(arr).shape for arr in arrays}
         if len(shapes) > 1:
             raise ValueError("All coordinate inputs (x, y, z) must have the same shape.")
+
+    @staticmethod
+    def make_shapely_box(minx: float, miny: float, maxx: float, maxy: float) -> shapely.box:
+        """Make a shapely box ensuring everything untraced."""
+
+        minx = get_static(minx)
+        miny = get_static(miny)
+        maxx = get_static(maxx)
+        maxy = get_static(maxy)
+
+        return shapely.box(minx, miny, maxx, maxy)
 
     def _inds_inside_bounds(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -536,6 +547,7 @@ class Geometry(Tidy3dBaseModel, ABC):
     @staticmethod
     def _evaluate_inf(array):
         """Processes values and evaluates any infs into large (signed) numbers."""
+        array = get_static(np.array(array))
         return np.where(np.isinf(array), np.sign(array) * LARGE_NUMBER, array)
 
     @staticmethod
@@ -1991,7 +2003,7 @@ class Box(SimplePlaneIntersection, Centered):
         if isclose(minx, maxx) and isclose(miny, maxy):
             return [shapely.Point(minx, miny)]
 
-        return [shapely.box(minx, miny, maxx, maxy)]
+        return [self.make_shapely_box(minx, miny, maxx, maxy)]
 
     def inside(
         self, x: np.ndarray[float], y: np.ndarray[float], z: np.ndarray[float]
@@ -2053,7 +2065,8 @@ class Box(SimplePlaneIntersection, Centered):
 
         # intersect all shapes with the input self
         bs_min, bs_max = (self.pop_axis(bounds, axis=normal_ind)[1] for bounds in self.bounds)
-        shapely_box = shapely.box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
+
+        shapely_box = self.make_shapely_box(bs_min[0], bs_min[1], bs_max[0], bs_max[1])
         shapely_box = Geometry.evaluate_inf_shape(shapely_box)
         return [Geometry.evaluate_inf_shape(shape) & shapely_box for shape in shapes_plane]
 

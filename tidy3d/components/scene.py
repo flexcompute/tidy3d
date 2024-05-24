@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import Dict, Tuple, List, Set, Union
 
 import pydantic.v1 as pd
-import numpy as np
+import autograd.numpy as np
 import matplotlib.pylab as plt
 import matplotlib as mpl
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -839,7 +839,7 @@ class Scene(Tidy3dBaseModel):
         medium_list = [medium for medium in medium_list if not medium.is_pec]
         # regular medium
         eps_list = [
-            medium.eps_model(freq).real
+            np.real(medium.eps_model(freq))
             for medium in medium_list
             if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
         ]
@@ -851,11 +851,17 @@ class Scene(Tidy3dBaseModel):
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min(np.min(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                min(
+                    np.min(_get_numpy_array(np.real(eps_comp)).ravel())
+                    for eps_comp in eps_dataarray
+                ),
             )
             eps_max = max(
                 eps_max,
-                max(np.max(_get_numpy_array(eps_comp.real).ravel()) for eps_comp in eps_dataarray),
+                max(
+                    np.max(_get_numpy_array(np.real(eps_comp)).ravel())
+                    for eps_comp in eps_dataarray
+                ),
             )
         return eps_min, eps_max
 

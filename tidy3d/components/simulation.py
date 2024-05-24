@@ -3299,7 +3299,7 @@ class Simulation(AbstractYeeGridSimulation):
 
         # get the maximum refractive index evaluated over each of all the source central frequencies
         all_ref_inds = [self.get_refractive_indices(src.source_time.freq0) for src in self.sources]
-        avg_ref_inds = [np.mean(n) for n in all_ref_inds]
+        avg_ref_inds = [np.mean(np.array(n)) for n in all_ref_inds]
         max_ref_ind = np.max(avg_ref_inds)
 
         propagation_time = run_time_spec.quality_factor * max_ref_ind * max_propagation_length / C_0
