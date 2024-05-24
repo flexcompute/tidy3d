@@ -163,17 +163,6 @@ class TestConvolveExceptions:
             convolve(self.array, kernel_mismatch)
 
 
-def _ary_and_kernel(rng, ary_size, kernel_size, square_kernel):
-    x = rng.random(ary_size)
-
-    kernel_shape = [kernel_size] * x.ndim
-    if not square_kernel:
-        kernel_shape[0] += 2
-    k = rng.random(kernel_shape)
-
-    return x, k
-
-
 @pytest.mark.parametrize(
     "op,sp_op",
     [
