@@ -1910,9 +1910,6 @@ class CustomMedium(AbstractCustomMedium):
     @skip_if_fields_missing(["modulation_spec"])
     def _eps_inf_greater_no_less_than_one(cls, val, values):
         """Assert any eps_inf must be >=1"""
-
-        # return val
-
         if val is None:
             return val
 
@@ -2017,7 +2014,6 @@ class CustomMedium(AbstractCustomMedium):
         """Internal representation in the form of
         either `CustomIsotropicMedium` or `CustomAnisotropicMedium`.
         """
-
         self_dict = self.dict(exclude={"type", "eps_dataset"})
         # isotropic
         if self.eps_dataset is None:

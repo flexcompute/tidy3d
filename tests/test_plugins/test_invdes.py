@@ -16,7 +16,6 @@ from . import test_adjoint as ta
 
 ta.NUM_PROC_PARALLEL = 1
 
-# from .test_adjoint import use_emulated_run_autograd, use_emulated_run_autograd_async
 from ..utils import run_emulated, run_async_emulated, log_capture, assert_log_level, AssertLogLevel
 
 FREQ0 = 1e14

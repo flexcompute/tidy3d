@@ -131,7 +131,7 @@ def run(
         Monitor progress of each of the running tasks.
     """
 
-    if isinstance(simulation, td.Simulation):
+    if isinstance(simulation, td.Simulation) and simulation.strip_traced_fields():
         try:
             return _run(
                 simulation=simulation,
@@ -217,7 +217,11 @@ def run_async(
         """Check whether the supplied simulations dict can use autograd run."""
         if not isinstance(simulations, dict):
             return False
-        return all(isinstance(sim, td.Simulation) for sim in simulations.values())
+        if not all(isinstance(sim, td.Simulation) for sim in simulations.values()):
+            return False
+        if not any(sim.strip_traced_fields() for sim in simulations.values()):
+            return False
+        return True
 
     if is_valid_for_autograd(simulations):
         try:
@@ -304,6 +308,7 @@ def _run_async(
         **run_async_kwargs,
     )
 
+    # TODO: package this as a Batch?
     sim_data_dict = {}
     for task_name in task_names:
         traced_fields_data = traced_fields_data_dict[task_name]
