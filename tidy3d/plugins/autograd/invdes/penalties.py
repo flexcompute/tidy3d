@@ -57,6 +57,6 @@ def make_erosion_dilation_penalty(
         if not np.any(diff):
             return 0.0
 
-        return np.linalg.norm(diff) / np.linalg.norm(np.ones_like(diff))
+        return np.linalg.norm(diff) / np.sqrt(diff.size)
 
     return _erosion_dilation_penalty
