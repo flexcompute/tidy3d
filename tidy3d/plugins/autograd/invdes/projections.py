@@ -1,4 +1,3 @@
-from typing import Union
 import autograd.numpy as np
 
 
@@ -8,7 +7,7 @@ def ramp_projection(array: np.ndarray, width: float = 0.1, center: float = 0.5):
     This function performs a ramp projection on the input array, modifying its values
     based on the specified width and center. Values within the range
     [center - width/2, center + width/2] are linearly transformed, while values
-    outside this range are projected to 0 or 1. The input array is assumed to be
+    outside this range are projected to 0 or 1. The input and output is assumed to be
     within the range [0, 1].
 
     Parameters
@@ -65,57 +64,3 @@ def tanh_projection(array: np.ndarray, beta: float = 1.0, eta: float = 0.5) -> n
     num = np.tanh(beta * eta) + np.tanh(beta * (array - eta))
     denom = np.tanh(beta * eta) + np.tanh(beta * (1 - eta))
     return num / denom
-
-
-def rescale(
-    array: np.ndarray, out_min: float, out_max: float, in_min: float = 0.0, in_max: float = 1.0
-) -> np.ndarray:
-    """
-    Rescale an array from an arbitrary input range to an arbitrary output range.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The input array to be rescaled.
-    out_min : float
-        The minimum value of the output range.
-    out_max : float
-        The maximum value of the output range.
-    in_min : float, optional
-        The minimum value of the input range. Default is 0.0.
-    in_max : float, optional
-        The maximum value of the input range. Default is 1.0.
-
-    Returns
-    -------
-    np.ndarray
-        The rescaled array.
-    """
-    scaled = (array - in_min) / (in_max - in_min)
-    return scaled * (out_max - out_min) + out_min
-
-
-def threshold(
-    array: np.ndarray, vmin: float = 0.0, vmax: float = 1.0, level: Union[float, None] = None
-) -> np.ndarray:
-    """Apply a threshold to an array, setting values below the threshold to `vmin` and values above to `vmax`.
-
-    Parameters
-    ----------
-    array : np.ndarray
-        The input array to be thresholded.
-    vmin : float, optional
-        The value to assign to elements below the threshold. Default is 0.0.
-    vmax : float, optional
-        The value to assign to elements above the threshold. Default is 1.0.
-    level : Union[float, None], optional
-        The threshold level. If None, the threshold is set to the midpoint between `vmin` and `vmax`. Default is None.
-
-    Returns
-    -------
-    np.ndarray
-        The thresholded array.
-    """
-    if level is None:
-        level = (vmin + vmax) / 2
-    return np.where(array < level, vmin, vmax)
