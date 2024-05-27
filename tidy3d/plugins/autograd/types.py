@@ -1,3 +1,4 @@
 from typing import Literal
 
-_pad_modes = Literal["constant", "edge", "reflect", "symmetric", "wrap"]
+PaddingType = Literal["constant", "edge", "reflect", "symmetric", "wrap"]
+KernelType = Literal["circular", "conic"]

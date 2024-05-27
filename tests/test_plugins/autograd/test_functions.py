@@ -16,7 +16,7 @@ from tidy3d.plugins.autograd.functions import (
     morphological_gradient_internal,
     morphological_gradient_external,
 )
-from tidy3d.plugins.autograd.types import _pad_modes
+from tidy3d.plugins.autograd.types import PaddingType
 
 _mode_to_scipy = {
     "constant": "constant",
@@ -27,7 +27,7 @@ _mode_to_scipy = {
 }
 
 
-@pytest.mark.parametrize("mode", _pad_modes.__args__)
+@pytest.mark.parametrize("mode", PaddingType.__args__)
 @pytest.mark.parametrize("size", [3, 4, (3, 3), (4, 4), (3, 4), (3, 3, 3), (4, 4, 4), (3, 4, 5)])
 @pytest.mark.parametrize("pad_width", [0, 1, 2, (0, 0), (0, 1), (1, 0), (1, 2)])
 @pytest.mark.parametrize("axis", [None, 0, -1])
@@ -90,7 +90,7 @@ class TestPadExceptions:
 
 
 @pytest.mark.parametrize("mode", ["full", "valid", "same"])
-@pytest.mark.parametrize("padding", _pad_modes.__args__)
+@pytest.mark.parametrize("padding", PaddingType.__args__)
 @pytest.mark.parametrize(
     "ary_size", [7, 8, (7, 7), (8, 8), (7, 8), (7, 7, 7), (8, 8, 8), (7, 8, 9)]
 )
@@ -181,7 +181,7 @@ class TestConvolveExceptions:
         ),
     ],
 )
-@pytest.mark.parametrize("mode", _pad_modes.__args__)
+@pytest.mark.parametrize("mode", PaddingType.__args__)
 @pytest.mark.parametrize("ary_size", [(7, 7), (8, 8), (7, 8)])
 @pytest.mark.parametrize("kernel_size", [1, 3])
 class TestMorphology:
