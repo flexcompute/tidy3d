@@ -308,7 +308,8 @@ def _run_async(
         **run_async_kwargs,
     )
 
-    # TODO: package this as a Batch?
+    # TODO: package this as a Batch? it might be not possible as autograd tracers lose their 
+    # powers when we save them to file.
     sim_data_dict = {}
     for task_name in task_names:
         traced_fields_data = traced_fields_data_dict[task_name]
