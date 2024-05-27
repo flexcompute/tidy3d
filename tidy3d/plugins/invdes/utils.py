@@ -6,19 +6,19 @@ import typing
 
 import tidy3d as td
 
-import autograd.numpy as npa
+import autograd.numpy as anp
 
 import xarray as xr
 
 
-def make_array(arr: typing.Any) -> npa.ndarray:
-    """Turn something into a ``npa.ndarray``."""
+def make_array(arr: typing.Any) -> anp.ndarray:
+    """Turn something into a ``anp.ndarray``."""
     if isinstance(arr, xr.DataArray):
-        return npa.array(arr.values)
-    return npa.array(arr)
+        return anp.array(arr.values)
+    return anp.array(arr)
 
 
-def get_amps(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> npa.ndarray:
+def get_amps(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> anp.ndarray:
     """Grab amplitudes from a ``ModeMonitorData`` and select out values."""
 
     monitor_data = sim_data[monitor_name]
@@ -36,7 +36,7 @@ def get_field_component(
     monitor_name: str,
     field_component: td.components.types.EMField,
     **sel_kwargs
-) -> npa.ndarray:
+) -> anp.ndarray:
     """Grab field component from a ``FieldMonitorData`` and select out values."""
 
     monitor_data = sim_data[monitor_name]
@@ -49,7 +49,7 @@ def get_field_component(
     return field_component_sel
 
 
-def get_intensity(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> npa.ndarray:
+def get_intensity(sim_data: td.SimulationData, monitor_name: str, **sel_kwargs) -> anp.ndarray:
     """Grab field intensity from a ``FieldMonitorData`` and select out values."""
     intensity = sim_data.get_intensity(monitor_name)
     intensity_sel = intensity.sel(**sel_kwargs)
@@ -60,17 +60,17 @@ def sum_array(arr: xr.DataArray) -> float:
     """Sum values in the ``td.DataArray``."""
 
     arr = make_array(arr)
-    return npa.sum(arr)
+    return anp.sum(arr)
 
 
 def sum_abs_squared(arr: xr.DataArray) -> float:
     """Sum the absolute value squared of a ``td.DataArray``."""
     arr = make_array(arr)
-    arr_abs_squared = npa.abs(arr) ** 2
+    arr_abs_squared = anp.abs(arr) ** 2
     return sum_array(arr_abs_squared)
 
 
-def get_phase(arr: xr.DataArray) -> npa.ndarray:
-    """Get ``npa.angle`` of a ``td.DataArray`` as an array."""
+def get_phase(arr: xr.DataArray) -> anp.ndarray:
+    """Get ``anp.angle`` of a ``td.DataArray`` as an array."""
     arr = make_array(arr)
-    return npa.angle(arr)
+    return anp.angle(arr)

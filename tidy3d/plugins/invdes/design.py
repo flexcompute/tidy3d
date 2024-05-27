@@ -4,7 +4,7 @@ import pydantic.v1 as pd
 import typing
 import abc
 
-import autograd.numpy as npa
+import autograd.numpy as anp
 
 import tidy3d as td
 import tidy3d.web as web
@@ -41,10 +41,10 @@ class AbstractInverseDesign(InvdesBaseModel, abc.ABC):
 
     def make_objective_fn(
         self, post_process_fn: typing.Callable
-    ) -> typing.Callable[[npa.ndarray], tuple[float, dict]]:
+    ) -> typing.Callable[[anp.ndarray], tuple[float, dict]]:
         """construct the objective function for this ``InverseDesignMulti`` object."""
 
-        def objective_fn(params: npa.ndarray, aux_data: dict = None) -> float:
+        def objective_fn(params: anp.ndarray, aux_data: dict = None) -> float:
             """Full objective function."""
 
             data = self.to_simulation_data(params=params)
@@ -107,7 +107,7 @@ class InverseDesign(AbstractInverseDesign):
 
         return monitor_fields
 
-    def to_simulation(self, params: npa.ndarray) -> td.Simulation:
+    def to_simulation(self, params: anp.ndarray) -> td.Simulation:
         """Convert the ``InverseDesign`` to a corresponding ``td.Simulation`` with traced fields."""
 
         # construct the design region to a regular structure
@@ -126,7 +126,7 @@ class InverseDesign(AbstractInverseDesign):
             grid_spec=grid_spec,
         )
 
-    def to_simulation_data(self, params: npa.ndarray, **kwargs) -> td.SimulationData:
+    def to_simulation_data(self, params: anp.ndarray, **kwargs) -> td.SimulationData:
         """Convert the ``InverseDesign`` to a ``td.Simulation`` and run it."""
         simulation = self.to_simulation(params=params)
         kwargs.setdefault("task_name", self.task_name)
@@ -196,12 +196,12 @@ class InverseDesignMulti(AbstractInverseDesign):
 
         return designs_list
 
-    def to_simulation(self, params: npa.ndarray) -> dict[str, td.Simulation]:
+    def to_simulation(self, params: anp.ndarray) -> dict[str, td.Simulation]:
         """Convert the ``InverseDesign`` to a corresponding dict of ``td.Simulation``s."""
         simulation_list = [design.to_simulation(params) for design in self.designs]
         return dict(zip(self.task_names, simulation_list))
 
-    def to_simulation_data(self, params: npa.ndarray, **kwargs) -> web.BatchData:
+    def to_simulation_data(self, params: anp.ndarray, **kwargs) -> web.BatchData:
         """Convert the ``InverseDesignMulti`` to a set of ``td.Simulation``s and run async."""
         simulations = self.to_simulation(params)
         kwargs.setdefault("verbose", self.verbose)

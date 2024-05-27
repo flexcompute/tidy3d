@@ -4,7 +4,7 @@
 import pytest
 
 import numpy as np
-import autograd.numpy as npa
+import autograd.numpy as anp
 
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
@@ -159,13 +159,13 @@ def test_region_inf_size():
 def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
     """Define a post-processing function with extra kwargs (recommended)."""
     intensity = sim_data.get_intensity(MNT_NAME1)
-    return npa.sum(intensity.values)
+    return anp.sum(intensity.values)
 
 
 def post_process_fn_kwargless(sim_data: td.SimulationData) -> float:
     """Define a post-processing function with no kwargs specified."""
     intensity = sim_data.get_intensity(MNT_NAME1)
-    return npa.sum(intensity.values)
+    return anp.sum(intensity.values)
 
 
 def post_process_fn_multi(batch_data: dict[str, td.SimulationData], **kwargs) -> float:
@@ -173,7 +173,7 @@ def post_process_fn_multi(batch_data: dict[str, td.SimulationData], **kwargs) ->
     val = 0.0
     for _, sim_data in batch_data.items():
         intensity_i = sim_data.get_intensity(MNT_NAME1)
-        val += npa.sum(intensity_i.values)
+        val += anp.sum(intensity_i.values)
         power_i = tdi.utils.sum_abs_squared(tdi.utils.get_amps(sim_data, MNT_NAME2))
         val += power_i
     return val
@@ -196,7 +196,7 @@ def make_invdes():
 class MockDataArray:
     """Pretends to be a ``JaxDataArray`` with ``.values``."""
 
-    values = npa.linspace(0, 1, 10)
+    values = anp.linspace(0, 1, 10)
 
 
 class MockSimData:

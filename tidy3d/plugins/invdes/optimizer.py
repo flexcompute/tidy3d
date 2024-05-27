@@ -7,7 +7,7 @@ import typing
 import pydantic.v1 as pd
 
 import numpy as np
-import autograd.numpy as npa
+import autograd.numpy as anp
 import autograd as ag
 
 import tidy3d as td
@@ -68,17 +68,17 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         """Default display function while optimizing."""
         print(f"step ({step_index + 1}/{self.num_steps})")
         print(f"\tobjective_fn_val = {result.objective_fn_val[-1]:.3e}")
-        print(f"\tgrad_norm = {npa.linalg.norm(result.grad[-1]):.3e}")
+        print(f"\tgrad_norm = {anp.linalg.norm(result.grad[-1]):.3e}")
         print(f"\tpost_process_val = {result.post_process_val[-1]:.3e}")
         print(f"\tpenalty = {result.penalty[-1]:.3e}")
 
-    def _initialize_result(self, params0: npa.ndarray = None) -> InverseDesignResult:
+    def _initialize_result(self, params0: anp.ndarray = None) -> InverseDesignResult:
         """Create an initially empty ``InverseDesignResult`` from the starting parameters."""
 
         # initialize optimizer
         if params0 is None:
             params0 = self.design.design_region.params_half
-        params0 = npa.array(params0)
+        params0 = anp.array(params0)
 
         state = self.initial_state(params0)
 
@@ -86,7 +86,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
         return InverseDesignResult(design=self.design, opt_state=[state], params=[params0])
 
     def run(
-        self, post_process_fn: typing.Callable, params0: npa.ndarray = None
+        self, post_process_fn: typing.Callable, params0: anp.ndarray = None
     ) -> InverseDesignResult:
         """Run this inverse design problem from an optional initial set of parameters."""
         self.design.design_region._check_params(params0)
@@ -112,7 +112,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             aux_data = {}
             val, grad = val_and_grad_fn(params, aux_data=aux_data)
 
-            if npa.allclose(grad, 0.0):
+            if anp.allclose(grad, 0.0):
                 td.log.warning(
                     "All elements of the gradient are almost zero. This likely indicates "
                     "a problem with the optimization set up. This can occur if the symmetry of the "
@@ -134,7 +134,7 @@ class AbstractOptimizer(InvdesBaseModel, abc.ABC):
             params, opt_state = self.update(parameters=params, state=opt_state, gradient=-grad)
 
             # cap the parameters
-            params = npa.clip(params, a_min=0.0, a_max=1.0)
+            params = anp.clip(params, a_min=0.0, a_max=1.0)
 
             # save the history of scalar values
             history["objective_fn_val"].append(val)

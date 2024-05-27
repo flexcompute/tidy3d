@@ -9,7 +9,7 @@ import typing
 from importlib import reload
 
 import autograd as ag
-import autograd.numpy as npa
+import autograd.numpy as anp
 
 import tidy3d as td
 from tidy3d.web import run, run_async
@@ -150,7 +150,7 @@ def use_emulated_run_async(monkeypatch):
         reload(autograd)
 
 
-def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
+def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
     vector = np.random.random(N_PARAMS) - 0.5
@@ -161,7 +161,7 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     med = td.Medium(permittivity=2.0)
 
     # Structure with variable .medium
-    eps = 1 + npa.abs(vector @ params)
+    eps = 1 + anp.abs(vector @ params)
     conductivity = eps / 10.0
     medium = td.Structure(
         geometry=box,
@@ -171,7 +171,7 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     # Structure with variable Box.center
     matrix = np.random.random((3, N_PARAMS)) - 0.5
     matrix /= np.linalg.norm(matrix)
-    center = npa.tanh(matrix @ params)
+    center = anp.tanh(matrix @ params)
     x0, y0, z0 = center
     center_list = td.Structure(
         geometry=td.Box(center=(x0, y0, z0), size=(1, 1, 1)),
@@ -179,7 +179,7 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     )
 
     # Structure with variable Box.center
-    size_y = npa.abs(vector @ params)
+    size_y = anp.abs(vector @ params)
     size_element = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, size_y, 1)),
         medium=med,
@@ -190,7 +190,7 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
     matrix = np.random.random((len_arr, N_PARAMS))
     matrix /= np.linalg.norm(matrix)
 
-    eps_arr = 1.01 + 0.5 * (npa.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+    eps_arr = 1.01 + 0.5 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
 
     nx, ny, nz = eps_arr.shape
 
@@ -210,13 +210,13 @@ def make_structures(params: npa.ndarray) -> dict[str, td.Structure]:
 
     # Polyslab with variable radius about origin
     matrix = np.random.random((NUM_VERTICES, N_PARAMS))
-    params_01 = 0.5 * (npa.tanh(matrix @ params) + 1)
+    params_01 = 0.5 * (anp.tanh(matrix @ params) + 1)
     radii = 1.0 + 0.1 * params_01
 
-    phis = 2 * npa.pi * npa.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
-    xs = radii * npa.cos(phis)
-    ys = radii * npa.sin(phis)
-    vertices = npa.stack((xs, ys), axis=-1)
+    phis = 2 * anp.pi * anp.linspace(0, 1, NUM_VERTICES + 1)[:NUM_VERTICES]
+    xs = radii * anp.cos(phis)
+    ys = radii * anp.sin(phis)
+    vertices = anp.stack((xs, ys), axis=-1)
     polyslab = td.Structure(
         geometry=td.PolySlab(
             vertices=vertices,
@@ -247,7 +247,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     )
 
     def mode_postprocess_fn(mnt_data):
-        return npa.sum(abs(mnt_data.amps.values) ** 2)
+        return anp.sum(abs(mnt_data.amps.values) ** 2)
 
     diff_mnt = td.DiffractionMonitor(
         size=(td.inf, td.inf, 0),
@@ -258,7 +258,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
     )
 
     def diff_postprocess_fn(mnt_data):
-        return npa.sum(abs(mnt_data.amps.values) ** 2)
+        return anp.sum(abs(mnt_data.amps.values) ** 2)
 
     return dict(
         mode=(mode_mnt, mode_postprocess_fn),
@@ -368,7 +368,7 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
             val = objective(params0)
         val, grad = ag.value_and_grad(objective)(params0)
         print(val, grad)
-        assert npa.all(grad != 0.0), "some gradients are 0"
+        assert anp.all(grad != 0.0), "some gradients are 0"
 
     # if 'numerical', we do a numerical gradient check
     if TEST_MODE == "numerical":
@@ -428,7 +428,7 @@ def test_autograd_async(use_emulated_run_async, structure_key, monitor_key):
 
     val, grad = ag.value_and_grad(objective)(params0)
     print(val, grad)
-    assert npa.all(grad != 0.0), "some gradients are 0"
+    assert anp.all(grad != 0.0), "some gradients are 0"
 
 
 def test_autograd_speed_num_structures(use_emulated_run):
@@ -487,6 +487,6 @@ def test_sim_full_ops(structure_key):
 
         assert sim_traced == sim_full_traced
 
-        return npa.sum(sim_full_traced.structures[-1].medium.permittivity.values)
+        return anp.sum(sim_full_traced.structures[-1].medium.permittivity.values)
 
     ag.grad(objective)(params0)

@@ -252,7 +252,7 @@ First we will grab the power at each of the waveguides from the `td.SimulationDa
 > Note: If doing more complex operations in the postprocess function, be sure to use `autograd.numpy` instead of regular `numpy` to ensure that the function is differentiable by `autograd`.
 
 ```py
-import autograd.numpy as npa
+import autograd.numpy as anp
 
 import autograd as ag
 
@@ -264,11 +264,11 @@ def post_process_fn(sim_data: td.SimulationData) -> float:
 
     # # or, when written in more low-level syntax
     # amps = [sim_data[mnt.name].amps.sel(direction="+") for mnt in monitors_out]
-    # powers = [npa.sum(abs(npa.array(amp.values))**2) for amp in amps]
+    # powers = [anp.sum(abs(anp.array(amp.values))**2) for amp in amps]
 
-    powers = npa.array(powers)
-    softmin_weights = npa.exp(-powers) / npa.sum(npa.exp(-powerss))
-    return num_output_waveguides * npa.sum(npa.array(powers) * softmin_weights)
+    powers = anp.array(powers)
+    softmin_weights = anp.exp(-powers) / anp.sum(anp.exp(-powerss))
+    return num_output_waveguides * anp.sum(anp.array(powers) * softmin_weights)
 
 ```
 > Note: the extra `**kwargs` contain information passed during optimization about the history and the index of the step. They can be used to schedule changes into the post processing function as a function of the optimization state.
@@ -487,7 +487,7 @@ def post_process_fn(batch_data: dict[str, td.SimulationData]) -> float:
 
         # # or, when written in more low-level syntax
         # amp = sim_data[mnt_name_left].amps.sel(direction="-")
-        # power = abs(npa.sum(npa.array(amp.values)))**2
+        # power = abs(anp.sum(anp.array(amp.values)))**2
 
         power_left += power
     return power_left

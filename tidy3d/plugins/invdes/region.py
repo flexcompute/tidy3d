@@ -3,7 +3,7 @@
 import abc
 import typing
 
-import autograd.numpy as npa
+import autograd.numpy as anp
 import numpy as np
 import pydantic.v1 as pd
 
@@ -65,13 +65,13 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         """``Box`` corresponding to this design region."""
         return td.Box(center=self.center, size=self.size)
 
-    def material_density(self, params: npa.ndarray) -> npa.ndarray:
+    def material_density(self, params: anp.ndarray) -> anp.ndarray:
         """Evaluate the transformations on a parameter array to give the material density (0,1)."""
         for transformation in self.transformations:
             params = self.evaluate_transformation(transformation=transformation, params=params)
         return params
 
-    def penalty_value(self, data: npa.ndarray) -> npa.ndarray:
+    def penalty_value(self, data: anp.ndarray) -> anp.ndarray:
         """Evaluate the transformations on a dataset."""
 
         if not self.penalties:
@@ -83,7 +83,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
             self.evaluate_penalty(penalty=penalty, material_density=material_density)
             for penalty in self.penalties
         ]
-        return npa.sum(npa.array(penalty_values))
+        return anp.sum(anp.array(penalty_values))
 
     @abc.abstractmethod
     def evaluate_transformation(self, transformation: None) -> float:
@@ -141,7 +141,7 @@ class TopologyDesignRegion(DesignRegion):
     )
 
     @staticmethod
-    def _check_params(params: npa.ndarray = None):
+    def _check_params(params: anp.ndarray = None):
         """Ensure ``params`` are between 0 and 1."""
         if params is None:
             return
@@ -207,7 +207,7 @@ class TopologyDesignRegion(DesignRegion):
 
         return coords
 
-    def eps_values(self, params: npa.ndarray) -> npa.ndarray:
+    def eps_values(self, params: anp.ndarray) -> anp.ndarray:
         """Values for the custom medium permittivity."""
 
         self._check_params(params)
@@ -217,7 +217,7 @@ class TopologyDesignRegion(DesignRegion):
         eps_arr = eps_min + material_density * (eps_max - eps_min)
         return eps_arr.reshape(params.shape)
 
-    def to_structure(self, params: npa.ndarray) -> td.Structure:
+    def to_structure(self, params: anp.ndarray) -> td.Structure:
         """Convert this ``DesignRegion`` into a custom ``JaxStructure``."""
         self._check_params(params)
 
@@ -251,12 +251,12 @@ class TopologyDesignRegion(DesignRegion):
             enforce=True,
         )
 
-    def evaluate_transformation(self, transformation: None, params: npa.ndarray) -> npa.ndarray:
+    def evaluate_transformation(self, transformation: None, params: anp.ndarray) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
         return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
 
-    def evaluate_penalty(self, penalty: None, material_density: npa.ndarray) -> float:
+    def evaluate_penalty(self, penalty: None, material_density: anp.ndarray) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
         return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 
