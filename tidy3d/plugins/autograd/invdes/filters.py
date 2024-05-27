@@ -39,16 +39,16 @@ def make_filter(
     return _filter
 
 
-conic_filter = partial(make_filter, filter_type="conic")
-conic_filter.__doc__ = """make_filter() with a default filter_type value of `conic`.
+make_conic_filter = partial(make_filter, filter_type="conic")
+make_conic_filter.__doc__ = """make_filter() with a default filter_type value of `conic`.
 
 See Also
 --------
 make_filter : Function to create a filter based on the specified kernel type and size.
 """
 
-circular_filter = partial(make_filter, filter_type="circular")
-circular_filter.__doc__ = """make_filter() with a default filter_type value of `circular`.
+make_circular_filter = partial(make_filter, filter_type="circular")
+make_circular_filter.__doc__ = """make_filter() with a default filter_type value of `circular`.
 
 See Also
 --------
