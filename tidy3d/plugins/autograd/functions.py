@@ -2,7 +2,8 @@ from typing import Iterable, Union, Tuple, Literal, List
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
-from tidy3d.plugins.autograd.types import PaddingType
+
+from .types import PaddingType
 
 
 def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
