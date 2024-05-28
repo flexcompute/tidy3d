@@ -1444,9 +1444,16 @@ class PolySlab(base.Planar):
             vjps_edges += contrib_E
 
         # scale by edge area
-        edge_lengths = np.linalg.norm(edges)
-        slab_height = float(np.squeeze(np.diff(self.slab_bounds)))
-        edge_areas = edge_lengths * slab_height / np.cos(self.sidewall_angle)
+        edge_lengths = np.linalg.norm(edges, axis=-1)
+        edge_areas = edge_lengths
+
+        # correction to edge area based on sidewall distance
+        dim_axis = "xyz"[self.axis]
+        field_coords_axis = E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]
+        if len(field_coords_axis) > 1:
+            slab_height = float(np.squeeze(np.diff(self.slab_bounds)))
+            if not np.isinf(slab_height):
+                edge_areas *= slab_height / np.cos(self.sidewall_angle)
 
         vjps_edges *= edge_areas
 
