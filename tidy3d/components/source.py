@@ -757,6 +757,12 @@ class CustomFieldSource(FieldSource, PlanarSource):
         the directionality of the source will likely not be perfect, even if both the ``E`` and ``H`` fields are
         provided. An empty normalizing run may be needed to accurately normalize results.
 
+        To create this empty simulation it is recommended that users create a simulation with no structures but just a flux
+        monitor (``tidy3D.FluxMonitor``) next to the custom source, ensuring that the flux monitor is at least one grid cell
+        away from the source. Moreover, for accurate normalization, users must ensure that the same grid is used to run
+        the original simulation as well as the empty simulation. The total flux calculated at the flux monitor of the empty
+        simulation can then be used for proper normalization of results after ``tidy3d`` simulation.
+
         The coordinates of all provided fields are assumed to be relative to the source center.
         If only the ``E`` or only the ``H`` fields are provided, the source will not be directional,
         but will inject equal power in both directions instead.
@@ -777,6 +783,17 @@ class CustomFieldSource(FieldSource, PlanarSource):
     ...     size=(2, 2, 0),
     ...     source_time=pulse,
     ...     field_dataset=dataset)
+
+    Creating an empty simulation with no structures with ``FluxMonitor`` for normalization but with the same grid as the
+    original simulation.
+
+    Example
+    -------
+
+    >>> sim_empty = sim.updated_copy(monitors = [Flux_monitor],
+    ...             structures = [],
+    ...             grid_spec= sim.grid_spec.updated_copy(override_structures = sim.structures)
+    ...             )
 
     See Also
     --------
