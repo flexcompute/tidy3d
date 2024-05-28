@@ -1,6 +1,8 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import autograd.numpy as np
+
+from tidy3d.components.types import ArrayFloat2D
 
 from .parametrizations import make_filter_and_project
 
@@ -60,3 +62,117 @@ def make_erosion_dilation_penalty(
         return np.linalg.norm(diff) / np.sqrt(diff.size)
 
     return _erosion_dilation_penalty
+
+
+def curvature(dp: np.ndarray, ddp: np.ndarray) -> np.ndarray:
+    """Calculate the curvature at a point given the first and second derivatives.
+
+    Parameters
+    ----------
+    dp : np.ndarray
+        The first derivative at the point, with (x, y) entries in the first dimension.
+    ddp : np.ndarray
+        The second derivative at the point, with (x, y) entries in the first dimension.
+
+    Returns
+    -------
+    np.ndarray
+        The curvature at the given point.
+
+    Notes
+    -----
+    The curvature can be positive or negative, indicating the direction of curvature.
+    The radius of curvature is defined as 1 / |κ|, where κ is the curvature.
+    """
+    return (dp[0] * ddp[1] - dp[1] * ddp[0]) / np.power(dp[0] ** 2 + dp[1] ** 2, 1.5)
+
+
+def bezier_with_grads(
+    t: float, p0: np.ndarray, pc: np.ndarray, p2: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Compute the Bezier curve and its first and second derivatives at a given point.
+
+    Parameters
+    ----------
+    t : float
+        The parameter at which to evaluate the Bezier curve.
+    p0 : np.ndarray
+        The first control point of the Bezier curve.
+    pc : np.ndarray
+        The central control point of the Bezier curve.
+    p2 : np.ndarray
+        The last control point of the Bezier curve.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray, np.ndarray]
+        A tuple containing the Bezier curve value, its first derivative, and its second derivative at the given point.
+    """
+    p1 = 2 * pc - p0 / 2 - p2 / 2
+    b = p0 * t**2 + p1 * 2 * t * (1 - t) + p2 * (1 - t) ** 2
+    dbdt = 2 * (p1 + p2 * (t - 1) + p0 * t - 2 * p1 * t)
+    dbd2t = 2 * (p0 - 2 * p1 + p2)
+    return b, dbdt, dbd2t
+
+
+def bezier_curvature(x: np.ndarray, y: np.ndarray, t: Union[np.ndarray, float] = 0.5) -> np.ndarray:
+    """
+    Calculate the curvature of a Bezier curve at a given parameter t.
+
+    Parameters
+    ----------
+    x : np.ndarray
+        The x-coordinates of the control points.
+    y : np.ndarray
+        The y-coordinates of the control points.
+    t : Union[np.ndarray, float], optional
+        The parameter at which to evaluate the curvature, by default 0.5.
+
+    Returns
+    -------
+    np.ndarray
+        The curvature of the Bezier curve at the given parameter t.
+    """
+    p = np.stack((x, y), axis=1)
+    _, dbdt, dbd2t = bezier_with_grads(t, p[:-2], p[1:-1], p[2:])
+    return curvature(dbdt.T, dbd2t.T)
+
+
+def make_curvature_penalty(min_radius: float, alpha: float = 1.0, kappa: float = 10.0):
+    """Create a penalty function based on the curvature of a set of points.
+
+    Parameters
+    ----------
+    min_radius : float
+        The minimum radius of curvature.
+    alpha : float, optional
+        Scaling factor for the penalty, by default 1.0.
+    kappa : float, optional
+        Exponential factor for the penalty, by default 10.0.
+
+    Returns
+    -------
+    Callable
+        A function that computes the curvature penalty for a given set of points.
+
+    Notes
+    -----
+    .. math::
+
+        p(r) = \\frac{\\mathrm{exp}(-\\kappa(r - r_{min}))}{1 + \\mathrm{exp}(-\\kappa(r - r_{min}))}
+
+    This formula was described by A. Micheals et al.
+    "Leveraging continuous material averaging for inverse electromagnetic design",
+    Optics Express (2018).
+    """
+
+    def _curvature_penalty(points: ArrayFloat2D):
+        xs, ys = np.array(points).T
+        crv = bezier_curvature(xs, ys)
+        curvature_radius = np.abs(1 / (crv + 1e-3))
+        arg = kappa * (curvature_radius - min_radius)
+        exp_arg = np.exp(-arg)
+        penalty = alpha * (exp_arg / (1 + exp_arg))
+        return np.mean(penalty)
+
+    return _curvature_penalty
