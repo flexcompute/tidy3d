@@ -1451,9 +1451,9 @@ class PolySlab(base.Planar):
         dim_axis = "xyz"[self.axis]
         field_coords_axis = E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]
         if len(field_coords_axis) > 1:
-            slab_height = float(np.squeeze(np.diff(self.slab_bounds)))
+            slab_height = abs(float(np.squeeze(np.diff(self.slab_bounds))))
             if not np.isinf(slab_height):
-                edge_areas *= slab_height / np.cos(self.sidewall_angle)
+                edge_areas *= slab_height
 
         vjps_edges *= edge_areas
 
