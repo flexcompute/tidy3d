@@ -1447,7 +1447,7 @@ class PolySlab(base.Planar):
         edge_lengths = np.linalg.norm(edges, axis=-1)
         edge_areas = edge_lengths
 
-        # correction to edge area based on sidewall distance
+        # correction to edge area based on sidewall distance along slab axis
         dim_axis = "xyz"[self.axis]
         field_coords_axis = E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]
         if len(field_coords_axis) > 1:

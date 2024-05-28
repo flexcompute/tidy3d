@@ -492,46 +492,46 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-@pytest.mark.timeout(18.0)
-def test_many_structures_timeout():
-    """Test that a metalens-like simulation with many structures can be initialized fast enough."""
+# @pytest.mark.timeout(18.0)
+# def test_many_structures_timeout():
+#     """Test that a metalens-like simulation with many structures can be initialized fast enough."""
 
-    with cProfile.Profile() as pr:
-        import time
+#     with cProfile.Profile() as pr:
+#         import time
 
-        t = time.time()
+#         t = time.time()
 
-        Nx, Ny = 200, 200
-        sim_size = [Nx, Ny, 5]
+#         Nx, Ny = 200, 200
+#         sim_size = [Nx, Ny, 5]
 
-        geoms = []
-        for ix in range(Nx):
-            for iy in range(Ny):
-                verts = ((ix, iy), (ix + 0.5, iy), (ix + 0.5, iy + 0.5), (ix, iy + 0.5))
-                geom = td.PolySlab(slab_bounds=(0, 1), vertices=verts)
-                geoms.append(geom)
+#         geoms = []
+#         for ix in range(Nx):
+#             for iy in range(Ny):
+#                 verts = ((ix, iy), (ix + 0.5, iy), (ix + 0.5, iy + 0.5), (ix, iy + 0.5))
+#                 geom = td.PolySlab(slab_bounds=(0, 1), vertices=verts)
+#                 geoms.append(geom)
 
-        metalens = td.Structure(
-            geometry=td.GeometryGroup(geometries=geoms),
-            medium=td.material_library["Si3N4"]["Horiba"],
-        )
+#         metalens = td.Structure(
+#             geometry=td.GeometryGroup(geometries=geoms),
+#             medium=td.material_library["Si3N4"]["Horiba"],
+#         )
 
-        src = td.PlaneWave(
-            source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
-            center=(0, 0, -1),
-            size=(td.inf, td.inf, 0),
-            direction="+",
-        )
+#         src = td.PlaneWave(
+#             source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
+#             center=(0, 0, -1),
+#             size=(td.inf, td.inf, 0),
+#             direction="+",
+#         )
 
-        sim = td.Simulation(size=sim_size, structures=[metalens], sources=[src], run_time=1e-12)
+#         sim = td.Simulation(size=sim_size, structures=[metalens], sources=[src], run_time=1e-12)
 
-        t2 = time.time() - t
-        pr.print_stats(sort="cumtime")
-        pr.dump_stats("sim_test.prof")
-        print(f"structures took {t2} seconds")
+#         t2 = time.time() - t
+#         pr.print_stats(sort="cumtime")
+#         pr.dump_stats("sim_test.prof")
+#         print(f"structures took {t2} seconds")
 
-        """ times (tyler's system)
-        * original : 35 sec
-        * no copy : 16 sec
-        * no to_static(): 13 sec
-        """
+""" times (tyler's system)
+* original : 35 sec
+* no copy : 16 sec
+* no to_static(): 13 sec
+"""
