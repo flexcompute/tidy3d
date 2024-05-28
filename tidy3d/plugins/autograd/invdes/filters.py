@@ -1,5 +1,7 @@
-from typing import Tuple
+from typing import Tuple, Union
 from functools import partial
+
+import numpy as np
 
 from ..functions import convolve
 from ..types import KernelType, PaddingType
@@ -8,7 +10,7 @@ from ..utilities import make_kernel
 
 def make_filter(
     filter_type: KernelType,
-    size: Tuple[int, ...],
+    size: Union[int, Tuple[int, ...]],
     *,
     normalize: bool = True,
     padding: PaddingType = "reflect",
@@ -19,8 +21,8 @@ def make_filter(
     ----------
     filter_type : KernelType
         The type of kernel to create (`circular` or `conic`).
-    size : Tuple[int, ...]
-        The size of the kernel in pixels for each dimension.
+    size : Union[int, Tuple[int, ...]]
+        The size of the kernel in pixels for each dimension. Can be a scalar or a tuple.
     normalize : bool, optional
         Whether to normalize the kernel so that it sums to 1. Default is True.
     padding : PadMode, optional
@@ -31,10 +33,18 @@ def make_filter(
     function
         A function that applies the created filter to an input array.
     """
-    kernel = make_kernel(kernel_type=filter_type, size=size, normalize=normalize)
+    _kernel = {}
 
     def _filter(array):
-        return convolve(array, kernel, padding=padding)
+        if array.ndim not in _kernel:
+            if np.isscalar(size):
+                kernel_size = (size,) * array.ndim
+            else:
+                kernel_size = size
+            _kernel[array.ndim] = make_kernel(
+                kernel_type=filter_type, size=kernel_size, normalize=normalize
+            )
+        return convolve(array, _kernel[array.ndim], padding=padding)
 
     return _filter
 
