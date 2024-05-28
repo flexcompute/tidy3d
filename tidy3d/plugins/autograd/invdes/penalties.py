@@ -5,6 +5,7 @@ import autograd.numpy as np
 from tidy3d.components.types import ArrayFloat2D
 
 from .parametrizations import make_filter_and_project
+from ..types import PaddingType
 
 
 def make_erosion_dilation_penalty(
@@ -12,6 +13,7 @@ def make_erosion_dilation_penalty(
     beta: float = 100.0,
     eta: float = 0.5,
     delta_eta: float = 0.01,
+    padding: PaddingType = "reflect",
 ):
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
@@ -31,13 +33,15 @@ def make_erosion_dilation_penalty(
         Midpoint of the tanh projection. Default is 0.5.
     delta_eta : float, optional
         The binarization threshold for erosion and dilation operations. Default is 0.01.
+    padding : PaddingType, optional
+        The padding type to use for the filter. Default is "reflect".
 
     Returns
     -------
     Callable
         A function that computes the erosion/dilation penalty for a given array.
     """
-    filtproj = make_filter_and_project(filter_size, beta, eta)
+    filtproj = make_filter_and_project(filter_size, beta, eta, padding=padding)
     eta_dilate = 0.0 + delta_eta
     eta_eroded = 1.0 - delta_eta
 
