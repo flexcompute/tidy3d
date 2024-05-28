@@ -3,7 +3,7 @@ from typing import Tuple, Callable, Iterable, Union
 
 import numpy as np
 
-from tidy3d.plugins.autograd.types import KernelType
+from .types import KernelType
 
 
 def _kernel_circular(size: Tuple[int, ...]) -> np.ndarray:
@@ -74,25 +74,6 @@ def make_kernel(
         kernel /= np.sum(kernel)
 
     return kernel
-
-
-def get_kernel_size_px(radius: float, dl: float) -> float:
-    """Calculate the size of the kernel in pixels based on the given radius and pixel size.
-
-    Parameters
-    ----------
-    radius : float
-        The radius of the kernel in micrometers.
-    dl : float
-        The size of each pixel in micrometers.
-
-    Returns
-    -------
-    float
-        The size of the kernel in pixels.
-    """
-    radius_px = np.ceil(radius / dl)
-    return 2 * radius_px + 1
 
 
 def chain(*funcs: Union[Callable, Iterable[Callable]]):

@@ -20,3 +20,22 @@ def grey_indicator(array: np.ndarray) -> float:
         The calculated grey indicator.
     """
     return np.mean(4 * array * (1 - array))
+
+
+def get_kernel_size_px(radius: float, dl: float) -> float:
+    """Calculate the size of the kernel in pixels based on the given radius and pixel size.
+
+    Parameters
+    ----------
+    radius : float
+        The radius of the kernel in micrometers.
+    dl : float
+        The size of each pixel in micrometers.
+
+    Returns
+    -------
+    float
+        The size of the kernel in pixels.
+    """
+    radius_px = np.ceil(radius / dl)
+    return 2 * radius_px + 1
