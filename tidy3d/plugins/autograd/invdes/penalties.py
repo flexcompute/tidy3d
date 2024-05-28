@@ -39,20 +39,20 @@ def make_erosion_dilation_penalty(
     eta_dilate = 0.0 + delta_eta
     eta_eroded = 1.0 - delta_eta
 
-    def _dilate(array: np.ndarray):
-        return filtproj(array, eta=eta_dilate)
+    def _dilate(array: np.ndarray, beta: float):
+        return filtproj(array, beta=beta, eta=eta_dilate)
 
-    def _erode(array: np.ndarray):
-        return filtproj(array, eta=eta_eroded)
+    def _erode(array: np.ndarray, beta: float):
+        return filtproj(array, beta=beta, eta=eta_eroded)
 
-    def _open(array: np.ndarray):
-        return _dilate(_erode(array))
+    def _open(array: np.ndarray, beta: float):
+        return _dilate(_erode(array, beta=beta), beta=beta)
 
-    def _close(array: np.ndarray):
-        return _erode(_dilate(array))
+    def _close(array: np.ndarray, beta: float):
+        return _erode(_dilate(array, beta=beta), beta=beta)
 
-    def _erosion_dilation_penalty(array: np.ndarray):
-        diff = _close(array) - _open(array)
+    def _erosion_dilation_penalty(array: np.ndarray, beta: float = beta):
+        diff = _close(array, beta) - _open(array, beta)
 
         if not np.any(diff):
             return 0.0
