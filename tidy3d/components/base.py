@@ -1044,6 +1044,10 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         # get dictionary of all traced fields
         field_mapping = self.strip_traced_fields()
 
+        # shortcut to just return self if no tracers found, for performance
+        if not field_mapping:
+            return self
+
         # convert all fields to static values
         field_mapping_static = {key: get_static(val) for key, val in field_mapping.items()}
 

@@ -480,7 +480,7 @@ def _run_bwd(
             return {path: 0 * value for path, value in sim_fields_original.items()}
 
         # run adjoint simulation
-        task_name_adj = task_name + "_adjoint"
+        task_name_adj = str(task_name) + "_adjoint"
         sim_data_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
 
         return postprocess_adj(
