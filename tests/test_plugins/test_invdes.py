@@ -74,13 +74,10 @@ def make_design_region():
         size=(0.4 * L_SIM, 0.4 * L_SIM, 0.4 * L_SIM),
         center=(0, 0, 0),
         eps_bounds=(1.0, 4.0),
-        transformations=[],
-        # TODO: add transformations
-        # tdi.FilterProject(radius=0.05, beta=2.0)],
-        penalties=[],
-        # TODO: add penalties
-        #     tdi.ErosionDilationPenalty(length_scale=0.05),
-        # ],
+        transformations=[tdi.FilterProject(radius=0.05, beta=2.0)],
+        penalties=[
+            tdi.ErosionDilationPenalty(length_scale=0.05),
+        ],
         pixel_size=0.02,
     )
 
@@ -107,9 +104,6 @@ def test_region_penalties():
     region.material_density(PARAMS_0)
     region.penalty_value(PARAMS_0)
 
-    # TODO: add penalties
-    region.updated_copy(penalties=[]).penalty_value(PARAMS_0)
-
 
 def test_region_to_structure():
     """Test converting ``TopologyDesignRegion`` to jax and regular structure."""
@@ -126,14 +120,13 @@ def test_region_params_bounds():
 
     region = make_design_region()
 
-    _ = region.params_ones
+    PARAMS_0 = region.params_ones
 
-    # TODO: add back
-    # with pytest.raises(ValueError):
-    #     region.penalty_value(2 * PARAMS_0)
+    with pytest.raises(ValueError):
+        region.penalty_value(2 * PARAMS_0)
 
-    # with pytest.raises(ValueError):
-    #     region.penalty_value(-1 * PARAMS_0)
+    with pytest.raises(ValueError):
+        region.penalty_value(-1 * PARAMS_0)
 
 
 def test_region_inf_size():
@@ -145,15 +138,6 @@ def test_region_inf_size():
     region = region.updated_copy(size=inf_size)
     params_0_inf = region.params_zeros
     _ = region.to_structure(params_0_inf)
-
-
-# def test_penalty_pixel_size(log_capture):
-#     """Test that warning is raised if ``pixel_size`` is supplied."""
-
-#     _ = tdi.ErosionDilationPenalty(length_scale=2.0)
-
-#     with AssertLogLevel(log_capture, "WARNING"):
-#         _ = tdi.ErosionDilationPenalty(pixel_size=1.0, length_scale=2.0)
 
 
 def post_process_fn(sim_data: td.SimulationData, **kwargs) -> float:
