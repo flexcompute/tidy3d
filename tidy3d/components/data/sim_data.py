@@ -2,6 +2,7 @@
 from __future__ import annotations
 from typing import Callable, Tuple, Union
 from abc import ABC
+from collections import defaultdict
 
 import pathlib
 import xarray as xr
@@ -836,7 +837,7 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
         grid_spec_original = sim_original.grid_spec
-        if len(sim_original.sources) and grid_spec_original.wavelength is None:
+        if sim_original.sources and grid_spec_original.wavelength is None:
             wavelength_original = grid_spec_original.wavelength_from_sources(sim_original.sources)
             grid_spec_adj = grid_spec_original.updated_copy(wavelength=wavelength_original)
             sim_adj_update_dict["grid_spec"] = grid_spec_adj
@@ -849,12 +850,9 @@ class SimulationData(AbstractYeeGridSimulationData):
         # TODO: determine if we can do multi-frequency sources
 
         # map of index into 'self.data' to the list of datasets we need adjoint sources for
-        adj_src_map = {}
+        adj_src_map = defaultdict(list)
         for _, index, dataset_name in data_vjp_paths:
-            if index in adj_src_map:
-                adj_src_map[index].append(dataset_name)
-            else:
-                adj_src_map[index] = [dataset_name]
+            adj_src_map[index].append(dataset_name)
 
         # gather a list of adjoint sources for every monitor data in the VJP that needs one
         sources_adj_all = []

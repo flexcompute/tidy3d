@@ -39,6 +39,8 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
     # order bounds with dimension first (N, 2)
     bounds = np.array(bounds).T
 
+    all_coords = {}
+
     # loop over all dimensions
     for dim, (bmin, bmax) in zip(dims, bounds):
         bmin = get_static(bmin)
@@ -50,8 +52,9 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
         coord_values[coord_values < bmin] = bmin
         coord_values[coord_values > bmax] = bmax
 
-        # TODO: this can be a little bit slow, might be a faster implementation
-        _arr = _arr.assign_coords(**{dim: coord_values})
+        all_coords[dim] = coord_values
+
+    _arr = _arr.assign_coords(**all_coords)
 
     # uses trapezoidal rule
     # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html

@@ -88,7 +88,7 @@ class MonitorData(AbstractMonitorData, ABC):
         return []
 
     @staticmethod
-    def flip_direction(direction: str) -> str:
+    def flip_direction(direction: Union[str, DataArray]) -> str:
         """Flip the direction of a string ``('+', '-') -> ('-', '+')``."""
 
         if isinstance(direction, DataArray):
@@ -1617,6 +1617,7 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
 
         adjoint_sources = []
 
+        # TODO: speed up with ufunc?
         for freq in coords["f"]:
             for direction in coords["direction"]:
                 for mode_index in coords["mode_index"]:
@@ -2700,6 +2701,7 @@ class DiffractionData(AbstractFieldProjectionData):
 
         adjoint_sources = []
 
+        # TODO: speed up with ufunc?
         # loop over all coordinates in the diffraction amplitudes
         for freq in coords["f"]:
             for pol in coords["polarization"]:

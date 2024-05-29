@@ -69,10 +69,7 @@ class ArrayLike:
     def convert_to_numpy(cls, val):
         """Convert the value to np.ndarray and provide some casting."""
         arr_numpy = np.array(val, ndmin=1, dtype=cls.dtype, copy=True)
-        try:
-            return arr_numpy.astype(arr_numpy.dtype)
-        except TypeError:
-            return arr_numpy
+        return arr_numpy
 
     @classmethod
     def check_dims(cls, val):

@@ -3235,15 +3235,14 @@ class Simulation(AbstractYeeGridSimulation):
         return adjoint_monitors_fld, adjoint_monitors_eps
 
     @property
-    def freqs_adjoint(self) -> list[float]:
+    def freqs_adjoint(self) -> set[float]:
         """Unique list of all frequencies. For now should be only one."""
-        freqs = []
+
+        freqs = set()
         for mnt in self.monitors:
             if isinstance(mnt, FreqMonitor):
-                for f in mnt.freqs:
-                    if f not in freqs:
-                        freqs.append(f)
-        freqs.sort()
+                freqs.update(mnt.freqs)
+        freqs = sorted(freqs)
 
         assert len(freqs) == 1, "Only support single frequency right now."
 

@@ -212,6 +212,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
+        kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
@@ -969,13 +970,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             # for sequences, add (i,) to the path and handle each value individually
             elif isinstance(x, (list, tuple)):
                 for i, val in enumerate(x):
-                    sub_paths = tuple(list(path) + [i])
+                    sub_paths = path + (i,)
                     handle_value(val, path=sub_paths)
 
             # for dictionaries, add the (key,) to the path and handle each value individually
             elif isinstance(x, dict):
                 for key, val in x.items():
-                    sub_paths = tuple(list(path) + [key])
+                    sub_paths = path + (key,)
                     handle_value(val, path=sub_paths)
 
         # recursively parse the dictionary of this object
@@ -994,48 +995,31 @@ class Tidy3dBaseModel(pydantic.BaseModel):
     def insert_traced_fields(self, field_mapping: AutogradFieldMap) -> Tidy3dBaseModel:
         """Recursively insert a map of paths to autograd-traced fields into a copy of this obj."""
 
-        # ``def insert_value()`` will insert into this dictionary
         self_dict = self.dict()
 
         def insert_value(x, path: tuple[str, ...], sub_dict: dict):
-            """Recursively insert a value into the path into a dictionary."""
+            """Insert a value into the path into a dictionary."""
+            current_dict = sub_dict
+            for key in path[:-1]:
+                if isinstance(current_dict[key], tuple):
+                    current_dict[key] = list(current_dict[key])
+                current_dict = current_dict[key]
 
-            # get the first and rest of the path
-            key, *sub_path = path
-            len_sub_path = len(sub_path)
+            final_key = path[-1]
+            if isinstance(current_dict[final_key], tuple):
+                current_dict[final_key] = list(current_dict[final_key])
 
-            # if sub_dict[key] is a tuple, immediately convert it to a list so we can assign to it
-            if isinstance(sub_dict[key], tuple):
-                sub_dict[key] = list(sub_dict[key])
+            sub_element = current_dict[final_key]
+            if isinstance(sub_element, DataArray):
+                current_dict[final_key] = sub_element.copy(deep=False, data=x)
+                if "AUTOGRAD" in sub_element.attrs:
+                    current_dict[final_key].attrs["AUTOGRAD"] = x
+            else:
+                current_dict[final_key] = x
 
-            # only one element in path => leaf node. insert into the sub dict and don't recurse
-            if len_sub_path == 0:
-                sub_element = sub_dict[key]
-
-                # if data array, we copy it and insert x into the data slot
-                if isinstance(sub_element, DataArray):
-                    sub_dict[key] = sub_element.copy(deep=False, data=x)
-
-                    # if the element is traced, we also insert the data into the attrs
-                    if "AUTOGRAD" in sub_element.attrs:
-                        sub_dict[key].attrs["AUTOGRAD"] = x
-
-                # if not a data array, just save x to the dictionary
-                else:
-                    sub_dict[key] = x
-
-                # don't recurse as this is a leaf node
-                return
-
-            # if 1 or more more elements in the path, and they aren't a tuple index (above), recurse
-            sub_dict = sub_dict[key]
-            insert_value(value, path=sub_path, sub_dict=sub_dict)
-
-        # iterate through field mapping. Insert each ``value`` into the ``self_dict`` at ``path``
         for path, value in field_mapping.items():
             insert_value(value, path=path, sub_dict=self_dict)
 
-        # parse the dict with inserted fields to return an updated copy of ``self``
         return self.parse_obj(self_dict)
 
     def to_static(self) -> Tidy3dBaseModel:

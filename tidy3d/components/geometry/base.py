@@ -2332,7 +2332,6 @@ class Box(SimplePlaneIntersection, Centered):
         derivative_map = {}
         for field_path in field_paths:
             field_name, *index = field_path
-            field_name = field_name
 
             if field_name in vjps_center_size:
                 # if the vjp calls for a specific index into the tuple

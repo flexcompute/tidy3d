@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Union, Tuple, Optional, Callable, Any
+from collections import defaultdict
 import pathlib
 import pydantic.v1 as pydantic
 import numpy as np
@@ -251,7 +252,7 @@ class Structure(AbstractStructure):
         """Compute adjoint gradients given the forward and adjoint fields"""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
-        structure_fields_map = {}
+        structure_fields_map = defaultdict(list)
         for structure_path in structure_paths:
             med_or_geo, *field_path = structure_path
             field_path = tuple(field_path)
@@ -263,10 +264,7 @@ class Structure(AbstractStructure):
                     "If you encounter this error, please raise an issue on the tidy3d GitHub "
                     "repository so we can investigate."
                 )
-            if med_or_geo not in structure_fields_map:
-                structure_fields_map[med_or_geo] = [field_path]
-            else:
-                structure_fields_map[med_or_geo].append(field_path)
+            structure_fields_map[med_or_geo].append(field_path)
 
         # loop through sub fields, compute VJPs, and store in the derivative map {path -> vjp_value}
         derivative_map = {}
