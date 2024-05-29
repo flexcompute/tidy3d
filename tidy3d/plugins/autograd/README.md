@@ -38,7 +38,11 @@ autograd.grad(objective)(1.0)
 
 ```
 
-Instead of using `jax`, we now use the [autograd](https://github.com/HIPS/autograd) package for our "core" automatic differentiation. Many `tidy3d` components now accept and are now compatible with `autograd` arrays. Because `autograd` is far lighter and has very few requirements, it was made a core dependency of `tidy3d`. The usability of `autograd` is extremely similar to `jax` but with a couple modifications, which we'll outline below.
+Instead of using `jax`, we now use the [autograd](https://github.com/HIPS/autograd) package for our "core" automatic differentiation. Many `tidy3d` components now accept and are now compatible with `autograd` arrays. Because `autograd` is far lighter and has very few requirements, it was made a core dependency of `tidy3d`. 
+
+While we use `autograd` internally, in the future, we will include wrappers so you can use automatic differentiation frameworks of your choice (e.g. `jax`, `pytorch`) without much of a change to the syntax.
+
+The usability of `autograd` is extremely similar to `jax` but with a couple modifications, which we'll outline below.
 
 ### Migrating from jax to autograd
 
