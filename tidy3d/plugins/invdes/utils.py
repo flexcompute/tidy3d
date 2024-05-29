@@ -35,7 +35,7 @@ def get_field_component(
     sim_data: td.SimulationData,
     monitor_name: str,
     field_component: td.components.types.EMField,
-    **sel_kwargs
+    **sel_kwargs,
 ) -> anp.ndarray:
     """Grab field component from a ``FieldMonitorData`` and select out values."""
 

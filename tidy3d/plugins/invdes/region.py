@@ -12,9 +12,8 @@ from tidy3d.components.types import Coordinate, Size
 
 
 from .base import InvdesBaseModel
-
-# from .transformation import FilterProject, TransformationType
-# from .penalty import ErosionDilationPenalty, PenaltyType
+from .penalty import PenaltyType
+from .transformation import TransformationType
 
 # TODO: support auto handling of symmetry in parameters
 
@@ -42,7 +41,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         description="Minimum and maximum relative permittivity expressed to the design region.",
     )
 
-    transformations: typing.Tuple[None, ...] = pd.Field(
+    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -52,7 +51,7 @@ class DesignRegion(InvdesBaseModel, abc.ABC):
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
 
-    penalties: typing.Tuple[None, ...] = pd.Field(
+    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -112,7 +111,7 @@ class TopologyDesignRegion(DesignRegion):
         "a value on the same order as the grid size.",
     )
 
-    transformations: typing.Tuple[None, ...] = pd.Field(
+    transformations: typing.Tuple[TransformationType, ...] = pd.Field(
         (),
         title="Transformations",
         description="Transformations that get applied from first to last on the parameter array."
@@ -121,7 +120,7 @@ class TopologyDesignRegion(DesignRegion):
         "permittivity and 1 corresponds to the maximum relative permittivity. "
         "Specific permittivity values given the density array are determined by ``eps_bounds``.",
     )
-    penalties: typing.Tuple[None, ...] = pd.Field(
+    penalties: typing.Tuple[PenaltyType, ...] = pd.Field(
         (),
         title="Penalties",
         description="Set of penalties that get evaluated on the material density. Note that the "
@@ -251,12 +250,14 @@ class TopologyDesignRegion(DesignRegion):
             enforce=True,
         )
 
-    def evaluate_transformation(self, transformation: None, params: anp.ndarray) -> anp.ndarray:
+    def evaluate_transformation(
+        self, transformation: TransformationType, params: anp.ndarray
+    ) -> anp.ndarray:
         """Evaluate a transformation, passing in design_region_dl."""
         self._check_params(params)
         return transformation.evaluate(spatial_data=params, design_region_dl=self.pixel_size)
 
-    def evaluate_penalty(self, penalty: None, material_density: anp.ndarray) -> float:
+    def evaluate_penalty(self, penalty: PenaltyType, material_density: anp.ndarray) -> float:
         """Evaluate an erosion-dilation penalty, passing in pixel_size."""
         return penalty.evaluate(x=material_density, pixel_size=self.pixel_size)
 

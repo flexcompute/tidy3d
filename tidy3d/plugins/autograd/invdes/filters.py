@@ -36,15 +36,20 @@ def make_filter(
     _kernel = {}
 
     def _filter(array):
-        if array.ndim not in _kernel:
+        original_shape = array.shape
+        squeezed_array = np.squeeze(array)
+
+        if squeezed_array.ndim not in _kernel:
             if np.isscalar(size):
-                kernel_size = (size,) * array.ndim
+                kernel_size = (size,) * squeezed_array.ndim
             else:
                 kernel_size = size
-            _kernel[array.ndim] = make_kernel(
+            _kernel[squeezed_array.ndim] = make_kernel(
                 kernel_type=filter_type, size=kernel_size, normalize=normalize
             )
-        return convolve(array, _kernel[array.ndim], padding=padding)
+
+        convolved_array = convolve(squeezed_array, _kernel[squeezed_array.ndim], padding=padding)
+        return np.reshape(convolved_array, original_shape)
 
     return _filter
 
