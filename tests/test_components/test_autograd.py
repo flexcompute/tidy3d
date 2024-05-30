@@ -1,4 +1,4 @@
-# ruff: noqa: F811
+# ruff: noqa: F811, F401
 # test autograd integration into tidy3d
 
 import pytest
@@ -15,7 +15,7 @@ import tidy3d as td
 from tidy3d.web import run, run_async
 from tidy3d.web.api.autograd.autograd import run
 
-from ..utils import run_emulated, SIM_FULL
+from ..utils import run_emulated, SIM_FULL, AssertLogLevel, log_capture
 
 """ Test configuration """
 
@@ -490,6 +490,141 @@ def test_sim_full_ops(structure_key):
         return anp.sum(sim_full_traced.structures[-1].medium.permittivity.values)
 
     ag.grad(objective)(params0)
+
+
+def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
+    """Make sure we get the right warning with no adjoint sources, and no error."""
+
+    monitor_key = "mode"
+    structure_key = "size_element"
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sim(*args):
+        structure = make_structures(*args)[structure_key]
+        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data[monitor_key])
+        return value
+
+    monkeypatch.setattr(td.SimulationData, "make_adjoint_sources", lambda *args, **kwargs: [])
+
+    with AssertLogLevel(log_capture, "WARNING", contains_str="No adjoint sources"):
+        ag.grad(objective)(params0)
+
+
+def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_emulated_run_async):
+    """Test what happens when autograd run pipeline fails."""
+
+    monitor_key = "mode"
+    structure_key = "size_element"
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sim(*args):
+        structure = make_structures(*args)[structure_key]
+        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data[monitor_key])
+        return value
+
+    def fail(*args, **kwargs):
+        """Just raise an exception."""
+        raise ValueError("test")
+
+    """ if autograd run raises exception, raise a warning and continue with regular ."""
+
+    monkeypatch.setattr(td.web.api.autograd.autograd, "_run", fail)
+
+    with AssertLogLevel(
+        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
+    ):
+        ag.grad(objective)(params0)
+
+    def objective_async(*args):
+        sims = {"key": make_sim(*args)}
+        data = run_async(sims, verbose=False)
+        value = 0.0
+        for _, val in data.items():
+            value += postprocess(val[monitor_key])
+        return value
+
+    """ if autograd run_async raises exception, raise a warning and continue with regular ."""
+
+    monkeypatch.setattr(td.web.api.autograd.autograd, "_run_async", fail)
+
+    with AssertLogLevel(
+        log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
+    ):
+        ag.grad(objective_async)(params0)
+
+    """ if the regular web functions are called, raise custom exception and catch it in tests ."""
+
+
+def test_web_incompatible_inputs(log_capture, monkeypatch):
+    """Test what happens when bad inputs passed to web.run()."""
+
+    def catch(*args, **kwargs):
+        """Just raise an exception."""
+        raise AssertionError()
+
+    monkeypatch.setattr(td.web.api.webapi, "run", catch)
+    monkeypatch.setattr(td.web.api.asynchronous, "run_async", catch)
+
+    from tidy3d.web.api.autograd import autograd
+
+    reload(autograd)
+
+    # no tracers
+
+    with pytest.raises(AssertionError):
+        td.web.run(SIM_BASE, task_name="task_name")
+
+    with pytest.raises(AssertionError):
+        td.web.run_async({"task_name": SIM_BASE})
+
+    with pytest.raises(AssertionError):
+        autograd._run(SIM_BASE, task_name="task_name")
+
+    # wrong input types
+
+    with pytest.raises(AssertionError):
+        td.web.run([SIM_BASE], task_name="test")
+
+    with pytest.raises(AssertionError):
+        td.web.run_async([SIM_BASE])
+
+
+def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
+    """More traced structures than allowed."""
+
+    from tidy3d.web.api.autograd.autograd import MAX_NUM_TRACED_STRUCTURES
+
+    monitor_key = "mode"
+    structure_key = "size_element"
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sim(*args):
+        structure = make_structures(*args)[structure_key]
+        return SIM_BASE.updated_copy(
+            structures=(MAX_NUM_TRACED_STRUCTURES + 1) * [structure], monitors=[monitor]
+        )
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False)
+        value = postprocess(data[monitor_key])
+        return value
+
+    with pytest.raises(ValueError):
+        ag.grad(objective)(params0)
 
 
 # @pytest.mark.timeout(18.0)
