@@ -704,10 +704,11 @@ class Batch(WebContainer):
                 for task_name, job in self.jobs.items():
                     status = job.status
                     description = pbar_description(task_name, status)
+                    completed = run_statuses.index(status) if status in run_statuses else 0
                     pbar = progress.add_task(
                         description,
                         total=len(run_statuses) - 1,
-                        completed=run_statuses.index(status),
+                        completed=completed,
                     )
                     pbar_tasks[task_name] = pbar
 
@@ -717,13 +718,10 @@ class Batch(WebContainer):
                         status = job.status
                         description = pbar_description(task_name, status)
 
-                        # if a problem occurred, update progressbar completion to 100%
-                        if status not in run_statuses:
-                            completed = run_statuses.index("success")
-                        else:
+                        if status in run_statuses:
                             completed = run_statuses.index(status)
+                            progress.update(pbar, description=description, completed=completed)
 
-                        progress.update(pbar, description=description, completed=completed)
                     time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
 
                 # set all to 100% completed (if error or diverge, will be red)
