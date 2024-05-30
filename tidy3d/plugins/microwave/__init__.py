@@ -6,12 +6,8 @@ from .custom_path_integrals import (
     CustomPathIntegral2D,
     CustomVoltageIntegral2D,
 )
-from .impedance_calculator import ImpedanceCalculator
-from .path_integrals import (
-    AxisAlignedPathIntegral,
-    CurrentIntegralAxisAligned,
-    VoltageIntegralAxisAligned,
-)
+from .impedance_calculator import ImpedanceCalculator, VoltageIntegralTypes, CurrentIntegralTypes
+from . import models
 
 __all__ = [
     "AxisAlignedPathIntegral",
@@ -20,6 +16,8 @@ __all__ = [
     "CurrentIntegralAxisAligned",
     "CustomVoltageIntegral2D",
     "CustomCurrentIntegral2D",
+    "VoltageIntegralTypes",
+    "CurrentIntegralTypes",
     "ImpedanceCalculator",
     "models",
 ]

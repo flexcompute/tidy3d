@@ -82,6 +82,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
                 current = np.conj(2 * flux / voltage)
 
         impedance = voltage / current
+        impedance.name = "impedance (Ohm)"
         return impedance
 
     @pd.validator("current_integral", always=True)

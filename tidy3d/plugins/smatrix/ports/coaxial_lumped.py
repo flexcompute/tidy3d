@@ -103,7 +103,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         return val
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: float, grid: Grid
+        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
     ) -> CustomCurrentSource:
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
@@ -122,9 +122,13 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         size = [self.outer_diameter] * 3
         size[self.injection_axis] = 0
         bounding_box = Box(center=self.center, size=size)
-        inds = grid.discretize_inds(box=bounding_box)
-        num1 = inds[trans_axes[0]][1] - inds[trans_axes[0]][0]
-        num2 = inds[trans_axes[1]][1] - inds[trans_axes[1]][0]
+        if grid:
+            inds = grid.discretize_inds(box=bounding_box)
+            num1 = inds[trans_axes[0]][1] - inds[trans_axes[0]][0]
+            num2 = inds[trans_axes[1]][1] - inds[trans_axes[1]][0]
+        else:
+            num1 = 11
+            num2 = 11
 
         # Get a normalized current density that is flowing radially from inner circle to outer circle
         # Total current is normalized to 1
@@ -187,7 +191,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             current_dataset=dataset_E,
         )
 
-    def to_load(self, snap_center: float) -> CoaxialLumpedResistor:
+    def to_load(self, snap_center: float = None) -> CoaxialLumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
@@ -204,7 +208,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             name=f"{self.name}_resistor",
         )
 
-    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
         if snap_center:
@@ -226,7 +230,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             colocate=False,
         )
 
-    def to_current_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)
         if snap_center:
@@ -285,15 +289,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         # Loops around inner conductive circle conductor
         field_data = sim_data[self._current_monitor_name]
 
-        # Helper for generating x,y vertices around a circle in the local coordinate frame
-        def generate_circle_coordinates(radius, num_points):
-            angles = np.linspace(0, 2 * np.pi, num_points, endpoint=True)
-            xt = radius * np.cos(angles)
-            yt = radius * np.sin(angles)
-            return (xt, yt)
-
         # Get transverse axes
-        trans_axes = self.remaining_axes
         (coord1, coord2, coord3) = self.local_dims
 
         # Just need a rough estimate for the number of cells
@@ -309,31 +305,22 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         # One extra point is used to close the loop.
         num_path_coords = round(np.pi * num_coords / 4) * 4 + 1
 
-        # These x,y coordinates are relate to the local coordinate frame
-        xt, yt = generate_circle_coordinates(
-            (self.outer_diameter + self.inner_diameter) / 4, num_path_coords
-        )
-        xt += self.center[trans_axes[0]]
-        yt += self.center[trans_axes[1]]
-
-        circle_vertices = np.column_stack((xt, yt))
-        # Close the contour exactly
-        circle_vertices[-1, :] = circle_vertices[0, :]
-
         # Get the coordinates normal to port and select positions just on either side of the port
         normal_coords = field_coords[coord3].values
         upper_bound = np.searchsorted(normal_coords, self.center[self.injection_axis])
         lower_bound = upper_bound - 1
+        center = list(self.center)
         # We need to choose which side of the port to place the path integral,
         # which depends on which way the inner conductor is extending
         if self.direction == "+":
-            path_pos = normal_coords[upper_bound]
+            center[self.injection_axis] = normal_coords[upper_bound]
         else:
-            path_pos = normal_coords[lower_bound]
+            center[self.injection_axis] = normal_coords[lower_bound]
 
+        radius = (self.outer_diameter + self.inner_diameter) / 4
         # Setup the path integral and integrate the H field
-        path_integral = CustomCurrentIntegral2D(
-            axis=self.injection_axis, position=path_pos, vertices=circle_vertices
+        path_integral = CustomCurrentIntegral2D.from_circular_path(
+            self.center, radius, num_path_coords, self.injection_axis, False
         )
         current = path_integral.compute_current(field_data)
 

@@ -2,8 +2,8 @@
 
 import numpy as np
 import pydantic.v1 as pydantic
-import pytest
-import tidy3d as td
+import matplotlib.pyplot as plt
+
 from skrf import Frequency
 from skrf.media import MLine
 from tidy3d import FieldData
@@ -33,6 +33,8 @@ FIELD_MONITOR = td.FieldMonitor(
 )
 STRIP_WIDTH = 1.5
 STRIP_HEIGHT = 0.5
+COAX_R1 = 0.04
+COAX_R2 = 0.5
 
 SIM_Z = td.Simulation(
     size=(2, 1, 1),
@@ -103,6 +105,51 @@ def make_stripline_scalar_field_data_array(grid_key: str):
     return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
 
+def make_coaxial_field_data_array(grid_key: str):
+    """Populate FIELD_MONITOR with a coaxial transmission line mode."""
+
+    # Get a normalized electric field that represents the electric field within a coaxial cable transmission line.
+    def compute_coax_radial_electric(rin, rout, x, y, is_x):
+        # Radial distance
+        r = np.sqrt((x) ** 2 + (y) ** 2)
+        # Remove division by 0
+        r_valid = np.where(r == 0.0, 1, r)
+        # Compute current density so that the total current
+        # is 1 flowing through surfaces of constant r
+        # Extra r is for changing to Cartesian coordinates
+        denominator = 2 * np.pi * r_valid**2
+        if is_x:
+            Exy = np.where(r <= rin, 0, (x / denominator))
+            Exy = np.where(r >= rout, 0, Exy)
+        else:
+            Exy = np.where(r <= rin, 0, (y / denominator))
+            Exy = np.where(r >= rout, 0, Exy)
+        return Exy
+
+    XS, YS, ZS = get_xyz(FIELD_MONITOR, grid_key)
+    XGRID, YGRID = np.meshgrid(XS, YS, indexing="ij")
+    XGRID = XGRID.reshape((len(XS), len(YS), 1, 1))
+    YGRID = YGRID.reshape((len(XS), len(YS), 1, 1))
+    values = np.zeros((len(XS), len(YS), len(ZS), len(FS)))
+
+    XGRID = np.broadcast_to(XGRID, values.shape)
+    YGRID = np.broadcast_to(YGRID, values.shape)
+
+    is_x = grid_key[1] == "x"
+    if grid_key[0] == "E":
+        field = compute_coax_radial_electric(COAX_R1, COAX_R2, XGRID, YGRID, is_x)
+    else:
+        field = compute_coax_radial_electric(COAX_R1, COAX_R2, XGRID, YGRID, not is_x)
+        # H field is perpendicular and oriented for positive z propagation
+        # We want to compute Hx which is -Ey/eta0, Hy which is Ex/eta0
+        if is_x:
+            field /= -ETA_0
+        else:
+            field /= ETA_0
+
+    return td.ScalarFieldDataArray(field, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+
+
 def make_field_data():
     return FieldData(
         monitor=FIELD_MONITOR,
@@ -110,6 +157,19 @@ def make_field_data():
         Ey=make_stripline_scalar_field_data_array("Ey"),
         Hx=make_stripline_scalar_field_data_array("Hx"),
         Hy=make_stripline_scalar_field_data_array("Hy"),
+        symmetry=SIM_Z.symmetry,
+        symmetry_center=SIM_Z.center,
+        grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
+    )
+
+
+def make_coax_field_data():
+    return FieldData(
+        monitor=FIELD_MONITOR,
+        Ex=make_coaxial_field_data_array("Ex"),
+        Ey=make_coaxial_field_data_array("Ey"),
+        Hx=make_coaxial_field_data_array("Hx"),
+        Hy=make_coaxial_field_data_array("Hy"),
         symmetry=SIM_Z.symmetry,
         symmetry_center=SIM_Z.center,
         grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
@@ -435,3 +495,19 @@ def test_mode_solver_custom_current_integral():
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
     current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     current_integral.compute_current(SIM_Z_DATA["mode"])
+
+
+def test_custom_path_integral_accuracy():
+    """Test the accuracy of the custom path integral."""
+    field_data = make_coax_field_data()
+
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
+    )
+    current = current_integral.compute_current(field_data)
+    print(current)
+    f, (ax1, ax2) = plt.subplots(1, 2, tight_layout=True, figsize=(8, 4))
+    np.real(field_data.Hx.isel(f=0)).plot(ax=ax1, x="x", y="y")
+    np.real(field_data.Hy.isel(f=0)).plot(ax=ax2, x="x", y="y")
+    plt.show()
+    # TODO FINISH

@@ -17,9 +17,10 @@ from ...components.data.data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
 )
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
+from ...components.base import cached_property, Tidy3dBaseModel
+from ...components.types import Axis, Direction, Bound
 from ...components.geometry.base import Box
-from ...components.types import Axis, Direction
 from ...components.validators import assert_line, assert_plane
 from ...exceptions import DataError, Tidy3dError
 
@@ -171,6 +172,14 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
                 return index
         raise Tidy3dError("Failed to identify axis.")
 
+    def within_bounds(self, bounds: Bound) -> bool:
+        """Helper to check if the defined path is completely within a bounding box."""
+        path_min = np.array(self.bounds[0])
+        path_max = np.array(self.bounds[1])
+        bound_min = np.array(bounds[0])
+        bound_max = np.array(bounds[1])
+        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
+
 
 class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
     """Class for computing the voltage between two points defined by an axis-aligned line."""
@@ -196,6 +205,7 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
 
         if self.sign == "+":
             voltage *= -1
+        voltage.name = "voltage (A)"
         # Return data array of voltage while keeping coordinates of frequency|time|mode index
         return voltage
 
@@ -253,7 +263,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
 
         if self.sign == "-":
             current *= -1
-
+        current.name = "current (A)"
         return current
 
     @cached_property
@@ -339,3 +349,11 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         )
 
         return (bottom, right, top, left)
+
+    def within_bounds(self, bounds: Bound) -> bool:
+        """Helper to check if the defined path is completely within a bounding box."""
+        path_min = np.array(self.bounds[0])
+        path_max = np.array(self.bounds[1])
+        bound_min = np.array(bounds[0])
+        bound_max = np.array(bounds[1])
+        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
