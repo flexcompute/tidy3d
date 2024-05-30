@@ -37,9 +37,8 @@ PyYAML = "*"
 dask = "*"
 toml = "*"
 autograd = "1.6.2"
-
-### NOT CORE
 scipy = "*"
+### NOT CORE
 boto3 = "^1.28.0"
 requests = "^2.31.0"
 pyjwt = "*"
