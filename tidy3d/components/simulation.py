@@ -2094,7 +2094,7 @@ class Simulation(AbstractYeeGridSimulation):
 
                 for bnd in boundary:
                     if isinstance(bnd, Absorber):
-                        raise SetupError(
+                        log.warning(
                             "Fixed angle plane wave sources ('FixedAngleSpec' and `angle_theta != 0`) are "
                             f"not compatible with the 'Absorder' boundary along dimension {norm_dir}. "
                             "Either set the boundary conditions to 'PML' to proceed to simulate a plane "
@@ -2105,7 +2105,7 @@ class Simulation(AbstractYeeGridSimulation):
                     elif isinstance(bnd, (PML, StablePML)) and (
                         bnd.parameters.alpha_min > 0 or bnd.parameters.alpha_max > 0
                     ):
-                        raise SetupError(
+                        log.warning(
                             "Fixed angle plane wave sources ('FixedAngleSpec' and `angle_theta != 0`) are "
                             f"not compatible with the 'PML' boundary with non-zero 'alpha' values along dimension {norm_dir}. "
                             "Either set parameters 'alpha_min=0' and 'alpha_max=0' of the 'PML' boundary to proceed to simulate a plane "
@@ -2286,8 +2286,8 @@ class Simulation(AbstractYeeGridSimulation):
             if any(med.allow_gain for med in mediums):
                 raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of gain materials.")
 
-            if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
-                raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of temporal monitors.")
+            # if any(isinstance(mnt, TimeMonitor) for mnt in values["monitors"]):
+            #     raise SetupError("Fixed-angle plane wave sources cannot be used in the presence of temporal monitors.")
                 
         return values
 
