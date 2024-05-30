@@ -735,6 +735,29 @@ class Geometry(Tidy3dBaseModel, ABC):
         return axis, position
 
     @staticmethod
+    def parse_two_xyz_kwargs(**xyz) -> List[Tuple[Axis, float]]:
+        """Turns x,y,z kwargs into indices of axes and the position along each axis.
+
+        Parameters
+        ----------
+        x : float = None
+            Position in x direction, only two of x,y,z can be specified to define line.
+        y : float = None
+            Position in y direction, only two of x,y,z can be specified to define line.
+        z : float = None
+            Position in z direction, only two of x,y,z can be specified to define line.
+
+        Returns
+        -------
+        [(int, float), (int, float)]
+            Index into xyz axis (0,1,2) and position along that axis.
+        """
+        xyz_filtered = {k: v for k, v in xyz.items() if v is not None}
+        assert len(xyz_filtered) == 2, "exactly two kwarg in [x,y,z] must be specified."
+        xyz_list = list(xyz_filtered.items())
+        return [("xyz".index(axis_label), position) for axis_label, position in xyz_list]
+
+    @staticmethod
     def rotate_points(points: ArrayFloat3D, axis: Coordinate, angle: float) -> ArrayFloat3D:
         """Rotate a set of points in 3D.
 

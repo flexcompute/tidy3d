@@ -8,14 +8,16 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
-from ...exceptions import DataError, ValidationError
+from ...components.data.monitor_data import FieldTimeData
+from ...constants import OHM
+from ...exceptions import ValidationError
 from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
 from .path_integrals import (
     CurrentIntegralAxisAligned,
     IntegralResultTypes,
     MonitorDataTypes,
     VoltageIntegralAxisAligned,
+    _check_em_field_supported,
 )
 
 VoltageIntegralTypes = Union[VoltageIntegralAxisAligned, CustomVoltageIntegral2D]
@@ -53,9 +55,7 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         :class:`.IntegralResultTypes`
             Result of impedance computation over remaining dimensions (frequency, time, mode indices).
         """
-
-        if not isinstance(em_field, (FieldData, FieldTimeData, ModeSolverData)):
-            raise DataError("'em_field' type not supported by impedance calculator.")
+        _check_em_field_supported(em_field=em_field)
 
         # If both voltage and current integrals have been defined then impedance is computed directly
         if self.voltage_integral:
@@ -63,11 +63,12 @@ class ImpedanceCalculator(Tidy3dBaseModel):
         if self.current_integral:
             current = self.current_integral.compute_current(em_field)
 
-        # If only one of the integrals has been provided then fall back to using total power (flux)
-        # with Ohm's law. The input field should cover an area large enough to render the flux
-        # computation accurate. If the input field is a time signal, then it is real and flux
-        # corresponds to the instantaneous power. Otherwise the input field is in frequency domain,
-        # where flux indicates the time-averaged power 0.5*Re(V*conj(I))
+        # If only one of the integrals has been provided, then the computation falls back to using
+        # total power (flux) with Ohm's law to compute the missing quantity. The input field should
+        # cover an area large enough to render the flux computation accurate. If the input field is
+        # a time signal, then it is real and flux corresponds to the instantaneous power. Otherwise
+        # the input field is in frequency domain, where flux indicates the time-averaged power
+        # 0.5*Re(V*conj(I)).
         if not self.voltage_integral:
             flux = em_field.flux
             if isinstance(em_field, FieldTimeData):
@@ -82,14 +83,21 @@ class ImpedanceCalculator(Tidy3dBaseModel):
                 current = np.conj(2 * flux / voltage)
 
         impedance = voltage / current
+        impedance = ImpedanceCalculator._set_data_array_attributes(impedance)
         return impedance
 
     @pd.validator("current_integral", always=True)
     def check_voltage_or_current(cls, val, values):
         """Raise validation error if both ``voltage_integral`` and ``current_integral``
-        were not provided."""
+        are not provided."""
         if not values.get("voltage_integral") and not val:
             raise ValidationError(
-                "Atleast one of 'voltage_integral' or 'current_integral' must be provided."
+                "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
         return val
+
+    @staticmethod
+    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
+        """Helper to set additional metadata for ``IntegralResultTypes``."""
+        data_array.name = "Z0"
+        return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")

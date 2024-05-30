@@ -1394,7 +1394,11 @@ class ModeData(ModeSolverDataset, ElectromagneticFieldData):
         newly created data."""
 
         update_dict = dict(self._grid_correction_dict, **self.field_components)
-        update_dict = {key: field.isel(**isel_kwargs) for key, field in update_dict.items()}
+        update_dict = {
+            key: field.isel(**isel_kwargs)
+            for key, field in update_dict.items()
+            if isinstance(field, DataArray)
+        }
         return self._updated(update=update_dict)
 
     def _assign_coords(self, **assign_coords_kwargs):

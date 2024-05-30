@@ -21,7 +21,7 @@ from .base_lumped import AbstractLumpedPort
 
 
 class LumpedPort(AbstractLumpedPort, Box):
-    """Class representing a single rectangular lumped port
+    """Class representing a single rectangular lumped port.
 
     Example
     -------
@@ -61,7 +61,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return 3 - self.injection_axis - self.voltage_axis
 
     def to_source(
-        self, source_time: GaussianPulse, snap_center: float, grid: Grid
+        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
     ) -> UniformCurrentSource:
         """Create a current source from the lumped port."""
         # Discretized source amps are manually zeroed out later if they
@@ -80,7 +80,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             confine_to_bounds=True,
         )
 
-    def to_load(self, snap_center: float) -> LumpedResistor:
+    def to_load(self, snap_center: float = None) -> LumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
         # It is done here so plots of the simulation will more accurately portray the setup
@@ -96,7 +96,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             voltage_axis=self.voltage_axis,
         )
 
-    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port voltage."""
         center = list(self.center)
         if snap_center:
@@ -117,7 +117,7 @@ class LumpedPort(AbstractLumpedPort, Box):
             colocate=False,
         )
 
-    def to_current_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port current."""
         center = list(self.center)
         if snap_center:
@@ -249,7 +249,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return (min_idx, max_idx - 1)
 
     def _check_grid_size(self, yee_grid: YeeGrid):
-        """Raises :class:``SetupError`` if the grid is too coarse at port locations."""
+        """Raises :class:`SetupError` if the grid is too coarse at port locations"""
         e_component = "xyz"[self.voltage_axis]
         e_yee_grid = yee_grid.grid_dict[f"E{e_component}"]
         coords = e_yee_grid.to_dict[e_component]
