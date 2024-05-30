@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `ModeSolver.plot_field` correctly returning the plot axes.
 - Avoid error if non-positive refractive index used for integration resolution in adjoint.
+- Make `Batch.monitor` robust if the run status is not found.
 
 ## [2.7.0rc2] - 2024-05-14
 
