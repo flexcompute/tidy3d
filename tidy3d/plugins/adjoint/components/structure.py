@@ -101,6 +101,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         freq_max = float(max(grad_data_eps.eps_xx.f))
         eps_in = self.medium.eps_model(frequency=freq_max)
         ref_ind = np.sqrt(np.max(np.real(eps_in)))
+        ref_ind = max([1.0, abs(ref_ind)])
         wvl_free_space = C_0 / freq_max
         wvl_mat = wvl_free_space / ref_ind
         return dict(wvl_mat=wvl_mat, eps_in=eps_in)
