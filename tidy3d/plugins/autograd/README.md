@@ -156,3 +156,14 @@ Later this year (2024), we plan to support:
 If you have feature requests or questions, please feel free to file an issue or discussion on the `tidy3d` front end repository.
 
 Happy autogradding!
+
+## Developer Notes
+
+To convert existing tidy3d front end code to be autograd compatible, will need to be aware of
+- `numpy` -> `autograd.numpy`
+- `x.real` -> `np.real(x)``
+- `float()` is not supported as far as I can tell.
+- `isclose()` -> `np.isclose()`
+- `array[i] = something` needs a different approach (happens in mesher a lot)
+- whenever we pass things to other modules, like `shapely` especially, we need to be careful that they are untraced.
+- I just made structures static before any meshing, as a cutoff point. So if we add a new `make_grid()` call somewhere, eg in a validator, just need to be aware.
