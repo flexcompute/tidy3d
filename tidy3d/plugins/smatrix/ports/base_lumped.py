@@ -1,56 +1,25 @@
 """Class and custom data array for representing a scattering matrix port based on lumped circuit elements."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Optional
 
 import pydantic.v1 as pd
 
-from ....components.base import Tidy3dBaseModel, cached_property
-from ....components.data.data_array import DataArray, FreqDataArray
-from ....components.data.sim_data import SimulationData
+from ....components.base import cached_property
 from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import AbstractLumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.source import GaussianPulse, UniformCurrentSource
 from ....components.types import Complex, Coordinate, FreqArray
 from ....constants import OHM
+from .base_terminal import AbstractTerminalPort
 
 DEFAULT_PORT_NUM_CELLS = 3
 DEFAULT_REFERENCE_IMPEDANCE = 50
 
 
-class LumpedPortDataArray(DataArray):
-    """Port parameter matrix elements for lumped ports.
-
-    Example
-    -------
-    >>> import numpy as np
-    >>> ports_in = ['port1', 'port2']
-    >>> ports_out = ['port1', 'port2']
-    >>> f = [2e14]
-    >>> coords = dict(
-    ...     port_in=ports_in,
-    ...     port_out=ports_out,
-    ...     f=f
-    ... )
-    >>> fd = LumpedPortDataArray((1 + 1j) * np.random.random((2, 2, 1)), coords=coords)
-    """
-
-    __slots__ = ()
-    _dims = ("port_out", "port_in", "f")
-    _data_attrs = {"long_name": "lumped port matrix element"}
-
-
-class AbstractLumpedPort(Tidy3dBaseModel, ABC):
-    """Class representing a single lumped port"""
-
-    name: str = pd.Field(
-        ...,
-        title="Name",
-        description="Unique name for the port.",
-        min_length=1,
-    )
+class AbstractLumpedPort(AbstractTerminalPort):
+    """Class representing a single lumped port."""
 
     impedance: Complex = pd.Field(
         DEFAULT_REFERENCE_IMPEDANCE,
@@ -88,35 +57,24 @@ class AbstractLumpedPort(Tidy3dBaseModel, ABC):
 
     @cached_property
     @abstractmethod
-    def injection_axis(self):
-        """Injection axis of the port."""
-
-    @abstractmethod
-    def to_source(
-        self, source_time: GaussianPulse, snap_center: float, grid=Grid
-    ) -> UniformCurrentSource:
-        """Create a current source from the lumped port."""
-
-    @abstractmethod
-    def to_load(self, snap_center: float) -> AbstractLumpedResistor:
+    def to_load(self, snap_center: float = None) -> AbstractLumpedResistor:
         """Create a load resistor from the lumped port."""
 
     @abstractmethod
-    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_voltage_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port voltage."""
 
     @abstractmethod
-    def to_current_monitor(self, freqs: FreqArray, snap_center: float) -> FieldMonitor:
+    def to_current_monitor(self, freqs: FreqArray, snap_center: float = None) -> FieldMonitor:
         """Field monitor to compute port current."""
 
-    @abstractmethod
-    def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute voltage across the port."""
+    def to_field_monitors(self, freqs: FreqArray, snap_center: float = None) -> list[FieldMonitor]:
+        """Field monitors to compute port voltage and current."""
+        return [
+            self.to_voltage_monitor(freqs, snap_center),
+            self.to_current_monitor(freqs, snap_center),
+        ]
 
     @abstractmethod
-    def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute current flowing through the port."""
-
-    @abstractmethod
-    def _check_grid_size(yee_grid: YeeGrid):
-        """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
+    def _check_grid_size(self, yee_grid: YeeGrid):
+        """Raises :class:`SetupError` if the grid is too coarse at port locations."""

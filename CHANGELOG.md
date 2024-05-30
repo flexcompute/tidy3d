@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `plot_length_units` to `Simulation` and `Scene` to allow for specifying units, which improves axis labels and scaling when plotting.
 - Added the helper function `compute_power_delivered_by_port`  to `TerminalComponentModeler` which computes power delivered to a microwave network from a port.
 - Added the account function `account` to check credit balance and daily free simulation balance.
+- Added `WavePort` to the `TerminalComponentModeler` which is the suggested port type for exciting transmission lines.
+- Added plotting functionality to voltage and current path integrals in the `microwave` plugin.
+- Added convenience functions `from_terminal_positions` and `from_circular_path` to simplify setup of `VoltageIntegralAxisAligned` and `CustomCurrentIntegral2D`, respectively.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.

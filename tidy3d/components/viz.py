@@ -75,18 +75,15 @@ def equal_aspect(plot):
 """ plot parameters """
 
 
-class PlotParams(Tidy3dBaseModel):
-    """Stores plotting parameters / specifications for a given model."""
+class AbstractPlotParams(Tidy3dBaseModel):
+    """Abstract class for storing plotting parameters.
+    Corresponds with select properties of ``matplotlib.artist.Artist``.
+    """
 
     alpha: Any = pd.Field(1.0, title="Opacity")
-    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
-    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
-    fill: bool = pd.Field(True, title="Is Filled")
-    hatch: str = pd.Field(None, title="Hatch Style")
     zorder: float = pd.Field(None, title="Display Order")
-    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
-    def include_kwargs(self, **kwargs) -> PlotParams:
+    def include_kwargs(self, **kwargs) -> AbstractPlotParams:
         """Update the plot params with supplied kwargs."""
         update_dict = {
             key: value
@@ -101,6 +98,32 @@ class PlotParams(Tidy3dBaseModel):
         for ignore_key in ("type", "attrs"):
             kwarg_dict.pop(ignore_key)
         return kwarg_dict
+
+
+class PathPlotParams(AbstractPlotParams):
+    """Stores plotting parameters / specifications for a path.
+    Corresponds with select properties of ``matplotlib.lines.Line2D``.
+    """
+
+    color: Any = pd.Field(None, title="Color", alias="c")
+    linewidth: pd.NonNegativeFloat = pd.Field(2, title="Line Width", alias="lw")
+    linestyle: str = pd.Field("--", title="Line Style", alias="ls")
+    marker: Any = pd.Field("o", title="Marker Style")
+    markeredgecolor: Any = pd.Field(None, title="Marker Edge Color", alias="mec")
+    markerfacecolor: Any = pd.Field(None, title="Marker Face Color", alias="mfc")
+    markersize: pd.NonNegativeFloat = pd.Field(10, title="Marker Size", alias="ms")
+
+
+class PlotParams(AbstractPlotParams):
+    """Stores plotting parameters / specifications for a given model.
+    Corresponds with select properties of ``matplotlib.patches.Patch``.
+    """
+
+    edgecolor: Any = pd.Field(None, title="Edge Color", alias="ec")
+    facecolor: Any = pd.Field(None, title="Face Color", alias="fc")
+    fill: bool = pd.Field(True, title="Is Filled")
+    hatch: str = pd.Field(None, title="Hatch Style")
+    linewidth: pd.NonNegativeFloat = pd.Field(1, title="Line Width", alias="lw")
 
 
 # defaults for different tidy3d objects

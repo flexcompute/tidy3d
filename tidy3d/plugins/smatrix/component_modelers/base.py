@@ -12,17 +12,22 @@ import pydantic.v1 as pd
 from ....components.base import Tidy3dBaseModel, cached_property
 from ....components.data.data_array import DataArray
 from ....components.simulation import Simulation
-from ....components.types import Complex, FreqArray
+from ....components.types import FreqArray
 from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
 from ....log import log
 from ....web.api.container import Batch, BatchData
+from ..ports.coaxial_lumped import CoaxialLumpedPort
 from ..ports.modal import Port
 from ..ports.rectangular_lumped import LumpedPort
+from ..ports.wave import WavePort
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10
 DEFAULT_DATA_DIR = "."
+
+LumpedPortType = Union[LumpedPort, CoaxialLumpedPort]
+TerminalPortType = Union[LumpedPortType, WavePort]
 
 
 class AbstractComponentModeler(ABC, Tidy3dBaseModel):
@@ -34,7 +39,7 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         description="Simulation describing the device without any sources present.",
     )
 
-    ports: Tuple[Union[Port, LumpedPort], ...] = pd.Field(
+    ports: Tuple[Union[Port, TerminalPortType], ...] = pd.Field(
         (),
         title="Ports",
         description="Collection of ports describing the scattering matrix elements. "
@@ -224,42 +229,45 @@ class AbstractComponentModeler(ABC, Tidy3dBaseModel):
         return self._construct_smatrix(batch_data=batch_data)
 
     @staticmethod
-    def s_to_z(s_matrix: DataArray, reference: Complex) -> DataArray:
-        """Get the impedance matrix given the scattering matrix and a reference impedance."""
-
-        # move the input and output port dimensions to the end, for ease of matrix operations
-        dims = list(s_matrix.dims)
-        dims.append(dims.pop(dims.index("port_out")))
-        dims.append(dims.pop(dims.index("port_in")))
-        z_matrix = s_matrix.copy(deep=True).transpose(*dims)
-        s_vals = z_matrix.values
-
-        eye = np.eye(len(s_matrix.port_out.values), len(s_matrix.port_in.values))
-        z_vals = np.matmul(AbstractComponentModeler.inv(eye - s_vals), (eye + s_vals)) * reference
-
-        z_matrix.data = z_vals
-        return z_matrix
-
-    @staticmethod
-    def ab_to_s(a_matrix: DataArray, b_matrix: DataArray) -> DataArray:
-        """Get the scattering matrix given the power wave matrices."""
-
-        # move the input and output port dimensions to the end, for ease of matrix operations
-        assert a_matrix.dims == b_matrix.dims
-        dims = list(a_matrix.dims)
-        dims.append(dims.pop(dims.index("port_out")))
-        dims.append(dims.pop(dims.index("port_in")))
-
-        s_matrix = a_matrix.copy(deep=True).transpose(*dims)
-        a_vals = s_matrix.copy(deep=True).transpose(*dims).values
-        b_vals = b_matrix.copy(deep=True).transpose(*dims).values
-
-        s_vals = np.matmul(b_vals, AbstractComponentModeler.inv(a_vals))
-
-        s_matrix.data = s_vals
-        return s_matrix
-
-    @staticmethod
     def inv(matrix: DataArray):
         """Helper to invert a port matrix."""
         return np.linalg.inv(matrix)
+
+    def _shift_value_signed(self, port: Union[Port, WavePort]) -> float:
+        """How far (signed) to shift the source from the monitor."""
+
+        # get the grid boundaries and sizes along port normal from the simulation
+        normal_axis = port.size.index(0.0)
+        grid = self.simulation.grid
+        grid_boundaries = grid.boundaries.to_list[normal_axis]
+        grid_centers = grid.centers.to_list[normal_axis]
+
+        # get the index of the grid cell where the port lies
+        port_position = port.center[normal_axis]
+        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
+
+        # no port index can be determined
+        if len(port_pos_gt_grid_bounds) == 0:
+            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
+        port_index = port_pos_gt_grid_bounds[-1]
+
+        # shift the port to the left
+        if port.direction == "+":
+            shifted_index = port_index - 2
+            if shifted_index < 0:
+                raise SetupError(
+                    f"Port {port.name} normal is too close to boundary "
+                    f"on -{'xyz'[normal_axis]} side."
+                )
+
+        # shift the port to the right
+        else:
+            shifted_index = port_index + 2
+            if shifted_index >= len(grid_centers):
+                raise SetupError(
+                    f"Port {port.name} normal is too close to boundary "
+                    f"on +{'xyz'[normal_axis]} side."
+                )
+
+        new_pos = grid_centers[shifted_index]
+        return new_pos - port_position

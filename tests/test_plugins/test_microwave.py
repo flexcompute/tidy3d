@@ -1,5 +1,6 @@
 """Test the microwave plugin."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
@@ -31,6 +32,8 @@ FS = np.linspace(FSTART, FSTOP, 3)
 FIELD_MONITOR = td.FieldMonitor(size=MON_SIZE, fields=FIELDS, name="strip_field", freqs=FS)
 STRIP_WIDTH = 1.5
 STRIP_HEIGHT = 0.5
+COAX_R1 = 0.04
+COAX_R2 = 0.5
 
 SIM_Z = td.Simulation(
     size=(2, 1, 1),
@@ -93,6 +96,51 @@ def make_stripline_scalar_field_data_array(grid_key: str):
     return td.ScalarFieldDataArray(values, coords=dict(x=XS, y=YS, z=ZS, f=FS))
 
 
+def make_coaxial_field_data_array(grid_key: str):
+    """Populate FIELD_MONITOR with a coaxial transmission line mode."""
+
+    # Get a normalized electric field that represents the electric field within a coaxial cable transmission line.
+    def compute_coax_radial_electric(rin, rout, x, y, is_x):
+        # Radial distance
+        r = np.sqrt((x) ** 2 + (y) ** 2)
+        # Remove division by 0
+        r_valid = np.where(r == 0.0, 1, r)
+        # Compute current density so that the total current
+        # is 1 flowing through surfaces of constant r
+        # Extra r is for changing to Cartesian coordinates
+        denominator = 2 * np.pi * r_valid**2
+        if is_x:
+            Exy = np.where(r <= rin, 0, (x / denominator))
+            Exy = np.where(r >= rout, 0, Exy)
+        else:
+            Exy = np.where(r <= rin, 0, (y / denominator))
+            Exy = np.where(r >= rout, 0, Exy)
+        return Exy
+
+    XS, YS, ZS = get_spatial_coords_dict(SIM_Z, FIELD_MONITOR, grid_key).values()
+    XGRID, YGRID = np.meshgrid(XS, YS, indexing="ij")
+    XGRID = XGRID.reshape((len(XS), len(YS), 1, 1))
+    YGRID = YGRID.reshape((len(XS), len(YS), 1, 1))
+    values = np.zeros((len(XS), len(YS), len(ZS), len(FS)))
+
+    XGRID = np.broadcast_to(XGRID, values.shape)
+    YGRID = np.broadcast_to(YGRID, values.shape)
+
+    is_x = grid_key[1] == "x"
+    if grid_key[0] == "E":
+        field = compute_coax_radial_electric(COAX_R1, COAX_R2, XGRID, YGRID, is_x)
+    else:
+        field = compute_coax_radial_electric(COAX_R1, COAX_R2, XGRID, YGRID, not is_x)
+        # H field is perpendicular and oriented for positive z propagation
+        # We want to compute Hx which is -Ey/eta0, Hy which is Ex/eta0
+        if is_x:
+            field /= -ETA_0
+        else:
+            field /= ETA_0
+
+    return td.ScalarFieldDataArray(field, coords=dict(x=XS, y=YS, z=ZS, f=FS))
+
+
 def make_field_data():
     return FieldData(
         monitor=FIELD_MONITOR,
@@ -100,6 +148,19 @@ def make_field_data():
         Ey=make_stripline_scalar_field_data_array("Ey"),
         Hx=make_stripline_scalar_field_data_array("Hx"),
         Hy=make_stripline_scalar_field_data_array("Hy"),
+        symmetry=SIM_Z.symmetry,
+        symmetry_center=SIM_Z.center,
+        grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
+    )
+
+
+def make_coax_field_data():
+    return FieldData(
+        monitor=FIELD_MONITOR,
+        Ex=make_coaxial_field_data_array("Ex"),
+        Ey=make_coaxial_field_data_array("Ey"),
+        Hx=make_coaxial_field_data_array("Hx"),
+        Hy=make_coaxial_field_data_array("Hy"),
         symmetry=SIM_Z.symmetry,
         symmetry_center=SIM_Z.center,
         grid_expanded=SIM_Z.discretize_monitor(FIELD_MONITOR),
@@ -194,6 +255,15 @@ def test_current_missing_fields():
     current_integral = CurrentIntegralAxisAligned(
         center=center,
         size=size,
+        sign="+",
+    )
+
+    with pytest.raises(DataError):
+        _ = current_integral.compute_current(SIM_Z_DATA["ExHx"])
+
+    current_integral = CurrentIntegralAxisAligned(
+        center=center,
+        size=[length, length, 0],
         sign="+",
     )
 
@@ -407,6 +477,20 @@ def test_fields_missing_custom_current_integral():
         current_integral.compute_current(SIM_Z_DATA["ExHx"])
 
 
+def test_wrong_monitor_data():
+    """Check that the function arguments to integrals are correctly validated."""
+    length = 0.5
+    size = [0, 0, 0]
+    size[1] = length
+    # Make box
+    vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
+    current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
+    with pytest.raises(DataError):
+        current_integral.compute_current(SIM_Z.sources[0].source_time)
+    with pytest.raises(DataError):
+        current_integral.compute_current(em_field=SIM_Z.sources[0].source_time)
+
+
 def test_time_monitor_custom_current_integral():
     length = 0.5
     size = [0, 0, 0]
@@ -425,3 +509,109 @@ def test_mode_solver_custom_current_integral():
     vertices = [(0.2, -0.2), (0.2, 0.2), (-0.2, 0.2), (-0.2, -0.2), (0.2, -0.2)]
     current_integral = CustomCurrentIntegral2D(axis=2, position=0, vertices=vertices)
     current_integral.compute_current(SIM_Z_DATA["mode"])
+
+
+def test_custom_current_integral_normal_y():
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=1, clockwise=False
+    )
+    current_integral.compute_current(SIM_Z_DATA["field"])
+
+
+def test_custom_path_integral_accuracy():
+    """Test the accuracy of the custom path integral."""
+    field_data = make_coax_field_data()
+
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
+    )
+    current = current_integral.compute_current(field_data)
+    assert np.allclose(current.values, 1.0 / ETA_0, rtol=0.01)
+
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=True
+    )
+    current = current_integral.compute_current(field_data)
+    assert np.allclose(current.values, -1.0 / ETA_0, rtol=0.01)
+
+
+def test_impedance_accuracy_on_coaxial():
+    """Test the accuracy of the ImpedanceCalculator."""
+    field_data = make_coax_field_data()
+    # Setup path integrals
+    mean_radius = (COAX_R2 + COAX_R1) * 0.5
+    size = [COAX_R2 - COAX_R1, 0, 0]
+    center = [mean_radius, 0, 0]
+
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
+    )
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=mean_radius, num_points=31, normal_axis=2, clockwise=False
+    )
+
+    def impedance_of_coaxial_cable(r1, r2, wave_impedance=td.ETA_0):
+        return np.log(r2 / r1) * wave_impedance / 2 / np.pi
+
+    Z_analytic = impedance_of_coaxial_cable(COAX_R1, COAX_R2)
+
+    # Compute impedance using the tool
+    Z_calculator = ImpedanceCalculator(
+        voltage_integral=voltage_integral, current_integral=current_integral
+    )
+    Z_calc = Z_calculator.compute_impedance(field_data)
+    assert np.allclose(Z_calc, Z_analytic, rtol=0.04)
+
+
+def test_path_integral_plotting():
+    """Test that all types of path integrals correctly plot themselves."""
+
+    mean_radius = (COAX_R2 + COAX_R1) * 0.5
+    size = [COAX_R2 - COAX_R1, 0, 0]
+    center = [mean_radius, 0, 0]
+
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
+    )
+
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
+    )
+
+    ax = voltage_integral.plot(z=0)
+    current_integral.plot(z=0, ax=ax)
+    plt.close()
+
+    # Test off center plotting
+    ax = voltage_integral.plot(z=2)
+    current_integral.plot(z=2, ax=ax)
+    plt.close()
+
+    # Plot
+    voltage_integral = CustomVoltageIntegral2D(
+        axis=1, position=0, vertices=[(-1, -1), (0, 0), (1, 1)]
+    )
+
+    current_integral = CurrentIntegralAxisAligned(
+        center=(0, 0, 0),
+        size=(2, 0, 1),
+        sign="-",
+        extrapolate_to_endpoints=False,
+        snap_contour_to_grid=False,
+    )
+
+    ax = voltage_integral.plot(y=0)
+    current_integral.plot(y=0, ax=ax)
+    plt.close()
+
+    # Test off center plotting
+    ax = voltage_integral.plot(y=2)
+    current_integral.plot(y=2, ax=ax)
+    plt.close()
+
+
+def test_creation_from_terminal_positions():
+    """Test creating an VoltageIntegralAxisAligned using terminal positions."""
+    _ = VoltageIntegralAxisAligned.from_terminal_positions(
+        plus_terminal=2, minus_terminal=1, y=2.2, z=1
+    )

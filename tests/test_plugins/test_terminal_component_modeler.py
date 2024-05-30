@@ -5,12 +5,15 @@ import pytest
 import tidy3d as td
 from tidy3d.components.data.data_array import FreqDataArray
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
     CoaxialLumpedPort,
     LumpedPort,
-    LumpedPortDataArray,
+    PortDataArray,
     TerminalComponentModeler,
+    TerminalPortDataArray,
+    WavePort,
 )
 from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 
@@ -23,9 +26,16 @@ def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     batch_data = {task_name: run_emulated(sim) for task_name, sim in sim_dict.items()}
     monkeypatch.setattr(TerminalComponentModeler, "_run_sims", lambda self, path_dir: batch_data)
     # for the random data, the power wave matrix might be singular, leading to an error
-    # during inversion, so monkeypatch the inv method so that it operates on a dummy
-    # identity matrix
-    monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
+    # during inversion, so monkeypatch the inv method so that it operates on a random matrix
+    monkeypatch.setattr(
+        AbstractComponentModeler, "inv", lambda matrix: np.random.rand(*matrix.shape) + 1e-4
+    )
+    # Need to do something similar when computing F
+    monkeypatch.setattr(
+        TerminalComponentModeler,
+        "_compute_F",
+        lambda matrix: 1.0 / (2.0 * np.sqrt(np.abs(matrix) + 1e-4)),
+    )
     s_matrix = modeler.run(path_dir=modeler.path_dir)
     return s_matrix
 
@@ -132,10 +142,10 @@ def test_s_to_z_component_modeler():
     S22 = ((Z11 + Z0) * (Z22 - Z0) - Z12 * Z21) / deltaZ
 
     port_names = ["lumped_port_1", "lumped_port_2"]
-    freqs = [1e8]
+    freqs = [1e8, 2e8, 3e8]
 
     values = np.array(
-        [[[S11, S12], [S21, S22]]],
+        3 * [[[S11, S12], [S21, S22]]],
         dtype=complex,
     )
     # Put coords in opposite order to check reordering
@@ -145,8 +155,22 @@ def test_s_to_z_component_modeler():
         port_in=port_names,
     )
 
-    s_matrix = LumpedPortDataArray(data=values, coords=coords)
-    z_matrix = AbstractComponentModeler.s_to_z(s_matrix, reference=Z0)
+    s_matrix = TerminalPortDataArray(data=values, coords=coords)
+    z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=Z0)
+    z_matrix_at_f = z_matrix.sel(f=1e8)
+    assert np.isclose(z_matrix_at_f[0, 0], Z11)
+    assert np.isclose(z_matrix_at_f[0, 1], Z12)
+    assert np.isclose(z_matrix_at_f[1, 0], Z21)
+    assert np.isclose(z_matrix_at_f[1, 1], Z22)
+
+    # test version with different port reference impedances
+    values = np.full((len(freqs), len(port_names)), Z0)
+    coords = dict(
+        f=np.array(freqs),
+        port=port_names,
+    )
+    z_port_matrix = PortDataArray(data=values, coords=coords)
+    z_matrix = TerminalComponentModeler.s_to_z(s_matrix, reference=z_port_matrix)
     z_matrix_at_f = z_matrix.sel(f=1e8)
     assert np.isclose(z_matrix_at_f[0, 0], Z11)
     assert np.isclose(z_matrix_at_f[0, 1], Z12)
@@ -166,9 +190,9 @@ def test_ab_to_s_component_modeler():
     a_values = np.eye(2, 2)
     a_values = np.reshape(a_values, (1, 2, 2))
     b_values = (1 + 1j) * np.random.random((1, 2, 2))
-    a_matrix = LumpedPortDataArray(data=a_values, coords=coords)
-    b_matrix = LumpedPortDataArray(data=b_values, coords=coords)
-    S_matrix = AbstractComponentModeler.ab_to_s(a_matrix, b_matrix)
+    a_matrix = TerminalPortDataArray(data=a_values, coords=coords)
+    b_matrix = TerminalPortDataArray(data=b_values, coords=coords)
+    S_matrix = TerminalComponentModeler.ab_to_s(a_matrix, b_matrix)
     assert np.isclose(S_matrix, b_matrix).all()
 
 
@@ -340,3 +364,148 @@ def test_power_delivered_helper(monkeypatch, tmp_path):
     current = np.ones_like(freqs) * current_amplitude
     power = TerminalComponentModeler.compute_power_delivered_by_port(sim_data=None, port=port1)
     assert np.allclose(power.values, 0.5 * (power_a**2 - power_b**2))
+
+
+def test_make_coaxial_component_modeler_with_wave_ports(tmp_path):
+    """Checks that the terminal component modeler is created successfully with wave ports."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    _ = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+    )
+
+
+def test_run_coaxial_component_modeler_with_wave_ports(monkeypatch, tmp_path):
+    """Checks that the terminal component modeler runs with wave ports."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(WavePort, WavePort), grid_spec=grid_spec
+    )
+    s_matrix = run_component_modeler(monkeypatch, modeler)
+
+    shape_one_port = (len(modeler.freqs), len(modeler.ports))
+    shape_both_ports = (len(modeler.freqs),)
+    for port_in in modeler.ports:
+        for port_out in modeler.ports:
+            coords_in = dict(port_in=port_in.name)
+            coords_out = dict(port_out=port_out.name)
+
+            assert np.all(
+                s_matrix.sel(**coords_in).values.shape == shape_one_port
+            ), "source index not present in S matrix"
+            assert np.all(
+                s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
+            ), "monitor index not present in S matrix"
+
+
+def test_run_mixed_component_modeler_with_wave_ports(monkeypatch, tmp_path):
+    """Checks the terminal component modeler will allow mixed ports."""
+    z_grid = td.UniformGrid(dl=1 * 1e3)
+    xy_grid = td.UniformGrid(dl=0.1 * 1e3)
+    grid_spec = td.GridSpec(grid_x=xy_grid, grid_y=xy_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(CoaxialLumpedPort, WavePort), grid_spec=grid_spec
+    )
+    s_matrix = run_component_modeler(monkeypatch, modeler)
+
+    shape_one_port = (len(modeler.freqs), len(modeler.ports))
+    shape_both_ports = (len(modeler.freqs),)
+    for port_in in modeler.ports:
+        for port_out in modeler.ports:
+            coords_in = dict(port_in=port_in.name)
+            coords_out = dict(port_out=port_out.name)
+
+            assert np.all(
+                s_matrix.sel(**coords_in).values.shape == shape_one_port
+            ), "source index not present in S matrix"
+            assert np.all(
+                s_matrix.sel(**coords_in).sel(**coords_out).values.shape == shape_both_ports
+            ), "monitor index not present in S matrix"
+
+
+def test_wave_port_path_integral_validation():
+    """Checks that wave port will ensure path integrals are within the bounds of the port."""
+    size_port = [2, 2, 0]
+    center_port = [0, 0, -10]
+
+    voltage_path = VoltageIntegralAxisAligned(
+        center=(0.5, 0, -10),
+        size=(1.0, 0, 0),
+        extrapolate_to_endpoints=True,
+        snap_path_to_grid=True,
+        sign="+",
+    )
+
+    custom_current_path = CustomCurrentIntegral2D.from_circular_path(
+        center=center_port, radius=0.5, num_points=21, normal_axis=2, clockwise=False
+    )
+
+    mode_spec = td.ModeSpec(num_modes=1, target_neff=1.8)
+
+    _ = WavePort(
+        center=center_port,
+        size=size_port,
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=voltage_path,
+        current_integral=None,
+    )
+
+    _ = WavePort(
+        center=center_port,
+        size=size_port,
+        name="wave_port_1",
+        mode_spec=mode_spec,
+        direction="+",
+        voltage_integral=None,
+        current_integral=custom_current_path,
+    )
+
+    with pytest.raises(pydantic.ValidationError):
+        _ = WavePort(
+            center=center_port,
+            size=size_port,
+            name="wave_port_1",
+            mode_spec=mode_spec,
+            direction="+",
+            voltage_integral=None,
+            current_integral=None,
+        )
+
+    voltage_path = voltage_path.updated_copy(size=(4, 0, 0))
+    with pytest.raises(pydantic.ValidationError):
+        _ = WavePort(
+            center=center_port,
+            size=size_port,
+            name="wave_port_1",
+            mode_spec=mode_spec,
+            direction="+",
+            voltage_integral=voltage_path,
+            current_integral=None,
+        )
+
+    custom_current_path = CustomCurrentIntegral2D.from_circular_path(
+        center=center_port, radius=3, num_points=21, normal_axis=2, clockwise=False
+    )
+    with pytest.raises(pydantic.ValidationError):
+        _ = WavePort(
+            center=center_port,
+            size=size_port,
+            name="wave_port_1",
+            mode_spec=mode_spec,
+            direction="+",
+            voltage_integral=None,
+            current_integral=custom_current_path,
+        )
+
+
+def test_wave_port_to_mode_solver(tmp_path):
+    """Checks that wave port can be converted to a mode solver."""
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_types=(WavePort, WavePort)
+    )
+    _ = modeler.ports[0].to_mode_solver(modeler.simulation, freqs=[1e9, 2e9, 3e9])

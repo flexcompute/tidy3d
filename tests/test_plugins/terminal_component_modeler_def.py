@@ -1,9 +1,13 @@
+from typing import Union
+
 import numpy as np
 import tidy3d as td
+import tidy3d.plugins.microwave as microwave
 from tidy3d.plugins.smatrix import (
     CoaxialLumpedPort,
     LumpedPort,
     TerminalComponentModeler,
+    WavePort,
 )
 
 # Microstrip dimensions
@@ -240,6 +244,10 @@ def make_coaxial_component_modeler(
     length: float = None,
     port_refinement: bool = True,
     grid_spec: td.GridSpec = None,
+    port_types: tuple[Union[CoaxialLumpedPort, WavePort], Union[CoaxialLumpedPort, WavePort]] = (
+        CoaxialLumpedPort,
+        CoaxialLumpedPort,
+    ),
     **kwargs,
 ):
     if not length:
@@ -247,24 +255,55 @@ def make_coaxial_component_modeler(
 
     sim = make_coaxial_simulation(length=length, grid_spec=grid_spec)
 
+    def make_port(center, direction, type, name) -> Union[CoaxialLumpedPort, WavePort]:
+        if type is CoaxialLumpedPort:
+            port_cells = None
+            if port_refinement:
+                port_cells = 21
+            port = CoaxialLumpedPort(
+                center=center,
+                outer_diameter=2 * Router,
+                inner_diameter=2 * Rinner,
+                normal_axis=2,
+                direction=direction,
+                name=name,
+                num_grid_cells=port_cells,
+                impedance=reference_impedance,
+            )
+        else:
+            mean_radius = (Router + Rinner) / 2
+            voltage_center = list(center)
+            voltage_center[0] += mean_radius
+            voltage_size = [Router - Rinner, 0, 0]
+
+            port = WavePort(
+                center=center,
+                size=[2 * Router, 2 * Router, 0],
+                direction=direction,
+                name=name,
+                mode_spec=td.ModeSpec(num_modes=1),
+                mode_index=0,
+                voltage_integral=microwave.VoltageIntegralAxisAligned(
+                    center=voltage_center,
+                    size=voltage_size,
+                    extrapolate_to_endpoints=True,
+                    snap_path_to_grid=True,
+                    sign="+",
+                ),
+                current_integral=microwave.CustomCurrentIntegral2D.from_circular_path(
+                    center=center,
+                    radius=mean_radius,
+                    num_points=41,
+                    normal_axis=2,
+                    clockwise=False,
+                ),
+            )
+        return port
+
     center_src1 = [0, 0, -length / 2]
-
-    port_cells = None
-    if port_refinement:
-        port_cells = 21
-
-    port_1 = CoaxialLumpedPort(
-        center=center_src1,
-        outer_diameter=2 * Router,
-        inner_diameter=2 * Rinner,
-        normal_axis=2,
-        direction="+",
-        name="coax_port_1",
-        num_grid_cells=port_cells,
-        impedance=reference_impedance,
-    )
+    port_1 = make_port(center_src1, direction="+", type=port_types[0], name="coax_port_1")
     center_src2 = [0, 0, length / 2]
-    port_2 = port_1.updated_copy(name="coax_port_2", center=center_src2, direction="-")
+    port_2 = make_port(center_src2, direction="-", type=port_types[1], name="coax_port_2")
     ports = [port_1, port_2]
     freqs = np.linspace(freq_start, freq_stop, 100)
 
