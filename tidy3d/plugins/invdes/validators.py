@@ -1,7 +1,9 @@
 # validator utilities for invdes plugin
 
 import typing
+
 import pydantic.v1 as pd
+
 import tidy3d as td
 
 # warn if pixel size is > PIXEL_SIZE_WARNING_THRESHOLD * (minimum wavelength in material)

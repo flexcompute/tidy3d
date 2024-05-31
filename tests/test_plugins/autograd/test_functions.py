@@ -1,20 +1,19 @@
-import pytest
 import numpy as np
 import numpy.testing as npt
+import pytest
 import scipy.ndimage
 from autograd.test_util import check_grads
 from scipy.signal import convolve as convolve_sp
-
 from tidy3d.plugins.autograd.functions import (
     convolve,
+    grey_closing,
     grey_dilation,
     grey_erosion,
-    pad,
     grey_opening,
-    grey_closing,
     morphological_gradient,
-    morphological_gradient_internal,
     morphological_gradient_external,
+    morphological_gradient_internal,
+    pad,
     rescale,
     threshold,
 )

@@ -1,5 +1,5 @@
-from typing import Tuple, Union
 from functools import partial
+from typing import Tuple, Union
 
 import numpy as np
 

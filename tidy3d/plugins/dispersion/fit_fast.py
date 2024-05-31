@@ -1,20 +1,21 @@
 """Fit PoleResidue Dispersion models to optical NK data"""
 
 from __future__ import annotations
-from typing import Tuple, Optional
+
+from typing import Optional, Tuple
 
 import numpy as np
-from rich.progress import Progress
-from pydantic.v1 import Field, validator, PositiveInt, NonNegativeFloat, PositiveFloat
 import scipy
+from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
+from rich.progress import Progress
 
-from .fit import DispersionFitter
-from ...log import log, get_logging_console
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.medium import PoleResidue, LOSS_CHECK_MIN, LOSS_CHECK_MAX, LOSS_CHECK_NUM
-from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayFloat2D, ArrayComplex2D
-from ...exceptions import ValidationError
+from ...components.medium import LOSS_CHECK_MAX, LOSS_CHECK_MIN, LOSS_CHECK_NUM, PoleResidue
+from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayFloat1D, ArrayFloat2D
 from ...constants import C_0
+from ...exceptions import ValidationError
+from ...log import get_logging_console, log
+from .fit import DispersionFitter
 
 # numerical tolerance for pole relocation for fast fitter
 TOL = 1e-8

@@ -1,11 +1,13 @@
 """Abstract base for monitor data structures."""
+
 from __future__ import annotations
+
 from abc import ABC
 
 import pydantic.v1 as pd
 
-from ..monitor import AbstractMonitor
 from ...data.dataset import Dataset
+from ..monitor import AbstractMonitor
 
 
 class AbstractMonitorData(Dataset, ABC):

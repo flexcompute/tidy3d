@@ -1,4 +1,5 @@
 """Material Fitter API."""
+
 from __future__ import annotations
 
 import os
@@ -10,8 +11,8 @@ from uuid import uuid4
 import numpy as np
 import requests
 from pydantic.v1 import BaseModel, Field
-from ...plugins.dispersion import DispersionFitter
 
+from ...plugins.dispersion import DispersionFitter
 from ..core.http_util import http
 from ..core.types import Submittable
 

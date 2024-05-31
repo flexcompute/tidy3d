@@ -2,11 +2,10 @@
 
 import inspect
 from datetime import datetime
-
-from typing import Union, List, Callable
-from typing_extensions import Literal
+from typing import Callable, List, Union
 
 from rich.console import Console
+from typing_extensions import Literal
 
 # Note: "SUPPORT" and "USER" levels are meant for backend runs only.
 # Logging in frontend code should just use the standard debug/info/warning/error/critical.

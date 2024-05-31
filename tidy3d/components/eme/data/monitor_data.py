@@ -1,4 +1,5 @@
 """EME monitor data"""
+
 from __future__ import annotations
 
 from typing import Union
@@ -6,10 +7,9 @@ from typing import Union
 import pydantic.v1 as pd
 
 from ...base_sim.data.monitor_data import AbstractMonitorData
-from ..monitor import EMEModeSolverMonitor, EMEFieldMonitor, EMECoefficientMonitor
-from ...data.monitor_data import ModeSolverData, ElectromagneticFieldData
-
-from .dataset import EMEFieldDataset, EMECoefficientDataset, EMEModeSolverDataset
+from ...data.monitor_data import ElectromagneticFieldData, ModeSolverData
+from ..monitor import EMECoefficientMonitor, EMEFieldMonitor, EMEModeSolverMonitor
+from .dataset import EMECoefficientDataset, EMEFieldDataset, EMEModeSolverDataset
 
 
 class EMEModeSolverData(ElectromagneticFieldData, EMEModeSolverDataset):

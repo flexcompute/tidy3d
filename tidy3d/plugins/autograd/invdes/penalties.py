@@ -4,8 +4,8 @@ import autograd.numpy as np
 
 from tidy3d.components.types import ArrayFloat2D
 
-from .parametrizations import make_filter_and_project
 from ..types import PaddingType
+from .parametrizations import make_filter_and_project
 
 
 def make_erosion_dilation_penalty(

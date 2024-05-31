@@ -1,14 +1,16 @@
 """Holds dispersive models for several commonly used optical materials."""
+
 import json
 from typing import Dict, List
+
 import pydantic.v1 as pd
 
-from ..components.medium import PoleResidue, Medium2D, AnisotropicMedium, Sellmeier
 from ..components.base import Tidy3dBaseModel
+from ..components.medium import AnisotropicMedium, Medium2D, PoleResidue, Sellmeier
 from ..components.types import Axis
-from ..log import log
 from ..exceptions import SetupError
-from .material_reference import material_refs, ReferenceData
+from ..log import log
+from .material_reference import ReferenceData, material_refs
 from .parametric_materials import Graphene
 
 

@@ -1,34 +1,33 @@
 """global configuration / base class for pydantic models used to make simulation."""
+
 from __future__ import annotations
 
+import hashlib
+import io
 import json
-import pathlib
 import os
+import pathlib
 import tempfile
 from functools import wraps
-from typing import List, Callable, Dict, Union, Tuple, Any
 from math import ceil
-import io
-import hashlib
+from typing import Any, Callable, Dict, List, Tuple, Union
 
-import rich
-import pydantic.v1 as pydantic
-from pydantic.v1.fields import ModelField
-import yaml
-import numpy as np
 import h5py
+import numpy as np
+import pydantic.v1 as pydantic
+import rich
 import xarray as xr
-
-from .autograd import Box, AutogradFieldMap, get_static
-from autograd.tracer import isbox
+import yaml
 from autograd.builtins import dict as dict_ag
+from autograd.tracer import isbox
+from pydantic.v1.fields import ModelField
 
-from .types import ComplexNumber, Literal, TYPE_TAG_STR
-from .data.data_array import DataArray, DATA_ARRAY_MAP, AUTOGRAD_KEY
-from .file_util import compress_file_to_gzip, extract_gzip_file
 from ..exceptions import FileError
 from ..log import log
-
+from .autograd import AutogradFieldMap, Box, get_static
+from .data.data_array import AUTOGRAD_KEY, DATA_ARRAY_MAP, DataArray
+from .file_util import compress_file_to_gzip, extract_gzip_file
+from .types import TYPE_TAG_STR, ComplexNumber, Literal
 
 INDENT_JSON_FILE = 4  # default indentation of json string in json files
 INDENT = None  # default indentation of json string used internally

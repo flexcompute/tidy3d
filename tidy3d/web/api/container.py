@@ -1,26 +1,26 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
+
 from __future__ import annotations
 
-import os
-from abc import ABC
-from typing import Dict, Tuple, Optional
-import time
-import json
-from concurrent.futures import ThreadPoolExecutor
 import concurrent
+import json
+import os
+import time
+from abc import ABC
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Optional, Tuple
 
-from rich.progress import Progress
 import pydantic.v1 as pd
+from rich.progress import Progress
 
-from .tidy3d_stub import SimulationType, SimulationDataType
-from ..api import webapi as web
-from ..core.task_info import TaskInfo, RunInfo
-from ..core.constants import TaskId, TaskName
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.types import annotate_type
-from ...log import log, get_logging_console
-
 from ...exceptions import DataError
+from ...log import get_logging_console, log
+from ..api import webapi as web
+from ..core.constants import TaskId, TaskName
+from ..core.task_info import RunInfo, TaskInfo
+from .tidy3d_stub import SimulationDataType, SimulationType
 
 # Max # of workers for parallel upload / download: above 10, performance is same but with warnings
 DEFAULT_NUM_WORKERS = 10

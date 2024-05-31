@@ -1,14 +1,14 @@
-""" Defines various validation functions that get used to ensure inputs are legit """
+"""Defines various validation functions that get used to ensure inputs are legit"""
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
-from .geometry.base import Box
-from ..exceptions import ValidationError, SetupError
-from .data.dataset import Dataset, FieldDataset
-from .base import DATA_ARRAY_MAP, skip_if_fields_missing
-from .types import Tuple
+from ..exceptions import SetupError, ValidationError
 from ..log import log
+from .base import DATA_ARRAY_MAP, skip_if_fields_missing
+from .data.dataset import Dataset, FieldDataset
+from .geometry.base import Box
+from .types import Tuple
 
 """ Explanation of pydantic validators:
 

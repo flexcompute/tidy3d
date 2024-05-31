@@ -1,21 +1,21 @@
 """Monitor level data, store the DataArrays associated with a single heat monitor."""
+
 from __future__ import annotations
-from typing import Union, Tuple, Optional
 
 from abc import ABC
+from typing import Optional, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ..monitor import TemperatureMonitor, HeatMonitorType
-from ...base import skip_if_fields_missing, cached_property
+from ....constants import KELVIN
+from ....log import log
+from ...base import cached_property, skip_if_fields_missing
 from ...base_sim.data.monitor_data import AbstractMonitorData
 from ...data.data_array import SpatialDataArray
-from ...data.dataset import TriangularGridDataset, TetrahedralGridDataset
-from ...types import ScalarSymmetry, Coordinate, annotate_type
-from ....constants import KELVIN
-
-from ....log import log
+from ...data.dataset import TetrahedralGridDataset, TriangularGridDataset
+from ...types import Coordinate, ScalarSymmetry, annotate_type
+from ..monitor import HeatMonitorType, TemperatureMonitor
 
 
 class HeatMonitorData(AbstractMonitorData, ABC):

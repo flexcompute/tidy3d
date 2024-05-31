@@ -1,36 +1,52 @@
-""" Container holding about the geometry and medium properties common to all types of simulations.
-"""
-from __future__ import annotations
-from typing import Dict, Tuple, List, Set, Union
+"""Container holding about the geometry and medium properties common to all types of simulations."""
 
-import pydantic.v1 as pd
+from __future__ import annotations
+
+from typing import Dict, List, Set, Tuple, Union
+
 import autograd.numpy as np
-import matplotlib.pylab as plt
 import matplotlib as mpl
+import matplotlib.pylab as plt
+import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cached_property, Tidy3dBaseModel
-from .validators import assert_unique_names
-from .geometry.base import Box, GeometryGroup, ClipOperation
-from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate, InterpMethod
-from .medium import Medium, MediumType
-from .medium import AbstractCustomMedium, Medium2D, MediumType3D
-from .medium import AbstractPerturbationMedium
-from .grid.grid import Grid
-from .structure import Structure
-from .data.dataset import _get_numpy_array, CustomSpatialDataType
-from .data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
-from .viz import add_ax_if_none, equal_aspect
-from .grid.grid import Coords
-from .heat_spec import SolidSpec
-
-from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, polygon_path, STRUCTURE_HEAT_COND_CMAP
-from .viz import plot_params_structure, plot_params_fluid
-
-from ..constants import inf, THERMAL_CONDUCTIVITY
+from ..constants import THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .data.dataset import (
+    CustomSpatialDataType,
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+    UnstructuredGridDataset,
+    _get_numpy_array,
+)
+from .geometry.base import Box, ClipOperation, GeometryGroup
+from .geometry.utils import flatten_groups, traverse_geometries
+from .grid.grid import Coords, Grid
+from .heat_spec import SolidSpec
+from .medium import (
+    AbstractCustomMedium,
+    AbstractPerturbationMedium,
+    Medium,
+    Medium2D,
+    MediumType,
+    MediumType3D,
+)
+from .structure import Structure
+from .types import TYPE_TAG_STR, Ax, Bound, Coordinate, InterpMethod, Shapely, Size
+from .validators import assert_unique_names
+from .viz import (
+    MEDIUM_CMAP,
+    STRUCTURE_EPS_CMAP,
+    STRUCTURE_HEAT_COND_CMAP,
+    PlotParams,
+    add_ax_if_none,
+    equal_aspect,
+    plot_params_fluid,
+    plot_params_structure,
+    polygon_path,
+)
 
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530

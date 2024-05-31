@@ -1,14 +1,15 @@
 """Tests mediums."""
 
-import numpy as np
-import pytest
-import pydantic.v1 as pydantic
-import matplotlib.pyplot as plt
-import tidy3d as td
-from tidy3d.exceptions import ValidationError, SetupError
-from ..utils import assert_log_level, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
 from typing import Dict
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pydantic.v1 as pydantic
+import pytest
+import tidy3d as td
+from tidy3d.exceptions import SetupError, ValidationError
+
+from ..utils import AssertLogLevel, assert_log_level
 
 MEDIUM = td.Medium()
 ANIS_MEDIUM = td.AnisotropicMedium(xx=MEDIUM, yy=MEDIUM, zz=MEDIUM)
@@ -82,7 +83,7 @@ def test_medium_conversions():
     assert np.isclose(k, k_)
 
 
-def test_lorentz_medium_conversions(log_capture):  # noqa: F811
+def test_lorentz_medium_conversions(log_capture):
     freq = 3.0
 
     # lossless, eps_r > 1
@@ -352,7 +353,7 @@ def test_n_cfl():
     assert material.n_cfl == 2
 
 
-def test_gain_medium(log_capture):  # noqa: F811
+def test_gain_medium(log_capture):
     """Test passive and gain medium validations."""
     # non-dispersive
     with pytest.raises(pydantic.ValidationError):
@@ -396,7 +397,7 @@ def test_gain_medium(log_capture):  # noqa: F811
         _ = td.AnisotropicMedium(xx=td.Medium(), yy=mL, zz=mS, allow_gain=False)
 
 
-def test_medium2d(log_capture):  # noqa: F811
+def test_medium2d(log_capture):
     sigma = 0.45
     thickness = 0.01
     cond_med = td.Medium(conductivity=sigma)
@@ -610,7 +611,7 @@ def test_perturbation_medium():
         )
 
 
-def test_nonlinear_medium(log_capture):  # noqa: F811
+def test_nonlinear_medium(log_capture):
     med = td.Medium(
         nonlinear_spec=td.NonlinearSpec(
             models=[
@@ -835,7 +836,7 @@ def test_coaxial_lumped_resistor():
         )
 
 
-def test_custom_medium(log_capture):  # noqa: F811
+def test_custom_medium(log_capture):
     Nx, Ny, Nz, Nf = 4, 3, 1, 1
     X = np.linspace(-1, 1, Nx)
     Y = np.linspace(-1, 1, Ny)

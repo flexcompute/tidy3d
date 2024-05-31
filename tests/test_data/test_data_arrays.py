@@ -1,9 +1,9 @@
 """Tests tidy3d/components/data/data_array.py"""
 
-import pytest
-import numpy as np
-from typing import Tuple, List
+from typing import List, Tuple
 
+import numpy as np
+import pytest
 import tidy3d as td
 from tidy3d.exceptions import DataError
 

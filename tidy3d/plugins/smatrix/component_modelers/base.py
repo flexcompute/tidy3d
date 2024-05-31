@@ -1,22 +1,23 @@
 """Base class for generating an S matrix automatically from tidy3d simulations and port definitions."""
+
 from __future__ import annotations
-from typing import Tuple, Dict, Union
+
+import json
 import os
 from abc import ABC, abstractmethod
-import json
+from typing import Dict, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ....constants import HERTZ
-from ....components.simulation import Simulation
-from ....components.data.data_array import DataArray
-from ....components.types import Complex, FreqArray
 from ....components.base import Tidy3dBaseModel, cached_property
+from ....components.data.data_array import DataArray
+from ....components.simulation import Simulation
+from ....components.types import Complex, FreqArray
+from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
 from ....log import log
-from ....web.api.container import BatchData, Batch
-
+from ....web.api.container import Batch, BatchData
 from ..ports.modal import Port
 from ..ports.rectangular_lumped import LumpedPort
 

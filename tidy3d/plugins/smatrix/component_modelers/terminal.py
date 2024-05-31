@@ -2,26 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union
+from typing import Dict, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ....constants import C_0, fp_eps
-from ....components.simulation import Simulation
-from ....components.geometry.utils_2d import snap_coordinate_to_grid
+from ....components.base import cached_property
 from ....components.data.sim_data import SimulationData
+from ....components.geometry.utils_2d import snap_coordinate_to_grid
+from ....components.simulation import Simulation
 from ....components.source import GaussianPulse
 from ....components.types import Ax
 from ....components.viz import add_ax_if_none, equal_aspect
-from ....components.base import cached_property
+from ....constants import C_0, fp_eps
 from ....exceptions import ValidationError
 from ....web.api.container import BatchData
-
-from .base import AbstractComponentModeler, FWIDTH_FRAC
 from ..ports.base_lumped import LumpedPortDataArray
-from ..ports.rectangular_lumped import LumpedPort
 from ..ports.coaxial_lumped import CoaxialLumpedPort
+from ..ports.rectangular_lumped import LumpedPort
+from .base import FWIDTH_FRAC, AbstractComponentModeler
 
 
 class TerminalComponentModeler(AbstractComponentModeler):

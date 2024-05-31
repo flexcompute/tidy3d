@@ -1,21 +1,21 @@
 """EME simulation data"""
+
 from __future__ import annotations
 
-from typing import Tuple, Union, Optional, Literal, List
+from typing import List, Literal, Optional, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ..simulation import EMESimulation
-from .monitor_data import EMEMonitorDataType, EMEModeSolverData, EMEFieldData
-from .dataset import EMESMatrixDataset
-from ...base import cached_property
-from ...data.data_array import EMESMatrixDataArray, EMEScalarFieldDataArray
-from ...data.sim_data import AbstractYeeGridSimulationData
-
-from ...types import annotate_type
 from ....exceptions import SetupError
+from ...base import cached_property
+from ...data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
 from ...data.monitor_data import FieldData, ModeData, ModeSolverData
+from ...data.sim_data import AbstractYeeGridSimulationData
+from ...types import annotate_type
+from ..simulation import EMESimulation
+from .dataset import EMESMatrixDataset
+from .monitor_data import EMEFieldData, EMEModeSolverData, EMEMonitorDataType
 
 
 class EMESimulationData(AbstractYeeGridSimulationData):

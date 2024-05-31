@@ -1,10 +1,11 @@
 """Tidy3d abstraction types for the core."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from enum import Enum
 
 from pydantic.v1 import BaseModel
-from enum import Enum
 
 
 class Tidy3DResource(BaseModel, ABC):

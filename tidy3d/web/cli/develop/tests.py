@@ -4,9 +4,10 @@ notebooks in order to achieve reproducibility between hardwares.
 """
 
 import click
-from .utils import echo_and_run_subprocess
+
 from .index import develop
 from .install import install_in_poetry
+from .utils import echo_and_run_subprocess
 
 __all__ = [
     "test_options",

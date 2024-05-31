@@ -1,12 +1,7 @@
 repos:
-  - repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-    - id: black
-      name: black <<< NOTE:, if you get a message stating that "All done! n file(s) reformatted", you must git add and commit the changes again to complete the commit. >>>
-
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: "v0.3.2"
+    rev: "v0.4.8"
     hooks:
      - id: ruff
        args: [ --fix ]
+     - id: ruff-format

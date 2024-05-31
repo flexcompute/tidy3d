@@ -1,9 +1,10 @@
 """Interface to run several jobs in batch using simplified syntax."""
+
 from typing import Dict, List
 
-from .container import DEFAULT_DATA_DIR, BatchData, Batch
-from .tidy3d_stub import SimulationType
 from ...log import log
+from .container import DEFAULT_DATA_DIR, Batch, BatchData
+from .tidy3d_stub import SimulationType
 
 
 def run_async(

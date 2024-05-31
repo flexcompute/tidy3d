@@ -1,26 +1,25 @@
 """Tool for generating an S matrix automatically from a Tidy3d simulation and modal port definitions."""
+
 # TODO: The names "ComponentModeler" and "Port" should be changed to "ModalComponentModeler" and
 # "ModalPort" to explicitly differentiate these from "TerminalComponentModeler" and "LumpedPort".
 from __future__ import annotations
 
-from typing import List, Tuple, Optional, Dict
+from typing import Dict, List, Optional, Tuple
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ....components.simulation import Simulation
-from ....components.monitor import ModeMonitor
-from ....components.source import ModeSource, GaussianPulse
+from ....components.base import cached_property
 from ....components.data.sim_data import SimulationData
+from ....components.monitor import ModeMonitor
+from ....components.simulation import Simulation
+from ....components.source import GaussianPulse, ModeSource
 from ....components.types import Ax, Complex
 from ....components.viz import add_ax_if_none, equal_aspect
-from ....components.base import cached_property
 from ....exceptions import SetupError
 from ....web.api.container import BatchData
-
-from .base import AbstractComponentModeler, FWIDTH_FRAC
 from ..ports.modal import ModalPortDataArray, Port
-
+from .base import FWIDTH_FRAC, AbstractComponentModeler
 
 MatrixIndex = Tuple[str, pd.NonNegativeInt]  # the 'i' in S_ij
 Element = Tuple[MatrixIndex, MatrixIndex]  # the 'ij' in S_ij

@@ -1,13 +1,17 @@
 """EME dataset"""
-from __future__ import annotations
 
+from __future__ import annotations
 
 import pydantic.v1 as pd
 
+from ...data.data_array import (
+    EMECoefficientDataArray,
+    EMEModeIndexDataArray,
+    EMEScalarFieldDataArray,
+    EMEScalarModeFieldDataArray,
+    EMESMatrixDataArray,
+)
 from ...data.dataset import Dataset, ElectromagneticFieldDataset
-from ...data.data_array import EMEScalarFieldDataArray, EMESMatrixDataArray
-from ...data.data_array import EMECoefficientDataArray
-from ...data.data_array import EMEModeIndexDataArray, EMEScalarModeFieldDataArray
 
 
 class EMESMatrixDataset(Dataset):

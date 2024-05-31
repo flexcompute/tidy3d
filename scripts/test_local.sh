@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-black tidy3d/
-black tests/
-black scripts/
+ruff format tidy3d/ --check --diff
+ruff format tests/ --check --diff
+ruff format scripts/ --check --diff
 
-ruff check tidy3d
+ruff check tidy3d --diff
 
 pytest -rA tests/
 # to test without vtk, one has to restart pytest

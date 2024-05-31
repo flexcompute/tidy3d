@@ -1,19 +1,17 @@
 """Tests tidy3d/components/data/dataset.py"""
 
-import pytest
 import numpy as np
 import pydantic.v1 as pd
+import pytest
 from matplotlib import pyplot as plt
-from ..utils import cartesian_to_unstructured
-from ..utils import AssertLogLevel
-from ..utils import log_capture  # noqa: F401
 
+from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 np.random.seed(4)
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):  # noqa: F811
+def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 
@@ -304,7 +302,7 @@ def test_triangular_dataset(log_capture, tmp_path, ds_name, no_vtk=False):  # no
 
 
 @pytest.mark.parametrize("ds_name", ["test123", None])
-def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):  # noqa: F811
+def test_tetrahedral_dataset(log_capture, tmp_path, ds_name, no_vtk=False):
     import tidy3d as td
     from tidy3d.exceptions import DataError, Tidy3dImportError
 

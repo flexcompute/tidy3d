@@ -2,9 +2,9 @@ from typing import Tuple
 
 import autograd.numpy as np
 
+from ..types import KernelType, PaddingType
 from .filters import make_filter
 from .projections import tanh_projection
-from ..types import KernelType, PaddingType
 
 
 def make_filter_and_project(

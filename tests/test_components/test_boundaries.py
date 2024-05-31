@@ -1,16 +1,23 @@
 """Tests boundary conditions."""
 
-import pytest
 import pydantic.v1 as pydantic
-
+import pytest
 import tidy3d as td
-from tidy3d.components.boundary import BoundarySpec, Boundary
-from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, BlochBoundary
-from tidy3d.components.boundary import PML, StablePML, Absorber
+from tidy3d.components.boundary import (
+    PML,
+    Absorber,
+    BlochBoundary,
+    Boundary,
+    BoundarySpec,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    StablePML,
+)
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
-from tidy3d.exceptions import SetupError, DataError
+from tidy3d.exceptions import DataError, SetupError
+
 from ..utils import assert_log_level
-from ..utils import log_capture  # noqa: F401
 
 
 def test_bloch_phase():
@@ -78,14 +85,14 @@ def test_boundary_validators():
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
-def test_boundary_validator_warnings(log_capture, boundary, log_level):  # noqa: F811
+def test_boundary_validator_warnings(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(plus=PECBoundary(), minus=boundary)
     assert_log_level(log_capture, log_level)
 
 
 @pytest.mark.parametrize("boundary, log_level", [(PMCBoundary(), None), (Periodic(), "WARNING")])
-def test_boundary_validator_warnings_switched(log_capture, boundary, log_level):  # noqa: F811
+def test_boundary_validator_warnings_switched(log_capture, boundary, log_level):
     """Test the validators in class `Boundary` which should show a warning but not an error"""
     boundary = Boundary(minus=PECBoundary(), plus=boundary)
     assert_log_level(log_capture, log_level)

@@ -1,31 +1,46 @@
 """Tests tidy3d/components/data/monitor_data.py"""
 
-import numpy as np
 import matplotlib.pyplot as plt
-import pytest
+import numpy as np
 import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
-
+from tidy3d.components.data.data_array import FreqModeDataArray
+from tidy3d.components.data.monitor_data import (
+    DiffractionData,
+    FieldData,
+    FieldTimeData,
+    FluxData,
+    FluxTimeData,
+    ModeData,
+    PermittivityData,
+)
 from tidy3d.exceptions import DataError
 
-from tidy3d.components.data.data_array import FreqModeDataArray
-from tidy3d.components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
-
-from tidy3d.components.data.monitor_data import ModeData
-from tidy3d.components.data.monitor_data import FluxData, FluxTimeData, DiffractionData
-
-from .test_data_arrays import make_scalar_field_data_array, make_scalar_field_time_data_array
-from .test_data_arrays import make_scalar_mode_field_data_array
-from .test_data_arrays import make_scalar_mode_field_data_array_smooth
-from .test_data_arrays import make_flux_data_array, make_flux_time_data_array
-from .test_data_arrays import make_mode_amps_data_array, make_mode_index_data_array
-from .test_data_arrays import make_diffraction_data_array
-from .test_data_arrays import FIELD_MONITOR, FIELD_TIME_MONITOR, MODE_MONITOR_WITH_FIELDS
-from .test_data_arrays import MODE_MONITOR, PERMITTIVITY_MONITOR, FLUX_MONITOR, FLUX_TIME_MONITOR
-from .test_data_arrays import FIELD_MONITOR_2D, FIELD_TIME_MONITOR_2D
-from .test_data_arrays import DIFFRACTION_MONITOR, SIM_SYM, SIM
 from ..utils import assert_log_level
-from ..utils import log_capture  # noqa: F401
+from .test_data_arrays import (
+    DIFFRACTION_MONITOR,
+    FIELD_MONITOR,
+    FIELD_MONITOR_2D,
+    FIELD_TIME_MONITOR,
+    FIELD_TIME_MONITOR_2D,
+    FLUX_MONITOR,
+    FLUX_TIME_MONITOR,
+    MODE_MONITOR,
+    MODE_MONITOR_WITH_FIELDS,
+    PERMITTIVITY_MONITOR,
+    SIM,
+    SIM_SYM,
+    make_diffraction_data_array,
+    make_flux_data_array,
+    make_flux_time_data_array,
+    make_mode_amps_data_array,
+    make_mode_index_data_array,
+    make_scalar_field_data_array,
+    make_scalar_field_time_data_array,
+    make_scalar_mode_field_data_array,
+    make_scalar_mode_field_data_array_smooth,
+)
 
 # data array instances
 AMPS = make_mode_amps_data_array()
@@ -449,13 +464,13 @@ def test_data_array_attrs():
     assert data.flux.f.attrs, "data coordinates have no attrs"
 
 
-def test_data_array_json_warns(log_capture, tmp_path):  # noqa F811
+def test_data_array_json_warns(log_capture, tmp_path):
     data = make_flux_data()
     data.to_file(str(tmp_path / "flux.json"))
     assert_log_level(log_capture, "WARNING")
 
 
-def test_data_array_hdf5_no_warnings(log_capture, tmp_path):  # noqa F811
+def test_data_array_hdf5_no_warnings(log_capture, tmp_path):
     data = make_flux_data()
     data.to_file(str(tmp_path / "flux.hdf5"))
     assert_log_level(log_capture, None)

@@ -3,25 +3,26 @@
 import os
 import time
 from datetime import datetime, timedelta
-from typing import List, Dict, Callable
-from requests import HTTPError
+from typing import Callable, Dict, List
+
 import pytz
+from requests import HTTPError
 from rich.progress import Progress
 
-from .tidy3d_stub import Tidy3dStub, Tidy3dStubData, SimulationType, SimulationDataType
-from .connect_util import (
-    wait_for_connection,
-    REFRESH_TIME,
-    get_time_steps_str,
-    get_grid_points_str,
-)
-from ..core.environment import Env
-from ..core.constants import SIM_FILE_HDF5, TaskId
-from ..core.task_core import SimulationTask, Folder
-from ..core.task_info import TaskInfo, ChargeType
 from ...components.types import Literal
-from ...log import log, get_logging_console
 from ...exceptions import WebError
+from ...log import get_logging_console, log
+from ..core.constants import SIM_FILE_HDF5, TaskId
+from ..core.environment import Env
+from ..core.task_core import Folder, SimulationTask
+from ..core.task_info import ChargeType, TaskInfo
+from .connect_util import (
+    REFRESH_TIME,
+    get_grid_points_str,
+    get_time_steps_str,
+    wait_for_connection,
+)
+from .tidy3d_stub import SimulationDataType, SimulationType, Tidy3dStub, Tidy3dStubData
 
 # time between checking run status
 RUN_REFRESH_TIME = 1.0

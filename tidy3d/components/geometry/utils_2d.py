@@ -1,15 +1,17 @@
 """Utilities for 2D geometry manipulation."""
+
+from typing import List, Tuple
+
 import numpy as np
 import shapely
-from typing import Tuple, List
 
-from ..types import Axis
 from ...constants import inf
-from ..geometry.base import Geometry, Box, ClipOperation
+from ..geometry.base import Box, ClipOperation, Geometry
 from ..geometry.polyslab import PolySlab
 from ..grid.grid import Grid
 from ..scene import Scene
 from ..structure import Structure
+from ..types import Axis
 
 
 def increment_float(val: float, sign) -> float:

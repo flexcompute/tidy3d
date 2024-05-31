@@ -1,44 +1,79 @@
-""" Monitor Level Data, store the DataArrays associated with a single monitor."""
+"""Monitor Level Data, store the DataArrays associated with a single monitor."""
+
 from __future__ import annotations
 
-from abc import ABC
-from typing import Union, Tuple, Callable, Dict, List, Any
 import warnings
+from abc import ABC
+from typing import Any, Callable, Dict, List, Tuple, Union
 
-import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
+import xarray as xr
 from pandas import DataFrame
 
-from .data_array import FluxTimeDataArray, FluxDataArray
-from .data_array import MixedModeDataArray, ModeAmpsDataArray
-from .data_array import GroupIndexDataArray, ModeDispersionDataArray
-from .data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
-from .data_array import FieldProjectionKSpaceDataArray
-from .data_array import DataArray, DiffractionDataArray
-from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray
-from .data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
-from .data_array import EMEFreqModeDataArray
-from .dataset import Dataset, AbstractFieldDataset, ElectromagneticFieldDataset
-from .dataset import FieldDataset, FieldTimeDataset, ModeSolverDataset, PermittivityDataset
-from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
-from ..types import Coordinate, Symmetry, ArrayFloat1D, ArrayFloat2D, Size, Numpy, TrackFreq
-from ..types import EpsSpecType, Literal
-from ..grid.grid import Grid, Coords
-from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
-from ..source import GaussianPulse, ModeSource, Source, PlaneWave
-from ..monitor import MonitorType, FieldMonitor, FieldTimeMonitor, ModeSolverMonitor
-from ..monitor import ModeMonitor, FluxMonitor, FluxTimeMonitor, PermittivityMonitor
-from ..monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
-from ..monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
-from ..monitor import DiffractionMonitor
-from ..source import SourceTimeType, CustomFieldSource
-from ..medium import Medium, MediumType
-from ...exceptions import SetupError, DataError, Tidy3dNotImplementedError, ValidationError
-from ...constants import ETA_0, C_0, MICROMETER
+from ...constants import C_0, ETA_0, MICROMETER
+from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
-
+from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
+from ..grid.grid import Coords, Grid
+from ..medium import Medium, MediumType
+from ..monitor import (
+    DiffractionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldProjectionSurface,
+    FieldTimeMonitor,
+    FluxMonitor,
+    FluxTimeMonitor,
+    ModeMonitor,
+    ModeSolverMonitor,
+    MonitorType,
+    PermittivityMonitor,
+)
+from ..source import CustomFieldSource, GaussianPulse, ModeSource, PlaneWave, Source, SourceTimeType
+from ..types import (
+    ArrayFloat1D,
+    ArrayFloat2D,
+    Coordinate,
+    EpsSpecType,
+    Literal,
+    Numpy,
+    Size,
+    Symmetry,
+    TrackFreq,
+)
+from ..validators import enforce_monitor_fields_present, required_if_symmetry_present
+from .data_array import (
+    DataArray,
+    DiffractionDataArray,
+    EMEFreqModeDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+    FluxDataArray,
+    FluxTimeDataArray,
+    FreqDataArray,
+    FreqModeDataArray,
+    GroupIndexDataArray,
+    MixedModeDataArray,
+    ModeAmpsDataArray,
+    ModeDispersionDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    TimeDataArray,
+)
+from .dataset import (
+    AbstractFieldDataset,
+    Dataset,
+    ElectromagneticFieldDataset,
+    FieldDataset,
+    FieldTimeDataset,
+    ModeSolverDataset,
+    PermittivityDataset,
+)
 
 Coords1D = ArrayFloat1D
 

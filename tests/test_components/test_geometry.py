@@ -1,21 +1,20 @@
 """Tests Geometry objects."""
 
-import pytest
-import pydantic.v1 as pydantic
-import numpy as np
-import shapely
-import matplotlib.pyplot as plt
-import gdstk
-import gdspy
-import trimesh
 import warnings
 
+import gdspy
+import gdstk
+import matplotlib.pyplot as plt
+import numpy as np
+import pydantic.v1 as pydantic
+import pytest
+import shapely
 import tidy3d as td
-from tidy3d.constants import LARGE_NUMBER
-from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
+import trimesh
 from tidy3d.components.geometry.base import Planar
 from tidy3d.components.geometry.utils import flatten_groups, traverse_geometries
-
+from tidy3d.constants import LARGE_NUMBER
+from tidy3d.exceptions import SetupError, Tidy3dKeyError, ValidationError
 
 GEO = td.Box(size=(1, 1, 1))
 GEO_INF = td.Box(size=(1, 1, td.inf))

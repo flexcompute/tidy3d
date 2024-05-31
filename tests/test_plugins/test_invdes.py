@@ -1,21 +1,15 @@
-# ruff: noqa: F811
 # Test the inverse design plugin
 
-import pytest
-
-import numpy as np
 import autograd.numpy as anp
-
+import numpy as np
+import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 
+from ..utils import AssertLogLevel, run_async_emulated, run_emulated
+
 # use single threading pipeline
-
 from .test_adjoint import use_emulated_run, use_emulated_run_async  # noqa: F401
-
-from ..utils import run_emulated, run_async_emulated, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
-
 
 FREQ0 = 1e14
 L_SIM = 1.0
@@ -193,7 +187,7 @@ class MockSimData:
         return MockDataArray()
 
 
-def test_invdes_simulation_data(use_emulated_run):
+def test_invdes_simulation_data(use_emulated_run):  # noqa: F811
     """Test convenience function to convert ``InverseDesign`` to simulation and run it."""
 
     invdes = make_invdes()
@@ -297,7 +291,7 @@ def test_default_params(use_emulated_run_autograd):  # noqa: F811
     optimizer.run(post_process_fn=post_process_fn)
 
 
-def test_warn_zero_grad(log_capture, use_emulated_run_autograd):  # noqa: F811
+def test_warn_zero_grad(log_capture, use_emulated_run_autograd):
     """Test default paramns running the optimization defined in the ``InverseDesign`` object."""
 
     optimizer = make_optimizer()
@@ -373,7 +367,10 @@ def test_continue_run_from_file(use_emulated_run_autograd):
 
 
 def test_result(
-    use_emulated_run, use_emulated_run_autograd, use_emulated_run_autograd_async, tmp_path
+    use_emulated_run,  # noqa: F811
+    use_emulated_run_autograd,
+    use_emulated_run_autograd_async,
+    tmp_path,
 ):
     """Test methods of the ``InverseDesignResult`` object."""
 
@@ -390,7 +387,7 @@ def test_result(
     _ = result.sim_data_last(task_name="last")
 
 
-def test_result_data(use_emulated_run, use_emulated_run_autograd):
+def test_result_data(use_emulated_run, use_emulated_run_autograd):  # noqa: F811
     """Test methods of the ``InverseDesignResult`` object."""
 
     result = make_result(use_emulated_run_autograd)
@@ -399,7 +396,10 @@ def test_result_data(use_emulated_run, use_emulated_run_autograd):
 
 
 def test_result_data_multi(
-    use_emulated_run_async, use_emulated_run_autograd_async, use_emulated_run_autograd, tmp_path
+    use_emulated_run_async,  # noqa: F811
+    use_emulated_run_autograd_async,
+    use_emulated_run_autograd,
+    tmp_path,
 ):
     result_multi = make_result_multi(use_emulated_run_autograd_async)
     _ = result_multi.sim_last

@@ -1,25 +1,25 @@
-"""Collection of functions for automatically generating a nonuniform grid. """
+"""Collection of functions for automatically generating a nonuniform grid."""
 
-from abc import ABC, abstractmethod
-from typing import Tuple, List, Union, Dict
-from math import isclose
-from itertools import compress
 import warnings
+from abc import ABC, abstractmethod
+from itertools import compress
+from math import isclose
+from typing import Dict, List, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 from pyroots import Brentq
-from shapely.strtree import STRtree
-from shapely.geometry import box as shapely_box
 from shapely.errors import ShapelyDeprecationWarning
+from shapely.geometry import box as shapely_box
+from shapely.strtree import STRtree
 
-from ..base import Tidy3dBaseModel
-from ..types import Axis, ArrayFloat1D, Bound
-from ..structure import Structure, MeshOverrideStructure, StructureType
-from ..medium import AnisotropicMedium, Medium2D, PECMedium
-from ...exceptions import SetupError, ValidationError
 from ...constants import C_0, fp_eps
+from ...exceptions import SetupError, ValidationError
 from ...log import log
+from ..base import Tidy3dBaseModel
+from ..medium import AnisotropicMedium, Medium2D, PECMedium
+from ..structure import MeshOverrideStructure, Structure, StructureType
+from ..types import ArrayFloat1D, Axis, Bound
 
 _ROOTS_TOL = 1e-10
 
@@ -1129,9 +1129,7 @@ class GradedMesher(Mesher):
                 if isclose(new_scale, 1.0):
                     return len_interval - small_dl * (1 + num_step)
                 return (
-                    len_interval
-                    - small_dl * (1 - new_scale**num_step) / (1 - new_scale)
-                    - small_dl
+                    len_interval - small_dl * (1 - new_scale**num_step) / (1 - new_scale) - small_dl
                 )
 
             # solve for new scaling factor

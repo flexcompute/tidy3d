@@ -10,7 +10,6 @@ import pydantic.v1 as pd
 import tidy3d as td
 from tidy3d.components.types import Coordinate, Size
 
-
 from .base import InvdesBaseModel
 from .penalty import PenaltyType
 from .transformation import TransformationType

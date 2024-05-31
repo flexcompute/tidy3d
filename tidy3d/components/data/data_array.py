@@ -1,16 +1,16 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
 
 from __future__ import annotations
-from typing import Dict, List, Union
-from abc import ABC
 
-import xarray as xr
-import numpy as np
-import pandas
+from abc import ABC
+from typing import Dict, List, Union
+
 import dask
 import h5py
-
-from autograd.tracer import isbox, getval
+import numpy as np
+import pandas
+import xarray as xr
+from autograd.tracer import getval, isbox
 
 from ...constants import (
     HERTZ,
@@ -21,7 +21,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..types import Bound, Axis
+from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {

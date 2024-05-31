@@ -1,44 +1,72 @@
 """Defines properties of the medium / materials"""
+
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Tuple, Union, Callable, Optional, Dict, List, Any
 import functools
+from abc import ABC, abstractmethod
 from math import isclose
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import pydantic.v1 as pd
+import autograd.numpy as np
 
 # TODO: it's hard to figure out which functions need this, for now all get it
 import numpy as npo
-import autograd.numpy as np
+import pydantic.v1 as pd
 import xarray as xr
 
-from .autograd import integrate_within_bounds
-from .base import Tidy3dBaseModel, cached_property
-from .base import skip_if_fields_missing
-from .grid.grid import Coords, Grid
-from .types import PoleAndResidue, Ax, FreqBound, TYPE_TAG_STR
-from .types import InterpMethod, Bound, ArrayComplex3D, ArrayFloat1D
-from .types import Axis, TensorReal, Complex
-from .data.dataset import PermittivityDataset, CustomSpatialDataType, CustomSpatialDataTypeAnnotated
-from .data.dataset import ElectromagneticFieldDataset
-from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates, _ones_like
-from .data.dataset import UnstructuredGridDataset
-from .data.validators import validate_no_nans
-from .data.data_array import SpatialDataArray, ScalarFieldDataArray, DATA_ARRAY_MAP
-from .viz import add_ax_if_none
-from .geometry.base import Geometry
-from .validators import validate_name_str, validate_parameter_perturbation
-from ..constants import C_0, pec_val, EPSILON_0, fp_eps, HBAR
-from ..constants import HERTZ, CONDUCTIVITY, PERMITTIVITY, RADPERSEC, MICROMETER, SECOND
-from ..constants import WATT, VOLT
-from ..exceptions import ValidationError, SetupError
+from ..constants import (
+    C_0,
+    CONDUCTIVITY,
+    EPSILON_0,
+    HBAR,
+    HERTZ,
+    MICROMETER,
+    PERMITTIVITY,
+    RADPERSEC,
+    SECOND,
+    VOLT,
+    WATT,
+    fp_eps,
+    pec_val,
+)
+from ..exceptions import SetupError, ValidationError
 from ..log import log
-from .transformation import RotationType
-from .parameter_perturbation import ParameterPerturbation
+from .autograd import TracedFloat, integrate_within_bounds
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
+from .data.dataset import (
+    CustomSpatialDataType,
+    CustomSpatialDataTypeAnnotated,
+    ElectromagneticFieldDataset,
+    PermittivityDataset,
+    UnstructuredGridDataset,
+    _check_same_coordinates,
+    _get_numpy_array,
+    _ones_like,
+    _zeros_like,
+)
+from .data.validators import validate_no_nans
+from .geometry.base import Geometry
+from .grid.grid import Coords, Grid
 from .heat_spec import HeatSpecType
+from .parameter_perturbation import ParameterPerturbation
 from .time_modulation import ModulationSpec
-from .autograd import TracedFloat
+from .transformation import RotationType
+from .types import (
+    TYPE_TAG_STR,
+    ArrayComplex3D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Bound,
+    Complex,
+    FreqBound,
+    InterpMethod,
+    PoleAndResidue,
+    TensorReal,
+)
+from .validators import validate_name_str, validate_parameter_perturbation
+from .viz import add_ax_if_none
 
 # evaluate frequency as this number (Hz) if inf
 FREQ_EVAL_INF = 1e50
@@ -1249,7 +1277,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
     @staticmethod
     def _validate_isreal_dataarray_tuple(
-        dataarray_tuple: Tuple[CustomSpatialDataType, ...]
+        dataarray_tuple: Tuple[CustomSpatialDataType, ...],
     ) -> bool:
         """Validate that the dataarray is real"""
         return np.all([AbstractCustomMedium._validate_isreal_dataarray(f) for f in dataarray_tuple])
@@ -3116,13 +3144,13 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        (),
-        title="Poles",
-        description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
-        units=(RADPERSEC, RADPERSEC),
+    poles: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            (),
+            title="Poles",
+            description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
+            units=(RADPERSEC, RADPERSEC),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")
@@ -3472,13 +3500,13 @@ class CustomSellmeier(CustomDispersiveMedium, Sellmeier):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
-        units=(None, MICROMETER + "^2"),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of Sellmeier (:math:`B_i, C_i`) coefficients.",
+            units=(None, MICROMETER + "^2"),
+        )
     )
 
     _no_nans = validate_no_nans("coeffs")
@@ -4169,13 +4197,13 @@ class CustomDrude(CustomDispersiveMedium, Drude):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of (:math:`f_i, \\delta_i`) values for model.",
-        units=(HERTZ, HERTZ),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of (:math:`f_i, \\delta_i`) values for model.",
+            units=(HERTZ, HERTZ),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")
@@ -4426,13 +4454,13 @@ class CustomDebye(CustomDispersiveMedium, Debye):
         units=PERMITTIVITY,
     )
 
-    coeffs: Tuple[
-        Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...
-    ] = pd.Field(
-        ...,
-        title="Coefficients",
-        description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
-        units=(PERMITTIVITY, SECOND),
+    coeffs: Tuple[Tuple[CustomSpatialDataTypeAnnotated, CustomSpatialDataTypeAnnotated], ...] = (
+        pd.Field(
+            ...,
+            title="Coefficients",
+            description="List of (:math:`\\Delta\\epsilon_i, \\tau_i`) values for model.",
+            units=(PERMITTIVITY, SECOND),
+        )
     )
 
     _no_nans_eps_inf = validate_no_nans("eps_inf")

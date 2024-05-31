@@ -1,10 +1,11 @@
 """Tests parameter perturbations."""
 
-import numpy as np
 import matplotlib.pyplot as plt
-import pytest
+import numpy as np
 import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
+
 from ..utils import cartesian_to_unstructured
 
 sp_arr = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))

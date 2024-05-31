@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-
-import pydantic.v1 as pd
-import numpy as np
 from typing import Optional, Union
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+
+import numpy as np
+import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...exceptions import DataError, ValidationError
-
-from .path_integrals import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
-from .path_integrals import MonitorDataTypes, IntegralResultTypes
-from .custom_path_integrals import CustomVoltageIntegral2D, CustomCurrentIntegral2D
+from .custom_path_integrals import CustomCurrentIntegral2D, CustomVoltageIntegral2D
+from .path_integrals import (
+    CurrentIntegralAxisAligned,
+    IntegralResultTypes,
+    MonitorDataTypes,
+    VoltageIntegralAxisAligned,
+)
 
 VoltageIntegralTypes = Union[VoltageIntegralAxisAligned, CustomVoltageIntegral2D]
 CurrentIntegralTypes = Union[CurrentIntegralAxisAligned, CustomCurrentIntegral2D]

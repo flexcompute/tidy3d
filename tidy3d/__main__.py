@@ -1,6 +1,7 @@
-""" command-line interface. For instructions run `python -m tidy3d --help` """
-import sys
+"""command-line interface. For instructions run `python -m tidy3d --help`"""
+
 import argparse
+import sys
 
 from tidy3d import Simulation
 from tidy3d.web import Job

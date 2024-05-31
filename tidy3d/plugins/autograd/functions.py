@@ -1,4 +1,4 @@
-from typing import Iterable, Union, Tuple, Literal, List
+from typing import Iterable, List, Literal, Tuple, Union
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag

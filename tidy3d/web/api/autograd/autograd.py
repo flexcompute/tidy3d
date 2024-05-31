@@ -1,21 +1,20 @@
 # autograd wrapper for web functions
 
-import tidy3d as td
-from tidy3d.components.autograd import primitive, defvjp, AutogradFieldMap, get_static  # noqa: 401
-import typing
 import traceback
+import typing
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
 
-from ..webapi import run as run_webapi
-from ..asynchronous import run_async as run_async_webapi
+import tidy3d as td
+from tidy3d.components.autograd import AutogradFieldMap, defvjp, get_static, primitive
+
 from ..asynchronous import DEFAULT_DATA_DIR
+from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData
-from ..tidy3d_stub import SimulationType, SimulationDataType
-
-from .utils import split_list, split_data_list, get_derivative_maps
-
+from ..tidy3d_stub import SimulationDataType, SimulationType
+from ..webapi import run as run_webapi
+from .utils import get_derivative_maps, split_data_list, split_list
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"

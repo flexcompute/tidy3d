@@ -1,31 +1,28 @@
 """Rectangular dielectric waveguide utilities."""
 
-from typing import List, Any, Union, Tuple
-from typing_extensions import Annotated
+from typing import Any, List, Tuple, Union
 
 import numpy
-from matplotlib import pyplot
 import pydantic.v1 as pydantic
+from matplotlib import pyplot
+from typing_extensions import Annotated
 
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ...components.boundary import BoundarySpec, Periodic
-from ...components.data.data_array import ModeIndexDataArray, FreqModeDataArray
+from ...components.data.data_array import FreqModeDataArray, ModeIndexDataArray
 from ...components.geometry.base import Box
 from ...components.geometry.polyslab import PolySlab
 from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
 from ...components.mode import ModeSpec
 from ...components.simulation import Simulation
-from ...components.viz import add_ax_if_none
-
-from ...components.source import ModeSource, GaussianPulse
+from ...components.source import GaussianPulse, ModeSource
 from ...components.structure import Structure
-from ...components.types import ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
-from ...components.types import TYPE_TAG_STR
-from ...constants import C_0, inf, MICROMETER, RADIAN
+from ...components.types import TYPE_TAG_STR, ArrayFloat1D, Ax, Axis, Coordinate, Literal, Size1D
+from ...components.viz import add_ax_if_none
+from ...constants import C_0, MICROMETER, RADIAN, inf
 from ...exceptions import Tidy3dError, ValidationError
 from ...log import log
-
 from ..mode.mode_solver import ModeSolver
 
 AnnotatedMedium = Annotated[MediumType, pydantic.Field(discriminator=TYPE_TAG_STR)]

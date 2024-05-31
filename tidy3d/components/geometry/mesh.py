@@ -1,23 +1,23 @@
 """Mesh-defined geometry."""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import List, Tuple, Union, Optional
+from typing import List, Optional, Tuple, Union
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
+from ...constants import inf
+from ...exceptions import DataError, ValidationError
+from ...log import log
+from ...packaging import verify_packages_import
 from ..base import cached_property
+from ..data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from ..data.dataset import TriangleMeshDataset
+from ..data.validators import validate_no_nans
 from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from ..viz import add_ax_if_none, equal_aspect
-from ...log import log
-from ...exceptions import ValidationError, DataError
-from ...constants import inf
-from ..data.dataset import TriangleMeshDataset
-from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
-from ..data.validators import validate_no_nans
-from ...packaging import verify_packages_import
-
 from . import base
 
 AREA_SIZE_THRESHOLD = 1e-36
@@ -122,6 +122,7 @@ class TriangleMesh(base.Geometry, ABC):
             The geometry or geometry group from the file.
         """
         import trimesh
+
         from ..types_extra import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:

@@ -1,26 +1,23 @@
 """Test the microwave plugin."""
 
-import pytest
 import numpy as np
 import pydantic.v1 as pydantic
-
+import pytest
+import tidy3d as td
 from skrf import Frequency
 from skrf.media import MLine
-
-import tidy3d as td
 from tidy3d import FieldData
 from tidy3d.constants import ETA_0
-from tidy3d.plugins.microwave import (
-    VoltageIntegralAxisAligned,
-    CurrentIntegralAxisAligned,
-    CustomVoltageIntegral2D,
-    CustomCurrentIntegral2D,
-    ImpedanceCalculator,
-)
-
-from tidy3d.plugins.microwave.models import microstrip, coupled_microstrip
-
 from tidy3d.exceptions import DataError
+from tidy3d.plugins.microwave import (
+    CurrentIntegralAxisAligned,
+    CustomCurrentIntegral2D,
+    CustomVoltageIntegral2D,
+    ImpedanceCalculator,
+    VoltageIntegralAxisAligned,
+)
+from tidy3d.plugins.microwave.models import coupled_microstrip, microstrip
+
 from ..utils import run_emulated
 
 # Using similar code as "test_data/test_data_arrays.py"

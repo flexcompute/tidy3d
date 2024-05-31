@@ -1,12 +1,12 @@
 """Tests the scene and its validators."""
 
-import pytest
-import pydantic.v1 as pd
 import matplotlib.pyplot as plt
-
 import numpy as np
+import pydantic.v1 as pd
+import pytest
 import tidy3d as td
-from tidy3d.components.scene import MAX_NUM_MEDIUMS, MAX_GEOMETRY_COUNT
+from tidy3d.components.scene import MAX_GEOMETRY_COUNT, MAX_NUM_MEDIUMS
+
 from ..utils import SIM_FULL, cartesian_to_unstructured
 
 SCENE = td.Scene()

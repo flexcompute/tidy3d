@@ -1,14 +1,13 @@
 # specification for running the optimizer
 
 import abc
-from copy import deepcopy
 import typing
+from copy import deepcopy
 
-import pydantic.v1 as pd
-
-import numpy as np
-import autograd.numpy as anp
 import autograd as ag
+import autograd.numpy as anp
+import numpy as np
+import pydantic.v1 as pd
 
 import tidy3d as td
 

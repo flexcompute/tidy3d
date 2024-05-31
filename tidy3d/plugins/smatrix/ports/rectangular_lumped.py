@@ -1,24 +1,22 @@
 """Lumped port specialization with a rectangular geometry."""
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ....constants import fp_eps
+from ....components.base import cached_property
+from ....components.data.data_array import FreqDataArray
+from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
 from ....components.geometry.utils_2d import increment_float
-from ....components.types import FreqArray, Axis
-from ....components.base import cached_property
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import LumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.data.sim_data import SimulationData
-from ....components.source import UniformCurrentSource, GaussianPulse
+from ....components.source import GaussianPulse, UniformCurrentSource
+from ....components.types import Axis, FreqArray
 from ....components.validators import assert_plane
-from ....components.data.data_array import FreqDataArray
+from ....constants import fp_eps
 from ....exceptions import SetupError, ValidationError
-
-from ...microwave import VoltageIntegralAxisAligned, CurrentIntegralAxisAligned
-
+from ...microwave import CurrentIntegralAxisAligned, VoltageIntegralAxisAligned
 from .base_lumped import AbstractLumpedPort
 
 

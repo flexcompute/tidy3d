@@ -1,23 +1,20 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pydantic.v1 as pydantic
 import pytest
 import responses
-import numpy as np
-import matplotlib.pyplot as plt
-import pydantic.v1 as pydantic
-
 import tidy3d as td
-
 import tidy3d.plugins.mode.web as msweb
-from tidy3d.plugins.mode import ModeSolver
-from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
-from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
-from tidy3d.plugins.mode.solver import compute_modes
-from tidy3d.exceptions import SetupError
-from ..utils import assert_log_level, cartesian_to_unstructured
-from ..utils import log_capture  # noqa: F401
 from tidy3d import ScalarFieldDataArray
-from tidy3d.web.core.environment import Env
 from tidy3d.components.data.monitor_data import ModeSolverData
+from tidy3d.exceptions import SetupError
+from tidy3d.plugins.mode import ModeSolver
+from tidy3d.plugins.mode.derivatives import create_sfactor_b, create_sfactor_f
+from tidy3d.plugins.mode.mode_solver import MODE_MONITOR_NAME
+from tidy3d.plugins.mode.solver import compute_modes
+from tidy3d.web.core.environment import Env
 
+from ..utils import assert_log_level, cartesian_to_unstructured
 
 WG_MEDIUM = td.Medium(permittivity=4.0, conductivity=1e-4)
 WAVEGUIDE = td.Structure(geometry=td.Box(size=(1.5, 100, 1)), medium=WG_MEDIUM)
@@ -298,7 +295,7 @@ def test_mode_solver_validation():
 
 
 @pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
-def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):  # noqa: F811
+def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
     """Test mode solver setups issuing warnings."""
 
     simulation = td.Simulation(
@@ -679,7 +676,7 @@ def test_mode_solver_2D():
 
 @pytest.mark.parametrize("local", [True, False])
 @responses.activate
-def test_group_index(mock_remote_api, log_capture, local):  # noqa: F811
+def test_group_index(mock_remote_api, log_capture, local):
     """Test group index and dispersion calculation"""
 
     simulation = td.Simulation(
@@ -905,7 +902,7 @@ def test_mode_solver_web_run_batch(mock_remote_api):
 
     # Run mode solver one at a time
     results = msweb.run_batch(mode_solver_list, verbose=False, folder_name="Mode Solver")
-    [print(type(x)) for x in results]
+    print(*results, sep="\n")
     assert all(isinstance(x, ModeSolverData) for x in results)
     assert (results[i].n_eff.shape == (num_freqs, i + 1) for i in range(num_of_sims))
 

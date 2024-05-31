@@ -1,24 +1,23 @@
 """Tests file export and loading."""
 
-import os
 import json
-
-import pytest
-import numpy as np
+import os
 from time import time
+
 import dill as pickle
 import h5py
-
-from tidy3d import __version__
+import numpy as np
+import pytest
 import tidy3d as td
+from tidy3d import __version__
 from tidy3d.components.base import DATA_ARRAY_MAP
-from ..utils import SIM_FULL as SIM
-from ..utils import SIM_MONITORS as SIM2
+from tidy3d.components.data.sim_data import DATA_TYPE_MAP
+
 from ..test_data.test_monitor_data import make_flux_data
 from ..test_data.test_sim_data import make_sim_data
+from ..utils import SIM_FULL as SIM
+from ..utils import SIM_MONITORS as SIM2
 from ..utils import run_emulated
-
-from tidy3d.components.data.sim_data import DATA_TYPE_MAP
 
 # Store an example of every minor release simulation to test updater in the future
 SIM_DIR = "tests/sims"
@@ -215,7 +214,7 @@ def test_simulation_updater(sim_file):
     assert sim_updated.version == __version__, "Simulation not converted properly"
 
     # just make sure the loaded sim does something properly using this version
-    sim_updated.grid  # noqa: B018
+    sim_updated.grid
 
 
 def test_yaml(tmp_path):

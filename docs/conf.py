@@ -20,8 +20,9 @@
 import datetime
 import os
 import re
-import sys
 import subprocess
+import sys
+
 import tidy3d
 
 # import sphinxcontrib.divparams as divparams

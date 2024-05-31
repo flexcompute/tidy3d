@@ -2,60 +2,100 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple, List, Set, Union
-from abc import ABC, abstractmethod
-
-import pydantic.v1 as pydantic
-import autograd.numpy as np
-import xarray as xr
-import matplotlib as mpl
 import math
 import pathlib
+from abc import ABC, abstractmethod
+from typing import Dict, List, Set, Tuple, Union
 
-from .autograd import AutogradFieldMap
-
-from .base import cached_property
-from .base import skip_if_fields_missing
-from .validators import assert_objects_in_sim_bounds
-from .validators import validate_mode_objects_symmetry
-from .geometry.base import Geometry, Box
-from .geometry.mesh import TriangleMesh
-from .geometry.utils import flatten_groups, traverse_geometries
-from .geometry.utils_2d import get_bounds, get_thickened_geom
-from .geometry.utils_2d import subdivide, snap_coordinate_to_grid
-from .types import Ax, FreqBound, Axis, annotate_type, InterpMethod, Symmetry
-from .types import Literal, TYPE_TAG_STR
-from .grid.grid import Coords1D, Grid, Coords
-from .grid.grid_spec import GridSpec, UniformGrid, AutoGrid, CustomGrid
-from .medium import MediumType, AbstractMedium
-from .medium import AbstractCustomMedium, Medium, Medium2D, MediumType3D
-from .medium import AnisotropicMedium, FullyAnisotropicMedium, AbstractPerturbationMedium
-from .boundary import BoundarySpec, BlochBoundary, PECBoundary, PMCBoundary, Periodic, Boundary
-from .boundary import PML, StablePML, Absorber, AbsorberSpec
-from .structure import Structure, MeshOverrideStructure
-from .source import SourceType, PlaneWave, GaussianBeam, AstigmaticGaussianBeam, CustomFieldSource
-from .source import CustomCurrentSource, CustomSourceTime, ContinuousWave
-from .source import TFSF, Source, ModeSource
-from .monitor import ModeMonitor, MonitorType, Monitor, FreqMonitor, SurfaceIntegrationMonitor
-from .monitor import AbstractModeMonitor, FieldMonitor, TimeMonitor, FieldTimeMonitor
-from .monitor import PermittivityMonitor, DiffractionMonitor, AbstractFieldProjectionMonitor
-from .monitor import FieldProjectionAngleMonitor, FieldProjectionKSpaceMonitor
-from .lumped_element import LumpedElementType
-from .data.dataset import Dataset, CustomSpatialDataType
-from .viz import add_ax_if_none, equal_aspect
-from .scene import Scene, MAX_NUM_MEDIUMS
-from .run_time_spec import RunTimeSpec
-from .subpixel_spec import SubpixelSpec
-from .viz import PlotParams
-from .viz import plot_params_pml, plot_params_override_structures
-from .viz import plot_params_pec, plot_params_pmc, plot_params_bloch, plot_sim_3d
+import autograd.numpy as np
+import matplotlib as mpl
+import pydantic.v1 as pydantic
+import xarray as xr
 
 from ..constants import C_0, SECOND, fp_eps, inf
-from ..exceptions import SetupError, ValidationError, Tidy3dError, Tidy3dImportError
+from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError, ValidationError
 from ..log import log
 from ..updater import Updater
-
+from .autograd import AutogradFieldMap
+from .base import cached_property, skip_if_fields_missing
 from .base_sim.simulation import AbstractSimulation
+from .boundary import (
+    PML,
+    Absorber,
+    AbsorberSpec,
+    BlochBoundary,
+    Boundary,
+    BoundarySpec,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    StablePML,
+)
+from .data.dataset import CustomSpatialDataType, Dataset
+from .geometry.base import Box, Geometry
+from .geometry.mesh import TriangleMesh
+from .geometry.utils import flatten_groups, traverse_geometries
+from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
+from .grid.grid import Coords, Coords1D, Grid
+from .grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
+from .lumped_element import LumpedElementType
+from .medium import (
+    AbstractCustomMedium,
+    AbstractMedium,
+    AbstractPerturbationMedium,
+    AnisotropicMedium,
+    FullyAnisotropicMedium,
+    Medium,
+    Medium2D,
+    MediumType,
+    MediumType3D,
+)
+from .monitor import (
+    AbstractFieldProjectionMonitor,
+    AbstractModeMonitor,
+    DiffractionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldTimeMonitor,
+    FreqMonitor,
+    ModeMonitor,
+    Monitor,
+    MonitorType,
+    PermittivityMonitor,
+    SurfaceIntegrationMonitor,
+    TimeMonitor,
+)
+from .run_time_spec import RunTimeSpec
+from .scene import MAX_NUM_MEDIUMS, Scene
+from .source import (
+    TFSF,
+    AstigmaticGaussianBeam,
+    ContinuousWave,
+    CustomCurrentSource,
+    CustomFieldSource,
+    CustomSourceTime,
+    GaussianBeam,
+    ModeSource,
+    PlaneWave,
+    Source,
+    SourceType,
+)
+from .structure import MeshOverrideStructure, Structure
+from .subpixel_spec import SubpixelSpec
+from .types import TYPE_TAG_STR, Ax, Axis, FreqBound, InterpMethod, Literal, Symmetry, annotate_type
+from .validators import assert_objects_in_sim_bounds, validate_mode_objects_symmetry
+from .viz import (
+    PlotParams,
+    add_ax_if_none,
+    equal_aspect,
+    plot_params_bloch,
+    plot_params_override_structures,
+    plot_params_pec,
+    plot_params_pmc,
+    plot_params_pml,
+    plot_sim_3d,
+)
 
 try:
     gdstk_available = True

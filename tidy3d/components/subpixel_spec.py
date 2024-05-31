@@ -1,8 +1,9 @@
 # Defines specifications for subpixel averaging
 from __future__ import annotations
 
-import pydantic.v1 as pd
 from typing import Union
+
+import pydantic.v1 as pd
 
 from .base import Tidy3dBaseModel, cached_property
 from .types import TYPE_TAG_STR

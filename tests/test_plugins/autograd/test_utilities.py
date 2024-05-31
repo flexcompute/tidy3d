@@ -1,7 +1,7 @@
-import pytest
 import numpy as np
 import numpy.testing as npt
-from tidy3d.plugins.autograd.utilities import make_kernel, chain
+import pytest
+from tidy3d.plugins.autograd.utilities import chain, make_kernel
 
 
 @pytest.mark.parametrize("size", [(3, 3), (4, 4), (5, 5)])

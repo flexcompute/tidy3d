@@ -1,19 +1,15 @@
 """Test the parameter sweep plugin."""
 
-import pytest
-import numpy as np
-import tidy3d as td
 import matplotlib.pyplot as plt
+import numpy as np
+import pytest
 import scipy.stats.qmc as qmc
-
+import tidy3d as td
 import tidy3d.web as web
-
 from tidy3d.plugins import design as tdd
 from tidy3d.plugins.design.method import MethodIndependent
 
-from ..utils import run_emulated, assert_log_level
-from ..utils import log_capture  # noqa: F401
-
+from ..utils import assert_log_level, run_emulated
 
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
@@ -45,8 +41,7 @@ def test_sweep(sweep_method, monkeypatch):
             # task_paths: dict
 
             def items(self):
-                for task_name, sim_data in self.data_dict.items():  # noqa: UP028
-                    yield task_name, sim_data
+                yield from self.data_dict.items()
 
             def __getitem__(self, task_name):
                 return self.data_dict[task_name]
@@ -158,7 +153,7 @@ def test_sweep(sweep_method, monkeypatch):
     sweep_results2 = design_space.run_batch(scs_pre, scs_post)
 
     bd = sweep_results2.batch_data
-    for task_name, data in bd.items():  # noqa: B007
+    for _ in bd.items():
         continue
 
     design_space.run_batch(scs_pre_multi, scs_post_multi)
@@ -294,7 +289,7 @@ def test_method_custom_validators():
     [(True, "WARNING"), (False, None)],
     ids=["warn_monte_carlo", "no_warn_monte_carlo"],
 )
-def test_method_random_warning(log_capture, monte_carlo_warning, log_level_expected):  # noqa: F811
+def test_method_random_warning(log_capture, monte_carlo_warning, log_level_expected):
     """Test that method random validation / warning works as expected."""
 
     tdd.MethodRandom(num_points=10, monte_carlo_warning=monte_carlo_warning)

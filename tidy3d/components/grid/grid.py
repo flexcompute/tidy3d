@@ -1,17 +1,18 @@
 """Defines the FDTD grid."""
+
 from __future__ import annotations
-from typing import Tuple, List, Union
+
+from typing import List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel
-from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
-from ..data.dataset import UnstructuredGridDatasetType, UnstructuredGridDataset
-from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
-from ..geometry.base import Box
-
 from ...exceptions import SetupError
+from ..base import Tidy3dBaseModel
+from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
+from ..data.dataset import UnstructuredGridDataset, UnstructuredGridDatasetType
+from ..geometry.base import Box
+from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D

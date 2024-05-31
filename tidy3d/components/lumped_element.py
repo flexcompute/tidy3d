@@ -1,23 +1,23 @@
 """Defines lumped elements that should be included in the simulation."""
 
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Union, Optional
+from typing import Optional, Union
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
+from ..components.medium import Medium, Medium2D
+from ..components.structure import MeshOverrideStructure, Structure
+from ..components.validators import assert_plane, validate_name_str
+from ..constants import MICROMETER, OHM
+from ..exceptions import ValidationError
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .geometry.base import Box, ClipOperation, Geometry
 from .geometry.primitives import Cylinder
-from ..components.structure import Structure
-from ..components.medium import Medium, Medium2D
-from ..components.structure import MeshOverrideStructure
 from .types import Axis, Coordinate
 from .viz import PlotParams, plot_params_lumped_element
-from ..constants import OHM, MICROMETER
-from ..components.validators import validate_name_str, assert_plane
-from ..exceptions import ValidationError
 
 DEFAULT_LUMPED_ELEMENT_NUM_CELLS = 3
 

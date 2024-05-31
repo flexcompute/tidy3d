@@ -1,19 +1,18 @@
 """Defines the methods used for parameter sweep."""
-from typing import Union, Tuple, Dict, Any, Callable
+
 from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
 
+from ... import web
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...log import log
-from ... import web
 from ...web.api.container import BatchData
-
 from .parameter import ParameterType
-
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
 

@@ -1,16 +1,15 @@
 """EME monitors"""
+
 from __future__ import annotations
 
-import pydantic.v1 as pd
-
-from typing import Union, Optional, Tuple, Literal
-
 from abc import ABC, abstractmethod
+from typing import Literal, Optional, Tuple, Union
+
+import pydantic.v1 as pd
 
 from ..base_sim.monitor import AbstractMonitor
 from ..monitor import AbstractFieldMonitor, ModeSolverMonitor
 from ..types import FreqArray
-
 
 BYTES_COMPLEX = 8
 

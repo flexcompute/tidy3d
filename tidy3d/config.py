@@ -2,7 +2,7 @@
 
 import pydantic.v1 as pd
 
-from .log import DEFAULT_LEVEL, LogLevel, set_logging_level, set_log_suppression
+from .log import DEFAULT_LEVEL, LogLevel, set_log_suppression, set_logging_level
 
 
 class Tidy3dConfig(pd.BaseModel):

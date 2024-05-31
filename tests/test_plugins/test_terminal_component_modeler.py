@@ -1,19 +1,19 @@
-import pytest
+import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
-import matplotlib.pyplot as plt
-
+import pytest
 import tidy3d as td
+from tidy3d.exceptions import SetupError, Tidy3dKeyError
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
-    LumpedPort,
     CoaxialLumpedPort,
+    LumpedPort,
     LumpedPortDataArray,
     TerminalComponentModeler,
 )
-from tidy3d.exceptions import Tidy3dKeyError, SetupError
+
 from ..utils import run_emulated
-from .terminal_component_modeler_def import make_component_modeler, make_coaxial_component_modeler
+from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 
 
 def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):

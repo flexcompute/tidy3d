@@ -1,24 +1,30 @@
 """Defines perturbations to properties of the medium / materials"""
+
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import Callable, Union, Tuple, List
 import functools
+from abc import ABC, abstractmethod
+from typing import Callable, List, Tuple, Union
 
-import pydantic.v1 as pd
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pydantic.v1 as pd
 
-from .data.data_array import SpatialDataArray, HeatDataArray, ChargeDataArray, IndexedDataArray
-from .data.dataset import UnstructuredGridDataset, CustomSpatialDataType
-from .data.dataset import _get_numpy_array, _zeros_like, _check_same_coordinates
-from .base import Tidy3dBaseModel, cached_property
-from ..constants import KELVIN, CMCUBE, PERCMCUBE, inf
-from ..log import log
-from ..components.types import Ax, ArrayLike, Complex, FieldVal, InterpMethod, TYPE_TAG_STR
-from ..components.viz import add_ax_if_none
 from ..components.data.validators import validate_no_nans
+from ..components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
+from ..components.viz import add_ax_if_none
+from ..constants import CMCUBE, KELVIN, PERCMCUBE, inf
 from ..exceptions import DataError
+from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .data.data_array import ChargeDataArray, HeatDataArray, IndexedDataArray, SpatialDataArray
+from .data.dataset import (
+    CustomSpatialDataType,
+    UnstructuredGridDataset,
+    _check_same_coordinates,
+    _get_numpy_array,
+    _zeros_like,
+)
 
 """ Generic perturbation classes """
 
@@ -77,7 +83,7 @@ def ensure_temp_in_range(
     sample: Callable[
         Union[ArrayLike[float], CustomSpatialDataType],
         Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
-    ]
+    ],
 ) -> Callable[
     Union[ArrayLike[float], CustomSpatialDataType],
     Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
@@ -418,7 +424,7 @@ def ensure_charge_in_range(
             Union[ArrayLike[float], CustomSpatialDataType],
         ],
         Union[ArrayLike[float], ArrayLike[Complex], CustomSpatialDataType],
-    ]
+    ],
 ) -> Callable[
     [
         Union[ArrayLike[float], CustomSpatialDataType],

@@ -1,14 +1,15 @@
 """Defines placements for boundary conditions."""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import pydantic.v1 as pd
 
-from .types import BoxSurface
-from .base import Tidy3dBaseModel
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel
+from .types import BoxSurface
 
 
 class AbstractBCPlacement(ABC, Tidy3dBaseModel):

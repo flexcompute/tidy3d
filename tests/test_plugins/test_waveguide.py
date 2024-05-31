@@ -1,8 +1,8 @@
-import pytest
 import numpy as np
+import pytest
 import tidy3d as td
-from tidy3d.plugins import waveguide
 from pydantic.v1 import ValidationError
+from tidy3d.plugins import waveguide
 
 
 def test_array_validators():

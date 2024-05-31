@@ -1,14 +1,14 @@
 # utilities for working with autograd
 
-from autograd.extend import Box, primitive, defvjp
+import typing
+
+import numpy as np
+import xarray as xr
 from autograd.builtins import dict as dict_ag
+from autograd.extend import Box, defvjp, primitive
 from autograd.tracer import getval
 
-import xarray as xr
-import numpy as np
-
-import typing
-from .types import Size1D, Bound, ArrayFloat2D, ArrayLike
+from .types import ArrayFloat2D, ArrayLike, Bound, Size1D
 
 # TODO: should we use ArrayBox? Box is more general
 

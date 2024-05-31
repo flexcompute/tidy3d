@@ -1,14 +1,15 @@
 """Penalty Functions for adjoint plugin."""
+
 from abc import ABC, abstractmethod
 
-import pydantic.v1 as pd
 import jax.numpy as jnp
+import pydantic.v1 as pd
 
 from ....components.base import Tidy3dBaseModel
 from ....components.types import ArrayFloat2D
 from ....constants import MICROMETER
 from ....log import log
-from .filter import ConicFilter, BinaryProjector
+from .filter import BinaryProjector, ConicFilter
 
 # Radius of Curvature Calculation
 

@@ -1,20 +1,19 @@
 """Class and custom data array for representing a scattering matrix port based on lumped circuit elements."""
 
-import pydantic.v1 as pd
-from typing import Optional
 from abc import ABC, abstractmethod
+from typing import Optional
 
-from ....constants import OHM
-from ....components.types import Complex, FreqArray
+import pydantic.v1 as pd
+
 from ....components.base import Tidy3dBaseModel, cached_property
+from ....components.data.data_array import DataArray, FreqDataArray
+from ....components.data.sim_data import SimulationData
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import AbstractLumpedResistor
 from ....components.monitor import FieldMonitor
-
-from ....components.data.sim_data import SimulationData
-from ....components.source import UniformCurrentSource, GaussianPulse
-
-from ....components.data.data_array import DataArray, FreqDataArray
+from ....components.source import GaussianPulse, UniformCurrentSource
+from ....components.types import Complex, FreqArray
+from ....constants import OHM
 
 DEFAULT_PORT_NUM_CELLS = 3
 DEFAULT_REFERENCE_IMPEDANCE = 50

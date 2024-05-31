@@ -1,24 +1,27 @@
 """Tests SimulationData"""
 
-import pytest
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import pydantic.v1 as pydantic
-
+import pytest
 import tidy3d as td
-from tidy3d.exceptions import DataError, Tidy3dKeyError
-
-from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
+from tidy3d.components.data.sim_data import SimulationData
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
+from tidy3d.exceptions import DataError, Tidy3dKeyError
 
-from .test_monitor_data import make_field_data, make_field_time_data, make_permittivity_data
-from .test_monitor_data import make_mode_data, make_mode_solver_data
-from .test_monitor_data import make_flux_data, make_flux_time_data
-from .test_monitor_data import make_diffraction_data
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
-
+from .test_monitor_data import (
+    make_diffraction_data,
+    make_field_data,
+    make_field_time_data,
+    make_flux_data,
+    make_flux_time_data,
+    make_mode_data,
+    make_mode_solver_data,
+    make_permittivity_data,
+)
 
 # monitor data instances
 

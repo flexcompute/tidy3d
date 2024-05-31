@@ -1,5 +1,5 @@
 import pytest
-from tidy3d.packaging import check_import, verify_packages_import, Tidy3dImportError
+from tidy3d.packaging import Tidy3dImportError, check_import, verify_packages_import
 
 assert check_import("tidy3d") is True
 

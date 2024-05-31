@@ -1,26 +1,25 @@
 """Defines jax-compatible mediums."""
+
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional
 from abc import ABC
+from typing import Callable, Dict, Optional, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
-from jax.tree_util import register_pytree_node_class
+import pydantic.v1 as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
-from ....components.types import Bound, Literal
-from ....components.medium import Medium, AnisotropicMedium, CustomMedium
-from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
-from ....exceptions import SetupError
+from ....components.geometry.base import Geometry
+from ....components.medium import AnisotropicMedium, CustomMedium, Medium
+from ....components.types import Bound, Literal
 from ....constants import CONDUCTIVITY
-
-from .base import JaxObject, WEB_ADJOINT_MESSAGE
-from .types import JaxFloat
+from ....exceptions import SetupError
+from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
-
+from .types import JaxFloat
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20

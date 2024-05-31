@@ -1,33 +1,31 @@
 """Defines EME simulation class."""
+
 from __future__ import annotations
 
-from typing import Tuple, List, Dict, Optional, Literal
+from typing import Dict, List, Literal, Optional, Tuple
 
-import pydantic.v1 as pd
 import matplotlib as mpl
 import numpy as np
+import pydantic.v1 as pd
 
-from ..types import Ax, FreqArray
-from ..simulation import AbstractYeeGridSimulation
-from ..viz import add_ax_if_none, equal_aspect
-from ..boundary import BoundarySpec, PECBoundary
-from ..grid.grid_spec import GridSpec
-from ..grid.grid import Grid
-from ..types import Axis, annotate_type
-from ..base import cached_property
-from ..scene import Scene
-from ..medium import FullyAnisotropicMedium
-from ..structure import Structure
-from ..source import ModeSource, GaussianPulse
-from ..monitor import ModeSolverMonitor, AbstractModeMonitor, Monitor
-from ..validators import validate_freqs_not_empty, validate_freqs_min, MIN_FREQUENCY
 from ...exceptions import SetupError
 from ...log import log
-
-from .monitor import EMEMonitor, EMEMonitorType, EMEFieldMonitor, EMEModeSolverMonitor
-from .grid import EMEGridSpecType, EMEGrid, EMEGridSpec, EMECompositeGrid
-from .sweep import EMESweepSpecType, EMEModeSweep, EMELengthSweep, EMEFreqSweep
-
+from ..base import cached_property
+from ..boundary import BoundarySpec, PECBoundary
+from ..grid.grid import Grid
+from ..grid.grid_spec import GridSpec
+from ..medium import FullyAnisotropicMedium
+from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor
+from ..scene import Scene
+from ..simulation import AbstractYeeGridSimulation
+from ..source import GaussianPulse, ModeSource
+from ..structure import Structure
+from ..types import Ax, Axis, FreqArray, annotate_type
+from ..validators import MIN_FREQUENCY, validate_freqs_min, validate_freqs_not_empty
+from ..viz import add_ax_if_none, equal_aspect
+from .grid import EMECompositeGrid, EMEGrid, EMEGridSpec, EMEGridSpecType
+from .monitor import EMEFieldMonitor, EMEModeSolverMonitor, EMEMonitor, EMEMonitorType
+from .sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep, EMESweepSpecType
 
 # maximum numbers of simulation parameters
 MAX_GRID_CELLS = 20e9

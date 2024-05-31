@@ -1,4 +1,5 @@
 """Defines heat material specifications"""
+
 from __future__ import annotations
 
 from abc import ABC
@@ -6,11 +7,10 @@ from typing import Union
 
 import pydantic.v1 as pd
 
+from ...constants import HEAT_FLUX, HEAT_TRANSFER_COEFF, KELVIN
 from ..base import Tidy3dBaseModel
 from ..bc_placement import BCPlacementType
 from ..types import TYPE_TAG_STR
-
-from ...constants import KELVIN, HEAT_FLUX, HEAT_TRANSFER_COEFF
 
 
 class HeatBC(ABC, Tidy3dBaseModel):

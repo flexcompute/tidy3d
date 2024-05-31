@@ -1,8 +1,9 @@
 """Defines sweep settings for the EME simulation."""
+
 from __future__ import annotations
 
-from typing import Union
 from abc import ABC, abstractmethod
+from typing import Union
 
 import pydantic.v1 as pd
 

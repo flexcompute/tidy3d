@@ -2,32 +2,56 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Any, Union, Callable
 import functools
 import pathlib
+from abc import ABC, abstractmethod
+from typing import Any, Callable, List, Tuple, Union
 
-import pydantic.v1 as pydantic
 import autograd.numpy as np
+import pydantic.v1 as pydantic
 import shapely
-from matplotlib import patches
 import xarray as xr
+from matplotlib import patches
 
-from ..autograd import TracedSize, TracedCoordinate, integrate_within_bounds, get_static
-from ..base import Tidy3dBaseModel, cached_property
-from ..types import Ax, Axis, PlanePosition, Shapely, ClipOperationType, annotate_type
-from ..types import Bound, Size, Coordinate, Coordinate2D
-from ..types import ArrayFloat2D, ArrayFloat3D, MatrixReal4x4
-from ..viz import add_ax_if_none, equal_aspect, PLOT_BUFFER, ARROW_LENGTH
-from ..viz import PlotParams, plot_params_geometry, polygon_patch, arrow_style
-from ..transformation import RotationAroundAxis
-from ..data.dataset import PermittivityDataset, ElectromagneticFieldDataset
+from ...constants import LARGE_NUMBER, MICROMETER, RADIAN, fp_eps, inf
+from ...exceptions import (
+    SetupError,
+    Tidy3dError,
+    Tidy3dImportError,
+    Tidy3dKeyError,
+    ValidationError,
+)
 from ...log import log
-from ...exceptions import SetupError, ValidationError
-from ...exceptions import Tidy3dKeyError, Tidy3dError, Tidy3dImportError
-from ...constants import MICROMETER, LARGE_NUMBER, RADIAN, inf, fp_eps
-from ...packaging import verify_packages_import, check_import
-
+from ...packaging import check_import, verify_packages_import
+from ..autograd import TracedCoordinate, TracedSize, get_static, integrate_within_bounds
+from ..base import Tidy3dBaseModel, cached_property
+from ..data.dataset import ElectromagneticFieldDataset, PermittivityDataset
+from ..transformation import RotationAroundAxis
+from ..types import (
+    ArrayFloat2D,
+    ArrayFloat3D,
+    Ax,
+    Axis,
+    Bound,
+    ClipOperationType,
+    Coordinate,
+    Coordinate2D,
+    MatrixReal4x4,
+    PlanePosition,
+    Shapely,
+    Size,
+    annotate_type,
+)
+from ..viz import (
+    ARROW_LENGTH,
+    PLOT_BUFFER,
+    PlotParams,
+    add_ax_if_none,
+    arrow_style,
+    equal_aspect,
+    plot_params_geometry,
+    polygon_patch,
+)
 
 POLY_GRID_SIZE = 1e-12
 

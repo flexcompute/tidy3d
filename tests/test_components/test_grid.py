@@ -1,8 +1,7 @@
 """Tests grid operations."""
 
-import pytest
 import numpy as np
-
+import pytest
 import tidy3d as td
 from tidy3d.components.grid.grid import Coords, FieldGrid, Grid
 from tidy3d.exceptions import SetupError

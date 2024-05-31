@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
-import numpy as np
-import xarray as xr
-
 from typing import Literal
 
-from ...constants import MICROMETER, fp_eps
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
-from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
-from ...components.base import cached_property
-from ...components.types import Axis, ArrayFloat2D
-from ...exceptions import DataError, SetupError
+import numpy as np
+import pydantic.v1 as pd
+import xarray as xr
 
-from .path_integrals import AbstractAxesRH, MonitorDataTypes, IntegralResultTypes
+from ...components.base import cached_property
+from ...components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+from ...components.types import ArrayFloat2D, Axis
+from ...constants import MICROMETER, fp_eps
+from ...exceptions import DataError, SetupError
+from .path_integrals import AbstractAxesRH, IntegralResultTypes, MonitorDataTypes
 
 FieldParameter = Literal["E", "H"]
 

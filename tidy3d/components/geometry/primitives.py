@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from typing import List
 from math import isclose
+from typing import List
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 import shapely
 
+from ...constants import LARGE_NUMBER, MICROMETER
+from ...exceptions import SetupError, ValidationError
+from ...packaging import verify_packages_import
 from ..base import cached_property, skip_if_fields_missing
 from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, Tuple
-from ...exceptions import SetupError, ValidationError
-from ...constants import MICROMETER, LARGE_NUMBER
-from ...packaging import verify_packages_import
 from . import base
 
 # for sampling conical frustum in visualization

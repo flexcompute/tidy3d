@@ -1,19 +1,18 @@
 """Base model for Tidy3D components that are compatible with jax."""
+
 from __future__ import annotations
 
-from typing import Tuple, List, Any, Callable
 import json
+from typing import Any, Callable, List, Tuple
 
-import numpy as np
 import jax
+import numpy as np
 import pydantic.v1 as pd
-
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel
-from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
-
+from .data.data_array import JAX_DATA_ARRAY_TAG, JaxDataArray
 
 # end of the error message when a ``_validate_web_adjoint`` exception is raised
 WEB_ADJOINT_MESSAGE = (

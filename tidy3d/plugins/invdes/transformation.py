@@ -1,14 +1,14 @@
 # transformations applied to design region
 
-import typing
 import abc
+import typing
 
 import autograd.numpy as anp
 import pydantic.v1 as pd
 
 import tidy3d as td
-from tidy3d.plugins.autograd.invdes import make_filter_and_project, get_kernel_size_px
 from tidy3d.plugins.autograd.functions import threshold
+from tidy3d.plugins.autograd.invdes import get_kernel_size_px, make_filter_and_project
 
 from .base import InvdesBaseModel
 

@@ -1,13 +1,12 @@
 # imports from tidy3d.plugins.invdes as tdi
 
+from . import utils
 from .design import InverseDesign, InverseDesignMulti
-
-from .transformation import FilterProject
+from .optimizer import AdamOptimizer
 from .penalty import ErosionDilationPenalty
 from .region import TopologyDesignRegion
-from .optimizer import AdamOptimizer
 from .result import InverseDesignResult
-from . import utils
+from .transformation import FilterProject
 
 __all__ = (
     "InverseDesign",

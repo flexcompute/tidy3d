@@ -1,28 +1,41 @@
-"""Near field to far field transformation plugin
-"""
-from __future__ import annotations
-from typing import Dict, Tuple, Union, List
-import numpy as np
-import xarray as xr
-import pydantic.v1 as pydantic
+"""Near field to far field transformation plugin"""
 
+from __future__ import annotations
+
+from typing import Dict, List, Tuple, Union
+
+import numpy as np
+import pydantic.v1 as pydantic
+import xarray as xr
 from rich.progress import track
 
-from .data.data_array import FieldProjectionAngleDataArray, FieldProjectionCartesianDataArray
-from .data.data_array import FieldProjectionKSpaceDataArray
-from .data.monitor_data import FieldData
-from .data.monitor_data import AbstractFieldProjectionData, FieldProjectionAngleData
-from .data.monitor_data import FieldProjectionCartesianData, FieldProjectionKSpaceData
-from .data.sim_data import SimulationData
-from .monitor import FieldProjectionSurface
-from .monitor import FieldMonitor, AbstractFieldProjectionMonitor, FieldProjectionAngleMonitor
-from .monitor import FieldProjectionCartesianMonitor, FieldProjectionKSpaceMonitor
-from .types import Direction, Coordinate, ArrayComplex4D
-from .medium import MediumType
-from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from ..constants import C_0, EPSILON_0, ETA_0, MICROMETER, MU_0
 from ..exceptions import SetupError
-from ..constants import C_0, MICROMETER, ETA_0, EPSILON_0, MU_0
 from ..log import get_logging_console
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from .data.data_array import (
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+)
+from .data.monitor_data import (
+    AbstractFieldProjectionData,
+    FieldData,
+    FieldProjectionAngleData,
+    FieldProjectionCartesianData,
+    FieldProjectionKSpaceData,
+)
+from .data.sim_data import SimulationData
+from .medium import MediumType
+from .monitor import (
+    AbstractFieldProjectionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldProjectionSurface,
+)
+from .types import ArrayComplex4D, Coordinate, Direction
 
 # Default number of points per wavelength in the background medium to use for resampling fields.
 PTS_PER_WVL = 10

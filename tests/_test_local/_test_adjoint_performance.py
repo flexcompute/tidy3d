@@ -1,28 +1,24 @@
-import pytest
-import numpy as np
 import sys
-from memory_profiler import profile
-import matplotlib.pyplot as plt
 import time
 
-from jax import grad
-
+import matplotlib.pyplot as plt
+import numpy as np
+import pytest
 import tidy3d as td
-
-from tidy3d.plugins.adjoint.components.geometry import JaxBox
-from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
-from tidy3d.plugins.adjoint.components.structure import JaxStructure
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
+from jax import grad
+from memory_profiler import profile
 from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray
 from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
+from tidy3d.plugins.adjoint.components.geometry import JaxBox
+from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium
+from tidy3d.plugins.adjoint.components.simulation import JaxSimulation
+from tidy3d.plugins.adjoint.components.structure import JaxStructure
 from tidy3d.plugins.adjoint.web import run
 
 from ..utils import run_emulated
 
-
 sys.path.append("/users/twhughes/Documents/Flexcompute/tidy3d-core")
 from tidy3d_backend.utils import Profile
-
 
 EPS = 2.0
 SIZE = (1.0, 2.0, 3.0)
@@ -239,7 +235,7 @@ def test_simple_jax_data_array(use_emulated_run):
 
     Nx, Ny, Nz, Nf = 300, 300, 1, 1
     VALUES = 2 + np.random.random((Nx, Ny, Nz, Nf))
-    data_array = make_data_array(VALUES)  # noqa: F841
+    data_array = make_data_array(VALUES)
 
     # the first 3 are fast, last one is slow
 

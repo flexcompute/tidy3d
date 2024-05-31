@@ -1,15 +1,14 @@
-import pytest
-from memory_profiler import profile
+import cProfile
+
 import jax
-
 import jax.numpy as jnp
-from ..utils import run_emulated
-
+import pytest
 import tidy3d as td
 import tidy3d.plugins.adjoint as tda
+from memory_profiler import profile
 from tidy3d.plugins.adjoint.web import run_local as run
 
-import cProfile
+from ..utils import run_emulated
 
 # name of the output monitor used in tests
 MNT_NAME = "field"
@@ -84,7 +83,7 @@ def test_large_custom_medium(use_emulated_run):
 
     with cProfile.Profile() as pr:
         grad_f = jax.grad(f)
-        df_eps_values = grad_f(BOX_LENGTH)  # noqa: F841
+        df_eps_values = grad_f(BOX_LENGTH)
         pr.print_stats(sort="cumtime")
         pr.dump_stats("results.prof")
 

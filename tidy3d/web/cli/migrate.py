@@ -1,4 +1,5 @@
 """Migrate authentication to API key."""
+
 import json
 import os
 
@@ -6,9 +7,9 @@ import click
 import requests
 import toml
 
-from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
-from ..core.constants import KEY_APIKEY, HEADER_APPLICATION, HEADER_APPLICATION_VALUE
+from ..core.constants import HEADER_APPLICATION, HEADER_APPLICATION_VALUE, KEY_APIKEY
 from ..core.environment import Env
+from .constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
 
 
 def migrate() -> bool:

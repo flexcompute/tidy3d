@@ -3,33 +3,47 @@ invariance along a given propagation axis.
 """
 
 from __future__ import annotations
-from typing import List, Tuple, Dict
+
 from math import isclose
+from typing import Dict, List, Tuple
 
 import numpy as np
 import pydantic.v1 as pydantic
 import xarray as xr
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.boundary import PECBoundary, BoundarySpec, Boundary, PML, StablePML, Absorber
-from ...components.geometry.base import Box
-from ...components.simulation import Simulation
-from ...components.grid.grid import Grid
-from ...components.mode import ModeSpec
-from ...components.monitor import ModeSolverMonitor, ModeMonitor
-from ...components.medium import FullyAnisotropicMedium
-from ...components.source import ModeSource, SourceTime
-from ...components.types import Direction, FreqArray, Ax, Literal, Axis, Symmetry, PlotScale
-from ...components.types import ArrayComplex3D, ArrayComplex4D, ArrayFloat1D, EpsSpecType
-from ...components.data.data_array import ModeIndexDataArray, ScalarModeFieldDataArray
-from ...components.data.data_array import FreqModeDataArray
-from ...components.data.sim_data import SimulationData
+from ...components.boundary import PML, Absorber, Boundary, BoundarySpec, PECBoundary, StablePML
+from ...components.data.data_array import (
+    FreqModeDataArray,
+    ModeIndexDataArray,
+    ScalarModeFieldDataArray,
+)
 from ...components.data.monitor_data import ModeSolverData
-
+from ...components.data.sim_data import SimulationData
+from ...components.geometry.base import Box
+from ...components.grid.grid import Grid
+from ...components.medium import FullyAnisotropicMedium
+from ...components.mode import ModeSpec
+from ...components.monitor import ModeMonitor, ModeSolverMonitor
+from ...components.simulation import Simulation
+from ...components.source import ModeSource, SourceTime
+from ...components.types import (
+    ArrayComplex3D,
+    ArrayComplex4D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Direction,
+    EpsSpecType,
+    FreqArray,
+    Literal,
+    PlotScale,
+    Symmetry,
+)
 from ...components.validators import validate_freqs_min, validate_freqs_not_empty
-from ...exceptions import ValidationError, SetupError
 from ...constants import C_0
+from ...exceptions import SetupError, ValidationError
+from ...log import log
 
 # Importing the local solver may not work if e.g. scipy is not installed
 IMPORT_ERROR_MSG = """Could not import local solver, 'ModeSolver' objects can still be constructed

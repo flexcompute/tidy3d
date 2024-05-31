@@ -1,38 +1,31 @@
-import pytest
-import pydantic.v1 as pd
 import numpy as np
-from matplotlib import pyplot as plt
-
+import pydantic.v1 as pd
+import pytest
 import tidy3d as td
-
-from tidy3d import FluidSpec, SolidSpec
-from tidy3d import UniformHeatSource
+from matplotlib import pyplot as plt
 from tidy3d import (
-    TemperatureBC,
-    HeatFluxBC,
     ConvectionBC,
+    DistanceUnstructuredGrid,
+    FluidSpec,
     HeatBoundarySpec,
-)
-from tidy3d import (
-    StructureBoundary,
-    StructureStructureInterface,
-    SimulationBoundary,
-    StructureSimulationBoundary,
+    HeatFluxBC,
+    HeatSimulation,
+    HeatSimulationData,
     MediumMediumInterface,
+    SimulationBoundary,
+    SolidSpec,
+    StructureBoundary,
+    StructureSimulationBoundary,
+    StructureStructureInterface,
+    TemperatureBC,
+    TemperatureData,
+    TemperatureMonitor,
+    UniformHeatSource,
+    UniformUnstructuredGrid,
 )
-from tidy3d import UniformUnstructuredGrid, DistanceUnstructuredGrid
-from tidy3d import HeatSimulation
-from tidy3d import HeatSimulationData
-from tidy3d import TemperatureMonitor
-from tidy3d import TemperatureData
 from tidy3d.exceptions import DataError
 
-from ..utils import (
-    assert_log_level,
-    log_capture,  # noqa: F401
-    AssertLogLevel,
-    cartesian_to_unstructured,
-)
+from ..utils import AssertLogLevel, assert_log_level, cartesian_to_unstructured
 
 
 def make_heat_mediums():
@@ -400,7 +393,7 @@ def test_heat_sim():
 
 
 @pytest.mark.parametrize("shift_amount, log_level", ((1, None), (2, "WARNING")))
-def test_heat_sim_bounds(shift_amount, log_level, log_capture):  # noqa: F811
+def test_heat_sim_bounds(shift_amount, log_level, log_capture):
     """make sure bounds are working correctly"""
 
     # make sure all things are shifted to this central location
@@ -450,7 +443,7 @@ def test_heat_sim_bounds(shift_amount, log_level, log_capture):  # noqa: F811
         ((0.1, 0.1, 1), "WARNING"),
     ],
 )
-def test_sim_structure_extent(log_capture, box_size, log_level):  # noqa: F811
+def test_sim_structure_extent(log_capture, box_size, log_level):
     """Make sure we warn if structure extends exactly to simulation edges."""
 
     box = td.Structure(geometry=td.Box(size=box_size), medium=td.Medium(permittivity=2))
@@ -509,7 +502,7 @@ def test_sim_data():
         _ = heat_sim_data.updated_copy(simulation=sim)
 
 
-def test_relative_min_dl_warning(log_capture):  # noqa: F811
+def test_relative_min_dl_warning(log_capture):
     with AssertLogLevel(log_capture, "WARNING"):
         _ = td.HeatSimulation(
             size=(1, 1, 1),

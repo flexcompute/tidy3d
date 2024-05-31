@@ -2,28 +2,33 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple, Any
 from math import isclose
+from typing import Any, List, Tuple
 
-import pydantic.v1 as pydantic
 import autograd.numpy as np
+import pydantic.v1 as pydantic
 import shapely
-from matplotlib import path
 import xarray as xr
+from matplotlib import path
 
-from ..autograd import TracedVertices, get_static
-from ..base import cached_property
-from ..base import skip_if_fields_missing
-from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
-from ..types import MatrixReal4x4, Shapely, ArrayLike
-from ..data.dataset import PermittivityDataset, ElectromagneticFieldDataset
-from ...log import log
+from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
-from ...constants import MICROMETER, fp_eps, LARGE_NUMBER
+from ...log import log
 from ...packaging import verify_packages_import
-
-from . import base
-from . import triangulation
+from ..autograd import TracedVertices, get_static
+from ..base import cached_property, skip_if_fields_missing
+from ..data.dataset import ElectromagneticFieldDataset, PermittivityDataset
+from ..types import (
+    ArrayFloat2D,
+    ArrayLike,
+    Axis,
+    Bound,
+    Coordinate,
+    MatrixReal4x4,
+    PlanePosition,
+    Shapely,
+)
+from . import base, triangulation
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process

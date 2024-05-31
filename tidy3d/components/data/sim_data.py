@@ -1,35 +1,34 @@
-""" Simulation Level Data """
+"""Simulation Level Data"""
+
 from __future__ import annotations
-from typing import Callable, Tuple, Union
+
+import json
+import pathlib
 from abc import ABC
 from collections import defaultdict
+from typing import Callable, Tuple, Union
 
-import pathlib
-import xarray as xr
-import pydantic.v1 as pd
-import numpy as np
 import h5py
-import json
+import numpy as np
+import pydantic.v1 as pd
+import xarray as xr
 
-
-from .monitor_data import (
-    MonitorDataTypes,
-    MonitorDataType,
-    AbstractFieldData,
-    FieldTimeData,
-)
-
-from ..simulation import Simulation
-from ..structure import Structure
-from ..monitor import Monitor
-from ..source import Source
-from ..types import Ax, Axis, annotate_type, FieldVal, PlotScale, ColormapType
-from ..viz import equal_aspect, add_ax_if_none
 from ...exceptions import DataError, Tidy3dKeyError
 from ...log import log
 from ..base import JSON_TAG
 from ..base_sim.data.sim_data import AbstractSimulationData
-
+from ..monitor import Monitor
+from ..simulation import Simulation
+from ..source import Source
+from ..structure import Structure
+from ..types import Ax, Axis, ColormapType, FieldVal, PlotScale, annotate_type
+from ..viz import add_ax_if_none, equal_aspect
+from .monitor_data import (
+    AbstractFieldData,
+    FieldTimeData,
+    MonitorDataType,
+    MonitorDataTypes,
+)
 
 DATA_TYPE_MAP = {data.__fields__["monitor"].type_: data for data in MonitorDataTypes}
 

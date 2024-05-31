@@ -1,9 +1,8 @@
 import pytest
 import responses
-
-from tidy3d.web.core.environment import Env
-from tidy3d.web.api.material_libray import MaterialLibray
 import tidy3d as td
+from tidy3d.web.api.material_libray import MaterialLibray
+from tidy3d.web.core.environment import Env
 
 Env.dev.active()
 

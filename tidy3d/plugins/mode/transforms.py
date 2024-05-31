@@ -1,4 +1,4 @@
-""" Coordinate transformations.
+"""Coordinate transformations.
 
 The Jacobian of a transformation from coordinates r = (x, y, z) into coordinates
 r' = (u, v, w) is defined as J_ij = dr'_i/dr_j. Here, z and w are the propagation axes in the

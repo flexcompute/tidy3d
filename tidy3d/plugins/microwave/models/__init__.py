@@ -1,7 +1,6 @@
-""" Imports for transmission line models."""
+"""Imports for transmission line models."""
 
-from . import microstrip
-from . import coupled_microstrip
+from . import coupled_microstrip, microstrip
 
 __all__ = [
     microstrip,

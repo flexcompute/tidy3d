@@ -1,23 +1,20 @@
-"""Find resonances in time series data
-"""
+"""Find resonances in time series data"""
 
-from typing import Tuple, List, Union
 from functools import partial
+from typing import List, Tuple, Union
 
 import numpy as np
 import scipy.linalg
 import xarray as xr
-
 from pydantic.v1 import Field, NonNegativeFloat, PositiveInt, validator
 
-from ...log import log
 from ...components.base import Tidy3dBaseModel
-from ...components.types import ArrayFloat1D, ArrayComplex1D, ArrayComplex2D, ArrayComplex3D
 from ...components.data.data_array import ScalarFieldTimeDataArray
 from ...components.data.monitor_data import FieldTimeData
+from ...components.types import ArrayComplex1D, ArrayComplex2D, ArrayComplex3D, ArrayFloat1D
 from ...constants import HERTZ
 from ...exceptions import SetupError, ValidationError
-
+from ...log import log
 
 INIT_NUM_FREQS = 200
 

@@ -1,22 +1,21 @@
 """Defines a jax-compatible SimulationData."""
+
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union, List
+from typing import Dict, List, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 import xarray as xr
-
 from jax.tree_util import register_pytree_node_class
 
-from .....components.data.monitor_data import MonitorDataType, FieldData, PermittivityData
+from .....components.data.monitor_data import FieldData, MonitorDataType, PermittivityData
 from .....components.data.sim_data import SimulationData
-from .....components.source import PointDipole, GaussianPulse
+from .....components.source import GaussianPulse, PointDipole
 from .....log import log
-
 from ..base import JaxObject
-from ..simulation import JaxSimulation, JaxInfo
-from .monitor_data import JaxMonitorDataType, JAX_MONITOR_DATA_MAP
+from ..simulation import JaxInfo, JaxSimulation
+from .monitor_data import JAX_MONITOR_DATA_MAP, JaxMonitorDataType
 
 
 @register_pytree_node_class

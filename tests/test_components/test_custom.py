@@ -1,24 +1,30 @@
 """Tests custom sources and mediums."""
 
-import dill as pickle
 from typing import Tuple
 
-import pytest
+import dill as pickle
 import numpy as np
 import pydantic.v1 as pydantic
-import xarray as xr
+import pytest
 import tidy3d as td
-
-from ..utils import assert_log_level, cartesian_to_unstructured
-from ..utils import log_capture  # noqa: F401
+import xarray as xr
 from tidy3d.components.data.dataset import (
     PermittivityDataset,
-    _get_numpy_array,
     UnstructuredGridDataset,
+    _get_numpy_array,
 )
-from tidy3d.components.medium import CustomMedium, CustomPoleResidue, CustomSellmeier
-from tidy3d.components.medium import CustomLorentz, CustomDrude, CustomDebye, AbstractCustomMedium
-from tidy3d.components.medium import CustomAnisotropicMedium
+from tidy3d.components.medium import (
+    AbstractCustomMedium,
+    CustomAnisotropicMedium,
+    CustomDebye,
+    CustomDrude,
+    CustomLorentz,
+    CustomMedium,
+    CustomPoleResidue,
+    CustomSellmeier,
+)
+
+from ..utils import assert_log_level, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -154,7 +160,7 @@ def test_io_hdf5(tmp_path):
     assert FIELD_SRC == FIELD_SRC2
 
 
-def test_io_json(tmp_path, log_capture):  # noqa: F811
+def test_io_json(tmp_path, log_capture):
     """to json warns and then from json errors."""
     path = str(tmp_path / "custom_source.json")
     FIELD_SRC.to_file(path)
@@ -511,7 +517,7 @@ def test_grids():
     """Get Dictionary of field components and select some data."""
     bounds = td.Box(size=(1, 1, 1)).bounds
     for grid in CUSTOM_MEDIUM.grids(bounds=bounds).values():
-        grid.sizes  # noqa: B018
+        grid.sizes
 
 
 @pytest.mark.parametrize("unstructured", [False, True])
@@ -959,7 +965,7 @@ def test_custom_debye(unstructured):
 
 
 @pytest.mark.parametrize("unstructured", [True])
-def test_custom_anisotropic_medium(log_capture, unstructured):  # noqa: F811
+def test_custom_anisotropic_medium(log_capture, unstructured):
     """Custom anisotropic medium."""
     seed = 43243
 
@@ -1108,7 +1114,7 @@ def test_io_dispersive(tmp_path, unstructured, z_custom):
     assert sim_load == sim
 
 
-def test_warn_planewave_intersection(log_capture):  # noqa: F811
+def test_warn_planewave_intersection(log_capture):
     """Warn that if a nonuniform custom medium is intersecting PlaneWave source."""
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=3e14, fwidth=1e13),
@@ -1146,7 +1152,7 @@ def test_warn_planewave_intersection(log_capture):  # noqa: F811
     assert_log_level(log_capture, "WARNING")
 
 
-def test_warn_diffraction_monitor_intersection(log_capture):  # noqa: F811
+def test_warn_diffraction_monitor_intersection(log_capture):
     """Warn that if a nonuniform custom medium is intersecting Diffraction Monitor."""
     src = td.PointDipole(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),

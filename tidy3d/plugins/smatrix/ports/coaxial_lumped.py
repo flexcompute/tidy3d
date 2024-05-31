@@ -1,24 +1,23 @@
 """Lumped port specialization with an annuluar geometry for exciting coaxial ports."""
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ....constants import MICROMETER
+from ....components.base import cached_property
+from ....components.data.data_array import FreqDataArray, ScalarFieldDataArray
+from ....components.data.dataset import FieldDataset
+from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box, Geometry
 from ....components.geometry.utils_2d import increment_float
-from ....components.types import FreqArray, Axis, Coordinate, Direction, Size
-from ....components.base import cached_property
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import CoaxialLumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.data.sim_data import SimulationData
 from ....components.source import CustomCurrentSource, GaussianPulse
+from ....components.types import Axis, Coordinate, Direction, FreqArray, Size
 from ....components.validators import skip_if_fields_missing
-from ....components.data.data_array import FreqDataArray, ScalarFieldDataArray
-from ....components.data.dataset import FieldDataset
+from ....constants import MICROMETER
 from ....exceptions import SetupError, ValidationError
-
-from ...microwave import VoltageIntegralAxisAligned, CustomCurrentIntegral2D
+from ...microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
 from ...microwave.path_integrals import AbstractAxesRH
 from .base_lumped import AbstractLumpedPort
 

@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Tuple, Any, Dict, List, Literal, Sequence, Union
+from typing import Any, Dict, List, Literal, Sequence, Tuple, Union
 
 import h5py
-import pydantic.v1 as pd
-import numpy as np
-import jax.numpy as jnp
 import jax
-from jax.tree_util import register_pytree_node_class
+import jax.numpy as jnp
+import numpy as np
+import pydantic.v1 as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
 from .....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .....exceptions import DataError, Tidy3dKeyError, AdjointError
-
+from .....exceptions import AdjointError, DataError, Tidy3dKeyError
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))

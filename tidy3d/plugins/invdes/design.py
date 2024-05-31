@@ -1,10 +1,10 @@
 # container for everything defining the inverse design
 
-import pydantic.v1 as pd
-import typing
 import abc
+import typing
 
 import autograd.numpy as anp
+import pydantic.v1 as pd
 
 import tidy3d as td
 import tidy3d.web as web
@@ -13,7 +13,6 @@ from tidy3d.components.autograd import get_static
 from .base import InvdesBaseModel
 from .region import DesignRegionType
 from .validators import check_pixel_size
-
 
 PostProcessFnType = typing.Callable[[td.SimulationData], float]
 

@@ -1,13 +1,15 @@
 """Defines heat grid specifications"""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple
+from typing import Tuple, Union
+
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ...constants import MICROMETER
 from ...exceptions import ValidationError
+from ..base import Tidy3dBaseModel, skip_if_fields_missing
 
 
 class UnstructuredGrid(Tidy3dBaseModel, ABC):

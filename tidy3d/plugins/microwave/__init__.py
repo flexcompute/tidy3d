@@ -1,17 +1,17 @@
-""" Imports from microwave plugin. """
+"""Imports from microwave plugin."""
 
-from .path_integrals import (
-    AxisAlignedPathIntegral,
-    VoltageIntegralAxisAligned,
-    CurrentIntegralAxisAligned,
-)
+from . import models
 from .custom_path_integrals import (
+    CustomCurrentIntegral2D,
     CustomPathIntegral2D,
     CustomVoltageIntegral2D,
-    CustomCurrentIntegral2D,
 )
 from .impedance_calculator import ImpedanceCalculator
-from . import models
+from .path_integrals import (
+    AxisAlignedPathIntegral,
+    CurrentIntegralAxisAligned,
+    VoltageIntegralAxisAligned,
+)
 
 __all__ = [
     "AxisAlignedPathIntegral",

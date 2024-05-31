@@ -1,24 +1,26 @@
 """Defines Geometric objects with Medium properties."""
+
 from __future__ import annotations
 
-from typing import Union, Tuple, Optional, Callable, Any
-from collections import defaultdict
 import pathlib
-import pydantic.v1 as pydantic
-import numpy as np
+from collections import defaultdict
+from typing import Any, Callable, Optional, Tuple, Union
 
-from .autograd import get_static
-from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .validators import validate_name_str
-from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
-from .medium import MediumType, AbstractCustomMedium, Medium2D
-from .monitor import FieldMonitor, PermittivityMonitor
-from .types import Ax, TYPE_TAG_STR, Axis, Bound
-from .viz import add_ax_if_none, equal_aspect
-from .grid.grid import Coords
+import numpy as np
+import pydantic.v1 as pydantic
+
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
-from .data.monitor_data import PermittivityData, FieldData
+from .autograd import get_static
+from .base import Tidy3dBaseModel, skip_if_fields_missing
+from .data.monitor_data import FieldData, PermittivityData
+from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
+from .grid.grid import Coords
+from .medium import AbstractCustomMedium, Medium2D, MediumType
+from .monitor import FieldMonitor, PermittivityMonitor
+from .types import TYPE_TAG_STR, Ax, Axis, Bound
+from .validators import validate_name_str
+from .viz import add_ax_if_none, equal_aspect
 
 try:
     gdstk_available = True

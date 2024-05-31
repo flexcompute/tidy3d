@@ -1,21 +1,19 @@
-# ruff: noqa: F811, F401
 # test autograd integration into tidy3d
 
-import pytest
-import matplotlib.pylab as plt
-import numpy as np
 import cProfile
 import typing
 from importlib import reload
 
 import autograd as ag
 import autograd.numpy as anp
-
+import matplotlib.pylab as plt
+import numpy as np
+import pytest
 import tidy3d as td
-from tidy3d.web import run, run_async
+from tidy3d.web import run_async
 from tidy3d.web.api.autograd.autograd import run
 
-from ..utils import run_emulated, SIM_FULL, AssertLogLevel, log_capture
+from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
 """ Test configuration """
 

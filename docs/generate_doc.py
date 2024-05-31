@@ -1,10 +1,14 @@
 # Generate documentation for Material Library (Python)
 
 import numpy as np
+
 from tidy3d import material_library as lib
 from tidy3d.constants import C_0
-from tidy3d.material_library.material_library import MaterialItemUniaxial, MaterialItem
-from tidy3d.material_library.material_library import MaterialItem2D
+from tidy3d.material_library.material_library import (
+    MaterialItem,
+    MaterialItem2D,
+    MaterialItemUniaxial,
+)
 
 LOW_LOSS_THRESHOLD = 2e-5
 

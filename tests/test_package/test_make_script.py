@@ -1,7 +1,7 @@
 """Tests generation of pythons script from simulation file."""
 
 import tidy3d as td
-from make_script import main
+from scripts.make_script import main
 
 
 def test_make_script(tmp_path):

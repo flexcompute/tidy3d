@@ -1,33 +1,42 @@
 """Collections of DataArrays."""
+
 from __future__ import annotations
 
+import numbers
 from abc import ABC, abstractmethod
-from typing import Union, Dict, Callable, Any, Tuple
+from typing import Any, Callable, Dict, Tuple, Union
 
-import xarray as xr
 import numpy as np
 import pydantic.v1 as pd
-from matplotlib.tri import Triangulation
+import xarray as xr
 from matplotlib import pyplot as plt
-import numbers
+from matplotlib.tri import Triangulation
 
-from .data_array import DataArray, DATA_ARRAY_MAP
-from .data_array import ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray
-from .data_array import ModeIndexDataArray, GroupIndexDataArray, ModeDispersionDataArray
-from .data_array import TriangleMeshDataArray
-from .data_array import TimeDataArray
-from .data_array import PointDataArray, IndexedDataArray, CellDataArray, SpatialDataArray
-from .data_array import EMEScalarFieldDataArray, EMEScalarModeFieldDataArray
-
-from ..viz import equal_aspect, add_ax_if_none, plot_params_grid
-from ..base import Tidy3dBaseModel, cached_property
-from ..base import skip_if_fields_missing
-from ..types import Axis, Bound, ArrayLike, Ax, Coordinate, Literal, annotate_type
-from ...packaging import vtk, requires_vtk
-from ...exceptions import DataError, ValidationError, Tidy3dNotImplementedError
 from ...constants import PICOSECOND_PER_NANOMETER_PER_KILOMETER, inf
+from ...exceptions import DataError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
-
+from ...packaging import requires_vtk, vtk
+from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from ..types import ArrayLike, Ax, Axis, Bound, Coordinate, Literal, annotate_type
+from ..viz import add_ax_if_none, equal_aspect, plot_params_grid
+from .data_array import (
+    DATA_ARRAY_MAP,
+    CellDataArray,
+    DataArray,
+    EMEScalarFieldDataArray,
+    EMEScalarModeFieldDataArray,
+    GroupIndexDataArray,
+    IndexedDataArray,
+    ModeDispersionDataArray,
+    ModeIndexDataArray,
+    PointDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    SpatialDataArray,
+    TimeDataArray,
+    TriangleMeshDataArray,
+)
 
 DEFAULT_MAX_SAMPLES_PER_STEP = 10_000
 DEFAULT_MAX_CELLS_PER_STEP = 10_000
@@ -2859,7 +2868,7 @@ def _get_numpy_array(data_array: Union[ArrayLike, DataArray, UnstructuredGridDat
 
 
 def _zeros_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
+    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
 ) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
     """Get a zeroed replica of dataarray/dataset."""
     if isinstance(data_array, UnstructuredGridDataset):
@@ -2870,7 +2879,7 @@ def _zeros_like(
 
 
 def _ones_like(
-    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]
+    data_array: Union[ArrayLike, xr.DataArray, UnstructuredGridDataset],
 ) -> Union[ArrayLike, xr.DataArray, UnstructuredGridDataset]:
     """Get a unity replica of dataarray/dataset."""
     if isinstance(data_array, UnstructuredGridDataset):

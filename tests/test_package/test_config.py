@@ -1,8 +1,7 @@
 """test the grid operations"""
 
-import pytest
 import pydantic.v1 as pydantic
-
+import pytest
 import tidy3d as td
 from tidy3d.log import DEFAULT_LEVEL, _level_value
 

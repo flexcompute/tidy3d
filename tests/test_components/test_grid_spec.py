@@ -1,8 +1,7 @@
 """Tests GridSpec."""
 
-import pytest
 import numpy as np
-
+import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 
@@ -135,8 +134,8 @@ def test_autogrid_2dmaterials():
         grid_spec=td.GridSpec.auto(),
         run_time=1e-12,
     )
-    grid_dl1_inplane = sim.discretize(box.geometry).sizes.x[0]  # noqa: F841
-    grid_dl2_inplane = sim2.discretize(box2.geometry).sizes.x[0]  # noqa: F841
+    grid_dl1_inplane = sim.discretize(box.geometry).sizes.x[0]
+    grid_dl2_inplane = sim2.discretize(box2.geometry).sizes.x[0]
     # This is commented out until inplane AutoGrid for 2D materials is enabled
     # assert grid_dl1_inplane > grid_dl2_inplane
 

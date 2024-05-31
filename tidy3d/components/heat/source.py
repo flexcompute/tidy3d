@@ -1,20 +1,19 @@
 """Defines heat material specifications"""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple
+from typing import Tuple, Union
 
 import pydantic.v1 as pd
 
-from .viz import plot_params_heat_source
-
+from ...constants import VOLUMETRIC_HEAT_RATE
+from ...exceptions import SetupError
 from ..base import cached_property
 from ..base_sim.source import AbstractSource
 from ..data.data_array import TimeDataArray
 from ..viz import PlotParams
-
-from ...constants import VOLUMETRIC_HEAT_RATE
-from ...exceptions import SetupError
+from .viz import plot_params_heat_source
 
 
 class HeatSource(AbstractSource, ABC):

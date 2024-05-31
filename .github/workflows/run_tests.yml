@@ -148,7 +148,7 @@ jobs:
     #----------------------------------------------
     - name: Run tests
       run: |
-        poetry run black . --check --diff
+        poetry run ruff format . --check --diff
         poetry run ruff check tidy3d --fix --exit-non-zero-on-fix
         poetry run pytest -rA tests
         poetry run pytest -rA tests/_test_data/_test_datasets_no_vtk.py

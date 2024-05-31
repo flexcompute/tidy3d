@@ -1,22 +1,21 @@
-import pytest
 import numpy as np
 import pydantic.v1 as pydantic
-from ..utils import assert_log_level
-from ..utils import log_capture  # noqa: F401
-
-from tidy3d.material_library.material_library import (
-    VariantItem,
-    MaterialItem,
-    ReferenceData,
-    material_library,
-    export_matlib_to_file,
-    VariantItemUniaxial,
-    MaterialItemUniaxial,
-)
+import pytest
 import tidy3d as td
+from tidy3d.material_library.material_library import (
+    MaterialItem,
+    MaterialItemUniaxial,
+    ReferenceData,
+    VariantItem,
+    VariantItemUniaxial,
+    export_matlib_to_file,
+    material_library,
+)
+
+from ..utils import assert_log_level
 
 
-def test_warning_default_variant_switching(log_capture):  # noqa: F811
+def test_warning_default_variant_switching(log_capture):
     """Issue warning for switching default medium variant."""
 
     # no warning for most materials with no default change

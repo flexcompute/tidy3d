@@ -1,10 +1,12 @@
 """Abstract base for classes that define simulation sources."""
+
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
+
 import pydantic.v1 as pydantic
 
 from ..base import Tidy3dBaseModel
-
 from ..validators import validate_name_str
 from ..viz import PlotParams
 

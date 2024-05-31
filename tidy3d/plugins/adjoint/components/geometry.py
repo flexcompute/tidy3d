@@ -3,35 +3,33 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Tuple, Union, Dict, List
-from joblib import Parallel, delayed
+from typing import Dict, List, Tuple, Union
 
-import pydantic.v1 as pd
-import numpy as np
-import xarray as xr
-from jax.tree_util import register_pytree_node_class
 import jax
 import jax.numpy as jnp
+import numpy as np
+import pydantic.v1 as pd
 import shapely
+import xarray as xr
+from jax.tree_util import register_pytree_node_class
+from joblib import Parallel, delayed
 
 from ....components.base import cached_property
-from ....components.types import Bound, Coordinate2D  # , annotate_type
-from ....components.geometry.base import Geometry, Box, GeometryGroup
-from ....components.geometry.polyslab import (
-    PolySlab,
-    _IS_CLOSE_RTOL,
-    _COMPLEX_POLYSLAB_DIVISIONS_WARN,
-)
-from ....components.data.monitor_data import FieldData, PermittivityData
 from ....components.data.data_array import ScalarFieldDataArray
+from ....components.data.monitor_data import FieldData, PermittivityData
+from ....components.geometry.base import Box, Geometry, GeometryGroup
+from ....components.geometry.polyslab import (
+    _COMPLEX_POLYSLAB_DIVISIONS_WARN,
+    _IS_CLOSE_RTOL,
+    PolySlab,
+)
 from ....components.monitor import FieldMonitor, PermittivityMonitor
-from ....components.types import ArrayFloat2D
-from ....constants import fp_eps, MICROMETER
+from ....components.types import ArrayFloat2D, Bound, Coordinate2D  # , annotate_type
+from ....constants import MICROMETER, fp_eps
 from ....exceptions import AdjointError
 from ....log import log
 from ...polyslab import ComplexPolySlab
-
-from .base import JaxObject, WEB_ADJOINT_MESSAGE
+from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .types import JaxFloat
 
 # number of integration points per unit wavelength in material

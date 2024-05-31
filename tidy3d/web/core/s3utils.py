@@ -1,9 +1,8 @@
-"""handles filesystem, storage
-"""
-import os
-import tempfile
+"""handles filesystem, storage"""
 
+import os
 import pathlib
+import tempfile
 import urllib
 from datetime import datetime
 from enum import Enum
@@ -12,13 +11,20 @@ from typing import Callable, Mapping
 import boto3
 from boto3.s3.transfer import TransferConfig
 from pydantic.v1 import BaseModel, Field
-from rich.progress import TextColumn, Progress, BarColumn, DownloadColumn
-from rich.progress import TransferSpeedColumn, TimeRemainingColumn
-from .http_util import http
-from .file_util import extract_gzip_file
-from .environment import Env
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
+
 from .core_config import get_logger_console
+from .environment import Env
 from .exceptions import WebError
+from .file_util import extract_gzip_file
+from .http_util import http
 
 
 class _UserCredential(BaseModel):

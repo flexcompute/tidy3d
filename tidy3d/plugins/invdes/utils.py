@@ -4,11 +4,10 @@
 
 import typing
 
-import tidy3d as td
-
 import autograd.numpy as anp
-
 import xarray as xr
+
+import tidy3d as td
 
 
 def make_array(arr: typing.Any) -> anp.ndarray:

@@ -1,30 +1,25 @@
 """Abstract base for defining simulation classes of different solvers"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Tuple
 
 import autograd.numpy as anp
-
 import pydantic.v1 as pd
 
-from .monitor import AbstractMonitor
-
-from ..base import cached_property, skip_if_fields_missing
-from ..validators import assert_unique_names, assert_objects_in_sim_bounds
-from ..geometry.base import Box
-from ..types import Ax, Bound, Axis, Symmetry, TYPE_TAG_STR
-from ..structure import Structure
-from ..viz import add_ax_if_none, equal_aspect
-from ..scene import Scene
-
-from ..medium import Medium, MediumType3D
-
-from ..viz import PlotParams, plot_params_symmetry
-
-from ...version import __version__
 from ...exceptions import Tidy3dKeyError
 from ...log import log
+from ...version import __version__
+from ..base import cached_property, skip_if_fields_missing
+from ..geometry.base import Box
+from ..medium import Medium, MediumType3D
+from ..scene import Scene
+from ..structure import Structure
+from ..types import TYPE_TAG_STR, Ax, Axis, Bound, Symmetry
+from ..validators import assert_objects_in_sim_bounds, assert_unique_names
+from ..viz import PlotParams, add_ax_if_none, equal_aspect, plot_params_symmetry
+from .monitor import AbstractMonitor
 
 
 class AbstractSimulation(Box, ABC):

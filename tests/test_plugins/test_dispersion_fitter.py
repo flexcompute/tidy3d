@@ -1,14 +1,15 @@
+import matplotlib.pyplot as plt
 import numpy as np
+import pydantic.v1 as pydantic
 import pytest
 import responses
-import pydantic.v1 as pydantic
-
-import matplotlib.pyplot as plt
-
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
-from tidy3d.plugins.dispersion import DispersionFitter, FastDispersionFitter
-from tidy3d.plugins.dispersion import AdvancedFastFitterParam
+from tidy3d.plugins.dispersion import (
+    AdvancedFastFitterParam,
+    DispersionFitter,
+    FastDispersionFitter,
+)
 from tidy3d.plugins.dispersion.web import run as run_fitter
 
 advanced_param = AdvancedFastFitterParam(num_iters=1, passivity_num_iters=1)

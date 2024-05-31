@@ -1,4 +1,5 @@
 from typing import Any
+
 from ..packaging import check_import
 
 # TODO Complicated as trimesh should be a core package unless decoupled implementation types in functional location.

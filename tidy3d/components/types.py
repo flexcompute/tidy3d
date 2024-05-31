@@ -1,19 +1,18 @@
-""" Defines 'types' that various fields can be """
+"""Defines 'types' that various fields can be"""
 
 from typing import Tuple, Union
-
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal
-from typing_extensions import Annotated
-
-import pydantic.v1 as pydantic
 import autograd.numpy as np
+import pydantic.v1 as pydantic
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
+from typing_extensions import Annotated
+
 from ..exceptions import ValidationError
 
 # type tag default name

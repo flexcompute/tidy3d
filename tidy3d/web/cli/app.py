@@ -1,6 +1,7 @@
 """
 Commandline interface for tidy3d.
 """
+
 import json
 import os.path
 import ssl
@@ -9,9 +10,9 @@ import click
 import requests
 import toml
 
-from ..cli.constants import TIDY3D_DIR, CONFIG_FILE, CREDENTIAL_FILE
+from ..cli.constants import CONFIG_FILE, CREDENTIAL_FILE, TIDY3D_DIR
 from ..cli.migrate import migrate
-from ..core.constants import KEY_APIKEY, HEADER_APIKEY
+from ..core.constants import HEADER_APIKEY, KEY_APIKEY
 from ..core.environment import Env
 from .develop.index import develop
 

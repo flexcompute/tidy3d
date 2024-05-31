@@ -1,8 +1,9 @@
 """Defines the dimensions of the parameter sweep and their properties."""
+
 from __future__ import annotations
 
-from typing import Tuple, Any, Union, List
 from abc import ABC, abstractmethod
+from typing import Any, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd

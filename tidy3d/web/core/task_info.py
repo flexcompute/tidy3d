@@ -1,7 +1,8 @@
-""" Defnes information about a task """
+"""Defnes information about a task"""
+
+from abc import ABC
 from datetime import datetime
 from enum import Enum
-from abc import ABC
 from typing import Optional
 
 import pydantic.v1 as pydantic

@@ -1,12 +1,9 @@
 import pytest
-
 import responses
-
-from tidy3d.plugins.dispersion import DispersionFitter
-
-from tidy3d.web.core.environment import Env
-from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
 import tidy3d as td
+from tidy3d.plugins.dispersion import DispersionFitter
+from tidy3d.web.api.material_fitter import FitterOptions, MaterialFitterTask
+from tidy3d.web.core.environment import Env
 
 Env.dev.active()
 
@@ -70,7 +67,7 @@ def test_material_fitter(tmp_path, monkeypatch, set_api_key):
     )
     task.sync_status()
     # FIXME: Check what this tests is supposed to accomplish
-    task.status == "running"  # noqa: B015
+    task.status == "running"
 
     responses.add(
         responses.POST,

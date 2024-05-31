@@ -1,13 +1,11 @@
-import pytest
-import pydantic.v1 as pd
 import numpy as np
-from matplotlib import pyplot as plt
-
+import pydantic.v1 as pd
+import pytest
 import tidy3d as td
-from tidy3d.exceptions import ValidationError, SetupError
+from matplotlib import pyplot as plt
+from tidy3d.exceptions import SetupError, ValidationError
 
 from ..utils import AssertLogLevel
-from ..utils import log_capture  # noqa: F401
 
 np.random.seed(4)
 
@@ -271,7 +269,7 @@ def test_eme_monitor():
     )
 
 
-def test_eme_simulation(log_capture):  # noqa: F811
+def test_eme_simulation(log_capture):
     sim = make_eme_sim()
     _ = sim.plot(x=0, ax=AX)
     _ = sim.plot(y=0, ax=AX)

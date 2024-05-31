@@ -1,19 +1,20 @@
 """Defines cells for the EME simulation."""
+
 from __future__ import annotations
 
-from typing import List, Union, Tuple, Literal
 from abc import ABC, abstractmethod
-import numpy as np
+from typing import List, Literal, Tuple, Union
 
+import numpy as np
 import pydantic.v1 as pd
 
+from ...constants import RADIAN, fp_eps
+from ...exceptions import SetupError, ValidationError
 from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ..geometry.base import Box
-from ..mode import ModeSpec
-from ..types import Axis, Coordinate, Size, annotate_type, TrackFreq, ArrayFloat1D
-from ...constants import RADIAN, fp_eps
 from ..grid.grid import Coords1D
-from ...exceptions import ValidationError, SetupError
+from ..mode import ModeSpec
+from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq, annotate_type
 
 # grid limits
 MAX_NUM_MODES = 100

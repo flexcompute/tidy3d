@@ -1,18 +1,18 @@
 """Utilities for converting between tidy3d versions."""
+
 from __future__ import annotations
 
-from typing import Dict, Callable
-import json
 import functools
+import json
+from typing import Callable, Dict
 
-import yaml
 import pydantic.v1 as pd
+import yaml
 
+from .components.base import Tidy3dBaseModel
+from .exceptions import FileError, SetupError
 from .log import log
 from .version import __version__
-from .exceptions import FileError, SetupError
-from .components.base import Tidy3dBaseModel
-
 
 """Storing version numbers."""
 

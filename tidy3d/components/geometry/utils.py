@@ -1,17 +1,15 @@
 """Utilities for geometry manipulation."""
+
 from __future__ import annotations
-from typing import Union, Tuple
+
 from math import isclose
+from typing import Tuple, Union
 
 import numpy as np
 
-from ..types import Axis, PlanePosition, Shapely, ArrayFloat2D, MatrixReal4x4
 from ...exceptions import Tidy3dError
-
-from . import base
-from . import primitives
-from . import polyslab
-from . import mesh
+from ..types import ArrayFloat2D, Axis, MatrixReal4x4, PlanePosition, Shapely
+from . import base, mesh, polyslab, primitives
 
 GeometryType = Union[
     base.Box,

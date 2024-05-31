@@ -1,29 +1,30 @@
 """Stub for webapi"""
+
 from __future__ import annotations
 
 import json
-from typing import Union, Callable, List
+from typing import Callable, List, Union
 
 import pydantic.v1 as pd
 from pydantic.v1 import BaseModel
 
-from ..core.file_util import (
-    read_simulation_from_json,
-    read_simulation_from_hdf5,
-    read_simulation_from_hdf5_gz,
-)
-from ..core.stub import TaskStub, TaskStubData
 from ... import log
 from ...components.base import _get_valid_extension
-from ...components.data.sim_data import SimulationData
 from ...components.data.monitor_data import ModeSolverData
-from ..core.types import TaskType
+from ...components.data.sim_data import SimulationData
+from ...components.eme.data.sim_data import EMESimulationData
+from ...components.eme.simulation import EMESimulation
+from ...components.heat.data.sim_data import HeatSimulationData
+from ...components.heat.simulation import HeatSimulation
 from ...components.simulation import Simulation
 from ...plugins.mode.mode_solver import ModeSolver
-from ...components.heat.simulation import HeatSimulation
-from ...components.heat.data.sim_data import HeatSimulationData
-from ...components.eme.simulation import EMESimulation
-from ...components.eme.data.sim_data import EMESimulationData
+from ..core.file_util import (
+    read_simulation_from_hdf5,
+    read_simulation_from_hdf5_gz,
+    read_simulation_from_json,
+)
+from ..core.stub import TaskStub, TaskStubData
+from ..core.types import TaskType
 
 SimulationType = Union[Simulation, HeatSimulation, EMESimulation]
 SimulationDataType = Union[SimulationData, HeatSimulationData, EMESimulationData]

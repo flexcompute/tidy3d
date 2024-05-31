@@ -1,17 +1,18 @@
 """Mode solver for propagating EM modes."""
+
 from typing import Tuple
 
 import numpy as np
+import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
-import scipy.linalg as linalg
 
-from ...components.types import Numpy, ModeSolverType, EpsSpecType
 from ...components.base import Tidy3dBaseModel
-from ...constants import ETA_0, C_0, fp_eps, pec_val
+from ...components.types import EpsSpecType, ModeSolverType, Numpy
+from ...constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
-from .transforms import radial_transform, angled_transform
+from .transforms import angled_transform, radial_transform
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = fp_eps

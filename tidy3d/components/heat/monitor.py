@@ -1,11 +1,12 @@
 """Objects that define how data is recorded from simulation."""
+
 from abc import ABC
-import pydantic.v1 as pd
 from typing import Union
 
-from ..types import ArrayFloat1D
-from ..base_sim.monitor import AbstractMonitor
+import pydantic.v1 as pd
 
+from ..base_sim.monitor import AbstractMonitor
+from ..types import ArrayFloat1D
 
 BYTES_REAL = 4
 

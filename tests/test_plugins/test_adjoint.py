@@ -1,60 +1,64 @@
 """Tests adjoint plugin."""
 
-from typing import Tuple, Dict, List
 import builtins
-
-import pytest
-import pydantic.v1 as pydantic
-import jax.numpy as jnp
-import numpy as np
-from numpy.testing import assert_allclose
-from xarray import DataArray
-from jax import grad
-import jax
-from jax.test_util import check_grads
 import time
-import matplotlib.pyplot as plt
-import h5py
-import trimesh
+from typing import Dict, List, Tuple
+
 import gdstk
-
+import h5py
+import jax
+import jax.numpy as jnp
+import matplotlib.pyplot as plt
+import numpy as np
+import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
-
-from tidy3d.exceptions import DataError, Tidy3dKeyError, AdjointError
-from tidy3d.plugins.polyslab import ComplexPolySlab
-from tidy3d.plugins.adjoint.components.geometry import (
-    JaxBox,
-    JaxPolySlab,
-    JaxComplexPolySlab,
-    MAX_NUM_VERTICES,
-)
-from tidy3d.plugins.adjoint.components.geometry import JaxGeometryGroup
-from tidy3d.plugins.adjoint.components.medium import JaxMedium, JaxAnisotropicMedium
-from tidy3d.plugins.adjoint.components.medium import JaxCustomMedium, MAX_NUM_CELLS_CUSTOM_MEDIUM
-from tidy3d.plugins.adjoint.components.structure import (
-    JaxStructure,
-    JaxStructureStaticMedium,
-    JaxStructureStaticGeometry,
-)
-from tidy3d.plugins.adjoint.components.simulation import JaxSimulation, JaxInfo, RUN_TIME_FACTOR
+import trimesh
+from jax import grad
+from jax.test_util import check_grads
+from numpy.testing import assert_allclose
+from tidy3d.exceptions import AdjointError, DataError, Tidy3dKeyError
 from tidy3d.plugins.adjoint.components import simulation
-from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
+from tidy3d.plugins.adjoint.components.data.data_array import (
+    JAX_DATA_ARRAY_TAG,
+    VALUE_FILTER_THRESHOLD,
+    JaxDataArray,
+)
+from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
 from tidy3d.plugins.adjoint.components.data.monitor_data import (
-    JaxModeData,
     JaxDiffractionData,
     JaxFieldData,
+    JaxModeData,
 )
-from tidy3d.plugins.adjoint.components.data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
-from tidy3d.plugins.adjoint.components.data.dataset import JaxPermittivityDataset
-from tidy3d.plugins.adjoint.web import run, run_async
-from tidy3d.plugins.adjoint.web import run_local, run_async_local
-from tidy3d.plugins.adjoint.components.data.data_array import VALUE_FILTER_THRESHOLD
-from tidy3d.plugins.adjoint.utils.penalty import RadiusPenalty, ErosionDilationPenalty
-from tidy3d.plugins.adjoint.utils.filter import ConicFilter, BinaryProjector, CircularFilter
+from tidy3d.plugins.adjoint.components.data.sim_data import JaxSimulationData
+from tidy3d.plugins.adjoint.components.geometry import (
+    MAX_NUM_VERTICES,
+    JaxBox,
+    JaxComplexPolySlab,
+    JaxGeometryGroup,
+    JaxPolySlab,
+)
+from tidy3d.plugins.adjoint.components.medium import (
+    MAX_NUM_CELLS_CUSTOM_MEDIUM,
+    JaxAnisotropicMedium,
+    JaxCustomMedium,
+    JaxMedium,
+)
+from tidy3d.plugins.adjoint.components.simulation import RUN_TIME_FACTOR, JaxInfo, JaxSimulation
+from tidy3d.plugins.adjoint.components.structure import (
+    JaxStructure,
+    JaxStructureStaticGeometry,
+    JaxStructureStaticMedium,
+)
+from tidy3d.plugins.adjoint.utils.filter import BinaryProjector, CircularFilter, ConicFilter
+from tidy3d.plugins.adjoint.utils.penalty import ErosionDilationPenalty, RadiusPenalty
+from tidy3d.plugins.adjoint.web import run, run_async, run_async_local, run_local
+from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web.api.container import BatchData
-from ..utils import run_emulated, assert_log_level, run_async_emulated, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
+from xarray import DataArray
+
 from ..test_components.test_custom import CUSTOM_MEDIUM
+from ..utils import AssertLogLevel, assert_log_level, run_async_emulated, run_emulated
 
 TMP_PATH = None
 FWD_SIM_DATA_FILE = "adjoint_grad_data_fwd.hdf5"
@@ -78,6 +82,32 @@ src = td.PointDipole(
     source_time=td.GaussianPulse(freq0=FREQ0, fwidth=FREQ0 / 10),
     polarization="Ex",
 )
+
+
+@pytest.fixture
+def use_emulated_run(monkeypatch, tmp_path_factory):
+    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    global TMP_PATH
+    import tidy3d.plugins.adjoint.web as adjoint_web
+
+    TMP_PATH = tmp_path_factory.mktemp("adjoint")
+    monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
+    monkeypatch.setattr(td.web, "run", run_emulated)
+    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
+    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
+
+
+@pytest.fixture
+def use_emulated_run_async(monkeypatch, tmp_path_factory):
+    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
+    global TMP_PATH
+    import tidy3d.plugins.adjoint.web as adjoint_web
+
+    TMP_PATH = tmp_path_factory.mktemp("adjoint")
+    monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
+    monkeypatch.setattr(td.web, "run_async", run_async_emulated)
+    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
+    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
 
 
 # Emulated forward and backward run functions
@@ -421,38 +451,11 @@ def extract_amp(sim_data: td.SimulationData) -> complex:
     return ret_value
 
 
-@pytest.fixture
-def use_emulated_run(monkeypatch, tmp_path_factory):
-    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-    global TMP_PATH
-    import tidy3d.plugins.adjoint.web as adjoint_web
-
-    TMP_PATH = tmp_path_factory.mktemp("adjoint")
-    monkeypatch.setattr(adjoint_web, "tidy3d_run_fn", run_emulated)
-    monkeypatch.setattr(td.web, "run", run_emulated)
-    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_fwd", run_emulated_fwd)
-    monkeypatch.setattr(adjoint_web, "webapi_run_adjoint_bwd", run_emulated_bwd)
-
-
-@pytest.fixture
-def use_emulated_run_async(monkeypatch, tmp_path_factory):
-    """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
-    global TMP_PATH
-    import tidy3d.plugins.adjoint.web as adjoint_web
-
-    TMP_PATH = tmp_path_factory.mktemp("adjoint")
-    monkeypatch.setattr(adjoint_web, "tidy3d_run_async_fn", run_async_emulated)
-    monkeypatch.setattr(td.web, "run_async", run_async_emulated)
-    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_fwd", run_async_emulated_fwd)
-    monkeypatch.setattr(adjoint_web, "webapi_run_async_adjoint_bwd", run_async_emulated_bwd)
-
-
 def test_run_flux(use_emulated_run):
     td.config.logging_level = "ERROR"
 
     def make_components(eps, size, vertices, base_eps_val):
         sim = make_sim(permittivity=eps, size=size, vertices=vertices, base_eps_val=base_eps_val)
-        # sim = sim.to_simulation()[0]
         td.config.logging_level = "WARNING"
         sim = sim.updated_copy(
             sources=[
@@ -945,7 +948,7 @@ def test_jax_sim_data(use_emulated_run):
         _ = sim_data[mnt_name]
 
 
-def test_intersect_structures(log_capture):  # noqa: F811
+def test_intersect_structures(log_capture):
     """Test validators for structures touching and intersecting."""
 
     SIZE_X = 1.0
@@ -1134,8 +1137,8 @@ def _test_polyslab_box(use_emulated_run):
         amp = extract_amp(sim_data)
         return objective(amp)
 
-    f_b = lambda size, center: f(size, center, is_box=True)  # noqa: E731
-    f_p = lambda size, center: f(size, center, is_box=False)  # noqa: E731
+    f_b = lambda size, center: f(size, center, is_box=True)
+    f_p = lambda size, center: f(size, center, is_box=False)
 
     g_b = grad(f_b, argnums=(0, 1))
     g_p = grad(f_p, argnums=(0, 1))
@@ -1230,7 +1233,7 @@ def test_polyslab_2d(sim_size_axis, use_emulated_run):
         amp = extract_amp(sim_data)
         return objective(amp)
 
-    f_b = lambda size, center: f(size, center)  # noqa: E731
+    f_b = lambda size, center: f(size, center)
 
     g_b = grad(f_b, argnums=(0, 1))
 
@@ -1378,14 +1381,14 @@ def _test_polyslab_scale(use_emulated_run):
         np.random.seed(0)
         start_time = time.time()
 
-        def f(scale=1.0):
+        def f(scale=1.0, vertices=vertices):
             jax_med = JaxMedium(permittivity=2.0)
             POLYSLAB_AXIS = 2
 
             size_axis, (size_1, size_2) = JaxPolySlab.pop_axis(SIZE, axis=POLYSLAB_AXIS)
             cent_axis, (cent_1, cent_2) = JaxPolySlab.pop_axis(CENTER, axis=POLYSLAB_AXIS)
 
-            vertices_jax = [(scale * x, scale * y) for x, y in vertices]  # noqa: B023
+            vertices_jax = [(scale * x, scale * y) for x, y in vertices]
             # vertices_jax = [(x, y) for x, y in vertices]
 
             slab_bounds = (cent_axis - size_axis / 2, cent_axis + size_axis / 2)
@@ -1664,7 +1667,7 @@ def test_adjoint_utils(strict_binarize):
 @pytest.mark.parametrize(
     "input_size_y, log_level_expected", [(13, None), (12, "WARNING"), (11, "WARNING"), (14, None)]
 )
-def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):  # noqa: F811
+def test_adjoint_filter_sizes(log_capture, input_size_y, log_level_expected):
     """Warn if filter size along a dim is smaller than radius."""
 
     signal_in = np.ones((266, input_size_y))
@@ -1790,12 +1793,7 @@ def test_adjoint_run_time(use_emulated_run, tmp_path, fwidth, run_time, run_time
 
 @pytest.mark.parametrize("has_adj_src, log_level_expected", [(True, None), (False, "WARNING")])
 def test_no_adjoint_sources(
-    monkeypatch,
-    use_emulated_run,
-    tmp_path,
-    log_capture,  # noqa: F811
-    has_adj_src,
-    log_level_expected,
+    monkeypatch, use_emulated_run, tmp_path, log_capture, has_adj_src, log_level_expected
 ):
     """Make sure warning (not error) if no adjoint sources."""
 
@@ -1834,7 +1832,7 @@ def test_no_adjoint_sources(
     jnp.sum(jnp.abs(jnp.array(data["mnt"].amps.values)) ** 2)
 
 
-def test_nonlinear_warn(log_capture):  # noqa: F811
+def test_nonlinear_warn(log_capture):
     """Test that simulations warn if nonlinearity is used."""
 
     struct = JaxStructure(
@@ -1896,19 +1894,20 @@ def hide_jax(monkeypatch, request):
 def try_tracer_import() -> None:
     """Try importing `tidy3d.plugins.adjoint.components.types`."""
     from importlib import reload
+
     import tidy3d
 
     reload(tidy3d.plugins.adjoint.components.types)
 
 
 @pytest.mark.usefixtures("hide_jax")
-def test_jax_tracer_import_fail(tmp_path, log_capture):  # noqa: F811
+def test_jax_tracer_import_fail(tmp_path, log_capture):
     """Make sure if import error with JVPTracer, a warning is logged and module still imports."""
     try_tracer_import()
     assert_log_level(log_capture, "WARNING")
 
 
-def test_jax_tracer_import_pass(tmp_path, log_capture):  # noqa: F811
+def test_jax_tracer_import_pass(tmp_path, log_capture):
     """Make sure if no import error with JVPTracer, nothing is logged and module imports."""
     try_tracer_import()
     assert_log_level(log_capture, None)
@@ -1925,7 +1924,7 @@ def test_inf_IO(tmp_path):
 
 
 @pytest.mark.parametrize("sidewall_angle, log_expected", ([0.0, None], [0.1, "WARNING"]))
-def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):  # noqa: F811
+def test_sidewall_angle_validator(log_capture, sidewall_angle, log_expected):
     """Test that the sidewall angle warning works as expected."""
 
     jax_polyslab1 = JaxPolySlab(axis=POLYSLAB_AXIS, vertices=VERTICES, slab_bounds=(-1, 1))
@@ -1951,7 +1950,7 @@ def test_package_flux():
     assert res_multi == da_multi
 
 
-def test_vertices_warning(log_capture):  # noqa: F811
+def test_vertices_warning(log_capture):
     sim = make_sim(permittivity=EPS, size=SIZE, vertices=VERTICES, base_eps_val=BASE_EPS_VAL)
 
     polyslab = sim.input_structures[3].geometry

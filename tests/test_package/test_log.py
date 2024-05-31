@@ -1,16 +1,15 @@
 """Test the logging."""
 
-import pytest
 import json
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
+import pytest
 import tidy3d as td
 from tidy3d.exceptions import Tidy3dError
 from tidy3d.log import DEFAULT_LEVEL, _get_level_int, set_logging_level
 
-from ..utils import assert_log_level, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
+from ..utils import AssertLogLevel, assert_log_level
 
 
 def test_log():
@@ -273,7 +272,7 @@ def test_log_suppression():
     td.config.log_suppression = True
 
 
-def test_assert_log_level(log_capture):  # noqa: F811
+def test_assert_log_level(log_capture):
     """Test features of the assert_log_level"""
 
     # log was captured

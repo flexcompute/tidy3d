@@ -2,24 +2,26 @@
 
 from __future__ import annotations
 
-import pydantic.v1 as pd
-import numpy as np
-
 from abc import ABC, abstractmethod
 from typing import Union
 
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+import numpy as np
+import pydantic.v1 as pd
+
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.data.data_array import (
+    FreqDataArray,
+    FreqModeDataArray,
     ScalarFieldDataArray,
     ScalarFieldTimeDataArray,
     ScalarModeFieldDataArray,
+    TimeDataArray,
 )
-from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
-from ...components.base import cached_property, Tidy3dBaseModel
-from ...components.types import Axis, Direction
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...components.geometry.base import Box
+from ...components.types import Axis, Direction
 from ...components.validators import assert_line, assert_plane
-from ...exceptions import Tidy3dError, DataError
+from ...exceptions import DataError, Tidy3dError
 
 MonitorDataTypes = Union[FieldData, FieldTimeData, ModeSolverData]
 EMScalarFieldType = Union[ScalarFieldDataArray, ScalarFieldTimeDataArray, ScalarModeFieldDataArray]

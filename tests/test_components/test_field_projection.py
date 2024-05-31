@@ -1,12 +1,9 @@
 """Test near field to far field transformations."""
-# ruff: noqa: B018
 
 import numpy as np
-import tidy3d as td
 import pytest
-
+import tidy3d as td
 from tidy3d.exceptions import DataError
-
 
 MEDIUM = td.Medium(permittivity=3)
 WAVELENGTH = 1

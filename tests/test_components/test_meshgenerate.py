@@ -1,15 +1,14 @@
 """Tests generating meshes."""
 
-import numpy as np
 import warnings
-import pytest
 
+import numpy as np
+import pytest
 import tidy3d as td
-from tidy3d.constants import fp_eps
 from tidy3d.components.grid.mesher import GradedMesher
+from tidy3d.constants import fp_eps
 
 from ..utils import assert_log_level, cartesian_to_unstructured
-from ..utils import log_capture  # noqa: F401
 
 np.random.seed(4)
 
@@ -651,7 +650,7 @@ def test_mesher_timeout():
     _ = sim.grid
 
 
-def test_small_structure_size(log_capture):  # noqa: F811
+def test_small_structure_size(log_capture):
     """Test that a warning is raised if a structure size is small during the auto meshing"""
     box_size = 0.03
     medium = td.Medium(permittivity=4)

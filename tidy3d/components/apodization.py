@@ -1,11 +1,11 @@
 """Defines specification for apodization."""
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from .base import Tidy3dBaseModel, skip_if_fields_missing
 from ..constants import SECOND
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .types import ArrayFloat1D, Ax
 from .viz import add_ax_if_none
 

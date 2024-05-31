@@ -1,9 +1,9 @@
 # convenient container for the output of the inverse design (specifically the history)
 
 import typing
-import numpy as np
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pydantic.v1 as pd
 
 import tidy3d as td
@@ -11,7 +11,6 @@ from tidy3d.components.types import ArrayLike
 
 from .base import InvdesBaseModel
 from .design import InverseDesignType
-
 
 # TODO: implement more convenience methods for exporting to figures?
 

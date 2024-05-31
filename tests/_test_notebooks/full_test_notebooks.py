@@ -1,12 +1,10 @@
 import os
 import sys
 
-import pytest
-
 # note: these libraries throw Deprecation warnings in python 3.9, so they are ignored in pytest.ini
 import nbformat
-from nbconvert.preprocessors import CellExecutionError
-from nbconvert.preprocessors import ExecutePreprocessor
+import pytest
+from nbconvert.preprocessors import CellExecutionError, ExecutePreprocessor
 
 sys.path.append("tidy3d")
 
@@ -198,8 +196,8 @@ def _run_notebook(notebook_fname):
             ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
         except CellExecutionError:
             # if there is an error, print message and fail test
-            msg = 'Error executing the notebook "%s".\n\n' % notebook_fname
-            msg += 'See notebook "%s" for the traceback.' % notebook_fname
+            msg = f'Error executing the notebook "{notebook_fname}".\n\n'
+            msg += f'See notebook "{notebook_fname}" for the traceback.'
             print(msg)
             raise
 

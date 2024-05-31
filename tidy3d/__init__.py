@@ -1,162 +1,267 @@
-""" Tidy3d package imports"""
+"""Tidy3d package imports"""
 
 # grid
-from .components.grid.grid import Grid, Coords
-from .components.grid.grid_spec import GridSpec, UniformGrid, CustomGrid, AutoGrid
-
-# subpixel
-from .components.subpixel_spec import SubpixelSpec, Staircasing
-from .components.subpixel_spec import VolumetricAveraging, PolarizedAveraging
-from .components.subpixel_spec import HeuristicPECStaircasing, PECConformal
-
-# geometry
-from .components.geometry.base import Box, Transformed, ClipOperation, GeometryGroup
-from .components.geometry.primitives import Sphere, Cylinder
-from .components.geometry.mesh import TriangleMesh
-from .components.geometry.polyslab import PolySlab
-
-# medium
-from .components.medium import Medium, PoleResidue, AnisotropicMedium, PEC, PECMedium
-from .components.medium import Medium2D, PEC2D, medium_from_nk
-from .components.medium import Sellmeier, Debye, Drude, Lorentz
-from .components.medium import CustomMedium, CustomPoleResidue
-from .components.medium import CustomSellmeier, FullyAnisotropicMedium
-from .components.medium import CustomLorentz, CustomDrude, CustomDebye, CustomAnisotropicMedium
-from .components.medium import NonlinearSusceptibility, TwoPhotonAbsorption, KerrNonlinearity
-from .components.transformation import RotationAroundAxis
-from .components.medium import PerturbationMedium, PerturbationPoleResidue
-from .components.parameter_perturbation import ParameterPerturbation
-from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
-from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
-
-# time modulation
-from .components.time_modulation import SpaceTimeModulation, SpaceModulation
-from .components.time_modulation import ContinuousWaveTimeModulation, ModulationSpec
-
-# structures
-from .components.structure import Structure, MeshOverrideStructure
-
-# modes
-from .components.mode import ModeSpec
-
 # apodization
 from .components.apodization import ApodizationSpec
 
-# sources
-from .components.source import GaussianPulse, ContinuousWave, CustomSourceTime
-from .components.source import UniformCurrentSource, PlaneWave, ModeSource, PointDipole
-from .components.source import GaussianBeam, AstigmaticGaussianBeam
-from .components.source import CustomFieldSource, TFSF, CustomCurrentSource
+# boundary placement for other solvers
+# boundary placement for other solvers
+from .components.bc_placement import (
+    MediumMediumInterface,
+    SimulationBoundary,
+    StructureBoundary,
+    StructureSimulationBoundary,
+    StructureStructureInterface,
+)
 
-# monitors
-from .components.monitor import FieldMonitor, FieldTimeMonitor, FluxMonitor, FluxTimeMonitor
-from .components.monitor import ModeMonitor, ModeSolverMonitor, PermittivityMonitor
-from .components.monitor import FieldProjectionAngleMonitor, FieldProjectionCartesianMonitor
-from .components.monitor import FieldProjectionKSpaceMonitor, FieldProjectionSurface
-from .components.monitor import DiffractionMonitor
+# boundary
+from .components.boundary import (
+    PML,
+    Absorber,
+    AbsorberParams,
+    BlochBoundary,
+    Boundary,
+    BoundaryEdge,
+    BoundaryEdgeType,
+    BoundarySpec,
+    DefaultAbsorberParameters,
+    DefaultPMLParameters,
+    DefaultStablePMLParameters,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    PMLParams,
+    PMLTypes,
+    StablePML,
+)
 
-# lumped elements
-from .components.lumped_element import LumpedResistor, CoaxialLumpedResistor
+# data
+from .components.data.data_array import (
+    CellDataArray,
+    ChargeDataArray,
+    DiffractionDataArray,
+    EMECoefficientDataArray,
+    EMEModeIndexDataArray,
+    EMEScalarFieldDataArray,
+    EMEScalarModeFieldDataArray,
+    EMESMatrixDataArray,
+    FieldProjectionAngleDataArray,
+    FieldProjectionCartesianDataArray,
+    FieldProjectionKSpaceDataArray,
+    FluxDataArray,
+    FluxTimeDataArray,
+    HeatDataArray,
+    IndexedDataArray,
+    ModeAmpsDataArray,
+    ModeIndexDataArray,
+    PointDataArray,
+    ScalarFieldDataArray,
+    ScalarFieldTimeDataArray,
+    ScalarModeFieldDataArray,
+    SpatialDataArray,
+)
+from .components.data.dataset import (
+    FieldDataset,
+    FieldTimeDataset,
+    ModeSolverDataset,
+    PermittivityDataset,
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+)
+from .components.data.monitor_data import (
+    AbstractFieldProjectionData,
+    DiffractionData,
+    FieldData,
+    FieldProjectionAngleData,
+    FieldProjectionCartesianData,
+    FieldProjectionKSpaceData,
+    FieldTimeData,
+    FluxData,
+    FluxTimeData,
+    ModeData,
+    ModeSolverData,
+    PermittivityData,
+)
+from .components.data.sim_data import DATA_TYPE_MAP, SimulationData
+from .components.eme.data.dataset import (
+    EMECoefficientDataset,
+    EMEFieldDataset,
+    EMEModeSolverDataset,
+    EMESMatrixDataset,
+)
+from .components.eme.data.monitor_data import EMECoefficientData, EMEFieldData, EMEModeSolverData
+from .components.eme.data.sim_data import EMESimulationData
+from .components.eme.grid import (
+    EMECompositeGrid,
+    EMEExplicitGrid,
+    EMEGrid,
+    EMEModeSpec,
+    EMEUniformGrid,
+)
+from .components.eme.monitor import (
+    EMECoefficientMonitor,
+    EMEFieldMonitor,
+    EMEModeSolverMonitor,
+    EMEMonitor,
+)
 
-# run time spec
-from .components.run_time_spec import RunTimeSpec
-
-# simulation
-from .components.simulation import Simulation
+# EME
+# EME
+from .components.eme.simulation import EMESimulation
+from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
 
 # field projection
 from .components.field_projection import FieldProjector
 
-# data
-from .components.data.data_array import ScalarFieldDataArray, ScalarModeFieldDataArray
-from .components.data.data_array import ScalarFieldTimeDataArray, SpatialDataArray
-from .components.data.data_array import ModeAmpsDataArray, ModeIndexDataArray
-from .components.data.data_array import FluxDataArray, FluxTimeDataArray
-from .components.data.data_array import FieldProjectionAngleDataArray
-from .components.data.data_array import FieldProjectionCartesianDataArray
-from .components.data.data_array import FieldProjectionKSpaceDataArray
-from .components.data.data_array import DiffractionDataArray
-from .components.data.data_array import HeatDataArray, ChargeDataArray
-from .components.data.dataset import FieldDataset, FieldTimeDataset
-from .components.data.dataset import PermittivityDataset, ModeSolverDataset
-from .components.data.monitor_data import FieldData, FieldTimeData, PermittivityData
-from .components.data.monitor_data import FluxData, FluxTimeData
-from .components.data.monitor_data import ModeData, ModeSolverData
-from .components.data.monitor_data import AbstractFieldProjectionData
-from .components.data.monitor_data import FieldProjectionAngleData, FieldProjectionCartesianData
-from .components.data.monitor_data import FieldProjectionKSpaceData
-from .components.data.monitor_data import DiffractionData
-from .components.data.sim_data import SimulationData
-from .components.data.sim_data import DATA_TYPE_MAP
-from .components.data.data_array import PointDataArray, CellDataArray, IndexedDataArray
-from .components.data.dataset import TriangularGridDataset, TetrahedralGridDataset
+# geometry
+from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
+from .components.geometry.mesh import TriangleMesh
+from .components.geometry.polyslab import PolySlab
+from .components.geometry.primitives import Cylinder, Sphere
+from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
+from .components.grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
+from .components.heat.boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
+from .components.heat.data.monitor_data import TemperatureData
+from .components.heat.data.sim_data import HeatSimulationData
+from .components.heat.grid import DistanceUnstructuredGrid, UniformUnstructuredGrid
+from .components.heat.monitor import TemperatureMonitor
+from .components.heat.simulation import HeatSimulation
+from .components.heat.source import UniformHeatSource
 
-# boundary
-from .components.boundary import BoundarySpec, Boundary, BoundaryEdge, BoundaryEdgeType
-from .components.boundary import BlochBoundary, Periodic, PECBoundary, PMCBoundary
-from .components.boundary import PML, StablePML, Absorber, PMLParams, AbsorberParams, PMLTypes
-from .components.boundary import DefaultPMLParameters, DefaultStablePMLParameters
-from .components.boundary import DefaultAbsorberParameters
+# heat
+# heat
+from .components.heat_spec import FluidSpec, SolidSpec
+
+# lumped elements
+from .components.lumped_element import CoaxialLumpedResistor, LumpedResistor
+
+# medium
+# for docs
+from .components.medium import (
+    PEC,
+    PEC2D,
+    AbstractMedium,
+    AnisotropicMedium,
+    CustomAnisotropicMedium,
+    CustomDebye,
+    CustomDrude,
+    CustomLorentz,
+    CustomMedium,
+    CustomPoleResidue,
+    CustomSellmeier,
+    Debye,
+    Drude,
+    FullyAnisotropicMedium,
+    KerrNonlinearity,
+    Lorentz,
+    Medium,
+    Medium2D,
+    NonlinearModel,
+    NonlinearSpec,
+    NonlinearSusceptibility,
+    PECMedium,
+    PerturbationMedium,
+    PerturbationPoleResidue,
+    PoleResidue,
+    Sellmeier,
+    TwoPhotonAbsorption,
+    medium_from_nk,
+)
+
+# modes
+from .components.mode import ModeSpec
+
+# monitors
+from .components.monitor import (
+    DiffractionMonitor,
+    FieldMonitor,
+    FieldProjectionAngleMonitor,
+    FieldProjectionCartesianMonitor,
+    FieldProjectionKSpaceMonitor,
+    FieldProjectionSurface,
+    FieldTimeMonitor,
+    FluxMonitor,
+    FluxTimeMonitor,
+    ModeMonitor,
+    ModeSolverMonitor,
+    Monitor,
+    PermittivityMonitor,
+)
+from .components.parameter_perturbation import (
+    CustomChargePerturbation,
+    CustomHeatPerturbation,
+    LinearChargePerturbation,
+    LinearHeatPerturbation,
+    ParameterPerturbation,
+)
+
+# run time spec
+from .components.run_time_spec import RunTimeSpec
+
+# scene
+# scene
+from .components.scene import Scene
+
+# simulation
+from .components.simulation import Simulation
+
+# sources
+from .components.source import (
+    TFSF,
+    AstigmaticGaussianBeam,
+    ContinuousWave,
+    CustomCurrentSource,
+    CustomFieldSource,
+    CustomSourceTime,
+    GaussianBeam,
+    GaussianPulse,
+    ModeSource,
+    PlaneWave,
+    PointDipole,
+    Source,
+    SourceTime,
+    UniformCurrentSource,
+)
+
+# structures
+from .components.structure import MeshOverrideStructure, Structure
+
+# subpixel
+from .components.subpixel_spec import (
+    HeuristicPECStaircasing,
+    PECConformal,
+    PolarizedAveraging,
+    Staircasing,
+    SubpixelSpec,
+    VolumetricAveraging,
+)
+
+# time modulation
+from .components.time_modulation import (
+    ContinuousWaveTimeModulation,
+    ModulationSpec,
+    SpaceModulation,
+    SpaceTimeModulation,
+)
+from .components.transformation import RotationAroundAxis
+
+# config
+from .config import config
 
 # constants imported as `C_0 = td.C_0` or `td.constants.C_0`
-from .constants import C_0, ETA_0, HBAR, EPSILON_0, MU_0, Q_e, K_B, inf
+from .constants import C_0, EPSILON_0, ETA_0, HBAR, K_B, MU_0, Q_e, inf
+from .log import log, set_logging_console, set_logging_file
 
 # material library dict imported as `from tidy3d import material_library`
 # get material `mat` and variant `var` as `material_library[mat][var]`
 from .material_library.material_library import material_library
 from .material_library.parametric_materials import Graphene
 
-# for docs
-from .components.medium import AbstractMedium, NonlinearSpec, NonlinearModel
-from .components.geometry.base import Geometry
-from .components.source import Source, SourceTime
-from .components.monitor import Monitor
-from .components.grid.grid import YeeGrid, FieldGrid, Coords1D
-
-from .log import log, set_logging_file, set_logging_console
-
-# config
-from .config import config
-
-# version
-from .version import __version__
-
 # updater
 from .updater import Updater
 
-# scene
-from .components.scene import Scene
-
-# boundary placement for other solvers
-from .components.bc_placement import StructureStructureInterface, StructureBoundary
-from .components.bc_placement import MediumMediumInterface
-from .components.bc_placement import StructureSimulationBoundary
-from .components.bc_placement import SimulationBoundary
-
-# heat
-from .components.heat_spec import FluidSpec, SolidSpec
-from .components.heat.simulation import HeatSimulation
-from .components.heat.data.sim_data import HeatSimulationData
-from .components.heat.data.monitor_data import TemperatureData
-from .components.heat.boundary import TemperatureBC, ConvectionBC, HeatFluxBC, HeatBoundarySpec
-from .components.heat.source import UniformHeatSource
-from .components.heat.monitor import TemperatureMonitor
-from .components.heat.grid import UniformUnstructuredGrid, DistanceUnstructuredGrid
-
-# EME
-from .components.eme.simulation import EMESimulation
-from .components.eme.data.sim_data import EMESimulationData
-from .components.eme.monitor import EMECoefficientMonitor, EMEModeSolverMonitor, EMEFieldMonitor
-from .components.eme.monitor import EMEMonitor
-from .components.data.data_array import EMESMatrixDataArray, EMEScalarFieldDataArray
-from .components.data.data_array import EMECoefficientDataArray
-from .components.data.data_array import EMEScalarModeFieldDataArray, EMEModeIndexDataArray
-from .components.eme.data.dataset import EMEFieldDataset, EMECoefficientDataset, EMESMatrixDataset
-from .components.eme.data.dataset import EMEModeSolverDataset
-from .components.eme.data.monitor_data import EMEModeSolverData, EMEFieldData, EMECoefficientData
-from .components.eme.grid import EMEUniformGrid, EMECompositeGrid, EMEExplicitGrid
-from .components.eme.grid import EMEGrid, EMEModeSpec
-from .components.eme.sweep import EMELengthSweep, EMEModeSweep, EMEFreqSweep
+# version
+from .version import __version__
 
 
 def set_logging_level(level: str) -> None:

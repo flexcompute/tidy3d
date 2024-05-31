@@ -1,13 +1,13 @@
 # define penalties applied to parameters from design region
 
-import typing
 import abc
+import typing
 
-import pydantic.v1 as pd
 import autograd.numpy as anp
+import pydantic.v1 as pd
 
 from tidy3d.constants import MICROMETER
-from tidy3d.plugins.autograd.invdes import make_erosion_dilation_penalty, get_kernel_size_px
+from tidy3d.plugins.autograd.invdes import get_kernel_size_px, make_erosion_dilation_penalty
 
 from .base import InvdesBaseModel
 

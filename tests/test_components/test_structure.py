@@ -1,8 +1,8 @@
-import pytest
 import gdstk
 import numpy as np
-import tidy3d as td
 import pydantic.v1 as pd
+import pytest
+import tidy3d as td
 
 
 def test_to_gds(tmp_path):

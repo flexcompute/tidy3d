@@ -1,23 +1,23 @@
 """Defines a jax-compatible structure and its conversion to a gradient monitor."""
+
 from __future__ import annotations
 
-from typing import List, Union, Dict
+from typing import Dict, List, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from ....constants import C_0
-from ....components.structure import Structure
-from ....components.monitor import FieldMonitor
 from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.types import Bound, TYPE_TAG_STR
-from ....components.medium import MediumType
 from ....components.geometry.utils import GeometryType
-
+from ....components.medium import MediumType
+from ....components.monitor import FieldMonitor
+from ....components.structure import Structure
+from ....components.types import TYPE_TAG_STR, Bound
+from ....constants import C_0
 from .base import JaxObject
-from .medium import JaxMediumType, JAX_MEDIUM_MAP
-from .geometry import JaxGeometryType, JAX_GEOMETRY_MAP, JaxBox
+from .geometry import JAX_GEOMETRY_MAP, JaxBox, JaxGeometryType
+from .medium import JAX_MEDIUM_MAP, JaxMediumType
 
 GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
 

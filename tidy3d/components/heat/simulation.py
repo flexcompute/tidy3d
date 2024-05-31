@@ -1,37 +1,43 @@
 """Defines heat simulation class"""
+
 from __future__ import annotations
 
-from typing import Tuple, List, Dict
-from matplotlib import cm
+from typing import Dict, List, Tuple
+
 import numpy as np
-
 import pydantic.v1 as pd
+from matplotlib import cm
 
-from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
-from .boundary import HeatBoundarySpec
-from .source import HeatSourceType, UniformHeatSource
-from .monitor import HeatMonitorType
-from .grid import HeatGridType, UniformUnstructuredGrid, DistanceUnstructuredGrid
-from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
-from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
-
-from ..base_sim.simulation import AbstractSimulation
-from ..base import cached_property, skip_if_fields_missing
-from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
-from ..viz import add_ax_if_none, equal_aspect, PlotParams
-from ..structure import Structure
-from ..geometry.base import Box
-from ..scene import Scene
-from ..heat_spec import SolidSpec
-
-from ..bc_placement import StructureBoundary, StructureStructureInterface
-from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
-from ..bc_placement import MediumMediumInterface
-
+from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
-from ...constants import inf, VOLUMETRIC_HEAT_RATE
-
 from ...log import log
+from ..base import cached_property, skip_if_fields_missing
+from ..base_sim.simulation import AbstractSimulation
+from ..bc_placement import (
+    MediumMediumInterface,
+    SimulationBoundary,
+    StructureBoundary,
+    StructureSimulationBoundary,
+    StructureStructureInterface,
+)
+from ..geometry.base import Box
+from ..heat_spec import SolidSpec
+from ..scene import Scene
+from ..structure import Structure
+from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely
+from ..viz import PlotParams, add_ax_if_none, equal_aspect
+from .boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
+from .grid import DistanceUnstructuredGrid, HeatGridType, UniformUnstructuredGrid
+from .monitor import HeatMonitorType
+from .source import HeatSourceType, UniformHeatSource
+from .viz import (
+    HEAT_BC_COLOR_CONVECTION,
+    HEAT_BC_COLOR_FLUX,
+    HEAT_BC_COLOR_TEMPERATURE,
+    HEAT_SOURCE_CMAP,
+    plot_params_heat_bc,
+    plot_params_heat_source,
+)
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
 
