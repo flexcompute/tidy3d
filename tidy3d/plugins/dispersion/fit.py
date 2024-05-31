@@ -603,7 +603,7 @@ class DispersionFitter(Tidy3dBaseModel):
         ----------
         url_file : str
             Url link to the data file.
-            e.g. "https://refractiveindex.info/data_csv.php?datafile=data/main/Ag/Johnson.yml"
+            e.g. "https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Ag/Johnson.yml"
         delimiter : str = ","
             E.g. in refractiveindex.info, it'll be "," for csv file, and "\\\\t" for txt file.
         ignore_k : bool = False
