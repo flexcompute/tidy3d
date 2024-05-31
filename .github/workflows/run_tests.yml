@@ -34,22 +34,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          # This fetches only a single branch by default, so additional fetch is needed
-          fetch-depth: 0 # Optionally, set to 0 to fetch all history for all branches and tags
+          fetch-depth: 0
 
       - name: Determine current branch or PR ref
         id: get_branch
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # Extract the base branch of the PR
             BRANCH_NAME="${{ github.event.pull_request.base.ref }}"
             echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           else
-            # Assume it's a push event, extract the branch name from $GITHUB_REF
             BRANCH_NAME=$(echo $GITHUB_REF | sed 's|refs/heads/||')
             echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           fi
-          # Now echoing the BRANCH_NAME to verify
           echo "BRANCH_NAME: $BRANCH_NAME"
         shell: bash
         env:
@@ -59,52 +55,65 @@ jobs:
         run: |
           git submodule update --init --recursive
 
-      - name: Check if submodules are up to date
+      - name: Check if submodules are up to date and update if needed
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -e
           NOTEBOOKS_PATH=docs/notebooks
           FAQ_PATH=docs/faq
-
-          # Checking out Notebooks submodule with the same branch as the main project
-          echo "Checking $NOTEBOOKS_PATH for updates..."
-          cd $NOTEBOOKS_PATH
-          NOTEBOOKS_CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo $(git fetch --all --verbose)
-          echo $(git remote get-url origin)
-          if git show-ref --verify refs/remotes/origin/$BRANCH_NAME; then
-           echo "Branch $BRANCH_NAME exists."
-          else
-            echo "::error::Branch $BRANCH_NAME does not exist on remote."
-            exit 1
-          fi
-          NOTEBOOKS_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/${{ env.BRANCH_NAME }})
-          echo "NOTEBOOKS_LATEST_COMMIT: $NOTEBOOKS_LATEST_COMMIT"
-          echo "NOTEBOOKS_CURRENT_COMMIT: $NOTEBOOKS_CURRENT_COMMIT"
+          SUBMODULES_UPDATED=0
           
+          # Function to update submodule
+          update_submodule() {
+            local path=$1
+            local branch=$2
           
-          cd ../..
-          if [ "$NOTEBOOKS_LATEST_COMMIT" != "$NOTEBOOKS_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $NOTEBOOKS_PATH is not up to date with the ${{ env.BRANCH_NAME }} branch. Please update it."
-            exit 1
-          else
-            echo "Submodule $NOTEBOOKS_PATH is up to date with the ${{ env.BRANCH_NAME }} branch."
+            echo "Checking $path for updates..."
+            cd $path
+            git fetch --all --verbose
+            if git show-ref --verify refs/remotes/origin/$branch; then
+              echo "Branch $branch exists."
+            else
+              echo "::error::Branch $branch does not exist on remote."
+              exit 1
+            fi
+            LATEST_COMMIT=$(git rev-parse refs/remotes/origin/$branch)
+            CURRENT_COMMIT=$(git rev-parse HEAD)
+            echo "LATEST_COMMIT: $LATEST_COMMIT"
+            echo "CURRENT_COMMIT: $CURRENT_COMMIT"
+            cd ../..
+          
+            if [ "$LATEST_COMMIT" != "$CURRENT_COMMIT" ]; then
+              echo "Submodule $path is not up to date. Updating..."
+              cd $path
+              git checkout $branch
+              git pull origin $branch
+              cd ../..
+              git add $path
+              SUBMODULES_UPDATED=1
+            else
+              echo "Submodule $path is up to date with the $branch branch."
+            fi
+          }
+          
+          # Check and update Notebooks submodule
+          update_submodule $NOTEBOOKS_PATH $BRANCH_NAME
+          
+          # Check and update FAQ submodule only on the develop branch
+          if [ "$BRANCH_NAME" == "develop" ]; then
+            update_submodule $FAQ_PATH develop
           fi
-
-          # Checking FAQs only on the develop branch.
-          echo "Checking $FAQ_PATH for updates..."
-          cd $FAQ_PATH
-          FAQ_CURRENT_COMMIT=$(git rev-parse HEAD)
-          echo $(git fetch --all --verbose)
-          echo $(git remote get-url origin)
-          FAQ_LATEST_COMMIT=$(git rev-parse refs/remotes/origin/develop)
-          echo "FAQ_LATEST_COMMIT: $FAQ_LATEST_COMMIT"
-          echo "FAQ_CURRENT_COMMIT: $FAQ_CURRENT_COMMIT"
-          cd ../..
-          if [ "$FAQ_LATEST_COMMIT" != "$FAQ_CURRENT_COMMIT" ]; then
-            echo "::error ::Submodule $FAQ_PATH is not up to date. Please update it."
-            exit 1
+          
+          if [ "$SUBMODULES_UPDATED" -eq 1 ]; then
+            echo "Submodules were updated. Committing changes..."
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m ":robot: :arrow_up: Update submodules to latest commits"
+            git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:${{ github.event.pull_request.head.ref }}
           else
-            echo "Submodule $FAQ_PATH is up to date."
+            echo "No submodule updates were necessary."
           fi
 
   build:
