@@ -627,6 +627,56 @@ def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
         ag.grad(objective)(params0)
 
 
+def test_tracer_io(use_emulated_run, tmp_path):
+    """Test saving and loading traced simulation to file with all tracers in tact."""
+
+    path = str(tmp_path) + "/test.hdf5"
+
+    monitor_dict = make_monitors()
+    monitors = list(SIM_BASE.monitors)
+    monitor_pp_fns = {}
+    for monitor_key in monitor_keys_:
+        monitor_traced, monitor_pp_fn = monitor_dict[monitor_key]
+        monitors.append(monitor_traced)
+        monitor_pp_fns[monitor_key] = monitor_pp_fn
+
+    def make_sim(*args) -> td.Simulation:
+        """Make the simulation with all of the fields."""
+
+        structures_traced_dict = make_structures(*args)
+
+        structures = list(SIM_BASE.structures)
+        for structure_key in structure_keys_:
+            structures.append(structures_traced_dict[structure_key])
+
+        return SIM_BASE.updated_copy(structures=structures, monitors=monitors)
+
+    def objective(*args):
+        """Objective function."""
+
+        sim = make_sim(*args)
+
+        # save to and from file
+        sim.to_file(path)
+        sim = sim.from_file(path)
+
+        sim_data = run(sim, task_name="autograd_test", verbose=False)
+
+        # TODO: add this next
+        # sim_data.to_file(path)
+        # sim_data = sim_data.from_file(path)
+
+        value = 0.0
+        for name, data in sim_data.monitor_data.items():
+            if name in monitor_pp_fns:
+                fn_pp = monitor_pp_fns[name]
+                value += fn_pp(data)
+        return value
+
+    g = ag.grad(objective)(params0)
+    assert np.all(g != 0.0), "all gradients are 0 after saving and loading from file"
+
+
 # @pytest.mark.timeout(18.0)
 # def test_many_structures_timeout():
 #     """Test that a metalens-like simulation with many structures can be initialized fast enough."""

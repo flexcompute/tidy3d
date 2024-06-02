@@ -8,6 +8,8 @@ import numpy as np
 import dask
 import h5py
 
+from autograd.extend import Box
+from autograd.core import VJPNode
 from autograd.tracer import isbox, getval
 
 from ...constants import (
@@ -191,6 +193,14 @@ class DataArray(xr.DataArray):
             else:
                 sub_group[key] = val
 
+        # save autograd tracers to hdf5 file
+        if AUTOGRAD_KEY in self.attrs:
+            autograd_group = sub_group.create_group(AUTOGRAD_KEY)
+            tracers = self.attrs.get(AUTOGRAD_KEY)
+            autograd_group["_value"] = tracers._value
+            autograd_group["_trace"] = tracers._trace
+            # missing _node
+
     @classmethod
     def from_hdf5(cls, fname: str, group_path: str) -> DataArray:
         """Load an DataArray from an hdf5 file with a given path to the group."""
@@ -201,7 +211,20 @@ class DataArray(xr.DataArray):
             for key, val in coords.items():
                 if val.dtype == "O":
                     coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords, dims=cls._dims)
+
+            obj = cls(values, coords=coords, dims=cls._dims)
+
+            # load autograd tracers to hdf5 file
+            if AUTOGRAD_KEY in sub_group:
+                autograd_group = sub_group[AUTOGRAD_KEY]
+
+                value = autograd_group["_value"]
+                trace = autograd_group["_trace"]
+                node = VJPNode.new_root
+
+                obj.attrs[AUTOGRAD_KEY] = Box(value, trace, node)
+
+            return obj
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:

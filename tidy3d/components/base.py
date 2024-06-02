@@ -73,6 +73,10 @@ def ndarray_encoder(val):
     return val.real.tolist()
 
 
+def autograd_encoder(val):
+    """How an autograd array gets handled before saving to json."""
+
+
 def _get_valid_extension(fname: str) -> str:
     """Return the file extension from fname, validated to accepted ones."""
     valid_extensions = [".json", ".yaml", ".hdf5", ".h5", ".hdf5.gz"]
@@ -622,6 +626,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
                 if is_data_array(value):
                     data_array_type = DATA_ARRAY_MAP[value]
                     model_dict[key] = data_array_type.from_hdf5(fname=fname, group_path=subpath)
+
                     continue
 
                 # if a list, assign each element a unique key, recurse
@@ -716,6 +721,11 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
                     # write the path to the element of the json dict where the data_array should be
                     if isinstance(value, xr.DataArray):
+                        # if AUTOGRAD_KEY in value.attrs:
+                        #     tracer = value.attrs.get(AUTOGRAD_KEY)
+                        #     # import pdb; pdb.set_trace()
+                        #     add_data_to_file({AUTOGRAD_KEY: tracer}, group_path=subpath + "/test")
+
                         value.to_hdf5(fname=f_handle, group_path=subpath)
 
                     # if a tuple, assign each element a unique key
