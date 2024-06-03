@@ -162,7 +162,9 @@ def assert_unique_names(field_name: str):
     return field_has_unique_names
 
 
-def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
+def assert_objects_in_sim_bounds(
+    field_name: str, error: bool = True, strict_inequality: bool = False
+):
     """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
@@ -173,11 +175,14 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
         sim_size = values.get("size")
         sim_box = Box(size=sim_size, center=sim_center)
 
+        # Do a strict check, unless simulation is 0D along a dimension
+        strict_ineq = [size != 0 and strict_inequality for size in sim_size]
+
         for position_index, geometric_object in enumerate(val):
-            if not sim_box.intersects(geometric_object.geometry):
+            if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
                 message = (
-                    f"'simulation.{field_name}[{position_index}]'"
-                    "is completely outside of simulation domain."
+                    f"'simulation.{field_name}[{position_index}]' "
+                    "is outside of the simulation domain."
                 )
                 custom_loc = [field_name, position_index]
 

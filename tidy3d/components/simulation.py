@@ -1988,7 +1988,7 @@ class Simulation(AbstractYeeGridSimulation):
             _ = val.wavelength_from_sources(sources=values.get("sources"))
         return val
 
-    _sources_in_bounds = assert_objects_in_sim_bounds("sources")
+    _sources_in_bounds = assert_objects_in_sim_bounds("sources", strict_inequality=True)
     _mode_sources_symmetries = validate_mode_objects_symmetry("sources")
     _mode_monitors_symmetries = validate_mode_objects_symmetry("monitors")
 
