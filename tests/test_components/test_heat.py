@@ -113,10 +113,10 @@ def make_heat_mnts():
     temp_mnt1 = TemperatureMonitor(size=(1.6, 2, 3), name="test")
     temp_mnt2 = TemperatureMonitor(size=(1.6, 2, 3), name="tet", unstructured=True)
     temp_mnt3 = TemperatureMonitor(
-        center=(0, 1, 0), size=(1.6, 0, 3), name="tri", unstructured=True, conformal=True
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="tri", unstructured=True, conformal=True
     )
     temp_mnt4 = TemperatureMonitor(
-        center=(0, 1, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
+        center=(0, 0.9, 0), size=(1.6, 0, 3), name="empty", unstructured=True, conformal=False
     )
     temp_mnt5 = TemperatureMonitor(center=(0, 0.7, 0.8), size=(3, 0, 0), name="line")
     temp_mnt6 = TemperatureMonitor(center=(0.7, 0.6, 0.8), size=(0, 0, 0), name="point")

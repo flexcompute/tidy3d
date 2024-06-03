@@ -114,7 +114,7 @@ class AbstractSimulation(Box, ABC):
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
 
-    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
+    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors", strict_inequality=True)
     _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
 
     @pd.validator("structures", always=True)

@@ -1059,7 +1059,7 @@ def test_proj_monitor_warnings(log_capture):  # noqa F811
 
     src = td.PlaneWave(
         source_time=td.GaussianPulse(freq0=2.5e14, fwidth=1e13),
-        center=(0, 0, -0.5),
+        center=(0, 0, -0.4),
         size=(td.inf, td.inf, 0),
         direction="+",
         pol_angle=-1.0,
@@ -2906,3 +2906,37 @@ def test_validate_low_num_cells_in_mode_objects():
     sim = SIM.updated_copy(monitors=[mode_monitor])
     with pytest.raises(SetupError):
         sim._validate_num_cells_in_mode_objects()
+
+
+def test_validate_sources_monitors_in_bounds():
+    pulse = td.GaussianPulse(freq0=200e12, fwidth=20e12)
+    mode_source = td.ModeSource(
+        center=(0, -1, 0),
+        size=(1, 0, 1),
+        source_time=pulse,
+        direction="+",
+    )
+    mode_monitor = td.ModeMonitor(
+        center=(0, 1, 0),
+        size=(1, 0, 1),
+        freqs=[1e12],
+        name="test_in_bounds",
+        mode_spec=td.ModeSpec(),
+    )
+
+    # check that a source at y- simulation domain edge errors
+    with pytest.raises(pydantic.ValidationError):
+        sim = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            sources=[mode_source],
+        )
+    # check that a monitor at y+ simulation domain edge errors
+    with pytest.raises(pydantic.ValidationError):
+        sim = td.Simulation(
+            size=(2, 2, 2),
+            run_time=1e-12,
+            grid_spec=td.GridSpec(wavelength=1.0),
+            monitors=[mode_monitor],
+        )

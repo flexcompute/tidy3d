@@ -248,13 +248,20 @@ class Geometry(Tidy3dBaseModel, ABC):
         )
         return plane.intersections_with(self)
 
-    def intersects(self, other) -> bool:
+    def intersects(
+        self, other, strict_inequality: Tuple[bool, bool, bool] = [False, False, False]
+    ) -> bool:
         """Returns ``True`` if two :class:`Geometry` have intersecting `.bounds`.
 
         Parameters
         ----------
         other : :class:`Geometry`
             Geometry to check intersection with.
+        strict_inequality : Tuple[bool, bool, bool] = [False, False, False]
+            For each dimension, defines whether to include equality in the boundaries comparison.
+            If ``False``, equality is included, and two geometries that only intersect at their
+            boundaries will evaluate as ``True``. If ``True``, such geometries will evaluate as
+            ``False``.
 
         Returns
         -------
@@ -265,14 +272,19 @@ class Geometry(Tidy3dBaseModel, ABC):
         self_bmin, self_bmax = self.bounds
         other_bmin, other_bmax = other.bounds
 
-        # are all of other's minimum coordinates less than self's maximum coordinate?
-        in_minus = all(o <= s for (s, o) in zip(self_bmax, other_bmin))
+        for smin, omin, smax, omax, strict in zip(
+            self_bmin, other_bmin, self_bmax, other_bmax, strict_inequality
+        ):
+            # are all of other's minimum coordinates less than self's maximum coordinate?
+            in_minus = omin < smax if strict else omin <= smax
+            # are all of other's maximum coordinates greater than self's minimum coordinate?
+            in_plus = omax > smin if strict else omax >= smin
 
-        # are all of other's maximum coordinates greater than self's minimum coordinate?
-        in_plus = all(o >= s for (s, o) in zip(self_bmin, other_bmax))
+            # if either failed, return False
+            if not all((in_minus, in_plus)):
+                return False
 
-        # for intersection of bounds, both must be true
-        return in_minus and in_plus
+        return True
 
     def intersects_plane(self, x: float = None, y: float = None, z: float = None) -> bool:
         """Whether self intersects plane specified by one non-None value of x,y,z.

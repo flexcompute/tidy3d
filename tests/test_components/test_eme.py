@@ -394,6 +394,11 @@ def test_eme_simulation(log_capture):  # noqa: F811
     with pytest.raises(SetupError):
         _ = sim.updated_copy(monitors=[monitor])
 
+    # test monitor at simulation bounds
+    monitor = sim.monitors[-1].updated_copy(center=[0, 0, -sim.size[2] / 2])
+    with pytest.raises(pd.ValidationError):
+        _ = sim.updated_copy(monitors=[monitor])
+
     # test boundary and source validation
     with pytest.raises(SetupError):
         _ = sim.updated_copy(boundary_spec=td.BoundarySpec.all_sides(td.Periodic()))
