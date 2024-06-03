@@ -1,6 +1,8 @@
 import pytest
 import numpy as np
 import pydantic.v1 as pydantic
+from ..utils import assert_log_level
+from ..utils import log_capture  # noqa: F401
 
 from tidy3d.material_library.material_library import (
     VariantItem,
@@ -12,6 +14,18 @@ from tidy3d.material_library.material_library import (
     MaterialItemUniaxial,
 )
 import tidy3d as td
+
+
+def test_warning_default_variant_switching(log_capture):  # noqa: F811
+    """Issue warning for switching default medium variant."""
+
+    # no warning for most materials with no default change
+    _ = td.material_library["cSi"].medium
+    assert_log_level(log_capture, None)
+
+    # issue warning for SiO2
+    _ = td.material_library["SiO2"].medium
+    assert_log_level(log_capture, "WARNING")
 
 
 def test_VariantItem():

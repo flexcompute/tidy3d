@@ -385,6 +385,7 @@ Silicon (Crystalline) ("cSi")
    Variant                   Valid for                  Model Info       Reference                                                                                                   
    ========================= ========================== ================ ============================================================================================================
    ``'Green2008'`` (default) 0.25 - 1.45 :math:`{\mu}m` 5-pole, lossy    [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
+   ``'Green2008_Lossless'``  1.2 - 1.45 :math:`{\mu}m`  1-pole, lossless [1] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Green-2008.yml>`__ 
    ``'Li1993_293K'``         1.2 - 14.0 :math:`{\mu}m`  1-pole, lossless [2] `[data] <https://refractiveindex.info/data_csv.php?datafile=database/data-nk/main/Si/Li-293K.yml>`__    
    ``'Palik_Lossless'``      1.2 - 250.0 :math:`{\mu}m` 1-pole, low loss [3]                                                                                                         
    ``'Palik_Lossy'``         0.1 - 1.4 :math:`{\mu}m`   5-pole, lossy    [3]                                                                                                         
@@ -394,6 +395,8 @@ Silicon (Crystalline) ("cSi")
 Examples:
 
 >>> medium = material_library['cSi']['Green2008']
+
+>>> medium = material_library['cSi']['Green2008_Lossless']
 
 >>> medium = material_library['cSi']['Li1993_293K']
 
@@ -1112,13 +1115,13 @@ Silicon Dioxide ("SiO2")
 .. table::
    :widths: auto
 
-   ====================== ========================== ================ ===========
-   Variant                Valid for                  Model Info       Reference  
-   ====================== ========================== ================ ===========
-   ``'Horiba'`` (default) 0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [1]        
-   ``'Palik_Lossless'``   0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [2]        
-   ``'Palik_Lossy'``      4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [2]        
-   ====================== ========================== ================ ===========
+   ============================== ========================== ================ ===========
+   Variant                        Valid for                  Model Info       Reference  
+   ============================== ========================== ================ ===========
+   ``'Horiba'``                   0.25 - 1.77 :math:`{\mu}m` 1-pole, lossy    [1]        
+   ``'Palik_Lossless'`` (default) 0.15 - 5.0 :math:`{\mu}m`  2-pole, low loss [2]        
+   ``'Palik_Lossy'``              4.0 - 250.0 :math:`{\mu}m` 5-pole, lossy    [2]        
+   ============================== ========================== ================ ===========
 
 Examples:
 
