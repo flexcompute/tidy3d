@@ -1,4 +1,5 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
+
 from __future__ import annotations
 from typing import Dict, List, Union
 from abc import ABC
@@ -113,9 +114,17 @@ class DataArray(xr.DataArray):
         return val
 
     def _interp_validator(self, field_name: str = None) -> None:
-        """Make sure we can interp()/sel() the data."""
-        # NOTE: this does not check every 'DataArray' by default. Instead, when required, this check can be
-        # called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
+        """Make sure we can interp()/sel() the data.
+
+        NOTE
+        ----
+        This does not check every 'DataArray' by default. Instead, when required, this check can be
+        called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
+        """
+        # skip this validator if currently tracing for autograd because
+        # self.values will be dtype('object') and not interpolatable
+        if isbox(self.values.flat[0]):
+            return
 
         if field_name is None:
             field_name = "DataArray"
