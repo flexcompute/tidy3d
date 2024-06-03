@@ -8,8 +8,8 @@ import numpy as np
 import tidy3d as td
 import xarray as xr
 
-from autograd.core import vspace, VJPNode, backward_pass
-from autograd.tracer import trace, new_box
+from autograd.core import VJPNode
+from autograd.tracer import new_box
 
 from tidy3d.log import _get_level_int
 from tidy3d.web import BatchData
@@ -868,8 +868,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         np.random.seed(1)
         data = np.random.random(data_shape)
 
-        # data = np.ones(data_shape)
-        data = (1 + 1j) * data if is_complex else data
+        data = (1 + 0.5j) * data if is_complex else data
         data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
         data_array = data_array_type(data, coords=coords)
         return data_array
