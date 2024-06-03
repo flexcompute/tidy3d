@@ -809,7 +809,12 @@ class FastDispersionFitter(DispersionFitter):
                                 best_model.unweighted_rms_error,
                             )
 
-                        return best_model.pole_residue, best_model.rms_error
+                        return (
+                            best_model.pole_residue.updated_copy(
+                                frequency_range=self.frequency_range
+                            ),
+                            best_model.rms_error,
+                        )
 
         # if exited loop, did not reach tolerance (warn)
         progress.update(
@@ -829,7 +834,10 @@ class FastDispersionFitter(DispersionFitter):
                 best_model.unweighted_rms_error,
             )
 
-        return best_model.pole_residue, best_model.rms_error
+        return (
+            best_model.pole_residue.updated_copy(frequency_range=self.frequency_range),
+            best_model.rms_error,
+        )
 
     @classmethod
     def constant_loss_tangent_model(

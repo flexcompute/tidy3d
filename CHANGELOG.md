@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RectangularWaveguide.plot_field` optionally draws geometry edges over fields. 
 - `RectangularWaveguide` supports layered cladding above and below core.
 - `SubpixelSpec` accepted by `Simulation.subpixel` to select subpixel averaging methods separately for dielectric, metal, and PEC materials. Specifically, added support for conformal mesh methods near PEC structures that can be specified through the field `pec` in the `SubpixelSpec` class. Note: previously, `subpixel=False` was implementing staircasing for every material except PEC. Now, `subpixel=False` implements direct staircasing for all materials. For PEC, the behavior of `subpixel=False` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=HeuristicPECStaircasing())`, while `subpixel=True` in Tidy3D < 2.7 is now achieved through `subpixel=SubpixelSpec(pec=Staircasing())`. The default is `subpixel=SubpixelSpec(pec=PECConformal())` for more accurate PEC modelling.
+- Lossless `Green2008` variant for crystalline silicon added to material library.
+
+### Changed
+- Default variant for silicon dioxide in material library switched from `Horiba` to `Palik_Lossless`.
 
 ### Changed
 - Sources and monitors which are exactly at the simulation domain boundaries will now error. They can still be placed very close to the boundaries, but need to be on the inside of the region.
