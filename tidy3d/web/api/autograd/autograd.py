@@ -92,6 +92,7 @@ def run(
     worker_group: str = None,
     simulation_type: str = "tidy3d",
     parent_tasks: list[str] = None,
+    local_gradient: bool = False,
 ) -> SimulationDataType:
     """
     Submits a :class:`.Simulation` to server, starts running, monitors progress, downloads,
@@ -122,6 +123,10 @@ def run(
         target solver version.
     worker_group: str = None
         worker group
+    local_gradient : bool = False
+        If ``True``, computes the adjoint gradient (if needed) locally. If ``False``, computes it
+        on the server. local gradient computation can be useful for debugging server-side issues
+        but we recommend server-side for performance and saving data.
 
     Returns
     -------
@@ -212,6 +217,7 @@ def run_async(
     verbose: bool = True,
     simulation_type: str = "tidy3d",
     parent_tasks: dict[str, list[str]] = None,
+    local_gradient: bool = False,
 ) -> BatchData:
     """Submits a set of Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] objects to server,
     starts running, monitors progress, downloads, and loads results as a :class:`.BatchData` object.
@@ -233,6 +239,10 @@ def run_async(
         Number of tasks to submit at once in a batch, if None, will run all at the same time.
     verbose : bool = True
         If ``True``, will print progressbars and status, otherwise, will run silently.
+    local_gradient : bool = False
+        If ``True``, computes the adjoint gradient (if needed) locally. If ``False``, computes it
+        on the server. local gradient computation can be useful for debugging server-side issues
+        but we recommend server-side for performance and saving data.
 
     Returns
     ------
