@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, List, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +13,7 @@ import pydantic.v1 as pd
 from ..components.data.validators import validate_no_nans
 from ..components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
 from ..components.viz import add_ax_if_none
-from ..constants import CMCUBE, KELVIN, PERCMCUBE, inf
+from ..constants import CMCUBE, EPSILON_0, KELVIN, PERCMCUBE, inf
 from ..exceptions import DataError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
@@ -1001,6 +1001,21 @@ class ParameterPerturbation(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    @pd.root_validator(skip_on_failure=True)
+    def _check_not_empty(cls, values):
+        """Check that perturbation model is not empty."""
+
+        heat = values.get("heat")
+        charge = values.get("charge")
+
+        if heat is None and charge is None:
+            raise DataError(
+                "Perturbation models 'heat' and 'charge' in 'ParameterPerturbation' cannot be "
+                "simultaneously 'None'."
+            )
+
+        return values
+
     @cached_property
     def perturbation_list(self) -> List[PerturbationType]:
         """Provided perturbations as a list."""
@@ -1107,3 +1122,257 @@ class ParameterPerturbation(Tidy3dBaseModel):
         """Whether perturbation is complex valued."""
 
         return np.any([p.is_complex for p in self.perturbation_list])
+
+
+class PermittivityPerturbation(Tidy3dBaseModel):
+    """A general medium perturbation model which is defined through perturbation to
+    permittivity and conductivity.
+
+    Example
+    -------
+    >>> from tidy3d import LinearChargePerturbation, LinearHeatPerturbation, PermittivityPerturbation, C_0
+    >>>
+    >>> heat_perturb = LinearHeatPerturbation(
+    ...     temperature_ref=300,
+    ...     coeff=0.001,
+    ... )
+    >>> charge_perturb = LinearChargePerturbation(
+    ...     electron_ref=0,
+    ...     electron_coeff=0.0001,
+    ...     hole_ref=0,
+    ...     hole_coeff=0.0002,
+    ... )
+    >>> delta_eps = ParameterPerturbation(heat=heat_perturb)
+    >>> delta_sigma = ParameterPerturbation(charge=charge_perturb)
+    >>> permittivity_pb = PermittivityPerturbation(delta_eps=delta_eps, delta_sigma=delta_sigma)
+    """
+
+    delta_eps: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Permittivity Perturbation",
+        description="Perturbation model for permittivity.",
+    )
+
+    delta_sigma: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Conductivity Perturbation",
+        description="Perturbation model for conductivity.",
+    )
+
+    @pd.root_validator(skip_on_failure=True)
+    def _check_not_complex(cls, values):
+        """Check that perturbation values are not complex."""
+
+        delta_eps = values.get("delta_eps")
+        delta_sigma = values.get("delta_sigma")
+
+        delta_eps_complex = False if delta_eps is None else delta_eps.is_complex
+        delta_sigma_complex = False if delta_sigma is None else delta_sigma.is_complex
+
+        if delta_eps_complex or delta_sigma_complex:
+            raise DataError(
+                "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
+                "complex-valued."
+            )
+
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def _check_not_empty(cls, values):
+        """Check that perturbation model is not empty."""
+
+        delta_eps = values.get("delta_eps")
+        delta_sigma = values.get("delta_sigma")
+
+        if delta_eps is None and delta_sigma is None:
+            raise DataError(
+                "Perturbation models 'delta_eps' and 'delta_sigma' in 'PermittivityPerturbation' cannot be "
+                "simultaneously 'None'."
+            )
+
+        return values
+
+    def _delta_eps_delta_sigma_ranges(self):
+        """Perturbation range of permittivity."""
+
+        delta_eps_range = (0, 0) if self.delta_eps is None else self.delta_eps.perturbation_range
+        delta_sigma_range = (
+            (0, 0) if self.delta_sigma is None else self.delta_sigma.perturbation_range
+        )
+        return delta_eps_range, delta_sigma_range
+
+    def _sample_delta_eps_delta_sigma(
+        self,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
+    ) -> CustomSpatialDataType:
+        """Compute effictive pertubation to eps and sigma."""
+
+        delta_eps_sampled = None
+        if self.delta_eps is not None:
+            delta_eps_sampled = self.delta_eps.apply_data(
+                temperature, electron_density, hole_density
+            )
+
+        delta_sigma_sampled = None
+        if self.delta_sigma is not None:
+            delta_sigma_sampled = self.delta_sigma.apply_data(
+                temperature, electron_density, hole_density
+            )
+
+        return delta_eps_sampled, delta_sigma_sampled
+
+
+class IndexPerturbation(Tidy3dBaseModel):
+    """A general medium perturbation model which is defined through perturbation to
+    refractive index, n and k.
+
+    Example
+    -------
+    >>> from tidy3d import LinearChargePerturbation, LinearHeatPerturbation, IndexPerturbation, C_0
+    >>>
+    >>> heat_perturb = LinearHeatPerturbation(
+    ...     temperature_ref=300,
+    ...     coeff=0.001,
+    ... )
+    >>> charge_perturb = LinearChargePerturbation(
+    ...     electron_ref=0,
+    ...     electron_coeff=0.0001,
+    ...     hole_ref=0,
+    ...     hole_coeff=0.0002,
+    ... )
+    >>> dn_pb = ParameterPerturbation(heat=heat_perturb)
+    >>> dk_pb = ParameterPerturbation(charge=charge_perturb)
+    >>> index_pb = IndexPerturbation(delta_n=dn_pb, delta_k=dk_pb, freq=C_0)
+    """
+
+    delta_n: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Refractive Index Perturbation",
+        description="Perturbation of the real part of refractive index.",
+    )
+
+    delta_k: Optional[ParameterPerturbation] = pd.Field(
+        None,
+        title="Exctinction Coefficient Perturbation",
+        description="Perturbation of the imaginary part of refractive index.",
+    )
+
+    freq: pd.NonNegativeFloat = pd.Field(
+        ...,
+        title="Frequency",
+        description="Frequency to evaluate permittivity at (Hz).",
+    )
+
+    @pd.root_validator(skip_on_failure=True)
+    def _check_not_complex(cls, values):
+        """Check that perturbation values are not complex."""
+
+        dn = values.get("delta_n")
+        dk = values.get("delta_k")
+
+        dn_complex = False if dn is None else dn.is_complex
+        dk_complex = False if dk is None else dk.is_complex
+
+        if dn_complex or dk_complex:
+            raise DataError(
+                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
+                "complex-valued."
+            )
+
+        return values
+
+    @pd.root_validator(skip_on_failure=True)
+    def _check_not_empty(cls, values):
+        """Check that perturbation model is not empty."""
+
+        dn = values.get("delta_n")
+        dk = values.get("delta_k")
+
+        if dn is None and dk is None:
+            raise DataError(
+                "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
+                "simultaneously 'None'."
+            )
+
+        return values
+
+    def _delta_eps_delta_sigma_ranges(self, n: float, k: float):
+        """Perturbation range of permittivity."""
+        omega0 = 2 * np.pi * self.freq
+
+        dn_range = [0] if self.delta_n is None else self.delta_n.perturbation_range
+        dk_range = [0] if self.delta_k is None else self.delta_k.perturbation_range
+
+        dn_grid, dk_grid = np.meshgrid(dn_range, dk_range)
+
+        # deal with possible 0 * inf
+        dk_dn = np.zeros_like(dn_grid)
+        inds = np.logical_and(dn_grid != 0, dk_grid != 0)
+        dk_dn[inds] = dn_grid[inds] * dk_grid[inds]
+        k_dn = 0 if k == 0 else k * dn_grid
+
+        # ignore potential inf - inf
+        with np.errstate(invalid="ignore"):
+            delta_eps = (2 * n + dn_grid) * dn_grid - (2 * n + dk_grid) * dk_grid
+            delta_sigma = 2 * omega0 * (k_dn + n * dk_grid + dk_dn) * EPSILON_0
+
+        if np.any(np.isnan(delta_eps)):
+            delta_eps_range = (-inf, inf)
+        else:
+            delta_eps_range = (np.min(delta_eps), np.max(delta_eps))
+
+        if np.any(np.isnan(delta_sigma)):
+            delta_sigma_range = (-inf, inf)
+        else:
+            delta_sigma_range = (np.min(delta_sigma), np.max(delta_sigma))
+
+        return delta_eps_range, delta_sigma_range
+
+    def _sample_delta_eps_delta_sigma(
+        self,
+        n: float,
+        k: float,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
+    ) -> CustomSpatialDataType:
+        """Compute effictive pertubation to eps and sigma."""
+
+        # delta_eps = 2 * n * dn + dn ** 2 - 2 * k * dk - dk ** 2
+        # delta_sigma = 2 * omega * (k * dn + n * dk + dk * dn)
+        dn_sampled = (
+            None
+            if self.delta_n is None
+            else self.delta_n.apply_data(temperature, electron_density, hole_density)
+        )
+        dk_sampled = (
+            None
+            if self.delta_k is None
+            else self.delta_k.apply_data(temperature, electron_density, hole_density)
+        )
+
+        omega0 = 2 * np.pi * self.freq
+
+        delta_eps = None
+        delta_sigma = None
+        if dn_sampled is not None:
+            delta_eps = 2 * n * dn_sampled + dn_sampled**2
+            if k != 0:
+                delta_sigma = 2 * omega0 * k * dn_sampled
+
+        if dk_sampled is not None:
+            delta_eps = 0 if delta_eps is None else delta_eps
+            delta_eps = delta_eps - 2 * k * dk_sampled - dk_sampled**2
+
+            delta_sigma = 0 if delta_sigma is None else delta_sigma
+            delta_sigma = delta_sigma + 2 * omega0 * n * dk_sampled
+
+            if dn_sampled is not None:
+                delta_sigma = delta_sigma + 2 * omega0 * dk_sampled * dn_sampled
+
+        if delta_sigma is not None:
+            delta_sigma = delta_sigma * EPSILON_0
+
+        return delta_eps, delta_sigma

@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple
 
 import numpy as np
 import pydantic.v1 as pd
-from matplotlib import cm
+from matplotlib import colormaps
 
 from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
@@ -892,7 +892,7 @@ class HeatSimulation(AbstractSimulation):
             delta_rate = rate - source_min
             delta_rate_max = source_max - source_min + 1e-5
             rate_fraction = delta_rate / delta_rate_max
-            cmap = cm.get_cmap(HEAT_SOURCE_CMAP)
+            cmap = colormaps[HEAT_SOURCE_CMAP]
             rgba = cmap(rate_fraction)
             plot_params = plot_params.copy(update={"edgecolor": rgba})
 
