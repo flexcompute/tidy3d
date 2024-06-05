@@ -193,6 +193,8 @@ from .components.parameter_perturbation import (
     LinearChargePerturbation,
     LinearHeatPerturbation,
     ParameterPerturbation,
+    PermittivityPerturbation,
+    IndexPerturbation,
 )
 
 # run time spec
@@ -320,6 +322,8 @@ __all__ = [
     "CustomHeatPerturbation",
     "LinearChargePerturbation",
     "CustomChargePerturbation",
+    "PermittivityPerturbation", 
+    "IndexPerturbation",
     "NonlinearSpec",
     "NonlinearModel",
     "NonlinearSusceptibility",
