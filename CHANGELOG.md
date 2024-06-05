@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.7.0] - 2024-06-13
+## [2.7.0] - 2024-06-17
 
 ### Added
 - EME solver through `EMESimulation` class.
@@ -57,6 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default variant for silicon dioxide in material library switched from `Horiba` to `Palik_Lossless`.
 - Sources and monitors which are exactly at the simulation domain boundaries will now error. They can still be placed very close to the boundaries, but need to be on the inside of the region.
 - Relaxed `dt` stability criterion for 1D and 2D simulations.
+- Switched order of angle and bend transformations in mode solver when both are present.
 
 ### Fixed
 - Bug in PolySlab intersection if slab bounds are `inf` on one side.
