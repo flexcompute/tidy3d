@@ -35,7 +35,11 @@ from ..constants import WATT, VOLT
 from ..exceptions import ValidationError, SetupError
 from ..log import log
 from .transformation import RotationType
-from .parameter_perturbation import ParameterPerturbation, PermittivityPerturbation, IndexPerturbation
+from .parameter_perturbation import (
+    ParameterPerturbation,
+    PermittivityPerturbation,
+    IndexPerturbation,
+)
 from .heat_spec import HeatSpecType
 from .time_modulation import ModulationSpec
 from .autograd import TracedFloat
@@ -1451,14 +1455,12 @@ class Medium(AbstractMedium):
             permittivity -= self.modulation_spec.permittivity.max_modulation
         n, _ = self.eps_complex_to_nk(permittivity)
         return n
-    
+
     @staticmethod
     def _eps_model(permittivity: float, conductivity: float, frequency: float) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
-        return AbstractMedium.eps_sigma_to_eps_complex(
-            permittivity, conductivity, frequency
-        )
+        return AbstractMedium.eps_sigma_to_eps_complex(permittivity, conductivity, frequency)
 
     @ensure_freq_in_range
     def eps_model(self, frequency: float) -> complex:
@@ -2734,7 +2736,9 @@ class PoleResidue(DispersiveMedium):
     _validate_conductivity_modulation = DispersiveMedium._conductivity_modulation_validation()
 
     @staticmethod
-    def _eps_model(eps_inf: pd.PositiveFloat, poles: Tuple[PoleAndResidue, ...], frequency: float) -> complex:
+    def _eps_model(
+        eps_inf: pd.PositiveFloat, poles: Tuple[PoleAndResidue, ...], frequency: float
+    ) -> complex:
         """Complex-valued permittivity as a function of frequency."""
 
         omega = 2 * np.pi * frequency
@@ -5372,8 +5376,8 @@ class AbstractPerturbationMedium(ABC, Tidy3dBaseModel):
 
 class PerturbationMedium(Medium, AbstractPerturbationMedium):
     """Dispersionless medium with perturbations. Perturbation model can be defined either directly
-    through providing ``permittivity_perturbation`` and ``conductivity_perturbation`` or via 
-    providing a specific perturbation model (:class:`PermittivityPerturbation`, 
+    through providing ``permittivity_perturbation`` and ``conductivity_perturbation`` or via
+    providing a specific perturbation model (:class:`PermittivityPerturbation`,
     :class:`IndexPerturbation`) as ``perturbaiton_spec``.
 
     Example
@@ -5434,7 +5438,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
                 "'permittivity_perturbation' and 'conductivity_perturbation', "
                 "but not in both ways simultaneously."
             )
-        
+
         return values
 
     @pd.root_validator(skip_on_failure=True)
@@ -5443,19 +5447,21 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         p_spec = values["perturbation_spec"]
         if p_spec is None:
             return values
-        
+
         perm = values["permittivity"]
         cond = values["conductivity"]
 
         if isinstance(p_spec, IndexPerturbation):
-            eps_complex = Medium._eps_model(permittivity=perm, conductivity=cond, frequency=p_spec.freq)
+            eps_complex = Medium._eps_model(
+                permittivity=perm, conductivity=cond, frequency=p_spec.freq
+            )
             n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
             deps_range, dsigma_range = p_spec._deps_dsigma_ranges(n, k)
         elif isinstance(p_spec, PermittivityPerturbation):
             deps_range, dsigma_range = p_spec._deps_dsigma_ranges()
         else:
             raise SetupError("Unknown type of 'perturbation_spec'.")
-        
+
         _warn_potential_error(
             field_name="permittivity",
             base_value=perm,
@@ -5463,7 +5469,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             allowed_real_range=(1.0, None),
             allowed_imag_range=None,
         )
-        
+
         _warn_potential_error(
             field_name="conductivity",
             base_value=cond,
@@ -5527,7 +5533,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         if all(x is None for x in [temperature, electron_density, hole_density]):
             new_dict.pop("subpixel")
             return Medium.parse_obj(new_dict)
-        
+
         permittivity_field = self.permittivity + ParameterPerturbation._zeros_like(
             temperature, electron_density, hole_density
         )
@@ -5538,10 +5544,14 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         if self.perturbation_spec is not None:
             pspec = self.perturbation_spec
             if isinstance(pspec, PermittivityPerturbation):
-                deps, dsigma = pspec._sample_deps_dsigma(temperature, electron_density, hole_density)
+                deps, dsigma = pspec._sample_deps_dsigma(
+                    temperature, electron_density, hole_density
+                )
             elif isinstance(pspec, IndexPerturbation):
                 n, k = self.nk_model(frequency=pspec.freq)
-                deps, dsigma = pspec._sample_deps_dsigma(n, k, temperature, electron_density, hole_density)
+                deps, dsigma = pspec._sample_deps_dsigma(
+                    n, k, temperature, electron_density, hole_density
+                )
         else:
             if self.permittivity_perturbation is not None:
                 deps = self.permittivity_perturbation.apply_data(
@@ -5570,8 +5580,8 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
 class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
     """A dispersive medium described by the pole-residue pair model with perturbations.
     Perturbation model can be defined either directly
-    through providing ``eps_inf_perturbation`` and ``poles_perturbation`` or via 
-    providing a specific perturbation model (:class:`PermittivityPerturbation`, 
+    through providing ``eps_inf_perturbation`` and ``poles_perturbation`` or via
+    providing a specific perturbation model (:class:`PermittivityPerturbation`,
     :class:`IndexPerturbation`) as ``perturbaiton_spec``.
 
     Notes
@@ -5606,9 +5616,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         units=PERMITTIVITY,
     )
 
-    poles_perturbation: Optional[Tuple[
-        Tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...
-    ]] = pd.Field(
+    poles_perturbation: Optional[
+        Tuple[Tuple[Optional[ParameterPerturbation], Optional[ParameterPerturbation]], ...]
+    ] = pd.Field(
         None,
         title="Perturbations of Poles",
         description="Perturbations to poles of the model.",
@@ -5646,28 +5656,30 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
                 "'eps_inf_perturbation' and 'poles_perturbation', "
                 "but not in both ways simultaneously."
             )
-        
+
         return values
-    
+
     @pd.root_validator(skip_on_failure=True)
     def _check_perturbation_spec_ranges(cls, values):
         """Check perturbation ranges if defined as ``perturbation_spec``."""
         p_spec = values["perturbation_spec"]
         if p_spec is None:
             return values
-        
+
         eps_inf = values["eps_inf"]
         poles = values["poles"]
 
         if isinstance(p_spec, IndexPerturbation):
-            eps_complex = PoleResidue._eps_model(eps_inf=eps_inf, poles=poles, frequency=p_spec.freq)
+            eps_complex = PoleResidue._eps_model(
+                eps_inf=eps_inf, poles=poles, frequency=p_spec.freq
+            )
             n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
             deps_range, _ = p_spec._deps_dsigma_ranges(n, k)
         elif isinstance(p_spec, PermittivityPerturbation):
             deps_range, _ = p_spec._deps_dsigma_ranges()
         else:
             raise SetupError("Unknown type of 'perturbation_spec'.")
-        
+
         _warn_potential_error(
             field_name="eps_inf",
             base_value=eps_inf,
@@ -5720,7 +5732,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
             Medium specification after application of heat and/or charge data.
         """
 
-        new_dict = self.dict(exclude={"eps_inf_perturbation", "poles_perturbation", "perturbation_spec", "type"})
+        new_dict = self.dict(
+            exclude={"eps_inf_perturbation", "poles_perturbation", "perturbation_spec", "type"}
+        )
 
         if all(x is None for x in [temperature, electron_density, hole_density]):
             new_dict.pop("subpixel")
@@ -5734,10 +5748,14 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         if self.perturbation_spec is not None:
             pspec = self.perturbation_spec
             if isinstance(pspec, PermittivityPerturbation):
-                deps, dsigma = pspec._sample_deps_dsigma(temperature, electron_density, hole_density)
+                deps, dsigma = pspec._sample_deps_dsigma(
+                    temperature, electron_density, hole_density
+                )
             elif isinstance(pspec, IndexPerturbation):
                 n, k = self.nk_model(frequency=pspec.freq)
-                deps, dsigma = pspec._sample_deps_dsigma(n, k, temperature, electron_density, hole_density)
+                deps, dsigma = pspec._sample_deps_dsigma(
+                    n, k, temperature, electron_density, hole_density
+                )
 
             if deps is not None:
                 eps_inf_field = eps_inf_field + deps
@@ -5753,7 +5771,9 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 
             # sample poles
             if self.poles_perturbation is not None:
-                for ind, ((a_perturb, c_perturb), (a_field, c_field)) in enumerate(zip(self.poles_perturbation, poles_field)):
+                for ind, ((a_perturb, c_perturb), (a_field, c_field)) in enumerate(
+                    zip(self.poles_perturbation, poles_field)
+                ):
                     if a_perturb is not None:
                         a_field = a_field + a_perturb.apply_data(
                             temperature, electron_density, hole_density

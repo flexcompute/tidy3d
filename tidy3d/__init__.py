@@ -216,7 +216,7 @@ __all__ = [
     "CustomHeatPerturbation",
     "LinearChargePerturbation",
     "CustomChargePerturbation",
-    "PermittivityPerturbation", 
+    "PermittivityPerturbation",
     "IndexPerturbation",
     "NonlinearSpec",
     "NonlinearModel",

@@ -269,10 +269,10 @@ def assert_single_freq_in_range(field_name: str):
 
 
 def _warn_potential_error(
-    field_name: str, 
-    base_value: float, 
-    val_change_range: Tuple[float, float], 
-    allowed_real_range: Tuple[float, float], 
+    field_name: str,
+    base_value: float,
+    val_change_range: Tuple[float, float],
+    allowed_real_range: Tuple[float, float],
     allowed_imag_range: Tuple[float, float],
 ):
     """Basic validation that perturbations do not drive a parameter out of physical bounds."""
@@ -353,7 +353,7 @@ def validate_parameter_perturbation(
                         sub_field_name = base_field_name + ind_pointer
 
                         _warn_potential_error(
-                            field_name=sub_field_name, 
+                            field_name=sub_field_name,
                             base_value=base_value,
                             val_change_range=perturb.perturbation_range,
                             allowed_real_range=real_range,
