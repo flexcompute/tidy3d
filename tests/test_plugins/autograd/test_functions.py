@@ -15,6 +15,8 @@ from tidy3d.plugins.autograd.functions import (
     morphological_gradient,
     morphological_gradient_internal,
     morphological_gradient_external,
+    rescale,
+    threshold,
 )
 from tidy3d.plugins.autograd.types import PaddingType
 
@@ -241,3 +243,61 @@ class TestMorphology:
             """Test gradients of morphological operations for various kernel structures."""
             x, k = self._ary_and_kernel(rng, ary_size, kernel_size, full, square, flat)
             check_grads(op, modes=["rev"], order=1)(x, size=kernel_size, mode=mode)
+
+
+@pytest.mark.parametrize(
+    "array, out_min, out_max, in_min, in_max, expected",
+    [
+        (np.array([0, 0.5, 1]), 0, 10, 0, 1, np.array([0, 5, 10])),
+        (np.array([0, 0.5, 1]), -1, 1, 0, 1, np.array([-1, 0, 1])),
+        (np.array([0, 1, 2]), 0, 1, 0, 2, np.array([0, 0.5, 1])),
+        (np.array([-1, 0, 1]), -10, 10, -1, 1, np.array([-10, 0, 10])),
+        (np.array([-2, -1, 0]), -1, 1, -2, 0, np.array([-1, 0, 1])),
+    ],
+)
+def test_rescale(array, out_min, out_max, in_min, in_max, expected):
+    """Test rescale function for various input and output ranges."""
+    result = rescale(array, out_min, out_max, in_min, in_max)
+    npt.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "array, out_min, out_max, in_min, in_max, expected_message",
+    [
+        (np.array([0, 0.5, 1]), 10, 0, 0, 1, "must be less than"),
+        (np.array([0, 0.5, 1]), 0, 10, 1, 1, "must not be equal"),
+        (np.array([0, 0.5, 1]), 0, 10, 1, 0, "must be less than"),
+    ],
+)
+def test_rescale_exceptions(array, out_min, out_max, in_min, in_max, expected_message):
+    """Test rescale function for expected exceptions."""
+    with pytest.raises(ValueError, match=expected_message):
+        rescale(array, out_min, out_max, in_min, in_max)
+
+
+@pytest.mark.parametrize(
+    "ary, vmin, vmax, level, expected",
+    [
+        (np.array([0, 0.5, 1]), 0, 1, 0.5, np.array([0, 1, 1])),
+        (np.array([0, 0.5, 1]), 0, 1, None, np.array([0, 1, 1])),
+        (np.array([0, 0.5, 1]), -1, 1, 0.5, np.array([-1, 1, 1])),
+    ],
+)
+def test_threshold(ary, vmin, vmax, level, expected):
+    """Test threshold function values for threshold levels and value ranges."""
+    result = threshold(ary, vmin, vmax, level)
+    npt.assert_allclose(result, expected)
+
+
+@pytest.mark.parametrize(
+    "array, vmin, vmax, level, expected_message",
+    [
+        (np.array([0, 0.5, 1]), 1, 0, None, "threshold range"),
+        (np.array([0, 0.5, 1]), 0, 1, -0.5, "threshold level"),
+        (np.array([0, 0.5, 1]), 0, 1, 1.5, "threshold level"),
+    ],
+)
+def test_threshold_exceptions(array, vmin, vmax, level, expected_message):
+    """Test threshold function for expected exceptions."""
+    with pytest.raises(ValueError, match=expected_message):
+        threshold(array, vmin, vmax, level)
