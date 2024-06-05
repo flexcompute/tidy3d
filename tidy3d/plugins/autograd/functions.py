@@ -608,6 +608,17 @@ def rescale(
     np.ndarray
         The rescaled array.
     """
+
+    if in_min == in_max:
+        raise ValueError(
+            f"'in_min' ({in_min}) must not be equal to 'in_max' ({in_max}) "
+            "to avoid division by zero."
+        )
+    if out_min >= out_max:
+        raise ValueError(f"'out_min' ({out_min}) must be less than 'out_max' ({out_max}).")
+    if in_min >= in_max:
+        raise ValueError(f"'in_min' ({in_min}) must be less than 'in_max' ({in_max}).")
+
     scaled = (array - in_min) / (in_max - in_min)
     return scaled * (out_max - out_min) + out_min
 
@@ -633,6 +644,17 @@ def threshold(
     np.ndarray
         The thresholded array.
     """
+    if vmin >= vmax:
+        raise ValueError(
+            f"Invalid threshold range: 'vmin' ({vmin}) must be smaller than 'vmax' ({vmax})."
+        )
+
     if level is None:
         level = (vmin + vmax) / 2
+    elif not (vmin <= level <= vmax):
+        raise ValueError(
+            f"Invalid threshold level: 'level' ({level}) must be "
+            f"between 'vmin' ({vmin}) and 'vmax' ({vmax})."
+        )
+
     return np.where(array < level, vmin, vmax)

@@ -1,17 +1,17 @@
 from functools import reduce
-from typing import Tuple, Callable, Iterable, Union
+from typing import Callable, Iterable, Union
 
 import numpy as np
 
 from .types import KernelType
 
 
-def _kernel_circular(size: Tuple[int, ...]) -> np.ndarray:
+def _kernel_circular(size: Iterable[int]) -> np.ndarray:
     """Create a circular kernel in n dimensions.
 
     Parameters
     ----------
-    size : Tuple[int, ...]
+    size : Iterable[int]
         The size of the circular kernel in pixels for each dimension.
 
     Returns
@@ -21,16 +21,16 @@ def _kernel_circular(size: Tuple[int, ...]) -> np.ndarray:
     """
     grids = np.ogrid[tuple(slice(-1, 1, 1j * s) for s in size)]
     squared_distances = sum(grid**2 for grid in grids)
-    kernel = squared_distances <= 1
+    kernel = np.array(squared_distances <= 1, dtype=np.float64)
     return kernel
 
 
-def _kernel_conic(size: Tuple[int, ...]) -> np.ndarray:
+def _kernel_conic(size: Iterable[int]) -> np.ndarray:
     """Create a conic kernel in n dimensions.
 
     Parameters
     ----------
-    size : Tuple[int, ...]
+    size : Iterable[int]
         The size of the conic kernel in pixels for each dimension.
 
     Returns
@@ -44,16 +44,14 @@ def _kernel_conic(size: Tuple[int, ...]) -> np.ndarray:
     return kernel
 
 
-def make_kernel(
-    kernel_type: KernelType, size: Tuple[int, ...], normalize: bool = True
-) -> np.ndarray:
+def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = True) -> np.ndarray:
     """Create a kernel based on the specified type in n dimensions.
 
     Parameters
     ----------
     kernel_type : KernelType
         The type of kernel to create ('circular' or 'conic').
-    size : Tuple[int, ...]
+    size : Iterable[int]
         The size of the kernel in pixels for each dimension.
     normalize : bool, optional
         Whether to normalize the kernel so that it sums to 1. Default is True.
@@ -63,6 +61,9 @@ def make_kernel(
     np.ndarray
         An n-dimensional array representing the specified type of kernel.
     """
+    if not all(isinstance(dim, int) and dim > 0 for dim in size):
+        raise ValueError("'size' must be an iterable of positive integers.")
+
     if kernel_type == "circular":
         kernel = _kernel_circular(size)
     elif kernel_type == "conic":
@@ -110,6 +111,9 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
     """
     if len(funcs) == 1 and isinstance(funcs[0], Iterable):
         funcs = funcs[0]
+
+    if not all(callable(f) for f in funcs):
+        raise TypeError("All elements in funcs must be callable.")
 
     def chained(array: np.ndarray):
         return reduce(lambda x, y: y(x), funcs, array)
