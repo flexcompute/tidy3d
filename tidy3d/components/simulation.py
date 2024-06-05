@@ -3737,7 +3737,11 @@ class Simulation(AbstractYeeGridSimulation):
         float
             Time step (seconds).
         """
-        dl_mins = [np.min(sizes) for sizes in self.grid.sizes.to_list]
+        dl_mins = [
+            np.min(sizes)
+            for dim, sizes in enumerate(self.grid.sizes.to_list)
+            if self.grid.num_cells[dim] > 1
+        ]
         dl_sum_inv_sq = sum(1 / dl**2 for dl in dl_mins)
         dl_avg = 1 / np.sqrt(dl_sum_inv_sq)
         # material factor
