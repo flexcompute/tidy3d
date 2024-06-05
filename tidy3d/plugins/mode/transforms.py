@@ -16,9 +16,9 @@ def radial_transform(coords, radius, bend_axis):
     offsetting the plane such that its center is a distance of ``radius`` away from the center of
     curvature, we have, e.g. for ``bend_axis=='y'``:
 
-        u = (x**2 + z**2)
+        u = sqrt(x**2 + z**2)
         v = y
-        w = R acos(x / u)
+        w = R asin(z / u)
 
     These are all evaluated at z = 0 below.
 
@@ -39,9 +39,6 @@ def radial_transform(coords, radius, bend_axis):
         Jacobian of the transformation at the E-field positions, shape ``(3, 3, Nx * Ny)``.
     jac_h: np.ndarrray
         Jacobian of the transformation at the H-field positions, shape ``(3, 3, Nx * Ny)``.
-    k_to_kp: np.ndarray
-        A matrix of shape (3, 3) that transforms the k-vector from the original coordinates to the
-        transformed ones.
     """
 
     Nx, Ny = coords[0].size - 1, coords[1].size - 1
@@ -101,7 +98,7 @@ def angled_transform(coords, angle_theta, angle_phi):
     Nx, Ny = coords[0].size - 1, coords[1].size - 1
 
     # The new coordinates are exactly the same at z = 0
-    new_coords = (np.copy(c) for c in coords)
+    new_coords = [np.copy(c) for c in coords]
 
     # The only nontrivial derivatives are dudz, dvdz and they are constant everywhere
     jac = np.zeros((3, 3, Nx * Ny))
