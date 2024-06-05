@@ -10,13 +10,12 @@ from ..utils import log_capture  # noqa: F401
 
 @pytest.mark.parametrize("unstructured", [False, True])
 def test_perturbation_medium(unstructured, log_capture):
-
     # fields to sample at
     coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
     temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
     electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
     hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
-    
+
     if unstructured:
         temperature = cartesian_to_unstructured(temperature, seed=7747)
         electron_density = cartesian_to_unstructured(electron_density, seed=7747)
@@ -44,35 +43,43 @@ def test_perturbation_medium(unstructured, log_capture):
             hole_coeff=-2e-21,
             hole_ref=0,
             hole_range=(0, 0.5e20),
-        ),  
+        ),
     )
 
     # different ways of defining
- 
+
     with AssertLogLevel(log_capture, None):
         pmed_direct = td.PerturbationMedium(permittivity=10, permittivity_perturbation=pp_real)
-        pmed_perm = td.PerturbationMedium(permittivity=10, perturbation_spec=td.PermittivityPerturbation(deps=pp_real))
-        pmed_index = td.PerturbationMedium(permittivity=10, perturbation_spec=td.IndexPerturbation(dn=pp_real, freq=1 / td.C_0))
+        pmed_perm = td.PerturbationMedium(
+            permittivity=10, perturbation_spec=td.PermittivityPerturbation(deps=pp_real)
+        )
+        pmed_index = td.PerturbationMedium(
+            permittivity=10, perturbation_spec=td.IndexPerturbation(dn=pp_real, freq=1 / td.C_0)
+        )
 
     with AssertLogLevel(log_capture, "WARNING"):
         pmed_direct = td.PerturbationMedium(permittivity=1.21, permittivity_perturbation=pp_real)
     with AssertLogLevel(log_capture, "WARNING"):
-        pmed_perm = td.PerturbationMedium(permittivity=1.21, perturbation_spec=td.PermittivityPerturbation(deps=pp_real))
+        pmed_perm = td.PerturbationMedium(
+            permittivity=1.21, perturbation_spec=td.PermittivityPerturbation(deps=pp_real)
+        )
     with AssertLogLevel(log_capture, "WARNING"):
-        pmed_index = td.PerturbationMedium(permittivity=1.21, perturbation_spec=td.IndexPerturbation(dn=pp_real, freq=1 / td.C_0))
+        pmed_index = td.PerturbationMedium(
+            permittivity=1.21, perturbation_spec=td.IndexPerturbation(dn=pp_real, freq=1 / td.C_0)
+        )
 
     # test from_unperturbed function
     pmed_direct_from_med = td.PerturbationMedium.from_unperturbed(
-        medium=td.Medium(permittivity=1.21), 
-         permittivity_perturbation=pp_real,
+        medium=td.Medium(permittivity=1.21),
+        permittivity_perturbation=pp_real,
     )
     pmed_perm_from_med = td.PerturbationMedium.from_unperturbed(
-        medium=td.Medium(permittivity=1.21), 
+        medium=td.Medium(permittivity=1.21),
         perturbation_spec=td.PermittivityPerturbation(deps=pp_real),
     )
 
     pmed_index_from_med = td.PerturbationMedium.from_unperturbed(
-        medium=td.Medium(permittivity=1.21), 
+        medium=td.Medium(permittivity=1.21),
         perturbation_spec=td.IndexPerturbation(dn=pp_real, freq=1 / td.C_0),
     )
     assert pmed_direct == pmed_direct_from_med
@@ -99,15 +106,27 @@ def test_perturbation_medium(unstructured, log_capture):
 
     # conductivity validators
     with AssertLogLevel(log_capture, None):
-        pmed_direct = td.PerturbationMedium(conductivity=3, conductivity_perturbation=pp_real, subpixel=False)
-        pmed_perm = td.PerturbationMedium(conductivity=3, perturbation_spec=td.PermittivityPerturbation(dsigma=pp_real), subpixel=False)
+        pmed_direct = td.PerturbationMedium(
+            conductivity=3, conductivity_perturbation=pp_real, subpixel=False
+        )
+        pmed_perm = td.PerturbationMedium(
+            conductivity=3,
+            perturbation_spec=td.PermittivityPerturbation(dsigma=pp_real),
+            subpixel=False,
+        )
 
     with AssertLogLevel(log_capture, "WARNING"):
         pmed_direct = td.PerturbationMedium(conductivity_perturbation=pp_real, subpixel=False)
     with AssertLogLevel(log_capture, "WARNING"):
-        pmed_perm = td.PerturbationMedium(perturbation_spec=td.PermittivityPerturbation(dsigma=pp_real), subpixel=False)
+        pmed_perm = td.PerturbationMedium(
+            perturbation_spec=td.PermittivityPerturbation(dsigma=pp_real), subpixel=False
+        )
     with AssertLogLevel(log_capture, "WARNING"):
-        pmed_index = td.PerturbationMedium(permittivity=2, perturbation_spec=td.IndexPerturbation(dk=pp_real, freq=1 / td.C_0), subpixel=False)
+        pmed_index = td.PerturbationMedium(
+            permittivity=2,
+            perturbation_spec=td.IndexPerturbation(dk=pp_real, freq=1 / td.C_0),
+            subpixel=False,
+        )
 
     for pmed in [pmed_direct, pmed_perm, pmed_index]:
         cmed = pmed.perturbed_copy(0.9 * temperature)  # positive conductivity
@@ -125,7 +144,11 @@ def test_perturbation_medium(unstructured, log_capture):
 
     # overdefinition
     with pytest.raises(pydantic.ValidationError):
-        _ = td.PerturbationMedium(permittivity=1.21, permittivity_perturbation=pp_real, perturbation_spec=td.PermittivityPerturbation(deps=pp_real))
+        _ = td.PerturbationMedium(
+            permittivity=1.21,
+            permittivity_perturbation=pp_real,
+            perturbation_spec=td.PermittivityPerturbation(deps=pp_real),
+        )
 
     # Dispersive
     with AssertLogLevel(log_capture, None):
@@ -153,7 +176,7 @@ def test_perturbation_medium(unstructured, log_capture):
             subpixel=False,
             allow_gain=True,
         )
-        
+
     with AssertLogLevel(log_capture, "WARNING"):
         pmed_direct = td.PerturbationPoleResidue(
             eps_inf=0.2,
@@ -246,18 +269,18 @@ def test_perturbation_medium(unstructured, log_capture):
     # overdefinition
     with pytest.raises(pydantic.ValidationError):
         _ = td.PerturbationPoleResidue(
-                eps_inf=1.21,
-                poles=[(1j, 3), (2j, 4)],
-                eps_inf_perturbation=pp_real,
-                poles_perturbation=[(None, pp_real), (pp_complex, None)],
-                perturbation_spec=td.PermittivityPerturbation(deps=pp_real),
-                subpixel=False,
-                allow_gain=True,
-            )
+            eps_inf=1.21,
+            poles=[(1j, 3), (2j, 4)],
+            eps_inf_perturbation=pp_real,
+            poles_perturbation=[(None, pp_real), (pp_complex, None)],
+            perturbation_spec=td.PermittivityPerturbation(deps=pp_real),
+            subpixel=False,
+            allow_gain=True,
+        )
+
 
 @pytest.mark.parametrize("dispersive", [False, True])
 def test_correct_values(dispersive):
-
     pp_large = td.ParameterPerturbation(
         heat=td.LinearHeatPerturbation(
             coeff=-0.01,
@@ -289,7 +312,7 @@ def test_correct_values(dispersive):
         perturbation_class = td.PerturbationMedium
 
     si_perm = perturbation_class.from_unperturbed(
-        medium=si, 
+        medium=si,
         perturbation_spec=td.PermittivityPerturbation(
             deps=pp_large,
             dsigma=pp_small,
@@ -317,7 +340,7 @@ def test_correct_values(dispersive):
     assert np.allclose(si_sigma + pp_small_sampled, si_perm_perturb_sigma)
 
     si_index = perturbation_class.from_unperturbed(
-        medium=si, 
+        medium=si,
         perturbation_spec=td.IndexPerturbation(
             dn=pp_large,
             dk=pp_small,
@@ -334,6 +357,3 @@ def test_correct_values(dispersive):
 
     assert np.isclose(si_n + pp_large_sampled, si_index_perturb_n)
     assert np.isclose(si_k + pp_small_sampled, si_index_perturb_k)
-
-
-

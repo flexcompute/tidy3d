@@ -1013,7 +1013,7 @@ class ParameterPerturbation(Tidy3dBaseModel):
                 "Perturbation models 'heat' and 'charge' in 'ParameterPerturbation' cannot be "
                 "simultaneously 'None'."
             )
-        
+
         return values
 
     @cached_property
@@ -1123,14 +1123,14 @@ class ParameterPerturbation(Tidy3dBaseModel):
 
         return np.any([p.is_complex for p in self.perturbation_list])
 
-        
+
 class PermittivityPerturbation(Tidy3dBaseModel):
     """A general medium perturbation model which is defined through perturbation to
     permittivity and conductivity.
 
     Example
     -------
-    >>> from tidy3d import LinearChargePerturbation, HeatHeatPerturbation, PermittivityPerturbation, C_0
+    >>> from tidy3d import LinearChargePerturbation, LinearHeatPerturbation, PermittivityPerturbation, C_0
     >>>
     >>> heat_perturb = LinearHeatPerturbation(
     ...     temperature_ref=300,
@@ -1146,13 +1146,13 @@ class PermittivityPerturbation(Tidy3dBaseModel):
     >>> dsigma = ParameterPerturbation(charge=charge_perturb)
     >>> permittivity_pb = PermittivityPerturbation(deps=deps, dsigma=dsigma)
     """
-    
+
     deps: Optional[ParameterPerturbation] = pd.Field(
         None,
         title="Permittivity Perturbation",
         description="Perturbation model for permittivity.",
     )
-    
+
     dsigma: Optional[ParameterPerturbation] = pd.Field(
         None,
         title="Conductivity Perturbation",
@@ -1174,7 +1174,7 @@ class PermittivityPerturbation(Tidy3dBaseModel):
                 "Perturbation models 'deps' and 'dsigma' in 'PermittivityPerturbation' cannot be "
                 "complex-valued."
             )
-        
+
         return values
 
     @pd.root_validator(skip_on_failure=True)
@@ -1189,7 +1189,7 @@ class PermittivityPerturbation(Tidy3dBaseModel):
                 "Perturbation models 'deps' and 'dsigma' in 'PermittivityPerturbation' cannot be "
                 "simultaneously 'None'."
             )
-        
+
         return values
 
     def _deps_dsigma_ranges(self):
@@ -1200,7 +1200,7 @@ class PermittivityPerturbation(Tidy3dBaseModel):
         return deps_range, dsigma_range
 
     def _sample_deps_dsigma(
-        self, 
+        self,
         temperature: CustomSpatialDataType = None,
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
@@ -1216,7 +1216,7 @@ class PermittivityPerturbation(Tidy3dBaseModel):
             dsigma_sampled = self.dsigma.apply_data(temperature, electron_density, hole_density)
 
         return deps_sampled, dsigma_sampled
-    
+
 
 class IndexPerturbation(Tidy3dBaseModel):
     """A general medium perturbation model which is defined through perturbation to
@@ -1224,7 +1224,7 @@ class IndexPerturbation(Tidy3dBaseModel):
 
     Example
     -------
-    >>> from tidy3d import LinearChargePerturbation, HeatHeatPerturbation, IndexPerturbation, C_0
+    >>> from tidy3d import LinearChargePerturbation, LinearHeatPerturbation, IndexPerturbation, C_0
     >>>
     >>> heat_perturb = LinearHeatPerturbation(
     ...     temperature_ref=300,
@@ -1274,7 +1274,7 @@ class IndexPerturbation(Tidy3dBaseModel):
                 "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
                 "complex-valued."
             )
-        
+
         return values
 
     @pd.root_validator(skip_on_failure=True)
@@ -1289,7 +1289,7 @@ class IndexPerturbation(Tidy3dBaseModel):
                 "Perturbation models 'dn' and 'dk' in 'IndexPerturbation' cannot be "
                 "simultaneously 'None'."
             )
-        
+
         return values
 
     def _deps_dsigma_ranges(self, n: float, k: float):
@@ -1306,15 +1306,16 @@ class IndexPerturbation(Tidy3dBaseModel):
         dk_dn[dn_grid == 0] = 0
         dk_dn[dk_grid == 0] = 0
         k_dn = 0 if k == 0 else k * dn_grid
-    
-        deps = 2 * n * dn_grid + dn_grid ** 2 - 2 * n * dk_grid - dk_grid ** 2
+
+        deps = 2 * n * dn_grid + dn_grid**2 - 2 * n * dk_grid - dk_grid**2
         dsigma = 2 * omega0 * (k_dn + n * dk_grid + dk_dn) * EPSILON_0
 
         return (np.min(deps), np.max(deps)), (np.min(dsigma), np.max(dsigma))
 
     def _sample_deps_dsigma(
-        self, 
-        n: float, k: float,
+        self,
+        n: float,
+        k: float,
         temperature: CustomSpatialDataType = None,
         electron_density: CustomSpatialDataType = None,
         hole_density: CustomSpatialDataType = None,
@@ -1323,21 +1324,29 @@ class IndexPerturbation(Tidy3dBaseModel):
 
         # deps = 2 * n * dn + dn ** 2 - 2 * k * dk - dk ** 2
         # dsigma = 2 * omega * (k * dn + n * dk + dk * dn)
-        dn_sampled = None if self.dn is None else self.dn.apply_data(temperature, electron_density, hole_density)
-        dk_sampled = None if self.dk is None else self.dk.apply_data(temperature, electron_density, hole_density)
+        dn_sampled = (
+            None
+            if self.dn is None
+            else self.dn.apply_data(temperature, electron_density, hole_density)
+        )
+        dk_sampled = (
+            None
+            if self.dk is None
+            else self.dk.apply_data(temperature, electron_density, hole_density)
+        )
 
         omega0 = 2 * np.pi * self.freq
 
         deps = None
         dsigma = None
         if dn_sampled is not None:
-            deps = 2 * n * dn_sampled + dn_sampled ** 2
+            deps = 2 * n * dn_sampled + dn_sampled**2
             if k != 0:
                 dsigma = 2 * omega0 * k * dn_sampled
 
         if dk_sampled is not None:
             deps = 0 if deps is None else deps
-            deps = deps - 2 * k * dk_sampled - dk_sampled ** 2
+            deps = deps - 2 * k * dk_sampled - dk_sampled**2
 
             dsigma = 0 if dsigma is None else dsigma
             dsigma = dsigma + 2 * omega0 * n * dk_sampled

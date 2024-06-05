@@ -515,7 +515,7 @@ def test_fully_anisotropic_media():
 
     assert all(np.isin(np.round(perm_d), np.round(np.diag(perm_diag))))
     assert all(np.isin(np.round(cond_d), np.round(np.diag(cond_diag))))
-    
+
 
 def test_nonlinear_medium(log_capture):
     med = td.Medium(

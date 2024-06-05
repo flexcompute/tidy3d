@@ -48,7 +48,7 @@ def test_heat_perturbation(log_capture):
             temperature_range=(200, 400),
         )
 
-    with pytest.raises(pydantic.ValidationError): 
+    with pytest.raises(pydantic.ValidationError):
         perturb = td.LinearHeatPerturbation(
             coeff=0.01,
             temperature_ref=300,
@@ -94,13 +94,17 @@ def test_heat_perturbation(log_capture):
         # warning if trying to provide temperature range by hands
         with AssertLogLevel(log_capture, "WARNING"):
             _ = td.CustomHeatPerturbation(
-                perturbation_values=perturb_data, interp_method=interp_method, temperature_range=(300, 500)
+                perturbation_values=perturb_data,
+                interp_method=interp_method,
+                temperature_range=(300, 500),
             )
 
         # no warning if temperature range is correct
         with AssertLogLevel(log_capture, None):
             _ = td.CustomHeatPerturbation(
-                perturbation_values=perturb_data, interp_method=interp_method, temperature_range=(200, 400)
+                perturbation_values=perturb_data,
+                interp_method=interp_method,
+                temperature_range=(200, 400),
             )
 
         # test complex type detection
@@ -275,18 +279,27 @@ def test_charge_perturbation(log_capture):
         # warning if trying to provide density ranges by hands
         with AssertLogLevel(log_capture, "WARNING"):
             _ = td.CustomChargePerturbation(
-                perturbation_values=perturb_data, interp_method=interp_method, electron_range=(1e17, 2e18), hole_range=(1e16, 1e18)
+                perturbation_values=perturb_data,
+                interp_method=interp_method,
+                electron_range=(1e17, 2e18),
+                hole_range=(1e16, 1e18),
             )
 
         with AssertLogLevel(log_capture, "WARNING"):
             _ = td.CustomChargePerturbation(
-                perturbation_values=perturb_data, interp_method=interp_method, electron_range=(2e17, 2e18), hole_range=(1e16, 1e19)
+                perturbation_values=perturb_data,
+                interp_method=interp_method,
+                electron_range=(2e17, 2e18),
+                hole_range=(1e16, 1e19),
             )
 
         # no warning if density ranges are correct
         with AssertLogLevel(log_capture, None):
             _ = td.CustomChargePerturbation(
-                perturbation_values=perturb_data, interp_method=interp_method, electron_range=(2e17, 2e18), hole_range=(1e16, 1e18)
+                perturbation_values=perturb_data,
+                interp_method=interp_method,
+                electron_range=(2e17, 2e18),
+                hole_range=(1e16, 1e18),
             )
 
         # test sample function on different arguments
@@ -416,8 +429,8 @@ def test_parameter_perturbation(unstructured):
     with pytest.raises(ValueError):
         _ = param_perturb.apply_data()
 
-def test_permittivity_perturbation():
 
+def test_permittivity_perturbation():
     # auxiliary objects
     heat_pb = td.LinearHeatPerturbation(coeff=0.01, temperature_ref=300)
 
@@ -435,49 +448,41 @@ def test_permittivity_perturbation():
     p_arr = td.SpatialDataArray([[[2e18]]], dims=list("xyz"))
 
     # basic make
-    perm_pb = td.PermittivityPerturbation(
-        deps=td.ParameterPerturbation(
-            heat=heat_pb
-        )
-    )
+    perm_pb = td.PermittivityPerturbation(deps=td.ParameterPerturbation(heat=heat_pb))
 
     deps_range, dsigma_range = perm_pb._deps_dsigma_ranges()
     assert np.all(deps_range != (0, 0))
     assert np.all(dsigma_range == (0, 0))
 
     deps_sampled, dsigma_sampled = perm_pb._sample_deps_dsigma(
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
-    assert deps_sampled.values[0, 0, 0] == heat_pb.coeff * (t_arr.values[0, 0, 0] - heat_pb.temperature_ref)
+    assert deps_sampled.values[0, 0, 0] == heat_pb.coeff * (
+        t_arr.values[0, 0, 0] - heat_pb.temperature_ref
+    )
     assert dsigma_sampled is None
 
-    perm_pb = td.PermittivityPerturbation(
-        dsigma=td.ParameterPerturbation(
-            charge=charge_pb
-        )
-    )
+    perm_pb = td.PermittivityPerturbation(dsigma=td.ParameterPerturbation(charge=charge_pb))
 
     deps_range, dsigma_range = perm_pb._deps_dsigma_ranges()
     assert np.all(deps_range == (0, 0))
     assert np.all(dsigma_range != (0, 0))
 
     deps_sampled, dsigma_sampled = perm_pb._sample_deps_dsigma(
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
     assert deps_sampled is None
-    assert dsigma_sampled.values[0, 0, 0] == charge_pb.electron_coeff * (n_arr.values[0, 0, 0] - charge_pb.electron_ref) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
+    assert dsigma_sampled.values[0, 0, 0] == charge_pb.electron_coeff * (
+        n_arr.values[0, 0, 0] - charge_pb.electron_ref
+    ) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
 
     perm_pb = td.PermittivityPerturbation(
-        deps=td.ParameterPerturbation(
-            charge=charge_pb
-        ),
-        dsigma=td.ParameterPerturbation(
-            heat=heat_pb
-        )
+        deps=td.ParameterPerturbation(charge=charge_pb),
+        dsigma=td.ParameterPerturbation(heat=heat_pb),
     )
 
     deps_range, dsigma_range = perm_pb._deps_dsigma_ranges()
@@ -485,12 +490,16 @@ def test_permittivity_perturbation():
     assert np.all(dsigma_range != (0, 0))
 
     deps_sampled, dsigma_sampled = perm_pb._sample_deps_dsigma(
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
-    assert deps_sampled.values[0, 0, 0] == charge_pb.electron_coeff * (n_arr.values[0, 0, 0] - charge_pb.electron_ref) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
-    assert dsigma_sampled.values[0, 0, 0] == heat_pb.coeff * (t_arr.values[0, 0, 0] - heat_pb.temperature_ref)
+    assert deps_sampled.values[0, 0, 0] == charge_pb.electron_coeff * (
+        n_arr.values[0, 0, 0] - charge_pb.electron_ref
+    ) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
+    assert dsigma_sampled.values[0, 0, 0] == heat_pb.coeff * (
+        t_arr.values[0, 0, 0] - heat_pb.temperature_ref
+    )
 
     # empty perturbation model
     with pytest.raises(ValueError):
@@ -511,8 +520,8 @@ def test_permittivity_perturbation():
             )
         )
 
-def test_index_perturbation():
 
+def test_index_perturbation():
     # auxiliary objects
     heat_pb = td.LinearHeatPerturbation(coeff=0.01, temperature_ref=300)
 
@@ -532,12 +541,7 @@ def test_index_perturbation():
     p_arr = td.SpatialDataArray([[[2e18]]], dims=list("xyz"))
 
     # basic make
-    index_pb = td.IndexPerturbation(
-        dn=td.ParameterPerturbation(
-            heat=heat_pb
-        ),
-        freq=freq0
-    )
+    index_pb = td.IndexPerturbation(dn=td.ParameterPerturbation(heat=heat_pb), freq=freq0)
 
     n, k = 8, 0
     omega0 = 2 * np.pi * freq0
@@ -549,48 +553,49 @@ def test_index_perturbation():
 
     # test sampling
     deps_sampled, dsigma_sampled = index_pb._sample_deps_dsigma(
-        n=n, k=k,
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        n=n,
+        k=k,
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
 
     dn = heat_pb.coeff * (t_arr.values[0, 0, 0] - heat_pb.temperature_ref)
     dk = 0
-    assert np.isclose(deps_sampled.values[0, 0, 0], 2 * n * dn + dn ** 2 - 2 * k * dk - dk ** 2, rtol=1e-14)
+    assert np.isclose(
+        deps_sampled.values[0, 0, 0], 2 * n * dn + dn**2 - 2 * k * dk - dk**2, rtol=1e-14
+    )
     assert dsigma_sampled is None
 
-    index_pb = td.IndexPerturbation(
-        dk=td.ParameterPerturbation(
-            charge=charge_pb
-        ),
-        freq=freq0
-    )
+    index_pb = td.IndexPerturbation(dk=td.ParameterPerturbation(charge=charge_pb), freq=freq0)
 
     # test sampling
     deps_sampled, dsigma_sampled = index_pb._sample_deps_dsigma(
-        n=n, k=k,
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        n=n,
+        k=k,
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
 
     dn = 0
-    dk = charge_pb.electron_coeff * (n_arr.values[0, 0, 0] - charge_pb.electron_ref) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
-    assert np.isclose(deps_sampled.values[0, 0, 0], 2 * n * dn + dn ** 2 - 2 * k * dk - dk ** 2, rtol=1e-14)
-    assert np.isclose(dsigma_sampled.values[0, 0, 0], 2 * omega0 * (k * dn + n * dk + dk * dn), rtol=1e-14)
+    dk = charge_pb.electron_coeff * (
+        n_arr.values[0, 0, 0] - charge_pb.electron_ref
+    ) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
+    assert np.isclose(
+        deps_sampled.values[0, 0, 0], 2 * n * dn + dn**2 - 2 * k * dk - dk**2, rtol=1e-14
+    )
+    assert np.isclose(
+        dsigma_sampled.values[0, 0, 0], 2 * omega0 * (k * dn + n * dk + dk * dn), rtol=1e-14
+    )
 
     deps_range, dsigma_range = index_pb._deps_dsigma_ranges(n, k)
     assert np.all(deps_range != (0, 0))
     assert np.all(dsigma_range != (0, 0))
 
     index_pb = td.IndexPerturbation(
-        dn=td.ParameterPerturbation(
-            charge=charge_pb
-        ),
-        dk=td.ParameterPerturbation(
-            heat=heat_pb
-        ),
+        dn=td.ParameterPerturbation(charge=charge_pb),
+        dk=td.ParameterPerturbation(heat=heat_pb),
         freq=freq0,
     )
 
@@ -602,27 +607,30 @@ def test_index_perturbation():
 
     # test sampling
     deps_sampled, dsigma_sampled = index_pb._sample_deps_dsigma(
-        n=n, k=k,
-        temperature=t_arr, 
-        electron_density=n_arr, 
+        n=n,
+        k=k,
+        temperature=t_arr,
+        electron_density=n_arr,
         hole_density=p_arr,
     )
 
-    dn = charge_pb.electron_coeff * (n_arr.values[0, 0, 0] - charge_pb.electron_ref) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
+    dn = charge_pb.electron_coeff * (
+        n_arr.values[0, 0, 0] - charge_pb.electron_ref
+    ) + charge_pb.hole_coeff * (p_arr.values[0, 0, 0] - charge_pb.hole_ref)
     dk = heat_pb.coeff * (t_arr.values[0, 0, 0] - heat_pb.temperature_ref)
-    assert np.isclose(deps_sampled.values[0, 0, 0], 2 * n * dn + dn ** 2 - 2 * k * dk - dk ** 2, rtol=1e-14)
-    assert np.isclose(dsigma_sampled.values[0, 0, 0], 2 * omega0 * (k * dn + n * dk + dk * dn), rtol=1e-14)
-    
+    assert np.isclose(
+        deps_sampled.values[0, 0, 0], 2 * n * dn + dn**2 - 2 * k * dk - dk**2, rtol=1e-14
+    )
+    assert np.isclose(
+        dsigma_sampled.values[0, 0, 0], 2 * omega0 * (k * dn + n * dk + dk * dn), rtol=1e-14
+    )
+
     # no freq provided
     with pytest.raises(ValueError):
         _ = td.IndexPerturbation(
-        dn=td.ParameterPerturbation(
-            charge=charge_pb
-        ),
-        dk=td.ParameterPerturbation(
-            heat=heat_pb
-        ),
-    )
+            dn=td.ParameterPerturbation(charge=charge_pb),
+            dk=td.ParameterPerturbation(heat=heat_pb),
+        )
 
     # empty perturbation model
     with pytest.raises(ValueError):
