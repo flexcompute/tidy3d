@@ -1,0 +1,180 @@
+beta: 1, penalty_weight: 0.04, penalty: Traced<ConcreteArray(1.0, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(1., dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd19368be0>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfea44860; to 'JaxprTracer' at 0x7fccfea44a50>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b15fe70>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 1
+	beta = 1.0000e+00
+	J = -3.9940e-02
+	grad_norm = 4.8048e-04
+beta: 2, penalty_weight: 0.08, penalty: Traced<ConcreteArray(0.41917376776703386, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.41917377, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd193694c0>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccf3260310; to 'JaxprTracer' at 0x7fccf3260500>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b31d370>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 2
+	beta = 2.0000e+00
+	J = 6.7732e-03
+	grad_norm = 8.9501e-03
+beta: 3, penalty_weight: 0.12, penalty: Traced<ConcreteArray(0.7489875675648758, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.74898757, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccfea18910>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd0894c900; to 'JaxprTracer' at 0x7fcd0894dea0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd087b8f30>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 3
+	beta = 3.0000e+00
+	J = -5.8523e-02
+	grad_norm = 9.5814e-03
+beta: 4, penalty_weight: 0.16, penalty: Traced<ConcreteArray(0.5721687878911486, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.57216879, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd0893b610>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd088594e0; to 'JaxprTracer' at 0x7fcd0b078370>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b339cf0>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 4
+	beta = 4.0000e+00
+	J = -8.3833e-02
+	grad_norm = 5.9015e-03
+beta: 5, penalty_weight: 0.2, penalty: Traced<ConcreteArray(0.42613670570538287, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.42613671, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd0b3a0680>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd08944fe0; to 'JaxprTracer' at 0x7fcd08945180>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd093fe630>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 5
+	beta = 5.0000e+00
+	J = 1.3149e-01
+	grad_norm = 1.1271e-02
+beta: 6, penalty_weight: 0.24, penalty: Traced<ConcreteArray(0.36406556558871184, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.36406557, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf329f970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd088b8ea0; to 'JaxprTracer' at 0x7fcd088b8fa0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccfeaf88f0>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 6
+	beta = 6.0000e+00
+	J = 3.3047e-01
+	grad_norm = 1.5039e-02
+beta: 7, penalty_weight: 0.28, penalty: Traced<ConcreteArray(0.3014650569617154, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.30146506, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd0b348970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfea1c180; to 'JaxprTracer' at 0x7fccfea1e710>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccf1320530>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 7
+	beta = 7.0000e+00
+	J = 4.2363e-01
+	grad_norm = 1.9666e-02
+beta: 8, penalty_weight: 0.32, penalty: Traced<ConcreteArray(0.2748874924440402, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.27488749, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf329db00>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd0b344b30; to 'JaxprTracer' at 0x7fcd0b346940>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b2ef030>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 8
+	beta = 8.0000e+00
+	J = 4.8215e-01
+	grad_norm = 1.4608e-02
+beta: 9, penalty_weight: 0.36, penalty: Traced<ConcreteArray(0.2540044005462358, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.2540044, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccfeae0970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfea06f20; to 'JaxprTracer' at 0x7fccfea04370>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccf1728170>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 9
+	beta = 9.0000e+00
+	J = 6.3775e-01
+	grad_norm = 1.1860e-02
+beta: 10, penalty_weight: 0.4, penalty: Traced<ConcreteArray(0.23300388928395166, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.23300389, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf329d600>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd0b377100; to 'JaxprTracer' at 0x7fcd0b3764e0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b33dd70>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 10
+	beta = 1.0000e+01
+	J = 7.3819e-01
+	grad_norm = 9.7542e-03
+beta: 11, penalty_weight: 0.44, penalty: Traced<ConcreteArray(0.20125531718001463, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.20125532, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd0b25c680>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd08a8bb50; to 'JaxprTracer' at 0x7fcd08a88aa0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd08771d30>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 11
+	beta = 1.1000e+01
+	J = 7.6494e-01
+	grad_norm = 1.3632e-02
+beta: 12, penalty_weight: 0.48, penalty: Traced<ConcreteArray(0.1714571725165667, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.17145717, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd19368f60>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccf32965c0; to 'JaxprTracer' at 0x7fccf32961c0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b1a0a70>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 12
+	beta = 1.2000e+01
+	J = 7.8710e-01
+	grad_norm = 1.3091e-02
+beta: 13, penalty_weight: 0.52, penalty: Traced<ConcreteArray(0.15092490511358822, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.15092491, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf33cc970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd08b69210; to 'JaxprTracer' at 0x7fcd08b6b250>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccf272c6b0>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 13
+	beta = 1.3000e+01
+	J = 8.3799e-01
+	grad_norm = 6.3098e-03
+beta: 14, penalty_weight: 0.56, penalty: Traced<ConcreteArray(0.12977359513621148, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.1297736, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd095eb980>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfeaa8f40; to 'JaxprTracer' at 0x7fccfeaab390>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccfeaeee30>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 14
+	beta = 1.4000e+01
+	J = 8.5027e-01
+	grad_norm = 7.6489e-03
+beta: 15, penalty_weight: 0.6, penalty: Traced<ConcreteArray(0.11337150599762909, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.11337151, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf33dc950>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfea0f0b0; to 'JaxprTracer' at 0x7fccfea0d950>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b31c470>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 15
+	beta = 1.5000e+01
+	J = 8.6756e-01
+	grad_norm = 4.9312e-03
+beta: 16, penalty_weight: 0.64, penalty: Traced<ConcreteArray(0.10124397799984906, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.10124398, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf329ce70>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccf326bdd0; to 'JaxprTracer' at 0x7fccf326bfc0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fcd0b0bc3b0>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 16
+	beta = 1.6000e+01
+	J = 8.7796e-01
+	grad_norm = 4.4875e-03
+beta: 17, penalty_weight: 0.68, penalty: Traced<ConcreteArray(0.08717864310903851, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.08717864, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf33a8970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd0b3bc3b0; to 'JaxprTracer' at 0x7fcd0b3bcb90>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccf39d3d70>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 17
+	beta = 1.7000e+01
+	J = 8.8684e-01
+	grad_norm = 4.5205e-03
+beta: 18, penalty_weight: 0.72, penalty: Traced<ConcreteArray(0.0759562180885155, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.07595622, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd19369690>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fccfeaa7f10; to 'JaxprTracer' at 0x7fccfeaa44b0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccfea61570>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 18
+	beta = 1.8000e+01
+	J = 8.9855e-01
+	grad_norm = 2.8766e-03
+beta: 19, penalty_weight: 0.76, penalty: Traced<ConcreteArray(0.0670649402179575, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.06706494, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fccf33ac970>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd08a90180; to 'JaxprTracer' at 0x7fcd08a917c0>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccf3cc7d70>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 19
+	beta = 1.9000e+01
+	J = 9.0336e-01
+	grad_norm = 3.7757e-03
+beta: 20, penalty_weight: 0.8, penalty: Traced<ConcreteArray(0.059627154358009624, dtype=float64)>with<JVPTrace(level=2/0)> with
+  primal = Array(0.05962715, dtype=float64)
+  tangent = Traced<ShapedArray(float64[])>with<JaxprTrace(level=1/0)> with
+    pval = (ShapedArray(float64[]), None)
+    recipe = JaxprEqnRecipe(eqn_id=<object object at 0x7fcd08939f90>, in_tracers=(Traced<ShapedArray(float64[]):JaxprTrace(level=1/0)>, Traced<ConcreteArray(387.2983346207417, dtype=float64):JaxprTrace(level=1/0)>), out_tracer_refs=[<weakref at 0x7fcd088ad9e0; to 'JaxprTracer' at 0x7fcd088af930>], out_avals=[ShapedArray(float64[])], primitive=pjit, params={'jaxpr': { lambda ; a:f64[] b:f64[]. let c:f64[] = div a b in (c,) }, 'in_shardings': (UnspecifiedValue, UnspecifiedValue), 'out_shardings': (UnspecifiedValue,), 'resource_env': None, 'donated_invars': (False, False), 'name': 'true_divide', 'keep_unused': False, 'inline': True}, effects=set(), source_info=SourceInfo(traceback=<jaxlib.xla_extension.Traceback object at 0x7fccfea76cf0>, name_stack=NameStack(stack=(Transform(name='jvp'),))))
+step = 20
+	beta = 2.0000e+01
+	J = 9.1124e-01
+	grad_norm = 2.6944e-03

@@ -1,0 +1,101 @@
+An NVIDIA GPU may be present on this machine, but a CUDA-enabled jaxlib is not installed. Falling back to cpu.
+beta: 1, penalty_weight: 0.04, penalty: Autograd ArrayBox with value 1.0
+step = 1
+	beta = 1.0000e+00
+	J = -3.9940e-02
+	grad_norm = 4.8047e-04
+beta: 2, penalty_weight: 0.08, penalty: Autograd ArrayBox with value 0.4191924859576494
+step = 2
+	beta = 2.0000e+00
+	J = 6.7468e-03
+	grad_norm = 8.9020e-03
+beta: 3, penalty_weight: 0.12, penalty: Autograd ArrayBox with value 0.7949966606569722
+step = 3
+	beta = 3.0000e+00
+	J = -5.8814e-02
+	grad_norm = 9.8779e-03
+beta: 4, penalty_weight: 0.16, penalty: Autograd ArrayBox with value 0.6217082672566118
+step = 4
+	beta = 4.0000e+00
+	J = -9.8679e-02
+	grad_norm = 1.9726e-03
+beta: 5, penalty_weight: 0.2, penalty: Autograd ArrayBox with value 0.4867193632704107
+step = 5
+	beta = 5.0000e+00
+	J = 1.1943e-01
+	grad_norm = 1.3653e-02
+beta: 6, penalty_weight: 0.24, penalty: Autograd ArrayBox with value 0.45060701780751417
+step = 6
+	beta = 6.0000e+00
+	J = 2.1420e-01
+	grad_norm = 2.3321e-02
+beta: 7, penalty_weight: 0.28, penalty: Autograd ArrayBox with value 0.378072573565799
+step = 7
+	beta = 7.0000e+00
+	J = 2.3426e-01
+	grad_norm = 2.3807e-02
+beta: 8, penalty_weight: 0.32, penalty: Autograd ArrayBox with value 0.33945172234497173
+step = 8
+	beta = 8.0000e+00
+	J = 3.7888e-01
+	grad_norm = 2.0053e-02
+beta: 9, penalty_weight: 0.36, penalty: Autograd ArrayBox with value 0.30508396063295345
+step = 9
+	beta = 9.0000e+00
+	J = 5.9794e-01
+	grad_norm = 1.1515e-02
+beta: 10, penalty_weight: 0.4, penalty: Autograd ArrayBox with value 0.2905793209691824
+step = 10
+	beta = 1.0000e+01
+	J = 6.7924e-01
+	grad_norm = 9.9696e-03
+beta: 11, penalty_weight: 0.44, penalty: Autograd ArrayBox with value 0.27762034168588573
+step = 11
+	beta = 1.1000e+01
+	J = 7.0087e-01
+	grad_norm = 1.1820e-02
+beta: 12, penalty_weight: 0.48, penalty: Autograd ArrayBox with value 0.27466043699410075
+step = 12
+	beta = 1.2000e+01
+	J = 7.4096e-01
+	grad_norm = 7.1235e-03
+beta: 13, penalty_weight: 0.52, penalty: Autograd ArrayBox with value 0.2664036808556472
+step = 13
+	beta = 1.3000e+01
+	J = 7.6044e-01
+	grad_norm = 7.0672e-03
+beta: 14, penalty_weight: 0.56, penalty: Autograd ArrayBox with value 0.2625320707660748
+step = 14
+	beta = 1.4000e+01
+	J = 7.7305e-01
+	grad_norm = 8.3606e-03
+beta: 15, penalty_weight: 0.6, penalty: Autograd ArrayBox with value 0.26560178057150535
+step = 15
+	beta = 1.5000e+01
+	J = 7.5104e-01
+	grad_norm = 1.1609e-02
+beta: 16, penalty_weight: 0.64, penalty: Autograd ArrayBox with value 0.27034248194596194
+step = 16
+	beta = 1.6000e+01
+	J = 7.6800e-01
+	grad_norm = 7.2648e-03
+beta: 17, penalty_weight: 0.68, penalty: Autograd ArrayBox with value 0.2710105488714571
+step = 17
+	beta = 1.7000e+01
+	J = 7.6492e-01
+	grad_norm = 5.4821e-03
+beta: 18, penalty_weight: 0.72, penalty: Autograd ArrayBox with value 0.2679147482970171
+step = 18
+	beta = 1.8000e+01
+	J = 7.6492e-01
+	grad_norm = 4.8988e-03
+beta: 19, penalty_weight: 0.76, penalty: Autograd ArrayBox with value 0.26732905428051185
+step = 19
+	beta = 1.9000e+01
+	J = 7.6126e-01
+	grad_norm = 3.2577e-03
+beta: 20, penalty_weight: 0.8, penalty: Autograd ArrayBox with value 0.2656517272590582
+step = 20
+	beta = 2.0000e+01
+	J = 7.5688e-01
+	grad_norm = 3.8637e-03

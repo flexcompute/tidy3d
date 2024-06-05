@@ -1,7 +1,7 @@
 from typing import Tuple, Union
 from functools import partial
 
-import numpy as np
+import autograd.numpy as np
 
 from ..functions import convolve
 from ..types import KernelType, PaddingType
@@ -12,7 +12,7 @@ def make_filter(
     filter_type: KernelType,
     size: Union[int, Tuple[int, ...]],
     *,
-    normalize: bool = True,
+    normalize: bool = False,
     padding: PaddingType = "reflect",
 ):
     """Create a filter function based on the specified kernel type and size.
@@ -45,10 +45,12 @@ def make_filter(
             else:
                 kernel_size = size
             _kernel[squeezed_array.ndim] = make_kernel(
-                kernel_type=filter_type, size=kernel_size, normalize=normalize
+                kernel_type=filter_type, size=kernel_size, normalize=False
             )
 
-        convolved_array = convolve(squeezed_array, _kernel[squeezed_array.ndim], padding=padding)
+        convolved_array = convolve(
+            squeezed_array, _kernel[squeezed_array.ndim], padding=padding
+        ) / convolve(np.ones_like(squeezed_array), _kernel[squeezed_array.ndim], padding=padding)
         return np.reshape(convolved_array, original_shape)
 
     return _filter

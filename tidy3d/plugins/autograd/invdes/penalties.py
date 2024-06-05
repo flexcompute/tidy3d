@@ -13,7 +13,8 @@ def make_erosion_dilation_penalty(
     beta: float = 100.0,
     eta: float = 0.5,
     delta_eta: float = 0.01,
-    padding: PaddingType = "reflect",
+    padding: PaddingType = "constant",
+    # padding: PaddingType = "reflect",
 ):
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
