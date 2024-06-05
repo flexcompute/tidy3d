@@ -443,9 +443,9 @@ def test_permittivity_perturbation():
         hole_range=[0, 2e19],
     )
 
-    t_arr = td.SpatialDataArray([[[350]]], dims=list("xyz"))
-    n_arr = td.SpatialDataArray([[[1e18]]], dims=list("xyz"))
-    p_arr = td.SpatialDataArray([[[2e18]]], dims=list("xyz"))
+    t_arr = td.SpatialDataArray([[[350]]], coords=dict(x=[0], y=[0], z=[0]))
+    n_arr = td.SpatialDataArray([[[1e18]]], coords=dict(x=[0], y=[0], z=[0]))
+    p_arr = td.SpatialDataArray([[[2e18]]], coords=dict(x=[0], y=[0], z=[0]))
 
     # basic make
     perm_pb = td.PermittivityPerturbation(deps=td.ParameterPerturbation(heat=heat_pb))
@@ -536,9 +536,9 @@ def test_index_perturbation():
 
     freq0 = 1 / td.C_0
 
-    t_arr = td.SpatialDataArray([[[350]]], dims=list("xyz"))
-    n_arr = td.SpatialDataArray([[[1e18]]], dims=list("xyz"))
-    p_arr = td.SpatialDataArray([[[2e18]]], dims=list("xyz"))
+    t_arr = td.SpatialDataArray([[[350]]], coords=dict(x=[0], y=[0], z=[0]))
+    n_arr = td.SpatialDataArray([[[1e18]]], coords=dict(x=[0], y=[0], z=[0]))
+    p_arr = td.SpatialDataArray([[[2e18]]], coords=dict(x=[0], y=[0], z=[0]))
 
     # basic make
     index_pb = td.IndexPerturbation(dn=td.ParameterPerturbation(heat=heat_pb), freq=freq0)

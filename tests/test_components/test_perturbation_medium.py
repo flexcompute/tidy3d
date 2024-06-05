@@ -295,7 +295,7 @@ def test_correct_values(dispersive):
         ),
     )
 
-    t_arr = td.SpatialDataArray([[[333]]], dims=list("xyz"))
+    t_arr = td.SpatialDataArray([[[333]]], coords=dict(x=[0], y=[0], z=[0]))
 
     pp_large_sampled = pp_large.apply_data(temperature=t_arr).values[0, 0, 0]
     pp_small_sampled = pp_small.apply_data(temperature=t_arr).values[0, 0, 0]
