@@ -268,6 +268,41 @@ def assert_single_freq_in_range(field_name: str):
     return _single_frequency_in_range
 
 
+def _warn_potential_error(
+    field_name: str, 
+    base_value: float, 
+    val_change_range: Tuple[float, float], 
+    allowed_real_range: Tuple[float, float], 
+    allowed_imag_range: Tuple[float, float],
+):
+    """Basic validation that perturbations do not drive a parameter out of physical bounds."""
+
+    min_val = val_change_range[0] + base_value
+    max_val = val_change_range[1] + base_value
+
+    for part_range, part_func, part_name in zip(
+        [allowed_real_range, allowed_imag_range], [np.real, np.imag], ["Re", "Im"]
+    ):
+        if part_range is not None:
+            min_allowed, max_allowed = part_range
+
+            if min_allowed is not None and part_func(min_val) < min_allowed:
+                log.warning(
+                    f"'{part_name}({field_name})' could "
+                    f"become less than '{min_allowed}' for a perturbation "
+                    "medium.",
+                    custom_loc=[field_name],
+                )
+
+            if max_allowed is not None and part_func(max_val) > max_allowed:
+                log.warning(
+                    f"'{part_name}({field_name})' could "
+                    f"become greater than '{max_allowed}' for a perturbation "
+                    "medium.",
+                    custom_loc=[field_name],
+                )
+
+
 def validate_parameter_perturbation(
     field_name: str,
     base_field_name: str,
@@ -311,35 +346,19 @@ def validate_parameter_perturbation(
                                 f"Perturbation of '{base_field_name}' cannot be complex."
                             )
 
-                        min_val, max_val = perturb.perturbation_range
-                        min_val = min_val + base_value
-                        max_val = max_val + base_value
-
                         ind_pointer = tuple_ind_str + (
                             "" if np.shape(base_tuple) == () else f"[{paramer_ind}]"
                         )
 
-                        for part_range, part_func, part_name in zip(
-                            [real_range, imag_range], [np.real, np.imag], ["Re", "Im"]
-                        ):
-                            if part_range is not None:
-                                min_allowed, max_allowed = part_range
+                        sub_field_name = base_field_name + ind_pointer
 
-                                if min_allowed is not None and part_func(min_val) < min_allowed:
-                                    log.warning(
-                                        f"'{part_name}({base_field_name}{ind_pointer})' could "
-                                        f"become less than '{min_allowed}' for a perturbation "
-                                        "medium.",
-                                        custom_loc=[field_name],
-                                    )
-
-                                if max_allowed is not None and part_func(max_val) > max_allowed:
-                                    log.warning(
-                                        f"'{part_name}({base_field_name}{ind_pointer})' could "
-                                        f"become greater than '{max_allowed}' for a perturbation "
-                                        "medium.",
-                                        custom_loc=[field_name],
-                                    )
+                        _warn_potential_error(
+                            field_name=sub_field_name, 
+                            base_value=base_value,
+                            val_change_range=perturb.perturbation_range,
+                            allowed_real_range=real_range,
+                            allowed_imag_range=imag_range,
+                        )
         return val
 
     return _warn_perturbed_val_range

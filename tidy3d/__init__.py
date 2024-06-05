@@ -28,6 +28,7 @@ from .components.medium import PerturbationMedium, PerturbationPoleResidue
 from .components.parameter_perturbation import ParameterPerturbation
 from .components.parameter_perturbation import LinearHeatPerturbation, CustomHeatPerturbation
 from .components.parameter_perturbation import LinearChargePerturbation, CustomChargePerturbation
+from .components.parameter_perturbation import PermittivityPerturbation, IndexPerturbation
 
 # time modulation
 from .components.time_modulation import SpaceTimeModulation, SpaceModulation
@@ -215,6 +216,8 @@ __all__ = [
     "CustomHeatPerturbation",
     "LinearChargePerturbation",
     "CustomChargePerturbation",
+    "PermittivityPerturbation", 
+    "IndexPerturbation",
     "NonlinearSpec",
     "NonlinearModel",
     "NonlinearSusceptibility",
