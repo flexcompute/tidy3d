@@ -208,6 +208,24 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         ),
     )
 
+    # custom medium with vector valued permittivity data
+    eps_ii = td.ScalarFieldDataArray(
+        eps_arr.reshape(nx, ny, nz, 1),
+        coords=dict(
+            x=np.linspace(-0.5, 0.5, nx),
+            y=np.linspace(-0.5, 0.5, ny),
+            z=np.linspace(-0.5, 0.5, nz),
+            f=[td.C_0],
+        ),
+    )
+
+    custom_med_vec = td.Structure(
+        geometry=box,
+        medium=td.CustomMedium(
+            eps_dataset=td.PermittivityDataset(eps_xx=eps_ii, eps_yy=eps_ii, eps_zz=eps_ii)
+        ),
+    )
+
     # Polyslab with variable radius about origin
     matrix = np.random.random((NUM_VERTICES, N_PARAMS))
     params_01 = 0.5 * (anp.tanh(matrix @ params) + 1)
@@ -231,6 +249,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         center_list=center_list,
         size_element=size_element,
         custom_med=custom_med,
+        custom_med_vec=custom_med_vec,
         polyslab=polyslab,
     )
 
@@ -279,7 +298,14 @@ def plot_sim(sim: td.Simulation, plot_eps: bool = False) -> None:
 
 
 # TODO: grab these automatically
-structure_keys_ = ("medium", "center_list", "size_element", "custom_med", "polyslab")
+structure_keys_ = (
+    "medium",
+    "center_list",
+    "size_element",
+    "custom_med",
+    "custom_med_vec",
+    "polyslab",
+)
 monitor_keys_ = ("mode", "diff")
 
 # generate combos of all structures with each monitor and all monitors with each structure
@@ -297,6 +323,9 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
+
+
+# args = [("custom_med_vec", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
