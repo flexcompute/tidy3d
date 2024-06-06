@@ -5480,16 +5480,16 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
                 permittivity=perm, conductivity=cond, frequency=p_spec.freq
             )
             n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
-            deps_range, dsigma_range = p_spec._deps_dsigma_ranges(n, k)
+            delta_eps_range, delta_sigma_range = p_spec._delta_eps_delta_sigma_ranges(n, k)
         elif isinstance(p_spec, PermittivityPerturbation):
-            deps_range, dsigma_range = p_spec._deps_dsigma_ranges()
+            delta_eps_range, delta_sigma_range = p_spec._delta_eps_delta_sigma_ranges()
         else:
             raise SetupError("Unknown type of 'perturbation_spec'.")
 
         _warn_potential_error(
             field_name="permittivity",
             base_value=perm,
-            val_change_range=deps_range,
+            val_change_range=delta_eps_range,
             allowed_real_range=(1.0, None),
             allowed_imag_range=None,
         )
@@ -5497,7 +5497,7 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
         _warn_potential_error(
             field_name="conductivity",
             base_value=cond,
-            val_change_range=dsigma_range,
+            val_change_range=delta_sigma_range,
             allowed_real_range=(0.0, None),
             allowed_imag_range=None,
         )
@@ -5562,37 +5562,37 @@ class PerturbationMedium(Medium, AbstractPerturbationMedium):
             temperature, electron_density, hole_density
         )
 
-        deps = None
-        dsigma = None
+        delta_eps = None
+        delta_sigma = None
 
         if self.perturbation_spec is not None:
             pspec = self.perturbation_spec
             if isinstance(pspec, PermittivityPerturbation):
-                deps, dsigma = pspec._sample_deps_dsigma(
+                delta_eps, delta_sigma = pspec._sample_delta_eps_delta_sigma(
                     temperature, electron_density, hole_density
                 )
             elif isinstance(pspec, IndexPerturbation):
                 n, k = self.nk_model(frequency=pspec.freq)
-                deps, dsigma = pspec._sample_deps_dsigma(
+                delta_eps, delta_sigma = pspec._sample_delta_eps_delta_sigma(
                     n, k, temperature, electron_density, hole_density
                 )
         else:
             if self.permittivity_perturbation is not None:
-                deps = self.permittivity_perturbation.apply_data(
+                delta_eps = self.permittivity_perturbation.apply_data(
                     temperature, electron_density, hole_density
                 )
 
             if self.conductivity_perturbation is not None:
-                dsigma = self.conductivity_perturbation.apply_data(
+                delta_sigma = self.conductivity_perturbation.apply_data(
                     temperature, electron_density, hole_density
                 )
 
-        if deps is not None:
-            permittivity_field = permittivity_field + deps
+        if delta_eps is not None:
+            permittivity_field = permittivity_field + delta_eps
 
         conductivity_field = None
-        if dsigma is not None:
-            conductivity_field = self.conductivity + dsigma
+        if delta_sigma is not None:
+            conductivity_field = self.conductivity + delta_sigma
 
         new_dict["permittivity"] = permittivity_field
         new_dict["conductivity"] = conductivity_field
@@ -5698,16 +5698,16 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
                 eps_inf=eps_inf, poles=poles, frequency=p_spec.freq
             )
             n, k = Medium.eps_complex_to_nk(eps_c=eps_complex)
-            deps_range, _ = p_spec._deps_dsigma_ranges(n, k)
+            delta_eps_range, _ = p_spec._delta_eps_delta_sigma_ranges(n, k)
         elif isinstance(p_spec, PermittivityPerturbation):
-            deps_range, _ = p_spec._deps_dsigma_ranges()
+            delta_eps_range, _ = p_spec._delta_eps_delta_sigma_ranges()
         else:
             raise SetupError("Unknown type of 'perturbation_spec'.")
 
         _warn_potential_error(
             field_name="eps_inf",
             base_value=eps_inf,
-            val_change_range=deps_range,
+            val_change_range=delta_eps_range,
             allowed_real_range=(0.0, None),
             allowed_imag_range=None,
         )
@@ -5772,20 +5772,20 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
         if self.perturbation_spec is not None:
             pspec = self.perturbation_spec
             if isinstance(pspec, PermittivityPerturbation):
-                deps, dsigma = pspec._sample_deps_dsigma(
+                delta_eps, delta_sigma = pspec._sample_delta_eps_delta_sigma(
                     temperature, electron_density, hole_density
                 )
             elif isinstance(pspec, IndexPerturbation):
                 n, k = self.nk_model(frequency=pspec.freq)
-                deps, dsigma = pspec._sample_deps_dsigma(
+                delta_eps, delta_sigma = pspec._sample_delta_eps_delta_sigma(
                     n, k, temperature, electron_density, hole_density
                 )
 
-            if deps is not None:
-                eps_inf_field = eps_inf_field + deps
+            if delta_eps is not None:
+                eps_inf_field = eps_inf_field + delta_eps
 
-            if dsigma is not None:
-                poles_field = poles_field + [[zeros, 0.5 * dsigma / EPSILON_0]]
+            if delta_sigma is not None:
+                poles_field = poles_field + [[zeros, 0.5 * delta_sigma / EPSILON_0]]
         else:
             # sample eps_inf
             if self.eps_inf_perturbation is not None:
