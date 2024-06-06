@@ -2450,13 +2450,37 @@ class CustomMedium(AbstractCustomMedium):
     ) -> dict[str, Any]:
         """Compute the adjoint derivative for this geometry."""
 
-        if len(field_paths) != 1 and field_paths[0] != ("permittivity",):
-            raise NotImplementedError(
-                f"Differentiation with respect to {type(self)} {field_paths} " "not supported."
-            )
+        vjps = {}
 
-        eps_data = self.permittivity
+        for field_path in field_paths:
+            if field_path == ("permittivity",):
+                vjp_array = 0.0
+                for dim in "xyz":
+                    vjp_array += self._derivative_field_cmp(
+                        E_der_map=E_der_map, eps_data=self.permittivity, dim=dim
+                    )
+                vjps[field_path] = vjp_array
 
+            elif field_path[0] == "eps_dataset":
+                key = field_path[1]
+                dim = key[-1]
+                vjps[field_path] = self._derivative_field_cmp(
+                    E_der_map=E_der_map, eps_data=self.eps_dataset.field_components[key], dim=dim
+                )
+
+            else:
+                raise NotImplementedError(
+                    f"No derivative defined for 'CustomMedium' field: {field_path}."
+                )
+
+        return vjps
+
+    def _derivative_field_cmp(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        dim: str,
+    ) -> np.ndarray:
         coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
         dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
 
@@ -2486,12 +2510,9 @@ class CustomMedium(AbstractCustomMedium):
             d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        vjp_array = 0.0
-        for dim in "xyz":
-            E_der_dim = E_der_map.field_components[f"E{dim}"]
-            E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
-            vjp_array += np.array(E_der_dim_interp.values).astype(float)
-
+        E_der_dim = E_der_map.field_components[f"E{dim}"]
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+        vjp_array = np.array(E_der_dim_interp.values).astype(float)
         vjp_array = vjp_array.reshape(eps_data.shape)
 
         # multiply by volume elements (if possible, being defensive here..)
@@ -2506,8 +2527,7 @@ class CustomMedium(AbstractCustomMedium):
                 "will be inaccurate. Please raise an issue on the tidy3d front end with this "
                 "message and some information about your simulation setup and we will investigate. "
             )
-
-        return {("permittivity",): vjp_array}
+        return vjp_array
 
 
 """ Dispersive Media """
