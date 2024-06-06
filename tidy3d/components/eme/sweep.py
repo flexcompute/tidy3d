@@ -8,7 +8,7 @@ from typing import Union
 import pydantic.v1 as pd
 
 from ..base import Tidy3dBaseModel
-from ..types import ArrayFloat1D, ArrayFloat2D, ArrayInt1D
+from ..types import ArrayFloat1D, ArrayInt1D, ArrayLike
 
 
 class EMESweepSpec(Tidy3dBaseModel, ABC):
@@ -23,7 +23,7 @@ class EMESweepSpec(Tidy3dBaseModel, ABC):
 class EMELengthSweep(EMESweepSpec):
     """Spec for sweeping EME cell lengths."""
 
-    scale_factors: Union[ArrayFloat1D, ArrayFloat2D] = pd.Field(
+    scale_factors: ArrayLike = pd.Field(
         ...,
         title="Length Scale Factor",
         description="Length scale factors to be used in the EME propagation step. "

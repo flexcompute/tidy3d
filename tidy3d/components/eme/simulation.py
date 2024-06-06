@@ -652,6 +652,11 @@ class EMESimulation(AbstractYeeGridSimulation):
                 )
         elif isinstance(self.sweep_spec, EMELengthSweep):
             scale_factors_shape = self.sweep_spec.scale_factors.shape
+            if len(scale_factors_shape) > 2:
+                raise SetupError(
+                    "Simulation 'sweep_spec.scale_factors' must "
+                    "have either one or two dimensions."
+                )
             if len(scale_factors_shape) == 2:
                 num_scale_factors = scale_factors_shape[1]
                 if num_scale_factors != self.eme_grid.num_cells:
@@ -870,6 +875,41 @@ class EMESimulation(AbstractYeeGridSimulation):
     def _sweep_modes(self) -> bool:
         """Whether the sweep changes the modes."""
         return self.sweep_spec is not None and isinstance(self.sweep_spec, EMEFreqSweep)
+
+    @property
+    def _num_sweep_modes(self) -> pd.PositiveInt:
+        """Number of sweep indices for modes."""
+        if self._sweep_modes:
+            return self._num_sweep
+        return 1
+
+    @property
+    def _sweep_interfaces(self) -> bool:
+        """Whether the sweep changes the cell interface scattering matrices."""
+        return self.sweep_spec is not None and isinstance(
+            self.sweep_spec, (EMEFreqSweep, EMEModeSweep)
+        )
+
+    @property
+    def _num_sweep_interfaces(self) -> pd.PositiveInt:
+        """Number of sweep indices for interfaces."""
+        if self._sweep_interfaces:
+            return self._num_sweep
+        return 1
+
+    @property
+    def _sweep_cells(self) -> bool:
+        """Whether the sweep changes the propagation within a cell."""
+        return self.sweep_spec is not None and isinstance(
+            self.sweep_spec, (EMELengthSweep, EMEFreqSweep, EMEModeSweep)
+        )
+
+    @property
+    def _num_sweep_cells(self) -> pd.PositiveInt:
+        """Number of sweep indices for cells."""
+        if self._sweep_cells:
+            return self._num_sweep
+        return 1
 
     def _monitor_num_sweep(self, monitor: EMEMonitor) -> pd.PositiveInt:
         """Number of sweep indices for a certain monitor."""
