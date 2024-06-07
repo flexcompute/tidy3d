@@ -2406,7 +2406,7 @@ class DiffractionData(AbstractFieldProjectionData):
         units=MICROMETER,
     )
 
-    bloch_vecs: Union[Tuple[float, float], Tuple[np.ndarray, np.ndarray]]  = pd.Field(
+    bloch_vecs: Union[Tuple[float, float], Tuple[ArrayFloat1D, ArrayFloat1D]]  = pd.Field(
         ...,
         title="Bloch vectors",
         description="Bloch vectors along the local x and y directions in units of "
@@ -2420,7 +2420,7 @@ class DiffractionData(AbstractFieldProjectionData):
 
     @staticmethod
     def reciprocal_coords(
-        orders: np.ndarray, size: float, bloch_vec: float, f: float, medium: MediumType
+        orders: np.ndarray, size: float, bloch_vec: Union[float, np.ndarray], f: float, medium: MediumType
     ) -> np.ndarray:
         """Get the normalized "u" reciprocal coords for a vector of orders, size, and bloch vec."""
         if size == 0:
