@@ -822,6 +822,15 @@ SIM_FULL = td.Simulation(
             theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
             far_field_approx=False,
         ),
+        td.DirectivityMonitor(
+            center=(0, 0, 0),
+            size=(0, 2, 2),
+            freqs=[250e12, 300e12],
+            name="directivity",
+            custom_origin=(1, 2, 3),
+            phi=[0, np.pi / 6],
+            theta=np.linspace(np.pi / 4, np.pi / 4 + np.pi / 2, 100),
+        ),
         td.DiffractionMonitor(
             size=(0, td.inf, td.inf),
             center=(0, 0, 0),
