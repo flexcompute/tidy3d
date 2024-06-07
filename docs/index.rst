@@ -187,7 +187,7 @@ Further Information
   About our Solver <https://www.flexcompute.com/tidy3d/solver/>
 
 Github Repositories
-~~~~~~~~~~~~~~~~~
+--------------------
 
 .. list-table::
    :header-rows: 1

@@ -32,14 +32,14 @@ full_build = True
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("_ext"))
-sys.path.insert(0, os.path.abspath("source"))
-sys.path.insert(0, os.path.abspath("notebooks"))
-sys.path.insert(0, os.path.abspath(""))
-sys.path.insert(0, os.path.abspath("../tidy3d"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
-sys.path.insert(0, os.path.abspath("../tidy3d/web"))
-sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
+# sys.path.insert(0, os.path.abspath("source"))
+# sys.path.insert(0, os.path.abspath("notebooks"))
+# # sys.path.insert(0, os.path.abspath(""))
+# sys.path.insert(0, os.path.abspath("../tidy3d"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/web"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
 
 # -- Project information -----------------------------------------------------
 
@@ -66,6 +66,7 @@ autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
     "undoc-members": True,
+    "exclude-members": "SchemaConfig,__init__,Config,attrs,chunk,copy,json,log",
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
@@ -75,7 +76,18 @@ copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: 
 copybutton_prompt_is_regexp = True
 custom_sitemap_excludes = [r"/notebooks/"]
 # divparams_enable_postprocessing = True # TODO FIX
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints", "faq/_faqs/*"]
+exclude_patterns = [
+    "_docs/",
+    "_templates/",
+    "_ext/",
+    "**.ipynb_checkpoints",
+    ".DS_Store",
+    "Thumbs.db",
+    "faq/_faqs/*",
+    "scripts/*",
+    "tests/*",
+    ".github/*",
+]
 extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -152,6 +164,17 @@ html_theme_options = {
 }
 latex_engine = "xelatex"
 language = "en"
+include_patterns = [
+    "tidy3d/*",
+    "faq/docs/**",
+    "notebooks/*.ipynb",
+    "notebooks/docs/*",
+    "**.rst",
+    "**.png",
+    "**.svg",
+    "**.txt",
+    "**/sitemap.xml",
+]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
@@ -224,6 +247,7 @@ latex_elements = {
     """
 }
 
+
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
 #     # The paper size ('letterpaper' or 'a4paper').
@@ -239,3 +263,50 @@ latex_elements = {
 #     #
 #     # 'figure_align': 'htbp',
 # }
+
+"""
+This is basically a hack until I finally get round to writing our own custom sphinx extension which will customise 
+the way we represent our documentation properly. The goal of adding these filters is that at least we'll get useful 
+information on errors, rather than those related to the docs memory - stub page generation tradeoff.
+"""
+import logging
+
+
+class ImportWarningFilter(logging.Filter):
+    def filter(self, record):
+        # Suppress specific autosummary import warnings
+        message = record.getMessage()
+        if "autosummary: failed to import" in message and any(
+            phrase in message
+            for phrase in ["ModuleNotFoundError", "ValueError", "KeyError", "AttributeError"]
+        ):
+            return False
+        return True
+
+
+class AutosummaryFilter(logging.Filter):
+    def filter(self, record):
+        # Suppress "autosummary: stub file not found" warnings
+        if "autosummary" in record.getMessage() and "stub file not found" in record.getMessage():
+            return False
+        return True
+
+
+def add_import_warning_filter(app):
+    # Get the Sphinx logger
+    logger = logging.getLogger("sphinx")
+    # Add the custom filter to the logger
+    logger.addFilter(ImportWarningFilter())
+
+
+def add_autosummary_filter(app):
+    # Get the Sphinx logger
+    logger = logging.getLogger("sphinx")
+    # Add the custom filter to the logger
+    logger.addFilter(AutosummaryFilter())
+
+
+def setup(app):
+    # Apply the custom filter early in the build process
+    app.connect("builder-inited", add_autosummary_filter)
+    app.connect("builder-inited", add_import_warning_filter)

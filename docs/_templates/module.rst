@@ -36,6 +36,7 @@
        {% endblock %}
 
 
-   .. rubric:: Inherited Common Usage
+   .. rubric:: Inherited Methods
 
    .. include:: ../_custom_autosummary/{{ fullname }}.rst
+
