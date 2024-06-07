@@ -5,6 +5,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
+
+### Fixed
+- Bug where boundary layers would be plotted too small in 2D simulations.
+
 ## [2.7.0] - 2024-06-17
 
 ### Added

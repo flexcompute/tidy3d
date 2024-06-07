@@ -8,9 +8,11 @@ import tidy3d as td
 from tidy3d.components.data.data_array import ScalarFieldTimeDataArray
 from tidy3d.components.data.monitor_data import FieldTimeData
 from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.file_util import replace_values
 from tidy3d.components.monitor import FieldMonitor, FieldTimeMonitor, ModeMonitor
 from tidy3d.exceptions import DataError, Tidy3dKeyError
 
+from ..utils import get_nested_shape
 from .test_data_arrays import FIELD_MONITOR, SIM, SIM_SYM
 from .test_monitor_data import (
     make_diffraction_data,
@@ -414,3 +416,57 @@ def test_loading_non_field_data():
     sim_data = make_sim_data()
     with pytest.raises(DataError):
         sim_data.load_field_monitor("flux")
+
+
+def test_replace_values_dict():
+    """
+    Test that replacing values in initial dict hasn't changed the shape and that values have been correctly replaced.
+    Used in simData.to_mat() method.
+    """
+    # Create data for test
+    test_data = make_sim_data()
+    test_data_dict = test_data.dict()
+    test_data_dict["none_test"] = None  # Check that replace works at top level of nested dict
+
+    # Get the original shape of nested dict
+    original_shape = get_nested_shape(test_data_dict)
+
+    # Modify dict and get shape of dict
+    new_data = replace_values(test_data_dict, None, [])
+    new_shape = get_nested_shape(new_data)
+
+    assert (
+        original_shape == new_shape
+        and new_data["simulation"]["medium"]["name"] == []
+        and new_data["none_test"] == []
+    )
+
+
+def test_replace_values_list():
+    """
+    Test that replacing values in initial list hasn't changed the shape and that values have been correctly replaced.
+    """
+    # Create data for test
+    test_list = [
+        {"nest1": {"nest2": {"nest3": None}}},
+        None,
+        [5, "asdf", 12.34, None, False, [3.14, None]],
+        3.14,
+        (None, None, "notNone"),
+    ]
+    original_shape = get_nested_shape(test_list)
+
+    # Modify list and get shape
+    new_list = replace_values(test_list, 3.14, [])
+    new_shape = get_nested_shape(new_list)
+
+    assert original_shape == new_shape and new_list[3] == [] and new_list[2][5][0] == []
+
+
+def test_to_mat_file(tmp_path):
+    """
+    Test output of ``.mat`` file completes without error.
+    """
+    sim_data = make_sim_data()
+    path = str(tmp_path / "test.mat")
+    sim_data.to_mat_file(path)

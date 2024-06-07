@@ -12,11 +12,13 @@ import h5py
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
+from scipy.io import savemat
 
-from ...exceptions import DataError, Tidy3dKeyError
+from ...exceptions import DataError, FileError, Tidy3dKeyError
 from ...log import log
 from ..base import JSON_TAG
 from ..base_sim.data.sim_data import AbstractSimulationData
+from ..file_util import replace_values
 from ..monitor import Monitor
 from ..simulation import Simulation
 from ..source import Source
@@ -1003,3 +1005,44 @@ class SimulationData(AbstractYeeGridSimulationData):
 
         monitor_name = Structure.get_monitor_name(index=structure_index, data_type=data_type)
         return self[monitor_name]
+
+    def to_mat_file(self, fname: str, **kwargs):
+        """Output the ``SimulationData`` object as ``.mat`` MATLAB file.
+
+        Parameters
+        ----------
+        fname : str
+            Full path to the output file. Should include ``.mat`` file extension.
+        **kwargs : dict, optional
+            Extra arguments to ``scipy.io.savemat``: see ``scipy`` documentation for more detail.
+
+        Example
+        -------
+        >>> simData.to_mat_file('/path/to/file/data.mat') # doctest: +SKIP
+        """
+        # Check .mat file extension is given
+        extension = pathlib.Path(fname).suffixes[0].lower()
+        if len(extension) == 0:
+            raise FileError(f"File '{fname}' missing extension.")
+        if extension != ".mat":
+            raise FileError(f"File '{fname}' should have a .mat extension.")
+
+        # Handle m_dict in kwargs
+        if "m_dict" in kwargs:
+            raise ValueError(
+                "'m_dict' is automatically determined by 'to_mat_file', can't pass to 'savemat'."
+            )
+
+        # Get SimData object as dictionary
+        sim_dict = self.dict()
+
+        # Remove NoneType values from dict
+        # Built from theory discussed in https://github.com/scipy/scipy/issues/3488
+        modified_sim_dict = replace_values(sim_dict, None, [])
+
+        try:
+            savemat(fname, modified_sim_dict, **kwargs)
+        except Exception as e:
+            raise ValueError(
+                "Could not save supplied 'SimulationData' to file. As this is an experimental feature, we may not be able to support the contents of your dataset. If you receive this error, please feel free to raise an issue on our front end repository so we can investigate."
+            ) from e
