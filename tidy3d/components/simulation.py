@@ -134,7 +134,7 @@ NUM_CELLS_WARN_EPSILON = 100_000_000
 NUM_STRUCTURES_WARN_EPSILON = 10_000
 
 # height of the PML plotting boxes along any dimensions where sim.size[dim] == 0
-PML_HEIGHT_FOR_0_DIMS = 0.02
+PML_HEIGHT_FOR_0_DIMS = inf
 
 
 class AbstractYeeGridSimulation(AbstractSimulation, ABC):

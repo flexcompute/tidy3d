@@ -1158,3 +1158,39 @@ def get_test_root_dir():
     """return the root folder of test code"""
 
     return Path(__file__).parent
+
+
+def get_nested_shape(nested_obj: Any) -> Any:
+    """
+    Recursively iterate through a nested object replacing values with None.
+    Empty list/tuple/dict are replaced with None.
+    Builds the structure for comparison to other nested objects.
+    Used to check structure hasn't changed when nested_obj data has been altered.
+    Similar concept to .shape method for numpy arrays.
+
+    Parameters
+    ----------
+    nested_obj : Any
+        A nested object to be reduced to its shape.
+
+    Returns
+    -------
+    Any
+        The nested object with values replaced with None whilst keeping the same nested structure.
+    """
+    if isinstance(nested_obj, dict):
+        if len(nested_obj) == 0:
+            return None
+        else:
+            return {key: get_nested_shape(nested_obj[key]) for key in nested_obj}
+
+    # Tuple of dicts, enter and continue iteration
+    elif isinstance(nested_obj, (tuple, list)):
+        if len(nested_obj) == 0:
+            return None
+        else:
+            return type(nested_obj)(get_nested_shape(val) for val in nested_obj)
+
+    # Replace everything else with None
+    else:
+        return None
