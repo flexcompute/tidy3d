@@ -1,5 +1,5 @@
-EME
-=============
+EME |:rainbow:|
+===============
 
 .. toctree::
     :hidden:
