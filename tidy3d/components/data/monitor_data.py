@@ -2483,6 +2483,15 @@ class FieldProjectionKSpaceData(AbstractFieldProjectionData):
 class DiffractionData(AbstractFieldProjectionData):
     """Data for a :class:`.DiffractionMonitor`: complex components of diffracted far fields.
 
+    Note
+    ----
+
+        The diffraction data are separated into S and P polarizations. At normal incidence when
+        S and P are undefined, P(S) corresponds to ``Ey``(``Ez``) polarization for monitor normal
+        to x, P(S) corresponds to ``Ex``(``Ez``) polarization for monitor normal to y, and P(S)
+        corresponds to ``Ex``(``Ey``) polarization for monitor normal to z.
+
+
     Example
     -------
     >>> from tidy3d import DiffractionDataArray
