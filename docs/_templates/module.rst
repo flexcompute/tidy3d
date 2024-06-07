@@ -8,19 +8,20 @@
    :show-inheritance:
    :undoc-members:
    :member-order: bysource
-   :exclude-members: SchemaConfig,__init__,Config,attrs,chunk,copy,json,log
 
    {% block attributes %}
    {% if attributes %}
    .. rubric:: Attributes
 
    .. autosummary::
-       :toctree:
-       {% for item in attributes %}
-            {{ item }}
-       {%- endfor %}
-       {% endif %}
-       {% endblock %}
+      :toctree:
+      {% for item in attributes %}
+      {% if item not in inherited_members %}
+        {{ item }}
+      {% endif %}
+      {%- endfor %}
+      {% endif %}
+      {% endblock %}
 
    {% block methods %}
    {% if methods %}
@@ -29,7 +30,14 @@
    .. autosummary::
        :toctree:
        {% for item in methods %}
+          {% if item not in inherited_members %}
             {{ item }}
+          {% endif %}
        {%- endfor %}
        {% endif %}
        {% endblock %}
+
+
+   .. rubric:: Commonly Used - Inherited
+
+   .. include:: ../_custom_autosummary/{{ fullname }}.rst
