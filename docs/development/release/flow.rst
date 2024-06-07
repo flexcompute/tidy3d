@@ -35,7 +35,7 @@ a clean branch on your machine.
 
 
 Create your feature rebase
-''''''''''''''''''''''''''''''
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Before rebasing, you should make sure you have the latest version
 of ``develop``, in case other work has been merged meanwhile.
@@ -77,7 +77,7 @@ rebasing has changed its history.
    git push -f origin my_name/new_feature
 
 Submitting to PR
-'''''''''''''''''
+^^^^^^^^^^^^^^^^^
 
 After this, you can notify Momchil that the branch is ready to to be
 merged. In the comment you can optionally also say things like “Fixes

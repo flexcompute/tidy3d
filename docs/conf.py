@@ -63,10 +63,11 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 # autodoc_inherit_docstrings = True  # If no docstring, inherit from base class
 autodoc_class_signature = "separated"
 autodoc_default_options = {
+    "members": True,
     "inherited-members": True,
     "member-order": "bysource",
     "undoc-members": True,
-    "exclude-members": "SchemaConfig,__init__,Config,attrs",
+    "exclude-members": "SchemaConfig,__init__,Config,attrs,chunk,copy,json,log",
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
