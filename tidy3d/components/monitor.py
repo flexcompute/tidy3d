@@ -1,23 +1,36 @@
 """Objects that define how data is recorded from simulation."""
+
 from abc import ABC, abstractmethod
-from typing import Union, Tuple
+from typing import Tuple, Union
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
-from .types import Ax, EMField, ArrayFloat1D, FreqArray, FreqBound, Bound, Size
-from .types import Literal, Direction, Coordinate, Axis, ObsGridArray, BoxSurface
-from .validators import assert_plane, validate_freqs_not_empty, validate_freqs_min
-from .base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
-from .mode import ModeSpec
-from .apodization import ApodizationSpec
-from .medium import MediumType
-from .viz import ARROW_COLOR_MONITOR, ARROW_ALPHA
-from ..constants import HERTZ, SECOND, MICROMETER, RADIAN, inf
+from ..constants import HERTZ, MICROMETER, RADIAN, SECOND, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-
+from .apodization import ApodizationSpec
+from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
+from .medium import MediumType
+from .mode import ModeSpec
+from .types import (
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Bound,
+    BoxSurface,
+    Coordinate,
+    Direction,
+    EMField,
+    FreqArray,
+    FreqBound,
+    Literal,
+    ObsGridArray,
+    Size,
+)
+from .validators import assert_plane, validate_freqs_min, validate_freqs_not_empty
+from .viz import ARROW_ALPHA, ARROW_COLOR_MONITOR
 
 BYTES_REAL = 4
 BYTES_COMPLEX = 8
@@ -216,14 +229,14 @@ class AbstractFieldMonitor(Monitor, ABC):
         description="Collection of field components to store in the monitor.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
     )
 
     colocate: bool = pydantic.Field(
@@ -461,14 +474,14 @@ class PermittivityMonitor(FreqMonitor):
         "physical meaning - they do not correspond to the subpixel-averaged ones.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals between monitor recordings. If equal to 1, "
-        "there will be no downsampling. If greater than 1, the step will be applied, but the "
-        "first and last point of the monitor grid are always included.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals between monitor recordings. If equal to 1, "
+            "there will be no downsampling. If greater than 1, the step will be applied, but the "
+            "first and last point of the monitor grid are always included.",
+        )
     )
 
     apodization: ApodizationSpec = pydantic.Field(
@@ -788,19 +801,19 @@ class AbstractFieldProjectionMonitor(SurfaceIntegrationMonitor, FreqMonitor):
         "in the far field of the device.",
     )
 
-    interval_space: Tuple[
-        pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt
-    ] = pydantic.Field(
-        (1, 1, 1),
-        title="Spatial Interval",
-        description="Number of grid step intervals at which near fields are recorded for "
-        "projection to the far field, along each direction. If equal to 1, there will be no "
-        "downsampling. If greater than 1, the step will be applied, but the first and last "
-        "point of the monitor grid are always included. Using values greater than 1 can "
-        "help speed up server-side far field projections with minimal accuracy loss, "
-        "especially in cases where it is necessary for the grid resolution to be high for "
-        "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
-        "projecting the recorded near fields to the far field.",
+    interval_space: Tuple[pydantic.PositiveInt, pydantic.PositiveInt, pydantic.PositiveInt] = (
+        pydantic.Field(
+            (1, 1, 1),
+            title="Spatial Interval",
+            description="Number of grid step intervals at which near fields are recorded for "
+            "projection to the far field, along each direction. If equal to 1, there will be no "
+            "downsampling. If greater than 1, the step will be applied, but the first and last "
+            "point of the monitor grid are always included. Using values greater than 1 can "
+            "help speed up server-side far field projections with minimal accuracy loss, "
+            "especially in cases where it is necessary for the grid resolution to be high for "
+            "the FDTD simulation, but such a high resolution is unnecessary for the purpose of "
+            "projecting the recorded near fields to the far field.",
+        )
     )
 
     window_size: Tuple[pydantic.NonNegativeFloat, pydantic.NonNegativeFloat] = pydantic.Field(

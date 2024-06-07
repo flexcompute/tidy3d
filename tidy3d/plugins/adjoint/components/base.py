@@ -1,18 +1,31 @@
 """Base model for Tidy3D components that are compatible with jax."""
+
 from __future__ import annotations
 
-from typing import Tuple, List, Any, Callable
 import json
+from typing import Any, Callable, List, Tuple
 
-import numpy as np
 import jax
+import numpy as np
 import pydantic.v1 as pd
-
 from jax.tree_util import tree_flatten as jax_tree_flatten
 from jax.tree_util import tree_unflatten as jax_tree_unflatten
 
 from ....components.base import Tidy3dBaseModel
-from .data.data_array import JaxDataArray, JAX_DATA_ARRAY_TAG
+from .data.data_array import JAX_DATA_ARRAY_TAG, JaxDataArray
+
+# end of the error message when a ``_validate_web_adjoint`` exception is raised
+WEB_ADJOINT_MESSAGE = (
+    "You can still run this simulation through "
+    "'tidy3d.plugins.adjoint.web.run_local' or 'tidy3d.plugins.adjoint.web.run_local' "
+    ", which are similar to 'run' / 'run_async', but "
+    "perform the gradient postprocessing calculation locally after the simulation runs. "
+    "Note that the postprocessing time can become "
+    "quite long (several minutes or more) if these restrictions are exceeded. "
+    "Furthermore, the local versions of 'adjoint' require downloading field data "
+    "inside of the 'input_structures', which can greatly increase the size of data "
+    "needing to be downloaded."
+)
 
 
 class JaxObject(Tidy3dBaseModel):
@@ -56,6 +69,10 @@ class JaxObject(Tidy3dBaseModel):
         # TODO: don't use getattr, define this dictionary better
         jax_field_names = self.get_jax_field_names()
         return {key: getattr(self, key) for key in jax_field_names}
+
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        pass
 
     """Methods needed for jax to register arbitrary classes."""
 

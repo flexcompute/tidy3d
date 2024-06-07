@@ -1,43 +1,45 @@
 """Defines heat simulation class"""
+
 from __future__ import annotations
 
-from typing import Tuple, List, Dict
+from typing import Dict, List, Tuple
+
+import numpy as np
+import pydantic.v1 as pd
 from matplotlib import cm
 
-import pydantic.v1 as pd
-
-from .boundary import TemperatureBC, HeatFluxBC, ConvectionBC
-from .boundary import HeatBoundarySpec
-from .source import HeatSourceType, UniformHeatSource
-from .monitor import HeatMonitorType
-from .grid import HeatGridType
-from .viz import HEAT_BC_COLOR_TEMPERATURE, HEAT_BC_COLOR_FLUX, HEAT_BC_COLOR_CONVECTION
-from .viz import plot_params_heat_bc, plot_params_heat_source, HEAT_SOURCE_CMAP
-
-from ..base_sim.simulation import AbstractSimulation
-from ..base import cached_property, skip_if_fields_missing
-from ..types import Ax, Shapely, TYPE_TAG_STR, ScalarSymmetry, Bound
-from ..viz import add_ax_if_none, equal_aspect, PlotParams
-from ..structure import Structure
-from ..geometry.base import Box, GeometryGroup
-from ..geometry.primitives import Sphere, Cylinder
-from ..geometry.polyslab import PolySlab
-from ..geometry.mesh import TriangleMesh
-from ..scene import Scene
-from ..heat_spec import SolidSpec
-
-from ..bc_placement import StructureBoundary, StructureStructureInterface
-from ..bc_placement import StructureSimulationBoundary, SimulationBoundary
-from ..bc_placement import MediumMediumInterface
-
+from ...constants import VOLUMETRIC_HEAT_RATE, inf
 from ...exceptions import SetupError
-from ...constants import inf, VOLUMETRIC_HEAT_RATE
-
 from ...log import log
+from ..base import cached_property, skip_if_fields_missing
+from ..base_sim.simulation import AbstractSimulation
+from ..bc_placement import (
+    MediumMediumInterface,
+    SimulationBoundary,
+    StructureBoundary,
+    StructureSimulationBoundary,
+    StructureStructureInterface,
+)
+from ..geometry.base import Box
+from ..heat_spec import SolidSpec
+from ..scene import Scene
+from ..structure import Structure
+from ..types import TYPE_TAG_STR, Ax, Bound, ScalarSymmetry, Shapely
+from ..viz import PlotParams, add_ax_if_none, equal_aspect
+from .boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
+from .grid import DistanceUnstructuredGrid, HeatGridType, UniformUnstructuredGrid
+from .monitor import HeatMonitorType
+from .source import HeatSourceType, UniformHeatSource
+from .viz import (
+    HEAT_BC_COLOR_CONVECTION,
+    HEAT_BC_COLOR_FLUX,
+    HEAT_BC_COLOR_TEMPERATURE,
+    HEAT_SOURCE_CMAP,
+    plot_params_heat_bc,
+    plot_params_heat_source,
+)
 
 HEAT_BACK_STRUCTURE_STR = "<<<HEAT_BACKGROUND_STRUCTURE>>>"
-
-HeatSingleGeometryType = (Box, Cylinder, Sphere, PolySlab, TriangleMesh)
 
 
 class HeatSimulation(AbstractSimulation):
@@ -115,34 +117,98 @@ class HeatSimulation(AbstractSimulation):
                 raise SetupError(
                     f"'HeatSimulation' does not currently support structures with dimensions of zero size ('structures[{ind}]')."
                 )
+        return val
 
-            if isinstance(structure.geometry, GeometryGroup):
-                geometries = structure.geometry.geometries
+    @staticmethod
+    def _check_cross_solids(objs: Tuple[Box, ...], values: Dict) -> Tuple[int, ...]:
+        """Given model dictionary ``values``, check whether objects in list ``objs`` cross
+        a ``SolidSpec`` medium.
+        """
+
+        try:
+            size = values["size"]
+            center = values["center"]
+            medium = values["medium"]
+            structures = values["structures"]
+        except KeyError:
+            raise SetupError(
+                "Function '_check_cross_solids' assumes dictionary 'values' contains well-defined "
+                "'size', 'center',  'medium', and 'structures'. Thus, it should only be used in "
+                "validators with @skip_if_fields_missing(['medium', 'center', 'size', 'structures']) "
+                "or root validators with option 'skip_on_failure=True'."
+            )
+
+        # list of structures including background as a Box()
+        structure_bg = Structure(
+            geometry=Box(
+                size=size,
+                center=center,
+            ),
+            medium=medium,
+        )
+
+        total_structures = [structure_bg] + list(structures)
+
+        failed_obj_inds = []
+        for ind, obj in enumerate(objs):
+            if obj.size.count(0.0) == 1:
+                # for planar objects we could do a rigorous check
+                medium_set = Scene.intersecting_media(obj, total_structures)
+                crosses_solid = any(
+                    isinstance(medium.heat_spec, SolidSpec) for medium in medium_set
+                )
             else:
-                geometries = [structure.geometry]
-            for geom in geometries:
-                if isinstance(geom, (GeometryGroup)):
-                    raise SetupError(
-                        "'HeatSimulation' does not currently support recursive 'GeometryGroup's ('structures[{ind}]')."
-                    )
-                if not isinstance(geom, HeatSingleGeometryType):
-                    geom_names = [f"'{cl.__name__}'" for cl in HeatSingleGeometryType]
-                    raise SetupError(
-                        "'HeatSimulation' does not currently support geometries of type "
-                        f"'{geom.type}'  ('structures[{ind}]'). Allowed geometries are "
-                        f"{', '.join(geom_names)}, "
-                        "and non-recursive 'GeometryGroup'."
-                    )
+                # approximate check for volumetric objects based on bounding boxes
+                # thus, it could still miss a case when there is no data inside the monitor
+                crosses_solid = any(
+                    obj.intersects(structure.geometry)
+                    for structure in total_structures
+                    if isinstance(structure.medium.heat_spec, SolidSpec)
+                )
+
+            if not crosses_solid:
+                failed_obj_inds.append(ind)
+
+        return failed_obj_inds
+
+    @pd.validator("monitors", always=True)
+    @skip_if_fields_missing(["medium", "center", "size", "structures"])
+    def _monitors_cross_solids(cls, val, values):
+        """Error if monitors does not cross any solid medium."""
+
+        if val is None:
+            return val
+
+        failed_mnt_inds = cls._check_cross_solids(val, values)
+
+        if len(failed_mnt_inds) > 0:
+            monitor_names = [f"'{val[ind].name}'" for ind in failed_mnt_inds]
+            raise SetupError(
+                f"Monitors {monitor_names} do not cross any solid materials "
+                "('heat_spec=SolidSpec(...)'). The heat equation is solved only inside solid "
+                "materials. Thus, no information will be recorded in these monitors."
+            )
+
         return val
 
     @pd.validator("size", always=True)
     def check_zero_dim_domain(cls, val, values):
         """Error if heat domain have zero dimensions."""
 
-        if any(length == 0 for length in val):
-            raise SetupError(
-                "'HeatSimulation' does not currently support domains with dimensions of zero size."
-            )
+        dim_names = ["x", "y", "z"]
+        zero_dimensions = [False, False, False]
+        zero_dim_str = ""
+        for n, v in enumerate(val):
+            if v == 0:
+                zero_dimensions[n] = True
+                zero_dim_str += f"{dim_names[n]}- "
+
+        num_zero_dims = np.sum(zero_dimensions)
+
+        if num_zero_dims > 1:
+            mssg = f"Your current HeatSimulation has zero size along the {zero_dim_str}dimensions. "
+            mssg += "Only 2- and 3-D simulations are currently supported."
+            raise SetupError(mssg)
 
         return val
 
@@ -162,7 +228,7 @@ class HeatSimulation(AbstractSimulation):
                 if bc_place.structure not in structures_names:
                     raise SetupError(
                         f"Structure '{bc_place.structure}' provided in "
-                        f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}')"
+                        f"'boundary_spec[{bc_ind}].placement' (type '{bc_place.type}') "
                         "is not found among simulation structures."
                     )
             if isinstance(bc_place, (StructureStructureInterface)):
@@ -211,6 +277,26 @@ class HeatSimulation(AbstractSimulation):
 
         return val
 
+    @pd.validator("grid_spec", always=True)
+    def warn_if_minimal_mesh_size_override(cls, val, values):
+        """Warn if minimal mesh size limit overrides desired mesh size."""
+
+        max_size = np.max(values.get("size"))
+        min_dl = val.relative_min_dl * max_size
+
+        if isinstance(val, UniformUnstructuredGrid):
+            desired_min_dl = val.dl
+        if isinstance(val, DistanceUnstructuredGrid):
+            desired_min_dl = min(val.dl_interface, val.dl_bulk)
+
+        if desired_min_dl < min_dl:
+            log.warning(
+                f"The resulting limit for minimal mesh size from parameter 'relative_min_dl={val.relative_min_dl}' is {min_dl}, while provided mesh size in 'grid_spec' is {desired_min_dl}. "
+                "Consider lowering parameter 'relative_min_dl' if a finer grid is required."
+            )
+
+        return val
+
     @pd.validator("sources", always=True)
     @skip_if_fields_missing(["structures"])
     def names_exist_sources(cls, val, values):
@@ -230,12 +316,17 @@ class HeatSimulation(AbstractSimulation):
     @pd.root_validator(skip_on_failure=True)
     def check_medium_heat_spec(cls, values):
         """Error if no structures with SolidSpec."""
-        medium = values["medium"]
-        structures = values["structures"]
-        if not (
-            isinstance(medium.heat_spec, SolidSpec)
-            or any(isinstance(struct.medium.heat_spec, SolidSpec) for struct in structures)
-        ):
+
+        sim_box = (
+            Box(
+                size=values.get("size"),
+                center=values.get("center"),
+            ),
+        )
+
+        failed = cls._check_cross_solids(sim_box, values)
+
+        if len(failed) > 0:
             raise SetupError(
                 "No solid materials ('SolidSpec') are detected in heat simulation. Solution domain is empty."
             )

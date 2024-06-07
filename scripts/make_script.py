@@ -8,14 +8,17 @@ to turn existing `simulation.json` into a script `simulation.py`
 
 """
 
-import tidy3d as td
 import argparse
-import sys
+import os
 import re
-from black import format_str, FileMode
+import subprocess
+import sys
+import tempfile
+
+import tidy3d as td
 
 
-def main(args):
+def parse_arguments(args):
     parser = argparse.ArgumentParser(description="Generate tidy3d script from a simulation file.")
 
     parser.add_argument(
@@ -29,7 +32,11 @@ def main(args):
         "script_file", type=str, default="simulation.py", help="path to the .py script to write to."
     )
 
-    args = parser.parse_args(args)
+    return parser.parse_args(args)
+
+
+def main(args):
+    args = parse_arguments(args)
 
     sim_file = args.simulation_file
     out_file = args.script_file
@@ -61,10 +68,25 @@ def main(args):
     pattern = r"\(type='([A-Za-z0-9_\./\\-]*)', "
     sim_string = re.sub(pattern, "(", sim_string)
 
-    # black to format string
-    sim_string = format_str(sim_string, mode=FileMode())
+    # write sim_string to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, mode="w+", suffix=".py") as temp_file:
+        temp_file.write(sim_string)
+        temp_file_path = temp_file.name
+    try:
+        # run ruff to format the temporary file
+        subprocess.run(["ruff", "format", temp_file_path], check=True)
+        # read the formatted content back
+        with open(temp_file_path) as temp_file:
+            sim_string = temp_file.read()
+    except subprocess.CalledProcessError:
+        raise RuntimeError(
+            "Ruff formatting failed. Your script might not be compatible with make_script.py. "
+            "This could be due to unsupported features like CustomMedium."
+        )
+    finally:
+        # remove the temporary file
+        os.remove(temp_file_path)
 
-    # write to file
     with open(out_file, "w+") as f:
         f.write(sim_string)
 

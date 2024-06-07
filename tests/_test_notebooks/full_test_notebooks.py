@@ -1,12 +1,10 @@
 import os
 import sys
 
-import pytest
-
 # note: these libraries throw Deprecation warnings in python 3.9, so they are ignored in pytest.ini
 import nbformat
-from nbconvert.preprocessors import CellExecutionError
-from nbconvert.preprocessors import ExecutePreprocessor
+import pytest
+from nbconvert.preprocessors import CellExecutionError, ExecutePreprocessor
 
 sys.path.append("tidy3d")
 
@@ -28,17 +26,19 @@ for _, path in enumerate(notebook_filenames_all):
     notebook_base = path.split("/")[-1]
     print(f"'{notebook_base[:-6]}',")
 
-
 # if you want to run only some notebooks, put here, if empty, run all
 run_only = []
 
 skip = [
-    "AdjointPlugin5BoundaryGradients",
-    "AdjointPlugin6GratingCoupler",
-    "AdjointPlugin7Metalens",
-    "AdjointPlugin8WaveguideBend",
-    "AdjointPlugin9WDM",
-    "AdjointPlugin11CircuitMZI",
+    # long time (excluding most adjoint)
+    "8ChannelDemultiplexer",
+    "BullseyeCavityPSO",
+    "FocusedApodGC",
+    "GeneticAlgorithmReflector",
+    "ParticleSwarmOptimizedPBS",
+    # hang by default
+    "AdjointPlugin14PreFab.ipynb",
+    "WaveguideBendSimulator",
 ]
 
 # if any run only supplied, only add those
@@ -52,13 +52,17 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """
-as of Nov 10 2023
+as of April 15 2024
 '8ChannelDemultiplexer',
 '90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
 'AdiabaticCouplerLN',
+'AdjointPlugin0Quickstart',
 'AdjointPlugin10YBranchLevelSet',
 'AdjointPlugin11CircuitMZI',
+'AdjointPlugin12LightExtractor',
+'AdjointPlugin13Metasurface',
+'AdjointPlugin14PreFab',
 'AdjointPlugin1Intro',
 'AdjointPlugin2GradientChecking',
 'AdjointPlugin3InverseDesign',
@@ -68,10 +72,12 @@ as of Nov 10 2023
 'AdjointPlugin7Metalens',
 'AdjointPlugin8WaveguideBend',
 'AdjointPlugin9WDM',
+'AllDielectricStructuralColor',
 'AndersonLocalization',
 'AnimationTutorial',
 'AutoGrid',
 'Bandstructure',
+'BilayerSiNEdgeCoupler',
 'BilevelPSR',
 'BiosensorGrating',
 'BistablePCCavity',
@@ -79,22 +85,29 @@ as of Nov 10 2023
 'BraggGratings',
 'BroadbandDirectionalCoupler',
 'BullseyeCavityPSO',
+'CMOSRGBSensor',
 'CavityFOM',
 'CreatingGeometryUsingTrimesh',
 'CustomFieldSource',
 'CustomMediumTutorial',
+'Design',
 'DielectricMetasurfaceAbsorber',
 'Dispersion',
 'DistributedBraggReflectorCavity',
 'DivergedFDTDSimulation',
+'EMESolver',
 'EdgeCoupler',
+'EffectiveIndexApproximation',
 'EulerWaveguideBend',
 'FieldProjections',
 'Fitting',
 'FocusedApodGC',
 'FresnelLens',
 'FullyAnisotropic',
+'GDSExport',
 'GDSImport',
+'GeneticAlgorithmReflector',
+'GeometryTransformations',
 'GradientMetasurfaceReflector',
 'GrapheneMetamaterial',
 'GratingCoupler',
@@ -103,7 +116,9 @@ as of Nov 10 2023
 'HeatSolver',
 'HighQGe',
 'HighQSi',
+'MIMResonator',
 'MMI1x4',
+'MachZehnderModulator',
 'MetalHeaterPhaseShifter',
 'Metalens',
 'MicrowaveFrequencySelectiveSurface',
@@ -115,6 +130,7 @@ as of Nov 10 2023
 'Near2FarSphereRCS',
 'NonHermitianMetagratings',
 'OpticalLuneburgLens',
+'OpticalSwitchDBS',
 'OptimizedL3',
 'PICComponents',
 'ParameterScan',
@@ -122,6 +138,7 @@ as of Nov 10 2023
 'PhotonicCrystalWaveguidePolarizationFilter',
 'PhotonicCrystalsComponents',
 'PlasmonicNanoparticle',
+'PlasmonicNanorodArray',
 'PlasmonicWaveguideCO2Sensor',
 'PlasmonicYagiUdaNanoantenna',
 'PolarizationSplitterRotator',
@@ -132,6 +149,8 @@ as of Nov 10 2023
 'SMatrix',
 'STLImport',
 'SWGBroadbandPolarizer',
+'SbendCMAES',
+'ScaleInvariantWaveguide',
 'SelfIntersectingPolyslab',
 'Simulation',
 'StartHere',
@@ -140,14 +159,20 @@ as of Nov 10 2023
 'TFSF',
 'THzDemultiplexerFilter',
 'ThermallyTunedRingResonator',
+'ThermoOpticDopedModulator',
 'TimeModulationTutorial',
+'TunableChiralMetasurface',
+'UnstructuredData',
 'VizData',
 'VizSimulation',
+'WaveguideBendSimulator',
 'WaveguideCrossing',
+'WaveguideGratingAntenna',
 'WaveguidePluginDemonstration',
 'WaveguideSizeConverter',
 'WaveguideToRingCoupling',
 'WebAPI',
+'XarrayTutorial',
 'YJunction',
 'ZeroCrossTalkTE',
 'ZonePlateFieldProjection',
@@ -168,12 +193,11 @@ def _run_notebook(notebook_fname):
         # try running the notebook
         try:
             # run from the `notebooks/` directory
-            out = ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
+            ep.preprocess(nb, {"metadata": {"path": f"{NOTEBOOK_DIR}"}})
         except CellExecutionError:
             # if there is an error, print message and fail test
-            out = None
-            msg = 'Error executing the notebook "%s".\n\n' % notebook_fname
-            msg += 'See notebook "%s" for the traceback.' % notebook_fname
+            msg = f'Error executing the notebook "{notebook_fname}".\n\n'
+            msg += f'See notebook "{notebook_fname}" for the traceback.'
             print(msg)
             raise
 

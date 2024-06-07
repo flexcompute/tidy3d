@@ -7,10 +7,11 @@ functionality to extract the timing performance of that specific operation and c
 """
 
 import pathlib
+import subprocess
+from pathlib import Path
 
 import click
-from pathlib import Path
-import subprocess
+
 from .index import develop
 from .utils import echo_and_check_subprocess
 

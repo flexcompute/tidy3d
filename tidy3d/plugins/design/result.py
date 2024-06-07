@@ -1,11 +1,12 @@
 """Defines parameter sweeping utilities for tidy3d."""
+
 from __future__ import annotations
 
-from typing import Tuple, Dict, Any, List
+from typing import Any, Dict, List, Tuple
 
-import pydantic.v1 as pd
 import numpy as np
 import pandas
+import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...web.api.container import BatchData

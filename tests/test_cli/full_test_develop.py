@@ -1,11 +1,13 @@
 """
 These scripts just test the CLI commands for the develop command, and verify that they run properly.
 """
-import pytest
+
 import os
+from unittest.mock import patch
+
+import pytest
 from click.testing import CliRunner
 from tidy3d.web.cli import tidy3d_cli
-from unittest.mock import patch
 
 
 @pytest.fixture

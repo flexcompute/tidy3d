@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import ssl
-from typing import Tuple, Optional
 from enum import Enum
-import requests
+from typing import Optional, Tuple
+
 import pydantic.v1 as pydantic
-from pydantic.v1 import PositiveInt, NonNegativeFloat, PositiveFloat, Field, validator
+import requests
+from pydantic.v1 import Field, NonNegativeFloat, PositiveFloat, PositiveInt, validator
 
-from ...log import log
-from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
-from ...components.types import Literal
-from ...components.medium import PoleResidue
-from ...constants import MICROMETER, HERTZ
-from ...exceptions import WebError, Tidy3dError, SetupError
-from tidy3d.web.core.http_util import get_headers
 from tidy3d.web.core.environment import Env
+from tidy3d.web.core.http_util import get_headers
 
+from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
+from ...components.medium import PoleResidue
+from ...components.types import Literal
+from ...constants import HERTZ, MICROMETER
+from ...exceptions import SetupError, Tidy3dError, WebError
+from ...log import log
 from .fit import DispersionFitter
-
 
 BOUND_MAX_FACTOR = 10
 

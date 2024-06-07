@@ -2,25 +2,33 @@
 
 from __future__ import annotations
 
-from typing import List, Tuple
 from math import isclose
+from typing import Any, List, Tuple
 
+import autograd.numpy as np
 import pydantic.v1 as pydantic
-import numpy as np
 import shapely
+import xarray as xr
 from matplotlib import path
 
-from ..base import cached_property
-from ..base import skip_if_fields_missing
-from ..types import Axis, Bound, PlanePosition, ArrayFloat2D, Coordinate
-from ..types import MatrixReal4x4, Shapely
-from ...log import log
+from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
-from ...constants import MICROMETER, fp_eps, LARGE_NUMBER
+from ...log import log
 from ...packaging import verify_packages_import
-
-from . import base
-from . import triangulation
+from ..autograd import TracedVertices, get_static
+from ..base import cached_property, skip_if_fields_missing
+from ..data.dataset import ElectromagneticFieldDataset, PermittivityDataset
+from ..types import (
+    ArrayFloat2D,
+    ArrayLike,
+    Axis,
+    Bound,
+    Coordinate,
+    MatrixReal4x4,
+    PlanePosition,
+    Shapely,
+)
+from . import base, triangulation
 
 # sampling polygon along dilation for validating polygon to be
 # non self-intersecting during the entire dilation process
@@ -59,7 +67,7 @@ class PolySlab(base.Planar):
         units=MICROMETER,
     )
 
-    vertices: ArrayFloat2D = pydantic.Field(
+    vertices: TracedVertices = pydantic.Field(
         ...,
         title="Vertices",
         description="List of (d1, d2) defining the 2 dimensional positions of the polygon "
@@ -68,6 +76,12 @@ class PolySlab(base.Planar):
         "the slab normal axis is ``axis=y``, the coordinate of the vertices will be in (x, z)",
         units=MICROMETER,
     )
+
+    @staticmethod
+    def make_shapely_polygon(vertices: ArrayLike) -> shapely.Polygon:
+        """Make a shapely polygon from some vertices, first ensures they are untraced."""
+        vertices = get_static(vertices)
+        return shapely.Polygon(vertices)
 
     @pydantic.validator("slab_bounds", always=True)
     def slab_bounds_order(cls, val):
@@ -93,7 +107,7 @@ class PolySlab(base.Planar):
             )
 
         # make sure no polygon splitting, islands, 0 area
-        poly_heal = shapely.make_valid(shapely.Polygon(val))
+        poly_heal = shapely.make_valid(cls.make_shapely_polygon(val))
         if poly_heal.area < fp_eps:
             raise SetupError("The polygon almost collapses to a 1D curve.")
 
@@ -138,7 +152,7 @@ class PolySlab(base.Planar):
             raise SetupError("Erosion value is too large. The polygon is fully eroded.")
 
         # edge events
-        poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
+        poly_offset = shapely.make_valid(cls.make_shapely_polygon(poly_offset))
         # 1) polygon split or create holes/islands
         if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
             raise SetupError(
@@ -338,7 +352,7 @@ class PolySlab(base.Planar):
         )
 
         # convert vertices into polyslabs
-        polygons = [shapely.Polygon(vertices).buffer(0) for vertices in all_vertices]
+        polygons = [PolySlab.make_shapely_polygon(vertices).buffer(0) for vertices in all_vertices]
         polys_union = shapely.unary_union(polygons, grid_size=base.POLY_GRID_SIZE)
 
         if polys_union.geom_type == "Polygon":
@@ -431,6 +445,16 @@ class PolySlab(base.Planar):
             raise ValidationError("'Medium2D' requires the 'PolySlab' bounds to be equal.")
         return self.axis
 
+    def _update_from_bounds(self, bounds: Tuple[float, float], axis: Axis) -> PolySlab:
+        """Returns an updated geometry which has been transformed to fit within ``bounds``
+        along the ``axis`` direction."""
+        if axis != self.axis:
+            raise ValueError(
+                f"'_update_from_bounds' may only be applied along axis '{self.axis}', "
+                f"but was given axis '{axis}'."
+            )
+        return self.updated_copy(slab_bounds=bounds)
+
     @cached_property
     def is_ccw(self) -> bool:
         """Is this ``PolySlab`` CCW-oriented?"""
@@ -488,7 +512,7 @@ class PolySlab(base.Planar):
 
             # vertical sidewall
             if isclose(self.sidewall_angle, 0):
-                # face_polygon = shapely.Polygon(self.reference_polygon)
+                # face_polygon = self.make_shapely_polygon(self.reference_polygon)
                 # fun_contain = contains_pointwise(face_polygon)
                 # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                 poly_path = path.Path(self.reference_polygon)
@@ -515,7 +539,7 @@ class PolySlab(base.Planar):
                     vertices_z = self._shift_vertices(
                         self.middle_polygon, _move_axis(dist)[0, 0, z_i]
                     )[0]
-                    # face_polygon = shapely.Polygon(vertices_z)
+                    # face_polygon = self.make_shapely_polygon(vertices_z)
                     # fun_contain = contains_pointwise(face_polygon)
                     # contains_vectorized = np.vectorize(fun_contain, signature="(n)->()")
                     poly_path = path.Path(vertices_z)
@@ -528,13 +552,13 @@ class PolySlab(base.Planar):
                 inside_polygon = _move_axis_reverse(inside_polygon_axis)
         else:
             vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-            face_polygon = shapely.Polygon(vertices_z)
+            face_polygon = self.make_shapely_polygon(vertices_z)
             point = shapely.Point(x, y)
             inside_polygon = face_polygon.covers(point)
         return inside_height * inside_polygon
 
     @verify_packages_import(["trimesh"])
-    def intersections_tilted_plane(
+    def _do_intersections_tilted_plane(
         self, normal: Coordinate, origin: Coordinate, to_2D: MatrixReal4x4
     ) -> List[Shapely]:
         """Return a list of shapely geometries at the plane specified by normal and origin.
@@ -586,7 +610,7 @@ class PolySlab(base.Planar):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full.tolist()
+        return path.polygons_full
 
     def _intersections_normal(self, z: float):
         """Find shapely geometries intersecting planar geometry with axis normal to slab.
@@ -604,13 +628,13 @@ class PolySlab(base.Planar):
             `Shapely's Documentation <https://shapely.readthedocs.io/en/stable/project.html>`_.
         """
         if isclose(self.sidewall_angle, 0):
-            return [shapely.Polygon(self.reference_polygon)]
+            return [self.make_shapely_polygon(self.reference_polygon)]
 
         z0 = self.center_axis
         z_local = z - z0  # distance to the middle
         dist = -z_local * self._tanq
         vertices_z = self._shift_vertices(self.middle_polygon, dist)[0]
-        return [shapely.Polygon(vertices_z)]
+        return [self.make_shapely_polygon(vertices_z)]
 
     def _intersections_side(self, position, axis) -> list:
         """Find shapely geometries intersecting planar geometry with axis orthogonal to slab.
@@ -686,7 +710,7 @@ class PolySlab(base.Planar):
                 maxx, maxy = self._order_by_axis(plane_val=y_max, axis_val=z_max, axis=axis)
 
                 if isclose(self.sidewall_angle, 0):
-                    polys.append(shapely.box(minx, miny, maxx, maxy))
+                    polys.append(self.make_shapely_box(minx, miny, maxx, maxy))
                 else:
                     angle_min = ints_angle[2 * y_index]
                     angle_max = ints_angle[2 * y_index + 1]
@@ -706,7 +730,7 @@ class PolySlab(base.Planar):
                         plane_val=y_min + dy_min, axis_val=z_max, axis=axis
                     )
                     vertices = ((x1, y1), (x2, y2), (x3, y3), (x4, y4))
-                    polys.append(shapely.Polygon(vertices).buffer(0))
+                    polys.append(self.make_shapely_polygon(vertices).buffer(0))
             # update the base coordinate for the next subsection
             h_base = h_top
 
@@ -782,7 +806,8 @@ class PolySlab(base.Planar):
             List of angles between plane and edges.
         """
 
-        vertices_axis = vertices.copy()
+        vertices_axis = vertices
+
         # flip vertices x,y for axis = y
         if axis == 1:
             vertices_axis = np.roll(vertices_axis, shift=1, axis=1)
@@ -791,8 +816,8 @@ class PolySlab(base.Planar):
         vertices_f = np.roll(vertices_axis, shift=-1, axis=0)
 
         # x coordinate of the two sets of vertices
-        x_vertices_f = vertices_f[:, 0]
-        x_vertices_axis = vertices_axis[:, 0]
+        x_vertices_f, _ = vertices_f.T
+        x_vertices_axis, _ = vertices_axis.T
 
         # find which segments intersect
         f_left_to_intersect = x_vertices_f <= position
@@ -1003,10 +1028,13 @@ class PolySlab(base.Planar):
         float
             Signed polygon area (positive for CCW orientation).
         """
-        vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
-        term1 = vertices[:, 0] * vert_shift[:, 1]
-        term2 = vertices[:, 1] * vert_shift[:, 0]
+        vert_shift = np.roll(vertices, axis=0, shift=-1)
 
+        xs, ys = vertices.T
+        xs_shift, ys_shift = vert_shift.T
+
+        term1 = xs * ys_shift
+        term2 = ys * xs_shift
         return np.sum(term1 - term2) * 0.5
 
     @staticmethod
@@ -1023,11 +1051,15 @@ class PolySlab(base.Planar):
         float
             Polygon perimeter.
         """
-        vert_shift = np.roll(vertices.copy(), axis=0, shift=-1)
-        dx = vertices[:, 0] - vert_shift[:, 0]
-        dy = vertices[:, 1] - vert_shift[:, 1]
 
-        return np.sum(np.sqrt(dx**2 + dy**2))
+        vert_shift = np.roll(vertices, axis=0, shift=-1)
+        squared_diffs = (vertices - vert_shift) ** 2
+
+        # distance along each edge
+        dists = np.sqrt(squared_diffs.sum(axis=-1))
+
+        # total distance along all edges
+        return np.sum(dists)
 
     @staticmethod
     def _orient(vertices: np.ndarray) -> np.ndarray:
@@ -1060,7 +1092,7 @@ class PolySlab(base.Planar):
             Vertices of polygon.
         """
 
-        vertices_f = np.roll(vertices.copy(), shift=-1, axis=0)
+        vertices_f = np.roll(vertices, shift=-1, axis=0)
         vertices_diff = np.linalg.norm(vertices - vertices_f, axis=1)
         return vertices[~np.isclose(vertices_diff, 0, rtol=_IS_CLOSE_RTOL)]
 
@@ -1108,7 +1140,7 @@ class PolySlab(base.Planar):
             if PolySlab._area(poly_offset) < fp_eps**2:
                 return True
 
-            poly_offset = shapely.make_valid(shapely.Polygon(poly_offset))
+            poly_offset = shapely.make_valid(PolySlab.make_shapely_polygon(poly_offset))
             # 1) polygon split or create holes/islands
             if not poly_offset.geom_type == "Polygon" or len(poly_offset.interiors) > 0:
                 return True
@@ -1121,7 +1153,7 @@ class PolySlab(base.Planar):
             # 3) some split polygon might fully disappear after the offset, but they
             # can be detected if we offset back.
             poly_offset_back = shapely.make_valid(
-                shapely.Polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
+                PolySlab.make_shapely_polygon(PolySlab._shift_vertices(offset_vertices, -dist)[0])
             )
             if poly_offset_back.geom_type == "MultiPolygon" or len(poly_offset_back.interiors) > 0:
                 return True
@@ -1279,7 +1311,7 @@ class PolySlab(base.Planar):
     @staticmethod
     def _heal_polygon(vertices: np.ndarray) -> np.ndarray:
         """heal a self-intersecting polygon."""
-        shapely_poly = shapely.Polygon(vertices)
+        shapely_poly = PolySlab.make_shapely_polygon(vertices)
         if shapely_poly.is_valid:
             return vertices
         # perform healing
@@ -1333,6 +1365,206 @@ class PolySlab(base.Planar):
         area += 0.5 * (top_perim + base_perim) * length
 
         return area
+
+    """ Autograd code """
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``field_path``s."""
+
+        assert field_paths == [("vertices",)], "only support derivative wrt 'PolySlab.vertices'."
+
+        vjp_vertices = self.compute_derivative_vertices(
+            E_der_map=E_der_map,
+            D_der_map=D_der_map,
+            eps_data=eps_data,
+            eps_in=eps_in,
+            eps_out=eps_out,
+            bounds=bounds,
+        )
+
+        return {("vertices",): vjp_vertices}
+
+    def compute_derivative_vertices(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> TracedVertices:
+        # derivative w.r.t each edge
+
+        vertices = np.array(self.vertices)
+        num_vertices, _ = vertices.shape
+
+        # compute edges between vertices
+
+        vertices_next = np.roll(self.vertices, axis=0, shift=1)
+        edges = vertices_next - vertices
+
+        # compute center positions between each edge
+        edge_centers_plane = (vertices_next + vertices) / 2.0
+        edge_centers_axis = np.mean(self.slab_bounds) * np.ones(num_vertices)
+
+        edge_centers_xyz = self.unpop_axis_vect(edge_centers_axis, edge_centers_plane)
+
+        assert edge_centers_xyz.shape == (num_vertices, 3), "something bad happened"
+
+        # compute the E and D fields at the edge centers
+        E_der_at_edges = self.der_at_centers(der_map=E_der_map, edge_centers=edge_centers_xyz)
+        D_der_at_edges = self.der_at_centers(der_map=D_der_map, edge_centers=edge_centers_xyz)
+
+        # compute the basis vectors along each edge
+        basis_vectors = self.edge_basis_vectors(edges=edges)
+
+        # project the D and E fields into the basis vectors
+        D_der_norm = self.project_in_basis(D_der_at_edges, basis_vector=basis_vectors["norm"])
+        E_der_edge = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["edge"])
+        E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
+
+        # approximate permittivity in and out
+        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
+        delta_eps = eps_in - eps_out
+
+        # put together VJP using D_normal and E_perp integration
+        vjps_edges = 0.0
+
+        # perform D-normal integral
+        contrib_D = -delta_eps_inv * D_der_norm
+        vjps_edges += contrib_D
+
+        # perform E-perpendicular integrals
+        for E_der in (E_der_edge, E_der_slab):
+            contrib_E = E_der * delta_eps
+            vjps_edges += contrib_E
+
+        # scale by edge area
+        edge_lengths = np.linalg.norm(edges, axis=-1)
+        edge_areas = edge_lengths
+
+        # correction to edge area based on sidewall distance along slab axis
+        dim_axis = "xyz"[self.axis]
+        field_coords_axis = E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]
+        if len(field_coords_axis) > 1:
+            slab_height = abs(float(np.squeeze(np.diff(self.slab_bounds))))
+            if not np.isinf(slab_height):
+                edge_areas *= slab_height
+
+        vjps_edges *= edge_areas
+
+        _, normal_vectors_in_plane = self.pop_axis_vect(basis_vectors["norm"])
+
+        vjps_edges_in_plane = vjps_edges.values.reshape((num_vertices, 1)) * normal_vectors_in_plane
+
+        vjps_vertices = vjps_edges_in_plane + np.roll(vjps_edges_in_plane, axis=0, shift=-1)
+
+        # sign change if counter clockwise, because normal direction is flipped
+        if self.is_ccw:
+            vjps_vertices *= -1
+            # TODO: verify sign, or if this is rather when `not self.is_ccw`
+
+        return vjps_vertices.real
+
+    def der_at_centers(
+        self,
+        der_map: ElectromagneticFieldDataset,
+        edge_centers: np.ndarray,  # (N, 3)
+    ) -> xr.Dataset:
+        """Compute the value of an ``ElectromagneticFieldDataset`` at a set of edge centers."""
+
+        xs, ys, zs = edge_centers.T
+        edge_index_dim = "edge_index"
+
+        interp_kwargs = {}
+        for dim, centers_dim in zip("xyz", edge_centers.T):
+            # only include dims where the data has more than 1 coord, to avoid warnings and errors
+            coords_data = der_map.field_components[f"E{dim}"].coords
+            if np.array(coords_data).size > 1:
+                interp_kwargs[dim] = xr.DataArray(centers_dim, dims=edge_index_dim)
+
+        components = {}
+        for fld_name, arr in der_map.field_components.items():
+            components[fld_name] = arr.interp(**interp_kwargs).sum("f")
+
+        return xr.Dataset(components)
+
+    def project_in_basis(
+        self,
+        der_dataset: xr.Dataset,
+        basis_vector: np.ndarray,
+    ) -> xr.DataArray:
+        """Project a derivative dataset along a supplied basis vector."""
+
+        value = 0.0
+        for coeffs, dim in zip(basis_vector.T, "xyz"):
+            value += coeffs * der_dataset.data_vars[f"E{dim}"]
+        return value
+
+    def unpop_axis_vect(self, ax_coords: np.ndarray, plane_coords: np.ndarray) -> np.ndarray:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        ax_coords.shape == [N] or [N, 1]
+        plane_coords.shape == [N, 2]
+        return shape == [N, 3]
+
+        """
+        arr_xyz = self.unpop_axis(ax_coords, plane_coords.T, axis=self.axis)
+        arr_xyz = np.stack(arr_xyz, axis=-1)
+        return arr_xyz
+
+    def pop_axis_vect(self, coord: np.ndarray) -> Tuple[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
+        """Combine coordinate along axis with coordinates on the plane tangent to the axis.
+
+        coord.shape == [N, 3]
+        return shape == ([N], [N, 2]
+
+        """
+
+        arr_axis, arrs_plane = self.pop_axis(coord.T, axis=self.axis)
+        arrs_plane = np.array(arrs_plane).T
+
+        return arr_axis, arrs_plane
+
+    @staticmethod
+    def normalize_vect(arr: np.ndarray) -> np.ndarray:
+        """normalize an array shaped (N, d) along the `d` axis and return (N, 1)."""
+        return arr / np.linalg.norm(arr, axis=-1)[..., None]
+
+    def edge_basis_vectors(
+        self,
+        edges: np.ndarray,  # (N, 2)
+    ) -> dict[str, np.ndarray]:  # (N, 3)
+        """Normalized basis vectors for 'normal' direction, 'slab' tangent direction and 'edge'."""
+
+        num_vertices, _ = edges.shape
+        zeros = np.zeros(num_vertices)
+        ones = np.ones(num_vertices)
+
+        # normalized vectors along edges
+        edges_norm_in_plane = self.normalize_vect(edges)
+        edges_norm_xyz = self.unpop_axis_vect(zeros, edges_norm_in_plane)
+
+        # normalized vectors from base of edges to tops of edges
+        slabs_axis_components = np.cos(self.sidewall_angle) * ones
+        axis_norm = self.unpop_axis(1.0, (0.0, 0.0), axis=self.axis)
+        slab_normal_xyz = -np.sin(self.sidewall_angle) * np.cross(edges_norm_xyz, axis_norm)
+        _, slab_normal_in_plane = self.pop_axis_vect(slab_normal_xyz)
+        slabs_norm_xyz = self.unpop_axis_vect(slabs_axis_components, slab_normal_in_plane)
+
+        # normalized vectors pointing in normal direction of edge
+        normals_norm_xyz = np.cross(edges_norm_xyz, slabs_norm_xyz)
+
+        return dict(edge=edges_norm_xyz, norm=normals_norm_xyz, slab=slabs_norm_xyz)
 
 
 class ComplexPolySlabBase(PolySlab):
@@ -1496,7 +1728,7 @@ class ComplexPolySlabBase(PolySlab):
                 if len(vertices_now) < 3:
                     break
                 # polygon collapse into 1D
-                if shapely.Polygon(vertices_now).buffer(0).area < fp_eps:
+                if self.make_shapely_polygon(vertices_now).buffer(0).area < fp_eps:
                     break
                 vertices_now = PolySlab._orient(vertices_now)
                 num_division_count += 1

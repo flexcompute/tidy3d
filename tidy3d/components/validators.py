@@ -1,14 +1,14 @@
-""" Defines various validation functions that get used to ensure inputs are legit """
+"""Defines various validation functions that get used to ensure inputs are legit"""
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
-from .geometry.base import Box
-from ..exceptions import ValidationError, SetupError
-from .data.dataset import Dataset, FieldDataset
-from .base import DATA_ARRAY_MAP, skip_if_fields_missing
-from .types import Tuple
+from ..exceptions import SetupError, ValidationError
 from ..log import log
+from .base import DATA_ARRAY_MAP, skip_if_fields_missing
+from .data.dataset import Dataset, FieldDataset
+from .geometry.base import Box
+from .types import Tuple
 
 """ Explanation of pydantic validators:
 
@@ -44,6 +44,19 @@ from ..log import log
 
 # Lowest frequency supported (Hz)
 MIN_FREQUENCY = 1e5
+
+
+def assert_line():
+    """makes sure a field's ``size`` attribute has exactly 2 zeros"""
+
+    @pydantic.validator("size", allow_reuse=True, always=True)
+    def is_line(cls, val):
+        """Raise validation error if not 1 dimensional."""
+        if val.count(0.0) != 2:
+            raise ValidationError(f"'{cls.__name__}' object must be a line, given size={val}")
+        return val
+
+    return is_line
 
 
 def assert_plane():
@@ -149,7 +162,9 @@ def assert_unique_names(field_name: str):
     return field_has_unique_names
 
 
-def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
+def assert_objects_in_sim_bounds(
+    field_name: str, error: bool = True, strict_inequality: bool = False
+):
     """Makes sure all objects in field are at least partially inside of simulation bounds."""
 
     @pydantic.validator(field_name, allow_reuse=True, always=True)
@@ -160,11 +175,14 @@ def assert_objects_in_sim_bounds(field_name: str, error: bool = True):
         sim_size = values.get("size")
         sim_box = Box(size=sim_size, center=sim_center)
 
+        # Do a strict check, unless simulation is 0D along a dimension
+        strict_ineq = [size != 0 and strict_inequality for size in sim_size]
+
         for position_index, geometric_object in enumerate(val):
-            if not sim_box.intersects(geometric_object.geometry):
+            if not sim_box.intersects(geometric_object.geometry, strict_inequality=strict_ineq):
                 message = (
-                    f"'simulation.{field_name}[{position_index}]'"
-                    "is completely outside of simulation domain."
+                    f"'simulation.{field_name}[{position_index}]' "
+                    "is outside of the simulation domain."
                 )
                 custom_loc = [field_name, position_index]
 

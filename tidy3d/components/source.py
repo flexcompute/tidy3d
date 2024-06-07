@@ -1,32 +1,52 @@
 """Defines electric current sources for injecting light into simulation."""
 
-
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Union, Tuple, Optional
+from typing import Optional, Tuple, Union
 
-from typing_extensions import Literal
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
+from typing_extensions import Literal
 
-from .base import cached_property, skip_if_fields_missing
-from .base_sim.source import AbstractSource
-from .time import AbstractTimeDependence
-from .types import Coordinate, Direction, Polarization, Ax, FreqBound
-from .types import ArrayFloat1D, Axis, PlotVal, ArrayComplex1D, TYPE_TAG_STR
-from .validators import assert_plane, assert_volumetric
-from .validators import warn_if_dataset_none, assert_single_freq_in_range, _assert_min_freq
-from .data.dataset import FieldDataset, TimeDataset
-from .data.validators import validate_no_nans
-from .data.data_array import TimeDataArray
-from .geometry.base import Box
-from .mode import ModeSpec
-from .viz import add_ax_if_none, PlotParams, plot_params_source
-from .viz import ARROW_COLOR_SOURCE, ARROW_ALPHA, ARROW_COLOR_POLARIZATION
-from ..constants import RADIAN, HERTZ, MICROMETER, GLANCING_CUTOFF
-from ..constants import inf
+from ..constants import GLANCING_CUTOFF, HERTZ, MICROMETER, RADIAN, inf
 from ..exceptions import SetupError, ValidationError
 from ..log import log
+from .base import cached_property, skip_if_fields_missing
+from .base_sim.source import AbstractSource
+from .data.data_array import TimeDataArray
+from .data.dataset import FieldDataset, ScalarFieldDataArray, TimeDataset
+from .data.validators import validate_no_nans
+from .geometry.base import Box
+from .mode import ModeSpec
+from .time import AbstractTimeDependence
+from .types import (
+    TYPE_TAG_STR,
+    ArrayComplex1D,
+    ArrayFloat1D,
+    Ax,
+    Axis,
+    Coordinate,
+    Direction,
+    FreqBound,
+    PlotVal,
+    Polarization,
+)
+from .validators import (
+    _assert_min_freq,
+    assert_plane,
+    assert_single_freq_in_range,
+    assert_volumetric,
+    warn_if_dataset_none,
+)
+from .viz import (
+    ARROW_ALPHA,
+    ARROW_COLOR_POLARIZATION,
+    ARROW_COLOR_SOURCE,
+    PlotParams,
+    add_ax_if_none,
+    plot_params_source,
+)
 
 # when checking if custom data spans the source plane, allow for a small tolerance
 # due to numerical precision
@@ -35,6 +55,8 @@ DATA_SPAN_TOL = 1e-8
 CHEB_GRID_WIDTH = 1.5
 # Number of frequencies in a broadband source above which to issue a warning
 WARN_NUM_FREQS = 20
+# how many units of ``twidth`` from the ``offset`` until a gaussian pulse is considered "off"
+END_TIME_FACTOR_GAUSSIAN = 10
 
 
 class SourceTime(AbstractTimeDependence):
@@ -78,6 +100,10 @@ class SourceTime(AbstractTimeDependence):
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
         """Frequency range within plus/minus ``num_fwidth * fwidth`` of the central frequency."""
 
+    @abstractmethod
+    def end_time(self) -> float | None:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+
 
 class Pulse(SourceTime, ABC):
     """A source time that ramps up with some ``fwidth`` and oscillates at ``freq0``."""
@@ -99,6 +125,11 @@ class Pulse(SourceTime, ABC):
         "pulse in units of 1 / (``2pi * fwidth``).",
         ge=2.5,
     )
+
+    @property
+    def twidth(self) -> float:
+        """Width of pulse in seconds."""
+        return 1.0 / (2 * np.pi * self.fwidth)
 
     def frequency_range(self, num_fwidth: float = 4.0) -> FreqBound:
         """Frequency range within 5 standard deviations of the central frequency.
@@ -143,24 +174,32 @@ class GaussianPulse(Pulse):
     def amp_time(self, time: float) -> complex:
         """Complex-valued source amplitude as a function of time."""
 
-        twidth = 1.0 / (2 * np.pi * self.fwidth)
         omega0 = 2 * np.pi * self.freq0
-        time_shifted = time - self.offset * twidth
+        time_shifted = time - self.offset * self.twidth
 
         offset = np.exp(1j * self.phase)
         oscillation = np.exp(-1j * omega0 * time)
-        amp = np.exp(-(time_shifted**2) / 2 / twidth**2) * self.amplitude
+        amp = np.exp(-(time_shifted**2) / 2 / self.twidth**2) * self.amplitude
 
         pulse_amp = offset * oscillation * amp
 
         # subtract out DC component
         if self.remove_dc_component:
-            pulse_amp = pulse_amp * (1j + time_shifted / twidth**2 / omega0)
+            pulse_amp = pulse_amp * (1j + time_shifted / self.twidth**2 / omega0)
         else:
             # 1j to make it agree in large omega0 limit
             pulse_amp = pulse_amp * 1j
 
         return pulse_amp
+
+    def end_time(self) -> float | None:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+
+        # TODO: decide if we should continue to return an end_time if the DC component remains
+        # if not self.remove_dc_component:
+        #     return None
+
+        return self.offset * self.twidth + END_TIME_FACTOR_GAUSSIAN * self.twidth
 
 
 class ContinuousWave(Pulse):
@@ -190,6 +229,10 @@ class ContinuousWave(Pulse):
         amp = 1 / (1 + np.exp(-time_shifted / twidth)) * self.amplitude
 
         return const * offset * oscillation * amp
+
+    def end_time(self) -> float | None:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+        return None
 
 
 class CustomSourceTime(Pulse):
@@ -330,6 +373,20 @@ class CustomSourceTime(Pulse):
 
         return offset * oscillation * amp * envelope
 
+    def end_time(self) -> float | None:
+        """Time after which the source is effectively turned off / close to zero amplitude."""
+
+        if self.source_time_dataset is None:
+            return None
+
+        data_array = self.source_time_dataset.values
+
+        t_coords = data_array.coords["t"]
+        source_is_non_zero = ~np.isclose(abs(data_array), 0)
+        t_non_zero = t_coords[source_is_non_zero]
+
+        return np.max(t_non_zero)
+
 
 SourceTimeType = Union[GaussianPulse, ContinuousWave, CustomSourceTime]
 
@@ -378,7 +435,7 @@ class Source(Box, AbstractSource, ABC):
         _assert_min_freq(val.freq0, msg_start="'source_time.freq0'")
         return val
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,
@@ -466,6 +523,15 @@ class ReverseInterpolatedSource(Source):
         "If ``False``, the source data is snapped to the nearest Yee grid point. If ``True``, "
         "equivalent source data is applied on the surrounding Yee grid points to emulate "
         "placement at the specified location using linear interpolation.",
+    )
+
+    confine_to_bounds: bool = pydantic.Field(
+        False,
+        title="Confine to Analytical Bounds",
+        description="If ``True``, any source amplitudes which, after discretization, fall beyond "
+        "the bounding box of the source are zeroed out, but only along directions where "
+        "the source has a non-zero extent. The bounding box is inclusive. Should be set ```True`` "
+        "when the current source is being used to excite a current in a conductive material.",
     )
 
 
@@ -746,6 +812,15 @@ class CustomFieldSource(FieldSource, PlanarSource):
                     return val
         raise SetupError("No tangential field found in the suppled 'field_dataset'.")
 
+    @pydantic.validator("field_dataset", always=True)
+    def _check_fields_interpolate(cls, val: FieldDataset) -> FieldDataset:
+        """Checks whether the filds in 'field_dataset' can be interpolated."""
+        if isinstance(val, FieldDataset):
+            for name, data in val.field_components.items():
+                if isinstance(data, ScalarFieldDataArray):
+                    data._interp_validator(name)
+        return val
+
 
 """ Source current profiles defined by (1) angle or (2) desired mode. Sets theta and phi angles."""
 
@@ -807,26 +882,41 @@ class AngledFieldSource(DirectionalSource, ABC):
     @cached_property
     def _dir_vector(self) -> Tuple[float, float, float]:
         """Source direction normal vector in cartesian coordinates."""
+
+        # Propagation vector assuming propagation along z
         radius = 1.0 if self.direction == "+" else -1.0
         dx = radius * np.cos(self.angle_phi) * np.sin(self.angle_theta)
         dy = radius * np.sin(self.angle_phi) * np.sin(self.angle_theta)
         dz = radius * np.cos(self.angle_theta)
+
+        # Move to original injection axis
         return self.unpop_axis(dz, (dx, dy), axis=self._injection_axis)
 
     @cached_property
     def _pol_vector(self) -> Tuple[float, float, float]:
         """Source polarization normal vector in cartesian coordinates."""
-        normal_dir = [0.0, 0.0, 0.0]
-        normal_dir[int(self._injection_axis)] = 1.0
-        propagation_dir = list(self._dir_vector)
-        if self.angle_theta == 0.0:
-            pol_vector_p = np.array((0, 1, 0)) if self._injection_axis == 0 else np.array((1, 0, 0))
-            pol_vector_p = self.rotate_points(pol_vector_p, normal_dir, angle=self.angle_phi)
-        else:
-            pol_vector_s = np.cross(normal_dir, propagation_dir)
-            pol_vector_p = np.cross(propagation_dir, pol_vector_s)
-            pol_vector_p = np.array(pol_vector_p) / np.linalg.norm(pol_vector_p)
-        return self.rotate_points(pol_vector_p, propagation_dir, angle=self.pol_angle)
+
+        # Polarization vector assuming propagation along z
+        pol_vector_z_normal = np.array([1.0, 0.0, 0.0])
+
+        # Rotate polarization
+        pol_vector_z_normal = self.rotate_points(
+            pol_vector_z_normal, axis=[0, 0, 1], angle=self.pol_angle
+        )
+
+        # Rotate the fields back to the original propagation axes
+        pol_vector_z_normal = self.rotate_points(
+            pol_vector_z_normal, axis=[0, 1, 0], angle=self.angle_theta
+        )
+        pol_vector_z_normal = self.rotate_points(
+            pol_vector_z_normal, axis=[0, 0, 1], angle=self.angle_phi
+        )
+
+        # Move to original injection axis
+        pol_vector = self.unpop_axis(
+            pol_vector_z_normal[2], pol_vector_z_normal[:2], axis=self._injection_axis
+        )
+        return pol_vector
 
 
 class ModeSource(DirectionalSource, PlanarSource, BroadbandSource):
@@ -1085,7 +1175,7 @@ class TFSF(AngledFieldSource, VolumeSource):
         center[self.injection_axis] += sign * size[self.injection_axis] / 2
         return tuple(center)
 
-    def plot(  #  pylint:disable=too-many-arguments
+    def plot(
         self,
         x: float = None,
         y: float = None,

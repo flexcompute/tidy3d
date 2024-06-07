@@ -1,13 +1,16 @@
-import pytest
+import gdstk
+import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
-import matplotlib.pyplot as plt
-import gdstk
-
+import pytest
 import tidy3d as td
-from tidy3d.web.api.container import Batch
-from tidy3d.plugins.smatrix.smatrix import Port, ComponentModeler
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.plugins.smatrix import (
+    ComponentModeler,
+    Port,
+)
+from tidy3d.web.api.container import Batch
+
 from ..utils import run_emulated
 
 # Waveguide height
@@ -59,7 +62,9 @@ def make_coupler():
         # bend interpolator
         interp = tanh_interp(3)
         delta = wg_width + wg_spacing_coup - wg_spacing_in
-        offset = lambda u: wg_spacing_in + interp(u) * delta
+
+        def offset(u):
+            return wg_spacing_in + interp(u) * delta
 
         coup = gdstk.RobustPath(
             (-0.5 * length, 0),
@@ -213,7 +218,7 @@ def test_validate_no_sources(tmp_path):
 def test_element_mappings_none(tmp_path):
     modeler = make_component_modeler(path_dir=str(tmp_path))
     modeler = modeler.updated_copy(ports=[], element_mappings=())
-    modeler.matrix_indices_run_sim
+    _ = modeler.matrix_indices_run_sim
 
 
 def test_no_port(tmp_path):
@@ -308,11 +313,11 @@ def test_component_modeler_run_only(monkeypatch):
 
 def _test_mappings(element_mappings, s_matrix):
     """Makes sure the mappings are reflected in a given S matrix."""
-    for (i, j), (k, l), mult_by in element_mappings:
+    for (i, j), (k, L), mult_by in element_mappings:
         (port_out_from, mode_index_out_from) = i
         (port_in_from, mode_index_in_from) = j
         (port_out_to, mode_index_out_to) = k
-        (port_in_to, mode_index_in_to) = l
+        (port_in_to, mode_index_in_to) = L
 
         coords_from = dict(
             port_in=port_in_from,
@@ -376,3 +381,24 @@ def test_mapping_exclusion(monkeypatch, tmp_path):
 def test_batch_filename(tmp_path):
     modeler = make_component_modeler(path_dir=str(tmp_path))
     path = modeler._batch_path
+    assert path
+
+
+def test_import_smatrix_smatrix():
+    from tidy3d.plugins.smatrix.smatrix import ComponentModeler, Port  # noqa: F401
+
+
+def test_to_from_file_batch(monkeypatch, tmp_path):
+    modeler = make_component_modeler(path_dir=str(tmp_path))
+    _ = run_component_modeler(monkeypatch, modeler)
+
+    batch = td.web.Batch(simulations=dict())
+
+    modeler._cached_properties["batch"] = batch
+
+    fname = str(tmp_path) + "/modeler.json"
+
+    modeler.to_file(fname)
+    modeler2 = modeler.from_file(fname)
+
+    assert modeler2.batch_cached == modeler2.batch == batch

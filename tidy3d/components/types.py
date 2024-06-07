@@ -1,19 +1,18 @@
-""" Defines 'types' that various fields can be """
+"""Defines 'types' that various fields can be"""
 
 from typing import Tuple, Union
-
 
 # Literal only available in python 3.8 + so try import otherwise use extensions
 try:
     from typing import Literal
 except ImportError:
     from typing_extensions import Literal
-from typing_extensions import Annotated
-
+import autograd.numpy as np
 import pydantic.v1 as pydantic
-import numpy as np
 from matplotlib.axes import Axes
 from shapely.geometry.base import BaseGeometry
+from typing_extensions import Annotated
+
 from ..exceptions import ValidationError
 
 # type tag default name
@@ -69,9 +68,7 @@ class ArrayLike:
     def convert_to_numpy(cls, val):
         """Convert the value to np.ndarray and provide some casting."""
         arr_numpy = np.array(val, ndmin=1, dtype=cls.dtype, copy=True)
-        arr_tidy3d = np.ndarray(shape=arr_numpy.shape, dtype=arr_numpy.dtype)
-        arr_tidy3d[:] = arr_numpy
-        return arr_tidy3d
+        return arr_numpy
 
     @classmethod
     def check_dims(cls, val):
@@ -125,6 +122,7 @@ def constrained_array(
 
 
 # pre-define a set of commonly used array like instances for import and use in type hints
+ArrayInt1D = constrained_array(dtype=int, ndim=1)
 ArrayFloat1D = constrained_array(dtype=float, ndim=1)
 ArrayFloat2D = constrained_array(dtype=float, ndim=2)
 ArrayFloat3D = constrained_array(dtype=float, ndim=3)

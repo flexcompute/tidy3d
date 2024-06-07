@@ -1,19 +1,19 @@
 """Defines jax-compatible DataArrays."""
+
 from __future__ import annotations
 
-from typing import Tuple, Any, Dict, List
+from typing import Any, Dict, List, Literal, Sequence, Tuple, Union
 
 import h5py
-import pydantic.v1 as pd
-import numpy as np
-import jax.numpy as jnp
 import jax
-from jax.tree_util import register_pytree_node_class
+import jax.numpy as jnp
+import numpy as np
+import pydantic.v1 as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
 from .....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .....exceptions import DataError, Tidy3dKeyError, AdjointError
-
+from .....exceptions import AdjointError, DataError, Tidy3dKeyError
 
 # condition setting when to set value in DataArray to zero:
 # if abs(val) <= VALUE_FILTER_THRESHOLD * max(abs(val))
@@ -312,29 +312,85 @@ class JaxDataArray(Tidy3dBaseModel):
 
         return self_sel
 
-    def sel(self, indexers: dict = None, method: str = "nearest", **sel_kwargs) -> JaxDataArray:
-        """Select a value from the :class:`.JaxDataArray` by indexing into coordinate values."""
+    def sel(
+        self, indexers: dict = None, method: Literal[None, "nearest"] = None, **sel_kwargs
+    ) -> JaxDataArray:
+        """Select a value from the :class:`.JaxDataArray` by indexing into coordinates by value.
+
+        Parameters
+        ----------
+        sel_kwargs : dict
+            Keyword arguments with names matching the coordinates of :class:`.JaxDataArray` and values
+            given by scalars or lists, e.g. `da.sel(x=0.1, y=[0.2, 0.3])`.
+        method : Literal[None, "nearest"] = None
+            Method to use for matching coordinate values:
+
+            - None (default): only exact matches
+            - nearest: use nearest valid index value
+
+        Returns
+        -------
+        JaxDataArray
+            JaxDataArray with extracted values.
+        """
+        if method not in [None, "nearest"]:
+            raise NotImplementedError(f"Unkown selection method: {method}.")
+
         isel_kwargs = {}
-        for coord_name, sel_kwarg in sel_kwargs.items():
+        for coord_name, vals in sel_kwargs.items():
             coord_list = self.get_coord_list(coord_name)
-            if isinstance(sel_kwarg, (tuple, list, np.ndarray)):
-                sel_kwarg = list(sel_kwarg)
-                isel_kwargs[coord_name] = []
-                for _sel_kwarg in sel_kwarg:
-                    if _sel_kwarg not in coord_list:
-                        raise DataError(
-                            f"Could not select '{coord_name}={_sel_kwarg}', value not found."
-                        )
-                    coord_index = coord_list.index(_sel_kwarg)
-                    isel_kwargs[coord_name].append(coord_index)
-            else:
-                if sel_kwarg not in coord_list:
-                    raise DataError(
-                        f"Could not select '{coord_name}={sel_kwarg}', value not found."
-                    )
-                coord_index = coord_list.index(sel_kwarg)
-                isel_kwargs[coord_name] = coord_index
+
+            try:  # handle non-numeric types (e.g. str)
+                coord_list = jnp.asarray(coord_list)
+            except TypeError:
+                isel_kwargs[coord_name] = self._indices_literal(coord_list, vals)
+                continue
+
+            vals_ary = jnp.atleast_1d(vals)
+            dist = jnp.abs(coord_list[None] - vals_ary[:, None])
+
+            if method is None:
+                indices = jnp.where(jnp.isclose(dist, 0))[1]
+            elif method == "nearest":
+                indices = jnp.argmin(dist, axis=1)
+
+            if indices.size == 0:
+                raise DataError(
+                    f"Could not select '{coord_name}={vals_ary}', some values were not found."
+                )
+
+            if np.isscalar(vals):
+                indices = jnp.squeeze(indices)
+
+            isel_kwargs[coord_name] = indices
+
         return self.isel(**isel_kwargs)
+
+    def _indices_literal(self, coord_list: list, values: Union[Any, Sequence[Any]]) -> np.ndarray:
+        """Find indices of non-numeric `values` in `coord_list`.
+
+        Parameters
+        ----------
+        coord_list : list
+            List of all entries for a specific coordinate.
+        values : Union[Any, Sequence[Any]]
+            Single value or values of which to find the index of.
+
+        Returns
+        -------
+        numpy.ndarray
+            Indices of `values` in `coord_list`.
+        """
+        indices = []
+        for v in np.atleast_1d(values):
+            if v not in coord_list:
+                raise DataError(f"Could not select '{v}' from '{coord_list}', value not found.")
+            indices.append(coord_list.index(v))
+
+        if np.isscalar(values):
+            indices = np.squeeze(indices)
+
+        return indices
 
     def assign_coords(self, coords: dict = None, **coords_kwargs) -> JaxDataArray:
         """Assign new coordinates to this object."""

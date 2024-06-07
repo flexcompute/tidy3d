@@ -1,9 +1,19 @@
 """Tests parameter perturbations."""
-import numpy as np
+
 import matplotlib.pyplot as plt
-import pytest
+import numpy as np
 import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
+
+from ..utils import cartesian_to_unstructured
+
+sp_arr = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))
+sp_arr_u = cartesian_to_unstructured(sp_arr)
+sp_arr_2d = td.SpatialDataArray(300 * np.ones((2, 1, 2)), coords=dict(x=[1, 2], y=[3.5], z=[5, 6]))
+sp_arr_2d_u = cartesian_to_unstructured(sp_arr_2d)
+
+sp_arrs = [sp_arr, sp_arr_u, sp_arr_2d, sp_arr_2d_u]
 
 
 def test_heat_perturbation():
@@ -40,10 +50,10 @@ def test_heat_perturbation():
     assert isinstance(sampled, np.ndarray)
     sampled = perturb.sample(np.array([310, 320]))
     assert isinstance(sampled, np.ndarray)
-    sampled = perturb.sample(
-        td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))
-    )
-    assert isinstance(sampled, td.SpatialDataArray)
+
+    for arr in sp_arrs:
+        sampled = perturb.sample(arr)
+        assert isinstance(sampled, type(arr))
 
     # complex temperature
     with pytest.raises(ValueError):
@@ -80,10 +90,10 @@ def test_heat_perturbation():
         assert isinstance(sampled, np.ndarray)
         sampled = perturb.sample(np.array([310, 320]))
         assert isinstance(sampled, np.ndarray)
-        sampled = perturb.sample(
-            td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))
-        )
-        assert isinstance(sampled, td.SpatialDataArray)
+
+        for arr in sp_arrs:
+            sampled = perturb.sample(arr)
+            assert isinstance(sampled, type(arr))
 
         # test plotting
         perturb.plot(temperature=np.linspace(200, 400, 10), val="real", ax=ax)
@@ -143,41 +153,49 @@ def test_charge_perturbation():
             hole_range=(0, 0.5e20),
         )
 
+    def test_sample(perturb):
+        sampled = perturb.sample(electron_density=[1e17, 1e18, 1e19], hole_density=[2e17, 2e18])
+        assert isinstance(sampled, np.ndarray)
+        assert np.shape(sampled) == (3, 2)
+        sampled = perturb.sample(electron_density=1e17, hole_density=[2e17, 2e18])
+        assert isinstance(sampled, np.ndarray)
+
+        for arr in sp_arrs:
+            sampled = perturb.sample(electron_density=1e15 * arr, hole_density=2e15 * arr)
+            assert isinstance(sampled, type(arr))
+            sampled = perturb.sample(electron_density=1e15 * arr, hole_density=0)
+            assert isinstance(sampled, type(arr))
+            sampled = perturb.sample(electron_density=1e15, hole_density=2e15 * arr)
+            assert isinstance(sampled, type(arr))
+
+        # test mixing spatial data array and simple array
+        for arr in sp_arrs:
+            with pytest.raises(td.exceptions.DataError):
+                _ = perturb.sample(
+                    electron_density=arr,
+                    hole_density=[2e17, 2e18],
+                )
+
+        with pytest.raises(td.exceptions.DataError):
+            _ = perturb.sample(electron_density=sp_arr, hole_density=sp_arr_u)
+
+        with pytest.raises(td.exceptions.DataError):
+            _ = perturb.sample(electron_density=sp_arr, hole_density=sp_arr_2d)
+
+        with pytest.raises(td.exceptions.DataError):
+            _ = perturb.sample(electron_density=sp_arr_2d_u, hole_density=sp_arr_u)
+
+        with pytest.raises(ValueError):
+            _ = perturb.sample(electron_density=1e19j, hole_density=2e19)
+
     # test sample function on different arguments
+    test_sample(perturb)
+    shape = (3, 4)
+    sampled = perturb.sample(electron_density=np.ones(shape), hole_density=np.zeros(shape))
+    assert isinstance(sampled, np.ndarray)
+    assert np.shape(sampled) == shape
     sampled = perturb.sample(electron_density=1e19, hole_density=2e19)
     assert isinstance(sampled, float)
-    sampled = perturb.sample(electron_density=[1e17, 1e18, 1e19], hole_density=[2e17, 2e18])
-    assert isinstance(sampled, np.ndarray)
-    sampled = perturb.sample(electron_density=1e17, hole_density=[2e17, 2e18])
-    assert isinstance(sampled, np.ndarray)
-    sampled = perturb.sample(
-        electron_density=td.SpatialDataArray(
-            1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-        ),
-        hole_density=td.SpatialDataArray(
-            2e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-        ),
-    )
-    assert isinstance(sampled, td.SpatialDataArray)
-    sampled = perturb.sample(
-        electron_density=0,
-        hole_density=td.SpatialDataArray(
-            2e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-        ),
-    )
-    assert isinstance(sampled, td.SpatialDataArray)
-
-    # test mixing spatial data array and simple array
-    with pytest.raises(ValueError):
-        _ = perturb.sample(
-            electron_density=td.SpatialDataArray(
-                1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-            ),
-            hole_density=[2e17, 2e18],
-        )
-
-    with pytest.raises(ValueError):
-        _ = perturb.sample(electron_density=1e19j, hole_density=2e19)
 
     # test plotting
     ax_2d = perturb.plot(
@@ -226,39 +244,9 @@ def test_charge_perturbation():
         assert perturb.is_complex
 
         # test sample function on different arguments
-        test_value_in = perturb.sample(electron_density=1.5e18, hole_density=9e17)
-        assert isinstance(test_value_in, complex)
-        test_value_out = perturb.sample(electron_density=1e19, hole_density=2e19)
-        assert isinstance(test_value_out, complex)
-        sampled = perturb.sample(electron_density=[1e17, 1e18, 1e19], hole_density=[2e17, 2e18])
-        assert isinstance(sampled, np.ndarray)
-        sampled = perturb.sample(electron_density=1e17, hole_density=[2e17, 2e18])
-        assert isinstance(sampled, np.ndarray)
-        sampled = perturb.sample(
-            electron_density=td.SpatialDataArray(
-                1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-            ),
-            hole_density=td.SpatialDataArray(
-                2e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-            ),
-        )
-        assert isinstance(sampled, td.SpatialDataArray)
-        sampled = perturb.sample(
-            electron_density=0,
-            hole_density=td.SpatialDataArray(
-                2e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-            ),
-        )
-        assert isinstance(sampled, td.SpatialDataArray)
-
-        # test mixing spatial data array and simple array
-        with pytest.raises(ValueError):
-            _ = perturb.sample(
-                electron_density=td.SpatialDataArray(
-                    1e18 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6])
-                ),
-                hole_density=[2e17, 2e18],
-            )
+        sampled = perturb.sample(electron_density=1e19, hole_density=2e19)
+        assert isinstance(sampled, complex)
+        test_sample(perturb)
 
         # test plotting
         _ = perturb.plot(
@@ -283,6 +271,11 @@ def test_charge_perturbation():
         )
 
         # check interpolation works as expected
+        test_value_in = perturb.sample(electron_density=1.5e18, hole_density=9e17)
+        assert isinstance(test_value_in, complex)
+        test_value_out = perturb.sample(electron_density=1e19, hole_density=2e19)
+        assert isinstance(test_value_out, complex)
+
         if interp_method == "linear":
             assert test_value_in != perturb_data[-1, -1].item()
         elif interp_method == "nearest":
@@ -301,7 +294,8 @@ def test_charge_perturbation():
     plt.close("all")
 
 
-def test_parameter_perturbation():
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_parameter_perturbation(unstructured):
     heat = td.LinearHeatPerturbation(
         coeff=0.01,
         temperature_ref=300,
@@ -320,11 +314,18 @@ def test_parameter_perturbation():
 
     coords = dict(x=[1, 2], y=[3, 4], z=[5, 6])
     coords2 = dict(x=[1, 2], y=[3, 4], z=[5])
-    temperature = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=coords)
-    electron_density = td.SpatialDataArray(1e18 * np.ones((2, 2, 2)), coords=coords)
-    hole_density = td.SpatialDataArray(2e18 * np.ones((2, 2, 2)), coords=coords)
+    temperature = td.SpatialDataArray(300 * np.random.random((2, 2, 2)), coords=coords)
+    electron_density = td.SpatialDataArray(1e18 * np.random.random((2, 2, 2)), coords=coords)
+    hole_density = td.SpatialDataArray(2e18 * np.random.random((2, 2, 2)), coords=coords)
 
-    temperature2 = td.SpatialDataArray(300 * np.ones((2, 2, 1)), coords=coords2)
+    temperature2 = td.SpatialDataArray(300 * np.random.random((2, 2, 1)), coords=coords2)
+
+    if unstructured:
+        seed = 321
+        temperature = cartesian_to_unstructured(temperature, seed=seed)
+        electron_density = cartesian_to_unstructured(electron_density, seed=seed)
+        hole_density = cartesian_to_unstructured(hole_density, seed=seed)
+        temperature2 = cartesian_to_unstructured(temperature2, seed=seed)
 
     param_perturb = td.ParameterPerturbation(
         heat=heat,

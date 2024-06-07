@@ -1,35 +1,52 @@
-""" Container holding about the geometry and medium properties common to all types of simulations.
-"""
-from __future__ import annotations
-from typing import Dict, Tuple, List, Set, Union
+"""Container holding about the geometry and medium properties common to all types of simulations."""
 
-import pydantic.v1 as pd
-import numpy as np
-import matplotlib.pylab as plt
+from __future__ import annotations
+
+from typing import Dict, List, Set, Tuple, Union
+
+import autograd.numpy as np
 import matplotlib as mpl
+import matplotlib.pylab as plt
+import pydantic.v1 as pd
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from .base import cached_property, Tidy3dBaseModel
-from .validators import assert_unique_names
-from .geometry.base import Box, GeometryGroup, ClipOperation
-from .geometry.utils import flatten_groups, traverse_geometries
-from .types import Ax, Shapely, TYPE_TAG_STR, Bound, Size, Coordinate, InterpMethod
-from .medium import Medium, MediumType
-from .medium import AbstractCustomMedium, Medium2D, MediumType3D
-from .medium import AbstractPerturbationMedium
-from .grid.grid import Grid
-from .structure import Structure
-from .data.data_array import SpatialDataArray
-from .viz import add_ax_if_none, equal_aspect
-from .grid.grid import Coords
-from .heat_spec import SolidSpec
-
-from .viz import MEDIUM_CMAP, STRUCTURE_EPS_CMAP, PlotParams, polygon_path, STRUCTURE_HEAT_COND_CMAP
-from .viz import plot_params_structure, plot_params_fluid
-
-from ..constants import inf, THERMAL_CONDUCTIVITY
+from ..constants import THERMAL_CONDUCTIVITY, inf
 from ..exceptions import SetupError, Tidy3dError
 from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .data.dataset import (
+    CustomSpatialDataType,
+    TetrahedralGridDataset,
+    TriangularGridDataset,
+    UnstructuredGridDataset,
+    _get_numpy_array,
+)
+from .geometry.base import Box, ClipOperation, GeometryGroup
+from .geometry.utils import flatten_groups, traverse_geometries
+from .grid.grid import Coords, Grid
+from .heat_spec import SolidSpec
+from .medium import (
+    AbstractCustomMedium,
+    AbstractPerturbationMedium,
+    Medium,
+    Medium2D,
+    MediumType,
+    MediumType3D,
+)
+from .structure import Structure
+from .types import TYPE_TAG_STR, Ax, Bound, Coordinate, InterpMethod, Shapely, Size
+from .validators import assert_unique_names
+from .viz import (
+    MEDIUM_CMAP,
+    STRUCTURE_EPS_CMAP,
+    STRUCTURE_HEAT_COND_CMAP,
+    PlotParams,
+    add_ax_if_none,
+    equal_aspect,
+    plot_params_fluid,
+    plot_params_structure,
+    polygon_path,
+)
 
 # maximum number of mediums supported
 MAX_NUM_MEDIUMS = 65530
@@ -838,7 +855,7 @@ class Scene(Tidy3dBaseModel):
         medium_list = [medium for medium in medium_list if not medium.is_pec]
         # regular medium
         eps_list = [
-            medium.eps_model(freq).real
+            np.real(medium.eps_model(freq))
             for medium in medium_list
             if not isinstance(medium, AbstractCustomMedium) and not isinstance(medium, Medium2D)
         ]
@@ -850,11 +867,17 @@ class Scene(Tidy3dBaseModel):
             eps_dataarray = mat.eps_dataarray_freq(freq)
             eps_min = min(
                 eps_min,
-                min(np.min(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+                min(
+                    np.min(_get_numpy_array(np.real(eps_comp)).ravel())
+                    for eps_comp in eps_dataarray
+                ),
             )
             eps_max = max(
                 eps_max,
-                max(np.max(eps_comp.real.values.ravel()) for eps_comp in eps_dataarray),
+                max(
+                    np.max(_get_numpy_array(np.real(eps_comp)).ravel())
+                    for eps_comp in eps_dataarray
+                ),
             )
         return eps_min, eps_max
 
@@ -891,9 +914,51 @@ class Scene(Tidy3dBaseModel):
             plane_axes_inds = [0, 1, 2]
             plane_axes_inds.pop(normal_axis_ind)
 
+            eps_diag = medium.eps_dataarray_freq(frequency=freq)
+
+            # handle unstructured data case
+            if isinstance(eps_diag[0], UnstructuredGridDataset):
+                if (
+                    isinstance(eps_diag[0], TriangularGridDataset)
+                    and eps_diag[0].normal_axis != normal_axis_ind
+                ):
+                    # if we trying to visualize 2d unstructured data not along its normal direction
+                    # we need to extract line slice that lies in the visualization plane
+                    # note that after this eps_diag[] will be SpatialDataArray's
+                    eps_diag = list(eps_diag)
+                    for dim in range(3):
+                        eps_diag[dim] = eps_diag[dim].plane_slice(
+                            axis=normal_axis_ind, pos=normal_position
+                        )
+                else:
+                    eps_mean = (eps_diag[0] + eps_diag[1] + eps_diag[2]) / 3
+
+                    if isinstance(eps_mean, TetrahedralGridDataset):
+                        # extract slice if volumetric unstructured data
+                        eps_mean = eps_mean.plane_slice(axis=normal_axis_ind, pos=normal_position)
+
+                    if reverse:
+                        eps_mean = eps_min + eps_max - eps_mean
+
+                    # at this point eps_mean is TriangularGridDataset and we just plot it directly
+                    # with applying shape mask
+                    eps_mean.plot(
+                        grid=False,
+                        ax=ax,
+                        cbar=False,
+                        cmap=STRUCTURE_EPS_CMAP,
+                        vmin=eps_min,
+                        vmax=eps_max,
+                        pcolor_kwargs=dict(
+                            clip_path=(polygon_path(shape), ax.transData),
+                            clip_box=ax.bbox,
+                            alpha=alpha,
+                        ),
+                    )
+                    return
+
             # in case when different components of custom medium are defined on different grids
             # we will combine all points along each dimension
-            eps_diag = medium.eps_dataarray_freq(frequency=freq)
             if (
                 eps_diag[0].coords == eps_diag[1].coords
                 and eps_diag[0].coords == eps_diag[2].coords
@@ -1240,9 +1305,9 @@ class Scene(Tidy3dBaseModel):
 
     def perturbed_mediums_copy(
         self,
-        temperature: SpatialDataArray = None,
-        electron_density: SpatialDataArray = None,
-        hole_density: SpatialDataArray = None,
+        temperature: CustomSpatialDataType = None,
+        electron_density: CustomSpatialDataType = None,
+        hole_density: CustomSpatialDataType = None,
         interp_method: InterpMethod = "linear",
     ) -> Scene:
         """Return a copy of the scene with heat and/or charge data applied to all mediums
@@ -1253,11 +1318,23 @@ class Scene(Tidy3dBaseModel):
 
         Parameters
         ----------
-        temperature : SpatialDataArray = None
+        temperature : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Temperature field data.
-        electron_density : SpatialDataArray = None
+        electron_density : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Electron density field data.
-        hole_density : SpatialDataArray = None
+        hole_density : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+            ] = None
             Hole density field data.
         interp_method : :class:`.InterpMethod`, optional
             Interpolation method to obtain heat and/or charge values that are not supplied
@@ -1265,7 +1342,7 @@ class Scene(Tidy3dBaseModel):
 
         Returns
         -------
-        Scene
+        :class:`.Scene`
             Simulation after application of heat and/or charge data.
         """
 

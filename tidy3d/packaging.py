@@ -3,10 +3,12 @@ This file contains a set of functions relating to packaging tidy3d for distribut
 
 This section should only depend on the standard core installation in the pyproject.toml, and should not depend on any other part of the codebase optional imports.
 """
+
 import functools
-import numpy as np
-from typing import Literal
 from importlib import import_module
+from typing import Literal
+
+import numpy as np
 
 from .exceptions import Tidy3dImportError
 
@@ -121,8 +123,11 @@ def requires_vtk(fn):
         if vtk["mod"] is None:
             try:
                 import vtk as vtk_mod
-                from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
-                from vtk.util.numpy_support import numpy_to_vtkIdTypeArray
+                from vtk.util.numpy_support import (
+                    numpy_to_vtk,
+                    numpy_to_vtkIdTypeArray,
+                    vtk_to_numpy,
+                )
                 from vtkmodules.vtkCommonCore import vtkLogger
 
                 vtk["mod"] = vtk_mod

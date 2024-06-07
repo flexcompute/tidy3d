@@ -1,17 +1,17 @@
-""" Defines time dependence """
+"""Defines time dependence"""
+
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
-from .base import Tidy3dBaseModel
-
-from .types import Ax
-from .types import ArrayFloat1D, PlotVal
-from .viz import add_ax_if_none
 from ..constants import RADIAN
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel
+from .types import ArrayFloat1D, Ax, PlotVal
+from .viz import add_ax_if_none
 
 # in spectrum computation, discard amplitudes with relative magnitude smaller than cutoff
 DFT_CUTOFF = 1e-8

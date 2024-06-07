@@ -1,26 +1,32 @@
 """higher level wrappers for webapi functions for individual (Job) and batch (Batch) tasks."""
+
 from __future__ import annotations
 
+import concurrent
+import json
 import os
-from abc import ABC
-from typing import Dict, Tuple
 import time
+from abc import ABC
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Optional, Tuple
 
-from rich.progress import Progress
 import pydantic.v1 as pd
+from rich.progress import Progress
 
-from .tidy3d_stub import SimulationType, SimulationDataType
-from ..api import webapi as web
-from ..core.task_info import TaskInfo, RunInfo
-from ..core.constants import TaskId, TaskName
-from ...components.base import Tidy3dBaseModel
+from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.types import annotate_type
-from ...log import log, get_logging_console
-
 from ...exceptions import DataError
+from ...log import get_logging_console, log
+from ..api import webapi as web
+from ..core.constants import TaskId, TaskName
+from ..core.task_info import RunInfo, TaskInfo
+from .tidy3d_stub import SimulationDataType, SimulationType
 
+# Max # of workers for parallel upload / download: above 10, performance is same but with warnings
+DEFAULT_NUM_WORKERS = 10
 DEFAULT_DATA_PATH = "simulation_data.hdf5"
 DEFAULT_DATA_DIR = "."
+BATCH_MONITOR_PROGRESS_REFRESH_TIME = 0.02
 
 
 class WebContainer(Tidy3dBaseModel, ABC):
@@ -146,10 +152,13 @@ class Job(WebContainer):
         None, title="Parent Tasks", description="Tuple of parent task ids, used internally only."
     )
 
-    task_id: TaskId = pd.Field(
+    task_id_cached: TaskId = pd.Field(
         None,
-        title="Task Id",
-        description="Task ID number, set when the task is uploaded, leave as None.",
+        title="Task ID (Cached)",
+        description="Optional field to specify ``task_id``. Only used as a workaround internally "
+        "so that ``task_id`` is written when ``Job.to_file()`` and then the proper task is loaded "
+        "from ``Job.from_file()``. We recommend leaving unset as setting this field along with "
+        "fields that were not used to create the task will cause errors.",
     )
 
     _upload_fields = (
@@ -162,6 +171,20 @@ class Job(WebContainer):
         "parent_tasks",
     )
 
+    def json(self, **kwargs):
+        """Save ``Job`` to dictionary. Add the `task_id` if it has been cached."""
+
+        self_json = super().json(**kwargs)
+
+        task_id = self._cached_properties.get("task_id")
+
+        if not task_id:
+            return self_json
+
+        self_dict = json.loads(self_json)
+        self_dict["task_id_cached"] = task_id
+        return json.dumps(self_dict)
+
     def run(self, path: str = DEFAULT_DATA_PATH) -> SimulationDataType:
         """Run :class:`Job` all the way through and return data.
 
@@ -172,29 +195,27 @@ class Job(WebContainer):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
 
+        self.upload()
         self.start()
         self.monitor()
         return self.load(path=path)
 
-    @pd.root_validator()
-    def _upload(cls, values) -> None:
-        """Upload simulation to server without running."""
+    @cached_property
+    def task_id(self) -> TaskId:
+        """The task ID for this ``Job``. Uploads the ``Job`` if it hasn't already been uploaded."""
+        if self.task_id_cached:
+            return self.task_id_cached
+        return self.upload()
 
-        # task_id already present, don't re-upload
-        if values.get("task_id") is not None:
-            return values
-
+    def upload(self) -> TaskId:
         # upload kwargs with all fields except task_id
-        upload_kwargs = {key: values.get(key) for key in cls._upload_fields}
-        task_id = web.upload(**upload_kwargs)
-
-        # then set the task_id and return
-        values["task_id"] = task_id
-        return values
+        self_dict = self.dict()
+        upload_kwargs = {key: self_dict.get(key) for key in self._upload_fields}
+        return web.upload(**upload_kwargs)
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
@@ -265,7 +286,7 @@ class Job(WebContainer):
 
         Returns
         -------
-        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
+        Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
             Object containing simulation results.
         """
         return web.load(task_id=self.task_id, path=path, verbose=self.verbose)
@@ -307,7 +328,7 @@ class Job(WebContainer):
         Cost is calculated assuming the simulation runs for
         the full ``run_time``. If early shut-off is triggered, the cost is adjusted proportionately.
         """
-        return web.estimate_cost(self.task_id, verbose=verbose)
+        return web.estimate_cost(self.task_id, verbose=verbose, solver_version=self.solver_version)
 
 
 class BatchData(Tidy3dBaseModel):
@@ -354,15 +375,17 @@ class BatchData(Tidy3dBaseModel):
         task_data_path = self.task_paths[task_name]
         task_id = self.task_ids[task_name]
         web.get_info(task_id)
+
         return web.load(
             task_id=task_id,
             path=task_data_path,
             replace_existing=False,
-            verbose=self.verbose,
+            verbose=False,
         )
 
     def items(self) -> Tuple[TaskName, SimulationDataType]:
         """Iterate through the simulations for each task_name."""
+
         for task_name in self.task_paths.keys():
             yield task_name, self.load_sim_data(task_name)
 
@@ -383,8 +406,8 @@ class BatchData(Tidy3dBaseModel):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`]
-            for each Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`]
+            for each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
         """
 
         batch_file = Batch._batch_path(path_dir=path_dir)
@@ -462,12 +485,25 @@ class Batch(WebContainer):
         description="Collection of parent task ids for each job in batch, used internally only.",
     )
 
-    jobs: Dict[TaskName, Job] = pd.Field(
-        None,
-        title="Simulations",
-        description="Mapping of task names to individual Job object for each task in the batch. "
-        "Set by ``Batch.upload``, leave as None.",
+    num_workers: Optional[pd.PositiveInt] = pd.Field(
+        DEFAULT_NUM_WORKERS,
+        title="Number of Workers",
+        description="Number of workers for multi-threading upload and download of batch. "
+        "Corresponds to ``max_workers`` argument passed to "
+        "``concurrent.futures.ThreadPoolExecutor``. When left ``None``, will pass the maximum "
+        "number of threads available on the system.",
     )
+
+    jobs_cached: Dict[TaskName, Job] = pd.Field(
+        None,
+        title="Jobs (Cached)",
+        description="Optional field to specify ``jobs``. Only used as a workaround internally "
+        "so that ``jobs`` is written when ``Batch.to_file()`` and then the proper task is loaded "
+        "from ``Batch.from_file()``. We recommend leaving unset as setting this field along with "
+        "fields that were not used to create the task will cause errors.",
+    )
+
+    _job_type = Job
 
     @staticmethod
     def _check_path_dir(path_dir: str) -> None:
@@ -487,8 +523,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for
-            each Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData] for
+            each Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
 
         Note
         ----
@@ -505,39 +541,80 @@ class Batch(WebContainer):
         data from file one by one. If no file exists for that task, it downloads it.
         """
         self._check_path_dir(path_dir)
+        self.upload()
         self.start()
         self.monitor()
+        self.download(path_dir=path_dir)
         return self.load(path_dir=path_dir)
 
-    @pd.validator("jobs", always=True)
-    def _upload(cls, val, values) -> None:
+    @cached_property
+    def jobs(self) -> Dict[TaskName, Job]:
         """Create a series of tasks in the :class:`.Batch` and upload them to server.
 
         Note
         ----
         To start the simulations running, must call :meth:`Batch.start` after uploaded.
         """
-        if val is not None:
-            return val
+
+        if self.jobs_cached is not None:
+            return self.jobs_cached
 
         # the type of job to upload (to generalize to subclasses)
-        JobType = cls.__fields__["jobs"].type_
-        parent_tasks = values.get("parent_tasks")
+        JobType = self._job_type
+        self_dict = self.dict()
 
-        verbose = bool(values.get("verbose"))
-        solver_version = values.get("solver_version")
         jobs = {}
-        for task_name, simulation in values.get("simulations").items():
-            upload_kwargs = {key: values.get(key) for key in JobType._upload_fields}
-            upload_kwargs["task_name"] = task_name
-            upload_kwargs["simulation"] = simulation
-            upload_kwargs["verbose"] = verbose
-            upload_kwargs["solver_version"] = solver_version
-            if parent_tasks and task_name in parent_tasks:
-                upload_kwargs["parent_tasks"] = parent_tasks[task_name]
-            job = JobType(**upload_kwargs)
+        for task_name, simulation in self.simulations.items():
+            job_kwargs = {}
+
+            for key in JobType._upload_fields:
+                if key in self_dict:
+                    job_kwargs[key] = self_dict.get(key)
+
+            job_kwargs["task_name"] = task_name
+            job_kwargs["simulation"] = simulation
+            job_kwargs["verbose"] = False
+            job_kwargs["solver_version"] = self.solver_version
+            if self.parent_tasks and task_name in self.parent_tasks:
+                job_kwargs["parent_tasks"] = self.parent_tasks[task_name]
+            job = JobType(**job_kwargs)
             jobs[task_name] = job
         return jobs
+
+    def json(self, **kwargs):
+        """Save ``Batch`` to dictionary. Add the ``jobs`` if they have been cached."""
+
+        self_json = super().json(**kwargs)
+
+        jobs = self._cached_properties.get("jobs")
+
+        if not jobs:
+            return self_json
+
+        self_dict = json.loads(self_json)
+        self_dict["jobs_cached"] = {k: json.loads(j.json()) for k, j in jobs.items()}
+        return json.dumps(self_dict)
+
+    @property
+    def num_jobs(self) -> int:
+        """Number of jobs in the batch."""
+        return len(self.jobs)
+
+    def upload(self) -> None:
+        """Upload a series of tasks associated with this ``Batch`` using multi-threading."""
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            futures = [executor.submit(job.upload) for _, job in self.jobs.items()]
+
+            # progressbar (number of tasks uploaded)
+            if self.verbose:
+                console = get_logging_console()
+                with Progress(console=console) as progress:
+                    pbar_message = f"Uploading data for {self.num_jobs} tasks."
+                    pbar = progress.add_task(pbar_message, total=self.num_jobs - 1)
+                    for _ in concurrent.futures.as_completed(futures):
+                        progress.update(pbar, advance=1)
+                    progress.update(pbar, completed=self.num_jobs - 1, refresh=True)
 
     def get_info(self) -> Dict[TaskName, TaskInfo]:
         """Get information about each task in the :class:`Batch`.
@@ -560,8 +637,13 @@ class Batch(WebContainer):
         ----
         To monitor the running simulations, can call :meth:`Batch.monitor`.
         """
-        for _, job in self.jobs.items():
-            job.start()
+        if self.verbose:
+            console = get_logging_console()
+            console.log(f"Started working on Batch containing {self.num_jobs} tasks.")
+
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            for _, job in self.jobs.items():
+                executor.submit(job.start)
 
     def get_run_info(self) -> Dict[TaskName, RunInfo]:
         """get information about a each of the tasks in the :class:`Batch`.
@@ -609,7 +691,6 @@ class Batch(WebContainer):
 
         if self.verbose:
             console = get_logging_console()
-            console.log("Started working on Batch.")
 
             self.estimate_cost()
             console.log(
@@ -623,7 +704,12 @@ class Batch(WebContainer):
                 for task_name, job in self.jobs.items():
                     status = job.status
                     description = pbar_description(task_name, status)
-                    pbar = progress.add_task(description, total=len(run_statuses) - 1)
+                    completed = run_statuses.index(status) if status in run_statuses else 0
+                    pbar = progress.add_task(
+                        description,
+                        total=len(run_statuses) - 1,
+                        completed=completed,
+                    )
                     pbar_tasks[task_name] = pbar
 
                 while any(job.status not in end_statuses for job in self.jobs.values()):
@@ -632,14 +718,11 @@ class Batch(WebContainer):
                         status = job.status
                         description = pbar_description(task_name, status)
 
-                        # if a problem occurred, update progressbar completion to 100%
-                        if status not in run_statuses:
-                            completed = run_statuses.index("success")
-                        else:
+                        if status in run_statuses:
                             completed = run_statuses.index(status)
+                            progress.update(pbar, description=description, completed=completed)
 
-                        progress.update(pbar, description=description, completed=completed)
-                    time.sleep(web.REFRESH_TIME)
+                    time.sleep(BATCH_MONITOR_PROGRESS_REFRESH_TIME)
 
                 # set all to 100% completed (if error or diverge, will be red)
                 for task_name, job in self.jobs.items():
@@ -714,14 +797,32 @@ class Batch(WebContainer):
 
         self.to_file(self._batch_path(path_dir=path_dir))
 
-        for task_name, job in self.jobs.items():
-            job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            fns = []
+            for task_name, job in self.jobs.items():
+                job_path = self._job_data_path(task_id=job.task_id, path_dir=path_dir)
 
-            if "error" in job.status:
-                log.warning(f"Not downloading '{task_name}' as the task errored.")
-                continue
+                if "error" in job.status:
+                    log.warning(f"Not downloading '{task_name}' as the task errored.")
+                    continue
 
-            job.download(path=job_path)
+                def fn(job=job, job_path=job_path) -> None:
+                    """Function to submit by executor, local variables bound by making kwargs."""
+                    return job.download(path=job_path)
+
+                fns.append(fn)
+
+            futures = [executor.submit(fn) for fn in fns]
+
+            # progressbar (number of eligible tasks downloaded)
+            if self.verbose:
+                console = get_logging_console()
+                with Progress(console=console) as progress:
+                    pbar_message = f"Downloading data for {len(fns)} tasks."
+                    pbar = progress.add_task(pbar_message, total=len(fns) - 1)
+                    for _ in concurrent.futures.as_completed(futures):
+                        progress.update(pbar, advance=1)
+                    progress.update(pbar, completed=len(fns) - 1, refresh=True)
 
     def load(self, path_dir: str = DEFAULT_DATA_DIR) -> BatchData:
         """Download results and load them into :class:`.BatchData` object.
@@ -734,8 +835,8 @@ class Batch(WebContainer):
         Returns
         ------
         :class:`BatchData`
-            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`] for each
-            Union[:class:`.Simulation`, :class:`.HeatSimulation`] in :class:`Batch`.
+            Contains Union[:class:`.SimulationData`, :class:`.HeatSimulationData`, :class:`.EMESimulationData`] for each
+            Union[:class:`.Simulation`, :class:`.HeatSimulation`, :class:`.EMESimulation`] in :class:`Batch`.
 
         The :class:`Batch` hdf5 file will be automatically saved as ``{path_dir}/batch.hdf5``,
         allowing one to load this :class:`Batch` later using ``batch = Batch.from_file()``.
@@ -807,7 +908,11 @@ class Batch(WebContainer):
         float
             Estimated total cost of the tasks in FlexCredits.
         """
-        batch_cost = sum(job.estimate_cost(verbose=False) for _, job in self.jobs.items())
+        job_costs = [job.estimate_cost(verbose=False) for _, job in self.jobs.items()]
+        if any(cost is None for cost in job_costs):
+            batch_cost = None
+        else:
+            batch_cost = sum(job_costs)
 
         if verbose:
             console = get_logging_console()

@@ -12,10 +12,13 @@ The functions are also used to convert all Markdown files to RST format using th
 
     poetry run tidy3d develop convert-all-markdown-to-rst
 """
-import click
+
 import json
 import os
 from typing import Optional
+
+import click
+
 from .index import develop
 from .utils import echo_and_check_subprocess, get_install_directory
 

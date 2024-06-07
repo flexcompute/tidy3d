@@ -1,4 +1,5 @@
 """Defines interface that can be subclassed to use with the tidy3d webapi"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

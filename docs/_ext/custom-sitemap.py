@@ -1,5 +1,5 @@
-import xml.etree.ElementTree as ET
 import re
+import xml.etree.ElementTree as ET
 
 
 def match_exclude_url(app, url):

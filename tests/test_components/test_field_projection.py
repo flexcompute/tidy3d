@@ -1,10 +1,9 @@
 """Test near field to far field transformations."""
+
 import numpy as np
-import tidy3d as td
 import pytest
-
+import tidy3d as td
 from tidy3d.exceptions import DataError
-
 
 MEDIUM = td.Medium(permittivity=3)
 WAVELENGTH = 1
@@ -334,7 +333,7 @@ def test_proj_clientside():
     far_fields_angular.fields_cartesian
     far_fields_angular.radar_cross_section
     far_fields_angular.power
-    for key, val in far_fields_angular.field_components.items():
+    for val in far_fields_angular.field_components.values():
         val.sel(f=f0)
     far_fields_angular.renormalize_fields(proj_distance=5e6)
 
@@ -345,7 +344,7 @@ def test_proj_clientside():
     far_fields_cartesian.fields_cartesian
     far_fields_cartesian.radar_cross_section
     far_fields_cartesian.power
-    for key, val in far_fields_cartesian.field_components.items():
+    for val in far_fields_cartesian.field_components.values():
         val.sel(f=f0)
     far_fields_cartesian.renormalize_fields(proj_distance=5e6)
 
@@ -356,7 +355,7 @@ def test_proj_clientside():
     far_fields_kspace.fields_cartesian
     far_fields_kspace.radar_cross_section
     far_fields_kspace.power
-    for key, val in far_fields_kspace.field_components.items():
+    for val in far_fields_kspace.field_components.values():
         val.sel(f=f0)
     far_fields_kspace.renormalize_fields(proj_distance=5e6)
 
@@ -367,7 +366,7 @@ def test_proj_clientside():
     exact_fields_cartesian.fields_cartesian
     exact_fields_cartesian.radar_cross_section
     exact_fields_cartesian.power
-    for key, val in exact_fields_cartesian.field_components.items():
+    for val in exact_fields_cartesian.field_components.values():
         val.sel(f=f0)
     with pytest.raises(DataError):
         exact_fields_cartesian.renormalize_fields(proj_distance=5e6)

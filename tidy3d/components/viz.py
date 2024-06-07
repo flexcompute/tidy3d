@@ -1,19 +1,20 @@
-""" utilities for plotting """
+"""utilities for plotting"""
+
 from __future__ import annotations
 
-from typing import Any
 from functools import wraps
 from html import escape
+from typing import Any
 
 import matplotlib.pyplot as plt
-from matplotlib.patches import PathPatch, ArrowStyle
-from matplotlib.path import Path
-from numpy import array, concatenate, ones, inf
 import pydantic.v1 as pd
+from matplotlib.patches import ArrowStyle, PathPatch
+from matplotlib.path import Path
+from numpy import array, concatenate, inf, ones
 
-from .types import Ax
-from .base import Tidy3dBaseModel
 from ..exceptions import SetupError
+from .base import Tidy3dBaseModel
+from .types import Ax
 
 """ Constants """
 
@@ -95,7 +96,7 @@ class PlotParams(Tidy3dBaseModel):
     def to_kwargs(self) -> dict:
         """Export the plot parameters as kwargs dict that can be supplied to plot function."""
         kwarg_dict = self.dict()
-        for ignore_key in ("type",):
+        for ignore_key in ("type", "attrs"):
             kwarg_dict.pop(ignore_key)
         return kwarg_dict
 
@@ -115,6 +116,9 @@ plot_params_override_structures = PlotParams(
 )
 plot_params_fluid = PlotParams(facecolor="white", edgecolor="lightsteelblue", lw=0.4, hatch="xx")
 plot_params_grid = PlotParams(edgecolor="black", lw=0.2)
+plot_params_lumped_element = PlotParams(
+    alpha=0.4, facecolor="mediumblue", edgecolor="mediumblue", lw=3
+)
 
 # stores color of simulation.structures for given index in simulation.medium_map
 MEDIUM_CMAP = [
@@ -233,7 +237,7 @@ def plot_sim_3d(sim, width=800, height=800) -> None:
     """Make 3D display of simulation in ipyython notebook."""
 
     try:
-        from IPython.display import display, HTML
+        from IPython.display import HTML, display
     except ImportError as e:
         raise SetupError(
             "3D plotting requires ipython to be installed "

@@ -1,9 +1,11 @@
 """Environment Setup."""
+
 import os
-from .core_config import get_logger
+import ssl
 
 from pydantic.v1 import BaseSettings, Field
-import ssl
+
+from .core_config import get_logger
 
 
 class EnvironmentConfig(BaseSettings):

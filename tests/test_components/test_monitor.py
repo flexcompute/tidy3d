@@ -1,10 +1,12 @@
 """Tests monitors."""
-import pytest
-import pydantic.v1 as pydantic
+
 import numpy as np
+import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, ValidationError
-from ..utils import assert_log_level, log_capture
+
+from ..utils import assert_log_level
 
 
 def test_stop_start():
@@ -272,7 +274,7 @@ def test_monitor_colocate(log_capture):
 def test_monitor_num_freqs(log_capture, freqs, log_level):
     """test default colocate value, and warning if not set"""
 
-    monitor = td.FieldMonitor(
+    td.FieldMonitor(
         size=(td.inf, td.inf, td.inf),
         freqs=freqs * 1e12,
         name="test",
@@ -285,7 +287,7 @@ def test_monitor_num_freqs(log_capture, freqs, log_level):
 def test_monitor_num_modes(log_capture, num_modes, log_level):
     """test default colocate value, and warning if not set"""
 
-    monitor = td.ModeMonitor(
+    td.ModeMonitor(
         size=(td.inf, 0, td.inf),
         freqs=np.linspace(1e14, 2e14, 100),
         name="test",

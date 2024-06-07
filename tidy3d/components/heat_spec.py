@@ -1,13 +1,14 @@
 """Defines heat material specifications"""
+
 from __future__ import annotations
 
 from abc import ABC
 
 import pydantic.v1 as pd
 
-from .types import Union
-from .base import Tidy3dBaseModel
 from ..constants import SPECIFIC_HEAT_CAPACITY, THERMAL_CONDUCTIVITY
+from .base import Tidy3dBaseModel
+from .types import Union
 
 
 # Liquid class

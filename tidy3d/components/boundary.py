@@ -1,20 +1,20 @@
 """Defines electromagnetic boundary conditions"""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import Union, Tuple, List
+from typing import List, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
-
-from .base import Tidy3dBaseModel, cached_property
-from .types import Complex, Axis, TYPE_TAG_STR
-from .source import GaussianBeam, ModeSource, PlaneWave, TFSF
-from .medium import Medium
+import pydantic.v1 as pd
 
 from ..constants import EPSILON_0, MU_0, PML_SIGMA
-from ..exceptions import SetupError, DataError
+from ..exceptions import DataError, SetupError
 from ..log import log
+from .base import Tidy3dBaseModel, cached_property
+from .medium import Medium
+from .source import TFSF, GaussianBeam, ModeSource, PlaneWave
+from .types import TYPE_TAG_STR, Axis, Complex
 
 
 class BoundaryEdge(ABC, Tidy3dBaseModel):

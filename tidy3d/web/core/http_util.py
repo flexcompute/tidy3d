@@ -1,31 +1,30 @@
 """Http connection pool and authentication management."""
 
 import os
-from functools import wraps
 from enum import Enum
+from functools import wraps
+from os.path import expanduser
 from typing import Dict
 
 import requests
+import toml
 from requests.adapters import HTTPAdapter
 from urllib3.util.ssl_ import create_urllib3_context
-import toml
 
+from . import core_config
 from .constants import (
-    SIMCLOUD_APIKEY,
-    KEY_APIKEY,
     HEADER_APIKEY,
-    HEADER_VERSION,
-    HEADER_SOURCE,
-    HEADER_USER_AGENT,
     HEADER_APPLICATION,
-    HEADER_SOURCE_VALUE,
     HEADER_APPLICATION_VALUE,
+    HEADER_SOURCE,
+    HEADER_SOURCE_VALUE,
+    HEADER_USER_AGENT,
+    HEADER_VERSION,
+    KEY_APIKEY,
+    SIMCLOUD_APIKEY,
 )
-
 from .environment import Env
 from .exceptions import WebError
-from os.path import expanduser
-from . import core_config
 
 REINITIALIZED = False
 

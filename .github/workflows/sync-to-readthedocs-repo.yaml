@@ -1,6 +1,5 @@
 name: "sync-to-readthedocs-repo"
-permissions:
-  contents: write
+
 on:
   workflow_dispatch:
   push:
@@ -9,43 +8,72 @@ on:
       - latest
       - develop
       - 'pre/*'
-      - 'v*'
       - 'production/test/*'
+    tags:
+      - 'v*'
+      - 'demo/*'
+
 jobs:
-  extract_branch:
+  extract_branch_or_tag:
     outputs:
-      branch: ${{ steps.extractbranch.outputs.branch }}
+      ref_name: ${{ steps.extract.outputs.ref_name }}
     runs-on: ubuntu-latest
     steps:
-      - id: extractbranch
-        name: Extract branch name
+      - id: extract
+        name: Extract branch or tag name
         shell: bash
         run: |
-          echo "::set-output name=branch::${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-          echo "${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
-          echo "${{ steps.extractbranch.outputs.branch }}"
+          REF_NAME="${GITHUB_REF#refs/*/}"
+          echo "::set-output name=ref_name::$REF_NAME"
+          echo "Extracted ref: $REF_NAME"
+
   build-and-deploy:
-    needs: extract_branch
+    permissions:
+      contents: write
+    needs: extract_branch_or_tag
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      # Conditional Checkout for Branch
+      - name: Checkout Branch
+        if: contains(github.ref, 'refs/heads/')
         uses: actions/checkout@v3
         with:
           submodules: true
-      - name: Create new branch if doesn't exist
+          token: ${{ secrets.GH_PAT }}
+          ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+
+      # Conditional Checkout for Tag
+      - name: Checkout Tag
+        if: contains(github.ref, 'refs/tags/')
+        uses: actions/checkout@v3
+        with:
+          submodules: true
+          token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0
+          ref: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
+          fetch-tags: true
+
+      - name: Create new branch or tag
         uses: GuillaumeFalourd/create-other-repo-branch-action@v1.5
+        if: contains(github.ref, 'refs/heads/')
         with:
           repository_owner: flexcompute-readthedocs
           repository_name: tidy3d-docs
-          new_branch_name: ${{ needs.extract_branch.outputs.branch }}
+          new_branch_name: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           access_token: ${{ secrets.GH_PAT }}
           new_branch_ref: default_clean_sync_branch
           ignore_branch_exists: true
+
+      - name: Tag and push
+        if: contains(github.ref, 'refs/tags/')
+        run: |
+          git push --force --tags https://${{ secrets.GH_PAT }}@github.com/flexcompute-readthedocs/tidy3d-docs.git
+
       - uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: .
           token: ${{ secrets.GH_PAT }}
           repository-name: flexcompute-readthedocs/tidy3d-docs
           target-folder: .
-          branch: ${{ needs.extract_branch.outputs.branch }}
+          branch: ${{ needs.extract_branch_or_tag.outputs.ref_name }}
           force: true

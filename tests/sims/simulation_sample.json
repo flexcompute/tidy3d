@@ -1,4 +1,5 @@
 {
+    "attrs": {},
     "type": "Simulation",
     "center": [
         0.0,
@@ -11,6 +12,7 @@
         8.0
     ],
     "medium": {
+        "attrs": {},
         "name": null,
         "frequency_range": null,
         "allow_gain": false,
@@ -23,7 +25,9 @@
     },
     "structures": [
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -39,6 +43,7 @@
             "name": "dieletric_box",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "dieletric",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -51,7 +56,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -67,6 +74,7 @@
             "name": "lossy_box",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "lossy_dieletric",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -79,7 +87,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Sphere",
                 "radius": 1.0,
                 "center": [
@@ -91,6 +101,7 @@
             "name": "sellmeier_sphere",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "sellmeier",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -111,7 +122,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -127,6 +140,7 @@
             "name": "lorentz_box",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "lorentz",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -145,7 +159,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -161,6 +177,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -178,9 +195,12 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "TriangleMesh",
                 "mesh_dataset": {
+                    "attrs": {},
                     "type": "TriangleMeshDataset",
                     "surface_mesh": "TriangleMeshDataArray"
                 }
@@ -188,6 +208,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -205,7 +226,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -221,6 +244,7 @@
             "name": "drude_box",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "drude",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -238,7 +262,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -254,6 +280,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -262,6 +289,7 @@
                 "heat_spec": null,
                 "type": "Medium2D",
                 "ss": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -284,6 +312,7 @@
                     ]
                 },
                 "tt": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -308,7 +337,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -324,6 +355,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -332,6 +364,7 @@
                 "heat_spec": null,
                 "type": "Medium2D",
                 "ss": {
+                    "attrs": {},
                     "name": "PEC",
                     "frequency_range": null,
                     "allow_gain": false,
@@ -341,6 +374,7 @@
                     "type": "PECMedium"
                 },
                 "tt": {
+                    "attrs": {},
                     "name": "PEC",
                     "frequency_range": null,
                     "allow_gain": false,
@@ -352,7 +386,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -368,6 +404,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": null,
@@ -376,6 +413,7 @@
                 "heat_spec": null,
                 "type": "AnisotropicMedium",
                 "xx": {
+                    "attrs": {},
                     "name": "PEC",
                     "frequency_range": null,
                     "allow_gain": false,
@@ -385,6 +423,7 @@
                     "type": "PECMedium"
                 },
                 "yy": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -396,6 +435,7 @@
                     "conductivity": 0.0
                 },
                 "zz": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -409,10 +449,13 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "GeometryGroup",
                 "geometries": [
                     {
+                        "attrs": {},
                         "type": "Box",
                         "center": [
                             -1.0,
@@ -430,6 +473,7 @@
             "name": "pec_group",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": "PEC",
                 "frequency_range": null,
                 "allow_gain": false,
@@ -440,7 +484,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Cylinder",
                 "axis": 1,
                 "sidewall_angle": 0.0,
@@ -456,6 +502,7 @@
             "name": "anisotopic_cylinder",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": null,
@@ -464,6 +511,7 @@
                 "heat_spec": null,
                 "type": "AnisotropicMedium",
                 "xx": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -475,6 +523,7 @@
                     "conductivity": 0.0
                 },
                 "yy": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -486,6 +535,7 @@
                     "conductivity": 0.0
                 },
                 "zz": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -499,7 +549,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "PolySlab",
                 "axis": 2,
                 "sidewall_angle": 0.0,
@@ -527,6 +579,7 @@
             "name": "pole_slab",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -550,7 +603,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -566,6 +621,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -581,7 +637,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -597,6 +655,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -616,7 +675,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -632,6 +693,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -652,7 +714,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -668,6 +732,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -687,7 +752,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -703,6 +770,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -722,7 +790,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -1.0,
@@ -738,6 +808,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -756,10 +827,12 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
-                    -3.0,
+                    -1.0,
                     0.5,
                     0.5
                 ],
@@ -772,10 +845,332 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomMedium",
+                "interp_method": "nearest",
+                "subpixel": false,
+                "eps_dataset": null,
+                "permittivity": {
+                    "attrs": {},
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "conductivity": null
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomDrude",
+                "eps_inf": {
+                    "attrs": {},
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomLorentz",
+                "eps_inf": {
+                    "attrs": {},
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomDebye",
+                "eps_inf": {
+                    "attrs": {},
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "coeffs": [
+                    [
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomPoleResidue",
+                "eps_inf": {
+                    "attrs": {},
+                    "type": "TetrahedralGridDataset",
+                    "points": "PointDataArray",
+                    "values": "IndexedDataArray",
+                    "cells": "CellDataArray"
+                },
+                "poles": [
+                    [
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomSellmeier",
+                "coeffs": [
+                    [
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        },
+                        {
+                            "attrs": {},
+                            "type": "TetrahedralGridDataset",
+                            "points": "PointDataArray",
+                            "values": "IndexedDataArray",
+                            "cells": "CellDataArray"
+                        }
+                    ]
+                ],
+                "interp_method": "nearest",
+                "subpixel": false
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -3.0,
+                    0.5,
+                    0.5
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
+            "name": null,
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
                 "nonlinear_spec": {
+                    "attrs": {},
                     "type": "NonlinearSusceptibility",
                     "chi3": 0.1,
                     "numiters": 20
@@ -788,7 +1183,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Box",
                 "center": [
                     -3.0,
@@ -804,17 +1201,21 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
                 "nonlinear_spec": {
+                    "attrs": {},
                     "models": [
                         {
+                            "attrs": {},
                             "type": "NonlinearSusceptibility",
                             "chi3": 0.1,
                             "numiters": null
                         },
                         {
+                            "attrs": {},
                             "type": "TwoPhotonAbsorption",
                             "beta": 1.0,
                             "tau": 1.0,
@@ -827,6 +1228,7 @@
                             "freq0": null
                         },
                         {
+                            "attrs": {},
                             "type": "KerrNonlinearity",
                             "n2": {
                                 "real": 1.0,
@@ -846,7 +1248,9 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "PolySlab",
                 "axis": 2,
                 "sidewall_angle": 0.0,
@@ -874,6 +1278,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -897,9 +1302,12 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "TriangleMesh",
                 "mesh_dataset": {
+                    "attrs": {},
                     "type": "TriangleMeshDataset",
                     "surface_mesh": "TriangleMeshDataArray"
                 }
@@ -907,6 +1315,7 @@
             "name": "dieletric_mesh",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -919,19 +1328,25 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "GeometryGroup",
                 "geometries": [
                     {
+                        "attrs": {},
                         "type": "TriangleMesh",
                         "mesh_dataset": {
+                            "attrs": {},
                             "type": "TriangleMeshDataset",
                             "surface_mesh": "TriangleMeshDataArray"
                         }
                     },
                     {
+                        "attrs": {},
                         "type": "TriangleMesh",
                         "mesh_dataset": {
+                            "attrs": {},
                             "type": "TriangleMeshDataset",
                             "surface_mesh": "TriangleMeshDataArray"
                         }
@@ -941,6 +1356,7 @@
             "name": null,
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -953,10 +1369,13 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "ClipOperation",
                 "operation": "symmetric_difference",
                 "geometry_a": {
+                    "attrs": {},
                     "type": "Box",
                     "center": [
                         0.9,
@@ -970,6 +1389,7 @@
                     ]
                 },
                 "geometry_b": {
+                    "attrs": {},
                     "type": "Box",
                     "center": [
                         1.1,
@@ -986,6 +1406,7 @@
             "name": "clip_operation",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -998,9 +1419,12 @@
             }
         },
         {
+            "attrs": {},
             "geometry": {
+                "attrs": {},
                 "type": "Transformed",
                 "geometry": {
+                    "attrs": {},
                     "type": "Box",
                     "center": [
                         1.0,
@@ -1043,6 +1467,7 @@
             "name": "transformed_box",
             "type": "Structure",
             "medium": {
+                "attrs": {},
                 "name": null,
                 "frequency_range": null,
                 "allow_gain": false,
@@ -1062,6 +1487,7 @@
     ],
     "sources": [
         {
+            "attrs": {},
             "name": null,
             "type": "UniformCurrentSource",
             "center": [
@@ -1075,6 +1501,7 @@
                 0.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1084,9 +1511,11 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         },
         {
+            "attrs": {},
             "name": null,
             "type": "PointDipole",
             "center": [
@@ -1100,6 +1529,7 @@
                 0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1109,9 +1539,11 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Ex"
         },
         {
+            "attrs": {},
             "name": null,
             "type": "ModeSource",
             "center": [
@@ -1125,6 +1557,7 @@
                 2.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1136,6 +1569,7 @@
             "num_freqs": 1,
             "direction": "-",
             "mode_spec": {
+                "attrs": {},
                 "num_modes": 1,
                 "target_neff": null,
                 "num_pml": [
@@ -1155,6 +1589,7 @@
             "mode_index": 0
         },
         {
+            "attrs": {},
             "name": null,
             "type": "PlaneWave",
             "center": [
@@ -1168,6 +1603,7 @@
                 "Infinity"
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1182,6 +1618,7 @@
             "pol_angle": 0.1
         },
         {
+            "attrs": {},
             "name": null,
             "type": "GaussianBeam",
             "center": [
@@ -1195,6 +1632,7 @@
                 3.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1212,6 +1650,7 @@
             "waist_distance": 0.0
         },
         {
+            "attrs": {},
             "name": null,
             "type": "AstigmaticGaussianBeam",
             "center": [
@@ -1225,6 +1664,7 @@
                 3.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1248,6 +1688,7 @@
             ]
         },
         {
+            "attrs": {},
             "name": null,
             "type": "CustomFieldSource",
             "center": [
@@ -1261,6 +1702,7 @@
                 0.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1270,6 +1712,7 @@
                 "remove_dc_component": true
             },
             "field_dataset": {
+                "attrs": {},
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
                 "Ey": null,
@@ -1280,6 +1723,7 @@
             }
         },
         {
+            "attrs": {},
             "name": null,
             "type": "CustomCurrentSource",
             "center": [
@@ -1293,6 +1737,7 @@
                 0.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1302,7 +1747,9 @@
                 "remove_dc_component": true
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "current_dataset": {
+                "attrs": {},
                 "type": "FieldDataset",
                 "Ex": "ScalarFieldDataArray",
                 "Ey": null,
@@ -1313,6 +1760,7 @@
             }
         },
         {
+            "attrs": {},
             "name": null,
             "type": "TFSF",
             "center": [
@@ -1326,6 +1774,7 @@
                 0.5
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "GaussianPulse",
@@ -1341,6 +1790,7 @@
             "injection_axis": 2
         },
         {
+            "attrs": {},
             "name": null,
             "type": "UniformCurrentSource",
             "center": [
@@ -1354,6 +1804,7 @@
                 0.0
             ],
             "source_time": {
+                "attrs": {},
                 "amplitude": 1.0,
                 "phase": 0.0,
                 "type": "CustomSourceTime",
@@ -1361,21 +1812,27 @@
                 "fwidth": 40000000000000.0,
                 "offset": 0.0,
                 "source_time_dataset": {
+                    "attrs": {},
                     "type": "TimeDataset",
                     "values": "TimeDataArray"
                 }
             },
             "interpolate": true,
+            "confine_to_bounds": false,
             "polarization": "Hx"
         }
     ],
     "boundary_spec": {
+        "attrs": {},
         "x": {
+            "attrs": {},
             "plus": {
+                "attrs": {},
                 "name": null,
                 "type": "PML",
                 "num_layers": 20,
                 "parameters": {
+                    "attrs": {},
                     "sigma_order": 3,
                     "sigma_min": 0.0,
                     "sigma_max": 1.5,
@@ -1389,10 +1846,12 @@
                 }
             },
             "minus": {
+                "attrs": {},
                 "name": null,
                 "type": "Absorber",
                 "num_layers": 100,
                 "parameters": {
+                    "attrs": {},
                     "sigma_order": 3,
                     "sigma_min": 0.0,
                     "sigma_max": 6.4,
@@ -1402,12 +1861,15 @@
             "type": "Boundary"
         },
         "y": {
+            "attrs": {},
             "plus": {
+                "attrs": {},
                 "name": null,
                 "type": "BlochBoundary",
                 "bloch_vec": 1.0
             },
             "minus": {
+                "attrs": {},
                 "name": null,
                 "type": "BlochBoundary",
                 "bloch_vec": 1.0
@@ -1415,11 +1877,14 @@
             "type": "Boundary"
         },
         "z": {
+            "attrs": {},
             "plus": {
+                "attrs": {},
                 "name": null,
                 "type": "Periodic"
             },
             "minus": {
+                "attrs": {},
                 "name": null,
                 "type": "Periodic"
             },
@@ -1429,6 +1894,7 @@
     },
     "monitors": [
         {
+            "attrs": {},
             "type": "FieldMonitor",
             "center": [
                 0.0,
@@ -1452,6 +1918,7 @@
                 200000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1462,6 +1929,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "FieldTimeMonitor",
             "center": [
                 0.0,
@@ -1493,6 +1961,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "FluxMonitor",
             "center": [
                 0.0,
@@ -1516,6 +1985,7 @@
                 250000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1525,6 +1995,7 @@
             "exclude_surfaces": null
         },
         {
+            "attrs": {},
             "type": "FluxTimeMonitor",
             "center": [
                 0.0,
@@ -1550,6 +2021,7 @@
             "exclude_surfaces": null
         },
         {
+            "attrs": {},
             "type": "PermittivityMonitor",
             "center": [
                 0.0,
@@ -1572,6 +2044,7 @@
                 100000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1579,6 +2052,7 @@
             }
         },
         {
+            "attrs": {},
             "type": "ModeMonitor",
             "center": [
                 0.0,
@@ -1602,12 +2076,14 @@
                 250000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
                 "type": "ApodizationSpec"
             },
             "mode_spec": {
+                "attrs": {},
                 "num_modes": 1,
                 "target_neff": null,
                 "num_pml": [
@@ -1627,6 +2103,7 @@
             "store_fields_direction": null
         },
         {
+            "attrs": {},
             "type": "FieldProjectionAngleMonitor",
             "center": [
                 0.0,
@@ -1650,6 +2127,7 @@
                 300000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1777,6 +2255,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "FieldProjectionCartesianMonitor",
             "center": [
                 0.0,
@@ -1800,6 +2279,7 @@
                 300000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1834,6 +2314,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "FieldProjectionKSpaceMonitor",
             "center": [
                 0.0,
@@ -1857,6 +2338,7 @@
                 300000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -1888,6 +2370,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "FieldProjectionAngleMonitor",
             "center": [
                 0.0,
@@ -1911,6 +2394,7 @@
                 300000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -2038,6 +2522,7 @@
             ]
         },
         {
+            "attrs": {},
             "type": "DiffractionMonitor",
             "center": [
                 0.0,
@@ -2061,6 +2546,7 @@
                 200000000000000.0
             ],
             "apodization": {
+                "attrs": {},
                 "start": null,
                 "end": null,
                 "width": null,
@@ -2070,16 +2556,20 @@
         }
     ],
     "grid_spec": {
+        "attrs": {},
         "grid_x": {
+            "attrs": {},
             "type": "AutoGrid",
             "min_steps_per_wvl": 10.0,
             "max_scale": 1.4,
             "dl_min": 0.0,
             "mesher": {
+                "attrs": {},
                 "type": "GradedMesher"
             }
         },
         "grid_y": {
+            "attrs": {},
             "type": "CustomGrid",
             "dl": [
                 0.04,
@@ -2186,13 +2676,16 @@
             "custom_offset": null
         },
         "grid_z": {
+            "attrs": {},
             "type": "UniformGrid",
             "dl": 0.05
         },
         "wavelength": null,
         "override_structures": [
             {
+                "attrs": {},
                 "geometry": {
+                    "attrs": {},
                     "type": "Box",
                     "center": [
                         -1.0,
@@ -2208,6 +2701,7 @@
                 "name": null,
                 "type": "Structure",
                 "medium": {
+                    "attrs": {},
                     "name": null,
                     "frequency_range": null,
                     "allow_gain": false,
@@ -2222,10 +2716,11 @@
         ],
         "type": "GridSpec"
     },
-    "version": "2.6.4",
+    "version": "2.7.0rc2",
+    "lumped_elements": [],
+    "subpixel": false,
     "courant": 0.8,
     "normalize_index": 0,
     "shutoff": 0.0001,
-    "subpixel": false,
     "run_time": 1e-12
 }

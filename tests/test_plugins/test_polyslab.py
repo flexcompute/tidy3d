@@ -1,10 +1,9 @@
-import numpy as np
 import gdstk
-
+import numpy as np
 import tidy3d as td
-
 from tidy3d.plugins.polyslab import ComplexPolySlab
-from ..utils import assert_log_level, log_capture
+
+from ..utils import assert_log_level
 
 
 def test_divide_simple_events():

@@ -1,9 +1,13 @@
 """Tests space time modulation."""
-import numpy as np
-import pytest
+
 from math import isclose
+
+import numpy as np
 import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
+
+from ..utils import cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -156,12 +160,12 @@ def test_modulated_medium():
     # unmodulated
     medium = td.Medium()
     assert medium.modulation_spec is None
-    assert medium.is_time_modulated == False
+    assert not medium.is_time_modulated
     reduce(medium)
 
-    assert MODULATION_SPEC.applied_modulation == False
+    assert not MODULATION_SPEC.applied_modulation
     medium = medium.updated_copy(modulation_spec=MODULATION_SPEC)
-    assert medium.is_time_modulated == False
+    assert not medium.is_time_modulated
     reduce(medium)
 
     # permittivity modulated
@@ -206,33 +210,35 @@ def test_unsupported_modulated_medium_types():
 
     # PEC cannot be modulated
     with pytest.raises(pydantic.ValidationError):
-        mat = td.PECMedium(modulation_spec=modulation_spec)
+        td.PECMedium(modulation_spec=modulation_spec)
 
     # For Anisotropic medium, one should modulate the components, not the whole medium
     with pytest.raises(pydantic.ValidationError):
-        mat = td.AnisotropicMedium(
+        td.AnisotropicMedium(
             xx=td.Medium(), yy=td.Medium(), zz=td.Medium(), modulation_spec=modulation_spec
         )
 
     # Modulation to fully Anisotropic medium unsupported
     with pytest.raises(pydantic.ValidationError):
-        mat = td.FullyAnisotropicMedium(modulation_spec=modulation_spec)
+        td.FullyAnisotropicMedium(modulation_spec=modulation_spec)
 
     # 2D material
     with pytest.raises(pydantic.ValidationError):
         drude_medium = td.Drude(eps_inf=2.0, coeffs=[(1, 2), (3, 4)])
-        medium2d = td.Medium2D(ss=drude_medium, tt=drude_medium, modulation_spec=modulation_spec)
+        td.Medium2D(ss=drude_medium, tt=drude_medium, modulation_spec=modulation_spec)
 
     # together with nonlinear_spec
     with pytest.raises(pydantic.ValidationError):
-        mat = td.Medium(
+        td.Medium(
             permittivity=2,
             nonlinear_spec=td.NonlinearSusceptibility(chi3=1),
             modulation_spec=modulation_spec,
         )
 
 
-def test_supported_modulated_medium_types():
+@pytest.mark.parametrize("unstructured", [True, False])
+@pytest.mark.parametrize("z", [[0], [0, 1]])
+def test_supported_modulated_medium_types(unstructured, z):
     """Supported types of time modulated medium"""
     modulation_spec = MODULATION_SPEC.updated_copy(permittivity=ST)
     modulation_both_spec = modulation_spec.updated_copy(conductivity=ST)
@@ -254,7 +260,11 @@ def test_supported_modulated_medium_types():
     check_med_reduction(mat_p)
 
     # custom
-    permittivity = td.SpatialDataArray(np.ones((1, 1, 1)) * 2, coords=dict(x=[1], y=[1], z=[1]))
+    permittivity = td.SpatialDataArray(
+        np.ones((2, 2, len(z))) * 2, coords=dict(x=[1, 2], y=[1, 3], z=z)
+    )
+    if unstructured:
+        permittivity = cartesian_to_unstructured(permittivity, seed=345)
     mat_c = td.CustomMedium(permittivity=permittivity, modulation_spec=modulation_spec)
     assert mat_c.is_time_modulated
     assert isclose(mat_c.n_cfl, np.sqrt(2 - AMP_TIME))

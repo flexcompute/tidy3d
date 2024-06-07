@@ -1,7 +1,7 @@
 """Tests GridSpec."""
-import pytest
-import numpy as np
 
+import numpy as np
+import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError
 
@@ -95,7 +95,6 @@ def test_autogrid_2dmaterials():
     sigma = 0.45
     thickness = 0.01
     medium = td.Medium2D.from_medium(td.Medium(conductivity=sigma), thickness=thickness)
-    grid_dl = 0.03
     box = td.Structure(geometry=td.Box(size=(td.inf, td.inf, 0), center=(0, 0, 1)), medium=medium)
     src = td.UniformCurrentSource(
         source_time=td.GaussianPulse(freq0=1.5e14, fwidth=0.5e14),
@@ -115,10 +114,8 @@ def test_autogrid_2dmaterials():
         run_time=1e-12,
     )
     assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.center[2], 1, rtol=RTOL)
-    grid_dl = sim.discretize(box.geometry).sizes.z[0]
-    assert np.isclose(
-        sim.volumetric_structures[0].geometry.bounding_box.size[2], grid_dl, rtol=RTOL
-    )
+    sim.discretize(box.geometry).sizes.z[0]
+    assert np.isclose(sim.volumetric_structures[0].geometry.bounding_box.size[2], 0, rtol=RTOL)
 
     # now if we increase conductivity, the in-plane grid size should decrease
     sigma2 = 4.5

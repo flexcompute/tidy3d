@@ -1,16 +1,18 @@
 """Defines the FDTD grid."""
+
 from __future__ import annotations
-from typing import Tuple, List, Union
+
+from typing import List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
-from ..base import Tidy3dBaseModel
-from ..data.data_array import DataArray, SpatialDataArray, ScalarFieldDataArray
-from ..types import ArrayFloat1D, Axis, TYPE_TAG_STR, InterpMethod, Literal
-from ..geometry.base import Box
-
 from ...exceptions import SetupError
+from ..base import Tidy3dBaseModel
+from ..data.data_array import DataArray, ScalarFieldDataArray, SpatialDataArray
+from ..data.dataset import UnstructuredGridDataset, UnstructuredGridDatasetType
+from ..geometry.base import Box
+from ..types import ArrayFloat1D, Axis, InterpMethod, Literal
 
 # data type of one dimensional coordinate array.
 Coords1D = ArrayFloat1D
@@ -42,14 +44,14 @@ class Coords(Tidy3dBaseModel):
     @property
     def to_dict(self):
         """Return a dict of the three Coord1D objects as numpy arrays."""
-        return {key: np.array(value) for key, value in self.dict(exclude={TYPE_TAG_STR}).items()}
+        return {key: self.dict()[key] for key in "xyz"}
 
     @property
     def to_list(self):
         """Return a list of the three Coord1D objects as numpy arrays."""
         return list(self.to_dict.values())
 
-    def spatial_interp(
+    def _interp_from_xarray(
         self,
         array: Union[SpatialDataArray, ScalarFieldDataArray],
         interp_method: InterpMethod,
@@ -83,17 +85,6 @@ class Coords(Tidy3dBaseModel):
         This method is called from a :class:`Coords` instance with the array to be interpolated as
         an argument, not the other way around.
         """
-
-        # Check for empty dimensions
-        result_coords = dict(self.to_dict)
-        if any(len(v) == 0 for v in result_coords.values()):
-            for c in array.coords:
-                if c not in result_coords:
-                    result_coords[c] = array.coords[c].values
-            result_shape = tuple(len(v) for v in result_coords.values())
-            result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
-            return result
-
         # Check which axes need interpolation or selection
         interp_ax = []
         isel_ax = []
@@ -138,6 +129,103 @@ class Coords(Tidy3dBaseModel):
             )
 
         return interp_array
+
+    def _interp_from_unstructured(
+        self,
+        array: UnstructuredGridDatasetType,
+        interp_method: InterpMethod,
+        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+    ) -> SpatialDataArray:
+        """
+        Interpolate from untructured grid onto a Cartesian one.
+
+        Parameters
+        ----------
+        array : Union[class:`.TriangularGridDataset`, class:`.TetrahedralGridDataset`]
+            Supplied scalar dataset
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+            Value used to fill in for points outside the data range. If set to 'extrapolate',
+            values will be extrapolated into those regions using the "nearest" method.
+
+        Returns
+        -------
+        :class:`.SpatialDataArray`
+            The interpolated spatial dataset.
+
+        Note
+        ----
+        This method is called from a :class:`Coords` instance with the array to be interpolated as
+        an argument, not the other way around.
+        """
+        interp_array = array.interp(
+            **{ax: self.to_dict[ax] for ax in "xyz"}, method=interp_method, fill_value=fill_value
+        )
+
+        return interp_array
+
+    def spatial_interp(
+        self,
+        array: Union[SpatialDataArray, ScalarFieldDataArray, UnstructuredGridDatasetType],
+        interp_method: InterpMethod,
+        fill_value: Union[Literal["extrapolate"], float] = "extrapolate",
+    ) -> Union[SpatialDataArray, ScalarFieldDataArray]:
+        """
+        Similar to ``xarrray.DataArray.interp`` with 2 enhancements:
+
+            1) (if input data is an ``xarrray.DataArray``) Check if the coordinate of the supplied
+            data are in monotonically increasing order. If they are, apply the faster
+            ``assume_sorted=True``.
+
+            2) Data is assumed invariant along zero-size dimensions (if any).
+
+        Parameters
+        ----------
+        array : Union[
+                :class:`.SpatialDataArray`,
+                :class:`.ScalarFieldDataArray`,
+                :class:`.TriangularGridDataset`,
+                :class:`.TetrahedralGridDataset`,
+        ]
+            Supplied scalar dataset
+        interp_method : :class:`.InterpMethod`
+            Interpolation method.
+        fill_value : Union[Literal['extrapolate'], float] = "extrapolate"
+            Value used to fill in for points outside the data range. If set to 'extrapolate',
+            values will be extrapolated into those regions using the "nearest" method.
+
+        Returns
+        -------
+        Union[:class:`.SpatialDataArray`, :class:`.ScalarFieldDataArray`]
+            The interpolated spatial dataset.
+
+        Note
+        ----
+        This method is called from a :class:`Coords` instance with the array to be interpolated as
+        an argument, not the other way around.
+        """
+
+        # Check for empty dimensions
+        result_coords = dict(self.to_dict)
+        if any(len(v) == 0 for v in result_coords.values()):
+            if isinstance(array, (SpatialDataArray, ScalarFieldDataArray)):
+                for c in array.coords:
+                    if c not in result_coords:
+                        result_coords[c] = array.coords[c].values
+            result_shape = tuple(len(v) for v in result_coords.values())
+            result = DataArray(np.empty(result_shape, dtype=array.dtype), coords=result_coords)
+            return result
+
+        # interpolation
+        if isinstance(array, UnstructuredGridDataset):
+            return self._interp_from_unstructured(
+                array=array, interp_method=interp_method, fill_value=fill_value
+            )
+        else:
+            return self._interp_from_xarray(
+                array=array, interp_method=interp_method, fill_value=fill_value
+            )
 
 
 class FieldGrid(Tidy3dBaseModel):
@@ -299,9 +387,7 @@ class Grid(Tidy3dBaseModel):
         >>> grid = Grid(boundaries=coords)
         >>> Nx, Ny, Nz = grid.num_cells
         """
-        return [
-            len(coords1d) - 1 for coords1d in self.boundaries.dict(exclude={TYPE_TAG_STR}).values()
-        ]
+        return [len(self.boundaries.dict()[dim]) - 1 for dim in "xyz"]
 
     @property
     def _primal_steps(self) -> Coords:
@@ -325,7 +411,7 @@ class Grid(Tidy3dBaseModel):
             applied.
         """
 
-        primal_steps = self._primal_steps.dict(exclude={TYPE_TAG_STR})
+        primal_steps = {dim: self._primal_steps.dict()[dim] for dim in "xyz"}
         dsteps = {key: (psteps + np.roll(psteps, 1)) / 2 for (key, psteps) in primal_steps.items()}
 
         return Coords(**dsteps)

@@ -1,6 +1,7 @@
 """Tests visualization operations."""
-import pytest
+
 import matplotlib.pyplot as plt
+import pytest
 import tidy3d as td
 from tidy3d.components.viz import Polygon
 

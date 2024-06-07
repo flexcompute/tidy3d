@@ -1,23 +1,23 @@
 """Defines a jax-compatible structure and its conversion to a gradient monitor."""
+
 from __future__ import annotations
 
-from typing import List, Union, Dict
+from typing import Dict, List, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
-from ....constants import C_0
-from ....components.structure import Structure
-from ....components.monitor import FieldMonitor
 from ....components.data.monitor_data import FieldData, PermittivityData
-from ....components.types import Bound, TYPE_TAG_STR
-from ....components.medium import MediumType
 from ....components.geometry.utils import GeometryType
-
+from ....components.medium import MediumType
+from ....components.monitor import FieldMonitor
+from ....components.structure import Structure
+from ....components.types import TYPE_TAG_STR, Bound
+from ....constants import C_0
 from .base import JaxObject
-from .medium import JaxMediumType, JAX_MEDIUM_MAP
-from .geometry import JaxGeometryType, JAX_GEOMETRY_MAP, JaxBox
+from .geometry import JAX_GEOMETRY_MAP, JaxBox, JaxGeometryType
+from .medium import JAX_MEDIUM_MAP, JaxMediumType
 
 GEO_MED_MAPPINGS = dict(geometry=JAX_GEOMETRY_MAP, medium=JAX_MEDIUM_MAP)
 
@@ -37,6 +37,13 @@ class AbstractJaxStructure(Structure, JaxObject):
     def _check_2d_geometry(cls, val, values):
         """Override validator checking 2D geometry, which triggers unnecessarily for gradients."""
         return val
+
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        if "geometry" in self._differentiable_fields:
+            self.geometry._validate_web_adjoint()
+        if "medium" in self._differentiable_fields:
+            self.medium._validate_web_adjoint()
 
     @property
     def jax_fields(self):
@@ -94,6 +101,7 @@ class AbstractJaxStructure(Structure, JaxObject):
         freq_max = float(max(grad_data_eps.eps_xx.f))
         eps_in = self.medium.eps_model(frequency=freq_max)
         ref_ind = np.sqrt(np.max(np.real(eps_in)))
+        ref_ind = max([1.0, abs(ref_ind)])
         wvl_free_space = C_0 / freq_max
         wvl_mat = wvl_free_space / ref_ind
         return dict(wvl_mat=wvl_mat, eps_in=eps_in)

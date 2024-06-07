@@ -1,15 +1,14 @@
-import pytest
-from memory_profiler import profile
+import cProfile
+
 import jax
-
 import jax.numpy as jnp
-from ..utils import run_emulated
-
+import pytest
 import tidy3d as td
 import tidy3d.plugins.adjoint as tda
+from memory_profiler import profile
 from tidy3d.plugins.adjoint.web import run_local as run
 
-import cProfile
+from ..utils import run_emulated
 
 # name of the output monitor used in tests
 MNT_NAME = "field"
@@ -26,7 +25,6 @@ surface_area = 6 * (N_SIDE * BOX_LENGTH**2)
 def make_sim(box_length) -> tda.JaxSimulation:
     """Construct a simulation out of some input parameters."""
 
-    num_structures = int(N_SIDE**2)
     sim_length = N_SIDE * (BOX_LENGTH + SPACE)
     med = tda.JaxMedium(permittivity=2.0)
 

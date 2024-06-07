@@ -1,14 +1,14 @@
 """Abstract bases for classes that define how data is recorded from simulation."""
+
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
-from ..types import ArrayFloat1D, Numpy
-from ..types import Axis
-from ..geometry.base import Box
 from ..base import cached_property
+from ..geometry.base import Box
+from ..types import ArrayFloat1D, Axis, Numpy
 from ..viz import PlotParams, plot_params_monitor
 
 

@@ -1,16 +1,16 @@
 """Defines design space specification for tidy3d."""
+
 from __future__ import annotations
 
-from typing import Tuple, Callable, Dict, Any, List, Union
 import inspect
+from typing import Any, Callable, Dict, List, Tuple, Union
 
 import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.simulation import Simulation
 from ...components.data.sim_data import SimulationData
+from ...components.simulation import Simulation
 from ...web.api.container import BatchData
-
 from .method import MethodType
 from .parameter import ParameterType
 from .result import Result

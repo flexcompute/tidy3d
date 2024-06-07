@@ -1,28 +1,44 @@
 """Defines jax-compatible MonitorData and their conversion to adjoint sources."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union, List, Dict, Any
-import pydantic.v1 as pd
-import numpy as np
-import jax.numpy as jnp
+from typing import Any, Dict, List, Union
 
+import jax.numpy as jnp
+import numpy as np
+import pydantic.v1 as pd
 from jax.tree_util import register_pytree_node_class
 
 from .....components.base import cached_property
-from .....components.geometry.base import Box
-from .....components.source import Source, GaussianPulse, PointDipole
-from .....components.source import ModeSource, PlaneWave, CustomFieldSource, CustomCurrentSource
-from .....components.data.monitor_data import MonitorData, ModeSolverData
-from .....components.data.monitor_data import ModeData, DiffractionData, FieldData
+from .....components.data.data_array import (
+    FreqModeDataArray,
+    MixedModeDataArray,
+    ModeAmpsDataArray,
+    ScalarFieldDataArray,
+)
 from .....components.data.dataset import FieldDataset
-from .....components.data.data_array import ScalarFieldDataArray, FreqModeDataArray
-from .....components.data.data_array import ModeAmpsDataArray, MixedModeDataArray
+from .....components.data.monitor_data import (
+    DiffractionData,
+    FieldData,
+    ModeData,
+    ModeSolverData,
+    MonitorData,
+)
+from .....components.geometry.base import Box
+from .....components.source import (
+    CustomCurrentSource,
+    CustomFieldSource,
+    GaussianPulse,
+    ModeSource,
+    PlaneWave,
+    PointDipole,
+    Source,
+)
 from .....constants import C_0, ETA_0, MU_0
 from .....exceptions import AdjointError
-
-from .data_array import JaxDataArray
 from ..base import JaxObject
+from .data_array import JaxDataArray
 
 
 class JaxMonitorData(MonitorData, JaxObject, ABC):
@@ -160,12 +176,18 @@ class JaxFieldData(JaxMonitorData, FieldData):
         """How to package the dictionary of fields computed via self.colocate()."""
         return self.updated_copy(**centered_fields)
 
-    def package_flux_results(self, flux_values: JaxDataArray) -> float:
+    def package_flux_results(self, flux_values: JaxDataArray) -> Union[float, JaxDataArray]:
         """How to package the dictionary of fields computed via self.colocate()."""
-        flux_data = flux_values
-        if isinstance(flux_data, JaxDataArray):
-            return jnp.sum(flux_data.values)
-        return jnp.sum(flux_data)
+
+        freqs = flux_values.coords.get("f")
+
+        # handle single frequency case separately for backwards compatibility
+        # return a float of the only value
+        if freqs is not None and len(freqs) == 1:
+            return jnp.sum(flux_values.values)
+
+        # for multi-frequency, return a JaxDataArray
+        return flux_values
 
     @property
     def intensity(self) -> ScalarFieldDataArray:

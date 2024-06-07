@@ -80,6 +80,9 @@ pip-log.txt
 .dmypy.json
 .mypy_cache/
 
+# pickle files
+*.pkl
+
 # PyInstaller
 *.manifest
 *.spec
@@ -109,6 +112,7 @@ _autosummary
 
 # Test and temporary files
 tests/tmp/*
+tests/data/invdes_history.*
 
 # Translations
 *.mo
@@ -129,3 +133,7 @@ htmlcov/
 
 # Specific file and folder exclusions
 .idea
+.vscode
+
+# cProfile output
+*.prof

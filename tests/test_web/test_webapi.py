@@ -1,29 +1,43 @@
 # Tests webapi and things that depend on it
 
+import numpy as np
 import pytest
 import responses
-import numpy as np
-from _pytest import monkeypatch
-
 import tidy3d as td
+from _pytest import monkeypatch
 from responses import matchers
 from tidy3d import Simulation
-from tidy3d.exceptions import SetupError
-from tidy3d.web.core.environment import Env
-from tidy3d.web.api.webapi import delete, delete_old, download, download_json, run, abort
-from tidy3d.web.api.webapi import download_log, estimate_cost, get_info, get_run_info, get_tasks
-from tidy3d.web.api.webapi import load, load_simulation, start, upload, monitor, real_cost
-from tidy3d.web.api.container import Job, Batch
-from tidy3d.web.api.asynchronous import run_async
-
 from tidy3d.__main__ import main
-from tidy3d.web.core.types import TaskType
-from tidy3d.components.source import PointDipole, GaussianPulse
-from tidy3d.components.grid.grid_spec import GridSpec
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.data.monitor_data import FieldData
 from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
+from tidy3d.components.source import GaussianPulse, PointDipole
+from tidy3d.exceptions import SetupError
+from tidy3d.web.api.asynchronous import run_async
+from tidy3d.web.api.container import Batch, Job
+from tidy3d.web.api.webapi import (
+    abort,
+    delete,
+    delete_old,
+    download,
+    download_json,
+    download_log,
+    estimate_cost,
+    get_info,
+    get_run_info,
+    get_tasks,
+    load,
+    load_simulation,
+    monitor,
+    real_cost,
+    run,
+    start,
+    upload,
+)
+from tidy3d.web.core.environment import Env
+from tidy3d.web.core.types import TaskType
 
 TASK_NAME = "task_name_test"
 TASK_ID = "1234"
@@ -510,7 +524,13 @@ def test_job(mock_webapi, monkeypatch, tmp_path):
     sim = make_sim()
     j = Job(simulation=sim, task_name=TASK_NAME, folder_name=PROJECT_NAME)
 
-    _ = j.run(path=str(tmp_path / "web_test_tmp.json"))
+    fname = str(tmp_path / "web_test_tmp.json")
+
+    j.to_file(fname)
+
+    j = j.from_file(fname)
+
+    _ = j.run(path=fname)
     _ = j.status
     j.estimate_cost()
     # j.download
@@ -525,15 +545,24 @@ def mock_job_status(monkeypatch):
 
 
 @responses.activate
-def test_batch(mock_webapi, mock_job_status, tmp_path):
+def test_batch(mock_webapi, mock_job_status, mock_load, tmp_path):
     # monkeypatch.setattr("tidy3d.web.api.container.Batch.monitor", lambda self: time.sleep(0.1))
     # monkeypatch.setattr("tidy3d.web.api.container.Job.status", property(lambda self: "success"))
 
     sims = {TASK_NAME: make_sim()}
     b = Batch(simulations=sims, folder_name=PROJECT_NAME)
-    b.estimate_cost()
-    _ = b.run(path_dir=str(tmp_path))
-    assert b.real_cost() == FLEX_UNIT * len(sims)
+
+    fname = str(tmp_path / "batch.json")
+
+    b.to_file(fname)
+    b2 = b.from_file(fname)
+
+    assert all(j.task_id == j2.task_id for j, j2 in zip(b.jobs.values(), b2.jobs.values()))
+
+    b2.estimate_cost()
+    b2.run(path_dir=str(tmp_path))
+    _ = b2.get_info()
+    assert b2.real_cost() == FLEX_UNIT * len(sims)
 
 
 """ Async """

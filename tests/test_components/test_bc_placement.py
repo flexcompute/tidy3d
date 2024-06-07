@@ -1,9 +1,9 @@
 from tidy3d.components.bc_placement import (
-    StructureBoundary,
-    StructureStructureInterface,
-    SimulationBoundary,
-    StructureSimulationBoundary,
     MediumMediumInterface,
+    SimulationBoundary,
+    StructureBoundary,
+    StructureSimulationBoundary,
+    StructureStructureInterface,
 )
 
 

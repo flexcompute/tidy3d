@@ -82,7 +82,7 @@ jobs:
     - name: Run tests
       run: |
         source $VENV
-        black . --check --diff
+        ruff format . --check --diff
         ruff check tidy3d --fix --exit-non-zero-on-fix
         coverage run -m pytest -rA tests
         coverage report -m

@@ -1,29 +1,28 @@
 """Tidy3d webapi types."""
+
 from __future__ import annotations
 
 import os
 import pathlib
 import tempfile
 from datetime import datetime
-from typing import List, Optional, Callable, Tuple
+from typing import Callable, List, Optional, Tuple
+
 import pydantic.v1 as pd
-from pydantic.v1 import Extra, Field, parse_obj_as
 from botocore.exceptions import ClientError
+from pydantic.v1 import Extra, Field, parse_obj_as
 
 from . import http_util
+from .cache import FOLDER_CACHE
+from .constants import SIM_FILE_HDF5_GZ, SIM_LOG_FILE, SIMULATION_DATA_HDF5, SIMULATION_DATA_HDF5_GZ
 from .core_config import get_logger_console
 from .environment import Env
 from .exceptions import WebError
-
-from .cache import FOLDER_CACHE
+from .file_util import read_simulation_from_hdf5
 from .http_util import http
 from .s3utils import download_file, download_gz_file, upload_file
 from .stub import TaskStub
-from .types import Queryable, ResourceLifecycle, Submittable
-from .types import Tidy3DResource
-
-from .constants import SIM_FILE_HDF5_GZ, SIMULATION_DATA_HDF5, SIMULATION_DATA_HDF5_GZ, SIM_LOG_FILE
-from .file_util import read_simulation_from_hdf5
+from .types import Queryable, ResourceLifecycle, Submittable, Tidy3DResource
 
 
 class Folder(Tidy3DResource, Queryable, extra=Extra.allow):

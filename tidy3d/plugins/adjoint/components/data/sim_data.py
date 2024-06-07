@@ -1,22 +1,21 @@
 """Defines a jax-compatible SimulationData."""
+
 from __future__ import annotations
 
-from typing import Tuple, Dict, Union, List
+from typing import Dict, List, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 import xarray as xr
-
 from jax.tree_util import register_pytree_node_class
 
-from .....components.data.monitor_data import MonitorDataType, FieldData, PermittivityData
+from .....components.data.monitor_data import FieldData, MonitorDataType, PermittivityData
 from .....components.data.sim_data import SimulationData
-from .....components.source import PointDipole, GaussianPulse
+from .....components.source import GaussianPulse, PointDipole
 from .....log import log
-
 from ..base import JaxObject
-from ..simulation import JaxSimulation, JaxInfo
-from .monitor_data import JaxMonitorDataType, JAX_MONITOR_DATA_MAP
+from ..simulation import JaxInfo, JaxSimulation
+from .monitor_data import JAX_MONITOR_DATA_MAP, JaxMonitorDataType
 
 
 @register_pytree_node_class
@@ -53,6 +52,34 @@ class JaxSimulationData(SimulationData, JaxObject):
         title="Task ID",
         description="Optional field storing the task_id for the original JaxSimulation.",
     )
+
+    def get_poynting_vector(self, field_monitor_name: str) -> xr.Dataset:
+        """return ``xarray.Dataset`` of the Poynting vector at Yee cell centers.
+
+        Calculated values represent the instantaneous Poynting vector for time-domain fields and the
+        complex vector for frequency-domain: ``S = 1/2 E × conj(H)``.
+
+        Only the available components are returned, e.g., if the indicated monitor doesn't include
+        field component `"Ex"`, then `"Sy"` and `"Sz"` will not be calculated.
+
+        Parameters
+        ----------
+        field_monitor_name : str
+            Name of field monitor used in the original :class:`Simulation`.
+
+        Returns
+        -------
+        xarray.DataArray
+            DataArray containing the Poynting vector calculated based on the field components
+            colocated at the center locations of the Yee grid.
+        """
+
+        if field_monitor_name in self.output_monitor_data:
+            raise NotImplementedError(
+                "Adjoint support for differentiation with respect to Poynting vector not available."
+            )
+
+        return super().get_poynting_vector(field_monitor_name)
 
     @property
     def grad_data_symmetry(self) -> Tuple[FieldData, ...]:

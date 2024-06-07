@@ -1,12 +1,14 @@
 """Tests sources."""
-import pytest
-import pydantic.v1 as pydantic
+
 import matplotlib.pyplot as plt
 import numpy as np
+import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
+from tidy3d.components.source import CHEB_GRID_WIDTH, DirectionalSource
 from tidy3d.exceptions import SetupError
-from tidy3d.components.source import DirectionalSource, CHEB_GRID_WIDTH
-from ..utils import assert_log_level, log_capture, AssertLogLevel
+
+from ..utils import AssertLogLevel, assert_log_level
 
 ST = td.GaussianPulse(freq0=2e14, fwidth=1e14)
 S = td.PointDipole(source_time=ST, polarization="Ex")
@@ -166,20 +168,20 @@ def test_pol_arrow():
     assert np.allclose(get_pol_dir(axis=0), (0, 1, 0))
     assert np.allclose(get_pol_dir(axis=1), (1, 0, 0))
     assert np.allclose(get_pol_dir(axis=2), (1, 0, 0))
-    assert np.allclose(get_pol_dir(axis=0, angle_phi=np.pi / 2), (0, 0, +1))
-    assert np.allclose(get_pol_dir(axis=1, angle_phi=np.pi / 2), (0, 0, -1))
-    assert np.allclose(get_pol_dir(axis=2, angle_phi=np.pi / 2), (0, +1, 0))
-    assert np.allclose(get_pol_dir(axis=0, pol_angle=np.pi / 2), (0, 0, +1))
-    assert np.allclose(get_pol_dir(axis=1, pol_angle=np.pi / 2), (0, 0, -1))
-    assert np.allclose(get_pol_dir(axis=2, pol_angle=np.pi / 2), (0, +1, 0))
+    assert np.allclose(get_pol_dir(axis=0, angle_phi=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=1, angle_phi=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=2, angle_phi=np.pi / 2), (0, 1, 0))
+    assert np.allclose(get_pol_dir(axis=0, pol_angle=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=1, pol_angle=np.pi / 2), (0, 0, 1))
+    assert np.allclose(get_pol_dir(axis=2, pol_angle=np.pi / 2), (0, 1, 0))
     assert np.allclose(
-        get_pol_dir(axis=0, angle_theta=np.pi / 4), (+1 / np.sqrt(2), -1 / np.sqrt(2), 0)
+        get_pol_dir(axis=0, angle_theta=np.pi / 4), (-1 / np.sqrt(2), +1 / np.sqrt(2), 0)
     )
     assert np.allclose(
-        get_pol_dir(axis=1, angle_theta=np.pi / 4), (-1 / np.sqrt(2), +1 / np.sqrt(2), 0)
+        get_pol_dir(axis=1, angle_theta=np.pi / 4), (+1 / np.sqrt(2), -1 / np.sqrt(2), 0)
     )
     assert np.allclose(
-        get_pol_dir(axis=2, angle_theta=np.pi / 4), (-1 / np.sqrt(2), 0, +1 / np.sqrt(2))
+        get_pol_dir(axis=2, angle_theta=np.pi / 4), (+1 / np.sqrt(2), 0, -1 / np.sqrt(2))
     )
 
 
@@ -287,7 +289,6 @@ def test_custom_source_time(log_capture):
 
     # test out of range handling
     source = td.PointDipole(center=(0, 0, 0), source_time=cst, polarization="Ex")
-    monitor = td.FieldMonitor(size=(td.inf, td.inf, 0), freqs=[1e12], name="field")
     sim = td.Simulation(
         size=(10, 10, 10),
         run_time=1e-12,
@@ -322,3 +323,31 @@ def test_custom_source_time(log_capture):
         dataset = td.components.data.dataset.TimeDataset(values=vals)
         cst = td.CustomSourceTime(source_time_dataset=dataset, freq0=freq0, fwidth=0.1e12)
         assert np.allclose(cst.amp_time([0]), [1], rtol=0, atol=ATOL)
+
+
+def test_custom_field_source(log_capture):
+    Nx, Ny, Nz, Nf = 4, 3, 1, 1
+    X = np.linspace(-1, 1, Nx)
+    Y = np.linspace(-1, 1, Ny)
+    Z = [0]
+    freqs = [2e14]
+    n_data = np.ones((Nx, Ny, Nz, Nf))
+    n_dataset = td.ScalarFieldDataArray(n_data, coords=dict(x=X, y=Y, z=Z, f=freqs))
+
+    def make_custom_field_source(field_ds):
+        custom_source = td.CustomFieldSource(
+            center=(1, 1, 1), size=(2, 2, 0), source_time=ST, field_dataset=field_ds
+        )
+        return custom_source
+
+    field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset)
+    make_custom_field_source(field_dataset)
+    assert_log_level(log_capture, None)
+
+    with pytest.raises(pydantic.ValidationError):
+        # repeat some entries so data cannot be interpolated
+        X2 = [X[0]] + list(X)
+        n_data2 = np.vstack((n_data[0, :, :, :].reshape(1, Ny, Nz, Nf), n_data))
+        n_dataset2 = td.ScalarFieldDataArray(n_data2, coords=dict(x=X2, y=Y, z=Z, f=freqs))
+        field_dataset = td.FieldDataset(Ex=n_dataset, Hy=n_dataset2)
+        make_custom_field_source(field_dataset)

@@ -1,34 +1,41 @@
 """Defines a jax-compatible simulation."""
+
 from __future__ import annotations
 
-from typing import Tuple, Union, List, Dict, Literal
-from multiprocessing import Pool
+from typing import Dict, List, Literal, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
-
+import pydantic.v1 as pd
+import xarray as xr
 from jax.tree_util import register_pytree_node_class
+from joblib import Parallel, delayed
 
-from ....log import log
-from ....components.base import cached_property, Tidy3dBaseModel, skip_if_fields_missing
-from ....components.monitor import FieldMonitor, PermittivityMonitor
-from ....components.monitor import ModeMonitor, DiffractionMonitor, Monitor
-from ....components.simulation import Simulation
+from ....components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from ....components.data.monitor_data import FieldData, PermittivityData
+from ....components.geometry.base import Box
+from ....components.medium import AbstractMedium
+from ....components.monitor import (
+    DiffractionMonitor,
+    FieldMonitor,
+    ModeMonitor,
+    Monitor,
+    PermittivityMonitor,
+)
+from ....components.simulation import Simulation
 from ....components.structure import Structure
+from ....components.subpixel_spec import Staircasing, SubpixelSpec
 from ....components.types import Ax, annotate_type
 from ....constants import HERTZ, SECOND
 from ....exceptions import AdjointError
-
-from .base import JaxObject
+from ....log import log
+from .base import WEB_ADJOINT_MESSAGE, JaxObject
+from .geometry import JaxGeometryGroup, JaxPolySlab
 from .structure import (
     JaxStructure,
-    JaxStructureType,
-    JaxStructureStaticMedium,
     JaxStructureStaticGeometry,
+    JaxStructureStaticMedium,
+    JaxStructureType,
 )
-from .geometry import JaxPolySlab, JaxGeometryGroup
-
 
 # bandwidth of adjoint source in units of freq0 if no `fwidth_adjoint`, and one output freq
 FWIDTH_FACTOR = 1.0 / 10
@@ -36,8 +43,8 @@ FWIDTH_FACTOR = 1.0 / 10
 # bandwidth of adjoint sources in units of the minimum difference between output frequencies
 FWIDTH_FACTOR_MULTIFREQ = 0.1
 
-# the adjoint run time is RUN_TIME_FACTOR / fwidth
-RUN_TIME_FACTOR = 100
+# the adjoint run time is the forward simulation run time + RUN_TIME_FACTOR / fwidth
+RUN_TIME_FACTOR = 10
 
 # how many processors to use for server and client side adjoint
 NUM_PROC_LOCAL = 1
@@ -52,6 +59,9 @@ NL_WARNING = (
     "error will increase as the strength of the nonlinearity is increased. "
     "We strongly recommend using linear simulations only with the adjoint plugin."
 )
+
+OutputMonitorTypes = (DiffractionMonitor, FieldMonitor, ModeMonitor)
+OutputMonitorType = Tuple[annotate_type(Union[OutputMonitorTypes]), ...]
 
 
 class JaxInfo(Tidy3dBaseModel):
@@ -116,9 +126,7 @@ class JaxSimulation(Simulation, JaxObject):
         jax_field=True,
     )
 
-    output_monitors: Tuple[
-        annotate_type(Union[DiffractionMonitor, FieldMonitor, ModeMonitor]), ...
-    ] = pd.Field(
+    output_monitors: OutputMonitorType = pd.Field(
         (),
         title="Output Monitors",
         description="Tuple of monitors whose data the differentiable output depends on.",
@@ -171,21 +179,12 @@ class JaxSimulation(Simulation, JaxObject):
 
     @pd.validator("subpixel", always=True)
     def _subpixel_is_on(cls, val):
-        """Assert subpixel is on."""
-        if not val:
-            raise AdjointError("'JaxSimulation.subpixel' must be 'True' to use adjoint plugin.")
-        return val
-
-    @pd.validator("input_structures", always=True)
-    def _restrict_input_structures(cls, val):
-        """Restrict number of input structures."""
-        num_input_structures = len(val)
-        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+        """Assert dielectric subpixel is on."""
+        if (isinstance(val, SubpixelSpec) and isinstance(val.dielectric, Staircasing)) or not val:
             raise AdjointError(
-                "For performance, adjoint plugin restricts the number of input structures to "
-                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}."
+                "'JaxSimulation.subpixel' must be 'True' or a specific 'SubpixelSpec' "
+                "with no dielectric staircasing to use adjoint plugin."
             )
-
         return val
 
     @pd.validator("input_structures", always=True)
@@ -281,6 +280,21 @@ class JaxSimulation(Simulation, JaxObject):
                 log.warning(f"Nonlinear medium detected in input_structures[{i}]. " + NL_WARNING)
         return val
 
+    def _restrict_input_structures(self) -> None:
+        """Restrict number of input structures."""
+        num_input_structures = len(self.input_structures)
+        if num_input_structures > MAX_NUM_INPUT_STRUCTURES:
+            raise AdjointError(
+                "For performance, adjoint plugin restricts the number of input structures to "
+                f"{MAX_NUM_INPUT_STRUCTURES}. Found {num_input_structures}. " + WEB_ADJOINT_MESSAGE
+            )
+
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        self._restrict_input_structures()
+        for structure in self.input_structures:
+            structure._validate_web_adjoint()
+
     @staticmethod
     def get_freqs_adjoint(output_monitors: List[Monitor]) -> List[float]:
         """Return sorted list of unique frequencies stripped from a collection of monitors."""
@@ -350,7 +364,8 @@ class JaxSimulation(Simulation, JaxObject):
         if self.run_time_adjoint is not None:
             return self.run_time_adjoint
 
-        run_time_adjoint = RUN_TIME_FACTOR / self._fwidth_adjoint
+        run_time_fwd = self._run_time
+        run_time_adjoint = run_time_fwd + RUN_TIME_FACTOR / self._fwidth_adjoint
 
         if self._is_multi_freq:
             log.warning(
@@ -360,13 +375,30 @@ class JaxSimulation(Simulation, JaxObject):
                 f"this value = {self._fwidth_adjoint:.3e} (Hz) to avoid spectral overlap. "
                 "To account for this, the corresponding 'run_time' in the adjoint simulation is "
                 f"will be set to {run_time_adjoint:3e} "
-                f"compared to {self.run_time:3e} in the forward simulation. "
+                f"compared to {self._run_time:3e} in the forward simulation. "
                 "If the adjoint 'run_time' is large due to small frequency spacing, "
                 "it could be better to instead run one simulation per frequency, "
                 "which can be done in parallel using 'tidy3d.plugins.adjoint.web.run_async'."
             )
 
         return run_time_adjoint
+
+    @cached_property
+    def tmesh_adjoint(self) -> np.ndarray:
+        """FDTD time stepping points.
+
+        Returns
+        -------
+        np.ndarray
+            Times (seconds) that the simulation time steps through.
+        """
+        dt = self.dt
+        return np.arange(0.0, self._run_time_adjoint + dt, dt)
+
+    @cached_property
+    def num_time_steps_adjoint(self) -> int:
+        """Number of time steps in the adjoint simulation."""
+        return len(self.tmesh_adjoint)
 
     def to_simulation(self) -> Tuple[Simulation, JaxInfo]:
         """Convert :class:`.JaxSimulation` instance to :class:`.Simulation` with an info dict."""
@@ -409,6 +441,118 @@ class JaxSimulation(Simulation, JaxObject):
         )
 
         return sim, jax_info
+
+    def to_gds(
+        self,
+        cell,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pd.NonNegativeFloat = 1,
+        frequency: pd.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> None:
+        """Append the simulation structures to a .gds cell.
+        Parameters
+        ----------
+        cell : ``gdstk.Cell`` or ``gdspy.Cell``
+            Cell object to which the generated polygons are added.
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluation in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gds(
+            cell=cell,
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
+
+    def to_gdstk(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        permittivity_threshold: pd.NonNegativeFloat = 1,
+        frequency: pd.PositiveFloat = 0,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        permittivity_threshold : float = 1
+            Permittivity value used to define the shape boundaries for structures with custom
+            medim
+        frequency : float = 0
+            Frequency for permittivity evaluation in case of custom medium (Hz).
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        Return
+        ------
+        List
+            List of `gdstk.Polygon`.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gdstk(
+            x=x,
+            y=y,
+            z=z,
+            permittivity_threshold=permittivity_threshold,
+            frequency=frequency,
+            gds_layer_dtype_map=gds_layer_dtype_map,
+        )
+
+    def to_gdspy(
+        self,
+        x: float = None,
+        y: float = None,
+        z: float = None,
+        gds_layer_dtype_map: Dict[
+            AbstractMedium, Tuple[pd.NonNegativeInt, pd.NonNegativeInt]
+        ] = None,
+    ) -> List:
+        """Convert a simulation's planar slice to a .gds type polygon list.
+        Parameters
+        ----------
+        x : float = None
+            Position of plane in x direction, only one of x,y,z can be specified to define plane.
+        y : float = None
+            Position of plane in y direction, only one of x,y,z can be specified to define plane.
+        z : float = None
+            Position of plane in z direction, only one of x,y,z can be specified to define plane.
+        gds_layer_dtype_map : Dict
+            Dictionary mapping mediums to GDSII layer and data type tuples.
+        Return
+        ------
+        List
+            List of `gdspy.Polygon` and `gdspy.PolygonSet`.
+        """
+        sim, _ = self.to_simulation()
+        return sim.to_gdspy(x=x, y=y, z=z, gds_layer_dtype_map=gds_layer_dtype_map)
 
     def plot(
         self,
@@ -563,6 +707,46 @@ class JaxSimulation(Simulation, JaxObject):
             hlim=hlim,
             vlim=vlim,
         )
+
+    def epsilon(
+        self,
+        box: Box,
+        coord_key: str = "centers",
+        freq: float = None,
+    ) -> xr.DataArray:
+        """Get array of permittivity at volume specified by box and freq.
+
+        Parameters
+        ----------
+        box : :class:`.Box`
+            Rectangular geometry specifying where to measure the permittivity.
+        coord_key : str = 'centers'
+            Specifies at what part of the grid to return the permittivity at.
+            Accepted values are ``{'centers', 'boundaries', 'Ex', 'Ey', 'Ez', 'Exy', 'Exz', 'Eyx',
+            'Eyz', 'Ezx', Ezy'}``. The field values (eg. ``'Ex'``) correspond to the corresponding field
+            locations on the yee lattice. If field values are selected, the corresponding diagonal
+            (eg. ``eps_xx`` in case of ``'Ex'``) or off-diagonal (eg. ``eps_xy`` in case of ``'Exy'``) epsilon
+            component from the epsilon tensor is returned. Otherwise, the average of the main
+            values is returned.
+        freq : float = None
+            The frequency to evaluate the mediums at.
+            If not specified, evaluates at infinite frequency.
+
+        Returns
+        -------
+        xarray.DataArray
+            Datastructure containing the relative permittivity values and location coordinates.
+            For details on xarray DataArray objects,
+            refer to `xarray's Documentation <https://tinyurl.com/2zrzsp7b>`_.
+
+        See Also
+        --------
+
+        **Notebooks**
+            * `First walkthrough: permittivity data <../../notebooks/Simulation.html#Permittivity-data>`_
+        """
+        sim, _ = self.to_simulation()
+        return sim.epsilon(box=box, coord_key=coord_key, freq=freq)
 
     def __eq__(self, other: JaxSimulation) -> bool:
         """Are two JaxSimulation objects equal?"""
@@ -795,26 +979,33 @@ class JaxSimulation(Simulation, JaxObject):
             else:
                 inds_par_external.append(index)
 
-        def make_args(indexes, num_proc_internal):
+        def make_args(indexes, num_proc_internal) -> list:
             """Make the arguments to map over selecting over a set of structure ``indexes``."""
-            structures = [self.input_structures[index] for index in indexes]
-            data_fwd = [grad_data_fwd[index] for index in indexes]
-            data_bwd = [grad_data_adj[index] for index in indexes]
-            eps_data = [grad_eps_data[index] for index in indexes]
-            num_proc = [num_proc_internal] * len(indexes)
+            args_list = []
+            for index in indexes:
+                args_i = [
+                    self.input_structures[index],
+                    grad_data_fwd[index],
+                    grad_data_adj[index],
+                    grad_eps_data[index],
+                    num_proc_internal,
+                ]
+                args_list.append(args_i)
 
-            return (structures, data_fwd, data_bwd, eps_data, num_proc)
+            return args_list
 
         # Get vjps for structures that parallelize internally using simple map
-        args_par_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
-        vjps_par_internal = list(map(self._store_vjp_structure, *args_par_internal))
+        args_list_internal = make_args(inds_par_internal, num_proc_internal=num_proc)
+        vjps_par_internal = [self._store_vjp_structure(*args) for args in args_list_internal]
 
         # Get vjps for structures where we parallelize directly here
-        args_par_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
-        with Pool(num_proc) as pool:
-            vjps_par_external = list(
-                pool.starmap(self._store_vjp_structure, zip(*args_par_external))
+        args_list_external = make_args(inds_par_external, num_proc_internal=NUM_PROC_LOCAL)
+
+        vjps_par_external = list(
+            Parallel(n_jobs=num_proc)(
+                delayed(self._store_vjp_structure)(*args) for args in args_list_external
             )
+        )
 
         # Reshuffle the two lists back in the correct order
         vjps_all = list(vjps_par_internal) + list(vjps_par_external)

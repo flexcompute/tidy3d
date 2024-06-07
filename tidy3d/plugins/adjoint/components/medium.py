@@ -1,26 +1,25 @@
 """Defines jax-compatible mediums."""
+
 from __future__ import annotations
 
-from typing import Dict, Tuple, Union, Callable, Optional
 from abc import ABC
+from typing import Callable, Dict, Optional, Tuple, Union
 
-import pydantic.v1 as pd
 import numpy as np
-from jax.tree_util import register_pytree_node_class
+import pydantic.v1 as pd
 import xarray as xr
+from jax.tree_util import register_pytree_node_class
 
-from ....components.types import Bound, Literal
-from ....components.medium import Medium, AnisotropicMedium, CustomMedium
-from ....components.geometry.base import Geometry
 from ....components.data.monitor_data import FieldData
-from ....exceptions import SetupError
+from ....components.geometry.base import Geometry
+from ....components.medium import AnisotropicMedium, CustomMedium, Medium
+from ....components.types import Bound, Literal
 from ....constants import CONDUCTIVITY
-
-from .base import JaxObject
-from .types import JaxFloat
+from ....exceptions import SetupError
+from .base import WEB_ADJOINT_MESSAGE, JaxObject
 from .data.data_array import JaxDataArray
 from .data.dataset import JaxPermittivityDataset
-
+from .types import JaxFloat
 
 # number of integration points per unit wavelength in material
 PTS_PER_WVL_INTEGRATION = 20
@@ -304,23 +303,27 @@ class JaxCustomMedium(CustomMedium, AbstractJaxMedium):
             )
         return values
 
-    @pd.validator("eps_dataset", always=True)
-    def _is_not_too_large(cls, val):
+    def _validate_web_adjoint(self) -> None:
+        """Run validators for this component, only if using ``tda.web.run()``."""
+        self._is_not_too_large()
+
+    def _is_not_too_large(self):
         """Ensure number of pixels does not surpass a set amount."""
+
+        field_components = self.eps_dataset.field_components
 
         for field_dim in "xyz":
             field_name = f"eps_{field_dim}{field_dim}"
-            data_array = val.field_components[field_name]
+            data_array = field_components[field_name]
             coord_lens = [len(data_array.coords[key]) for key in "xyz"]
             num_cells_dim = np.prod(coord_lens)
             if num_cells_dim > MAX_NUM_CELLS_CUSTOM_MEDIUM:
                 raise SetupError(
                     "For the adjoint plugin, each component of the 'JaxCustomMedium.eps_dataset' "
                     f"is restricted to have a maximum of {MAX_NUM_CELLS_CUSTOM_MEDIUM} cells. "
-                    f"Detected {num_cells_dim} grid cells in the '{field_name}' component ."
+                    f"Detected {num_cells_dim} grid cells in the '{field_name}' component. "
+                    + WEB_ADJOINT_MESSAGE
                 )
-
-        return val
 
     @pd.validator("eps_dataset", always=True)
     def _eps_dataset_single_frequency(cls, val):

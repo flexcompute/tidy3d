@@ -1,12 +1,14 @@
 """connect util for webapi."""
 
-from functools import wraps
 import time
+from functools import wraps
+
 from requests import ReadTimeout
 from requests.exceptions import ConnectionError as ConnErr
 from requests.exceptions import JSONDecodeError
-from ...exceptions import WebError
 from urllib3.exceptions import NewConnectionError
+
+from ...exceptions import WebError
 from ...log import log
 
 # number of seconds to keep re-trying connection before erroring

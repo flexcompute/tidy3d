@@ -1,9 +1,11 @@
-""" tests converted webapi """
+"""tests converted webapi"""
+
 import os
 from unittest import TestCase, mock
 
 import tidy3d.web as web
-from tidy3d.web.auth import get_credentials, encode_password
+from tidy3d.web.auth import encode_password, get_credentials
+
 from ..utils import SIM_FULL as sim_original
 
 CALLBACK_URL = "https://callbackurl"

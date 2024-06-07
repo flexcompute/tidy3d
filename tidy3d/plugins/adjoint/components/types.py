@@ -1,8 +1,8 @@
 """Special types and validators used by adjoint plugin."""
-from typing import Union, Any
+
+from typing import Any, Union
 
 import numpy as np
-
 
 # special handling if we cant import the JVPTracer in the future (so it doesn't break tidy3d).
 try:

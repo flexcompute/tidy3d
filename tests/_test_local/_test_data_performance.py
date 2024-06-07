@@ -1,17 +1,16 @@
-import numpy as np
 import os
 import sys
-from memory_profiler import profile
 
-from tidy3d.components.data.sim_data import SimulationData
-from tidy3d.components.data.monitor_data import FieldData
+import numpy as np
+import tidy3d as td
+from memory_profiler import profile
 from tidy3d.components.data.data_array import ScalarFieldDataArray
+from tidy3d.components.data.monitor_data import FieldData
+from tidy3d.components.data.sim_data import SimulationData
+from tidy3d.components.grid.grid_spec import GridSpec
 from tidy3d.components.monitor import FieldMonitor
 from tidy3d.components.simulation import Simulation
-from tidy3d.components.source import PointDipole, GaussianPulse
-from tidy3d.components.grid.grid_spec import GridSpec
-
-import tidy3d as td
+from tidy3d.components.source import GaussianPulse, PointDipole
 
 sys.path.append("/users/twhughes/Documents/Flexcompute/tidy3d-core")
 from tidy3d_backend.utils import Profile
@@ -100,7 +99,7 @@ def test_core_profile_small_1_save():
 def test_core_profile_small_2_load():
     with Profile():
         print(f"file_size = {os.path.getsize(PATH):.2e} Bytes")
-        data = td.FieldTimeData.from_file(PATH)
+        td.FieldTimeData.from_file(PATH)
 
 
 def test_core_profile_large():
@@ -159,7 +158,7 @@ def test_speed_many_datasets():
 
     with Profile():
         sim_data.to_file(PATH)
-        sim_data2 = sim_data.from_file(PATH)
+        sim_data.from_file(PATH)
 
 
 if __name__ == "__main__":

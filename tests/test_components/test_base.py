@@ -1,17 +1,15 @@
 """Tests the base model."""
-import pytest
-import numpy as np
 
+import numpy as np
+import pytest
 import tidy3d as td
 from tidy3d.components.base import Tidy3dBaseModel
-
 
 M = td.Medium()
 
 
 def test_shallow_copy():
-    with pytest.raises(ValueError):
-        _ = M.copy(deep=False)
+    _ = M.copy(deep=False)
 
 
 def test_help():
@@ -117,6 +115,55 @@ def test_updated_copy():
     assert s3 == s2
 
 
+def test_updated_copy_path():
+    """Make sure updated copying shortcut works as expected with defaults."""
+    b = td.Box(size=(1, 1, 1))
+    m = td.Medium(permittivity=1)
+
+    s = td.Structure(
+        geometry=b,
+        medium=m,
+    )
+
+    index = 12
+    structures = (index + 1) * [s]
+
+    sim = td.Simulation(
+        size=(4, 4, 4),
+        run_time=1e-12,
+        grid_spec=td.GridSpec.auto(wavelength=1.0),
+        structures=structures,
+    )
+
+    # works as expected
+    new_size = (2, 2, 2)
+    sim2 = sim.updated_copy(size=new_size, path=f"structures/{index}/geometry")
+    assert sim2.structures[index].geometry.size != sim.structures[index].geometry.size
+    assert sim2.structures[index].geometry.size == new_size
+
+    # wrong integer index
+    with pytest.raises(ValueError):
+        sim2 = sim.updated_copy(size=new_size, path="structures/blah/geometry")
+
+    # try with medium for good measure
+    new_permittivity = 2.0
+    sim3 = sim.updated_copy(permittivity=new_permittivity, path=f"structures/{index}/medium")
+    assert sim3.structures[index].medium.permittivity == new_permittivity
+    assert sim3.structures[index].medium.permittivity != sim.structures[index].medium.permittivity
+
+    # wrong field name
+    with pytest.raises(AttributeError):
+        sim3 = sim.updated_copy(
+            permittivity=new_permittivity, path=f"structures/{index}/not_a_field"
+        )
+
+    # forgot path
+    with pytest.raises(ValueError):
+        assert sim == sim.updated_copy(permittivity=2.0)
+
+    assert sim.updated_copy(size=(6, 6, 6)) == sim.updated_copy(size=(6, 6, 6), path=None)
+
+
 def test_equality():
     # test freqs / arraylike
     mnt1 = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="1")
@@ -128,4 +175,52 @@ def test_equality():
 def test_special_characters_in_name():
     """Test error if special characters are in a component's name."""
     with pytest.raises(ValueError):
-        mnt = td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="mnt/flux")
+        td.FluxMonitor(size=(1, 1, 0), freqs=np.array([1, 2, 3]) * 1e12, name="mnt/flux")
+
+
+def test_attrs(tmp_path):
+    """Test the ``.attrs`` metadata feature."""
+
+    # attrs initialize to empty dict
+    obj = td.Medium()
+    assert obj.attrs == {}
+
+    # or they can be initialized directly
+    obj = td.Medium(attrs={"foo": "attr"})
+    assert obj.attrs == {"foo": "attr"}
+
+    # this is still not allowed though
+    with pytest.raises(TypeError):
+        obj.attrs = {}
+
+    # attrs can be modified
+    obj.attrs["foo"] = "bar"
+    assert obj.attrs == {"foo": "bar"}
+
+    # attrs persist with regular copies
+    obj2 = obj.copy()
+    assert obj2.attrs == obj.attrs
+
+    # attrs persist with updated copies
+    obj3 = obj2.updated_copy(permittivity=2.0)
+    assert obj3.attrs == obj2.attrs
+
+    # attrs are in the json strings
+    obj_json = obj3.json()
+    assert '{"foo": "bar"}' in obj_json
+
+    # attrs are in the dict()
+    obj_dict = obj3.dict()
+    assert obj_dict["attrs"] == {"foo": "bar"}
+
+    # objects saved and loaded from file still have attrs
+    for extension in ("hdf5", "json"):
+        path = str(tmp_path / ("obj." + extension))
+        obj.to_file(path)
+        obj4 = obj.from_file(path)
+        assert obj4.attrs == obj.attrs
+
+    # test attrs that can't be serialized
+    obj.attrs["not_serializable"] = type
+    with pytest.raises(TypeError):
+        obj.json()

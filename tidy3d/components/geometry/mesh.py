@@ -1,24 +1,26 @@
 """Mesh-defined geometry."""
+
 from __future__ import annotations
 
 from abc import ABC
-from typing import List, Tuple, Union, Optional
+from typing import List, Optional, Tuple, Union
 
-import pydantic.v1 as pydantic
 import numpy as np
+import pydantic.v1 as pydantic
 
+from ...constants import inf
+from ...exceptions import DataError, ValidationError
+from ...log import log
+from ...packaging import verify_packages_import
 from ..base import cached_property
+from ..data.data_array import DATA_ARRAY_MAP, TriangleMeshDataArray
+from ..data.dataset import TriangleMeshDataset
+from ..data.validators import validate_no_nans
 from ..types import Ax, Bound, Coordinate, MatrixReal4x4, Shapely
 from ..viz import add_ax_if_none, equal_aspect
-from ...log import log
-from ...exceptions import ValidationError, DataError
-from ...constants import fp_eps, inf
-from ..data.dataset import TriangleMeshDataset
-from ..data.data_array import TriangleMeshDataArray, DATA_ARRAY_MAP
-from ..data.validators import validate_no_nans
-from ...packaging import verify_packages_import
-
 from . import base
+
+AREA_SIZE_THRESHOLD = 1e-36
 
 
 class TriangleMesh(base.Geometry, ABC):
@@ -60,9 +62,9 @@ class TriangleMesh(base.Geometry, ABC):
         if val is None:
             return None
         mesh = cls._triangles_to_trimesh(val.surface_mesh)
-        if not all(np.array(mesh.area_faces) > fp_eps):
+        if not all(np.array(mesh.area_faces) > AREA_SIZE_THRESHOLD):
             raise ValidationError(
-                "The provided mesh has triangles with zero area. "
+                f"The provided mesh has triangles with near zero area < {AREA_SIZE_THRESHOLD}. "
                 "Consider using numpy-stl's 'from_file' import with 'remove_empty_areas' set "
                 "to True and a suitable 'AREA_SIZE_THRESHOLD' to remove them."
             )
@@ -120,6 +122,7 @@ class TriangleMesh(base.Geometry, ABC):
             The geometry or geometry group from the file.
         """
         import trimesh
+
         from ..types_extra import TrimeshType
 
         def process_single(mesh: TrimeshType) -> TriangleMesh:
@@ -310,7 +313,7 @@ class TriangleMesh(base.Geometry, ABC):
         if section is None:
             return []
         path, _ = section.to_planar(to_2D=to_2D)
-        return path.polygons_full.tolist()
+        return path.polygons_full
 
     def intersections_plane(
         self, x: float = None, y: float = None, z: float = None

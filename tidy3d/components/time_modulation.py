@@ -1,20 +1,21 @@
-""" Defines time modulation to the medium"""
+"""Defines time modulation to the medium"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Union
 from math import isclose
+from typing import Union
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
+from ..constants import HERTZ, RADIAN
+from ..exceptions import ValidationError
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from .types import InterpMethod, Bound
-from .time import AbstractTimeDependence
 from .data.data_array import SpatialDataArray
 from .data.validators import validate_no_nans
-from ..exceptions import ValidationError
-from ..constants import HERTZ, RADIAN
+from .time import AbstractTimeDependence
+from .types import Bound, InterpMethod
 
 
 class AbstractTimeModulation(AbstractTimeDependence, ABC):

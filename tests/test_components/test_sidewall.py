@@ -1,10 +1,10 @@
-"""test slanted polyslab can be correctly setup and visualized. """
-import pytest
+"""test slanted polyslab can be correctly setup and visualized."""
+
 import numpy as np
 import pydantic.v1 as pydantic
-from shapely import Polygon, Point
-
+import pytest
 import tidy3d as td
+from shapely import Point, Polygon
 from tidy3d.constants import fp_eps
 
 np.random.seed(4)
@@ -309,7 +309,7 @@ def test_shift_height_poly(execution_number):
     # avoid vertex-edge crossing case
     try:
         s = setup_polyslab(vertices, dilation, angle, bounds)
-    except:
+    except Exception:
         s = None
     if s is not None:
         for axis in (0, 1):
@@ -338,7 +338,7 @@ def test_intersection_with_inside_poly():
     # multiple vertices touching axis
     vertices_list.append([[0, -1], [0, 0], [0, 1], [0, 2], [-1, 2], [-1, -1]])
     # random vertices
-    for i in range(Ntest):
+    for _ in range(Ntest):
         vertices_list.append(np.array(convert_valid_polygon(np.random.random((N, 2)) * Lx)))
 
     # different polyslab axis
@@ -362,7 +362,7 @@ def test_intersection_with_inside_poly():
                 # avoid vertex-edge crossing case
                 try:
                     s_bottom = setup_polyslab(vertices, dilation, angle, bounds, axis=axis)
-                except:
+                except Exception:
                     continue
                 s_top = convert_polyslab_other_reference_plane(s_bottom, "top")
                 s_middle = convert_polyslab_other_reference_plane(s_bottom, "middle")
@@ -473,7 +473,7 @@ def test_bound_poly(execution_number):
         # avoid vertex-edge crossing case
         try:
             s = setup_polyslab(vertices, dilation, angle, bounds, reference_plane=reference_plane)
-        except:
+        except Exception:
             continue
         validate_poly_bound(s)
 
@@ -490,7 +490,7 @@ def test_bound_poly(execution_number):
         # avoid vertex-edge crossing case
         try:
             s = setup_polyslab(vertices, dilation, angle, bounds)
-        except:
+        except Exception:
             continue
         s = convert_polyslab_other_reference_plane(s, reference_plane)
         validate_poly_bound(s)

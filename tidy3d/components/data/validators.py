@@ -1,11 +1,11 @@
 # special validators for Datasets
 
-import pydantic.v1 as pd
 import numpy as np
+import pydantic.v1 as pd
 
+from ...exceptions import ValidationError
 from .data_array import DataArray
 from .dataset import AbstractFieldDataset
-from ...exceptions import ValidationError
 
 
 # this can't go in validators.py because that file imports dataset.py

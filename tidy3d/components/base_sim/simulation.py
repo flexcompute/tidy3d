@@ -1,29 +1,25 @@
 """Abstract base for defining simulation classes of different solvers"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Tuple
-from math import isclose
 
+import autograd.numpy as anp
 import pydantic.v1 as pd
 
-from .monitor import AbstractMonitor
-
-from ..base import cached_property, skip_if_fields_missing
-from ..validators import assert_unique_names, assert_objects_in_sim_bounds
-from ..geometry.base import Box
-from ..types import Ax, Bound, Axis, Symmetry, TYPE_TAG_STR
-from ..structure import Structure
-from ..viz import add_ax_if_none, equal_aspect
-from ..scene import Scene
-
-from ..medium import Medium, MediumType3D
-
-from ..viz import PlotParams, plot_params_symmetry
-
-from ...version import __version__
 from ...exceptions import Tidy3dKeyError
 from ...log import log
+from ...version import __version__
+from ..base import cached_property, skip_if_fields_missing
+from ..geometry.base import Box
+from ..medium import Medium, MediumType3D
+from ..scene import Scene
+from ..structure import Structure
+from ..types import TYPE_TAG_STR, Ax, Axis, Bound, Symmetry
+from ..validators import assert_objects_in_sim_bounds, assert_unique_names
+from ..viz import PlotParams, add_ax_if_none, equal_aspect, plot_params_symmetry
+from .monitor import AbstractMonitor
 
 
 class AbstractSimulation(Box, ABC):
@@ -113,7 +109,7 @@ class AbstractSimulation(Box, ABC):
     _unique_structure_names = assert_unique_names("structures")
     _unique_source_names = assert_unique_names("sources")
 
-    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors")
+    _monitors_in_bounds = assert_objects_in_sim_bounds("monitors", strict_inequality=True)
     _structures_in_bounds = assert_objects_in_sim_bounds("structures", error=False)
 
     @pd.validator("structures", always=True)
@@ -134,7 +130,7 @@ class AbstractSimulation(Box, ABC):
                 struct_bounds = list(struct_bound_min) + list(struct_bound_max)
 
                 for sim_val, struct_val in zip(sim_bounds, struct_bounds):
-                    if isclose(sim_val, struct_val):
+                    if anp.isclose(sim_val, struct_val):
                         consolidated_logger.warning(
                             f"Structure at 'structures[{istruct}]' has bounds that extend exactly "
                             "to simulation edges. This can cause unexpected behavior. "

@@ -1,12 +1,16 @@
 """Storing tidy3d data at it's most fundamental level as xr.DataArray objects"""
-from __future__ import annotations
-from typing import Dict, List, Union
-from abc import ABC
 
-import xarray as xr
-import numpy as np
+from __future__ import annotations
+
+from abc import ABC
+from typing import Dict, List, Union
+
 import dask
 import h5py
+import numpy as np
+import pandas
+import xarray as xr
+from autograd.tracer import getval, isbox
 
 from ...constants import (
     HERTZ,
@@ -17,7 +21,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..types import Bound, Axis
+from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
 DIM_ATTRS = {
@@ -28,6 +32,11 @@ DIM_ATTRS = {
     "t": {"units": SECOND, "long_name": "time"},
     "direction": {"long_name": "propagation direction"},
     "mode_index": {"long_name": "mode index"},
+    "eme_port_index": {"long_name": "EME port index"},
+    "eme_cell_index": {"long_name": "EME cell index"},
+    "mode_index_in": {"long_name": "mode index in"},
+    "mode_index_out": {"long_name": "mode index out"},
+    "sweep_index": {"long_name": "sweep index"},
     "theta": {"units": RADIAN, "long_name": "elevation angle"},
     "phi": {"units": RADIAN, "long_name": "azimuth angle"},
     "ux": {"long_name": "normalized kx"},
@@ -43,6 +52,9 @@ DIM_ATTRS = {
 # name of the DataArray.values in the hdf5 file (xarray's default name too)
 DATA_ARRAY_VALUE_NAME = "__xarray_dataarray_variable__"
 
+# name for the autograd-traced part of the DataArray
+AUTOGRAD_KEY = "AUTOGRAD"
+
 
 class DataArray(xr.DataArray):
     """Subclass of ``xr.DataArray`` that requires _dims to match the keys of the coords."""
@@ -53,6 +65,19 @@ class DataArray(xr.DataArray):
     _dims = ()
     # stores a dictionary of attributes corresponding to the data values
     _data_attrs: Dict[str, str] = {}
+
+    def __init__(self, data, *args, **kwargs):
+        """Initialize ``DataArray``."""
+
+        # initialize with untraced data
+        data_untraced = getval(data)
+        super().__init__(data_untraced, *args, **kwargs)
+
+        # if the passed data has tracers, store them in attrs dict
+        if isbox(data):
+            self.attrs[AUTOGRAD_KEY] = data
+            # NOTE: this is done because if we pass the traced array directly, it will create a
+            # numpy array of `ArrayBox`, which is extremely slow
 
     @classmethod
     def __get_validators__(cls):
@@ -87,6 +112,56 @@ class DataArray(xr.DataArray):
         for attr_name, attr in cls._data_attrs.items():
             val.attrs[attr_name] = attr
         return val
+
+    def _interp_validator(self, field_name: str = None) -> None:
+        """Make sure we can interp()/sel() the data.
+
+        NOTE
+        ----
+        This does not check every 'DataArray' by default. Instead, when required, this check can be
+        called from a validator, as is the case with 'CustomMedium' and 'CustomFieldSource'.
+        """
+        # skip this validator if currently tracing for autograd because
+        # self.values will be dtype('object') and not interpolatable
+        if isbox(self.values.flat[0]):
+            return
+
+        if field_name is None:
+            field_name = "DataArray"
+
+        dims = self.coords.dims
+
+        for dim in dims:
+            # in case we encounter some /0 or /NaN we'll ignore the warnings here
+            with np.errstate(divide="ignore", invalid="ignore"):
+                # check that we can interpolate
+                try:
+                    x0 = np.array(self.coords[dim][0])
+                    self.interp({dim: x0}, method="linear")
+                    self.interp({dim: x0}, method="nearest")
+                    # self.interp_like(self.isel({self.dim: 0}))
+                except pandas.errors.InvalidIndexError as e:
+                    raise DataError(
+                        f"'{field_name}.interp()' fails to interpolate along {dim} which is used by the solver. "
+                        "This may be caused, for instance, by duplicated data "
+                        f"in this dimension (you can verify this by running "
+                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
+                        f"and interpolate with the new '{field_name}'). "
+                        "Plase make sure data can be interpolated."
+                    ) from e
+                # in case it can interpolate, try also to sel
+                try:
+                    x0 = np.array(self.coords[dim][0])
+                    self.sel({dim: x0}, method="nearest")
+                except pandas.errors.InvalidIndexError as e:
+                    raise DataError(
+                        f"'{field_name}.sel()' fails to select along {dim} which is used by the solver. "
+                        "This may be caused, for instance, by duplicated data "
+                        f"in this dimension (you can verify this by running "
+                        f"'{field_name}={field_name}.drop_duplicates(dim=\"{dim}\")' "
+                        f"and run 'sel()' with the new '{field_name}'). "
+                        "Plase make sure 'sel()' can be used on the 'DataArray'."
+                    ) from e
 
     @classmethod
     def assign_coord_attrs(cls, val):
@@ -139,6 +214,12 @@ class DataArray(xr.DataArray):
         """Absolute value of data array."""
         return abs(self)
 
+    @property
+    def is_uniform(self):
+        """Whether each element is of equal value in the data array"""
+        raw_data = self.data.ravel()
+        return np.allclose(raw_data, raw_data[0])
+
     def to_hdf5(self, fname: Union[str, h5py.File], group_path: str) -> None:
         """Save an xr.DataArray to the hdf5 file or file handle with a given path to the group."""
 
@@ -168,11 +249,11 @@ class DataArray(xr.DataArray):
         with h5py.File(fname, "r") as f:
             sub_group = f[group_path]
             values = np.array(sub_group[DATA_ARRAY_VALUE_NAME])
-            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims}
+            coords = {dim: np.array(sub_group[dim]) for dim in cls._dims if dim in sub_group}
             for key, val in coords.items():
                 if val.dtype == "O":
                     coords[key] = [byte_string.decode() for byte_string in val.tolist()]
-            return cls(values, coords=coords)
+            return cls(values, coords=coords, dims=cls._dims)
 
     @classmethod
     def from_file(cls, fname: str, group_path: str) -> DataArray:
@@ -260,9 +341,24 @@ class AbstractSpatialDataArray(DataArray, ABC):
     _dims = ("x", "y", "z")
     _data_attrs = {"long_name": "field value"}
 
+    @property
+    def _spatially_sorted(self) -> SpatialDataArray:
+        """Check whether sorted and sort if not."""
+        needs_sorting = []
+        for axis in "xyz":
+            axis_coords = self.coords[axis].values
+            if len(axis_coords) > 1 and np.any(axis_coords[1:] < axis_coords[:-1]):
+                needs_sorting.append(axis)
+
+        if len(needs_sorting) > 0:
+            return self.sortby(needs_sorting)
+
+        return self
+
     def sel_inside(self, bounds: Bound) -> SpatialDataArray:
         """Return a new SpatialDataArray that contains the minimal amount data necessary to cover
-        a spatial region defined by ``bounds``.
+        a spatial region defined by ``bounds``. Note that the returned data is sorted with respect
+        to spatial coordinates.
 
 
         Parameters
@@ -275,10 +371,17 @@ class AbstractSpatialDataArray(DataArray, ABC):
         SpatialDataArray
             Extracted spatial data array.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError(
+                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
+            )
+
+        # make sure data is sorted with respect to coordinates
+        sorted_self = self._spatially_sorted
 
         inds_list = []
 
-        coords = (self.x, self.y, self.z)
+        coords = (sorted_self.x, sorted_self.y, sorted_self.z)
 
         for coord, smin, smax in zip(coords, bounds[0], bounds[1]):
             length = len(coord)
@@ -311,7 +414,7 @@ class AbstractSpatialDataArray(DataArray, ABC):
 
             inds_list.append(comp_inds)
 
-        return self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
+        return sorted_self.isel(x=inds_list[0], y=inds_list[1], z=inds_list[2])
 
     def does_cover(self, bounds: Bound) -> bool:
         """Check whether data fully covers specified by ``bounds`` spatial region. If data contains
@@ -329,10 +432,14 @@ class AbstractSpatialDataArray(DataArray, ABC):
         bool
             Full cover check outcome.
         """
+        if any(bmin > bmax for bmin, bmax in zip(*bounds)):
+            raise DataError(
+                "Min and max bounds must be packaged as '(minx, miny, minz), (maxx, maxy, maxz)'."
+            )
 
         coords = (self.x, self.y, self.z)
         return all(
-            (coord[0] <= smin and coord[-1] >= smax) or len(coord) == 1
+            (np.min(coord) <= smin and np.max(coord) >= smax) or len(coord) == 1
             for coord, smin, smax in zip(coords, bounds[0], bounds[1])
         )
 
@@ -351,9 +458,9 @@ class SpatialDataArray(AbstractSpatialDataArray):
 
     __slots__ = ()
 
-    def reflect(self, axis: Axis, center: float) -> SpatialDataArray:
+    def reflect(self, axis: Axis, center: float, reflection_only: bool = False) -> SpatialDataArray:
         """Reflect data across the plane define by parameters ``axis`` and ``center`` from right to
-        left.
+        left. Note that the returned data is sorted with respect to spatial coordinates.
 
         Parameters
         ----------
@@ -361,6 +468,8 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Normal direction of the reflection plane.
         center : float
             Location of the reflection plane along its normal direction.
+        reflection_only : bool = False
+            Return only reflected data.
 
         Returns
         -------
@@ -368,15 +477,27 @@ class SpatialDataArray(AbstractSpatialDataArray):
             Data after reflection is performed.
         """
 
-        coords = list(self.coords.values())
-        data = np.array(self.data)
+        sorted_self = self._spatially_sorted
 
-        if np.isclose(center, coords[axis].data[0]):
+        coords = [sorted_self.x.values, sorted_self.y.values, sorted_self.z.values]
+        data = np.array(sorted_self.data)
+
+        data_left_bound = coords[axis][0]
+
+        if np.isclose(center, data_left_bound):
             num_duplicates = 1
-        elif center > coords[axis].data[0]:
-            raise DataError("Reflection center must be outside and on the left of the data region.")
+        elif center > data_left_bound:
+            raise DataError("Reflection center must be outside and to the left of the data region.")
         else:
             num_duplicates = 0
+
+        if reflection_only:
+            coords[axis] = 2 * center - coords[axis]
+            coords_dict = dict(zip("xyz", coords))
+
+            tmp_arr = SpatialDataArray(sorted_self.data, coords=coords_dict)
+
+            return tmp_arr.sortby("xyz"[axis])
 
         shape = np.array(np.shape(data))
         old_len = shape[axis]
@@ -650,6 +771,137 @@ class HeatDataArray(DataArray):
     _dims = "T"
 
 
+class EMEScalarModeFieldDataArray(AbstractSpatialDataArray):
+    """Spatial distribution of a mode in frequency-domain as a function of mode index
+    and EME cell index.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> eme_cell_index = np.arange(5)
+    >>> coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
+    >>> fd = EMEScalarModeFieldDataArray((1+1j) * np.random.random((2,3,1,2,5,5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "f", "sweep_index", "eme_cell_index", "mode_index")
+
+
+class EMEFreqModeDataArray(DataArray):
+    """Array over frequency, mode index, and EME cell index.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> eme_cell_index = np.arange(5)
+    >>> coords = dict(f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
+    >>> fd = EMEFreqModeDataArray((1+1j) * np.random.random((2, 5, 5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+
+
+class EMEScalarFieldDataArray(AbstractSpatialDataArray):
+    """Spatial distribution of a field excited from an EME port in frequency-domain as a
+    function of mode index at the EME port and the EME port index.
+
+    Example
+    -------
+    >>> x = [1,2]
+    >>> y = [2,3,4]
+    >>> z = [3,4,5,6]
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(5)
+    >>> eme_port_index = [0, 1]
+    >>> coords = dict(x=x, y=y, z=z, f=f, mode_index=mode_index, eme_port_index=eme_port_index)
+    >>> fd = EMEScalarFieldDataArray((1+1j) * np.random.random((2,3,4,2,5,2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("x", "y", "z", "f", "sweep_index", "eme_port_index", "mode_index")
+
+
+class EMECoefficientDataArray(DataArray):
+    """EME expansion coefficient of the mode `mode_index_out` in the EME cell
+    `eme_cell_index`, when excited from mode `mode_index_in` of EME port `eme_port_index`.
+
+    Example
+    -------
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1]
+    >>> eme_cell_index = np.arange(5)
+    >>> eme_port_index = [0, 1]
+    >>> f = [2e14]
+    >>> coords = dict(
+    ...     f=f,
+    ...     mode_index_out=mode_index_out,
+    ...     mode_index_in=mode_index_in,
+    ...     eme_cell_index=eme_cell_index,
+    ...     eme_port_index=eme_port_index
+    ... )
+    >>> fd = EMECoefficientDataArray((1 + 1j) * np.random.random((1, 2, 2, 5, 2)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = (
+        "f",
+        "sweep_index",
+        "eme_port_index",
+        "eme_cell_index",
+        "mode_index_out",
+        "mode_index_in",
+    )
+    _data_attrs = {"long_name": "mode expansion coefficient"}
+
+
+class EMESMatrixDataArray(DataArray):
+    """Scattering matrix elements for a fixed pair of ports, possibly with an extra
+    sweep index.
+
+    Example
+    -------
+    >>> mode_index_in = [0, 1]
+    >>> mode_index_out = [0, 1, 2]
+    >>> f = [2e14]
+    >>> sweep_index = np.arange(10)
+    >>> coords = dict(
+    ...     f=f,
+    ...     mode_index_out=mode_index_out,
+    ...     mode_index_in=mode_index_in,
+    ...     sweep_index=sweep_index
+    ... )
+    >>> fd = EMESMatrixDataArray((1 + 1j) * np.random.random((1, 3, 2, 10)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "mode_index_out", "mode_index_in")
+    _data_attrs = {"long_name": "scattering matrix element"}
+
+
+class EMEModeIndexDataArray(DataArray):
+    """Complex-valued effective propagation index of an EME mode,
+    also indexed by EME cell.
+
+    Example
+    -------
+    >>> f = [2e14, 3e14]
+    >>> mode_index = np.arange(4)
+    >>> eme_cell_index = np.arange(5)
+    >>> coords = dict(f=f, mode_index=mode_index, eme_cell_index=eme_cell_index)
+    >>> data = EMEModeIndexDataArray((1+1j) * np.random.random((2,4,5)), coords=coords)
+    """
+
+    __slots__ = ()
+    _dims = ("f", "sweep_index", "eme_cell_index", "mode_index")
+    _data_attrs = {"long_name": "Propagation index"}
+
+
 class ChargeDataArray(DataArray):
     """Charge data array.
 
@@ -744,6 +996,12 @@ DATA_ARRAY_TYPES = [
     FreqModeDataArray,
     TriangleMeshDataArray,
     HeatDataArray,
+    EMEScalarFieldDataArray,
+    EMEScalarModeFieldDataArray,
+    EMESMatrixDataArray,
+    EMECoefficientDataArray,
+    EMEModeIndexDataArray,
+    EMEFreqModeDataArray,
     ChargeDataArray,
     PointDataArray,
     CellDataArray,

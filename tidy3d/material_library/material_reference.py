@@ -1,4 +1,5 @@
 """Holds the reference materials for Tidy3D material library."""
+
 import pydantic.v1 as pd
 
 from ..components.base import Tidy3dBaseModel
@@ -143,6 +144,12 @@ material_refs = dict(
         journal="Y. Nigara. Measurement of the optical constants of yttrium oxide, "
         "Jpn. J. Appl. Phys. 7, 404-408 (1968)",
         doi="https://doi.org/10.1143/JJAP.7.404",
+    ),
+    Zelmon1997=ReferenceData(
+        journal="D. E. Zelmon, D. L. Small and D. Jundt. Infrared corrected Sellmeier "
+        "coefficients for congruently grown lithium niobate and 5 mol.% magnesium oxide-doped "
+        "lithium niobate, J. Opt. Soc. Am. B 14, 3319-3322 (1997)",
+        doi="https://doi.org/10.1364/JOSAB.14.003319",
     ),
     Zelmon1998=ReferenceData(
         journal="D. E. Zelmon, D. L. Small and R. Page. Refractive-index measurements "

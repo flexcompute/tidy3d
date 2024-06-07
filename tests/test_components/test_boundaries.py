@@ -1,15 +1,23 @@
 """Tests boundary conditions."""
 
-import pytest
 import pydantic.v1 as pydantic
-
+import pytest
 import tidy3d as td
-from tidy3d.components.boundary import BoundarySpec, Boundary
-from tidy3d.components.boundary import Periodic, PECBoundary, PMCBoundary, BlochBoundary
-from tidy3d.components.boundary import PML, StablePML, Absorber
+from tidy3d.components.boundary import (
+    PML,
+    Absorber,
+    BlochBoundary,
+    Boundary,
+    BoundarySpec,
+    PECBoundary,
+    Periodic,
+    PMCBoundary,
+    StablePML,
+)
 from tidy3d.components.source import GaussianPulse, PlaneWave, PointDipole
-from tidy3d.exceptions import SetupError, DataError
-from ..utils import assert_log_level, log_capture
+from tidy3d.exceptions import DataError, SetupError
+
+from ..utils import assert_log_level
 
 
 def test_bloch_phase():
@@ -173,5 +181,5 @@ def test_boundaryspec_classmethods():
     boundary_spec = BoundarySpec.all_sides(boundary=PML())
     boundaries = boundary_spec.to_list
     assert all(
-        [isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim]
+        isinstance(boundary, PML) for boundary_dim in boundaries for boundary in boundary_dim
     )

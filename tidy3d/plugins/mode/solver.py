@@ -1,16 +1,18 @@
 """Mode solver for propagating EM modes."""
+
 from typing import Tuple
 
 import numpy as np
+import scipy.linalg as linalg
 import scipy.sparse as sp
 import scipy.sparse.linalg as spl
 
-from ...components.types import Numpy, ModeSolverType, EpsSpecType
 from ...components.base import Tidy3dBaseModel
-from ...constants import ETA_0, C_0, fp_eps, pec_val
+from ...components.types import EpsSpecType, ModeSolverType, Numpy
+from ...constants import C_0, ETA_0, fp_eps, pec_val
 from .derivatives import create_d_matrices as d_mats
 from .derivatives import create_s_matrices as s_mats
-from .transforms import radial_transform, angled_transform
+from .transforms import angled_transform, radial_transform
 
 # Consider vec to be complex if norm(vec.imag)/norm(vec) > TOL_COMPLEX
 TOL_COMPLEX = fp_eps
@@ -34,8 +36,11 @@ class EigSolver(Tidy3dBaseModel):
         coords,
         freq,
         mode_spec,
+        mu_cross=None,
+        split_curl_scaling=None,
         symmetry=(0, 0),
         direction="+",
+        solver_basis_fields=None,
     ) -> Tuple[Numpy, Numpy, EpsSpecType]:
         """
         Solve for the modes of a waveguide cross-section.
@@ -54,8 +59,21 @@ class EigSolver(Tidy3dBaseModel):
             (Hertz) Frequency at which the eigenmodes are computed.
         mode_spec : ModeSpec
             ``ModeSpec`` object containing specifications of the mode solver.
+        mu_cross : array_like or tuple of array_like
+            Either a single 2D array defining the relative permeability in the cross-section,
+            or nine 2D arrays defining the permeability at the Hx, Hy, and Hz locations
+            of the Yee grid in the order xx, xy, xz, yx, yy, yz, zx, zy, zz.
+            Set to 1 if `None`.
+        split_curl_scaling : tuple of array_like
+            Split curl coefficient to Curl E. Three 2D arrays defining the scaling factor
+            at the Ex, Ey, and Ez locations of the Yee grid in the order xx, yy, zz.
+            Following Benkler's approach, we formulate it as the following:
+            1) during mode solver: eps_cross -> eps_corss / scaling, so eigenvector is E * scaling
+            2) in postprocessing: apply scaling^-1 to eigenvector to obtain E
         direction : Union["+", "-"]
             Direction of mode propagation.
+        solver_basis_fields
+            If provided, solve for modes in this basis.
 
         Returns
         -------
@@ -72,17 +90,17 @@ class EigSolver(Tidy3dBaseModel):
         angle_phi = mode_spec.angle_phi
         omega = 2 * np.pi * freq
         k0 = omega / C_0
+        enable_incidence_matrices = split_curl_scaling is not None or mu_cross is not None
 
-        if isinstance(eps_cross, Numpy):
-            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_cross
-        elif len(eps_cross) == 9:
-            eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = (
-                np.copy(e) for e in eps_cross
-            )
-        else:
-            raise ValueError("Wrong input to mode solver pemittivity!")
+        eps_formated = cls.format_medium_data(eps_cross)
+        eps_xx, eps_xy, eps_xz, eps_yx, eps_yy, eps_yz, eps_zx, eps_zy, eps_zz = eps_formated
 
-        Nx, Ny = eps_xx.shape
+        mu_formated = None
+        if mu_cross is not None:
+            mu_formated = cls.format_medium_data(mu_cross)
+
+        Nxy = eps_xx.shape
+        Nx, Ny = Nxy
         N = eps_xx.size
 
         if len(coords[0]) != Nx + 1 or len(coords[1]) != Ny + 1:
@@ -95,16 +113,31 @@ class EigSolver(Tidy3dBaseModel):
         (2N, 2N), and the full tensorial case, in which case it has shape (4N, 4N)."""
         eps_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         mu_tensor = np.zeros((3, 3, N), dtype=np.complex128)
+        identity_tensor = np.zeros((3, 3, N), dtype=np.complex128)
         for row, eps_row in enumerate(
             [[eps_xx, eps_xy, eps_xz], [eps_yx, eps_yy, eps_yz], [eps_zx, eps_zy, eps_zz]]
         ):
-            mu_tensor[row, row, :] = 1.0
+            identity_tensor[row, row, :] = 1.0
             for col, eps in enumerate(eps_row):
+                if split_curl_scaling is not None and col == row:
+                    outside_pec = ~np.isclose(split_curl_scaling[col], 0)
+                    eps[outside_pec] /= split_curl_scaling[col][outside_pec]
+
                 eps_tensor[row, col, :] = eps.ravel()
 
+        if mu_formated is not None:
+            mu_xx, mu_xy, mu_xz, mu_yx, mu_yy, mu_yz, mu_zx, mu_zy, mu_zz = mu_formated
+            for row, mu_row in enumerate(
+                [[mu_xx, mu_xy, mu_xz], [mu_yx, mu_yy, mu_yz], [mu_zx, mu_zy, mu_zz]]
+            ):
+                for col, mu in enumerate(mu_row):
+                    mu_tensor[row, col, :] = mu.ravel()
+        else:
+            mu_tensor = np.copy(identity_tensor)
+
         # Get Jacobian of all coordinate transformations. Initialize as identity (same as mu so far)
-        jac_e = np.real(np.copy(mu_tensor))
-        jac_h = np.real(np.copy(mu_tensor))
+        jac_e = np.real(np.copy(identity_tensor))
+        jac_h = np.real(np.copy(identity_tensor))
 
         if bend_radius is not None:
             new_coords, jac_e, jac_h = radial_transform(new_coords, bend_radius, bend_axis)
@@ -138,6 +171,12 @@ class EigSolver(Tidy3dBaseModel):
         mu_tensor = np.einsum("ij...,pj...->ip...", mu_tensor, jac_h)
         mu_tensor /= jac_h_det
 
+        # # Uncomment block to force eps and mu to be translationally invariant into the PML.
+        # # This may be important for bends as the jacobian transformation breaks the invariance, but
+        # # tests reveal that it has little effect.
+        # eps_tensor = cls.make_pml_invariant(Nxy, eps_tensor, mode_spec.num_pml)
+        # mu_tensor = cls.make_pml_invariant(Nxy, mu_tensor, mode_spec.num_pml)
+
         """ Boundaries are imposed through the derivative matrices. The forward derivative matrices
         always impose PEC boundary at the xmax and ymax interfaces, and on the xmin and ymin
         interfaces unless PMC symmetry is present. If so, the PMC boundary is imposed through the
@@ -149,13 +188,14 @@ class EigSolver(Tidy3dBaseModel):
         # Dual grid steps for H-field derivatives
         dl_tmp = [(dl[:-1] + dl[1:]) / 2 for dl in dl_f]
         dl_b = [np.hstack((d1[0], d2)) for d1, d2 in zip(dl_f, dl_tmp)]
+        dls = (dl_f, dl_b)
 
         # Derivative matrices with PEC boundaries by default and optional PMC at the near end
-        der_mats_tmp = d_mats((Nx, Ny), dl_f, dl_b, dmin_pmc)
+        der_mats_tmp = d_mats(Nxy, dls, dmin_pmc)
 
         # PML matrices; do not impose PML on the bottom when symmetry present
         dmin_pml = np.array(symmetry) == 0
-        pml_mats = s_mats(omega, (Nx, Ny), mode_spec.num_pml, dl_f, dl_b, dmin_pml)
+        pml_mats = s_mats(omega, Nxy, mode_spec.num_pml, dls, eps_tensor, mu_tensor, dmin_pml)
 
         # Add the PML on top of the derivatives; normalize by k0 to match the EM-possible notation
         der_mats = [Smat.dot(Dmat) / k0 for Smat, Dmat in zip(pml_mats, der_mats_tmp)]
@@ -176,6 +216,25 @@ class EigSolver(Tidy3dBaseModel):
         else:
             target_neff_p *= 1 + TARGET_SHIFT
 
+        # preprocess solver_basis_fields
+        basis_E = None
+        if solver_basis_fields is not None:
+            basis_E = solver_basis_fields[:3, ...]
+            try:
+                basis_E = basis_E.reshape((3, Nx * Ny, num_modes))
+            except ValueError:
+                raise ValueError(
+                    "Shape mismatch between 'basis_fields' and requested mode data. "
+                    "Make sure the mode solvers are set up the same, and that the "
+                    "basis mode solver data has 'colocate=False'."
+                )
+            if split_curl_scaling is not None:
+                basis_E = cls.split_curl_field_postprocess_inverse(split_curl_scaling, basis_E)
+            jac_e_inv = np.moveaxis(
+                np.linalg.inv(np.moveaxis(jac_e, [0, 1], [-2, -1])), [-2, -1], [0, 1]
+            )
+            basis_E = np.sum(jac_e_inv[..., None] * basis_E[:, None, ...], axis=0)
+
         # Solve for the modes
         E, H, neff, keff, eps_spec = cls.solver_em(
             Nx,
@@ -187,17 +246,21 @@ class EigSolver(Tidy3dBaseModel):
             target_neff_p,
             mode_spec.precision,
             direction,
+            enable_incidence_matrices,
+            basis_E=basis_E,
         )
 
         # Transform back to original axes, E = J^T E'
         E = np.sum(jac_e[..., None] * E[:, None, ...], axis=0)
+        if split_curl_scaling is not None:
+            E = cls.split_curl_field_postprocess(split_curl_scaling, E)
         E = E.reshape((3, Nx, Ny, 1, num_modes))
         H = np.sum(jac_h[..., None] * H[:, None, ...], axis=0)
         H = H.reshape((3, Nx, Ny, 1, num_modes))
+        fields = np.stack((E, H), axis=0)
+
         neff = neff * np.linalg.norm(kp_to_k)
         keff = keff * np.linalg.norm(kp_to_k)
-
-        fields = np.stack((E, H), axis=0)
 
         if mode_spec.precision == "single":
             # Recast to single precision which may have changed due to earlier manipulations
@@ -217,6 +280,8 @@ class EigSolver(Tidy3dBaseModel):
         neff_guess,
         mat_precision,
         direction,
+        enable_incidence_matrices,
+        basis_E,
     ):
         """Solve for the electromagnetic modes of a system defined by in-plane permittivity and
         permeability and assuming translational invariance in the normal direction.
@@ -241,6 +306,8 @@ class EigSolver(Tidy3dBaseModel):
             Single or double-point precision in eigensolver.
         direction : Union["+", "-"]
             Direction of mode propagation.
+        basis_E: np.ndarray
+            Basis for mode solving.
 
         Returns
         -------
@@ -287,9 +354,19 @@ class EigSolver(Tidy3dBaseModel):
 
         is_eps_complex = cls.isinstance_complex(eps_tensor)
 
+        if basis_E is not None and is_tensorial:
+            raise RuntimeError(
+                "Tensorial eps not yet supported in relative mode solver "
+                "(with basis fields provided)."
+            )
+
         if not is_tensorial:
             eps_spec = "diagonal"
-            E, H, neff, keff = cls.solver_diagonal(**kwargs)
+            E, H, neff, keff = cls.solver_diagonal(
+                **kwargs,
+                enable_incidence_matrices=enable_incidence_matrices,
+                basis_E=basis_E,
+            )
             if direction == "-":
                 H[0] *= -1
                 H[1] *= -1
@@ -343,11 +420,21 @@ class EigSolver(Tidy3dBaseModel):
         mat.eliminate_zeros()
 
     @classmethod
-    def solver_diagonal(cls, eps, mu, der_mats, num_modes, neff_guess, vec_init, mat_precision):
+    def solver_diagonal(
+        cls,
+        eps,
+        mu,
+        der_mats,
+        num_modes,
+        neff_guess,
+        vec_init,
+        mat_precision,
+        enable_incidence_matrices,
+        basis_E,
+    ):
         """EM eigenmode solver assuming ``eps`` and ``mu`` are diagonal everywhere."""
 
         # code associated with these options is included below in case it's useful in the future
-        enable_incidence_matrices = False
         enable_preconditioner = False
         analyze_conditioning = False
 
@@ -433,28 +520,54 @@ class EigSolver(Tidy3dBaseModel):
             print(spl.norm(diff, ord=np.inf), spl.norm(aca, ord=np.inf), spl.norm(aac, ord=np.inf))
             print(spl.norm(diff, ord="fro"), spl.norm(aca, ord="fro"), spl.norm(aac, ord="fro"))
 
+        # preprocess basis modes
+        basis_vecs = None
+        if basis_E is not None:
+            basis_Ex = basis_E[0, ...]
+            basis_Ey = basis_E[1, ...]
+            basis_vecs = np.concatenate((basis_Ex, basis_Ey), axis=0)
+
+            # if enable_preconditioner:
+            #    basis_vecs = (1 / precon) * basis_vecs
+
+            # if enable_incidence_matrices:
+            #    basis_vecs = dnz * basis_vecs
+
         # Call the eigensolver. The eigenvalues are -(neff + 1j * keff)**2
-        vals, vecs = cls.solver_eigs(
-            mat,
-            num_modes,
-            vec_init,
-            guess_value=eig_guess,
-            mode_solver_type=mode_solver_type,
-            M=precon,
-        )
-
-        if enable_preconditioner:
-            vecs = precon * vecs
-
-        if enable_incidence_matrices:
-            vecs = dnz.T * vecs
-
+        if basis_E is None:
+            vals, vecs = cls.solver_eigs(
+                mat,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+            )
+        else:
+            vals, vecs = cls.solver_eigs_relative(
+                mat,
+                num_modes,
+                vec_init,
+                guess_value=eig_guess,
+                mode_solver_type=mode_solver_type,
+                M=precon,
+                basis_vecs=basis_vecs,
+            )
         neff, keff = cls.eigs_to_effective_index(vals, mode_solver_type)
 
         # Sort by descending neff
         sort_inds = np.argsort(neff)[::-1]
         neff = neff[sort_inds]
         keff = keff[sort_inds]
+
+        E, H = None, None
+        if basis_E is None:
+            if enable_preconditioner:
+                vecs = precon * vecs
+
+            if enable_incidence_matrices:
+                vecs = dnz.T * vecs
+
         vecs = vecs[:, sort_inds]
 
         # Field components from eigenvectors
@@ -608,7 +721,15 @@ class EigSolver(Tidy3dBaseModel):
         return E, H, neff, keff
 
     @classmethod
-    def solver_eigs(cls, mat, num_modes, vec_init, guess_value=1.0, M=None, **kwargs):
+    def solver_eigs(
+        cls,
+        mat,
+        num_modes,
+        vec_init,
+        guess_value=1.0,
+        M=None,
+        **kwargs,
+    ):
         """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
 
         Parameters
@@ -623,6 +744,35 @@ class EigSolver(Tidy3dBaseModel):
         values, vectors = spl.eigs(
             mat, k=num_modes, sigma=guess_value, tol=TOL_EIGS, v0=vec_init, M=M
         )
+        return values, vectors
+
+    @classmethod
+    def solver_eigs_relative(
+        cls,
+        mat,
+        num_modes,
+        vec_init,
+        guess_value=1.0,
+        M=None,
+        basis_vecs=None,
+        **kwargs,
+    ):
+        """Find ``num_modes`` eigenmodes of ``mat`` cloest to ``guess_value``.
+
+        Parameters
+        ----------
+        mat : scipy.sparse matrix
+            Square matrix for diagonalization.
+        num_modes : int
+            Number of eigenmodes to compute.
+        guess_value : float, optional
+        """
+
+        basis, _ = np.linalg.qr(basis_vecs)
+        mat_basis = np.conj(basis.T) @ mat @ basis
+        values, coeffs = linalg.eig(mat_basis)
+        vectors = None
+        vectors = basis @ coeffs
         return values, vectors
 
     @classmethod
@@ -731,13 +881,61 @@ class EigSolver(Tidy3dBaseModel):
 
         # for diagonal type, eigenvalues are -(neff + 1j * keff)**2
         if mode_solver_type == "diagonal":
-            vre, vim = -np.real(eig_list), -np.imag(eig_list)
-            # Real and imaginary part of the effective index
-            neff = np.sqrt(vre / 2 + np.sqrt(vre**2 + vim**2) / 2)
-            keff = vim / 2 / (neff + 1e-10)
-            return neff, keff
+            sqrt_eig_list = np.emath.sqrt(-eig_list + 0j)
+            return np.real(sqrt_eig_list), np.imag(sqrt_eig_list)
 
         raise RuntimeError(f"Unidentified 'mode_solver_type={mode_solver_type}'.")
+
+    @staticmethod
+    def format_medium_data(mat_data):
+        """
+        mat_data can be either permittivity or permeability. It's either a single 2D array
+        defining the relative property in the cross-section, or nine 2D arrays defining
+        the property at the E(H)x, E(H)y, and E(H)z locations of the Yee grid in the order
+        xx, xy, xz, yx, yy, yz, zx, zy, zz.
+        """
+        if isinstance(mat_data, Numpy):
+            return (mat_data[i, :, :] for i in range(9))
+        if len(mat_data) == 9:
+            return (np.copy(e) for e in mat_data)
+        raise ValueError("Wrong input to mode solver pemittivity/permeability!")
+
+    @staticmethod
+    def split_curl_field_postprocess(split_curl, E):
+        """E has the shape (3, N, num_modes)"""
+        _, Nx, Ny = split_curl.shape
+        field_shape = E.shape
+
+        # set a dummy value of split curl inside PEC to avoid division by 0 warning (it's 0/0, since
+        # E field inside PEC is also 0); then by the end, zero out E inside PEC again just to be safe.
+        outside_pec = ~np.isclose(split_curl, 0)
+        split_curl_scaling = np.copy(split_curl)
+        split_curl_scaling[~outside_pec] = 1.0
+
+        E = E.reshape(3, Nx, Ny, field_shape[-1])
+        E /= split_curl_scaling[:, :, :, np.newaxis]
+        E *= outside_pec[:, :, :, np.newaxis]
+        E = E.reshape(field_shape)
+        return E
+
+    @staticmethod
+    def make_pml_invariant(Nxy, tensor, num_pml):
+        """For a given epsilon or mu tensor of shape ``(3, 3, Nx, Ny)``, and ``num_pml`` pml layers
+        along ``x`` and ``y``, make all the tensor values in the PML equal by replicating the first
+        pixel into the PML."""
+
+        Nx, Ny = Nxy
+        new_ten = tensor.reshape((3, 3, Nx, Ny))
+        new_ten[:, :, : num_pml[0], :] = new_ten[:, :, num_pml[0], :][:, :, None, :]
+        new_ten[:, :, Nx - num_pml[0] + 1 :, :] = new_ten[:, :, Nx - num_pml[0], :][:, :, None, :]
+        new_ten[:, :, :, : num_pml[1]] = new_ten[:, :, :, num_pml[1]][:, :, :, None]
+        new_ten[:, :, :, Ny - num_pml[1] + 1 :] = new_ten[:, :, :, Ny - num_pml[1]][:, :, :, None]
+        return new_ten.reshape((3, 3, -1))
+
+    @staticmethod
+    def split_curl_field_postprocess_inverse(split_curl, E):
+        """E has the shape (3, N, num_modes)"""
+        raise RuntimeError("Split curl not yet implemented for relative mode solver.")
 
 
 def compute_modes(*args, **kwargs) -> Tuple[Numpy, Numpy, str]:

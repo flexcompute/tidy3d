@@ -1,13 +1,14 @@
 """Tests generating meshes."""
-import numpy as np
+
 import warnings
+
+import numpy as np
 import pytest
-
 import tidy3d as td
-from tidy3d.constants import fp_eps
 from tidy3d.components.grid.mesher import GradedMesher
+from tidy3d.constants import fp_eps
 
-from ..utils import assert_log_level, log_capture
+from ..utils import assert_log_level, cartesian_to_unstructured
 
 np.random.seed(4)
 
@@ -72,7 +73,7 @@ def validate_dl_in_interval(
 def test_uniform_grid_in_interval():
     """Uniform mesh in an interval"""
 
-    for i in range(100):
+    for _ in range(100):
         len_interval = 10.0 - np.random.random(1)[0]
         # max_scale = 1, but left_dl != right_dl
         left_dl = np.random.random(1)[0]
@@ -131,7 +132,7 @@ def test_asending_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = 10
@@ -170,7 +171,7 @@ def test_asending_plateau_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = 10
@@ -205,7 +206,7 @@ def test_asending_plateau_desending_grid_in_interval():
     validate_dl_in_interval(dl, max_scale, left_dl, right_dl, max_dl, len_interval)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = np.random.random(1)[0]
@@ -243,7 +244,7 @@ def test_asending_desending_grid_in_interval():
     # print(dl)
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.random(1)[0]
         right_dl = np.random.random(1)[0]
@@ -266,7 +267,7 @@ def test_grid_in_interval():
     """Nonuniform mesh in an interval"""
 
     # randoms
-    for i in range(100):
+    for _ in range(100):
         max_scale = 1 + np.random.random(1)[0]
         left_dl = np.random.randint(1, 10) * np.random.random(1)[0]
         right_dl = np.random.randint(1, 10) * np.random.random(1)[0]
@@ -309,7 +310,7 @@ def test_grid_refinement():
 
     num_intervals = 100
     max_shrink = 1
-    for i in range(50):
+    for _ in range(50):
         max_dl_list = np.random.random(num_intervals)
         len_interval_list = np.random.random(num_intervals) * 10
         too_short_ind = len_interval_list < max_dl_list
@@ -621,7 +622,7 @@ def test_mesher_timeout():
     mediums = [td.Medium(permittivity=n**2) for n in (1 + (n_max - 1) * np.random.rand(100))]
 
     boxes = []
-    for i in range(num_boxes):
+    for _ in range(num_boxes):
         center = sim_size * (np.random.rand(3) - 0.5)
         center[0] = 0
         size = np.abs(box_scale * np.random.randn(3))
@@ -673,7 +674,7 @@ def test_small_structure_size(log_capture):
     # Warning not raised if structure is higher index
     log_capture.clear()
     box2 = box.updated_copy(medium=td.Medium(permittivity=300))
-    sim2 = sim.updated_copy(structures=[box2])
+    sim.updated_copy(structures=[box2])
     assert len(log_capture) == 0
 
     # Warning not raised if structure is covered by an override structure
@@ -691,7 +692,7 @@ def test_small_structure_size(log_capture):
     box3 = td.Structure(
         geometry=td.Box(center=(box_size, 0, 0), size=(box_size, td.inf, td.inf)), medium=medium
     )
-    sim4 = sim.updated_copy(structures=[box3, box])
+    sim.updated_copy(structures=[box3, box])
     assert_log_level(log_capture, "WARNING")
 
 
@@ -707,7 +708,9 @@ def test_shapely_strtree_warnings():
         )
 
 
-def test_anisotropic_material_meshing():
+@pytest.mark.parametrize("z", [[0, 1], [0]])
+@pytest.mark.parametrize("unstructured", [True, False])
+def test_anisotropic_material_meshing(unstructured, z):
     """Make sure the largest propagation index defines refinement in all directions."""
     perm_diag = [3, 2, 1]
     cond_diag = [0.2, 0.15, 0.1]
@@ -731,18 +734,21 @@ def test_anisotropic_material_meshing():
         ),
     )
 
-    coords = dict(x=[0], y=[0], z=[0])
+    coords = dict(x=[0, 1], y=[0, 1], z=z)
+    ones = td.SpatialDataArray(np.ones((2, 2, len(z))), coords=coords)
+    if unstructured:
+        ones = cartesian_to_unstructured(ones, seed=951)
     custom_medium_xx = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[0] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[0] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[0] * ones,
+        conductivity=cond_diag[0] * ones,
     )
     custom_medium_yy = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[1] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[1] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[1] * ones,
+        conductivity=cond_diag[1] * ones,
     )
     custom_medium_zz = td.CustomMedium(
-        permittivity=td.SpatialDataArray(perm_diag[2] * np.ones((1, 1, 1)), coords=coords),
-        conductivity=td.SpatialDataArray(cond_diag[2] * np.ones((1, 1, 1)), coords=coords),
+        permittivity=perm_diag[2] * ones,
+        conductivity=cond_diag[2] * ones,
     )
     box_diag_custom = td.Structure(
         geometry=box,

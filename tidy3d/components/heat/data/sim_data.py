@@ -1,19 +1,20 @@
 """Defines heat simulation data class"""
+
 from __future__ import annotations
+
 from typing import Tuple
 
 import numpy as np
 import pydantic.v1 as pd
 
-from .monitor_data import HeatMonitorDataType, TemperatureData
-from ..simulation import HeatSimulation
-
-from ...data.dataset import UnstructuredGridDataset, TetrahedralGridDataset, TriangularGridDataset
-from ...data.data_array import SpatialDataArray
-from ...base_sim.data.sim_data import AbstractSimulationData
-from ...types import Ax, RealFieldVal, Literal
-from ...viz import equal_aspect, add_ax_if_none
 from ....exceptions import DataError
+from ...base_sim.data.sim_data import AbstractSimulationData
+from ...data.data_array import SpatialDataArray
+from ...data.dataset import TetrahedralGridDataset, TriangularGridDataset, UnstructuredGridDataset
+from ...types import Ax, Literal, RealFieldVal
+from ...viz import add_ax_if_none, equal_aspect
+from ..simulation import HeatSimulation
+from .monitor_data import HeatMonitorDataType, TemperatureData
 
 
 class HeatSimulationData(AbstractSimulationData):
