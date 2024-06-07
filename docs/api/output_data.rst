@@ -30,6 +30,7 @@ Collections of Data from single monitor
    tidy3d.FieldProjectionCartesianData
    tidy3d.FieldProjectionKSpaceData
    tidy3d.DiffractionData
+   tidy3d.DirectivityData
 
 Individual Datasets
 -------------------
@@ -51,3 +52,4 @@ Individual Datasets
    tidy3d.FieldProjectionCartesianDataArray
    tidy3d.FieldProjectionKSpaceDataArray
    tidy3d.DiffractionDataArray
+   tidy3d.DirectivityDataArray
