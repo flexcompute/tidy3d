@@ -325,6 +325,10 @@ def test_monitor():
     size = (1, 2, 3)
     center = (1, 2, 3)
 
+    pd = np.atleast_1d(40000)
+    thetas = np.linspace(0, 2 * np.pi, 100)
+    phis = np.linspace(0, np.pi, 100)
+
     m1 = td.FieldMonitor(size=size, center=center, freqs=FREQS, name="test_monitor")
     _ = td.FieldMonitor.surfaces(size=size, center=center, freqs=FREQS, name="test_monitor")
     m2 = td.FieldTimeMonitor(size=size, center=center, name="test_mon")
@@ -342,10 +346,19 @@ def test_monitor():
         direction="-",
     )
     m7 = td.PermittivityMonitor(size=size, center=center, freqs=FREQS, name="perm")
+    m8 = td.DirectivityMonitor(
+        size=size,
+        center=center,
+        theta=thetas,
+        phi=phis,
+        proj_distance=pd,
+        freqs=FREQS,
+        name="directivity",
+    )
 
     tmesh = np.linspace(0, 1, 10)
 
-    for m in [m1, m2, m3, m4, m5, m6, m7]:
+    for m in [m1, m2, m3, m4, m5, m6, m7, m8]:
         # m.plot(y=2)
         # plt.close()
         m.storage_size(num_cells=100, tmesh=tmesh)

@@ -21,6 +21,7 @@ from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -59,6 +60,7 @@ from ..validators import enforce_monitor_fields_present, required_if_symmetry_pr
 from .data_array import (
     DataArray,
     DiffractionDataArray,
+    DirectivityDataArray,
     EMEFreqModeDataArray,
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -1972,6 +1974,34 @@ class FluxTimeData(MonitorData):
     )
 
 
+class DirectivityData(MonitorData):
+    """
+    Data associated with a :class:`.DirectivityMonitor`.
+
+    Example
+    -------
+    >>> from tidy3d import DirectivityDataArray
+    >>> f = np.linspace(1e14, 2e14, 10)
+    >>> r = np.atleast_1d(5)
+    >>> theta = np.linspace(0, np.pi, 10)
+    >>> phi = np.linspace(0, 2*np.pi, 20)
+    >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
+    >>> scalar_field = DirectivityDataArray(farfield_values, coords=coords)
+    >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
+    >>> data = DirectivityData(monitor=monitor,Directivity=scalar_field)
+    """
+
+    monitor: DirectivityMonitor = pd.Field(
+        ...,
+        title="Directivity monitor",
+        description="Monitor describing the angle-based projection grid on which to measure directivity data.",
+    )
+
+    directivity: DirectivityDataArray = pd.Field(
+        ..., title="Directivity", description="Directivity with an angle-based projection grid."
+    )
+
+
 ProjFieldType = Union[
     FieldProjectionAngleDataArray,
     FieldProjectionCartesianDataArray,
@@ -2957,6 +2987,7 @@ MonitorDataTypes = (
     FieldProjectionCartesianData,
     FieldProjectionAngleData,
     DiffractionData,
+    DirectivityData,
 )
 
 MonitorDataType = Union[MonitorDataTypes]

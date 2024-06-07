@@ -40,6 +40,7 @@ from .components.data.data_array import (
     CellDataArray,
     ChargeDataArray,
     DiffractionDataArray,
+    DirectivityDataArray,
     EMECoefficientDataArray,
     EMEModeIndexDataArray,
     EMEScalarFieldDataArray,
@@ -71,6 +72,7 @@ from .components.data.dataset import (
 from .components.data.monitor_data import (
     AbstractFieldProjectionData,
     DiffractionData,
+    DirectivityData,
     FieldData,
     FieldProjectionAngleData,
     FieldProjectionCartesianData,
@@ -174,6 +176,7 @@ from .components.mode import ModeSpec
 # monitors
 from .components.monitor import (
     DiffractionMonitor,
+    DirectivityMonitor,
     FieldMonitor,
     FieldProjectionAngleMonitor,
     FieldProjectionCartesianMonitor,
@@ -357,6 +360,7 @@ __all__ = [
     "FieldProjectionKSpaceMonitor",
     "FieldProjectionSurface",
     "DiffractionMonitor",
+    "DirectivityMonitor",
     "RunTimeSpec",
     "Simulation",
     "FieldProjector",
@@ -372,6 +376,7 @@ __all__ = [
     "FieldProjectionCartesianDataArray",
     "FieldProjectionKSpaceDataArray",
     "DiffractionDataArray",
+    "DirectivityDataArray",
     "HeatDataArray",
     "ChargeDataArray",
     "FieldDataset",
@@ -390,6 +395,7 @@ __all__ = [
     "FieldProjectionCartesianData",
     "FieldProjectionKSpaceData",
     "DiffractionData",
+    "DirectivityData",
     "SimulationData",
     "DATA_TYPE_MAP",
     "BoundarySpec",

@@ -8,6 +8,7 @@ import tidy3d as td
 from tidy3d.components.data.data_array import FreqModeDataArray
 from tidy3d.components.data.monitor_data import (
     DiffractionData,
+    DirectivityData,
     FieldData,
     FieldTimeData,
     FluxData,
@@ -20,6 +21,7 @@ from tidy3d.exceptions import DataError
 from ..utils import assert_log_level
 from .test_data_arrays import (
     DIFFRACTION_MONITOR,
+    DIRECTIVITY_MONITOR,
     FIELD_MONITOR,
     FIELD_MONITOR_2D,
     FIELD_TIME_MONITOR,
@@ -32,6 +34,7 @@ from .test_data_arrays import (
     SIM,
     SIM_SYM,
     make_diffraction_data_array,
+    make_directivity_data_array,
     make_flux_data_array,
     make_flux_time_data_array,
     make_mode_amps_data_array,
@@ -50,6 +53,7 @@ FLUX_TIME = make_flux_time_data_array()
 GRID_CORRECTION = FreqModeDataArray(
     1 + 0.01 * np.random.rand(*N_COMPLEX.shape), coords=N_COMPLEX.coords
 )
+DIRECTIVITY = make_directivity_data_array()
 
 """ Make the montor data """
 
@@ -183,6 +187,10 @@ def make_flux_data():
     return FluxData(monitor=FLUX_MONITOR, flux=FLUX.copy())
 
 
+def make_directivity_data():
+    return DirectivityData(monitor=DIRECTIVITY_MONITOR, directivity=DIRECTIVITY.copy())
+
+
 def make_flux_time_data():
     return FluxTimeData(monitor=FLUX_TIME_MONITOR, flux=FLUX_TIME.copy())
 
@@ -305,6 +313,11 @@ def test_flux_data():
 def test_flux_time_data():
     data = make_flux_time_data()
     _ = data.flux
+
+
+def test_directivity_data():
+    data = make_directivity_data()
+    _ = data.directivity
 
 
 def test_diffraction_data():
