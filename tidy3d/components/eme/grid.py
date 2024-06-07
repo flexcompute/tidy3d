@@ -14,7 +14,7 @@ from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ..geometry.base import Box
 from ..grid.grid import Coords1D
 from ..mode import ModeSpec
-from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq, annotate_type
+from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq
 
 # grid limits
 MAX_NUM_MODES = 100
@@ -277,7 +277,7 @@ class EMECompositeGrid(EMEGridSpec):
     ... )
     """
 
-    subgrids: List[annotate_type(EMESubgridType)] = pd.Field(
+    subgrids: List[EMESubgridType] = pd.Field(
         ..., title="Subgrids", description="Subgrids in the composite grid."
     )
 

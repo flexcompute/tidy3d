@@ -116,3 +116,13 @@ Material Library
 
 .. toctree::
    material_library
+
+
+Abstract Classes
+-----------------
+
+.. autosummary::
+   :toctree: _autosummary/
+
+   tidy3d.components.medium.AbstractPerturbationMedium
+   tidy3d.components.medium.NonlinearModel

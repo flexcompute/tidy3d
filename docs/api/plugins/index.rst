@@ -4,17 +4,17 @@ Plugins
 .. toctree::
     :hidden:
 
-    mode_solver
-    dispersion
-    polyslab
-    smatrix
-    resonance
-    autograd
-    adjoint
-    design
-    invdes
-    waveguide
-    microwave
+    ./mode_solver
+    ./dispersion
+    ./polyslab
+    ./smatrix
+    ./resonance
+    ./autograd
+    ./adjoint
+    ./invdes
+    ./design
+    ./waveguide
+    ./microwave
 
 
 .. include:: /api/plugins/mode_solver.rst
