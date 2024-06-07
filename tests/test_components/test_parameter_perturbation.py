@@ -6,10 +6,7 @@ import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 
-from ..utils import cartesian_to_unstructured
-
-from ..utils import assert_log_level, AssertLogLevel
-from ..utils import log_capture  # noqa: F401
+from ..utils import cartesian_to_unstructured, AssertLogLevel
 
 sp_arr = td.SpatialDataArray(300 * np.ones((2, 2, 2)), coords=dict(x=[1, 2], y=[3, 4], z=[5, 6]))
 sp_arr_u = cartesian_to_unstructured(sp_arr)

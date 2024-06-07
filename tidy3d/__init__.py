@@ -190,11 +190,11 @@ from .components.monitor import (
 from .components.parameter_perturbation import (
     CustomChargePerturbation,
     CustomHeatPerturbation,
+    IndexPerturbation,
     LinearChargePerturbation,
     LinearHeatPerturbation,
     ParameterPerturbation,
     PermittivityPerturbation,
-    IndexPerturbation,
 )
 
 # run time spec

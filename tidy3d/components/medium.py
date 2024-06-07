@@ -49,7 +49,11 @@ from .data.validators import validate_no_nans
 from .geometry.base import Geometry
 from .grid.grid import Coords, Grid
 from .heat_spec import HeatSpecType
-from .parameter_perturbation import ParameterPerturbation, PermittivityPerturbation, IndexPerturbation
+from .parameter_perturbation import (
+    IndexPerturbation,
+    ParameterPerturbation,
+    PermittivityPerturbation,
+)
 from .time_modulation import ModulationSpec
 from .transformation import RotationType
 from .types import (
@@ -65,7 +69,7 @@ from .types import (
     PoleAndResidue,
     TensorReal,
 )
-from .validators import validate_name_str, validate_parameter_perturbation
+from .validators import _warn_potential_error, validate_name_str, validate_parameter_perturbation
 from .viz import add_ax_if_none
 
 # evaluate frequency as this number (Hz) if inf

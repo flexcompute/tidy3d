@@ -5,7 +5,6 @@ import pytest
 import pydantic.v1 as pydantic
 import tidy3d as td
 from ..utils import AssertLogLevel, cartesian_to_unstructured
-from ..utils import log_capture  # noqa: F401
 
 
 @pytest.mark.parametrize("unstructured", [False, True])

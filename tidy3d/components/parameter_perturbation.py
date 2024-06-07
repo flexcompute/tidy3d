@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import functools
 from abc import ABC, abstractmethod
-from typing import Callable, List, Tuple, Union, Optional
+from typing import Callable, List, Optional, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -13,7 +13,7 @@ import pydantic.v1 as pd
 from ..components.data.validators import validate_no_nans
 from ..components.types import TYPE_TAG_STR, ArrayLike, Ax, Complex, FieldVal, InterpMethod
 from ..components.viz import add_ax_if_none
-from ..constants import CMCUBE, KELVIN, PERCMCUBE, inf
+from ..constants import CMCUBE, EPSILON_0, KELVIN, PERCMCUBE, inf
 from ..exceptions import DataError
 from ..log import log
 from .base import Tidy3dBaseModel, cached_property
