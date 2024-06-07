@@ -19,7 +19,7 @@ The `latest` branch holds the state of the docs that we want to host in `latest`
 The `stable` version of the docs on our website is built based on the last version tag which is not a pre-release tag (no `rc`  ending).
 
 Hot Fix & Submodule Updates
-'''''''''''''''''''''''''''
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To make a “hot fix” (eg fix a typo, add a notebook, update the release FAQ), just update the ``latest`` branch in ``tidy3d`` repo. This should automatically sync to `tidy3d-docs`, and trigger a docs rebuild. **However, we should avoid this as this will cause the ``develop`` and ``latest branches`` to diverge.** Ideally, these hot fixes could wait until the next pre/post-release to be propagated through.
 

@@ -644,7 +644,7 @@ def load(
         After the simulation is complete, you can load the results into a :class:`.SimulationData` object by its
         ``task_id`` using:
 
-        .. code-block:: python py
+        .. code-block:: python
 
             sim_data = web.load(task_id, path="outt/sim.hdf5", verbose=verbose)
 

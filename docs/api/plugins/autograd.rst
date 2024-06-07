@@ -5,7 +5,7 @@ Automatic Differentiation with Autograd
 
 .. toctree::
 
-    ../../../tidy3d/plugins/autograd/README
+    ./../../../tidy3d/plugins/autograd/README
 
 .. autosummary::
    :toctree: ../_autosummary/
