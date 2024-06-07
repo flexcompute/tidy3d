@@ -32,14 +32,14 @@ full_build = True
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("_ext"))
-sys.path.insert(0, os.path.abspath("source"))
-sys.path.insert(0, os.path.abspath("notebooks"))
-sys.path.insert(0, os.path.abspath(""))
-sys.path.insert(0, os.path.abspath("../tidy3d"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
-sys.path.insert(0, os.path.abspath("../tidy3d/web"))
-sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
+# sys.path.insert(0, os.path.abspath("source"))
+# sys.path.insert(0, os.path.abspath("notebooks"))
+# # sys.path.insert(0, os.path.abspath(""))
+# sys.path.insert(0, os.path.abspath("../tidy3d"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/web"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
 
 # -- Project information -----------------------------------------------------
 
