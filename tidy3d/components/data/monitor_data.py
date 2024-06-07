@@ -6,16 +6,17 @@ import warnings
 from abc import ABC
 from typing import Any, Callable, Dict, List, Tuple, Union
 
-import numpy as np
+import autograd.numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 from pandas import DataFrame
 
-from ...constants import C_0, ETA_0, MICROMETER
+from ...constants import C_0, ETA_0, MICROMETER, MU_0
 from ...exceptions import DataError, SetupError, Tidy3dNotImplementedError, ValidationError
 from ...log import log
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
+from ..geometry.base import Box
 from ..grid.grid import Coords, Grid
 from ..medium import Medium, MediumType
 from ..monitor import (
@@ -33,7 +34,16 @@ from ..monitor import (
     MonitorType,
     PermittivityMonitor,
 )
-from ..source import CustomFieldSource, GaussianPulse, ModeSource, PlaneWave, Source, SourceTimeType
+from ..source import (
+    CustomCurrentSource,
+    CustomFieldSource,
+    GaussianPulse,
+    ModeSource,
+    PlaneWave,
+    PointDipole,
+    Source,
+    SourceTimeType,
+)
 from ..types import (
     ArrayFloat1D,
     ArrayFloat2D,
@@ -76,6 +86,9 @@ from .dataset import (
 )
 
 Coords1D = ArrayFloat1D
+
+# how much to shift the adjoint field source for 0-D axes dimensions
+SHIFT_VALUE_ADJ_FLD_SRC = 1e-5
 
 
 class MonitorData(AbstractMonitorData, ABC):
@@ -574,9 +587,12 @@ class ElectromagneticFieldData(AbstractFieldData, ElectromagneticFieldDataset, A
         tan_fields = self._colocated_tangential_fields
         dim1, dim2 = self._tangential_dims
 
-        e_x_h_star = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
-        e_x_h_star -= tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
+        e1_h2 = tan_fields["E" + dim1] * tan_fields["H" + dim2].conj()
+        e2_h1 = tan_fields["E" + dim2] * tan_fields["H" + dim1].conj()
+
+        e_x_h_star = e1_h2 - e2_h1
         poynting = 0.5 * np.real(e_x_h_star)
+
         return poynting
 
     def package_flux_results(self, flux_values: xr.DataArray) -> Any:
@@ -995,6 +1011,110 @@ class FieldData(FieldDataset, ElectromagneticFieldData):
         return CustomFieldSource(
             field_dataset=dataset, source_time=source_time, center=center, size=size, **kwargs
         )
+
+    def make_adjoint_sources(
+        self, dataset_names: list[str]
+    ) -> List[Union[CustomCurrentSource, PointDipole]]:
+        """Converts a :class:`.FieldData` to a list of adjoint current or point sources."""
+
+        if np.allclose(self.monitor.size, 0):
+            return self.to_adjoint_point_sources()
+
+        return self.to_adjoint_field_sources()
+
+    def to_adjoint_point_sources(self) -> List[PointDipole]:
+        """Create adjoint point dipole source if this field data contains one item."""
+
+        sources = []
+
+        for polarization, field_component in self.field_components.items():
+            if field_component is None:
+                continue
+
+            for freq0 in field_component.coords["f"]:
+                omega0 = 2 * np.pi * freq0
+                scaling_factor = 1 / (MU_0 * omega0)
+
+                forward_amp = self.get_amplitude(field_component.sel(f=freq0))
+
+                adj_phase = np.pi + np.angle(forward_amp)
+                adj_amp = scaling_factor * forward_amp
+
+                src_adj = PointDipole(
+                    center=self.monitor.center,
+                    polarization=polarization,
+                    source_time=GaussianPulse(
+                        freq0=freq0,
+                        fwidth=freq0 / 10,  # TODO: how to set this properly?
+                        amplitude=abs(adj_amp),
+                        phase=adj_phase,
+                    ),
+                    interpolate=True,
+                )
+
+                sources.append(src_adj)
+
+        return sources
+
+    def to_adjoint_field_sources(self) -> List[CustomCurrentSource]:
+        """Create adjoint custom field sources if this field data has some dimensionality."""
+
+        sources = []
+
+        # Define source geometry based on coordinates in the data
+        data_mins = []
+        data_maxs = []
+
+        def shift_value(coords) -> float:
+            """How much to shift the geometry by along a dimension (only if > 1D)."""
+            return SHIFT_VALUE_ADJ_FLD_SRC if len(coords) > 1 else 0
+
+        for _, field_component in self.field_components.items():
+            coords = field_component.coords
+            data_mins.append({key: min(val) + shift_value(val) for key, val in coords.items()})
+            data_maxs.append({key: max(val) + shift_value(val) for key, val in coords.items()})
+
+        rmin = []
+        rmax = []
+        for dim in "xyz":
+            rmin.append(max(val[dim] for val in data_mins))
+            rmax.append(min(val[dim] for val in data_maxs))
+
+        source_geo = Box.from_bounds(rmin=rmin, rmax=rmax)
+
+        # Define source dataset
+        # Offset coordinates by source center since local coords are assumed in CustomCurrentSource
+
+        for freq0 in tuple(self.field_components.values())[0].coords["f"]:
+            src_field_components = {}
+            for name, field_component in self.field_components.items():
+                field_component = field_component.sel(f=freq0)
+                forward_amps = field_component.values
+                values = -1j * forward_amps
+                coords = dict(field_component.coords.copy())
+                for dim, key in enumerate("xyz"):
+                    coords[key] = np.array(coords[key]) - source_geo.center[dim]
+                coords["f"] = np.array([freq0])
+                values = np.expand_dims(values, axis=-1)
+                if not np.all(values == 0):
+                    src_field_components[name] = ScalarFieldDataArray(values, coords=coords)
+
+            dataset = FieldDataset(**src_field_components)
+
+            custom_source = CustomCurrentSource(
+                center=source_geo.center,
+                size=source_geo.size,
+                source_time=GaussianPulse(
+                    freq0=freq0,
+                    fwidth=freq0 / 10,  # TODO: how to set this properly?
+                ),
+                current_dataset=dataset,
+                interpolate=True,
+            )
+
+            sources.append(custom_source)
+
+        return sources
 
 
 class FieldTimeData(FieldTimeDataset, ElectromagneticFieldData):

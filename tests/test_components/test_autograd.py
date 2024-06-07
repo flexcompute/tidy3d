@@ -263,7 +263,7 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         name="mode",
     )
 
-    def mode_postprocess_fn(mnt_data):
+    def mode_postprocess_fn(sim_data, mnt_data):
         return anp.sum(abs(mnt_data.amps.values) ** 2)
 
     diff_mnt = td.DiffractionMonitor(
@@ -274,12 +274,44 @@ def make_monitors() -> dict[str, tuple[td.Monitor, typing.Callable[[td.Simulatio
         name="diff",
     )
 
-    def diff_postprocess_fn(mnt_data):
+    def diff_postprocess_fn(sim_data, mnt_data):
         return anp.sum(abs(mnt_data.amps.values) ** 2)
+
+    field_vol = td.FieldMonitor(
+        size=(1, 1, 0),
+        center=(0, 0, -LZ / 2 + WVL),
+        freqs=[FREQ0],
+        name="field_vol",
+    )
+
+    def field_vol_postprocess_fn(sim_data, mnt_data):
+        value = 0.0
+        for _, val in mnt_data.field_components.items():
+            value += abs(anp.sum(val.values))
+        intensity = anp.nan_to_num(anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values))
+        value += intensity
+        # value += anp.sum(mnt_data.flux.values) # not yet supported
+        return value
+
+    field_point = td.FieldMonitor(
+        size=(0, 0, 0),
+        center=(0, 0, -LZ / 2 + WVL),
+        freqs=[FREQ0],
+        name="field_point",
+    )
+
+    def field_point_postprocess_fn(sim_data, mnt_data):
+        value = 0.0
+        for _, val in mnt_data.field_components.items():
+            value += abs(anp.sum(val.values))
+        value += anp.sum(sim_data.get_intensity(mnt_data.monitor.name).values)
+        return value
 
     return dict(
         mode=(mode_mnt, mode_postprocess_fn),
         diff=(diff_mnt, diff_postprocess_fn),
+        field_vol=(field_vol, field_vol_postprocess_fn),
+        field_point=(field_point, field_point_postprocess_fn),
     )
 
 
@@ -304,7 +336,7 @@ structure_keys_ = (
     "custom_med_vec",
     "polyslab",
 )
-monitor_keys_ = ("mode", "diff")
+monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
 # generate combos of all structures with each monitor and all monitors with each structure
 ALL_KEY = "<ALL>"
@@ -360,7 +392,7 @@ def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     def postprocess(data: td.SimulationData) -> float:
         """Postprocess the dataset."""
         mnt_data = data[monitor_key]
-        return monitor_pp_fn(mnt_data)
+        return monitor_pp_fn(data, mnt_data)
 
     return dict(sim=make_sim, postprocess=postprocess)
 
@@ -481,7 +513,7 @@ def test_autograd_speed_num_structures(use_emulated_run):
         """Objective function."""
         sim = make_sim(*args)
         data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data[monitor_key])
+        value = postprocess(data, data[monitor_key])
         return value
 
     # if speed test, get the profile
@@ -534,7 +566,7 @@ def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
         """Objective function."""
         sim = make_sim(*args)
         data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data[monitor_key])
+        value = postprocess(data, data[monitor_key])
         return value
 
     monkeypatch.setattr(td.SimulationData, "make_adjoint_sources", lambda *args, **kwargs: [])
@@ -558,7 +590,7 @@ def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_em
         """Objective function."""
         sim = make_sim(*args)
         data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data[monitor_key])
+        value = postprocess(data, data[monitor_key])
         return value
 
     def fail(*args, **kwargs):
@@ -579,7 +611,7 @@ def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_em
         data = run_async(sims, verbose=False)
         value = 0.0
         for _, val in data.items():
-            value += postprocess(val[monitor_key])
+            value += postprocess(val, val[monitor_key])
         return value
 
     """ if autograd run_async raises exception, raise a warning and continue with regular ."""
@@ -647,7 +679,7 @@ def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
         """Objective function."""
         sim = make_sim(*args)
         data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data[monitor_key])
+        value = postprocess(data, data[monitor_key])
         return value
 
     with pytest.raises(ValueError):

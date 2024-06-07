@@ -116,11 +116,13 @@ The following components are traceable as inputs to the `td.Simulation`
 - `Medium.permittivity`
 - `Medium.conductivity`
 - `CustomMedium.permittivity`
+- `CustomMedium.eps_dataset`
 
 The following components are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`
 - `DiffractionData.amps`
+- `FieldData.field_components`
 
 We currently have the following restrictions:
 
@@ -136,9 +138,10 @@ Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
 - support for multi-frequency monitors in certain situations (single adjoint source).
 - server-side gradient processing.
 
-- `FieldData` components, including `FieldData.flux`
-- `SimulationData.get_intensity`
-- `SimulationData.get_poynting`
+- `FieldData` operations:
+  - `FieldData.flux`
+  - `SimulationData.get_intensity`
+  - `SimulationData.get_poynting`
 
 - `PoleResidue` and other dispersive models.
 - custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
