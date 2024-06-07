@@ -50,7 +50,7 @@ However, if we do decide to commit with emojis, I believe it would be worth havi
 
 
 Package Speedup Best Practices
-----------------------------
+--------------------------------
 
 ``tidy3d`` is a pretty big project already, and will get bigger. We want to optimise the performance of the codebase throughout the multiple operations that we perform.
 
@@ -77,7 +77,7 @@ This is because the latter will import the entire package, which is not necessar
 
 
 Managing Optional Dependencies On-The-Fly
-----------------------------
+------------------------------------------
 
 
 If you look within ``pyproject.toml``, it is possible to see that we have different packages relating to different functionalities that are optional.
