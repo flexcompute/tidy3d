@@ -261,13 +261,15 @@ class Tidy3dBaseModel(pydantic.BaseModel):
             sub_component = sub_component_list[index]
             sub_path = "/".join(path_components[2:])
 
-            sub_component_list[index] = sub_component.updated_copy(path=sub_path, **kwargs)
+            sub_component_list[index] = sub_component.updated_copy(
+                path=sub_path, deep=deep, **kwargs
+            )
             new_component = tuple(sub_component_list)
         else:
             sub_path = "/".join(path_components[1:])
-            new_component = sub_component.updated_copy(path=sub_path, **kwargs)
+            new_component = sub_component.updated_copy(path=sub_path, deep=deep, **kwargs)
 
-        return self._updated_copy(**{field_name: new_component})
+        return self._updated_copy(deep=deep, **{field_name: new_component})
 
     def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""

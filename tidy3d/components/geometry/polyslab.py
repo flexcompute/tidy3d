@@ -1414,8 +1414,7 @@ class PolySlab(base.Planar):
 
         # compute center positions between each edge
         edge_centers_plane = (vertices_next + vertices) / 2.0
-        edge_centers_axis = np.mean(self.slab_bounds) * np.ones(num_vertices)
-
+        edge_centers_axis = self.center_axis * np.ones(num_vertices)
         edge_centers_xyz = self.unpop_axis_vect(edge_centers_axis, edge_centers_plane)
 
         assert edge_centers_xyz.shape == (num_vertices, 3), "something bad happened"
