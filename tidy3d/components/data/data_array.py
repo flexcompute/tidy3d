@@ -79,6 +79,23 @@ class DataArray(xr.DataArray):
             # NOTE: this is done because if we pass the traced array directly, it will create a
             # numpy array of `ArrayBox`, which is extremely slow
 
+    def __deepcopy__(self, memo):
+        """Define the behavior of ``deepcopy()`` a ``xr.DataArray``."""
+
+        # if we detect that this has tracers, we need to shallow copy
+        # otherwise it confuses autograd..
+        if self.has_tracers:
+            return self.__copy__()
+
+        return super().__deepcopy__(memo)
+
+    @property
+    def has_tracers(self) -> bool:
+        """Whether the ``DataArray`` has ``autograd`` derivative information."""
+        traced_data = self.data.dtype == object and isbox(self.data.flat[0])
+        traced_attrs = AUTOGRAD_KEY in self.attrs
+        return traced_data or traced_attrs
+
     @classmethod
     def __get_validators__(cls):
         """Validators that get run when :class:`.DataArray` objects are added to pydantic models."""
