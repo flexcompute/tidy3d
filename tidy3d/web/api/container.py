@@ -215,7 +215,13 @@ class Job(WebContainer):
         # upload kwargs with all fields except task_id
         self_dict = self.dict()
         upload_kwargs = {key: self_dict.get(key) for key in self._upload_fields}
-        return web.upload(**upload_kwargs)
+        # set the cached task_id
+        self.Config.frozen = False
+        self.Config.allow_mutation = True
+        self.task_id_cached = web.upload(**upload_kwargs)
+        self.Config.allow_mutation = False
+        self.Config.frozen = True
+        return self.task_id
 
     def get_info(self) -> TaskInfo:
         """Return information about a :class:`Job`.
