@@ -209,13 +209,13 @@ class Tidy3dBaseModel(pydantic.BaseModel):
         "by calling ``obj.json()``.",
     )
 
-    def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def copy(self, deep: bool = False, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
         kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
-    def updated_copy(self, path: str = None, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def updated_copy(self, path: str = None, deep: bool = False, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values.
 
         Note
@@ -271,7 +271,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
         return self._updated_copy(deep=deep, **{field_name: new_component})
 
-    def _updated_copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
+    def _updated_copy(self, deep: bool = False, **kwargs) -> Tidy3dBaseModel:
         """Make copy of a component instance with ``**kwargs`` indicating updated field values."""
         return self.copy(update=kwargs, deep=deep)
 
