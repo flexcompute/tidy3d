@@ -12,6 +12,7 @@ from .path_integrals import (
     CurrentIntegralAxisAligned,
     VoltageIntegralAxisAligned,
 )
+from .rf_material_library import rf_material_library
 
 __all__ = [
     "AxisAlignedPathIntegral",
@@ -22,4 +23,5 @@ __all__ = [
     "CustomCurrentIntegral2D",
     "ImpedanceCalculator",
     "models",
+    "rf_material_library",
 ]
