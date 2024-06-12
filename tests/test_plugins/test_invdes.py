@@ -6,10 +6,9 @@ import pytest
 import tidy3d as td
 import tidy3d.plugins.invdes as tdi
 
-from ..utils import AssertLogLevel, run_async_emulated, run_emulated
-
 # use single threading pipeline
-from .test_adjoint import use_emulated_run, use_emulated_run_async  # noqa: F401
+from ..test_components.test_autograd import use_emulated_run, use_emulated_run_async  # noqa: F401
+from ..utils import AssertLogLevel, run_async_emulated, run_emulated
 
 FREQ0 = 1e14
 L_SIM = 1.0

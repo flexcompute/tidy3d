@@ -13,8 +13,7 @@ import numpy as np
 import pytest
 import tidy3d as td
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.web import run_async
-from tidy3d.web.api.autograd.autograd import run
+from tidy3d.web.api.autograd.autograd import run, run_async
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -116,16 +115,99 @@ _run_was_emulated = [False]
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
+    import tidy3d
+    from tidy3d.web.api.container import Job
+
     if TEST_MODE in ("pipeline", "speed"):
+        VJP = "VJP"
+        task_id_fwd = "task_fwd"
+        task_id_bwd = "task_bwd"
+
+        cache = {}
+
         import tidy3d.web.api.webapi as webapi
 
+        # reload(tidy3d.web.api.autograd.autograd)
+        from tidy3d.web.api.autograd.autograd import (
+            AUX_KEY_SIM_DATA_FWD,
+            AUX_KEY_SIM_DATA_ORIGINAL,
+            postprocess_adj,
+            postprocess_fwd,
+            setup_run,
+        )
+
+        def emulated_job_run(self: Job) -> td.SimulationData:
+            """What gets called instead of ``web.run()``."""
+
+            sim_data = run_emulated(self.simulation, task_name="test")
+
+            if self.simulation_type == "autograd_fwd":
+                sim_original = self.simulation
+
+                # add gradient monitors and make combined simulation
+                sim_fields = setup_run(sim_original)
+                sim_combined = sim_original.with_adjoint_monitors(sim_fields)
+                sim_data_combined = run_emulated(sim_combined, task_name="test")
+
+                # store the data in aux_data (see commented out lines below)
+                aux_data = {}
+
+                _ = postprocess_fwd(
+                    sim_data_combined=sim_data_combined,
+                    sim_original=sim_original,
+                    aux_data=aux_data,
+                )
+
+                # todo: split into return (original data) and store (fwd data)
+                # sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+                # sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
+
+                # cache it locally for test
+                cache[task_id_fwd] = copy.copy(aux_data)
+
+            elif self.simulation_type == "autograd_bwd":
+                # run the adjoint sim
+                sim_data_adj = run_emulated(self.simulation, task_name="test")
+
+                # grab the fwd and original data from the cache
+                aux_data_fwd = cache[task_id_fwd]
+                sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
+                sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
+
+                # get the original traced fields
+                sim_fields_original = setup_run(simulation=sim_data_orig.simulation)
+
+                # postprocess (compute adjoint gradients)
+                traced_fields_vjp = postprocess_adj(
+                    sim_data_adj=sim_data_adj,
+                    sim_data_orig=sim_data_orig,
+                    sim_data_fwd=sim_data_fwd,
+                    sim_fields_original=sim_fields_original,
+                )
+
+                # cache the results in the VJP key of the cache
+                cache[task_id_bwd] = {VJP: traced_fields_vjp}
+
+            return sim_data
+
         monkeypatch.setattr(webapi, "run", run_emulated)
+        monkeypatch.setattr(Job, "run", emulated_job_run)
+        monkeypatch.setattr(Job, "task_id", task_id_fwd)
+
+        reload(tidy3d.web.api.autograd.autograd)
+
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd,
+            "get_fwd_sim_data",
+            lambda task_id: cache[task_id_fwd][AUX_KEY_SIM_DATA_FWD],
+        )
+        monkeypatch.setattr(
+            tidy3d.web.api.autograd.autograd,
+            "get_vjp_traced_fields",
+            lambda task_id: cache[task_id_bwd][VJP],
+        )
+
         _run_was_emulated[0] = True
-
-        # import here so it uses emulated run
-        from tidy3d.web.api.autograd import autograd
-
-        reload(autograd)
 
 
 @pytest.fixture
@@ -586,6 +668,28 @@ def test_autograd_speed_num_structures(use_emulated_run):
         print(f"{num_structures_test} structures took {t2:.2e} seconds")
 
 
+@pytest.mark.parametrize("structure_key, monitor_key", (("custom_med", "mode"),))
+def test_autograd_server(use_emulated_run, structure_key, monitor_key):
+    """Test an objective function through tidy3d autograd."""
+
+    fn_dict = get_functions(structure_key, monitor_key)
+    make_sim = fn_dict["sim"]
+    postprocess = fn_dict["postprocess"]
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name="autograd_test", verbose=False, local_gradient=False)
+        value = postprocess(data)
+        return value
+
+        val, grad = ag.value_and_grad(objective)(params0)
+        print(val, grad)
+        assert anp.all(grad != 0.0), "some gradients are 0"
+
+    val, grad = ag.value_and_grad(objective)(params0)
+
+
 @pytest.mark.parametrize("structure_key", ("custom_med",))
 def test_sim_full_ops(structure_key):
     """make sure the autograd operations don't error on a simulation containing everything."""
@@ -694,6 +798,7 @@ def test_web_incompatible_inputs(log_capture, monkeypatch):
         raise AssertionError()
 
     monkeypatch.setattr(td.web.api.webapi, "run", catch)
+    monkeypatch.setattr(td.web.api.container.Job, "run", catch)
     monkeypatch.setattr(td.web.api.asynchronous, "run_async", catch)
 
     from tidy3d.web.api.autograd import autograd

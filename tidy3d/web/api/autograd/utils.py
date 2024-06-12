@@ -4,30 +4,6 @@ import typing
 
 import tidy3d as td
 
-""" generic data manipulation """
-
-
-def split_data_list(sim_data: td.SimulationData, num_mnts_original: int) -> tuple[list, list]:
-    """Split data list into original, adjoint field, and adjoint permittivity."""
-
-    data_all = list(sim_data.data)
-    num_mnts_adjoint = (len(data_all) - num_mnts_original) // 2
-
-    td.log.info(
-        f" -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {num_mnts_adjoint} adjoint eps monitors."
-    )
-
-    data_original, data_adjoint = split_list(data_all, index=num_mnts_original)
-
-    return data_original, data_adjoint
-
-
-def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
-    """Split a list at a given index."""
-    x = list(x)
-    return x[:index], x[index:]
-
-
 """ E and D field gradient map calculation helpers. """
 
 
