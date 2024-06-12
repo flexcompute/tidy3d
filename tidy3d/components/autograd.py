@@ -16,8 +16,15 @@ from .types import ArrayFloat2D, ArrayLike, Bound, Size1D
 # add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
 
-# make sure Boxes in tidy3d do shallow copy, otherwise corrupts computational graph
-Box.__deepcopy__ = lambda self, memo: copy.copy(self)
+# make sure Boxes in tidy3d properly define VJPs for copy operations, for computational graph
+_copy = primitive(copy.copy)
+_deepcopy = primitive(copy.deepcopy)
+
+defvjp(_copy, lambda ans, x: lambda g: _copy(g))
+defvjp(_deepcopy, lambda ans, x, memo: lambda g: _deepcopy(g, memo))
+
+Box.__copy__ = lambda v: _copy(v)
+Box.__deepcopy__ = lambda v, memo: _deepcopy(v, memo)
 
 # Types for floats, or collections of floats that can also be autograd tracers
 TracedFloat = typing.Union[float, Box]
