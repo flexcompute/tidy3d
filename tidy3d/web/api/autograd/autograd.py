@@ -409,7 +409,6 @@ def _run_primitive(
         sim_data_combined=sim_data_combined,
         sim_original=sim_original,
         aux_data=aux_data,
-        local_gradient=local_gradient,
     )
     return field_map
 
@@ -457,7 +456,6 @@ def postprocess_fwd(
     sim_data_combined: td.SimulationData,
     sim_original: td.Simulation,
     aux_data: dict,
-    local_gradient: bool,
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map."""
 
@@ -477,18 +475,16 @@ def postprocess_fwd(
     )
     aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_original
 
-    if local_gradient:
-        # construct the 'forward' simulation and its data, which is only used for for gradient calc.
-        sim_fwd = sim_combined.updated_copy(monitors=monitors_fwd)
-        sim_data_fwd = sim_data_combined.updated_copy(
-            simulation=sim_fwd,
-            data=data_fwd,
-            deep=False,
-        )
-        aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
+    # construct the 'forward' simulation and its data, which is only used for for gradient calc.
+    sim_fwd = sim_combined.updated_copy(monitors=monitors_fwd)
+    sim_data_fwd = sim_data_combined.updated_copy(
+        simulation=sim_fwd,
+        data=data_fwd,
+        deep=False,
+    )
+    aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
 
-        # strip out the tracer AutogradFieldMap for the .data from the original sim
-
+    # strip out the tracer AutogradFieldMap for the .data from the original sim
     data_traced = sim_data_original.strip_traced_fields(
         include_untraced_data_arrays=True, starting_path=("data",)
     )
@@ -498,6 +494,16 @@ def postprocess_fwd(
 
 
 """ VJP maker for ADJ pass."""
+
+
+def get_fwd_sim_data(task_id_fwd: str) -> td.SimulationData:
+    """Function to grab the forward simulation data from the server from a task_id."""
+    raise NotImplementedError()
+
+
+def get_vjp_traced_fields(task_id_adj: str) -> AutogradFieldMap:
+    """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
+    raise NotImplementedError()
 
 
 def _run_bwd(
@@ -513,7 +519,12 @@ def _run_bwd(
 
     # get the fwd epsilon and field data from the cached aux_data
     sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-    sim_data_fwd = aux_data.get(AUX_KEY_SIM_DATA_FWD)
+
+    if not local_gradient:
+        task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
+        sim_data_fwd = get_fwd_sim_data(task_id_fwd)
+    else:
+        sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
 
     td.log.info("constructing custom vjp function for backwards pass.")
 
@@ -549,13 +560,8 @@ def _run_bwd(
             run_kwargs["simulation_type"] = "autograd_bwd"
             task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
             run_kwargs["parent_tasks"] = [task_id_fwd]
-            # TODO: run the adjoint special web API? get the field map
-            # job = Job(...)
-            # job.upload()
-            # job.start()
-            # job.monitor()
-            # traced_fields_vjp = download_sim_vjp_autograd(job.task_id)
-            # return traced_fields_vjp
+            _, task_id_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
+            return get_vjp_traced_fields(task_id_adj)
 
         sim_data_adj, _ = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
 
