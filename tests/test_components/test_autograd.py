@@ -1,5 +1,6 @@
 # test autograd integration into tidy3d
 
+import copy
 import cProfile
 import typing
 from importlib import reload
@@ -684,6 +685,34 @@ def test_too_many_traced_structures(monkeypatch, log_capture, use_emulated_run):
 
     with pytest.raises(ValueError):
         ag.grad(objective)(params0)
+
+
+def test_autograd_deepcopy():
+    """make sure deepcopy works as expected in autograd."""
+
+    def post(x, y):
+        return 3 * x + y
+
+    def f1(x):
+        y = copy.deepcopy(x)
+        return post(x, y)
+
+    def f2(x):
+        y = copy.copy(x)
+        return post(x, y)
+
+    def f3(x):
+        y = x
+        return post(x, y)
+
+    x0 = 12.0
+
+    val1, grad1 = ag.value_and_grad(f1)(x0)
+    val2, grad2 = ag.value_and_grad(f2)(x0)
+    val3, grad3 = ag.value_and_grad(f3)(x0)
+
+    assert val1 == val2 == val3
+    assert grad1 == grad2 == grad3
 
 
 # @pytest.mark.timeout(18.0)
