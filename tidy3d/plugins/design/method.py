@@ -1,11 +1,14 @@
 """Defines the methods used for parameter sweep."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Tuple, Union
+from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
 import scipy.stats.qmc as qmc
+from bayes_opt import BayesianOptimization, UtilityFunction
+from bayes_opt.event import Events
+from bayes_opt.logger import JSONLogger
 
 from ... import web
 from ...components.base import Tidy3dBaseModel
@@ -190,6 +193,64 @@ class MethodGrid(MethodIndependent):
         return dict(zip(vals_each_dim.keys(), vals_grid))
 
 
+class MethodBayOpt(MethodIndependent, ABC):
+    """A standard method for performing bayesian optimization search"""
+
+    initial_iter: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of initial random search iterations",
+        description="TBD",
+    )
+
+    n_iter: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of bayesian optimization iterations",
+        description="TBD",
+    )
+
+    acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
+        title="Type of acquisition function",
+        description="TBD",
+        default="ucb",
+    )
+
+    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+        """Defines the search algorithm (sequential)."""
+        boundary_dict = self.sample(parameters)
+        print(f"We print params: {boundary_dict}")
+
+        utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
+        opt = BayesianOptimization(
+            f=fn,
+            pbounds=boundary_dict,
+            random_state=1,
+        )
+
+        logger = JSONLogger(path="./logs")
+        opt.subscribe(Events.OPTIMIZATION_STEP, logger)
+
+        opt.maximize(
+            init_points=self.initial_iter,
+            n_iter=self.n_iter,
+            acquisition_function=utility,
+        )
+
+        # OR
+        # Need method of running initial_iter random points
+        # Need to iterate over n_iter points
+
+        next_point = opt.suggest(utility)
+        next_out = fn(**next_point)
+        opt.register(params=next_point, target=next_out)
+
+    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+        """Defines how the design parameters are sampled."""
+        boundary_dict = {}
+        for design_var in parameters:
+            boundary_dict[design_var.name] = design_var.span
+        return boundary_dict
+
+
 class AbstractMethodRandom(MethodIndependent, ABC):
     """Select parameters with an object with a ``random`` method."""
 
@@ -354,4 +415,4 @@ class MethodRandomCustom(AbstractMethodRandom):
         return self.sampler
 
 
-MethodType = Union[MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom]
+MethodType = Union[MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom, MethodBayOpt]
