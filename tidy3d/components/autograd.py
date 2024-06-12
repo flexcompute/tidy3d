@@ -1,5 +1,6 @@
 # utilities for working with autograd
 
+import copy
 import typing
 
 import numpy as np
@@ -12,9 +13,11 @@ from tidy3d.components.type_util import _add_schema
 
 from .types import ArrayFloat2D, ArrayLike, Bound, Size1D
 
+# add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
 
-# TODO: should we use ArrayBox? Box is more general
+# make sure Boxes in tidy3d do shallow copy, otherwise corrupts computational graph
+Box.__deepcopy__ = lambda self, memo: copy.copy(self)
 
 # Types for floats, or collections of floats that can also be autograd tracers
 TracedFloat = typing.Union[float, Box]
