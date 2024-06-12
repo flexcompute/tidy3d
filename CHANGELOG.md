@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
+- `autograd` gradient calculations are done server side by default. Behavior can be changed by passing `local_gradient = True` into `web.run()`.
 
 ### Changed
 - Slightly reorganized `web.run` logging when `verbose=True` to make it clearer.
