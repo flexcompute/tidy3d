@@ -9,7 +9,8 @@ import pandas
 import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...web.api.container import BatchData
+
+# NOTE: Coords are args_dict from method and design. This may be changed in future to unify naming
 
 
 class Result(Tidy3dBaseModel):
@@ -61,23 +62,34 @@ class Result(Tidy3dBaseModel):
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_ids: Tuple[Tuple[str, ...], ...] = pd.Field(
+    task_names: list = pd.Field(
         None,
-        title="Task IDs",
-        description="Task IDs for the simulation run in each data point. Only available if "
-        "the parameter sweep function is split into pre and post processing and run with "
-        "'Design.run_batch()', otherwise is ``None``. "
-        "To access all of the data, see ``batch_data``.",
+        title="Task Names",
+        description="Task name of every simulation run during ``DesignSpace.run``. Only available if "
+        "the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
+        "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
     )
 
-    batch_data: BatchData = pd.Field(
+    task_paths: list = pd.Field(
         None,
-        title="Batch Data",
-        description=":class:`BatchData` object storing all of the data for the simulations "
-        " used in this ``Result``. Can be iterated through like a dictionary with "
-        "``for task_name, sim_data in batch_data.items()``. Only available if "
-        "the parameter sweep function is split into pre and post processing and run with "
-        "'Design.run_batch()', otherwise is ``None``.",
+        title="Task Paths",
+        description="Task paths of every simulation run during ``DesignSpace.run``. Useful for loading download ``SimulationData`` hdf5 files."
+        "Only available if the parameter sweep function is split into pre and post processing, otherwise is ``None``. "
+        "Stored in the same format as the output of fn_pre i.e. if pre outputs a dict, this output is a dict with the keys preserved.",
+    )
+
+    aux_values: Tuple[Any, ...] = pd.Field(
+        None,
+        title="Auxiliary values output from the user function",
+        description="The auxiliary return values from the design problem function. This is the collection of objects returned "
+        "alongside the float value used for the optimization. These weren't used to inform the optimizer, if one was used.",
+    )
+
+    optimizer: Any = pd.Field(
+        None,
+        title="Optimizer object",
+        description="The optimizer returned at the end of an optimizer run. Can be used to analyze and plot how the optimization progressed. "
+        "Attributes depend on the optimizer used; a full explaination of the optimizer can be found on associated library doc pages. Will be ``None`` for sampling based methods.",
     )
 
     @pd.validator("coords", always=True)
@@ -94,7 +106,7 @@ class Result(Tidy3dBaseModel):
             if len(_val) != num_dims:
                 raise ValueError(
                     f"Number of 'coords' at index '{i}' ({len(_val)}) "
-                    "doesn't match the number of 'dims' ({num_dims})."
+                    f"doesn't match the number of 'dims' ({num_dims})."
                 )
 
         return val
@@ -138,7 +150,7 @@ class Result(Tidy3dBaseModel):
 
         # if array-like, ith output has key "output {i}"
         if isinstance(value, (tuple, list, np.ndarray)):
-            return tuple(f"output {i}" for i in range(len(value)))
+            return tuple(f"output_{i}" for i in range(len(value)))
 
         # if simply single value (float, int, bool, etc) just label "output"
         return ("output",)
@@ -170,8 +182,17 @@ class Result(Tidy3dBaseModel):
         coords_tuple = tuple(kwargs[dim] for dim in self.dims)
         return self.get_value(coords_tuple)
 
-    def to_dataframe(self) -> pandas.DataFrame:
-        """Data as a `pandas.DataFrame`.
+    def to_dataframe(self, include_aux: bool = False) -> pandas.DataFrame:
+        """Data as a ``pandas.DataFrame``.
+
+        Output a ``pandas.DataFrame`` of the ``Result``. Can include auxiliary data if ``include_aux`` is ``True``
+        and auxiliary data is found in the ``Result``. If auxiliary data is in a dictionary the keys will be used
+        as column names, otherwise they will be labeled ``aux_key_X`` for X auxiliary columns.
+
+        Parameters
+        ----------
+        include_aux: bool = False
+            Toggle to include auxiliary values in the dataframe. Requires auxiliary values in the ``Result``.
 
         Returns
         -------
@@ -186,12 +207,36 @@ class Result(Tidy3dBaseModel):
             data.append(data_i)
 
         val_keys = list(self.value_as_dict(self.values[0])) if self.values else [""]
+
         columns = list(self.dims) + val_keys
+
+        if include_aux:
+            if self.aux_values is not None:
+                # Can use [0] for aux keys as the function is assumed producing the same structure of output each run
+                if all(isinstance(auxs, dict) for auxs in self.aux_values):
+                    expanded_data = [
+                        data_row + list(auxs.values())
+                        for data_row, auxs in zip(data, self.aux_values)
+                    ]
+                    aux_keys = list(self.aux_values[0].keys())
+                else:
+                    expanded_data = [
+                        data_row + aux_row for data_row, aux_row in zip(data, self.aux_values)
+                    ]
+                    aux_keys = [f"aux_key_{val}" for val in range(len(self.aux_values[0]))]
+
+                columns = columns + aux_keys
+                data = expanded_data
+
+            else:
+                raise ValueError(
+                    "``include_aux`` is True but no ``aux_values`` were found in the ``Results``."
+                )
 
         df = pandas.DataFrame(data=data, columns=columns)
 
         attrs = dict(
-            task_ids=self.task_ids,
+            task_names=self.task_names,
             output_names=self.output_names,
             fn_source=self.fn_source,
             dims=self.dims,
@@ -249,7 +294,7 @@ class Result(Tidy3dBaseModel):
             coords=coords,
             values=values,
             output_names=attrs.get("output_names"),
-            task_ids=attrs.get("task_ids"),
+            task_names=attrs.get("task_names"),
             fn_source=attrs.get("fn_source"),
         )
 
@@ -284,7 +329,7 @@ class Result(Tidy3dBaseModel):
                 raise ValueError("Can't combine data where one only one field is `None`.")
             return list(tuple1) + list(tuple2)
 
-        task_ids = combine_tuples(self.task_ids, other.task_ids)
+        task_names = combine_tuples(self.task_names, other.task_names)
         coords = combine_tuples(self.coords, other.coords)
         values = combine_tuples(self.values, other.values)
 
@@ -294,7 +339,7 @@ class Result(Tidy3dBaseModel):
             values=values,
             output_names=self.output_names,
             fn_source=self.fn_source,
-            task_ids=task_ids,
+            task_names=task_names,
         )
 
     def __add__(self, other):
@@ -330,6 +375,21 @@ class Result(Tidy3dBaseModel):
         new_coords.pop(index)
         new_values.pop(index)
 
+        # ParticleSwarm optimizer doesn't work with updated_copy
+        # Creating new result with updated values and coords instead
+        if self.optimizer is not None:
+            new_result = Result(
+                dims=self.dims,
+                values=new_values,
+                coords=new_coords,
+                output_names=self.output_names,
+                fn_source=self.fn_source,
+                task_names=self.task_names,
+                aux_values=self.aux_values,
+                optimizer=self.optimizer,
+            )
+            return new_result
+
         return self.updated_copy(values=new_values, coords=new_coords)
 
     def add(self, fn_args: Dict[str, float], value: Any) -> Result:
@@ -350,5 +410,20 @@ class Result(Tidy3dBaseModel):
 
         new_values = list(self.values) + [value]
         new_coords = list(self.coords) + [tuple(fn_args[dim] for dim in self.dims)]
+
+        # ParticleSwarm optimizer doesn't work with updated_copy
+        # Creating new result with updated values and coords instead
+        if self.optimizer is not None:
+            new_result = Result(
+                dims=self.dims,
+                values=new_values,
+                coords=new_coords,
+                output_names=self.output_names,
+                fn_source=self.fn_source,
+                task_names=self.task_names,
+                aux_values=self.aux_values,
+                optimizer=self.optimizer,
+            )
+            return new_result
 
         return self.updated_copy(values=new_values, coords=new_coords)

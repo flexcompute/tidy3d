@@ -18,12 +18,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added convenience functions `from_terminal_positions` and `from_circular_path` to simplify setup of `VoltageIntegralAxisAligned` and `CustomCurrentIntegral2D`, respectively.
 - Added `axial_ratio` to `DirectivityData.axial_ratio` for the `DirectivityMonitor`, defined as the ratio of the major axis to the minor axis of the polarization ellipse. 
 `ComponentModeler.batch_data` convenience property to access the `BatchData` corresponding to the component modeler run.
+- Added optimization methods to the Design plugin. The plugin has been expanded to include Bayesian optimization, genetic algorithms and particle swarm optimization. Explanations of these methods are available in new and updated notebooks.
+- Added new support functions for the Design plugin: automated batching of `Simulation` objects, and summary functions with `DesignSpace.estimate_cost` and `DesignSpace.summarize`.
 
 ### Changed
 - Priority is given to `snapping_points` in `GridSpec` when close to structure boundaries, which reduces the chance of them being skipped.
 - Gradients for autograd are computed server-side by default. They can be computed locally (requiring more data download) by passing `local_gradient=True` to the `web.run()` and related functions.
 - Passing `path_dir` to `ComponentModeler` methods is deprecated in favor of setting `ComponentModeler.path_dir` and will result in an error if the two don't match.
 - `BatchData` is now a mapping and can be accessed and iterated over like a Python dictionary (`.keys()`, `.values()`, `.items()`).
+- `MethodRandom` and `MethodRandomCustom` have been removed from the Design plugin, and `DesignSpace.run_batch` has been superseded by `.run`.
+- Design plugin has been significantly reworked to improve ease of use and allow for new optimization methods.
 
 ### Fixed
 - Significant speedup for field projection computations.

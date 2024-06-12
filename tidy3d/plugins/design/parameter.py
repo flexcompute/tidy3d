@@ -30,7 +30,7 @@ class Parameter(Tidy3dBaseModel, ABC):
     def _values_unique(cls, val):
         """Supplied unique values."""
         if (val is not None) and (len(set(val)) != len(val)):
-            raise pd.ValidationError("Supplied 'values' were not unique.")
+            raise ValueError("Supplied 'values' were not unique.")
         return val
 
     def sample_grid(self) -> List[Any]:
@@ -51,6 +51,10 @@ class Parameter(Tidy3dBaseModel, ABC):
     def select_from_01(self, pts_01: np.ndarray) -> List[Any]:
         """Select values given a set of points between 0, 1."""
 
+    @abstractmethod
+    def sample_first(self) -> Any:
+        """Output the first allowed sample."""
+
 
 class ParameterNumeric(Parameter, ABC):
     """A variable with numeric values."""
@@ -58,7 +62,7 @@ class ParameterNumeric(Parameter, ABC):
     span: Tuple[Union[float, int], Union[float, int]] = pd.Field(
         ...,
         title="Span",
-        description="(min, max) inclusive range within which the variable should be swept.",
+        description="(min, max) range within which are allowed values for the variable. Is inclusive of max value.",
     )
 
     @pd.validator("span", always=True)
@@ -66,7 +70,7 @@ class ParameterNumeric(Parameter, ABC):
         """Span min <= span max."""
         span_min, span_max = val
         if span_min > span_max:
-            raise pd.ValidationError(
+            raise ValueError(
                 f"Given invalid span '{val}'. The 1st value can't be greater than the 2nd value."
             )
         return val
@@ -77,6 +81,10 @@ class ParameterNumeric(Parameter, ABC):
         span_min = min(self.span)
         span_max = max(self.span)
         return span_max - span_min
+
+    def sample_first(self) -> tuple:
+        """Output the first allowed sample."""
+        return self.span[0]
 
 
 class ParameterFloat(ParameterNumeric):
@@ -133,7 +141,7 @@ class ParameterInt(ParameterNumeric):
     span: Tuple[int, int] = pd.Field(
         ...,
         title="Span",
-        description="``(min, max)`` range within which the variable should be swept. "
+        description="``(min, max)`` range within which are allowed values for the variable. "
         "The ``min`` value is inclusive and the ``max`` value is exclusive. In other words, "
         "a grid search over this variable will iterate over ``np.arange(min, max)``.",
     )
@@ -179,14 +187,14 @@ class ParameterAny(Parameter):
     def _given_any_allowed_values(cls, val):
         """Need at least one allowed value."""
         if not len(val):
-            raise pd.ValidationError("Given empty tuple of allowed values. Must have at least one.")
+            raise ValueError("Given empty tuple of allowed values. Must have at least one.")
         return val
 
     @pd.validator("allowed_values", always=True)
     def _no_duplicate_allowed_values(cls, val):
         """No duplicates in allowed_values."""
         if len(val) != len(set(val)):
-            raise pd.ValidationError("'allowed_values' has duplicate entries, must be unique.")
+            raise ValueError("'allowed_values' has duplicate entries, must be unique.")
         return val
 
     def sample_random(self, num_samples: int) -> List[Any]:
@@ -202,6 +210,10 @@ class ParameterAny(Parameter):
         pts_continuous = pts_01 * len(self.allowed_values)
         indices = np.floor(pts_continuous).astype(int)
         return np.array(self.allowed_values)[indices].tolist()
+
+    def sample_first(self) -> Any:
+        """Output the first allowed sample."""
+        return self.allowed_values[0]
 
 
 ParameterType = Union[ParameterInt, ParameterFloat, ParameterAny]
