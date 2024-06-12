@@ -789,6 +789,7 @@ def test_web_incompatible_inputs(log_capture, monkeypatch):
         raise AssertionError()
 
     monkeypatch.setattr(td.web.api.webapi, "run", catch)
+    monkeypatch.setattr(td.web.api.container.Job, "run", catch)
     monkeypatch.setattr(td.web.api.asynchronous, "run_async", catch)
 
     from tidy3d.web.api.autograd import autograd

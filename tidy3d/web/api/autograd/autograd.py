@@ -439,7 +439,6 @@ def _run_async_primitive(
             sim_data_combined=sim_data_combined,
             sim_original=sim_original,
             aux_data=aux_data,
-            local_gradient=False,  # TODO: fix once we start supporting
         )
 
     return field_map_fwd_dict
@@ -498,12 +497,12 @@ def postprocess_fwd(
 
 def get_fwd_sim_data(task_id_fwd: str) -> td.SimulationData:
     """Function to grab the forward simulation data from the server from a task_id."""
-    raise NotImplementedError()
+    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
 
 
 def get_vjp_traced_fields(task_id_adj: str) -> AutogradFieldMap:
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
-    raise NotImplementedError()
+    raise NotImplementedError("Must implement grabbing fwd task id for server side autograd.")
 
 
 def _run_bwd(
