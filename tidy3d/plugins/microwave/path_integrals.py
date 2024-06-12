@@ -17,10 +17,9 @@ from ...components.data.data_array import (
     ScalarModeFieldDataArray,
     TimeDataArray,
 )
-from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
-from ...components.base import cached_property, Tidy3dBaseModel
-from ...components.types import Axis, Direction, Bound
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...components.geometry.base import Box
+from ...components.types import Axis, Bound, Direction
 from ...components.validators import assert_line, assert_plane
 from ...exceptions import DataError, Tidy3dError
 

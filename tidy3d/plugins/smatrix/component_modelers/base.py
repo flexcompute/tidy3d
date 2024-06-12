@@ -12,14 +12,15 @@ import pydantic.v1 as pd
 
 from ....components.base import Tidy3dBaseModel, cached_property
 from ....components.data.data_array import DataArray
+from ....components.simulation import Simulation
 from ....components.types import FreqArray
-from ....components.base import Tidy3dBaseModel, cached_property
+from ....constants import HERTZ
 from ....exceptions import SetupError, Tidy3dKeyError
 from ....log import log
 from ....web.api.container import Batch, BatchData
+from ..ports.base_terminal import AbstractTerminalPort
 from ..ports.modal import Port
 from ..ports.wave import WavePort
-from ..ports.base_terminal import AbstractTerminalPort
 
 # fwidth of gaussian pulse in units of central frequency
 FWIDTH_FRAC = 1.0 / 10

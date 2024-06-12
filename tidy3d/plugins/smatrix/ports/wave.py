@@ -1,19 +1,18 @@
 """Class and custom data array for representing a scattering matrix wave port."""
 
-import pydantic.v1 as pd
 from typing import Optional
 
-from ....components.base import cached_property
+import pydantic.v1 as pd
 
-from ....components.types import FreqArray, Direction
+from ....components.base import cached_property
+from ....components.data.data_array import FreqDataArray
+from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
 from ....components.monitor import FieldMonitor, ModeSolverMonitor
-from ....components.source import ModeSpec, ModeSource, GaussianPulse
-from ....components.data.sim_data import SimulationData
-from ....components.data.data_array import FreqDataArray
+from ....components.source import GaussianPulse, ModeSource, ModeSpec
+from ....components.types import Direction, FreqArray
 from ....exceptions import ValidationError
-
-from ...microwave import ImpedanceCalculator, VoltageIntegralTypes, CurrentIntegralTypes
+from ...microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from .base_terminal import AbstractTerminalPort
 
 

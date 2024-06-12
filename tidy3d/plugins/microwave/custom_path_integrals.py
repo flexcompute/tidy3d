@@ -8,14 +8,12 @@ import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
 
-from typing import Literal
-
-from ...constants import MICROMETER, fp_eps
-from ...components.geometry.base import Geometry
-from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
-from ...components.data.data_array import FreqDataArray, TimeDataArray, FreqModeDataArray
 from ...components.base import cached_property
-from ...components.types import Axis, ArrayFloat2D, Bound, Coordinate
+from ...components.data.data_array import FreqDataArray, FreqModeDataArray, TimeDataArray
+from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
+from ...components.geometry.base import Geometry
+from ...components.types import ArrayFloat2D, Axis, Bound, Coordinate
+from ...constants import MICROMETER, fp_eps
 from ...exceptions import DataError, SetupError
 from .path_integrals import AbstractAxesRH, IntegralResultTypes, MonitorDataTypes
 

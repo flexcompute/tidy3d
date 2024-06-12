@@ -1,17 +1,16 @@
 """Class and custom data array for representing a scattering matrix port based on a pair of terminals."""
 
-import pydantic.v1 as pd
 from abc import ABC, abstractmethod
 
-from ....components.types import FreqArray
+import pydantic.v1 as pd
+
 from ....components.base import Tidy3dBaseModel, cached_property
+from ....components.data.data_array import DataArray, FreqDataArray
+from ....components.data.sim_data import SimulationData
 from ....components.grid.grid import Grid
 from ....components.monitor import FieldMonitor
-
-from ....components.data.sim_data import SimulationData
-from ....components.source import Source, GaussianPulse
-
-from ....components.data.data_array import DataArray, FreqDataArray
+from ....components.source import GaussianPulse, Source
+from ....components.types import FreqArray
 
 
 class TerminalPortDataArray(DataArray):

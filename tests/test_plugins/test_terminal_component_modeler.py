@@ -4,16 +4,17 @@ import pydantic.v1 as pydantic
 import pytest
 import tidy3d as td
 from tidy3d.exceptions import SetupError, Tidy3dKeyError
+from tidy3d.plugins.microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
 from tidy3d.plugins.smatrix import (
     AbstractComponentModeler,
     CoaxialLumpedPort,
-    WavePort,
-    TerminalPortDataArray,
+    LumpedPort,
     PortDataArray,
     TerminalComponentModeler,
+    TerminalPortDataArray,
+    WavePort,
 )
-from tidy3d.plugins.microwave import VoltageIntegralAxisAligned, CustomCurrentIntegral2D
-from tidy3d.exceptions import Tidy3dKeyError, SetupError
+
 from ..utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
 

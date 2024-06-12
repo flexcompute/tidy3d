@@ -1,9 +1,10 @@
 """Test the microwave plugin."""
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
-import matplotlib.pyplot as plt
-
+import pytest
+import tidy3d as td
 from skrf import Frequency
 from skrf.media import MLine
 from tidy3d import FieldData
