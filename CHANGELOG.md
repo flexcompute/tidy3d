@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
 - Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
+- Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
+- `autograd` gradient calculations are done server side by default. Behavior can be changed by passing `local_gradient = True` into `web.run()`.
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
