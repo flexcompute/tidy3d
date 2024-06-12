@@ -1,6 +1,5 @@
 """Test the microwave plugin."""
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pydantic.v1 as pydantic
 import pytest
@@ -271,6 +270,15 @@ def test_current_missing_fields():
     with pytest.raises(DataError):
         _ = current_integral.compute_current(SIM_Z_DATA["ExHx"])
 
+    current_integral = CurrentIntegralAxisAligned(
+        center=center,
+        size=[length, length, 0],
+        sign="+",
+    )
+
+    with pytest.raises(DataError):
+        _ = current_integral.compute_current(SIM_Z_DATA["ExHx"])
+
 
 def test_time_monitor_voltage_integral():
     """Check VoltageIntegralAxisAligned runs on time domain data."""
@@ -498,6 +506,13 @@ def test_mode_solver_custom_current_integral():
     current_integral.compute_current(SIM_Z_DATA["mode"])
 
 
+def test_custom_current_integral_normal_y():
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=1, clockwise=False
+    )
+    current_integral.compute_current(SIM_Z_DATA["field"])
+
+
 def test_custom_path_integral_accuracy():
     """Test the accuracy of the custom path integral."""
     field_data = make_coax_field_data()
@@ -506,9 +521,38 @@ def test_custom_path_integral_accuracy():
         center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=False
     )
     current = current_integral.compute_current(field_data)
-    print(current)
-    f, (ax1, ax2) = plt.subplots(1, 2, tight_layout=True, figsize=(8, 4))
-    np.real(field_data.Hx.isel(f=0)).plot(ax=ax1, x="x", y="y")
-    np.real(field_data.Hy.isel(f=0)).plot(ax=ax2, x="x", y="y")
-    plt.show()
-    # TODO FINISH
+    assert np.allclose(current.values, 1.0 / ETA_0, rtol=0.01)
+
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=0.4, num_points=31, normal_axis=2, clockwise=True
+    )
+    current = current_integral.compute_current(field_data)
+    assert np.allclose(current.values, -1.0 / ETA_0, rtol=0.01)
+
+
+def test_impedance_accuracy_on_coaxial():
+    """Test the accuracy of the ImpedanceCalculator."""
+    field_data = make_coax_field_data()
+    # Setup path integrals
+    mean_radius = (COAX_R2 + COAX_R1) * 0.5
+    size = [COAX_R2 - COAX_R1, 0, 0]
+    center = [mean_radius, 0, 0]
+
+    voltage_integral = VoltageIntegralAxisAligned(
+        center=center, size=size, sign="-", extrapolate_to_endpoints=True, snap_path_to_grid=True
+    )
+    current_integral = CustomCurrentIntegral2D.from_circular_path(
+        center=(0, 0, 0), radius=mean_radius, num_points=31, normal_axis=2, clockwise=False
+    )
+
+    def impedance_of_coaxial_cable(r1, r2, wave_impedance=td.ETA_0):
+        return np.log(r2 / r1) * wave_impedance / 2 / np.pi
+
+    Z_analytic = impedance_of_coaxial_cable(COAX_R1, COAX_R2)
+
+    # Compute impedance using the tool
+    Z_calculator = ImpedanceCalculator(
+        voltage_integral=voltage_integral, current_integral=current_integral
+    )
+    Z_calc = Z_calculator.compute_impedance(field_data)
+    assert np.allclose(Z_calc, Z_analytic, rtol=0.04)

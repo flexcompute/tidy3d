@@ -19,7 +19,7 @@ from ...components.data.data_array import (
 )
 from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolverData
 from ...components.geometry.base import Box
-from ...components.types import Axis, Bound, Direction
+from ...components.types import Axis, Direction
 from ...components.validators import assert_line, assert_plane
 from ...exceptions import DataError, Tidy3dError
 
@@ -170,14 +170,6 @@ class AxisAlignedPathIntegral(AbstractAxesRH, Box):
             if value != 0:
                 return index
         raise Tidy3dError("Failed to identify axis.")
-
-    def within_bounds(self, bounds: Bound) -> bool:
-        """Helper to check if the defined path is completely within a bounding box."""
-        path_min = np.array(self.bounds[0])
-        path_max = np.array(self.bounds[1])
-        bound_min = np.array(bounds[0])
-        bound_max = np.array(bounds[1])
-        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
 
 
 class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
@@ -348,11 +340,3 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         )
 
         return (bottom, right, top, left)
-
-    def within_bounds(self, bounds: Bound) -> bool:
-        """Helper to check if the defined path is completely within a bounding box."""
-        path_min = np.array(self.bounds[0])
-        path_max = np.array(self.bounds[1])
-        bound_min = np.array(bounds[0])
-        bound_max = np.array(bounds[1])
-        return (bound_min <= path_min).all() and (bound_max >= path_max).all()

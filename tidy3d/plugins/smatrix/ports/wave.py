@@ -2,6 +2,7 @@
 
 from typing import Optional
 
+import numpy as np
 import pydantic.v1 as pd
 
 from ....components.base import cached_property
@@ -10,7 +11,7 @@ from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
 from ....components.monitor import FieldMonitor, ModeSolverMonitor
 from ....components.source import GaussianPulse, ModeSource, ModeSpec
-from ....components.types import Direction, FreqArray
+from ....components.types import Bound, Direction, FreqArray
 from ....exceptions import ValidationError
 from ...microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from .base_terminal import AbstractTerminalPort
@@ -129,16 +130,25 @@ class WavePort(AbstractTerminalPort, Box):
         impedance_array = impedance_array.sel(mode_index=self.mode_index)
         return FreqDataArray(impedance_array.values, coords=impedance_array.coords)
 
+    @staticmethod
+    def _within_port_bounds(path_bounds: Bound, port_bounds: Bound) -> bool:
+        """Helper to check if one bounding box is completely within the other bounding box."""
+        path_min = np.array(path_bounds[0])
+        path_max = np.array(path_bounds[1])
+        bound_min = np.array(port_bounds[0])
+        bound_max = np.array(port_bounds[1])
+        return (bound_min <= path_min).all() and (bound_max >= path_max).all()
+
     @pd.validator("voltage_integral", "current_integral")
     def _validate_path_integrals_within_port(cls, val, values):
         """Raise ``ValidationError`` when the supplied path integrals are not within the port bounds."""
         center = values["center"]
         size = values["size"]
         box = Box(center=center, size=size)
-        if val and not val.within_bounds(box.bounds):
+        if val and not WavePort._within_port_bounds(val.bounds, box.bounds):
             raise ValidationError(
                 f"'{cls.__name__}' must be setup with all path integrals defined within the bounds "
-                f"of the port. Path bounds are {val.bounds}, but port bounds are {box.bounds}."
+                f"of the port. Path bounds are '{val.bounds}', but port bounds are '{box.bounds}'."
             )
         return val
 

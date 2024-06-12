@@ -225,11 +225,6 @@ class CustomPathIntegral2D(AbstractAxesRH):
         max_bound = Geometry.unpop_axis(self.position, path_max, self.axis)
         return (min_bound, max_bound)
 
-    def within_bounds(self, bounds: Bound) -> bool:
-        """Helper to check if the defined path is completely within a bounding box."""
-        path_bounds = self.bounds
-        return (bounds[0] <= path_bounds[0]).all() and (bounds[1] >= path_bounds[1]).all()
-
 
 class CustomVoltageIntegral2D(CustomPathIntegral2D):
     """Class for computing the voltage between two points defined by a custom path.
