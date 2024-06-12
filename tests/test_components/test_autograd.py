@@ -14,6 +14,9 @@ import pytest
 import tidy3d as td
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.web import run_async
+
+from tidy3d.plugins.polyslab import ComplexPolySlab
+from tidy3d.web import Job, run_async
 from tidy3d.web.api.autograd.autograd import run
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
@@ -120,6 +123,11 @@ def use_emulated_run(monkeypatch):
         import tidy3d.web.api.webapi as webapi
 
         monkeypatch.setattr(webapi, "run", run_emulated)
+        monkeypatch.setattr(
+            Job, "run", lambda self: run_emulated(self.simulation, task_name="test")
+        )
+        monkeypatch.setattr(Job, "task_id", "test")
+
         _run_was_emulated[0] = True
 
         # import here so it uses emulated run
