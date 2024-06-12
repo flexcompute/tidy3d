@@ -4,6 +4,8 @@ from typing import Any, Union
 
 import numpy as np
 
+from tidy3d.components.type_util import _add_schema
+
 # special handling if we cant import the JVPTracer in the future (so it doesn't break tidy3d).
 try:
     from jax.interpreters.ad import JVPTracer
@@ -35,17 +37,6 @@ class NumpyArrayType(np.ndarray):
             type="numpy.ndarray",
         )
         field_schema.update(schema)
-
-
-def _add_schema(arbitrary_type: type, title: str, field_type_str: str) -> None:
-    """Adds a schema to the ``arbitrary_type`` class without subclassing."""
-
-    @classmethod
-    def mod_schema_fn(cls, field_schema: dict) -> None:
-        """Function that gets set to ``arbitrary_type.__modify_schema__``."""
-        field_schema.update(dict(title=title, type=field_type_str))
-
-    arbitrary_type.__modify_schema__ = mod_schema_fn
 
 
 _add_schema(JaxArrayType, title="JaxArray", field_type_str="jax.numpy.ndarray")

@@ -8,7 +8,11 @@ from autograd.builtins import dict as dict_ag
 from autograd.extend import Box, defvjp, primitive
 from autograd.tracer import getval
 
+from tidy3d.components.type_util import _add_schema
+
 from .types import ArrayFloat2D, ArrayLike, Bound, Size1D
+
+_add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
 
 # TODO: should we use ArrayBox? Box is more general
 
