@@ -292,7 +292,29 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     c1 = 2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
 
     med = td.PoleResidue(eps_inf=eps_inf, poles=[(a0, c0), (a1, c1)])
-    med_dispersive = td.Structure(geometry=box, medium=med)
+    pole_res = td.Structure(geometry=box, medium=med)
+
+    # custom dispersive medium
+    len_arr = np.prod(DA_SHAPE)
+    matrix = np.random.random((len_arr, N_PARAMS))
+    matrix /= np.linalg.norm(matrix)
+
+    eps_arr = 1.01 + 0.5 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+    custom_disp_values = 1.01 + (0.5 + 0.5j) * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+
+    nx, ny, nz = custom_disp_values.shape
+    x = np.linspace(-0.5, 0.5, nx)
+    y = np.linspace(-0.5, 0.5, ny)
+    z = np.linspace(-0.5, 0.5, nz)
+    coords = dict(x=x, y=y, z=z)
+
+    eps_inf = td.SpatialDataArray(anp.real(custom_disp_values), coords=coords)
+    a1 = td.SpatialDataArray(-custom_disp_values, coords=coords)
+    c1 = td.SpatialDataArray(custom_disp_values, coords=coords)
+    a2 = td.SpatialDataArray(-custom_disp_values, coords=coords)
+    c2 = td.SpatialDataArray(custom_disp_values, coords=coords)
+    custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
+    custom_pole_res = td.Structure(geometry=box, medium=custom_med_pole_res)
 
     return dict(
         medium=medium,
@@ -304,6 +326,8 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         geo_group=geo_group,
         complex_polyslab=complex_polyslab_geo_group,
         med_dispersive=med_dispersive,
+        pole_res=pole_res,
+        custom_pole_res=custom_pole_res,
     )
 
 
@@ -393,6 +417,8 @@ structure_keys_ = (
     "geo_group",
     "complex_polyslab",
     "med_dispersive",
+    "pole_res",
+    "custom_pole_res",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -411,7 +437,6 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
-
 
 # args = [("geo_group", "mode")]
 
