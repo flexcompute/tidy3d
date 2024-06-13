@@ -260,12 +260,12 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     eps_inf = 1 + anp.abs(vector @ params)
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
 
-    # a0 = -FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
-    # c0 = FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
-    # a1 = -2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
-    # c1 = 2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    a0 = -FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    c0 = FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    a1 = -2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    c1 = 2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
 
-    med = td.PoleResidue(eps_inf=eps_inf, poles=[])  # [(a0, c0), (a1, c1)])
+    med = td.PoleResidue(eps_inf=eps_inf, poles=[(a0, c0), (a1, c1)])
     med_dispersive = td.Structure(geometry=box, medium=med)
 
     return dict(
