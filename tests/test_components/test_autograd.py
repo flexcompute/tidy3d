@@ -387,7 +387,7 @@ structure_keys_ = (
     "polyslab",
     "geo_group",
     "pole_res",
-    "custom_pole_res",
+    # "custom_pole_res",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 

@@ -3145,32 +3145,52 @@ class PoleResidue(DispersiveMedium):
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
         for field_path in field_paths:
-            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
-
             field_name, *rest = field_path
 
-            # compute derivatives of complex epsilon w.r.t. eps_inf and poles
-            grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
+            """
+                J(x) = f(g(x))
+
+                J(pole) = J(eps(pole))
+
+                dJ_dpole(pole) = dJ_deps(eps(pole)) * deps_dpole(pole)
+
+                We know X = dJ_deps(eps(pole)) through adjoint volume integration
+
+                We also have a formula for `eps(pole)` (eps_model)
+
+                A function f(pole) = X * eps(pole)
+                when differentiated, should give
+
+                df_dpole = X * deps_dpole(pole), which is exactly what we want
+
+            """
+
+            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+            dJ_deps = complex(dJ_deps)
+
+            # TODO: fix for multi-frequency, also _xx is arbitrary...
             frequency = eps_data.eps_xx.coords["f"].values.flat[0]
-            eps_inf_complex = self.eps_inf
             poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
 
-            # compute partial derivatives w.r.t. eps_complex, ignore autograd warning
-            # "UserWarning: Input to holomorphic_grad is not complex" as it seems irrelevant
+            def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
+                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
+                eps = self._eps_model(eps_inf, poles, frequency)
+                return dJ_deps * eps
+
+            grad_maker = ag.holomorphic_grad(aux_fn, argnum=(0, 1))
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                deps_deps_inf, deps_dpoles = grad_eps_model(
-                    eps_inf_complex, poles_complex, frequency
+                deps_deps_inf, deps_dpoles = grad_maker(
+                    self.eps_inf, poles_complex, frequency, dJ_deps
                 )
 
             if field_name == "eps_inf":
-                dJ_deps_inf = float(np.real(dJ_deps * deps_deps_inf))
-                derivative_map[field_path] = dJ_deps_inf
+                derivative_map[field_path] = float(np.real(deps_deps_inf))
 
             if field_name == "poles":
                 pole_index, a_or_c = rest
-                deps_dpole_value = deps_dpoles[pole_index][a_or_c]
-                derivative_map[field_path] = complex(dJ_deps * deps_dpole_value)
+                derivative_map[field_path] = complex(deps_dpoles[pole_index][a_or_c])
 
         return derivative_map
 
