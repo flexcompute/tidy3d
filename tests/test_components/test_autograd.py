@@ -3,6 +3,7 @@
 import copy
 import cProfile
 import typing
+import warnings
 from importlib import reload
 
 import autograd as ag
@@ -11,6 +12,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.web import run_async
 from tidy3d.web.api.autograd.autograd import run
 
@@ -257,6 +259,40 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
+    # dispersive medium
+    eps_inf = 1 + anp.abs(vector @ params)
+    box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
+
+    a0 = -FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    c0 = FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    a1 = -2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    c1 = 2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+
+    med = td.PoleResidue(eps_inf=eps_inf, poles=[(a0, c0), (a1, c1)])
+    pole_res = td.Structure(geometry=box, medium=med)
+
+    # custom dispersive medium
+    len_arr = np.prod(DA_SHAPE)
+    matrix = np.random.random((len_arr, N_PARAMS))
+    matrix /= np.linalg.norm(matrix)
+
+    eps_arr = 1.01 + 0.5 * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+    custom_disp_values = 1.01 + (0.5 + 0.5j) * (anp.tanh(matrix @ params).reshape(DA_SHAPE) + 1)
+
+    nx, ny, nz = custom_disp_values.shape
+    x = np.linspace(-0.5, 0.5, nx)
+    y = np.linspace(-0.5, 0.5, ny)
+    z = np.linspace(-0.5, 0.5, nz)
+    coords = dict(x=x, y=y, z=z)
+
+    eps_inf = td.SpatialDataArray(anp.real(custom_disp_values), coords=coords)
+    a1 = td.SpatialDataArray(-custom_disp_values, coords=coords)
+    c1 = td.SpatialDataArray(custom_disp_values, coords=coords)
+    a2 = td.SpatialDataArray(-custom_disp_values, coords=coords)
+    c2 = td.SpatialDataArray(custom_disp_values, coords=coords)
+    custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=[(a1, c1), (a2, c2)])
+    custom_pole_res = td.Structure(geometry=box, medium=custom_med_pole_res)
+
     return dict(
         medium=medium,
         center_list=center_list,
@@ -265,6 +301,8 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
         geo_group=geo_group,
+        pole_res=pole_res,
+        custom_pole_res=custom_pole_res,
     )
 
 
@@ -352,6 +390,8 @@ structure_keys_ = (
     "custom_med_vec",
     "polyslab",
     "geo_group",
+    "pole_res",
+    "custom_pole_res",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -370,7 +410,6 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
-
 
 # args = [("geo_group", "mode")]
 
@@ -455,25 +494,30 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
         params_num = np.zeros((N_PARAMS, N_PARAMS))
 
+        def task_name_fn(i: int, sign: int) -> str:
+            """Task name for a given index into grad num and sign."""
+            pm_string = "+" if sign > 0 else "-"
+            return f"{i}_{pm_string}"
+
         for i in range(N_PARAMS):
-            for sign, pm_string in zip((-1, 1), "-+"):
-                task_name = f"{i}_{pm_string}"
+            for j, sign in enumerate((-1, 1)):
+                task_name = task_name_fn(i, sign)
                 params_i = np.copy(params0)
                 params_i[i] += sign * delta
-                params_num[i] = params_i.copy()
+                params_num[:, j] = params_i.copy()
                 sim_i = make_sim(params_i)
                 sims_numerical[task_name] = sim_i
 
-        datas = web.run_async(sims_numerical, path_dir="data")
+        datas = web.Batch(simulations=sims_numerical).run(path_dir="data")
 
         grad_num = np.zeros_like(grad)
         objectives_num = np.zeros((len(params0), 2))
         for i in range(N_PARAMS):
-            for sign, pm_string in zip((-1, 1), "-+"):
-                task_name = f"{i}_{pm_string}"
+            for j, sign in enumerate((-1, 1)):
+                task_name = task_name_fn(i, sign)
                 sim_data_i = datas[task_name]
                 obj_i = postprocess(sim_data_i)
-                objectives_num[i, (sign + 1) // 2] = obj_i
+                objectives_num[i, j] = obj_i
                 grad_num[i] += sign * obj_i / 2 / delta
 
         print("adjoint: ", grad)
@@ -729,6 +773,147 @@ def test_autograd_deepcopy():
 
     assert val1 == val2 == val3
     assert grad1 == grad2 == grad3
+
+
+def test_pole_residue(monkeypatch):
+    """Test that computed pole residue derivatives match."""
+
+    def J(eps):
+        return abs(eps)
+
+    freq = 3e8
+
+    eps_inf = 2.0
+    p = td.C_0 * (1 + 1j)
+    poles = [(-p, p), (-2 * p, 2 * p)]
+    pr = td.PoleResidue(eps_inf=2.0, poles=poles)
+    eps0 = pr.eps_model(freq)
+
+    dJ_deps = ag.holomorphic_grad(J)(eps0)
+
+    monkeypatch.setattr(
+        td.PoleResidue, "derivative_eps_complex_volume", lambda self, E_der_map, bounds: dJ_deps
+    )
+
+    import importlib
+
+    importlib.reload(td)
+
+    poles = [(-p, p), (-2 * p, 2 * p)]
+    pr = td.PoleResidue(eps_inf=2.0, poles=poles)
+    field_paths = [("eps_inf",)]
+    for i in range(len(poles)):
+        for j in range(2):
+            field_paths.append(("poles", i, j))
+
+    info = DerivativeInfo(
+        paths=field_paths,
+        E_der_map={},
+        D_der_map={},
+        eps_data={},
+        eps_in=2.0,
+        eps_out=1.0,
+        frequency=freq,
+        bounds=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    grads_computed = pr.compute_derivatives(derivative_info=info)
+
+    def f(eps_inf, poles):
+        eps = td.PoleResidue._eps_model(eps_inf, poles, freq)
+        return J(eps)
+
+    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        grad_eps_inf, grad_poles = gfn(eps_inf, poles)
+
+    assert np.isclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    for i in range(len(poles)):
+        for j in range(2):
+            field_path = ("poles", i, j)
+            assert np.isclose(grads_computed[field_path], grad_poles[i][j])
+
+
+def test_custom_pole_residue(monkeypatch):
+    """Test that computed pole residue derivatives match."""
+
+    nx, ny, nz = shape = (4, 5, 6)
+    values = np.random.random((nx, ny, nz)) * (2 + 2j) * td.C_0
+
+    nx, ny, nz = values.shape
+    x = np.linspace(-0.5, 0.5, nx)
+    y = np.linspace(-0.5, 0.5, ny)
+    z = np.linspace(-0.5, 0.5, nz)
+    coords = dict(x=x, y=y, z=z)
+
+    eps_inf = td.SpatialDataArray(anp.real(values), coords=coords)
+    a1 = td.SpatialDataArray(-values, coords=coords)
+    c1 = td.SpatialDataArray(values, coords=coords)
+    a2 = td.SpatialDataArray(-values, coords=coords)
+    c2 = td.SpatialDataArray(values, coords=coords)
+    poles = [(a1, c1), (a2, c2)]
+    custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+
+    def J(eps):
+        return anp.sum(abs(eps))
+
+    freq = 3e8
+    pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+    eps0 = pr.eps_model(freq)
+
+    dJ_deps = ag.holomorphic_grad(J)(eps0)
+
+    monkeypatch.setattr(
+        td.CustomPoleResidue,
+        "_derivative_field_cmp",
+        lambda self, E_der_map, eps_data, dim: dJ_deps,
+    )
+
+    import importlib
+
+    importlib.reload(td)
+
+    pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+    field_paths = [("eps_inf",)]
+    for i in range(len(poles)):
+        for j in range(2):
+            field_paths.append(("poles", i, j))
+
+    info = DerivativeInfo(
+        paths=field_paths,
+        E_der_map={},
+        D_der_map={},
+        eps_data={},
+        eps_in=2.0,
+        eps_out=1.0,
+        frequency=freq,
+        bounds=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    grads_computed = pr.compute_derivatives(derivative_info=info)
+
+    poles_complex = [
+        (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex)) for a, c in poles
+    ]
+    poles_complex = np.stack(poles_complex, axis=0)
+
+    def f(eps_inf, poles):
+        eps = td.CustomPoleResidue._eps_model(eps_inf, poles, freq)
+        return J(eps)
+
+    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
+
+    assert np.allclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    for i in range(len(poles)):
+        for j in range(2):
+            field_path = ("poles", i, j)
+            assert np.allclose(grads_computed[field_path], grad_poles[i][j])
 
 
 # @pytest.mark.timeout(18.0)
