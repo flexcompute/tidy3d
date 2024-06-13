@@ -32,7 +32,7 @@ from ..constants import (
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from .autograd.types import AutogradFieldMap, TracedFloat
+from .autograd.types import AutogradFieldMap, TracedFloat, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
@@ -1114,6 +1114,42 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
         """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
+    def derivative_eps_sigma_volume(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        bounds: Bound,
+    ) -> dict[str, xr.DataArray]:
+        """Get the derivative w.r.t permittivity and conductivity in the volume."""
+
+        vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+
+        freqs = vjp_eps_complex.coords["f"].values
+        values = vjp_eps_complex.values
+
+        eps_vjp, sigma_vjp = self.eps_complex_to_eps_sigma(eps_complex=values, freq=freqs)
+
+        eps_vjp = np.sum(eps_vjp)
+        sigma_vjp = np.sum(sigma_vjp)
+
+        return dict(permittivity=eps_vjp, conductivity=sigma_vjp)
+
+    def derivative_eps_complex_volume(
+        self, E_der_map: ElectromagneticFieldDataset, bounds: Bound
+    ) -> xr.DataArray:
+        """Get the derivative w.r.t complex-valued permittivity in the volume."""
+
+        vjp_value = 0.0
+        for field_name in ("Ex", "Ey", "Ez"):
+            fld = E_der_map.field_components[field_name]
+            vjp_value_fld = integrate_within_bounds(
+                arr=fld,
+                dims=("x", "y", "z"),
+                bounds=bounds,
+            )
+            vjp_value += vjp_value_fld
+
+        return vjp_value
+
 
 class AbstractCustomMedium(AbstractMedium, ABC):
     """A spatially varying medium."""
@@ -1532,6 +1568,7 @@ class Medium(AbstractMedium):
 
         return derivative_map
 
+<<<<<<< HEAD
     def derivative_eps_sigma_volume(
         self,
         E_der_map: ElectromagneticFieldDataset,
@@ -1568,6 +1605,8 @@ class Medium(AbstractMedium):
 
         return vjp_value
 
+=======
+>>>>>>> 8d1fb635 (PoleResidue.eps_inf supported)
 
 class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     """:class:`.Medium` with user-supplied permittivity distribution.
@@ -2736,7 +2775,7 @@ class PoleResidue(DispersiveMedium):
         * `Modeling dispersive material in FDTD <https://www.flexcompute.com/fdtd101/Lecture-5-Modeling-dispersive-material-in-FDTD/>`_
     """
 
-    eps_inf: pd.PositiveFloat = pd.Field(
+    eps_inf: TracedPositiveFloat = pd.Field(
         1.0,
         title="Epsilon at Infinity",
         description="Relative permittivity at infinite frequency (:math:`\\epsilon_\\infty`).",
@@ -3091,6 +3130,27 @@ class PoleResidue(DispersiveMedium):
         # of Sellmeier-type poles.
         ep = ep[~np.isnan(ep)]
         return max(ep.imag)
+
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+
+        # get vjps w.r.t. permittivity and conductivity of the bulk
+        derivative_map = {}
+        for field_path in field_paths:
+            if field_path == ("eps_inf",):
+                vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
+                vjp_eps = vjps_volume["permittivity"]
+                derivative_map[field_path] = vjp_eps
+        return derivative_map
 
 
 class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
