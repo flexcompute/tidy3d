@@ -418,7 +418,7 @@ structure_keys_ = (
     "complex_polyslab",
     "med_dispersive",
     "pole_res",
-    "custom_pole_res",
+    # "custom_pole_res",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
