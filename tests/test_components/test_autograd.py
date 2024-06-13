@@ -282,6 +282,18 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
+    # dispersive medium
+    eps_inf = 1 + anp.abs(vector @ params)
+    box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
+
+    # a0 = -FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    # c0 = FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    # a1 = -2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+    # c1 = 2 * FREQ0 * eps_inf + 1j * FREQ0 * eps_inf
+
+    med = td.PoleResidue(eps_inf=eps_inf, poles=[])  # [(a0, c0), (a1, c1)])
+    med_dispersive = td.Structure(geometry=box, medium=med)
+
     return dict(
         medium=medium,
         center_list=center_list,
@@ -291,7 +303,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         polyslab=polyslab,
         geo_group=geo_group,
         complex_polyslab=complex_polyslab_geo_group,
-
+        med_dispersive=med_dispersive,
     )
 
 
@@ -380,6 +392,7 @@ structure_keys_ = (
     "polyslab",
     "geo_group",
     "complex_polyslab",
+    "med_dispersive",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -400,7 +413,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("complex_polyslab", "mode")]
+# args = [("geo_group", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
