@@ -10,7 +10,10 @@ from bayes_opt import BayesianOptimization, UtilityFunction
 from bayes_opt.event import Events
 from bayes_opt.logger import JSONLogger
 
-from ... import web
+import tidy3d.plugins.design as tdd
+import tidy3d.web as web
+
+# from ... import web # What's this for??
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...log import log
@@ -80,18 +83,22 @@ class Method(Tidy3dBaseModel, ABC):
         else:
             print("Tidy3d coming soon")
 
-    def _tidy3d_run(self):
+    def _tidy3d_run(self, sims, run_kwargs):
         """Generic logic for running a pre_fn on tidy3d servers"""
 
         # Maybe it's just a check for the number of simulations given?
         # Simulation building done by individual runs / submethod methods and then given to this
 
-        # If something given/determined shows only one thing to be run
-        web.run()
+        # If a single simulation is supplied
+        if isinstance(sims, Simulation):
+            return web.run(sims, **run_kwargs)
 
-        # Elif if is clearly to be run as batches
-        batch = web.Batch()
-        batch.run()
+        # Uses batches if multiple simulations have been supplied
+        else:
+            batch = web.Batch(
+                simulations=sims, simulation_type="tidy3d_design_testing", **run_kwargs
+            )
+            return batch.run()
 
     @staticmethod
     def _check_pre_output(self, parameters: Tuple[ParameterType, ...], pre_fn: Callable):
@@ -306,11 +313,20 @@ class MethodBayOpt(MethodOptimise, ABC):
         default="ucb",
     )
 
+    def _force_int(self, next_point, int_keys):
+        """Convert a float asigned to an int parameter to be an int
+
+        Update dict in place
+        """
+
+        for key in int_keys:
+            # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
+            next_point[key] = int(round(next_point[key], 0))
+
     def run(
         self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
     ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
-
         boundary_dict = self.create_boundary_dict(parameters)
         run_loc = self._check_pre_output(self, parameters, pre_fn)
 
@@ -320,26 +336,59 @@ class MethodBayOpt(MethodOptimise, ABC):
             f=pre_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
         )
 
+        # Create log and update
         logger = JSONLogger(path="./logs")
         opt.subscribe(Events.OPTIMIZATION_STEP, logger)
 
-        # opt.maximize(
-        #     init_points=self.initial_iter,
-        #     n_iter=self.n_iter,
-        #     acquisition_function=utility,
-        # )
-
-        # OR
-        # Need method of running initial_iter random points
-        # Need to iterate over n_iter points
+        # Run variables
+        firstRun = True
+        int_keys = [param.name for param in parameters if type(param) == tdd.ParameterInt]
 
         if run_loc == "local":
             for _ in range(self.n_iter):
                 next_point = opt.suggest(utility)
-                next_out = pre_fn(**next_point)
+                self._force_int(next_point, int_keys)
+                pre_out = pre_fn(**next_point)
+                next_out = post_fn(pre_out)
                 opt.register(params=next_point, target=next_out)
+
         elif run_loc == "tidy3d":
-            print("Tidy3d coming soon")
+            # Handle the initial random samples as a batch to save time
+            if firstRun:
+                sim_dict = {}
+                arg_list = []
+                run_kwargs = {}
+                for sim_idx in range(self.initial_iter):
+                    next_point = opt.suggest(utility)
+                    self._force_int(next_point, int_keys)
+                    arg_list.append(next_point)
+                    sim_dict[f"init_{sim_idx}"] = pre_fn(**next_point)
+
+                pre_out = self._tidy3d_run(sim_dict, run_kwargs)
+
+                # Get the sim data out
+                sim_data = [sim_tuple[1] for sim_tuple in pre_out.items()]
+
+                for next_point, sim in zip(arg_list, sim_data):
+                    next_out = post_fn(sim)
+                    opt.register(params=next_point, target=next_out)
+
+                firstRun = False
+
+            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
+            for idx in range(self.n_iter):
+                next_point = opt.suggest(utility)
+                self._force_int(next_point, int_keys)
+
+                # Determine task name
+                task_name = str(idx)
+                run_kwargs = {"task_name": task_name}
+
+                # Data submitted as single Simulations not dict
+                pre_out = self._tidy3d_run(pre_fn(**next_point), run_kwargs)
+
+                next_out = post_fn(pre_out)
+                opt.register(params=next_point, target=next_out)
 
         # Output results from the BO.opt object
         result = []
@@ -349,27 +398,6 @@ class MethodBayOpt(MethodOptimise, ABC):
             fn_args.append(output["params"])
 
         return fn_args, result
-
-    def run_batch(
-        self,
-        parameters: Tuple[ParameterType, ...],
-        fn_pre: Callable,
-        fn_post: Callable,
-        path_dir: str = None,
-        **batch_kwargs,
-    ) -> Tuple[Any]:
-        """Defines the search algorithm (batched)."""
-
-        def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
-            """Get task name for 'index'-th set of function kwargs."""
-            try:
-                kwarg_str = str(fn_kwargs)
-                if sim_index is not None:
-                    return f"{kwarg_str}_{sim_index}"
-                return kwarg_str
-            # just to be safe, handle the case if this does not work
-            except ValueError:
-                return f"{pt_index}_{sim_index}"
 
 
 class AbstractMethodRandom(MethodSample, ABC):
