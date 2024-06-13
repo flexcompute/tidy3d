@@ -3146,10 +3146,17 @@ class PoleResidue(DispersiveMedium):
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
         for field_path in field_paths:
+            vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+
             if field_path == ("eps_inf",):
-                vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
-                vjp_eps = vjps_volume["permittivity"]
-                derivative_map[field_path] = vjp_eps
+                derivative_map[field_path] = vjp_eps_complex
+
+            if field_path[0] == "poles":
+                for _, _ in field_path[1:]:
+                    import pdb
+
+                    pdb.set_trace()
+
         return derivative_map
 
 
