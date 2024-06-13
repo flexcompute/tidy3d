@@ -80,6 +80,19 @@ class Method(Tidy3dBaseModel, ABC):
         else:
             print("Tidy3d coming soon")
 
+    def _tidy3d_run(self):
+        """Generic logic for running a pre_fn on tidy3d servers"""
+
+        # Maybe it's just a check for the number of simulations given?
+        # Simulation building done by individual runs / submethod methods and then given to this
+
+        # If something given/determined shows only one thing to be run
+        web.run()
+
+        # Elif if is clearly to be run as batches
+        batch = web.Batch()
+        batch.run()
+
     @staticmethod
     def _check_pre_output(self, parameters: Tuple[ParameterType, ...], pre_fn: Callable):
         """See if pre produces an arrangement of td.Simulation or is unrelated"""
@@ -102,6 +115,7 @@ class Method(Tidy3dBaseModel, ABC):
                     run_loc = "tidy3d"
 
         else:
+            print("Not a recognised way of organising Tidy3D simulation objects")
             run_loc = "local"
 
         return run_loc
@@ -235,6 +249,18 @@ class MethodSample(Method, ABC):
         return fn_args, result, task_ids, batch_data
 
 
+class MethodOptimise(Method, ABC):
+    """A method for handling design searches that optimise the design"""
+
+    def create_boundary_dict(
+        self,
+        parameters: Tuple[ParameterType, ...],
+    ):
+        """Reshape parameter spans to dict of boundaries"""
+
+        return {design_var.name: design_var.span for design_var in parameters}
+
+
 class MethodGrid(MethodSample):
     """Select parameters uniformly on a grid.
 
@@ -259,7 +285,7 @@ class MethodGrid(MethodSample):
         return dict(zip(vals_each_dim.keys(), vals_grid))
 
 
-class MethodBayOpt(Method, ABC):
+class MethodBayOpt(MethodOptimise, ABC):
     """A standard method for performing bayesian optimization search"""
 
     initial_iter: pd.PositiveInt = pd.Field(
@@ -280,43 +306,49 @@ class MethodBayOpt(Method, ABC):
         default="ucb",
     )
 
-    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+    def run(
+        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+    ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
-        boundary_dict = {}
-        for design_var in parameters:
-            boundary_dict[design_var.name] = design_var.span
+
+        boundary_dict = self.create_boundary_dict(parameters)
+        run_loc = self._check_pre_output(self, parameters, pre_fn)
 
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
         opt = BayesianOptimization(
-            f=fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
+            f=pre_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
         )
 
         logger = JSONLogger(path="./logs")
         opt.subscribe(Events.OPTIMIZATION_STEP, logger)
 
-        opt.maximize(
-            init_points=self.initial_iter,
-            n_iter=self.n_iter,
-            acquisition_function=utility,
-        )
+        # opt.maximize(
+        #     init_points=self.initial_iter,
+        #     n_iter=self.n_iter,
+        #     acquisition_function=utility,
+        # )
 
-        fn_args = {param_name: [] for param_name in boundary_dict}
-        result = []
-        for output in opt.res:
-            result.append(output["target"])
-
-            for param_name, arg_values in output["params"].items():
-                fn_args[param_name].append(arg_values)
-
-        return fn_args, result
         # OR
         # Need method of running initial_iter random points
         # Need to iterate over n_iter points
 
-        next_point = opt.suggest(utility)
-        next_out = fn(**next_point)
-        opt.register(params=next_point, target=next_out)
+        if run_loc == "local":
+            for _ in range(self.n_iter):
+                next_point = opt.suggest(utility)
+                next_out = pre_fn(**next_point)
+                opt.register(params=next_point, target=next_out)
+        elif run_loc == "tidy3d":
+            print("Tidy3d coming soon")
+
+        # Output results from the BO.opt object
+        result = []
+        fn_args = []
+        for output in opt.res:
+            result.append(output["target"])
+            fn_args.append(output["params"])
+
+        return fn_args, result
 
     def run_batch(
         self,
