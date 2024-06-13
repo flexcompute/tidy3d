@@ -13,11 +13,12 @@ from bayes_opt.logger import JSONLogger
 import tidy3d.plugins.design as tdd
 import tidy3d.web as web
 
-# from ... import web # What's this for??
+# from ... import web # What's this for?
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...log import log
-from ...web.api.container import BatchData
+
+# from ...web.api.container import BatchData
 from .parameter import ParameterType
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
@@ -70,18 +71,24 @@ class Method(Tidy3dBaseModel, ABC):
                 "Please raise an issue on the front end GitHub repository."
             )
 
-    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, run_loc):
-        """Decide whether this is a local, single online, or batch online job"""
+    def _force_int(self, next_point, parameters):
+        """Convert a float asigned to an int parameter to be an int
 
-        if run_loc == "local":
-            result = []
-            for arg_dict in fn_args:
-                fn_output = pre_fn(**arg_dict)
-                result.append(fn_output)
+        Update dict in place
+        """
+        # int_keys = [param.name for param in parameters if type(param) == tdd.ParameterInt]
+        for param in parameters:
+            if type(param) == tdd.ParameterInt:
+                # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
+                new_int = int(round(next_point[param.name], 0))
 
-            return result
-        else:
-            print("Tidy3d coming soon")
+                # Check that the new int is within the bounds - correct if not
+                if new_int < param.span[0]:
+                    new_int = param.span[0]
+                elif new_int > param.span[1]:
+                    new_int = param.span[1]
+
+                next_point[param.name] = new_int
 
     def _tidy3d_run(self, sims, run_kwargs):
         """Generic logic for running a pre_fn on tidy3d servers"""
@@ -149,10 +156,39 @@ class MethodSample(Method, ABC):
         """Sample design parameters, check the args are hashable and compute number of points."""
 
         fn_args = self.sample(parameters)
+        for arg_dict in fn_args:
+            self._force_int(arg_dict, parameters)
         run_loc = self._check_pre_output(self, parameters, pre_fn)
         # self.assert_hashable(fn_args)
         # self.assert_num_points(fn_args)
         return fn_args, run_loc
+
+    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, post_fn, run_loc):
+        """Decide whether this is a local, single online, or batch online job"""
+
+        if run_loc == "local":
+            results = []
+            for arg_dict in fn_args:
+                fn_output = pre_fn(**arg_dict)
+                results.append(fn_output)
+
+        else:
+            # Create dict of simulations
+            if len(fn_args) == 1:
+                print("TBD")
+            else:
+                sims = {str(i): pre_fn(**arg_dict) for i, arg_dict in enumerate(fn_args)}
+                run_kwargs = {}
+
+                pre_out = self._tidy3d_run(sims, run_kwargs)
+                results = [sim_tuple[1] for sim_tuple in pre_out.items()]
+
+        # Post process the data
+        processed_result = []
+        for res in results:
+            processed_result.append(post_fn(res))
+
+        return processed_result
 
     def run(
         self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
@@ -163,97 +199,92 @@ class MethodSample(Method, ABC):
         fn_args, run_loc = self._assemble_args(parameters, pre_fn)
 
         # for each point, construct the function inputs, run it, record output
-        results = self._eval_run(fn_args, pre_fn, run_loc)
+        results = self._eval_run(fn_args, pre_fn, post_fn, run_loc)
 
-        # Post process the data
-        processed_result = []
-        for res in results:
-            processed_result.append(post_fn(res))
+        return fn_args, results
 
-        return fn_args, processed_result
+    # def _run_batch(
+    #     self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
+    # ) -> BatchData:
+    #     """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
+    #     batch = web.Batch(simulations=simulations, simulation_type="tidy3d_design", **kwargs)
 
-    def _run_batch(
-        self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
-    ) -> BatchData:
-        """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
-        batch = web.Batch(simulations=simulations, simulation_type="tidy3d_design", **kwargs)
+    #     if path_dir:
+    #         run_kwargs = dict(path_dir=path_dir)
+    #     else:
+    #         run_kwargs = {}
+    #     return batch.run(**run_kwargs)
 
-        if path_dir:
-            run_kwargs = dict(path_dir=path_dir)
-        else:
-            run_kwargs = {}
-        return batch.run(**run_kwargs)
+    # def run_batch(
+    #     self,
+    #     parameters: Tuple[ParameterType, ...],
+    #     fn_pre: Callable,
+    #     fn_post: Callable,
+    #     path_dir: str = None,
+    #     **batch_kwargs,
+    # ) -> Tuple[Any]:
+    #     """Defines the search algorithm (batched)."""
 
-    def run_batch(
-        self,
-        parameters: Tuple[ParameterType, ...],
-        fn_pre: Callable,
-        fn_post: Callable,
-        path_dir: str = None,
-        **batch_kwargs,
-    ) -> Tuple[Any]:
-        """Defines the search algorithm (batched)."""
+    #     # get all function inputs
+    #     fn_args = self._assemble_args(parameters)
 
-        # get all function inputs
-        fn_args = self._assemble_args(parameters)
+    #     def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
+    #         """Get task name for 'index'-th set of function kwargs."""
+    #         try:
+    #             kwarg_str = str(fn_kwargs)
+    #             if sim_index is not None:
+    #                 return f"{kwarg_str}_{sim_index}"
+    #             return kwarg_str
+    #         # just to be safe, handle the case if this does not work
+    #         except ValueError:
+    #             return f"{pt_index}_{sim_index}"
 
-        def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
-            """Get task name for 'index'-th set of function kwargs."""
-            try:
-                kwarg_str = str(fn_kwargs)
-                if sim_index is not None:
-                    return f"{kwarg_str}_{sim_index}"
-                return kwarg_str
-            # just to be safe, handle the case if this does not work
-            except ValueError:
-                return f"{pt_index}_{sim_index}"
+    #     # for each point, construct the simulation inputs into a dict
+    #     simulations = {}
+    #     task_name_mappings = []
+    #     for i in range(fn_args):
+    #         fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
+    #         sim = fn_pre(**fn_kwargs)
+    #         if isinstance(sim, Simulation):
+    #             task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
+    #             simulations[task_name] = sim
+    #             task_name_mappings.append([task_name])
+    #         elif isinstance(sim, dict):
+    #             task_name_mappings.append({})
+    #             for name, _sim in sim.items():
+    #                 task_name = get_task_name(pt_index=1, sim_index=name, fn_kwargs=fn_kwargs)
+    #                 simulations[task_name] = _sim
+    #                 task_name_mappings[i][name] = task_name
+    #         else:
+    #             task_name_mappings.append([])
+    #             for j, _sim in enumerate(sim):
+    #                 task_name = get_task_name(pt_index=i, sim_index=j, fn_kwargs=fn_kwargs)
+    #                 simulations[task_name] = _sim
+    #                 task_name_mappings[i].append(task_name)
 
-        # for each point, construct the simulation inputs into a dict
-        simulations = {}
-        task_name_mappings = []
-        for i in range(fn_args):
-            fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-            sim = fn_pre(**fn_kwargs)
-            if isinstance(sim, Simulation):
-                task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
-                simulations[task_name] = sim
-                task_name_mappings.append([task_name])
-            elif isinstance(sim, dict):
-                task_name_mappings.append({})
-                for name, _sim in sim.items():
-                    task_name = get_task_name(pt_index=1, sim_index=name, fn_kwargs=fn_kwargs)
-                    simulations[task_name] = _sim
-                    task_name_mappings[i][name] = task_name
-            else:
-                task_name_mappings.append([])
-                for j, _sim in enumerate(sim):
-                    task_name = get_task_name(pt_index=i, sim_index=j, fn_kwargs=fn_kwargs)
-                    simulations[task_name] = _sim
-                    task_name_mappings[i].append(task_name)
+    #     # run in batch
+    #     batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
+    #     task_id_dict = batch_data.task_ids
 
-        # run in batch
-        batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
-        task_id_dict = batch_data.task_ids
+    #     # run post processing on each data
+    #     result = []
+    #     task_ids = []
+    #     for task_names_i in task_name_mappings:
+    #         if isinstance(task_names_i, dict):
+    #             task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
+    #             kwargs_dict = {
+    #                 kwarg_name: batch_data[task_name]
+    #                 for kwarg_name, task_name in task_names_i.items()
+    #             }
+    #             val = fn_post(**kwargs_dict)
+    #         else:
+    #             task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
+    #             args_list = (batch_data[task_name] for task_name in task_names_i)
+    #             val = fn_post(*args_list)
 
-        # run post processing on each data
-        result = []
-        task_ids = []
-        for task_names_i in task_name_mappings:
-            if isinstance(task_names_i, dict):
-                task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
-                kwargs_dict = {
-                    kwarg_name: batch_data[task_name]
-                    for kwarg_name, task_name in task_names_i.items()
-                }
-                val = fn_post(**kwargs_dict)
-            else:
-                task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
-                args_list = (batch_data[task_name] for task_name in task_names_i)
-                val = fn_post(*args_list)
+    #         result.append(val)
 
-            result.append(val)
-
-        return fn_args, result, task_ids, batch_data
+    #     return fn_args, result, task_ids, batch_data
 
 
 class MethodOptimise(Method, ABC):
@@ -289,7 +320,10 @@ class MethodGrid(MethodSample):
         # meshgrid each dimension's results and combine them all
         vals_grid = np.meshgrid(*vals_each_dim.values())
         vals_grid = (np.ravel(x).tolist() for x in vals_grid)
-        return dict(zip(vals_each_dim.keys(), vals_grid))
+        vals_dict = dict(zip(vals_each_dim.keys(), vals_grid))
+        t_vals_dict = [dict(zip(vals_dict.keys(), values)) for values in zip(*vals_dict.values())]
+
+        return t_vals_dict
 
 
 class MethodBayOpt(MethodOptimise, ABC):
@@ -313,16 +347,6 @@ class MethodBayOpt(MethodOptimise, ABC):
         default="ucb",
     )
 
-    def _force_int(self, next_point, int_keys):
-        """Convert a float asigned to an int parameter to be an int
-
-        Update dict in place
-        """
-
-        for key in int_keys:
-            # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
-            next_point[key] = int(round(next_point[key], 0))
-
     def run(
         self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
     ) -> Tuple[Any]:
@@ -342,12 +366,10 @@ class MethodBayOpt(MethodOptimise, ABC):
 
         # Run variables
         firstRun = True
-        int_keys = [param.name for param in parameters if type(param) == tdd.ParameterInt]
-
         if run_loc == "local":
             for _ in range(self.n_iter):
                 next_point = opt.suggest(utility)
-                self._force_int(next_point, int_keys)
+                self._force_int(next_point, parameters)
                 pre_out = pre_fn(**next_point)
                 next_out = post_fn(pre_out)
                 opt.register(params=next_point, target=next_out)
@@ -360,7 +382,7 @@ class MethodBayOpt(MethodOptimise, ABC):
                 run_kwargs = {}
                 for sim_idx in range(self.initial_iter):
                     next_point = opt.suggest(utility)
-                    self._force_int(next_point, int_keys)
+                    self._force_int(next_point, parameters)
                     arg_list.append(next_point)
                     sim_dict[f"init_{sim_idx}"] = pre_fn(**next_point)
 
@@ -378,7 +400,7 @@ class MethodBayOpt(MethodOptimise, ABC):
             # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
             for idx in range(self.n_iter):
                 next_point = opt.suggest(utility)
-                self._force_int(next_point, int_keys)
+                self._force_int(next_point, parameters)
 
                 # Determine task name
                 task_name = str(idx)
