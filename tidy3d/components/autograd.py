@@ -12,7 +12,7 @@ from autograd.tracer import getval
 
 from tidy3d.components.type_util import _add_schema
 
-from .types import ArrayFloat2D, ArrayLike, Bound, Size1D
+from .types import ArrayFloat2D, ArrayLike, Bound, Complex, Size1D
 
 # add schema to the Box
 _add_schema(Box, title="AutogradBox", field_type_str="autograd.tracer.Box")
@@ -35,6 +35,9 @@ TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
 TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
 TracedVertices = typing.Union[ArrayFloat2D, Box]
 
+# poles
+TracedComplex = typing.Union[Complex, Box]
+TracedPoleAndResidue = typing.Tuple[TracedComplex, TracedComplex]
 
 # The data type that we pass in and out of the web.run() @autograd.primitive
 AutogradTraced = typing.Union[Box, ArrayLike]

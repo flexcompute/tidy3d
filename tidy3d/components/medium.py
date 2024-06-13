@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import functools
+import warnings
 from abc import ABC, abstractmethod
 from math import isclose
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
+import autograd as ag
 import autograd.numpy as np
 
 # TODO: it's hard to figure out which functions need this, for now all get it
@@ -32,7 +34,7 @@ from ..constants import (
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from .autograd.types import AutogradFieldMap, TracedFloat, TracedPositiveFloat
+from .autograd.types import AutogradFieldMap, TracedFloat, TracedPositiveFloat, TracedPoleAndResidue
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
@@ -1568,7 +1570,6 @@ class Medium(AbstractMedium):
 
         return derivative_map
 
-<<<<<<< HEAD
     def derivative_eps_sigma_volume(
         self,
         E_der_map: ElectromagneticFieldDataset,
@@ -1605,8 +1606,6 @@ class Medium(AbstractMedium):
 
         return vjp_value
 
-=======
->>>>>>> 8d1fb635 (PoleResidue.eps_inf supported)
 
 class CustomIsotropicMedium(AbstractCustomMedium, Medium):
     """:class:`.Medium` with user-supplied permittivity distribution.
@@ -2782,7 +2781,7 @@ class PoleResidue(DispersiveMedium):
         units=PERMITTIVITY,
     )
 
-    poles: Tuple[PoleAndResidue, ...] = pd.Field(
+    poles: Tuple[TracedPoleAndResidue, ...] = pd.Field(
         (),
         title="Poles",
         description="Tuple of complex-valued (:math:`a_i, c_i`) poles for the model.",
@@ -3146,16 +3145,32 @@ class PoleResidue(DispersiveMedium):
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
         for field_path in field_paths:
-            vjp_eps_complex = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
 
-            if field_path == ("eps_inf",):
-                derivative_map[field_path] = vjp_eps_complex
+            field_name, *rest = field_path
 
-            if field_path[0] == "poles":
-                for _, _ in field_path[1:]:
-                    import pdb
+            # compute derivatives of complex epsilon w.r.t. eps_inf and poles
+            grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
+            frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+            eps_inf_complex = self.eps_inf
+            poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
 
-                    pdb.set_trace()
+            # compute partial derivatives w.r.t. eps_complex, ignore autograd warning
+            # "UserWarning: Input to holomorphic_grad is not complex" as it seems irrelevant
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                deps_deps_inf, deps_dpoles = grad_eps_model(
+                    eps_inf_complex, poles_complex, frequency
+                )
+
+            if field_name == "eps_inf":
+                dJ_deps_inf = float(np.real(dJ_deps * deps_deps_inf))
+                derivative_map[field_path] = dJ_deps_inf
+
+            if field_name == "poles":
+                pole_index, a_or_c = rest
+                deps_dpole_value = deps_dpoles[pole_index][a_or_c]
+                derivative_map[field_path] = complex(dJ_deps * deps_dpole_value)
 
         return derivative_map
 
