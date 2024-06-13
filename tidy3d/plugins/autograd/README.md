@@ -121,6 +121,12 @@ The following components are traceable as inputs to the `td.Simulation`
 
 - `GeometryGroup.geometries`
 
+- `PoleResidue.eps_inf`
+- `PoleResidue.poles`
+
+- `CustomPoleResidue.eps_inf`
+- `CustomPoleResidue.poles`
+
 The following components are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`

@@ -70,6 +70,12 @@ class DerivativeInfo(Tidy3dBaseModel):
         description="Bounds corresponding to the structure, used in ``Medium`` calculations.",
     )
 
+    frequency: float = pd.Field(
+        ...,
+        title="Frequency of adjoint simulation",
+        description="Frequency at which the adjoint gradient is computed.",
+    )
+
     eps_approx: bool = pd.Field(
         False,
         title="Use Permittivity Approximation",
