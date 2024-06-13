@@ -387,7 +387,7 @@ structure_keys_ = (
     "polyslab",
     "geo_group",
     "pole_res",
-    # "custom_pole_res",
+    "custom_pole_res",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -407,7 +407,7 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
-args = [("custom_pole_res", "mode")]
+args = [("custom_pole_res", "mode"), ("pole_res", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:

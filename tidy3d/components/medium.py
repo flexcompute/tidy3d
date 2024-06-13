@@ -3437,6 +3437,91 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
+    def compute_derivatives(
+        self,
+        field_paths: list[tuple[str, ...]],
+        E_der_map: ElectromagneticFieldDataset,
+        D_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        eps_in: complex,
+        eps_out: complex,
+        bounds: Bound,
+    ) -> dict[str, Any]:
+        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+
+        # get vjps w.r.t. permittivity and conductivity of the bulk
+        derivative_map = {}
+        for field_path in field_paths:
+            field_name, *rest = field_path
+
+            """
+                J(x) = f(g(x))
+
+                J(pole) = J(eps(pole))
+
+                dJ_dpole(pole) = dJ_deps(eps(pole)) * deps_dpole(pole)
+
+                We know X = dJ_deps(eps(pole)) through adjoint volume integration
+
+                We also have a formula for `eps(pole)` (eps_model)
+
+                A function f(pole) = X * eps(pole)
+                when differentiated, should give
+
+                df_dpole = X * deps_dpole(pole), which is exactly what we want
+
+            """
+
+            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+            dJ_deps = complex(dJ_deps)
+
+            # TODO: fix for multi-frequency, also _xx is arbitrary...
+            frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+            poles_complex = [
+                (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
+                for a, c in self.poles
+            ]
+
+            def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
+                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
+                eps = self._eps_model(eps_inf, poles, frequency)
+                return dJ_deps * eps
+
+            def aux_fn_re(
+                eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex
+            ) -> complex:
+                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
+                return np.real(aux_fn(eps_inf, poles, frequency, dJ_deps))
+
+            def aux_fn_im(
+                eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex
+            ) -> complex:
+                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
+                return np.imag(aux_fn(eps_inf, poles, frequency, dJ_deps))
+
+            grad_maker_re = ag.elementwise_grad(aux_fn_re, argnum=(0, 1))
+            grad_maker_im = ag.elementwise_grad(aux_fn_im, argnum=(0, 1))
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                deps_deps_inf_re, deps_dpoles_re = grad_maker_re(
+                    self.eps_inf.values, poles_complex, frequency, dJ_deps
+                )
+                deps_deps_inf_im, deps_dpoles_im = grad_maker_im(
+                    self.eps_inf.values, poles_complex, frequency, dJ_deps
+                )
+                deps_deps_inf = deps_deps_inf_re + 1j * deps_deps_inf_im
+                deps_dpoles = np.array(deps_dpoles_re) + 1j * np.array(deps_dpoles_im)
+
+            if field_name == "eps_inf":
+                derivative_map[field_path] = np.real(deps_deps_inf)
+
+            if field_name == "poles":
+                pole_index, a_or_c = rest
+                derivative_map[field_path] = deps_dpoles[pole_index][a_or_c]
+
+        return derivative_map
+
 
 class Sellmeier(DispersiveMedium):
     """A dispersive medium described by the Sellmeier model.
