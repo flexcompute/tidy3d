@@ -25,8 +25,22 @@ class Method(Tidy3dBaseModel, ABC):
 
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
+    batch_size: pd.PositiveInt = pd.Field(
+        ...,
+        title="Size of batch to be run",
+        description="TBD",
+    )
+
+    num_batches: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of batches to be run",
+        description="TBD",
+    )
+
     @abstractmethod
-    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+    def run(
+        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+    ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
     @staticmethod
@@ -42,16 +56,8 @@ class Method(Tidy3dBaseModel, ABC):
                 "Convert these to 'tuple' for a workaround."
             )
 
-
-class MethodIndependent(Method, ABC):
-    """A sweep method where all points are independently computed."""
-
-    @abstractmethod
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
-        """Defines how the design parameters are sampled."""
-
     @staticmethod
-    def get_num_points(fn_args: Dict[str, tuple]) -> int:
+    def assert_num_points(fn_args: Dict[str, tuple]) -> int:
         """Compute number of points from the function arguments and do error checking."""
         num_points_each_dim = [len(val) for val in fn_args.values()]
         if len(set(num_points_each_dim)) != 1:
@@ -60,30 +66,90 @@ class MethodIndependent(Method, ABC):
                 "This suggests a bug in the parameter sweep tool. "
                 "Please raise an issue on the front end GitHub repository."
             )
-        return num_points_each_dim[0]
 
-    def _assemble_args(self, parameters: Tuple[ParameterType, ...]) -> Tuple[dict, int]:
+    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, run_loc):
+        """Decide whether this is a local, single online, or batch online job"""
+
+        if run_loc == "local":
+            result = []
+            for arg_dict in fn_args:
+                fn_output = pre_fn(**arg_dict)
+                result.append(fn_output)
+
+            return result
+        else:
+            print("Tidy3d coming soon")
+
+    @staticmethod
+    def _check_pre_output(self, parameters: Tuple[ParameterType, ...], pre_fn: Callable):
+        """See if pre produces an arrangement of td.Simulation or is unrelated"""
+
+        # Run fn_pre with the lower bound of each parameter
+        lower_params = {param.name: param.span[0] for param in parameters}
+        result = pre_fn(**lower_params)
+
+        # Determine if pre_fn will need to run locally or on tidy3d
+        if isinstance(result, Simulation):  # Single Simulation
+            run_loc = "tidy3d"
+
+        elif isinstance(result, dict):  # Dict of simulations
+            if isinstance(result[next(iter(result))], Simulation):
+                run_loc = "tidy3d"
+
+        elif isinstance(result, list):  # List of dicts of simulations
+            if isinstance(result[0], dict):
+                if isinstance(result[0][next(iter(result[0]))], Simulation):
+                    run_loc = "tidy3d"
+
+        else:
+            run_loc = "local"
+
+        return run_loc
+
+
+class MethodSample(Method, ABC):
+    """A sweep method where all points are independently computed."""
+
+    num_points: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of points for sampling",
+        description="TBD",
+    )
+
+    @abstractmethod
+    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+        """Defines how the design parameters are sampled."""
+
+    def _assemble_args(
+        self,
+        parameters: Tuple[ParameterType, ...],
+        pre_fn: Callable,
+    ) -> Tuple[dict, int]:
         """Sample design parameters, check the args are hashable and compute number of points."""
 
         fn_args = self.sample(parameters)
-        self.assert_hashable(fn_args)
-        num_points = self.get_num_points(fn_args)
-        return fn_args, num_points
+        run_loc = self._check_pre_output(self, parameters, pre_fn)
+        # self.assert_hashable(fn_args)
+        # self.assert_num_points(fn_args)
+        return fn_args, run_loc
 
-    def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
+    def run(
+        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+    ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
-        fn_args, num_points = self._assemble_args(parameters)
+        fn_args, run_loc = self._assemble_args(parameters, pre_fn)
 
         # for each point, construct the function inputs, run it, record output
-        result = []
-        for i in range(num_points):
-            fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-            fn_output = fn(**fn_kwargs)
-            result.append(fn_output)
+        results = self._eval_run(fn_args, pre_fn, run_loc)
 
-        return fn_args, result
+        # Post process the data
+        processed_result = []
+        for res in results:
+            processed_result.append(post_fn(res))
+
+        return fn_args, processed_result
 
     def _run_batch(
         self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
@@ -108,7 +174,7 @@ class MethodIndependent(Method, ABC):
         """Defines the search algorithm (batched)."""
 
         # get all function inputs
-        fn_args, num_points = self._assemble_args(parameters)
+        fn_args = self._assemble_args(parameters)
 
         def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
             """Get task name for 'index'-th set of function kwargs."""
@@ -124,7 +190,7 @@ class MethodIndependent(Method, ABC):
         # for each point, construct the simulation inputs into a dict
         simulations = {}
         task_name_mappings = []
-        for i in range(num_points):
+        for i in range(fn_args):
             fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
             sim = fn_pre(**fn_kwargs)
             if isinstance(sim, Simulation):
@@ -169,7 +235,7 @@ class MethodIndependent(Method, ABC):
         return fn_args, result, task_ids, batch_data
 
 
-class MethodGrid(MethodIndependent):
+class MethodGrid(MethodSample):
     """Select parameters uniformly on a grid.
 
     Example
@@ -274,14 +340,8 @@ class MethodBayOpt(Method, ABC):
                 return f"{pt_index}_{sim_index}"
 
 
-class AbstractMethodRandom(MethodIndependent, ABC):
+class AbstractMethodRandom(MethodSample, ABC):
     """Select parameters with an object with a ``random`` method."""
-
-    num_points: pd.PositiveInt = pd.Field(
-        ...,
-        title="Number of Points",
-        description="Maximum number of sampling points to perform in the sweep.",
-    )
 
     @abstractmethod
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
@@ -293,12 +353,17 @@ class AbstractMethodRandom(MethodIndependent, ABC):
         sampler = self.get_sampler(parameters)
         pts_01 = sampler.random(self.num_points)
 
+        # Get output list of kwargs for pre_fn
+        keys = [param.name for param in parameters]
+        result = [{keys[j]: row[j] for j in range(len(keys))} for row in pts_01]
+
         # for each dimension, sample `num_points` points and combine them all
-        result = {}
-        for i, design_var in enumerate(parameters):
-            pts_i_01 = pts_01[..., i]
-            values = design_var.select_from_01(pts_i_01)
-            result[design_var.name] = values
+        # result = {}
+        # for i, design_var in enumerate(parameters):
+        #     pts_i_01 = pts_01[..., i]
+        #     values = design_var.select_from_01(pts_i_01)
+        #     result[design_var.name] = values
+
         return result
 
 

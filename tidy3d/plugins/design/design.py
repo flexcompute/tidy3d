@@ -65,7 +65,9 @@ class DesignSpace(Tidy3dBaseModel):
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
-        fn_args_coords = tuple(fn_args.values())
+        fn_args_coords = tuple(
+            [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0].keys()]
+        )
 
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
@@ -86,7 +88,7 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
-    def run(self, function: Callable, **kwargs) -> Result:
+    def run(self, pre_function: Callable, post_function: Callable, **kwargs) -> Result:
         """Run the design problem on a user defined function of the design parameters.
 
         Parameters
@@ -103,9 +105,11 @@ class DesignSpace(Tidy3dBaseModel):
         """
 
         # run the function from the method
-        fn_args, fn_values = self.method.run(parameters=self.parameters, fn=function)
+        fn_args, fn_values = self.method.run(
+            parameters=self.parameters, pre_fn=pre_function, post_fn=post_function
+        )
 
-        fn_source = self.get_fn_source(function)
+        fn_source = self.get_fn_source(pre_function)
 
         # package the result
         return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
