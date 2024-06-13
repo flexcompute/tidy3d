@@ -29,10 +29,6 @@ class Method(Tidy3dBaseModel, ABC):
     def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
-    @abstractmethod
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
-        """Defines how the design parameters are sampled."""
-
     @staticmethod
     def assert_hashable(fn_args: dict) -> None:
         """Raise error if the function arguments aren't hashable (do before computation)."""
@@ -49,6 +45,10 @@ class Method(Tidy3dBaseModel, ABC):
 
 class MethodIndependent(Method, ABC):
     """A sweep method where all points are independently computed."""
+
+    @abstractmethod
+    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
+        """Defines how the design parameters are sampled."""
 
     @staticmethod
     def get_num_points(fn_args: Dict[str, tuple]) -> int:
@@ -193,7 +193,7 @@ class MethodGrid(MethodIndependent):
         return dict(zip(vals_each_dim.keys(), vals_grid))
 
 
-class MethodBayOpt(MethodIndependent, ABC):
+class MethodBayOpt(Method, ABC):
     """A standard method for performing bayesian optimization search"""
 
     initial_iter: pd.PositiveInt = pd.Field(
@@ -216,14 +216,14 @@ class MethodBayOpt(MethodIndependent, ABC):
 
     def run(self, parameters: Tuple[ParameterType, ...], fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
-        boundary_dict = self.sample(parameters)
-        print(f"We print params: {boundary_dict}")
+        boundary_dict = {}
+        for design_var in parameters:
+            boundary_dict[design_var.name] = design_var.span
 
+        # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
         opt = BayesianOptimization(
-            f=fn,
-            pbounds=boundary_dict,
-            random_state=1,
+            f=fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
         )
 
         logger = JSONLogger(path="./logs")
@@ -235,6 +235,15 @@ class MethodBayOpt(MethodIndependent, ABC):
             acquisition_function=utility,
         )
 
+        fn_args = {param_name: [] for param_name in boundary_dict}
+        result = []
+        for output in opt.res:
+            result.append(output["target"])
+
+            for param_name, arg_values in output["params"].items():
+                fn_args[param_name].append(arg_values)
+
+        return fn_args, result
         # OR
         # Need method of running initial_iter random points
         # Need to iterate over n_iter points
@@ -243,12 +252,26 @@ class MethodBayOpt(MethodIndependent, ABC):
         next_out = fn(**next_point)
         opt.register(params=next_point, target=next_out)
 
-    def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
-        """Defines how the design parameters are sampled."""
-        boundary_dict = {}
-        for design_var in parameters:
-            boundary_dict[design_var.name] = design_var.span
-        return boundary_dict
+    def run_batch(
+        self,
+        parameters: Tuple[ParameterType, ...],
+        fn_pre: Callable,
+        fn_post: Callable,
+        path_dir: str = None,
+        **batch_kwargs,
+    ) -> Tuple[Any]:
+        """Defines the search algorithm (batched)."""
+
+        def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
+            """Get task name for 'index'-th set of function kwargs."""
+            try:
+                kwarg_str = str(fn_kwargs)
+                if sim_index is not None:
+                    return f"{kwarg_str}_{sim_index}"
+                return kwarg_str
+            # just to be safe, handle the case if this does not work
+            except ValueError:
+                return f"{pt_index}_{sim_index}"
 
 
 class AbstractMethodRandom(MethodIndependent, ABC):
