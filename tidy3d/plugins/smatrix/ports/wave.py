@@ -1,19 +1,22 @@
 """Class and custom data array for representing a scattering matrix wave port."""
 
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 import pydantic.v1 as pd
 
 from ....components.base import cached_property
 from ....components.data.data_array import FreqDataArray
+from ....components.data.monitor_data import ModeSolverData
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
 from ....components.monitor import FieldMonitor, ModeSolverMonitor
+from ....components.simulation import Simulation
 from ....components.source import GaussianPulse, ModeSource, ModeSpec
 from ....components.types import Bound, Direction, FreqArray
 from ....exceptions import ValidationError
 from ...microwave import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
+from ...mode import ModeSolver
 from .base_terminal import AbstractTerminalPort
 
 
@@ -109,6 +112,18 @@ class WavePort(AbstractTerminalPort, Box):
         )
         return mode_mon
 
+    def to_mode_solver(self, simulation: Simulation, freqs: FreqArray) -> ModeSolver:
+        """Helper to create a :class:``ModeSolver``"""
+        mode_solver = ModeSolver(
+            simulation=simulation,
+            plane=self,
+            mode_spec=self.mode_spec,
+            freqs=freqs,
+            direction=self.direction,
+            colocate=False,
+        )
+        return mode_solver
+
     def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
         """Helper to compute voltage across the port."""
         field_monitor = sim_data[self._field_monitor_name]
@@ -119,13 +134,19 @@ class WavePort(AbstractTerminalPort, Box):
         field_monitor = sim_data[self._field_monitor_name]
         return self.current_integral.compute_current(field_monitor)
 
-    def compute_port_impedance(self, sim_data: SimulationData) -> FreqDataArray:
+    def compute_port_impedance(
+        self, sim_mode_data: Union[SimulationData, ModeSolverData]
+    ) -> FreqDataArray:
         """Helper to compute impedance of port. The port impedance is computed from the
         transmission line mode, which should be TEM or atleast quasi-TEM."""
         impedance_calc = ImpedanceCalculator(
             voltage_integral=self.voltage_integral, current_integral=self.current_integral
         )
-        mode_solver_data = sim_data[self._mode_monitor_name]
+        if isinstance(sim_mode_data, SimulationData):
+            mode_solver_data = sim_mode_data[self._mode_monitor_name]
+        else:
+            mode_solver_data = sim_mode_data
+
         impedance_array = impedance_calc.compute_impedance(mode_solver_data)
         impedance_array = impedance_array.sel(mode_index=self.mode_index)
         return FreqDataArray(impedance_array.values, coords=impedance_array.coords)
