@@ -17,8 +17,6 @@ import tidy3d.web as web
 from ...components.base import Tidy3dBaseModel
 from ...components.simulation import Simulation
 from ...log import log
-
-# from ...web.api.container import BatchData
 from .parameter import ParameterType
 
 DEFAULT_MONTE_CARLO_SAMPLER_TYPE = qmc.LatinHypercube
@@ -29,17 +27,17 @@ class Method(Tidy3dBaseModel, ABC):
 
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
-    batch_size: pd.PositiveInt = pd.Field(
-        ...,
-        title="Size of batch to be run",
-        description="TBD",
-    )
+    # batch_size: pd.PositiveInt = pd.Field(
+    #     ...,
+    #     title="Size of batch to be run",
+    #     description="TBD",
+    # )
 
-    num_batches: pd.PositiveInt = pd.Field(
-        ...,
-        title="Number of batches to be run",
-        description="TBD",
-    )
+    # num_batches: pd.PositiveInt = pd.Field(
+    #     ...,
+    #     title="Number of batches to be run",
+    #     description="TBD",
+    # )
 
     @abstractmethod
     def run(
@@ -93,8 +91,8 @@ class Method(Tidy3dBaseModel, ABC):
     def _tidy3d_run(self, sims, run_kwargs):
         """Generic logic for running a pre_fn on tidy3d servers"""
 
-        # Maybe it's just a check for the number of simulations given?
-        # Simulation building done by individual runs / submethod methods and then given to this
+        # Add sim type right before running
+        run_kwargs.update(simulation_type="tidy3d_design_testing")
 
         # If a single simulation is supplied
         if isinstance(sims, Simulation):
@@ -102,9 +100,7 @@ class Method(Tidy3dBaseModel, ABC):
 
         # Uses batches if multiple simulations have been supplied
         else:
-            batch = web.Batch(
-                simulations=sims, simulation_type="tidy3d_design_testing", **run_kwargs
-            )
+            batch = web.Batch(simulations=sims, **run_kwargs)
             return batch.run()
 
     @staticmethod
@@ -138,12 +134,6 @@ class Method(Tidy3dBaseModel, ABC):
 class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed."""
 
-    num_points: pd.PositiveInt = pd.Field(
-        ...,
-        title="Number of points for sampling",
-        description="TBD",
-    )
-
     @abstractmethod
     def sample(self, parameters: Tuple[ParameterType, ...], **kwargs) -> Dict[str, Any]:
         """Defines how the design parameters are sampled."""
@@ -173,15 +163,15 @@ class MethodSample(Method, ABC):
                 results.append(fn_output)
 
         else:
+            run_kwargs = {}
             # Create dict of simulations
             if len(fn_args) == 1:
-                print("TBD")
+                sims = pre_fn(**fn_args[0])
             else:
                 sims = {str(i): pre_fn(**arg_dict) for i, arg_dict in enumerate(fn_args)}
-                run_kwargs = {}
 
-                pre_out = self._tidy3d_run(sims, run_kwargs)
-                results = [sim_tuple[1] for sim_tuple in pre_out.items()]
+            pre_out = self._tidy3d_run(sims, run_kwargs)
+            results = [sim_tuple[1] for sim_tuple in pre_out.items()]
 
         # Post process the data
         processed_result = []
@@ -198,105 +188,14 @@ class MethodSample(Method, ABC):
         # get all function inputs
         fn_args, run_loc = self._assemble_args(parameters, pre_fn)
 
+        # Get min and max for each sample
+        # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
+        # min_max_params = [(min(param), max(param)) for param in args_as_params]
+
         # for each point, construct the function inputs, run it, record output
         results = self._eval_run(fn_args, pre_fn, post_fn, run_loc)
 
         return fn_args, results
-
-    # def _run_batch(
-    #     self, simulations: Dict[str, Simulation], path_dir: str = None, **kwargs
-    # ) -> BatchData:
-    #     """Create a batch of simulations and run it. Mainly separated out for ease of testing."""
-    #     batch = web.Batch(simulations=simulations, simulation_type="tidy3d_design", **kwargs)
-
-    #     if path_dir:
-    #         run_kwargs = dict(path_dir=path_dir)
-    #     else:
-    #         run_kwargs = {}
-    #     return batch.run(**run_kwargs)
-
-    # def run_batch(
-    #     self,
-    #     parameters: Tuple[ParameterType, ...],
-    #     fn_pre: Callable,
-    #     fn_post: Callable,
-    #     path_dir: str = None,
-    #     **batch_kwargs,
-    # ) -> Tuple[Any]:
-    #     """Defines the search algorithm (batched)."""
-
-    #     # get all function inputs
-    #     fn_args = self._assemble_args(parameters)
-
-    #     def get_task_name(pt_index: int, sim_index: int, fn_kwargs: dict) -> str:
-    #         """Get task name for 'index'-th set of function kwargs."""
-    #         try:
-    #             kwarg_str = str(fn_kwargs)
-    #             if sim_index is not None:
-    #                 return f"{kwarg_str}_{sim_index}"
-    #             return kwarg_str
-    #         # just to be safe, handle the case if this does not work
-    #         except ValueError:
-    #             return f"{pt_index}_{sim_index}"
-
-    #     # for each point, construct the simulation inputs into a dict
-    #     simulations = {}
-    #     task_name_mappings = []
-    #     for i in range(fn_args):
-    #         fn_kwargs = {key: vals[i] for key, vals in fn_args.items()}
-    #         sim = fn_pre(**fn_kwargs)
-    #         if isinstance(sim, Simulation):
-    #             task_name = get_task_name(pt_index=i, sim_index=None, fn_kwargs=fn_kwargs)
-    #             simulations[task_name] = sim
-    #             task_name_mappings.append([task_name])
-    #         elif isinstance(sim, dict):
-    #             task_name_mappings.append({})
-    #             for name, _sim in sim.items():
-    #                 task_name = get_task_name(pt_index=1, sim_index=name, fn_kwargs=fn_kwargs)
-    #                 simulations[task_name] = _sim
-    #                 task_name_mappings[i][name] = task_name
-    #         else:
-    #             task_name_mappings.append([])
-    #             for j, _sim in enumerate(sim):
-    #                 task_name = get_task_name(pt_index=i, sim_index=j, fn_kwargs=fn_kwargs)
-    #                 simulations[task_name] = _sim
-    #                 task_name_mappings[i].append(task_name)
-
-    #     # run in batch
-    #     batch_data = self._run_batch(simulations=simulations, path_dir=path_dir, **batch_kwargs)
-    #     task_id_dict = batch_data.task_ids
-
-    #     # run post processing on each data
-    #     result = []
-    #     task_ids = []
-    #     for task_names_i in task_name_mappings:
-    #         if isinstance(task_names_i, dict):
-    #             task_ids.append([task_id_dict[task_name] for task_name in task_names_i.values()])
-    #             kwargs_dict = {
-    #                 kwarg_name: batch_data[task_name]
-    #                 for kwarg_name, task_name in task_names_i.items()
-    #             }
-    #             val = fn_post(**kwargs_dict)
-    #         else:
-    #             task_ids.append([task_id_dict[task_name] for task_name in task_names_i])
-    #             args_list = (batch_data[task_name] for task_name in task_names_i)
-    #             val = fn_post(*args_list)
-
-    #         result.append(val)
-
-    #     return fn_args, result, task_ids, batch_data
-
-
-class MethodOptimise(Method, ABC):
-    """A method for handling design searches that optimise the design"""
-
-    def create_boundary_dict(
-        self,
-        parameters: Tuple[ParameterType, ...],
-    ):
-        """Reshape parameter spans to dict of boundaries"""
-
-        return {design_var.name: design_var.span for design_var in parameters}
 
 
 class MethodGrid(MethodSample):
@@ -324,6 +223,18 @@ class MethodGrid(MethodSample):
         t_vals_dict = [dict(zip(vals_dict.keys(), values)) for values in zip(*vals_dict.values())]
 
         return t_vals_dict
+
+
+class MethodOptimise(Method, ABC):
+    """A method for handling design searches that optimise the design"""
+
+    def create_boundary_dict(
+        self,
+        parameters: Tuple[ParameterType, ...],
+    ):
+        """Reshape parameter spans to dict of boundaries"""
+
+        return {design_var.name: design_var.span for design_var in parameters}
 
 
 class MethodBayOpt(MethodOptimise, ABC):
@@ -425,6 +336,12 @@ class MethodBayOpt(MethodOptimise, ABC):
 class AbstractMethodRandom(MethodSample, ABC):
     """Select parameters with an object with a ``random`` method."""
 
+    num_points: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of points for sampling",
+        description="TBD",
+    )
+
     @abstractmethod
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
@@ -435,16 +352,16 @@ class AbstractMethodRandom(MethodSample, ABC):
         sampler = self.get_sampler(parameters)
         pts_01 = sampler.random(self.num_points)
 
+        # Convert value from 0-1 to fit within the parameter spans
+        args_by_param = []
+        for i, design_var in enumerate(parameters):
+            pts_i_01 = pts_01[..., i]
+            args_by_param.append(design_var.select_from_01(pts_i_01))
+        args_by_sample = [[row[i] for row in args_by_param] for i in range(len(args_by_param[0]))]
+
         # Get output list of kwargs for pre_fn
         keys = [param.name for param in parameters]
-        result = [{keys[j]: row[j] for j in range(len(keys))} for row in pts_01]
-
-        # for each dimension, sample `num_points` points and combine them all
-        # result = {}
-        # for i, design_var in enumerate(parameters):
-        #     pts_i_01 = pts_01[..., i]
-        #     values = design_var.select_from_01(pts_i_01)
-        #     result[design_var.name] = values
+        result = [{keys[j]: row[j] for j in range(len(keys))} for row in args_by_sample]
 
         return result
 
