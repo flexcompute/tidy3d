@@ -26,7 +26,7 @@ from .data.monitor_data import (
     FieldProjectionKSpaceData,
 )
 from .data.sim_data import SimulationData
-from .medium import MediumType
+from .good_conductor import MediumType
 from .monitor import (
     AbstractFieldProjectionMonitor,
     FieldMonitor,

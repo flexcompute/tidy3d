@@ -114,6 +114,15 @@ class PECConformal(AbstractSubpixelAveragingMethod):
 PECSubpixelType = Union[Staircasing, HeuristicPECStaircasing, PECConformal]
 
 
+class SurfaceImpedance(PECConformal):
+    """Apply 1st order (Leontovich) surface impedance boundary condition to
+    structure made of ``td.LossyMetal``.
+    """
+
+
+GoodConductorSubpixelType = Union[Staircasing, VolumetricAveraging, SurfaceImpedance]
+
+
 class SubpixelSpec(Tidy3dBaseModel):
     """Defines specification for subpixel averaging schemes when added to ``Simulation.subpixel``."""
 
@@ -140,16 +149,27 @@ class SubpixelSpec(Tidy3dBaseModel):
         discriminator=TYPE_TAG_STR,
     )
 
+    lossy_metal: GoodConductorSubpixelType = pd.Field(
+        VolumetricAveraging(),
+        title="Subpixel averaging method on good conductor interfaces",
+        description="Subpixel averaging method applied to `td.LossyMetal` structure interfaces.",
+        discriminator=TYPE_TAG_STR,
+    )
+
     @classmethod
     def staircasing(cls) -> SubpixelSpec:
         """Apply staircasing on all material boundaries."""
         return cls(dielectric=Staircasing(), metal=Staircasing(), pec=Staircasing())
 
-    def courant_ratio(self, contain_pec_structures: bool) -> float:
+    def courant_ratio(self, contain_pec_structures: bool, contain_sibc_structures: bool) -> float:
         """The scaling ratio applied to Courant number so that the courant number
         in the simulation is ``sim.courant * courant_ratio``. So far only PEC subpixel averaging
-        scheme requires deduction of Courant number.
+        scheme and SurfaceImpedance require deduction of Courant number.
         """
+        if contain_pec_structures and contain_sibc_structures:
+            return min(self.pec.courant_ratio, self.lossy_metal.courant_ratio)
         if contain_pec_structures:
             return self.pec.courant_ratio
+        if contain_sibc_structures:
+            return self.lossy_metal.courant_ratio
         return 1.0

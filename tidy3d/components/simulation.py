@@ -36,6 +36,7 @@ from .geometry.base import Box, Geometry
 from .geometry.mesh import TriangleMesh
 from .geometry.utils import flatten_groups, traverse_geometries
 from .geometry.utils_2d import get_bounds, get_thickened_geom, snap_coordinate_to_grid, subdivide
+from .good_conductor import LossyMetal, MediumType, MediumType3D
 from .grid.grid import Coords, Coords1D, Grid
 from .grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
 from .lumped_element import LumpedElementType
@@ -47,8 +48,6 @@ from .medium import (
     FullyAnisotropicMedium,
     Medium,
     Medium2D,
-    MediumType,
-    MediumType3D,
 )
 from .monitor import (
     AbstractFieldProjectionMonitor,
@@ -3772,8 +3771,10 @@ class Simulation(AbstractYeeGridSimulation):
 
         mediums = self.scene.mediums
         contain_pec_structures = any(medium.is_pec for medium in mediums)
+        contain_sibc_structures = any(isinstance(medium, LossyMetal) for medium in mediums)
         return self.courant * self._subpixel.courant_ratio(
-            contain_pec_structures=contain_pec_structures
+            contain_pec_structures=contain_pec_structures,
+            contain_sibc_structures=contain_sibc_structures,
         )
 
     @cached_property

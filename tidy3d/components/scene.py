@@ -23,6 +23,7 @@ from .data.dataset import (
 )
 from .geometry.base import Box, ClipOperation, GeometryGroup
 from .geometry.utils import flatten_groups, traverse_geometries
+from .good_conductor import MediumType, MediumType3D
 from .grid.grid import Coords, Grid
 from .heat_spec import SolidSpec
 from .medium import (
@@ -30,8 +31,6 @@ from .medium import (
     AbstractPerturbationMedium,
     Medium,
     Medium2D,
-    MediumType,
-    MediumType3D,
 )
 from .structure import Structure
 from .types import TYPE_TAG_STR, Ax, Bound, Coordinate, InterpMethod, Shapely, Size
