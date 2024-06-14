@@ -14,13 +14,13 @@ This page hopefully will get you started to develop Tidy3D.
 .. toctree::
     :maxdepth: 1
 
-    understanding_virutal_environments
+    understanding_virtual_environments
     understanding_poetry
     code_quality_principles
     project_structure
 
 
-.. include:: /development/introduction/understanding_virutal_environments.rst
+.. include:: /development/introduction/understanding_virtual_environments.rst
 .. include:: /development/introduction/understanding_poetry.rst
 .. include:: /development/introduction/code_quality_principles.rst
 .. include:: /development/introduction/project_structure.rst

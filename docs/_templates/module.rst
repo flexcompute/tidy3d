@@ -1,8 +1,6 @@
 :html_theme.sidebar_secondary.remove:
 {{ fullname | escape | underline}}
 
-.. currentmodule:: {{ fullname }}
-
 .. autoclass:: {{ fullname }}
    :members:
    :show-inheritance:
@@ -41,3 +39,4 @@
    .. rubric:: Commonly Used - Inherited
 
    .. include:: ../_custom_autosummary/{{ fullname }}.rst
+
