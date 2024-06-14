@@ -89,3 +89,18 @@ Further Guidance
 - The sphinx warnings are OK as long as the build occurs, errors will cause the crash the build.
 - Make sure all your internal API references start with ``tidy3d.<your_reference>``
 - In notebooks, always have absolute links, otherwise the links will break when the user downloads them.
+
+
+Writing Documentation
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+... raw::
+
+    Normally, there are no heading levels assigned to certain characters as the structure is determined from the succession of headings. However, this convention is used in Python Developer’s Guide for documenting which you may follow:
+    # with overline, for parts
+    * with overline, for chapters
+    = for sections
+    - for subsections
+    ^ for subsubsections
+    " for paragraphs
+

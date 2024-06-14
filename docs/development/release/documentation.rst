@@ -24,17 +24,3 @@ Hot Fix & Submodule Updates
 To make a “hot fix” (eg fix a typo, add a notebook, update the release FAQ), just update the ``latest`` branch in ``tidy3d`` repo. This should automatically sync to `tidy3d-docs`, and trigger a docs rebuild. **However, we should avoid this as this will cause the ``develop`` and ``latest branches`` to diverge.** Ideally, these hot fixes could wait until the next pre/post-release to be propagated through.
 
 NOTE: To avoid conflicts, ideally we should only update ``latest`` by merging ``develop`` in it, or at the very least we should make sure changes are propagated to both branches.
-
-Writing Documentation
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-... raw::
-
-    Normally, there are no heading levels assigned to certain characters as the structure is determined from the succession of headings. However, this convention is used in Python Developer’s Guide for documenting which you may follow:
-    # with overline, for parts
-    * with overline, for chapters
-    = for sections
-    - for subsections
-    ^ for subsubsections
-    " for paragraphs
-

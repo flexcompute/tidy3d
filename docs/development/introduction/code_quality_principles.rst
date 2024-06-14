@@ -1,5 +1,5 @@
-Code Quality
-------------
+Code Quality Principles
+------------------------
 
 When writing a code snippet, remember the saying: "code is read more than written". We want to maintain our code maintainable, readable and high quality.
 

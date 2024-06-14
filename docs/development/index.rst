@@ -9,7 +9,6 @@ Welecome to the ``tidy3d`` developers guide!
     :maxdepth: 2
 
     introduction/index
-    project_structure
     installation
     usage
     documentation
@@ -17,7 +16,6 @@ Welecome to the ``tidy3d`` developers guide!
     release/index
 
 .. include:: /development/introduction/index.rst
-.. include:: /development/project_structure.rst
 .. include:: /development/installation.rst
 .. include:: /development/usage.rst
 .. include:: /development/documentation.rst
