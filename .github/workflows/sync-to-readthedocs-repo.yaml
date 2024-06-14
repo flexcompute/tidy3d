@@ -9,6 +9,7 @@ on:
       - develop
       - 'pre/*'
       - 'production/test/*'
+      - 'docs/demo/*'
     tags:
       - 'v*'
       - 'demo/*'

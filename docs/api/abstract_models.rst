@@ -43,8 +43,6 @@ These are some classes that are used to organize the tidy3d components, but aren
    tidy3d.components.monitor.AbstractFieldProjectionMonitor
    tidy3d.components.lumped_element.LumpedElement
    tidy3d.components.grid.grid_spec.GridSpec1d
-   tidy3d.components.base_sim.data.sim_data.SimulationData
-   tidy3d.components.data.sim_data.AbstractYeeGridSimulationData
    tidy3d.components.data.sim_data.SimulationData
    tidy3d.components.data.data_array.DataArray
    tidy3d.components.data.monitor_data.MonitorData

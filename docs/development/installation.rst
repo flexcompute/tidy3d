@@ -1,20 +1,15 @@
-Installation
-==============
-
-Beginners Guide
-^^^^^^^^^^^^^^^
-
-
+Development Environment Installation
+=====================================
 
 The Fast Lane
-^^^^^^^^^^^^^
+--------------
 
 Maybe you already have ``tidy3d`` installed in some form. After installing version ``tidy3d>=2.6``, you can use a few terminal commands to set you up on the correct environment and perform common development tasks. Just run in your terminal, :code:`tidy3d develop` to get the latest list of commands.
 
 It does not matter how you have installed ``tidy3d`` before as long as you have any form of ``tidy3d>=2.6`` in your environment. This can help you transition from a standard user installation to a development environment installation.
 
 Quick Start
-''''''''''''
+~~~~~~~~~~~~
 
 Instructions for anyone who wants to migrate to the development flow from a version before 2.6:
 
@@ -61,16 +56,14 @@ If you rather install ``poetry``, ``pipx`` and ``pandoc`` yourself, you can run 
     tidy3d develop verify-dev-environment
 
 
-.. _The Detailed Lane::
-
 The Detailed Lane
-^^^^^^^^^^^^^^^^^
+------------------
 
 If you do not have any of the above tools already installed and want to install them manually, let's go through the process of setting things up from scratch:
 
 
 Environment Requirements
-''''''''''''''''''''''''''
+^^^^^^^^^^^^^^^^^^^^^^^^
 
 Make sure you have installed ``pipx``. We provide common installation flows below:
 
@@ -182,7 +175,7 @@ If you want to contribute to the project, read the following section:
 
 
 More Contribution Requirements
-''''''''''''''''''''''''''''''
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 If you want to contribute to the development of ``tidy3d``, you can follow the instructions below to set up your development environment. This will allow you to run the tests, build the documentation, and run the examples. Another thing you need to do before committing to the project is to install the pre-commit hooks. This will ensure that your code is formatted correctly and passes the tests before you commit it. To do this, run the following command:
 
@@ -204,7 +197,7 @@ You can also run the checks manually on all files by running the following comma
 
 
 Packaging Equivalent Functionality
-'''''''''''''''''''''''''''''''''''
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This package installation process should be  approximately equivalent to the previous ``setup.py`` installation flow. Independent of the ``poetry`` development flow, it is possible to run any of the following commands in any particular virtual environment you have configured:
 

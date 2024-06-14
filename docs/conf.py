@@ -32,14 +32,14 @@ full_build = True
 # TODO sort this out
 here = os.path.abspath(os.path.dirname(__file__))
 sys.path.insert(0, os.path.abspath("_ext"))
-sys.path.insert(0, os.path.abspath("source"))
-sys.path.insert(0, os.path.abspath("notebooks"))
-sys.path.insert(0, os.path.abspath(""))
-sys.path.insert(0, os.path.abspath("../tidy3d"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components"))
-sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
-sys.path.insert(0, os.path.abspath("../tidy3d/web"))
-sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
+# sys.path.insert(0, os.path.abspath("source"))
+# sys.path.insert(0, os.path.abspath("notebooks"))
+# # sys.path.insert(0, os.path.abspath(""))
+# sys.path.insert(0, os.path.abspath("../tidy3d"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/components/base_sim"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/web"))
+# sys.path.insert(0, os.path.abspath("../tidy3d/plugins"))
 
 # -- Project information -----------------------------------------------------
 
@@ -64,8 +64,10 @@ autosummary_generate = full_build  # Turn on sphinx.ext.autosummary
 autodoc_class_signature = "separated"
 autodoc_default_options = {
     "members": True,
+    "inherited-members": True,
     "member-order": "bysource",
     "undoc-members": True,
+    "exclude-members": "SchemaConfig,__init__,Config,attrs,chunk,copy,json,log",
 }
 autodoc_typehints = "none"
 ## TODO DEBATE KEEP
@@ -75,7 +77,18 @@ copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: 
 copybutton_prompt_is_regexp = True
 custom_sitemap_excludes = [r"/notebooks/"]
 # divparams_enable_postprocessing = True # TODO FIX
-exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "**.ipynb_checkpoints", "faq/_faqs/*"]
+exclude_patterns = [
+    "_docs/",
+    "_templates/",
+    "_ext/",
+    "**.ipynb_checkpoints",
+    ".DS_Store",
+    "Thumbs.db",
+    "faq/_faqs/*",
+    "scripts/*",
+    "tests/*",
+    ".github/*",
+]
 extensions = [
     "IPython.sphinxext.ipython_directive",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -152,6 +165,17 @@ html_theme_options = {
 }
 latex_engine = "xelatex"
 language = "en"
+include_patterns = [
+    "tidy3d/*",
+    "faq/docs/*",
+    "notebooks/*.ipynb",
+    "notebooks/docs/*",
+    "**.rst",
+    "**.png",
+    "**.svg",
+    "**.txt",
+    "**/sitemap.xml",
+]
 napoleon_google_docstring = False
 napoleon_numpy_docstring = True
 napoleon_include_init_with_doc = False
