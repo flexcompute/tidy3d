@@ -1359,6 +1359,60 @@ class AbstractCustomMedium(AbstractMedium, ABC):
         elif isinstance(field, UnstructuredGridDataset):
             return any(len(subfield) == 0 for subfield in [field.points, field.cells, field.values])
 
+    def _derivative_field_cmp(
+        self,
+        E_der_map: ElectromagneticFieldDataset,
+        eps_data: PermittivityDataset,
+        dim: str,
+    ) -> np.ndarray:
+        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
+        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
+
+        # compute sizes along each of the interpolation dimensions
+        sizes_list = []
+        for _, coords in coords_interp.items():
+            num_coords = len(coords)
+            coords = np.array(coords)
+
+            # compute distances between midpoints for all internal coords
+            mid_points = (coords[1:] + coords[:-1]) / 2.0
+            dists = np.diff(mid_points)
+            sizes = np.zeros(num_coords)
+            sizes[1:-1] = dists
+
+            # estimate the sizes on the edges using 2 x the midpoint distance
+            sizes[0] = 2 * abs(mid_points[0] - coords[0])
+            sizes[-1] = 2 * abs(coords[-1] - mid_points[-1])
+
+            sizes_list.append(sizes)
+
+        # turn this into a volume element, should be re-sizeable to the gradient shape
+        if sizes_list:
+            d_vol = functools.reduce(np.outer, sizes_list)
+        else:
+            # if sizes_list is empty, then reduce() fails
+            d_vol = np.array(1.0)
+
+        # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
+        E_der_dim = E_der_map.field_components[f"E{dim}"]
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+        vjp_array = np.array(E_der_dim_interp.values).astype(float)
+        vjp_array = vjp_array.reshape(eps_data.shape)
+
+        # multiply by volume elements (if possible, being defensive here..)
+        try:
+            vjp_array *= d_vol.reshape(vjp_array.shape)
+        except ValueError:
+            log.warning(
+                "Skipping volume element normalization of 'CustomMedium' gradients. "
+                f"Could not reshape the volume elements of shape {d_vol.shape} "
+                f"to the shape of the gradient {vjp_array.shape}. "
+                "If you encounter this warning, gradient direction will be accurate but the norm "
+                "will be inaccurate. Please raise an issue on the tidy3d front end with this "
+                "message and some information about your simulation setup and we will investigate. "
+            )
+        return vjp_array
+
 
 """ Dispersionless Medium """
 
@@ -3472,8 +3526,11 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
             """
 
-            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
-            dJ_deps = complex(dJ_deps)
+            dJ_deps = 0.0
+            for dim in "xyz":
+                dJ_deps += self._derivative_field_cmp(
+                    E_der_map=E_der_map, eps_data=self.eps_inf, dim=dim
+                )
 
             # TODO: fix for multi-frequency, also _xx is arbitrary...
             frequency = eps_data.eps_xx.coords["f"].values.flat[0]
