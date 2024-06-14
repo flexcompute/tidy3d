@@ -27,7 +27,6 @@ Tidy3D Special Constants
    :template: module.rst
 
    tidy3d.constants.inf
-   tidy3d.constants.PEC
 
 Tidy3D Configuration
 --------------------
