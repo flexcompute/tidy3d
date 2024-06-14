@@ -40,6 +40,83 @@
                     1.0
                 ]
             },
+            "name": "traced_dieletric_box",
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": "dieletric",
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "Medium",
+                "permittivity": 2.0,
+                "conductivity": 0.0
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "PolySlab",
+                "axis": 1,
+                "sidewall_angle": 0.0,
+                "reference_plane": "middle",
+                "slab_bounds": [
+                    -0.1,
+                    0.1
+                ],
+                "dilation": 0.0,
+                "vertices": [
+                    [
+                        -0.9,
+                        0.0
+                    ],
+                    [
+                        -0.9,
+                        0.1
+                    ],
+                    [
+                        -1.0,
+                        0.1
+                    ]
+                ]
+            },
+            "name": "traced custom polyslab",
+            "type": "Structure",
+            "medium": {
+                "attrs": {},
+                "name": null,
+                "frequency_range": null,
+                "allow_gain": false,
+                "nonlinear_spec": null,
+                "modulation_spec": null,
+                "heat_spec": null,
+                "type": "CustomMedium",
+                "interp_method": "nearest",
+                "subpixel": false,
+                "eps_dataset": null,
+                "permittivity": "SpatialDataArray",
+                "conductivity": null
+            }
+        },
+        {
+            "attrs": {},
+            "geometry": {
+                "attrs": {},
+                "type": "Box",
+                "center": [
+                    -1.0,
+                    0.0,
+                    0.0
+                ],
+                "size": [
+                    1.0,
+                    1.0,
+                    1.0
+                ]
+            },
             "name": "dieletric_box",
             "type": "Structure",
             "medium": {
@@ -2714,9 +2791,10 @@
                 }
             }
         ],
+        "snapping_points": [],
         "type": "GridSpec"
     },
-    "version": "2.7.0rc2",
+    "version": "2.7.0",
     "lumped_elements": [],
     "subpixel": false,
     "courant": 0.8,

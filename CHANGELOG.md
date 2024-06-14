@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2024-06-13
+
 ### Added
 - EME solver through `EMESimulation` class.
 - 2D heat simulations are now fully supported. 
@@ -1221,9 +1223,8 @@ which fields are to be projected is now determined automatically based on the me
 - Job and Batch classes for better simulation handling (eventually to fully replace webapi functions).
 - A large number of small improvements and bug fixes.
 
-[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0rc2...pre/2.7
-[2.7.0rc2]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0rc2
-[2.7.0rc1]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.7.0rc1
+[Unreleased]: https://github.com/flexcompute/tidy3d/compare/v2.7.0...develop
+[2.7.0]: https://github.com/flexcompute/tidy3d/compare/v2.6.4...v2.7.0
 [2.6.4]: https://github.com/flexcompute/tidy3d/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/flexcompute/tidy3d/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/flexcompute/tidy3d/compare/v2.6.1...v2.6.2

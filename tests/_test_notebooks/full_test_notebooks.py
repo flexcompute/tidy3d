@@ -27,11 +27,13 @@ for _, path in enumerate(notebook_filenames_all):
     print(f"'{notebook_base[:-6]}',")
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = []
+run_only = [
+]
 
 skip = [
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
+    '90BendPolarizationSplitterRotator',
     "BullseyeCavityPSO",
     "FocusedApodGC",
     "GeneticAlgorithmReflector",
@@ -52,7 +54,7 @@ for fname in notebook_filenames_all:
         notebook_filenames.append(fname)
 
 """
-as of April 15 2024
+as of June 08 2024
 '8ChannelDemultiplexer',
 '90BendPolarizationSplitterRotator',
 '90OpticalHybrid',
@@ -75,7 +77,16 @@ as of April 15 2024
 'AllDielectricStructuralColor',
 'AndersonLocalization',
 'AnimationTutorial',
+'AntiResonantHollowCoreFiber',
 'AutoGrid',
+'Autograd10YBranchLevelSet',
+'Autograd1Intro',
+'Autograd2GradientChecking',
+'Autograd3InverseDesign',
+'Autograd4MultiObjective',
+'Autograd5BoundaryGradients',
+'Autograd6GratingCoupler',
+'Autograd8WaveguideBend',
 'Bandstructure',
 'BilayerSiNEdgeCoupler',
 'BilevelPSR',
@@ -87,6 +98,8 @@ as of April 15 2024
 'BullseyeCavityPSO',
 'CMOSRGBSensor',
 'CavityFOM',
+'CharacteristicImpedanceCalculator',
+'CoupledLineBandpassFilter',
 'CreatingGeometryUsingTrimesh',
 'CustomFieldSource',
 'CustomMediumTutorial',
@@ -102,6 +115,7 @@ as of April 15 2024
 'FieldProjections',
 'Fitting',
 'FocusedApodGC',
+'FreeFormCoupler',
 'FresnelLens',
 'FullyAnisotropic',
 'GDSExport',
@@ -116,12 +130,14 @@ as of April 15 2024
 'HeatSolver',
 'HighQGe',
 'HighQSi',
+'InverseDesign',
 'MIMResonator',
 'MMI1x4',
 'MachZehnderModulator',
 'MetalHeaterPhaseShifter',
 'Metalens',
 'MicrowaveFrequencySelectiveSurface',
+'MidIRMetalens',
 'MoS2Waveguide',
 'ModalSourcesMonitors',
 'ModeSolver',
