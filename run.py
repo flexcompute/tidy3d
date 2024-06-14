@@ -8,7 +8,7 @@ import xarray as xr
 from autograd.test_util import check_grads
 
 from tidy3d.components.data.data_array import DataArray
-from tidy3d.plugins.autograd.primitives import interpn
+from tidy3d.plugins.autograd.functions import interpn
 
 
 def check_interp_allclose(coords, values, xi, yi):
