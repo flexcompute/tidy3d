@@ -27,13 +27,12 @@ for _, path in enumerate(notebook_filenames_all):
     print(f"'{notebook_base[:-6]}',")
 
 # if you want to run only some notebooks, put here, if empty, run all
-run_only = [
-]
+run_only = []
 
 skip = [
     # long time (excluding most adjoint)
     "8ChannelDemultiplexer",
-    '90BendPolarizationSplitterRotator',
+    "90BendPolarizationSplitterRotator",
     "BullseyeCavityPSO",
     "FocusedApodGC",
     "GeneticAlgorithmReflector",
