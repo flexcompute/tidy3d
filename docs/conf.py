@@ -166,7 +166,7 @@ latex_engine = "xelatex"
 language = "en"
 include_patterns = [
     "tidy3d/*",
-    "faq/docs/*",
+    "faq/docs/**",
     "notebooks/*.ipynb",
     "notebooks/docs/*",
     "**.rst",
@@ -247,6 +247,7 @@ latex_elements = {
     """
 }
 
+
 # latex_elements: dict = {
 #     # "preamble": r"\usepackage{bm}\n\usepackage{amssymb}\n\usepackage{esint}",
 #     # The paper size ('letterpaper' or 'a4paper').
@@ -262,3 +263,50 @@ latex_elements = {
 #     #
 #     # 'figure_align': 'htbp',
 # }
+
+"""
+This is basically a hack until I finally get round to writing our own custom sphinx extension which will customise 
+the way we represent our documentation properly. The goal of adding these filters is that at least we'll get useful 
+information on errors, rather than those related to the docs memory - stub page generation tradeoff.
+"""
+import logging
+
+
+class ImportWarningFilter(logging.Filter):
+    def filter(self, record):
+        # Suppress specific autosummary import warnings
+        message = record.getMessage()
+        if "autosummary: failed to import" in message and any(
+            phrase in message
+            for phrase in ["ModuleNotFoundError", "ValueError", "KeyError", "AttributeError"]
+        ):
+            return False
+        return True
+
+
+class AutosummaryFilter(logging.Filter):
+    def filter(self, record):
+        # Suppress "autosummary: stub file not found" warnings
+        if "autosummary" in record.getMessage() and "stub file not found" in record.getMessage():
+            return False
+        return True
+
+
+def add_import_warning_filter(app):
+    # Get the Sphinx logger
+    logger = logging.getLogger("sphinx")
+    # Add the custom filter to the logger
+    logger.addFilter(ImportWarningFilter())
+
+
+def add_autosummary_filter(app):
+    # Get the Sphinx logger
+    logger = logging.getLogger("sphinx")
+    # Add the custom filter to the logger
+    logger.addFilter(AutosummaryFilter())
+
+
+def setup(app):
+    # Apply the custom filter early in the build process
+    app.connect("builder-inited", add_autosummary_filter)
+    app.connect("builder-inited", add_import_warning_filter)
