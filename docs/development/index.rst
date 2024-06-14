@@ -2,12 +2,13 @@
 Development Guide |:hammer_and_wrench:|
 ********************************************************************
 
-Welecome to the ``tidy3d`` developers guide! These are just some recommendations I've compiled, but we can change anything as we think might help the development cycle more.
+Welecome to the ``tidy3d`` developers guide!
+
 
 .. toctree::
-    :maxdepth: 1
-    :hidden:
+    :maxdepth: 2
 
+    introduction/index
     project_structure
     installation
     usage
@@ -15,6 +16,7 @@ Welecome to the ``tidy3d`` developers guide! These are just some recommendations
     recommendations
     release/index
 
+.. include:: /development/introduction/index.rst
 .. include:: /development/project_structure.rst
 .. include:: /development/installation.rst
 .. include:: /development/usage.rst

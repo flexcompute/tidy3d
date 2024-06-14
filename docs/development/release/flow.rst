@@ -7,9 +7,11 @@ under that release.
 
 We are using a variation of the `gitflow
 workflow <https://www.atlassian.com/git/tutorials/comparing-workflows/gitflow-workflow>`__
-- so this is the first thing to familiarize yourselves with. The
-splitting of branches into ``main``, ``develop`` and separate feature
-branches is as explained there. Most importantly, **all contributions
+- so this is the first thing to familiarize yourselves with. The link provided explains it very well, but to summarize: features get added to a pre-release branch (``pre/x.x``), and once all the features for a particular release have been implemented, the pre-release branch gets merged into ``develop``. The ``latest`` branch holds the code we want most users to be using. When we wish to release a new version, we simply merge the state of ``develop`` into ``latest``, propagating all of the changes at once. We will describe this process in more detail below.
+
+When developing new features, we ask that you create a branch off of whichever branch you aim to contribute to. This is typically either the current pre-release branch named ``pre/x.x`` or ``develop`` depending on what stage of development we are currently in. You then work on your branch, and when the feature is ready to merge in, we prefer ``git rebase`` to ``git merge``. This creates a cleaner, linear history. You can read about why we do it and what a rebase is at `this link <https://www.atlassian.com/git/tutorials/merging-vs-rebasing>`_. And see Momchil’s more specific notes `here <https://www.notion.so/6a7b343ee1cf4ca28fdad0a870354eee?pvs=21>`_.
+
+Most importantly, **all contributions
 should happen through a PR from a feature branch into the develop
 branch.**
 
@@ -29,8 +31,8 @@ a clean branch on your machine.
 .. code-block:: bash
 
     # from the main tidy3d frontend repo
-   git checkout develop
-   git pull origin develop
+   git checkout pre/x.x
+   git pull origin pre/x.x
    git checkout -b my_name/new_feature
 
 
@@ -42,10 +44,10 @@ of ``develop``, in case other work has been merged meanwhile.
 
 .. code-block:: bash
 
-   git checkout develop
-   git pull origin develop
+   git checkout pre/x.x
+   git pull origin pre/x.x
    git checkout my_name/new_feature
-   git rebase -i develop
+   git rebase -i pre/x.x
 
 This will now open an editor that will allow you to edit the commits in
 the feature branch. There is plenty of explanations of the various
