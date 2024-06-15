@@ -1483,11 +1483,11 @@ class Simulation(AbstractYeeGridSimulation):
 
     courant: float = pydantic.Field(
         0.99,
-        title="Courant Factor",
-        description="Courant stability factor, controls time step to spatial step ratio. "
+        title="Normalized Courant Factor",
+        description="Normalized Courant stability factor that is no larger than 1 when CFL "
+        "stability condition is met. It controls time step to spatial step ratio. "
         "Lower values lead to more stable simulations for dispersive materials, "
-        "but result in longer simulation times. This factor is normalized to no larger than 1 "
-        "when CFL stability condition is met in 3D.",
+        "but result in longer simulation times.",
         gt=0.0,
         le=1.0,
     )
@@ -1511,20 +1511,22 @@ class Simulation(AbstractYeeGridSimulation):
 
     .. math::
 
-        C_{\\text{1D}} = \\frac{\\Delta x}{c \\Delta t} \\leq 1
+        C_{\\text{1D}} = \\frac{c \\Delta t}{\\Delta x} \\leq 1
 
     **2D Illustration**
 
-    In a 2D grid, where the :math:`E_z` field is at the red dot center surrounded by four green magnetic edge components
+    In a 2D uniform grid, where the :math:`E_z` field is at the red dot center surrounded by four green magnetic edge components
     in a square Yee cell grid:
 
     .. image:: ../../_static/img/courant_instability_2d.png
 
     .. math::
 
-        C_{\\text{2D}} = \\frac{\\Delta x}{c \\Delta t} \\leq \\frac{1}{\\sqrt{2}}
+        C_{\\text{2D}} = \\frac{c\\Delta t}{\\Delta x} \\leq \\frac{1}{\\sqrt{2}}
 
-    Hence, for the same spatial grid, the time step in 2D grid needs to be smaller than the time step in a 1D grid.
+    Hence, for the same spatial grid, the time step in 2D grid needs to be smaller than the time step in a 1D grid. Note we use
+    a normalized Courant number in our simulation, which in 2D is :math:`\\sqrt{2}C_{\\text{2D}}`. CFL stability condition
+    is met when the normalized Courant number is no larger than 1.
 
     **3D Illustration**
 
