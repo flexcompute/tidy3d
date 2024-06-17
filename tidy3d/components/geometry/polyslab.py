@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import isclose
-from typing import Any, List, Tuple
+from typing import List, Tuple
 
 import autograd.numpy as np
 import pydantic.v1 as pydantic
@@ -15,9 +15,10 @@ from ...constants import LARGE_NUMBER, MICROMETER, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ...packaging import verify_packages_import
-from ..autograd import TracedVertices, get_static
+from ..autograd import AutogradFieldMap, TracedVertices, get_static
+from ..autograd.derivative_utils import DerivativeInfo
 from ..base import cached_property, skip_if_fields_missing
-from ..data.dataset import ElectromagneticFieldDataset, PermittivityDataset
+from ..data.dataset import ElectromagneticFieldDataset
 from ..types import (
     ArrayFloat2D,
     ArrayLike,
@@ -1368,40 +1369,18 @@ class PolySlab(base.Planar):
 
     """ Autograd code """
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute adjoint derivatives for each of the ``field_path``s."""
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
 
-        assert field_paths == [("vertices",)], "only support derivative wrt 'PolySlab.vertices'."
+        assert derivative_info.paths == [
+            ("vertices",)
+        ], "only support derivative wrt 'PolySlab.vertices'."
 
-        vjp_vertices = self.compute_derivative_vertices(
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_data=eps_data,
-            eps_in=eps_in,
-            eps_out=eps_out,
-            bounds=bounds,
-        )
+        vjp_vertices = self.compute_derivative_vertices(derivative_info=derivative_info)
 
         return {("vertices",): vjp_vertices}
 
-    def compute_derivative_vertices(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> TracedVertices:
+    def compute_derivative_vertices(self, derivative_info: DerivativeInfo) -> TracedVertices:
         # derivative w.r.t each edge
 
         vertices = np.array(self.vertices)
@@ -1420,8 +1399,12 @@ class PolySlab(base.Planar):
         assert edge_centers_xyz.shape == (num_vertices, 3), "something bad happened"
 
         # compute the E and D fields at the edge centers
-        E_der_at_edges = self.der_at_centers(der_map=E_der_map, edge_centers=edge_centers_xyz)
-        D_der_at_edges = self.der_at_centers(der_map=D_der_map, edge_centers=edge_centers_xyz)
+        E_der_at_edges = self.der_at_centers(
+            der_map=derivative_info.E_der_map, edge_centers=edge_centers_xyz
+        )
+        D_der_at_edges = self.der_at_centers(
+            der_map=derivative_info.D_der_map, edge_centers=edge_centers_xyz
+        )
 
         # compute the basis vectors along each edge
         basis_vectors = self.edge_basis_vectors(edges=edges)
@@ -1432,8 +1415,8 @@ class PolySlab(base.Planar):
         E_der_slab = self.project_in_basis(E_der_at_edges, basis_vector=basis_vectors["slab"])
 
         # approximate permittivity in and out
-        delta_eps_inv = 1.0 / eps_in - 1.0 / eps_out
-        delta_eps = eps_in - eps_out
+        delta_eps_inv = 1.0 / derivative_info.eps_in - 1.0 / derivative_info.eps_out
+        delta_eps = derivative_info.eps_in - derivative_info.eps_out
 
         # put together VJP using D_normal and E_perp integration
         vjps_edges = 0.0
@@ -1453,7 +1436,7 @@ class PolySlab(base.Planar):
 
         # correction to edge area based on sidewall distance along slab axis
         dim_axis = "xyz"[self.axis]
-        field_coords_axis = E_der_map.field_components[f"E{dim_axis}"].coords[dim_axis]
+        field_coords_axis = derivative_info.E_der_map[f"E{dim_axis}"].coords[dim_axis]
         if len(field_coords_axis) > 1:
             slab_height = abs(float(np.squeeze(np.diff(self.slab_bounds))))
             if not np.isinf(slab_height):
@@ -1487,12 +1470,12 @@ class PolySlab(base.Planar):
         interp_kwargs = {}
         for dim, centers_dim in zip("xyz", edge_centers.T):
             # only include dims where the data has more than 1 coord, to avoid warnings and errors
-            coords_data = der_map.field_components[f"E{dim}"].coords
+            coords_data = der_map[f"E{dim}"].coords
             if np.array(coords_data).size > 1:
                 interp_kwargs[dim] = xr.DataArray(centers_dim, dims=edge_index_dim)
 
         components = {}
-        for fld_name, arr in der_map.field_components.items():
+        for fld_name, arr in der_map.items():
             components[fld_name] = arr.interp(**interp_kwargs).sum("f")
 
         return xr.Dataset(components)

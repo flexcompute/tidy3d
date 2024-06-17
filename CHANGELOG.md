@@ -6,7 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Support for differentiation with respect to `GeometryGroup.geometries` elements.
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
+
+### Changed
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.

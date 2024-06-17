@@ -115,8 +115,11 @@ The following components are traceable as inputs to the `td.Simulation`
 
 - `Medium.permittivity`
 - `Medium.conductivity`
+
 - `CustomMedium.permittivity`
 - `CustomMedium.eps_dataset`
+
+- `GeometryGroup.geometries`
 
 The following components are traceable as outputs of the `td.SimulationData`
 
@@ -147,7 +150,6 @@ Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
 - custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
 
 - `ComplexPolySlab`
-- `GeometryGroup`
 
 Later this year (2024), we plan to support:
 
