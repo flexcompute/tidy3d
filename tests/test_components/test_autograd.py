@@ -12,9 +12,9 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
+import xarray as xr
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
-from tidy3d.web import run_async
-from tidy3d.web.api.autograd.autograd import run
+from tidy3d.web import run, run_async
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -53,6 +53,7 @@ CALL_OBJECTIVE = False
 
 WVL = 1.0
 FREQ0 = td.C_0 / WVL
+FREQS = [0.9 * FREQ0, FREQ0, FREQ0 * 1.1]
 
 # sim sizes
 LZ = 7 * WVL
@@ -154,8 +155,10 @@ def use_emulated_run_async(monkeypatch):
 def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
+    np.random.seed(0)
+
     vector = np.random.random(N_PARAMS) - 0.5
-    vector /= np.linalg.norm(vector)
+    vector = vector / np.linalg.norm(vector)
 
     # static components
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
@@ -411,6 +414,7 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
+
 # args = [("geo_group", "mode")]
 
 
@@ -612,51 +616,27 @@ def test_sim_full_ops(structure_key):
     ag.grad(objective)(params0)
 
 
-def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
-    """Make sure we get the right warning with no adjoint sources, and no error."""
-
-    monitor_key = "mode"
-    structure_key = "size_element"
-    monitor, postprocess = make_monitors()[monitor_key]
-
-    def make_sim(*args):
-        structure = make_structures(*args)[structure_key]
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data, data[monitor_key])
-        return value
-
-    monkeypatch.setattr(td.SimulationData, "make_adjoint_sources", lambda *args, **kwargs: [])
-
-    with AssertLogLevel(log_capture, "WARNING", contains_str="No adjoint sources"):
-        ag.grad(objective)(params0)
-
-
 def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_emulated_run_async):
     """Test what happens when autograd run pipeline fails."""
-
-    monitor_key = "mode"
-    structure_key = "size_element"
-    monitor, postprocess = make_monitors()[monitor_key]
-
-    def make_sim(*args):
-        structure = make_structures(*args)[structure_key]
-        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
-
-    def objective(*args):
-        """Objective function."""
-        sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
-        value = postprocess(data, data[monitor_key])
-        return value
 
     def fail(*args, **kwargs):
         """Just raise an exception."""
         raise ValueError("test")
+
+    monitor_key = "mode"
+    structure_key = "size_element"
+    monitor, postprocess = make_monitors()[monitor_key]
+
+    def make_sim(*args):
+        structure = make_structures(*args)[structure_key]
+        return SIM_BASE.updated_copy(structures=[structure], monitors=[monitor])
+
+    def objective(*args):
+        """Objective function."""
+        sim = make_sim(*args)
+        data = run(sim, task_name=None, verbose=False)
+        value = postprocess(data, data[monitor_key])
+        return value
 
     """ if autograd run raises exception, raise a warning and continue with regular ."""
 
@@ -1008,3 +988,230 @@ def _test_many_structures():
 * no copy : 16 sec
 * no to_static(): 13 sec
 """
+
+FREQ1 = FREQ0 * 1.1
+
+mnt_single = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0],
+    name="single",
+)
+
+mnt_multi = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0, FREQ1],
+    name="multi",
+)
+
+
+def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    def objective(params):
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+        )
+        data = run(sim, task_name="multifreq_test")
+        return postprocess_fn(data)
+
+    return objective
+
+
+def get_amps(sim_data: td.SimulationData, mnt_name: str) -> xr.DataArray:
+    return sim_data[mnt_name].amps
+
+
+def power(amps: xr.DataArray) -> float:
+    """Reduce a selected DataArray into just a float for objective function."""
+    return anp.sum(anp.abs(amps.values) ** 2)
+
+
+def postprocess_0_src(sim_data: td.SimulationData) -> float:
+    """Postprocess function that should return 0 adjoint sources."""
+    return 0.0
+
+
+def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    objective = make_objective(postprocess_fn, structure_key=structure_key)
+    params = params0 + 1.0  # +1 is to avoid a warning in size_element with value 0
+    return ag.grad(objective)(params)
+
+
+def check_0_src(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 0 adjoint sources."""
+        return 0.0
+
+    compute_grad(postprocess, structure_key=structure_key)
+
+
+# NOTE: not tested, just raises regular warning
+
+
+def check_1_src_single(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with one adjoint source."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_2_src_single(log_capture, structure_key):
+    def postprocess_2_src_single(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with 2 adjoint sources."
+    ):
+        compute_grad(postprocess_2_src_single, structure_key=structure_key)
+
+
+def check_1_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with one adjoint source."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_2_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, f=FREQ1)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with 2 adjoint sources."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_2_src_both(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps_single) + power(amps_multi)
+
+    with AssertLogLevel(
+        log_capture,
+        log_level_expected="INFO",
+        contains_str="Several adjoint sources from different monitors, all with same single frequency.",
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_1_error_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ1)
+        return power(amps_single) + power(amps_multi)
+
+    with pytest.raises(ValueError):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_2_error_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps_single) + power(amps_multi)
+
+    with pytest.raises(ValueError):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+def check_1_src_broadband(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 broadband adjoint sources with many freqs."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture,
+        log_level_expected="INFO",
+        contains_str="Constructing broadband adjoint source and performing post-run normalization",
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES = dict(
+    src_1_freq_1=check_1_src_single,
+    src_2_freq_1=check_2_src_single,
+    src_1_freq_2=check_1_src_multi,
+    src_2_freq_1_mon_1=check_1_src_multi,
+    src_2_freq_1_mon_2=check_2_src_both,
+    src_2_freq_2_mon_1=check_1_error_multisrc,
+    src_2_freq_2_mon_2=check_2_error_multisrc,
+    src_1_freq_2_broadband=check_1_src_broadband,
+)
+
+checks = list(MULT_FREQ_TEST_CASES.items())
+
+
+@pytest.mark.parametrize("label, check_fn", checks)
+@pytest.mark.parametrize("structure_key", structure_keys_)
+def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, label, check_fn):
+    # test multi-frequency adjoint handling
+    check_fn(structure_key=structure_key, log_capture=log_capture)
+
+
+@pytest.mark.parametrize("structure_key", structure_keys_)
+def test_multi_frequency_equivalence(use_emulated_run, structure_key):
+    """Test an objective function through tidy3d autograd."""
+
+    def objective_indi(params, structure_key) -> float:
+        power_sum = 0.0
+
+        for f in mnt_multi.freqs:
+            structure_traced = make_structures(params)[structure_key]
+            sim = SIM_BASE.updated_copy(
+                structures=[structure_traced],
+                monitors=list(SIM_BASE.monitors) + [mnt_multi],
+            )
+
+            sim_data = run(sim, task_name="multifreq_test")
+            amps_i = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=f)
+            power_i = power(amps_i)
+            power_sum = power_sum + power_i
+
+        return power_sum
+
+    def objective_multi(params, structure_key) -> float:
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_multi],
+        )
+        sim_data = run(sim, task_name="multifreq_test")
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    params0_ = params0 + 1.0
+
+    J_indi = objective_indi(params0_, structure_key)
+    J_multi = objective_multi(params0_, structure_key)
+
+    np.testing.assert_allclose(J_indi, J_multi)
+
+    grad_indi = ag.grad(objective_indi)(params0_, structure_key=structure_key)
+    grad_multi = ag.grad(objective_multi)(params0_, structure_key=structure_key)
+
+    assert not np.any(np.isclose(grad_indi, 0))
+    assert not np.any(np.isclose(grad_multi, 0))

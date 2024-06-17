@@ -3254,14 +3254,6 @@ class Simulation(AbstractYeeGridSimulation):
             if isinstance(mnt, FreqMonitor):
                 freqs.update(mnt.freqs)
         freqs = sorted(freqs)
-
-        if len(freqs) > 1:
-            raise ValueError(
-                "Only the same, single frequency is supported in all monitors "
-                "when using autograd differentiation. "
-                f"Found {len(freqs)} distinct frequencies in the monitors."
-            )
-
         return freqs
 
     """ Accounting """

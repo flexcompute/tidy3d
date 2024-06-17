@@ -76,6 +76,7 @@ class DataArray(xr.DataArray):
         # initialize with untraced data
         super().__init__(getval(data), *args, **kwargs)
         # and put tracers in .attrs
+
         if isbox(data):
             self.attrs[AUTOGRAD_KEY] = data
 

@@ -16,6 +16,8 @@ from tidy3d.web import BatchData
 """ utilities shared between all tests """
 np.random.seed(4)
 
+# function used to generate the data for emulated runs
+DATA_GEN_FN = np.random.random
 
 FREQS = np.array([1.90, 2.01, 2.2]) * 1e12
 SIM_MONITORS = td.Simulation(
@@ -880,7 +882,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         """make a random DataArray out of supplied coordinates and data_type."""
         data_shape = [len(coords[k]) for k in data_array_type._dims]
         np.random.seed(1)
-        data = np.random.random(data_shape)
+        data = DATA_GEN_FN(data_shape)
 
         data = (1 + 0.5j) * data if is_complex else data
         data = gaussian_filter(data, sigma=1.0)  # smooth out the data a little so it isnt random
@@ -939,7 +941,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         index_coords["mode_index"] = np.arange(monitor.mode_spec.num_modes)
         index_data_shape = (len(index_coords["f"]), len(index_coords["mode_index"]))
         index_data = ModeIndexDataArray(
-            (1 + 1j) * np.random.random(index_data_shape), coords=index_coords
+            (1 + 1j) * DATA_GEN_FN(index_data_shape), coords=index_coords
         )
         for field_name in ["Ex", "Ey", "Ez", "Hx", "Hy", "Hz"]:
             coords = get_spatial_coords_dict(simulation, monitor, field_name)
@@ -977,7 +979,7 @@ def run_emulated(simulation: td.Simulation, path=None, **kwargs) -> td.Simulatio
         orders_x = np.linspace(-1, 1, 3)
         orders_y = np.linspace(-2, 2, 5)
         coords = dict(orders_x=orders_x, orders_y=orders_y, f=f)
-        values = np.random.random((len(orders_x), len(orders_y), len(f)))
+        values = DATA_GEN_FN((len(orders_x), len(orders_y), len(f)))
         data = td.DiffractionDataArray(values, coords=coords)
         field_data = {field: data for field in ("Er", "Etheta", "Ephi", "Hr", "Htheta", "Hphi")}
         return td.DiffractionData(monitor=monitor, sim_size=(1, 1), bloch_vecs=(0, 0), **field_data)
