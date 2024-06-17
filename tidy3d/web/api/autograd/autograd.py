@@ -5,9 +5,11 @@ import typing
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
+from autograd.extend import defvjp, primitive
 
 import tidy3d as td
-from tidy3d.components.autograd import AutogradFieldMap, defvjp, get_static, primitive
+from tidy3d.components.autograd import AutogradFieldMap, get_static
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
 from ..asynchronous import DEFAULT_DATA_DIR
 from ..asynchronous import run_async as run_async_webapi
@@ -58,7 +60,7 @@ def is_valid_for_autograd(simulation: td.Simulation) -> bool:
         return False
 
     # if too many structures, raise an error
-    structure_indices = [i for key, i, *_ in traced_fields.keys() if key == "structures"]
+    structure_indices = {i for key, i, *_ in traced_fields.keys() if key == "structures"}
     num_traced_structures = len(structure_indices)
     if num_traced_structures > MAX_NUM_TRACED_STRUCTURES:
         raise ValueError(
@@ -654,15 +656,17 @@ def postprocess_adj(
         eps_in = np.mean(structure.medium.eps_model(td.C_0))
         eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(td.C_0))
 
-        vjp_value_map = structure.compute_derivatives(
-            structure_paths=structure_paths,
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_data=eps_fwd,
+        derivative_info = DerivativeInfo(
+            paths=structure_paths,
+            E_der_map=E_der_map.field_components,
+            D_der_map=D_der_map.field_components,
+            eps_data=eps_fwd.field_components,
             eps_in=eps_in,
             eps_out=eps_out,
             bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
         )
+
+        vjp_value_map = structure.compute_derivatives(derivative_info)
 
         # extract VJPs and put back into sim_fields_vjp AutogradFieldMap
         for structure_path, vjp_value in vjp_value_map.items():

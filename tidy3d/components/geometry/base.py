@@ -23,9 +23,9 @@ from ...exceptions import (
 )
 from ...log import log
 from ...packaging import check_import, verify_packages_import
-from ..autograd import TracedCoordinate, TracedSize, get_static, integrate_within_bounds
+from ..autograd import AutogradFieldMap, TracedCoordinate, TracedSize, get_static
+from ..autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
 from ..base import Tidy3dBaseModel, cached_property
-from ..data.dataset import ElectromagneticFieldDataset, PermittivityDataset
 from ..transformation import RotationAroundAxis
 from ..types import (
     ArrayFloat2D,
@@ -1427,18 +1427,8 @@ class Geometry(Tidy3dBaseModel, ABC):
         pathlib.Path(fname).parent.mkdir(parents=True, exist_ok=True)
         library.write_gds(fname)
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute the adjoint derivative for this geometry."""
-
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Geometry': '{type(self)}'.")
 
     def _as_union(self) -> List[Geometry]:
@@ -2339,34 +2329,18 @@ class Box(SimplePlaneIntersection, Centered):
 
     """ Autograd code """
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute adjoint derivatives for each of the ``field_path``s."""
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
 
         # get gradients w.r.t. each of the 6 faces (in normal direction)
-        vjps_faces = self.derivative_faces(
-            E_der_map=E_der_map,
-            D_der_map=D_der_map,
-            eps_data=eps_data,
-            eps_in=eps_in,
-            eps_out=eps_out,
-            bounds=bounds,
-        )
+        vjps_faces = self.derivative_faces(derivative_info=derivative_info)
 
         # post-process these values to give the gradients w.r.t. center and size
         vjps_center_size = self.derivatives_center_size(vjps_faces=vjps_faces)
 
         # store only the gradients asked for in 'field_paths'
         derivative_map = {}
-        for field_path in field_paths:
+        for field_path in derivative_info.paths:
             field_name, *index = field_path
 
             if field_name in vjps_center_size:
@@ -2397,15 +2371,7 @@ class Box(SimplePlaneIntersection, Centered):
             size=tuple(vjp_size.tolist()),
         )
 
-    def derivative_faces(
-        self,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> Bound:
+    def derivative_faces(self, derivative_info: DerivativeInfo) -> Bound:
         """Derivative with respect to normal position of 6 faces of ``Box``."""
 
         # change in permittivity between inside and outside
@@ -2416,12 +2382,7 @@ class Box(SimplePlaneIntersection, Centered):
                 vjp_face = self.derivative_face(
                     min_max_index=min_max_index,
                     axis_normal=axis,
-                    E_der_map=E_der_map,
-                    D_der_map=D_der_map,
-                    eps_data=eps_data,
-                    eps_in=eps_in,
-                    eps_out=eps_out,
-                    bounds=bounds,
+                    derivative_info=derivative_info,
                 )
 
                 # record vjp for this face
@@ -2433,12 +2394,7 @@ class Box(SimplePlaneIntersection, Centered):
         self,
         min_max_index: int,
         axis_normal: Axis,
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
+        derivative_info: DerivativeInfo,
     ) -> float:
         """Compute the derivative w.r.t. shifting a face in the normal direction."""
 
@@ -2447,11 +2403,11 @@ class Box(SimplePlaneIntersection, Centered):
         fld_normal, flds_perp = self.pop_axis(("Ex", "Ey", "Ez"), axis=axis_normal)
 
         # normal and tangential fields
-        D_normal = D_der_map.field_components[fld_normal]
-        Es_perp = tuple(E_der_map.field_components[key] for key in flds_perp)
+        D_normal = derivative_info.D_der_map[fld_normal]
+        Es_perp = tuple(derivative_info.E_der_map[key] for key in flds_perp)
 
         # normal and tangential bounds
-        bounds_T = np.array(bounds).T  # put (xyz) first dimension
+        bounds_T = np.array(derivative_info.bounds).T  # put (xyz) first dimension
         bounds_normal, bounds_perp = self.pop_axis(bounds_T, axis=axis_normal)
 
         # define the integration plane
@@ -2473,15 +2429,16 @@ class Box(SimplePlaneIntersection, Centered):
             return 0.0
 
         # grab permittivity data inside and outside edge in normal direction
-        eps_xyz = [eps_data.field_components[f"eps_{dim}{dim}"] for dim in "xyz"]
+        eps_xyz = [derivative_info.eps_data[f"eps_{dim}{dim}"] for dim in "xyz"]
 
         # number of cells from the edge of data to register "inside" (index = num_cells_in - 1)
         num_cells_in = 4
 
         # if not enough data, just use best guess using eps in medium and simulation
-        if any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz):
-            eps_xyz_inside = 3 * [eps_in]
-            eps_xyz_outside = 3 * [eps_out]
+        needs_eps_approx = any(len(eps.coords[dim_normal]) <= num_cells_in for eps in eps_xyz)
+        if derivative_info.eps_approx or needs_eps_approx:
+            eps_xyz_inside = 3 * [derivative_info.eps_in]
+            eps_xyz_outside = 3 * [derivative_info.eps_out]
             # TODO: not tested...
 
         # otherwise, try to grab the data at the edges
@@ -3245,6 +3202,24 @@ class GeometryGroup(Geometry):
             geometry._update_from_bounds(bounds=bounds, axis=axis) for geometry in self.geometries
         ]
         return self.updated_copy(geometries=new_geometries)
+
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
+
+        grad_vjps = {}
+
+        for field_path in derivative_info.paths:
+            _, index, *geo_path = field_path
+            geo = self.geometries[index]
+            geo_info = derivative_info.updated_copy(
+                paths=[geo_path], bounds=geo.bounds, eps_approx=True
+            )
+            vjp_dict_geo = geo.compute_derivatives(geo_info)
+            grad_vjp_values = list(vjp_dict_geo.values())
+            assert len(grad_vjp_values) == 1, "Got multiple gradients for single geometry field."
+            grad_vjps[field_path] = grad_vjp_values[0]
+
+        return grad_vjps
 
 
 from .utils import GeometryType, from_shapely, vertices_from_shapely  # noqa: E402
