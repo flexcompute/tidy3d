@@ -49,5 +49,30 @@ def main():
     print("ok!")
 
 
+def test_data_array():
+    coords = {
+        "x": np.linspace(-1, 1, 11),
+        "y": np.linspace(0, 10, 11),
+        "z": np.linspace(-5, 5, 11),
+        "f": np.linspace(1e14, 2e14, 11),
+    }
+    values = np.random.random(
+        (coords["x"].size, coords["y"].size, coords["z"].size, coords["f"].size)
+    )
+
+    xi = np.linspace(-0.9, 0.5, 9)
+    yi = np.linspace(0.5, 9.5, 13)
+    zi = np.linspace(-4.5, 4.5, 7)
+    fi = np.linspace(1.1e14, 1.9e14, 5)
+
+    da = DataArray(values, coords=coords)
+    da.attrs["AUTOGRAD"] = None
+    # res = da.interp(x=xi, y=yi, z=zi, f=fi)
+    res = da.interp(x=xi, z=zi, f=fi)
+
+    print("Interpolated values:", res)
+
+
 if __name__ == "__main__":
-    main()
+    # main()
+    test_data_array()

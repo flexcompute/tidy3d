@@ -12,6 +12,7 @@ import pandas
 import xarray as xr
 from autograd.tracer import getval, isbox
 from xarray.core.types import InterpOptions
+from xarray.core.utils import either_dict_or_kwargs
 
 from tidy3d.plugins.autograd.functions import interpn
 
@@ -295,9 +296,23 @@ class DataArray(xr.DataArray):
         **coords_kwargs: Any,
     ):
         if self.has_tracers:
-            points = tuple(self.coords[dim].values for dim in self.dims)
-            xi = tuple(coords[dim] for dim in self.dims)
-            return interpn(points, self.values, xi, method=method)
+            if kwargs is None:
+                kwargs = {}
+            coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
+
+            missing_keys = set(coords) - set(self.coords)
+            if missing_keys:
+                raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
+
+            # TODO: handle dims not in coords
+            obj = self if assume_sorted else self.sortby(list(coords.keys()))
+            points = tuple(obj.coords[k].values for k in coords)
+            xi = tuple(coords.values())
+            # traced_vals = interpn(points, obj.attrs[AUTOGRAD_KEY], xi, method=method)
+            traced_vals = interpn(points, obj.values, xi, method=method)
+            da = DataArray(getval(traced_vals), coords)
+            da.attrs[AUTOGRAD_KEY] = traced_vals
+            return da
         else:
             return super().interp(
                 coords=coords,
@@ -306,6 +321,8 @@ class DataArray(xr.DataArray):
                 kwargs=kwargs,
                 **coords_kwargs,
             )
+
+        return self
 
 
 class FreqDataArray(DataArray):
