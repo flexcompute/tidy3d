@@ -51,6 +51,7 @@ CALL_OBJECTIVE = False
 
 WVL = 1.0
 FREQ0 = td.C_0 / WVL
+FREQS = [0.9 * FREQ0, FREQ0, FREQ0 * 1.1]
 
 # sim sizes
 LZ = 7 * WVL
@@ -729,6 +730,11 @@ def test_autograd_deepcopy():
 
     assert val1 == val2 == val3
     assert grad1 == grad2 == grad3
+
+
+def test_multi_freq_edge_cases():
+    def f(x):
+        pass
 
 
 # @pytest.mark.timeout(18.0)
