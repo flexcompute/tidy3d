@@ -1,6 +1,6 @@
-from typing import Tuple
+from typing import Callable, Tuple
 
-import autograd.numpy as np
+from numpy.typing import NDArray
 
 from ..types import KernelType, PaddingType
 from .filters import make_filter
@@ -13,7 +13,7 @@ def make_filter_and_project(
     eta: float = 0.5,
     filter_type: KernelType = "conic",
     padding: PaddingType = "reflect",
-):
+) -> Callable:
     """Create a function that filters and projects an array.
 
     This is the standard filter-and-project scheme used in topology optimization.
@@ -38,7 +38,7 @@ def make_filter_and_project(
     """
     _filter = make_filter(filter_type, filter_size, padding=padding)
 
-    def _filter_and_project(array: np.ndarray, beta: float = beta, eta: float = eta):
+    def _filter_and_project(array: NDArray, beta: float = beta, eta: float = eta) -> NDArray:
         array = _filter(array)
         array = tanh_projection(array, beta, eta)
         return array

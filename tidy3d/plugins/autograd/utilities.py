@@ -2,11 +2,12 @@ from functools import reduce
 from typing import Callable, Iterable, Union
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .types import KernelType
 
 
-def _kernel_circular(size: Iterable[int]) -> np.ndarray:
+def _kernel_circular(size: Iterable[int]) -> NDArray:
     """Create a circular kernel in n dimensions.
 
     Parameters
@@ -16,7 +17,7 @@ def _kernel_circular(size: Iterable[int]) -> np.ndarray:
 
     Returns
     -------
-    np.ndarray
+    NDArray
         An n-dimensional array representing the circular kernel.
     """
     grids = np.ogrid[tuple(slice(-1, 1, 1j * s) for s in size)]
@@ -25,7 +26,7 @@ def _kernel_circular(size: Iterable[int]) -> np.ndarray:
     return kernel
 
 
-def _kernel_conic(size: Iterable[int]) -> np.ndarray:
+def _kernel_conic(size: Iterable[int]) -> NDArray:
     """Create a conic kernel in n dimensions.
 
     Parameters
@@ -35,7 +36,7 @@ def _kernel_conic(size: Iterable[int]) -> np.ndarray:
 
     Returns
     -------
-    np.ndarray
+    NDArray
         An n-dimensional array representing the conic kernel.
     """
     grids = np.ogrid[tuple(slice(-1, 1, 1j * s) for s in size)]
@@ -44,7 +45,7 @@ def _kernel_conic(size: Iterable[int]) -> np.ndarray:
     return kernel
 
 
-def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = True) -> np.ndarray:
+def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = True) -> NDArray:
     """Create a kernel based on the specified type in n dimensions.
 
     Parameters
@@ -58,7 +59,7 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
 
     Returns
     -------
-    np.ndarray
+    NDArray
         An n-dimensional array representing the specified type of kernel.
     """
     if not all(isinstance(dim, int) and dim > 0 for dim in size):
@@ -77,7 +78,7 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
     return kernel
 
 
-def chain(*funcs: Union[Callable, Iterable[Callable]]):
+def chain(*funcs: Union[Callable, Iterable[Callable]]) -> Callable:
     """Chain multiple functions together to apply them sequentially to an array.
 
     Parameters
@@ -115,7 +116,7 @@ def chain(*funcs: Union[Callable, Iterable[Callable]]):
     if not all(callable(f) for f in funcs):
         raise TypeError("All elements in funcs must be callable.")
 
-    def chained(array: np.ndarray):
+    def chained(array: NDArray):
         return reduce(lambda x, y: y(x), funcs, array)
 
     return chained

@@ -1,7 +1,8 @@
 import autograd.numpy as np
+from numpy.typing import NDArray
 
 
-def grey_indicator(array: np.ndarray) -> float:
+def grey_indicator(array: NDArray) -> float:
     """Calculate the grey indicator for a given array.
 
     The grey indicator returns 1 for completely grey arrays (all 0.5) and 0 for
@@ -11,7 +12,7 @@ def grey_indicator(array: np.ndarray) -> float:
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array for which the grey indicator is to be calculated.
 
     Returns
