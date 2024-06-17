@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Changed
+
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
 
