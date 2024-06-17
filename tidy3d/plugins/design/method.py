@@ -1,6 +1,7 @@
 """Defines the methods used for parameter sweep."""
 
 from abc import ABC, abstractmethod
+from inspect import getsource
 from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -106,6 +107,11 @@ class Method(Tidy3dBaseModel, ABC):
     @staticmethod
     def _check_pre_output(self, parameters: Tuple[ParameterType, ...], pre_fn: Callable):
         """See if pre produces an arrangement of td.Simulation or is unrelated"""
+
+        # Check if tidy3d is called in func
+        source = getsource(pre_fn)
+        if "web.Batch(" in source or "web.run(" in source:
+            return "local"
 
         # Run fn_pre with the lower bound of each parameter
         lower_params = {param.name: param.span[0] for param in parameters}
@@ -261,7 +267,7 @@ class MethodBayOpt(MethodOptimise, ABC):
     def run(
         self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
     ) -> Tuple[Any]:
-        """Defines the search algorithm (sequential)."""
+        """Defines the search algorithm for BayOpt"""
         boundary_dict = self.create_boundary_dict(parameters)
         run_loc = self._check_pre_output(self, parameters, pre_fn)
 
@@ -276,8 +282,20 @@ class MethodBayOpt(MethodOptimise, ABC):
         opt.subscribe(Events.OPTIMIZATION_STEP, logger)
 
         # Run variables
-        firstRun = True
+        arg_list = []
         if run_loc == "local":
+            # Handle the initial random samples as a batch to save time
+            init_output = []
+            for _ in range(self.initial_iter):
+                next_point = opt.suggest(utility)
+                self._force_int(next_point, parameters)
+                arg_list.append(next_point)
+                init_output.append(post_fn(pre_fn(**next_point)))
+
+            for next_point, next_out in zip(arg_list, init_output):
+                opt.register(params=next_point, target=next_out)
+
+            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
             for _ in range(self.n_iter):
                 next_point = opt.suggest(utility)
                 self._force_int(next_point, parameters)
@@ -287,26 +305,22 @@ class MethodBayOpt(MethodOptimise, ABC):
 
         elif run_loc == "tidy3d":
             # Handle the initial random samples as a batch to save time
-            if firstRun:
-                sim_dict = {}
-                arg_list = []
-                run_kwargs = {}
-                for sim_idx in range(self.initial_iter):
-                    next_point = opt.suggest(utility)
-                    self._force_int(next_point, parameters)
-                    arg_list.append(next_point)
-                    sim_dict[f"init_{sim_idx}"] = pre_fn(**next_point)
+            sim_dict = {}
+            run_kwargs = {}
+            for sim_idx in range(self.initial_iter):
+                next_point = opt.suggest(utility)
+                self._force_int(next_point, parameters)
+                arg_list.append(next_point)
+                sim_dict[f"init_{sim_idx}"] = pre_fn(**next_point)
 
-                pre_out = self._tidy3d_run(sim_dict, run_kwargs)
+            pre_out = self._tidy3d_run(sim_dict, run_kwargs)
 
-                # Get the sim data out
-                sim_data = [sim_tuple[1] for sim_tuple in pre_out.items()]
+            # Get the sim data out
+            sim_data = [sim_tuple[1] for sim_tuple in pre_out.items()]
 
-                for next_point, sim in zip(arg_list, sim_data):
-                    next_out = post_fn(sim)
-                    opt.register(params=next_point, target=next_out)
-
-                firstRun = False
+            for next_point, sim in zip(arg_list, sim_data):
+                next_out = post_fn(sim)
+                opt.register(params=next_point, target=next_out)
 
             # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
             for idx in range(self.n_iter):
