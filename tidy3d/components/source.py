@@ -201,6 +201,27 @@ class GaussianPulse(Pulse):
 
         return self.offset * self.twidth + END_TIME_FACTOR_GAUSSIAN * self.twidth
 
+    @property
+    def amp_complex(self) -> complex:
+        """Grab the complex amplitude from a ``GaussianPulse``."""
+        phase = np.exp(1j * self.phase)
+        return self.amplitude * phase
+
+    @classmethod
+    def from_amp_complex(cls, amp: complex, **kwargs) -> GaussianPulse:
+        """Set the complex amplitude of a ``GaussianPulse``.
+
+        Parameters
+        ----------
+        amp : complex
+            Complex-valued amplitude to set in the returned ``GaussianPulse``.
+        kwargs : dict
+            Keyword arguments passed to ``GaussianPulse()``, excluding ``amplitude`` & ``phase``.
+        """
+        amplitude = abs(amp)
+        phase = np.angle(amp)
+        return cls(amplitude=amplitude, phase=phase, **kwargs)
+
 
 class ContinuousWave(Pulse):
     """Source time dependence that ramps up to continuous oscillation

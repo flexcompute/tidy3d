@@ -2,6 +2,7 @@
 
 import tempfile
 import typing
+from collections import defaultdict
 
 import numpy as np
 from autograd.builtins import dict as dict_ag
@@ -10,6 +11,7 @@ from autograd.extend import defvjp, primitive
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.components.data.sim_data import AdjointSourceInfo
 
 from ...core.s3utils import download_file, upload_file
 from ..asynchronous import DEFAULT_DATA_DIR
@@ -518,7 +520,7 @@ def postprocess_fwd(
     return data_traced
 
 
-def upload_sim_fields_keys(sim_fields_keys: list, task_id: str, verbose: bool = False):
+def upload_sim_fields_keys(sim_fields_keys: list[tuple], task_id: str, verbose: bool = False):
     """Function to grab the VJP result for the simulation fields from the adjoint task ID."""
     data_file = tempfile.NamedTemporaryFile(suffix=".hdf5")
     data_file.close()
@@ -567,26 +569,11 @@ def _run_bwd(
     def vjp(data_fields_vjp: AutogradFieldMap) -> AutogradFieldMap:
         """dJ/d{sim.traced_fields()} as a function of Function of dJ/d{data.traced_fields()}"""
 
-        sim_adj = setup_adj(
+        sim_adj, adjoint_source_info = setup_adj(
             data_fields_vjp=data_fields_vjp,
             sim_data_orig=sim_data_orig,
             sim_fields_keys=sim_fields_keys,
         )
-
-        # no adjoint sources, no gradient for you :(
-        if not len(sim_adj.sources):
-            td.log.warning(
-                "No adjoint sources generated. "
-                "There is likely zero output in the data, or you have no traceable monitors. "
-                "As a result, the 'SimulationData' returned has no contribution to the gradient. "
-                "Skipping the adjoint simulation. "
-                "If this is unexpected, please double check the post-processing function to ensure "
-                "there is a path from the 'SimulationData' to the objective function return value."
-            )
-
-            # TODO: add a test for this
-            # construct a VJP of all zeros for all tracers in the original simulation
-            return {path: 0 * value for path, value in sim_fields_original.items()}
 
         # run adjoint simulation
         task_name_adj = str(task_name) + "_adjoint"
@@ -599,6 +586,7 @@ def _run_bwd(
                 sim_data_orig=sim_data_orig,
                 sim_data_fwd=sim_data_fwd,
                 sim_fields_keys=sim_fields_keys,
+                adjoint_source_info=adjoint_source_info,
             )
 
         else:
@@ -647,18 +635,19 @@ def _run_async_bwd(
         task_names_adj = {task_name + "_adjoint" for task_name in task_names}
 
         sims_adj = {}
+        adjoint_source_info_dict = {}
         for task_name, task_name_adj in zip(task_names, task_names_adj):
             data_fields_vjp = data_fields_dict_vjp[task_name]
             sim_data_orig = sim_data_orig_dict[task_name]
             sim_fields_keys = sim_fields_keys_dict[task_name]
 
-            sim_adj = setup_adj(
+            sim_adj, adjoint_source_info = setup_adj(
                 data_fields_vjp=data_fields_vjp,
                 sim_data_orig=sim_data_orig,
                 sim_fields_keys=sim_fields_keys,
             )
             sims_adj[task_name_adj] = sim_adj
-
+            adjoint_source_info_dict[task_name_adj] = adjoint_source_info
             # TODO: handle case where no adjoint sources?
 
         if local_gradient:
@@ -671,12 +660,14 @@ def _run_async_bwd(
                 sim_data_orig = sim_data_orig_dict[task_name]
                 sim_data_fwd = sim_data_fwd_dict[task_name]
                 sim_fields_keys = sim_fields_keys_dict[task_name]
+                adjoint_source_info = adjoint_source_info_dict[task_name_adj]
 
                 sim_fields_vjp = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
                     sim_data_fwd=sim_data_fwd,
                     sim_fields_keys=sim_fields_keys,
+                    adjoint_source_info=adjoint_source_info,
                 )
                 sim_fields_vjp_dict[task_name] = sim_fields_vjp
 
@@ -709,8 +700,8 @@ def _run_async_bwd(
 def setup_adj(
     data_fields_vjp: AutogradFieldMap,
     sim_data_orig: td.SimulationData,
-    sim_fields_keys: list,
-) -> td.Simulation:
+    sim_fields_keys: list[tuple],
+) -> tuple[td.Simulation, AdjointSourceInfo]:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
 
     td.log.info("Running custom vjp (adjoint) pipeline.")
@@ -731,32 +722,29 @@ def setup_adj(
         num_monitors:
     ]
 
-    sim_adj = sim_data_vjp.make_adjoint_sim(
-        data_vjp_paths=data_vjp_paths,
-        adjoint_monitors=adjoint_monitors,
+    sim_adj, adjoint_source_info = sim_data_vjp.make_adjoint_sim(
+        data_vjp_paths=data_vjp_paths, adjoint_monitors=adjoint_monitors
     )
 
     td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")
 
-    return sim_adj
+    return sim_adj, adjoint_source_info
 
 
 def postprocess_adj(
     sim_data_adj: td.SimulationData,
     sim_data_orig: td.SimulationData,
     sim_data_fwd: td.SimulationData,
-    sim_fields_keys: list,
+    sim_fields_keys: list[tuple],
+    adjoint_source_info: AdjointSourceInfo,
 ) -> AutogradFieldMap:
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     # map of index into 'structures' to the list of paths we need vjps for
-    sim_vjp_map = {}
+    sim_vjp_map = defaultdict(list)
     for _, structure_index, *structure_path in sim_fields_keys:
         structure_path = tuple(structure_path)
-        if structure_index in sim_vjp_map:
-            sim_vjp_map[structure_index].append(structure_path)
-        else:
-            sim_vjp_map[structure_index] = [structure_path]
+        sim_vjp_map[structure_index].append(structure_path)
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
@@ -766,6 +754,14 @@ def postprocess_adj(
         eps_fwd = sim_data_fwd.get_adjoint_data(structure_index, data_type="eps")
         fld_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="fld")
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
+
+        # post normalize the adjoint fields if a single, broadband source
+
+        fwd_flds_normed = {}
+        for key, val in fld_adj.field_components.items():
+            fwd_flds_normed[key] = val * adjoint_source_info.post_norm
+
+        fld_adj = fld_adj.updated_copy(**fwd_flds_normed)
 
         # maps of the E_fwd * E_adj and D_fwd * D_adj, each as as td.FieldData & 'Ex', 'Ey', 'Ez'
         der_maps = get_derivative_maps(
@@ -780,9 +776,7 @@ def postprocess_adj(
         # todo: handle multi-frequency, move to a property?
         frequencies = {src.source_time.freq0 for src in sim_data_adj.simulation.sources}
         frequencies = list(frequencies)
-        if len(frequencies) != 1:
-            raise RuntimeError("Multiple adjoint frequencies found.")
-        freq_adj = frequencies[0]
+        freq_adj = frequencies[0] or None
 
         eps_in = np.mean(structure.medium.eps_model(freq_adj))
         eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
