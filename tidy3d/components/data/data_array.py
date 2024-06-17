@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC
-from typing import Dict, List, Union
+from typing import Any, Dict, List, Mapping, Union
 
 import dask
 import h5py
@@ -11,6 +11,9 @@ import numpy as np
 import pandas
 import xarray as xr
 from autograd.tracer import getval, isbox
+from xarray.core.types import InterpOptions
+
+from tidy3d.plugins.autograd.functions import interpn
 
 from ...constants import (
     HERTZ,
@@ -282,6 +285,27 @@ class DataArray(xr.DataArray):
         self_mult = self.copy()
         self_mult[{coord_name: indices}] *= value
         return self_mult
+
+    def interp(
+        self,
+        coords: Mapping[Any, Any] | None = None,
+        method: InterpOptions = "linear",
+        assume_sorted: bool = False,
+        kwargs: Mapping[str, Any] | None = None,
+        **coords_kwargs: Any,
+    ):
+        if self.has_tracers:
+            points = tuple(self.coords[dim].values for dim in self.dims)
+            xi = tuple(coords[dim] for dim in self.dims)
+            return interpn(points, self.values, xi, method=method)
+        else:
+            return super().interp(
+                coords=coords,
+                method=method,
+                assume_sorted=assume_sorted,
+                kwargs=kwargs,
+                **coords_kwargs,
+            )
 
 
 class FreqDataArray(DataArray):
