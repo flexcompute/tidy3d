@@ -6,6 +6,7 @@ from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pd
+import pygad
 import scipy.stats.qmc as qmc
 from bayes_opt import BayesianOptimization, UtilityFunction
 from bayes_opt.event import Events
@@ -347,6 +348,107 @@ class MethodBayOpt(MethodOptimise, ABC):
         return fn_args, result
 
 
+class MethodGenAlg(MethodOptimise, ABC):
+    """A standard method for performing genetic algorithm search"""
+
+    # Args for the user
+    # Solutions per pop
+    # Num generations
+    # Num parents mating
+    # Parent selector, optional
+
+    def run(
+        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+    ) -> Tuple[Any]:
+        """Defines the search algorithm for the GA"""
+
+        # Create fitness function combining pre and post fn with the tidy3d call
+        def fitness_function(ga_instance, solution, solution_idx):
+            # Hard-coded kwargs
+            # run_kwargs = {}
+
+            # Break solution down to dict
+            sol_out = []
+            for sol in solution:
+                dict_sol = dict(zip(_param_keys, sol))
+                sol_out.append(post_fn(pre_fn(**dict_sol)))
+
+            return sol_out
+
+            # sim = pre_fn(solution)
+            # sim_result = self._tidy3d_run(sim, run_kwargs)
+            # return post_fn(sim_result)
+
+        def on_generation(ga_instance):
+            _store_parameters.append(ga_instance.population.copy())
+            _store_fitness.append(ga_instance.last_generation_fitness)
+            best_fitness = ga_instance.best_solution()[1]
+            print(
+                f"Generation {ga_instance.generations_completed}: Best Fitness = {best_fitness:.3f}"
+            )
+
+        # Make param names available to the fitness function
+        global _param_keys
+        _param_keys = [param.name for param in parameters]
+
+        # Store parameters and fitness
+        global _store_parameters
+        global _store_fitness
+        _store_parameters = []
+        _store_fitness = []
+
+        # Set gene_spaces to keep GA within ranges
+        gene_spaces = []
+        for param in parameters:
+            if type(param) == tdd.ParameterFloat:
+                gene_spaces.append({"low": param.span[0], "high": param.span[1]})
+            elif type(param) == tdd.ParameterInt:
+                gene_spaces.append(
+                    range(param.span[0], param.span[1] + 1)
+                )  # +1 included so as to be inclusive of upper range value
+            else:
+                print("Parameter type not supported by GA method.")
+
+        # Determine initial array
+
+        sol_per_pop = 30  # number of solutions in the population
+        num_genes = len(parameters)
+        num_generations = 25  # number of generation
+
+        num_parents_mating = 10  # number of mating parents
+        parent_selection_type = "sss"  # parent selection rule
+
+        crossover_type = "single_point"  # crossover rule
+        crossover_probability = 0.7  # cross over probability
+
+        mutation_type = "inversion"  # mutation rule
+
+        # define the optimizer
+        ga_instance = pygad.GA(
+            num_generations=num_generations,
+            num_parents_mating=num_parents_mating,
+            fitness_func=fitness_function,
+            parent_selection_type=parent_selection_type,
+            mutation_type=mutation_type,
+            crossover_type=crossover_type,
+            crossover_probability=crossover_probability,
+            sol_per_pop=sol_per_pop,
+            num_genes=num_genes,
+            fitness_batch_size=sol_per_pop,
+            on_generation=on_generation,
+            random_seed=1,
+            gene_space=gene_spaces,
+        )
+
+        ga_instance.run()
+
+        # Format output
+        fn_args = [dict(zip(_param_keys, val)) for arr in _store_parameters for val in arr]
+        results = [val for arr in _store_fitness for val in arr]
+
+        return fn_args, results
+
+
 class AbstractMethodRandom(MethodSample, ABC):
     """Select parameters with an object with a ``random`` method."""
 
@@ -516,4 +618,6 @@ class MethodRandomCustom(AbstractMethodRandom):
         return self.sampler
 
 
-MethodType = Union[MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom, MethodBayOpt]
+MethodType = Union[
+    MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom, MethodBayOpt, MethodGenAlg
+]
