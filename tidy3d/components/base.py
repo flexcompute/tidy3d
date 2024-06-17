@@ -24,7 +24,8 @@ from pydantic.v1.fields import ModelField
 
 from ..exceptions import FileError
 from ..log import log
-from .autograd import AutogradFieldMap, Box, get_static
+from .autograd.types import AutogradFieldMap, Box
+from .autograd.utils import get_static
 from .data.data_array import AUTOGRAD_KEY, DATA_ARRAY_MAP, DataArray
 from .file_util import compress_file_to_gzip, extract_gzip_file
 from .types import TYPE_TAG_STR, ComplexNumber, Literal
