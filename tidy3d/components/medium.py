@@ -3542,7 +3542,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
                 """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
                 eps = self._eps_model(eps_inf, poles, frequency)
-                return dJ_deps * eps
+                return dJ_deps * eps  # possible conj? minus sign?
 
             def aux_fn_re(
                 eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex
@@ -3575,7 +3575,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
             if field_name == "poles":
                 pole_index, a_or_c = rest
-                derivative_map[field_path] = deps_dpoles[pole_index][a_or_c]
+                derivative_map[field_path] = -np.conj(deps_dpoles[pole_index][a_or_c])
 
         return derivative_map
 
