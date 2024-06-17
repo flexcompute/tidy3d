@@ -4,21 +4,22 @@ from __future__ import annotations
 
 import pathlib
 from collections import defaultdict
-from typing import Any, Callable, Optional, Tuple, Union
+from typing import Callable, Optional, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
 
 from ..constants import MICROMETER
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
-from .autograd import get_static
+from .autograd.derivative_utils import DerivativeInfo
+from .autograd.types import AutogradFieldMap
+from .autograd.utils import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
-from .data.monitor_data import FieldData, PermittivityData
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
 from .grid.grid import Coords
 from .medium import AbstractCustomMedium, Medium2D, MediumType
 from .monitor import FieldMonitor, PermittivityMonitor
-from .types import TYPE_TAG_STR, Ax, Axis, Bound
+from .types import TYPE_TAG_STR, Ax, Axis
 from .validators import validate_name_str
 from .viz import add_ax_if_none, equal_aspect
 
@@ -241,21 +242,12 @@ class Structure(AbstractStructure):
             raise NotImplementedError(f"Can't compute derivative for structure field path: {path}.")
         return derivative_map[path]
 
-    def compute_derivatives(
-        self,
-        structure_paths: list[tuple[str, ...]],
-        E_der_map: FieldData,
-        D_der_map: FieldData,
-        eps_data: PermittivityData,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[tuple[str, ...], Any]:
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint gradients given the forward and adjoint fields"""
 
         # generate a mapping from the 'medium', or 'geometry' tag to the list of fields for VJP
         structure_fields_map = defaultdict(list)
-        for structure_path in structure_paths:
+        for structure_path in derivative_info.paths:
             med_or_geo, *field_path = structure_path
             field_path = tuple(field_path)
             if med_or_geo not in ("geometry", "medium"):
@@ -273,15 +265,8 @@ class Structure(AbstractStructure):
         for med_or_geo, field_paths in structure_fields_map.items():
             # grab derivative values {field_name -> vjp_value}
             med_or_geo_field = self.medium if med_or_geo == "medium" else self.geometry
-            derivative_values_map = med_or_geo_field.compute_derivatives(
-                field_paths=field_paths,
-                E_der_map=E_der_map,
-                D_der_map=D_der_map,
-                eps_data=eps_data,
-                eps_in=eps_in,
-                eps_out=eps_out,
-                bounds=bounds,
-            )
+            info = derivative_info.updated_copy(paths=field_paths)
+            derivative_values_map = med_or_geo_field.compute_derivatives(derivative_info=info)
 
             # construct map of {field path -> derivative value}
             for field_path, derivative_value in derivative_values_map.items():

@@ -5,7 +5,7 @@ from __future__ import annotations
 import functools
 from abc import ABC, abstractmethod
 from math import isclose
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import autograd.numpy as np
 
@@ -31,7 +31,8 @@ from ..constants import (
 )
 from ..exceptions import SetupError, ValidationError
 from ..log import log
-from .autograd import TracedFloat, integrate_within_bounds
+from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
+from .autograd.types import AutogradFieldMap, TracedFloat
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
@@ -1109,17 +1110,8 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
     """ Autograd code """
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute the adjoint derivative for this geometry."""
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
         raise NotImplementedError(f"Can't compute derivative for 'Medium': '{type(self)}'.")
 
 
@@ -1523,24 +1515,17 @@ class Medium(AbstractMedium):
             )
         return cls(permittivity=eps, conductivity=sigma, **kwargs)
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
-        vjps_volume = self.derivative_eps_sigma_volume(E_der_map=E_der_map, bounds=bounds)
+        vjps_volume = self.derivative_eps_sigma_volume(
+            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
+        )
 
         # store the fields asked for by ``field_paths``
         derivative_map = {}
-        for field_path in field_paths:
+        for field_path in derivative_info.paths:
             field_name, *_ = field_path
             if field_name in vjps_volume:
                 derivative_map[field_path] = vjps_volume[field_name]
@@ -1573,7 +1558,7 @@ class Medium(AbstractMedium):
 
         vjp_value = 0.0
         for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map.field_components[field_name]
+            fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
                 arr=fld,
                 dims=("x", "y", "z"),
@@ -2438,26 +2423,17 @@ class CustomMedium(AbstractCustomMedium):
             eps_dataset=eps_reduced,
         )
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
-        """Compute the adjoint derivative for this geometry."""
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
 
         vjps = {}
 
-        for field_path in field_paths:
+        for field_path in derivative_info.paths:
             if field_path == ("permittivity",):
                 vjp_array = 0.0
                 for dim in "xyz":
                     vjp_array += self._derivative_field_cmp(
-                        E_der_map=E_der_map, eps_data=self.permittivity, dim=dim
+                        E_der_map=derivative_info.E_der_map, eps_data=self.permittivity, dim=dim
                     )
                 vjps[field_path] = vjp_array
 
@@ -2465,7 +2441,9 @@ class CustomMedium(AbstractCustomMedium):
                 key = field_path[1]
                 dim = key[-1]
                 vjps[field_path] = self._derivative_field_cmp(
-                    E_der_map=E_der_map, eps_data=self.eps_dataset.field_components[key], dim=dim
+                    E_der_map=derivative_info.E_der_map,
+                    eps_data=self.eps_dataset.field_components[key],
+                    dim=dim,
                 )
 
             else:
@@ -2510,7 +2488,7 @@ class CustomMedium(AbstractCustomMedium):
             d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim = E_der_map.field_components[f"E{dim}"]
+        E_der_dim = E_der_map[f"E{dim}"]
         E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
         vjp_array = np.array(E_der_dim_interp.values).astype(float)
         vjp_array = vjp_array.reshape(eps_data.shape)
