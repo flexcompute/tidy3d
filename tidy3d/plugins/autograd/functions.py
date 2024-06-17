@@ -3,9 +3,10 @@ from typing import Iterable, List, Literal, Tuple, Union
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
+from numpy.typing import NDArray
 from scipy.interpolate import RegularGridInterpolator
 
-from .types import PaddingType
+from .types import InterpolationType, PaddingType
 
 
 def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
@@ -662,52 +663,113 @@ def threshold(
     return np.where(array < level, vmin, vmax)
 
 
-def interpn(points, values, xi, *, method="linear"):
+def interpn(
+    points: tuple[NDArray[np.float64], ...],
+    values: NDArray[np.float64],
+    xi: tuple[NDArray[np.float64], ...],
+    *,
+    method: InterpolationType = "linear",
+) -> NDArray[np.float64]:
+    """Interpolate over a regular grid in arbitrary dimensions.
+
+    This function has the same interface as `scipy.interpolate.interpn` but is differentiable with autograd.
+
+    Parameters
+    ----------
+    points : tuple[NDArray[np.float64], ...]
+        The points defining the regular grid in n dimensions.
+    values : NDArray[np.float64]
+        The data values on the regular grid.
+    xi : tuple[NDArray[np.float64], ...]
+        The coordinates to sample the gridded data at.
+    method : InterpolationType, optional
+        The method of interpolation to perform. Supported are "linear" and "nearest". Default is "linear".
+
+    Returns
+    -------
+    NDArray[np.float64]
+        The interpolated values.
+
+    Raises
+    ------
+    ValueError
+        If the interpolation method is not supported.
+
+    See Also
+    --------
+    scipy.interpolate.interpn : Interpolation on a regular grid in arbitrary dimensions.
+        https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interpn.html
+    """
     if method == "nearest":
         interp_fn = _evaluate_nearest
     elif method == "linear":
         interp_fn = _evaluate_linear
     else:
-        raise ValueError
-    interpolator = RegularGridInterpolator(points, values, method=method)
+        raise ValueError(f"Unsupported interpolation method: {method}")
+
+    itrp = RegularGridInterpolator(points, values, method=method)
     grid = np.meshgrid(*xi, indexing="ij")
-    grid, shape, ndim, nans, out_of_bounds = interpolator._prepare_xi(tuple(grid))
-    indices, norm_distances = interpolator._find_indices(grid.T)
-    return interp_fn(indices, norm_distances, values, shape, ndim)
+    grid, shape, ndim, nans, _ = itrp._prepare_xi(tuple(grid))
+    indices, norm_distances = itrp._find_indices(grid.T)
+
+    result = interp_fn(indices, norm_distances, values)
+    result = np.where(nans, np.nan, result)
+    return np.reshape(result, shape[:-1] + values.shape[ndim:])
 
 
-def _evaluate_nearest(indices, norm_distances, values, shape, ndim):
+def _evaluate_nearest(
+    indices: NDArray[np.int64], norm_distances: NDArray[np.float64], values: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Evaluate the nearest neighbor interpolation.
+
+    Parameters
+    ----------
+    indices : NDArray[np.int64]
+        The indices of the grid points.
+    norm_distances : NDArray[np.float64]
+        The normalized distances to the grid points.
+    values : NDArray[np.float64]
+        The data values on the regular grid.
+
+    Returns
+    -------
+    NDArray[np.float64]
+        The interpolated values.
+    """
     idx_res = tuple(np.where(yi <= 0.5, i, i + 1) for i, yi in zip(indices, norm_distances))
     return values[idx_res]
 
 
-def _evaluate_linear(indices, norm_distances, values, shape, ndim):
-    # slice for broadcasting over trailing dimensions in values
-    vslice = (slice(None),) + (None,) * (values.ndim - len(indices))
+def _evaluate_linear(
+    indices: NDArray[np.int64], norm_distances: NDArray[np.float64], values: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    """Evaluate the linear interpolation.
 
-    # Compute shifting up front before zipping everything together
-    shift_norm_distances = [1 - yi for yi in norm_distances]
-    shift_indices = [i + 1 for i in indices]
+    Parameters
+    ----------
+    indices : NDArray[np.int64]
+        The indices of the grid points.
+    norm_distances : NDArray[np.float64]
+        The normalized distances to the grid points.
+    values : NDArray[np.float64]
+        The data values on the regular grid.
 
-    # The formula for linear interpolation in 2d takes the form:
-    # values = values[(i0, i1)] * (1 - y0) * (1 - y1) + \
-    #          values[(i0, i1 + 1)] * (1 - y0) * y1 + \
-    #          values[(i0 + 1, i1)] * y0 * (1 - y1) + \
-    #          values[(i0 + 1, i1 + 1)] * y0 * y1
-    # We pair i with 1 - yi (zipped1) and i + 1 with yi (zipped2)
-    zipped1 = zip(indices, shift_norm_distances)
-    zipped2 = zip(shift_indices, norm_distances)
+    Returns
+    -------
+    NDArray[np.float64]
+        The interpolated values.
+    """
+    _slice = (slice(None),) + (None,) * (values.ndim - len(indices))
 
-    # Take all products of zipped1 and zipped2 and iterate over them
-    # to get the terms in the above formula. This corresponds to iterating
-    # over the vertices of a hypercube.
-    hypercube = itertools.product(*zip(zipped1, zipped2))
-    value = np.array([0.0])
-    for h in hypercube:
+    ix = zip(indices, (1 - yi for yi in norm_distances))
+    iy = zip((i + 1 for i in indices), norm_distances)
+
+    value = np.zeros(1)
+    for h in itertools.product(*zip(ix, iy)):
         edge_indices, weights = zip(*h)
-        weight = np.array([1.0])
+        weight = np.ones(1)
         for w in weights:
             weight = weight * w
-        term = np.array(values[edge_indices]) * weight[vslice]
-        value = value + term  # cannot use += because broadcasting
-    return np.reshape(value, shape[:-1] + values.shape[ndim:])
+        term = np.array(values[edge_indices]) * weight[_slice]
+        value = value + term
+    return value
