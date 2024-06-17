@@ -1150,7 +1150,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
             )
             vjp_value += vjp_value_fld
 
-        return vjp_value
+        return vjp_value.sum("f")
 
 
 class AbstractCustomMedium(AbstractMedium, ABC):
@@ -1395,7 +1395,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         E_der_dim = E_der_map[f"E{dim}"]
-        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum)
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).sum("f")
         vjp_array = np.array(E_der_dim_interp.values).astype(complex)
         vjp_array = vjp_array.reshape(eps_data.shape)
 
@@ -2551,8 +2551,11 @@ class CustomMedium(AbstractCustomMedium):
         eps_data: PermittivityDataset,
         dim: str,
     ) -> np.ndarray:
-        coords_interp = {key: val for key, val in eps_data.coords.items() if len(val) > 1}
-        dims_sum = {dim for dim in eps_data.coords.keys() if dim not in coords_interp}
+        """Compute derivative with respect to the ``dim`` components within the custom medium."""
+
+        coords_interp = {key: eps_data.coords[key] for key in "xyz"}
+        coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
+        dims_sum = [dim for dim in "xyz" if dim not in coords_interp]
 
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
@@ -2581,8 +2584,11 @@ class CustomMedium(AbstractCustomMedium):
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         E_der_dim = E_der_map[f"E{dim}"]
-        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum)
-        vjp_array = np.array(E_der_dim_interp.values).astype(complex)
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
+        E_der_dim_interp = E_der_dim_interp.sum("f")
+
+        vjp_array = np.array(E_der_dim_interp.values, dtype=float)
+
         vjp_array = vjp_array.reshape(eps_data.shape)
 
         # multiply by volume elements (if possible, being defensive here..)
