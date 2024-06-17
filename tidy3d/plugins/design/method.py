@@ -106,13 +106,13 @@ class Method(Tidy3dBaseModel, ABC):
             return batch.run()
 
     @staticmethod
-    def _check_pre_output(self, parameters: Tuple[ParameterType, ...], pre_fn: Callable):
+    def _can_batch(parameters: Tuple[ParameterType, ...], pre_fn: Callable):
         """See if pre produces an arrangement of td.Simulation or is unrelated"""
 
         # Check if tidy3d is called in func
         source = getsource(pre_fn)
         if "web.Batch(" in source or "web.run(" in source:
-            return "local"
+            return False
 
         # Run fn_pre with the lower bound of each parameter
         lower_params = {param.name: param.span[0] for param in parameters}
@@ -120,22 +120,20 @@ class Method(Tidy3dBaseModel, ABC):
 
         # Determine if pre_fn will need to run locally or on tidy3d
         if isinstance(result, Simulation):  # Single Simulation
-            run_loc = "tidy3d"
+            return True
 
-        elif isinstance(result, dict):  # Dict of simulations
-            if isinstance(result[next(iter(result))], Simulation):
-                run_loc = "tidy3d"
+        # elif isinstance(result, dict):  # Dict of simulations
+        #     if isinstance(result[next(iter(result))], Simulation):
+        #         is_batchable = "tidy3d"
 
-        elif isinstance(result, list):  # List of dicts of simulations
-            if isinstance(result[0], dict):
-                if isinstance(result[0][next(iter(result[0]))], Simulation):
-                    run_loc = "tidy3d"
+        # elif isinstance(result, list):  # List of dicts of simulations
+        #     if isinstance(result[0], dict):
+        #         if isinstance(result[0][next(iter(result[0]))], Simulation):
+        #             is_batchable = "tidy3d"
 
         else:
-            print("Not a recognised way of organising Tidy3D simulation objects")
-            run_loc = "local"
-
-        return run_loc
+            # print("Not a recognised way of organising Tidy3D simulation objects")
+            return False
 
 
 class MethodSample(Method, ABC):
@@ -155,21 +153,15 @@ class MethodSample(Method, ABC):
         fn_args = self.sample(parameters)
         for arg_dict in fn_args:
             self._force_int(arg_dict, parameters)
-        run_loc = self._check_pre_output(self, parameters, pre_fn)
+        is_batchable = self._can_batch(self, parameters, pre_fn)
         # self.assert_hashable(fn_args)
         # self.assert_num_points(fn_args)
-        return fn_args, run_loc
+        return fn_args, is_batchable
 
-    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, post_fn, run_loc):
+    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, post_fn, is_batchable):
         """Decide whether this is a local, single online, or batch online job"""
 
-        if run_loc == "local":
-            results = []
-            for arg_dict in fn_args:
-                fn_output = pre_fn(**arg_dict)
-                results.append(fn_output)
-
-        else:
+        if is_batchable:
             run_kwargs = {}
             # Create dict of simulations
             if len(fn_args) == 1:
@@ -179,6 +171,12 @@ class MethodSample(Method, ABC):
 
             pre_out = self._tidy3d_run(sims, run_kwargs)
             results = [sim_tuple[1] for sim_tuple in pre_out.items()]
+
+        else:
+            results = []
+            for arg_dict in fn_args:
+                fn_output = pre_fn(**arg_dict)
+                results.append(fn_output)
 
         # Post process the data
         processed_result = []
@@ -193,14 +191,14 @@ class MethodSample(Method, ABC):
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
-        fn_args, run_loc = self._assemble_args(parameters, pre_fn)
+        fn_args, is_batchable = self._assemble_args(parameters, pre_fn)
 
         # Get min and max for each sample
         # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
         # min_max_params = [(min(param), max(param)) for param in args_as_params]
 
         # for each point, construct the function inputs, run it, record output
-        results = self._eval_run(fn_args, pre_fn, post_fn, run_loc)
+        results = self._eval_run(fn_args, pre_fn, post_fn, is_batchable)
 
         return fn_args, results
 
@@ -270,7 +268,7 @@ class MethodBayOpt(MethodOptimise, ABC):
     ) -> Tuple[Any]:
         """Defines the search algorithm for BayOpt"""
         boundary_dict = self.create_boundary_dict(parameters)
-        run_loc = self._check_pre_output(self, parameters, pre_fn)
+        is_batchable = self._can_batch(self, parameters, pre_fn)
 
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
@@ -284,27 +282,7 @@ class MethodBayOpt(MethodOptimise, ABC):
 
         # Run variables
         arg_list = []
-        if run_loc == "local":
-            # Handle the initial random samples as a batch to save time
-            init_output = []
-            for _ in range(self.initial_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-                arg_list.append(next_point)
-                init_output.append(post_fn(pre_fn(**next_point)))
-
-            for next_point, next_out in zip(arg_list, init_output):
-                opt.register(params=next_point, target=next_out)
-
-            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
-            for _ in range(self.n_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-                pre_out = pre_fn(**next_point)
-                next_out = post_fn(pre_out)
-                opt.register(params=next_point, target=next_out)
-
-        elif run_loc == "tidy3d":
+        if is_batchable:
             # Handle the initial random samples as a batch to save time
             sim_dict = {}
             run_kwargs = {}
@@ -337,6 +315,25 @@ class MethodBayOpt(MethodOptimise, ABC):
 
                 next_out = post_fn(pre_out)
                 opt.register(params=next_point, target=next_out)
+        else:
+            # Handle the initial random samples as a batch to save time
+            init_output = []
+            for _ in range(self.initial_iter):
+                next_point = opt.suggest(utility)
+                self._force_int(next_point, parameters)
+                arg_list.append(next_point)
+                init_output.append(post_fn(pre_fn(**next_point)))
+
+            for next_point, next_out in zip(arg_list, init_output):
+                opt.register(params=next_point, target=next_out)
+
+            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
+            for _ in range(self.n_iter):
+                next_point = opt.suggest(utility)
+                self._force_int(next_point, parameters)
+                pre_out = pre_fn(**next_point)
+                next_out = post_fn(pre_out)
+                opt.register(params=next_point, target=next_out)
 
         # Output results from the BO.opt object
         result = []
@@ -365,19 +362,28 @@ class MethodGenAlg(MethodOptimise, ABC):
         # Create fitness function combining pre and post fn with the tidy3d call
         def fitness_function(ga_instance, solution, solution_idx):
             # Hard-coded kwargs
-            # run_kwargs = {}
+            run_kwargs = {}
 
             # Break solution down to dict
+            sol_dict = [dict(zip(_param_keys, sol)) for sol in solution]
+
+            # Iterate through solutions for batched and non-batched data
             sol_out = []
-            for sol in solution:
-                dict_sol = dict(zip(_param_keys, sol))
-                sol_out.append(post_fn(pre_fn(**dict_sol)))
+            if _is_batchable:
+                sim_dict = {}
+                for sim_idx, arg_dict in enumerate(sol_dict):
+                    sim_dict[sim_idx] = pre_fn(**arg_dict)
+
+                sim_result = self._tidy3d_run(sim_dict, run_kwargs)
+                sim_data = [sim_tuple[1] for sim_tuple in sim_result.items()]
+                for next_out in sim_data:
+                    sol_out.append(post_fn(next_out))
+
+            else:
+                for arg_dict in sol_dict:
+                    sol_out.append(post_fn(pre_fn(**arg_dict)))
 
             return sol_out
-
-            # sim = pre_fn(solution)
-            # sim_result = self._tidy3d_run(sim, run_kwargs)
-            # return post_fn(sim_result)
 
         def on_generation(ga_instance):
             _store_parameters.append(ga_instance.population.copy())
@@ -397,31 +403,39 @@ class MethodGenAlg(MethodOptimise, ABC):
         _store_parameters = []
         _store_fitness = []
 
+        # Determine if batching is possible
+        global _is_batchable
+        _is_batchable = self._can_batch(parameters, pre_fn)
+
         # Set gene_spaces to keep GA within ranges
         gene_spaces = []
+        gene_types = []
         for param in parameters:
             if type(param) == tdd.ParameterFloat:
                 gene_spaces.append({"low": param.span[0], "high": param.span[1]})
+                gene_types.append(float)
             elif type(param) == tdd.ParameterInt:
                 gene_spaces.append(
                     range(param.span[0], param.span[1] + 1)
                 )  # +1 included so as to be inclusive of upper range value
+                gene_types.append(int)
             else:
                 print("Parameter type not supported by GA method.")
 
         # Determine initial array
 
-        sol_per_pop = 30  # number of solutions in the population
+        sol_per_pop = 10  # number of solutions in the population
         num_genes = len(parameters)
-        num_generations = 25  # number of generation
+        num_generations = 3  # number of generation
 
-        num_parents_mating = 10  # number of mating parents
-        parent_selection_type = "sss"  # parent selection rule
+        num_parents_mating = 4  # number of mating parents
+        parent_selection_type = "rws"  # parent selection rule
 
-        crossover_type = "single_point"  # crossover rule
+        crossover_type = "scattered"  # crossover rule
         crossover_probability = 0.7  # cross over probability
 
-        mutation_type = "inversion"  # mutation rule
+        mutation_type = "random"  # mutation rule
+        mutation_probability = 0.2
 
         # define the optimizer
         ga_instance = pygad.GA(
@@ -430,6 +444,7 @@ class MethodGenAlg(MethodOptimise, ABC):
             fitness_func=fitness_function,
             parent_selection_type=parent_selection_type,
             mutation_type=mutation_type,
+            mutation_probability=mutation_probability,
             crossover_type=crossover_type,
             crossover_probability=crossover_probability,
             sol_per_pop=sol_per_pop,
@@ -438,6 +453,7 @@ class MethodGenAlg(MethodOptimise, ABC):
             on_generation=on_generation,
             random_seed=1,
             gene_space=gene_spaces,
+            gene_type=gene_types,
         )
 
         ga_instance.run()
