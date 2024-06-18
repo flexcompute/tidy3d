@@ -4054,7 +4054,7 @@ class Simulation(AbstractYeeGridSimulation):
         freq_max = max(freq_source_max, freq_monitor_max)
 
         if freq_max > 0:
-            nyquist_step = int(1 / (2 * freq_max) / self.dt) - 1
+            nyquist_step = int(1 / (2 * freq_max) / self.dt * 2) - 1
             nyquist_step = max(1, nyquist_step)
         else:
             nyquist_step = 1
