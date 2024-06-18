@@ -14,8 +14,6 @@ from autograd.tracer import getval, isbox
 from xarray.core.types import InterpOptions
 from xarray.core.utils import either_dict_or_kwargs
 
-from tidy3d.plugins.autograd.functions import interpn
-
 from ...constants import (
     HERTZ,
     MICROMETER,
@@ -25,6 +23,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
+from ..autograd import interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes

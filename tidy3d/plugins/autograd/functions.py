@@ -1,12 +1,27 @@
-import itertools
 from typing import Iterable, List, Literal, Tuple, Union
 
 import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
 from numpy.typing import NDArray
-from scipy.interpolate import RegularGridInterpolator
 
-from .types import InterpolationType, PaddingType
+from tidy3d.components.autograd import interpn
+
+from .types import PaddingType
+
+__all__ = [
+    "interpn",
+    "pad",
+    "convolve",
+    "grey_dilation",
+    "grey_erosion",
+    "grey_opening",
+    "grey_closing",
+    "morphological_gradient",
+    "morphological_gradient_internal",
+    "morphological_gradient_external",
+    "rescale",
+    "threshold",
+]
 
 
 def _make_slices(rule: Union[int, slice], ndim: int, axis: int) -> Tuple[slice, ...]:
@@ -661,84 +676,3 @@ def threshold(
         )
 
     return np.where(array < level, vmin, vmax)
-
-
-def _evaluate_nearest(
-    indices: NDArray[np.int64], norm_distances: NDArray[np.float64], values: NDArray[np.float64]
-) -> NDArray[np.float64]:
-    idx_res = tuple(np.where(yi <= 0.5, i, i + 1) for i, yi in zip(indices, norm_distances))
-    return values[idx_res]
-
-
-def _evaluate_linear(
-    indices: NDArray[np.int64], norm_distances: NDArray[np.float64], values: NDArray[np.float64]
-) -> NDArray[np.float64]:
-    _slice = (slice(None),) + (None,) * (values.ndim - len(indices))
-
-    ix = zip(indices, (1 - yi for yi in norm_distances))
-    iy = zip((i + 1 for i in indices), norm_distances)
-
-    value = np.zeros(1)
-    for h in itertools.product(*zip(ix, iy)):
-        edge_indices, weights = zip(*h)
-        weight = np.ones(1)
-        for w in weights:
-            weight = weight * w
-        term = np.array(values[edge_indices]) * weight[_slice]
-        value = value + term
-    return value
-
-
-def interpn(
-    points: tuple[NDArray[np.float64], ...],
-    values: NDArray[np.float64],
-    xi: tuple[NDArray[np.float64], ...],
-    *,
-    method: InterpolationType = "linear",
-) -> NDArray[np.float64]:
-    """Interpolate over a rectilinear grid in arbitrary dimensions.
-
-    This function mirrors the interface of `scipy.interpolate.interpn` but is differentiable with autograd.
-
-    Parameters
-    ----------
-    points : tuple[NDArray[np.float64], ...]
-        The points defining the rectilinear grid in n dimensions.
-    values : NDArray[np.float64]
-        The data values on the rectilinear grid.
-    xi : tuple[NDArray[np.float64], ...]
-        The coordinates to sample the gridded data at.
-    method : InterpolationType, optional
-        The method of interpolation to perform. Supported are "linear" and "nearest". Default is "linear".
-
-    Returns
-    -------
-    NDArray[np.float64]
-        The interpolated values.
-
-    Raises
-    ------
-    ValueError
-        If the interpolation method is not supported.
-
-    See Also
-    --------
-    scipy.interpolate.interpn : Interpolation on a rectilinear grid in arbitrary dimensions.
-        https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.interpn.html
-    """
-    if method == "nearest":
-        interp_fn = _evaluate_nearest
-    elif method == "linear":
-        interp_fn = _evaluate_linear
-    else:
-        raise ValueError(f"Unsupported interpolation method: {method}")
-
-    itrp = RegularGridInterpolator(points, values, method=method)
-    grid = np.meshgrid(*xi, indexing="ij")
-    grid, shape, ndim, nans, _ = itrp._prepare_xi(tuple(grid))
-    indices, norm_distances = itrp._find_indices(grid.T)
-
-    result = interp_fn(indices, norm_distances, values)
-    nans = np.reshape(nans, (len(nans),) + (1,) * (len(result.shape) - 1))
-    result = np.where(nans, np.nan, result)
-    return np.reshape(result, shape[:-1] + values.shape[ndim:])

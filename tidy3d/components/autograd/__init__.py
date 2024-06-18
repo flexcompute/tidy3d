@@ -1,3 +1,4 @@
+from .derivative_utils import DerivativeInfo, integrate_within_bounds, interpn
 from .types import (
     AutogradFieldMap,
     AutogradTraced,
@@ -20,4 +21,5 @@ __all__ = [
     "get_static",
     "integrate_within_bounds",
     "DerivativeInfo",
+    "interpn",
 ]
