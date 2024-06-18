@@ -29,18 +29,6 @@ class Method(Tidy3dBaseModel, ABC):
 
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
-    # batch_size: pd.PositiveInt = pd.Field(
-    #     ...,
-    #     title="Size of batch to be run",
-    #     description="TBD",
-    # )
-
-    # num_batches: pd.PositiveInt = pd.Field(
-    #     ...,
-    #     title="Number of batches to be run",
-    #     description="TBD",
-    # )
-
     @abstractmethod
     def run(
         self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
@@ -106,33 +94,34 @@ class Method(Tidy3dBaseModel, ABC):
             return batch.run()
 
     @staticmethod
-    def _can_batch(parameters: Tuple[ParameterType, ...], pre_fn: Callable):
+    def _can_batch(parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]):
         """See if pre produces an arrangement of td.Simulation or is unrelated"""
 
-        # Check if tidy3d is called in func
-        source = getsource(pre_fn)
-        if "web.Batch(" in source or "web.run(" in source:
-            return False
+        if isinstance(run_fn, Tuple):
+            # Check if tidy3d is called in func
+            source = getsource(run_fn[0])
+            if "web.Batch(" in source and "web.run(" in source:
+                raise ValueError(
+                    "Can't effectively control batches from a pre-function that calls the tidy3d API. "
+                    "Please convert to a single function or change the function to return a Simulation object."
+                )
 
-        # Run fn_pre with the lower bound of each parameter
-        lower_params = {param.name: param.span[0] for param in parameters}
-        result = pre_fn(**lower_params)
+            # Run fn_pre with the lower bound of each parameter
+            lower_params = {param.name: param.span[0] for param in parameters}
+            result = run_fn[0](**lower_params)
 
-        # Determine if pre_fn will need to run locally or on tidy3d
-        if isinstance(result, Simulation):  # Single Simulation
-            return True
-
-        # elif isinstance(result, dict):  # Dict of simulations
-        #     if isinstance(result[next(iter(result))], Simulation):
-        #         is_batchable = "tidy3d"
-
-        # elif isinstance(result, list):  # List of dicts of simulations
-        #     if isinstance(result[0], dict):
-        #         if isinstance(result[0][next(iter(result[0]))], Simulation):
-        #             is_batchable = "tidy3d"
+            # Determine if pre_fn will need to run locally or on tidy3d
+            if isinstance(result, Simulation):  # Single Simulation
+                return True
+            else:
+                # Not valid - batching can only be done on tidy3d Simulation generators
+                raise ValueError(
+                    "Can't create batches from a pre-function that does not output Simulation objects. "
+                    "Please convert to a single function or change the function to return a Simulation object."
+                )
 
         else:
-            # print("Not a recognised way of organising Tidy3D simulation objects")
+            # For single functions that pass through sequentially
             return False
 
 
@@ -146,22 +135,25 @@ class MethodSample(Method, ABC):
     def _assemble_args(
         self,
         parameters: Tuple[ParameterType, ...],
-        pre_fn: Callable,
+        run_fn: Callable,
     ) -> Tuple[dict, int]:
         """Sample design parameters, check the args are hashable and compute number of points."""
 
         fn_args = self.sample(parameters)
         for arg_dict in fn_args:
             self._force_int(arg_dict, parameters)
-        is_batchable = self._can_batch(self, parameters, pre_fn)
+        is_batchable = self._can_batch(parameters, run_fn)
         # self.assert_hashable(fn_args)
         # self.assert_num_points(fn_args)
         return fn_args, is_batchable
 
-    def _eval_run(self, fn_args: Dict[str, tuple], pre_fn, post_fn, is_batchable):
-        """Decide whether this is a local, single online, or batch online job"""
+    def _eval_run(self, fn_args: Dict[str, tuple], run_fn, is_batchable):
+        """Handle batchable and non-batchable jobs for a given run_function"""
 
+        processed_result = []
         if is_batchable:
+            pre_fn = run_fn[0]
+            post_fn = run_fn[1]
             run_kwargs = {}
             # Create dict of simulations
             if len(fn_args) == 1:
@@ -172,33 +164,31 @@ class MethodSample(Method, ABC):
             pre_out = self._tidy3d_run(sims, run_kwargs)
             results = [sim_tuple[1] for sim_tuple in pre_out.items()]
 
-        else:
-            results = []
-            for arg_dict in fn_args:
-                fn_output = pre_fn(**arg_dict)
-                results.append(fn_output)
+            # Post process the data
+            for res in results:
+                processed_result.append(post_fn(res))
 
-        # Post process the data
-        processed_result = []
-        for res in results:
-            processed_result.append(post_fn(res))
+        else:
+            for arg_dict in fn_args:
+                fn_output = run_fn(**arg_dict)
+                processed_result.append(fn_output)
 
         return processed_result
 
     def run(
-        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
     ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
-        fn_args, is_batchable = self._assemble_args(parameters, pre_fn)
+        fn_args, is_batchable = self._assemble_args(parameters, run_fn)
 
         # Get min and max for each sample
         # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
         # min_max_params = [(min(param), max(param)) for param in args_as_params]
 
         # for each point, construct the function inputs, run it, record output
-        results = self._eval_run(fn_args, pre_fn, post_fn, is_batchable)
+        results = self._eval_run(fn_args, run_fn, is_batchable)
 
         return fn_args, results
 
@@ -355,7 +345,7 @@ class MethodGenAlg(MethodOptimise, ABC):
     # Parent selector, optional
 
     def run(
-        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
+        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
     ) -> Tuple[Any]:
         """Defines the search algorithm for the GA"""
 
@@ -370,6 +360,8 @@ class MethodGenAlg(MethodOptimise, ABC):
             # Iterate through solutions for batched and non-batched data
             sol_out = []
             if _is_batchable:
+                pre_fn = run_fn[0]
+                post_fn = run_fn[1]
                 sim_dict = {}
                 for sim_idx, arg_dict in enumerate(sol_dict):
                     sim_dict[sim_idx] = pre_fn(**arg_dict)
@@ -381,7 +373,7 @@ class MethodGenAlg(MethodOptimise, ABC):
 
             else:
                 for arg_dict in sol_dict:
-                    sol_out.append(post_fn(pre_fn(**arg_dict)))
+                    sol_out.append(run_fn(**arg_dict))
 
             return sol_out
 
@@ -405,7 +397,7 @@ class MethodGenAlg(MethodOptimise, ABC):
 
         # Determine if batching is possible
         global _is_batchable
-        _is_batchable = self._can_batch(parameters, pre_fn)
+        _is_batchable = self._can_batch(parameters, run_fn)
 
         # Set gene_spaces to keep GA within ranges
         gene_spaces = []
