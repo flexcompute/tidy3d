@@ -304,13 +304,15 @@ class DataArray(xr.DataArray):
             if missing_keys:
                 raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
 
-            # TODO: handle dims not in coords
-            obj = self if assume_sorted else self.sortby(list(coords.keys()))
-            points = tuple(obj.coords[k].values for k in coords)
-            xi = tuple(coords.values())
-            # traced_vals = interpn(points, obj.attrs[AUTOGRAD_KEY], xi, method=method)
-            traced_vals = interpn(points, obj.values, xi, method=method)
-            da = DataArray(getval(traced_vals), coords)
+            obj = (
+                self if assume_sorted else self.sortby(list(coords.keys()))
+            )  # same handling as in vanilla xarray
+
+            points = tuple(dict(obj.coords).values())
+            xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
+            traced_vals = interpn(points, obj.attrs[AUTOGRAD_KEY], xi, method=method)
+
+            da = DataArray(getval(traced_vals), dict(obj.coords) | coords)
             da.attrs[AUTOGRAD_KEY] = traced_vals
             return da
         else:
