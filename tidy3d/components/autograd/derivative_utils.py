@@ -190,11 +190,12 @@ def interpn(
     else:
         raise ValueError(f"Unsupported interpolation method: {method}")
 
-    itrp = RegularGridInterpolator(points, values, method=method)
+    itrp = RegularGridInterpolator(points, getval(values), method=method)
     grid = anp.meshgrid(*xi, indexing="ij")
     grid, shape, ndim, nans, _ = itrp._prepare_xi(tuple(grid))
     indices, norm_distances = itrp._find_indices(grid.T)
 
+    values = anp.array(values, copy=False)
     result = interp_fn(indices, norm_distances, values)
     nans = anp.reshape(nans, (len(nans),) + (1,) * (len(result.shape) - 1))
     result = anp.where(nans, np.nan, result)

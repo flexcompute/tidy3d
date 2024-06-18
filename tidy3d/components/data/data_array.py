@@ -314,16 +314,14 @@ class DataArray(xr.DataArray):
             da = DataArray(getval(traced_vals), dict(obj.coords) | coords)
             da.attrs[AUTOGRAD_KEY] = traced_vals
             return da
-        else:
-            return super().interp(
-                coords=coords,
-                method=method,
-                assume_sorted=assume_sorted,
-                kwargs=kwargs,
-                **coords_kwargs,
-            )
 
-        return self
+        return super().interp(
+            coords=coords,
+            method=method,
+            assume_sorted=assume_sorted,
+            kwargs=kwargs,
+            **coords_kwargs,
+        )
 
 
 class FreqDataArray(DataArray):
