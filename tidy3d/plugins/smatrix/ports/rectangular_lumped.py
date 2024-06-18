@@ -21,7 +21,7 @@ from .base_lumped import AbstractLumpedPort
 
 
 class LumpedPort(AbstractLumpedPort, Box):
-    """Class representing a single rectangular lumped port
+    """Class representing a single rectangular lumped port.
 
     Example
     -------
@@ -249,7 +249,7 @@ class LumpedPort(AbstractLumpedPort, Box):
         return (min_idx, max_idx - 1)
 
     def _check_grid_size(self, yee_grid: YeeGrid):
-        """Raises :class:``SetupError`` if the grid is too coarse at port locations."""
+        """Raises :class:`SetupError` if the grid is too coarse at port locations"""
         e_component = "xyz"[self.voltage_axis]
         e_yee_grid = yee_grid.grid_dict[f"E{e_component}"]
         coords = e_yee_grid.to_dict[e_component]

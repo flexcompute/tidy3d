@@ -1,4 +1,4 @@
-"""Class and custom data array for representing a scattering matrix port based on a pair of terminals."""
+"""Class and custom data array for representing a scattering-matrix port, which is defined by a pair of terminals."""
 
 from abc import ABC, abstractmethod
 
@@ -36,7 +36,10 @@ class TerminalPortDataArray(DataArray):
 
 
 class AbstractTerminalPort(Tidy3dBaseModel, ABC):
-    """Class representing a single terminal-based port."""
+    """Class representing a single terminal-based port. All terminal ports must provide methods
+    for computing voltage and current. These quantities represent the voltage between the
+    terminals, and the current flowing from one terminal into the other.
+    """
 
     name: str = pd.Field(
         ...,

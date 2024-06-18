@@ -1,4 +1,4 @@
-"""Lumped port specialization with an annuluar geometry for exciting coaxial ports."""
+"""Lumped port specialization with an annular geometry for exciting coaxial ports."""
 
 import numpy as np
 import pydantic.v1 as pd
@@ -21,9 +21,11 @@ from ...microwave import CustomCurrentIntegral2D, VoltageIntegralAxisAligned
 from ...microwave.path_integrals import AbstractAxesRH
 from .base_lumped import AbstractLumpedPort
 
+DEFAULT_COAX_SOURCE_NUM_POINTS = 11
+
 
 class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
-    """Class representing a single coaxial lumped port
+    """Class representing a single coaxial lumped port.
 
     Example
     -------
@@ -79,7 +81,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
     @cached_property
     def injection_axis(self):
-        """Required for inheriting from AbstractLumpedPort."""
+        """Required for inheriting from AbstractTerminalPort."""
         return self.normal_axis
 
     @pd.validator("center", always=True)
@@ -122,13 +124,14 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         size = [self.outer_diameter] * 3
         size[self.injection_axis] = 0
         bounding_box = Box(center=self.center, size=size)
+
+        num1 = DEFAULT_COAX_SOURCE_NUM_POINTS
+        num2 = DEFAULT_COAX_SOURCE_NUM_POINTS
+
         if grid:
             inds = grid.discretize_inds(box=bounding_box)
             num1 = inds[trans_axes[0]][1] - inds[trans_axes[0]][0]
             num2 = inds[trans_axes[1]][1] - inds[trans_axes[1]][0]
-        else:
-            num1 = 11
-            num2 = 11
 
         # Get a normalized current density that is flowing radially from inner circle to outer circle
         # Total current is normalized to 1
@@ -194,7 +197,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
     def to_load(self, snap_center: float = None) -> CoaxialLumpedResistor:
         """Create a load resistor from the lumped port."""
         # 2D materials are currently snapped to the grid, so snapping here is not needed.
-        # It is done here so plots of the simulation will more accurately portray the setup
+        # Snapping is done here so plots of the simulation will more accurately portray the setup.
         center = list(self.center)
         if snap_center:
             center[self.injection_axis] = snap_center

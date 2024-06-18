@@ -6,12 +6,9 @@ from typing import Optional
 import pydantic.v1 as pd
 
 from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray
-from ....components.data.sim_data import SimulationData
-from ....components.grid.grid import Grid, YeeGrid
+from ....components.grid.grid import YeeGrid
 from ....components.lumped_element import AbstractLumpedResistor
 from ....components.monitor import FieldMonitor
-from ....components.source import GaussianPulse, UniformCurrentSource
 from ....components.types import Complex, FreqArray
 from ....constants import OHM
 from .base_terminal import AbstractTerminalPort
@@ -21,7 +18,7 @@ DEFAULT_REFERENCE_IMPEDANCE = 50
 
 
 class AbstractLumpedPort(AbstractTerminalPort):
-    """Class representing a single lumped port"""
+    """Class representing a single lumped port."""
 
     impedance: Complex = pd.Field(
         DEFAULT_REFERENCE_IMPEDANCE,
@@ -46,17 +43,6 @@ class AbstractLumpedPort(AbstractTerminalPort):
     def _current_monitor_name(self) -> str:
         return f"{self.name}_current"
 
-    @cached_property
-    @abstractmethod
-    def injection_axis(self):
-        """Injection axis of the port."""
-
-    @abstractmethod
-    def to_source(
-        self, source_time: GaussianPulse, snap_center: float = None, grid: Grid = None
-    ) -> UniformCurrentSource:
-        """Create a current source from the lumped port."""
-
     @abstractmethod
     def to_load(self, snap_center: float = None) -> AbstractLumpedResistor:
         """Create a load resistor from the lumped port."""
@@ -77,13 +63,5 @@ class AbstractLumpedPort(AbstractTerminalPort):
         ]
 
     @abstractmethod
-    def compute_voltage(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute voltage across the port."""
-
-    @abstractmethod
-    def compute_current(self, sim_data: SimulationData) -> FreqDataArray:
-        """Helper to compute current flowing through the port."""
-
-    @abstractmethod
-    def _check_grid_size(yee_grid: YeeGrid):
-        """Raises :class:``SetupError`` if the grid is too coarse at port locations"""
+    def _check_grid_size(self, yee_grid: YeeGrid):
+        """Raises :class:`SetupError` if the grid is too coarse at port locations."""

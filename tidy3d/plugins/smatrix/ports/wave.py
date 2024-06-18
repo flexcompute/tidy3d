@@ -6,7 +6,7 @@ import numpy as np
 import pydantic.v1 as pd
 
 from ....components.base import cached_property
-from ....components.data.data_array import FreqDataArray
+from ....components.data.data_array import FreqDataArray, FreqModeDataArray
 from ....components.data.monitor_data import ModeSolverData
 from ....components.data.sim_data import SimulationData
 from ....components.geometry.base import Box
@@ -113,7 +113,7 @@ class WavePort(AbstractTerminalPort, Box):
         return mode_mon
 
     def to_mode_solver(self, simulation: Simulation, freqs: FreqArray) -> ModeSolver:
-        """Helper to create a :class:``ModeSolver``"""
+        """Helper to create a :class:`.ModeSolver` instance."""
         mode_solver = ModeSolver(
             simulation=simulation,
             plane=self,
@@ -136,9 +136,9 @@ class WavePort(AbstractTerminalPort, Box):
 
     def compute_port_impedance(
         self, sim_mode_data: Union[SimulationData, ModeSolverData]
-    ) -> FreqDataArray:
+    ) -> FreqModeDataArray:
         """Helper to compute impedance of port. The port impedance is computed from the
-        transmission line mode, which should be TEM or atleast quasi-TEM."""
+        transmission line mode, which should be TEM or at least quasi-TEM."""
         impedance_calc = ImpedanceCalculator(
             voltage_integral=self.voltage_integral, current_integral=self.current_integral
         )
@@ -149,11 +149,11 @@ class WavePort(AbstractTerminalPort, Box):
 
         impedance_array = impedance_calc.compute_impedance(mode_solver_data)
         impedance_array = impedance_array.sel(mode_index=self.mode_index)
-        return FreqDataArray(impedance_array.values, coords=impedance_array.coords)
+        return impedance_array
 
     @staticmethod
     def _within_port_bounds(path_bounds: Bound, port_bounds: Bound) -> bool:
-        """Helper to check if one bounding box is completely within the other bounding box."""
+        """Helper to check if one bounding box is completely within the other."""
         path_min = np.array(path_bounds[0])
         path_max = np.array(path_bounds[1])
         bound_min = np.array(port_bounds[0])
@@ -179,6 +179,6 @@ class WavePort(AbstractTerminalPort, Box):
         were not provided."""
         if not values.get("voltage_integral") and not val:
             raise ValidationError(
-                "Atleast one of 'voltage_integral' or 'current_integral' must be provided."
+                "At least one of 'voltage_integral' or 'current_integral' must be provided."
             )
         return val

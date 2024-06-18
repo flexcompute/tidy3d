@@ -21,6 +21,7 @@ from ...components.data.monitor_data import FieldData, FieldTimeData, ModeSolver
 from ...components.geometry.base import Box
 from ...components.types import Axis, Direction
 from ...components.validators import assert_line, assert_plane
+from ...constants import AMP, VOLT
 from ...exceptions import DataError, Tidy3dError
 
 MonitorDataTypes = Union[FieldData, FieldTimeData, ModeSolverData]
@@ -191,14 +192,20 @@ class VoltageIntegralAxisAligned(AxisAlignedPathIntegral):
         if field_name not in em_field.field_components:
             raise DataError(f"'field_name' '{field_name}' not found.")
         e_field = em_field.field_components[field_name]
-        # V = -integral(E)
+
         voltage = self.compute_integral(e_field)
 
         if self.sign == "+":
             voltage *= -1
-        voltage.name = "voltage (A)"
+
+        voltage = VoltageIntegralAxisAligned._set_data_array_attributes(voltage)
         # Return data array of voltage while keeping coordinates of frequency|time|mode index
         return voltage
+
+    @staticmethod
+    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
+        data_array.name = "V"
+        return data_array.assign_attrs(units=VOLT, long_name="voltage")
 
 
 class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
@@ -254,7 +261,7 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
 
         if self.sign == "-":
             current *= -1
-        current.name = "current (A)"
+        current = CurrentIntegralAxisAligned._set_data_array_attributes(current)
         return current
 
     @cached_property
@@ -340,3 +347,8 @@ class CurrentIntegralAxisAligned(AbstractAxesRH, Box):
         )
 
         return (bottom, right, top, left)
+
+    @staticmethod
+    def _set_data_array_attributes(data_array: IntegralResultTypes) -> IntegralResultTypes:
+        data_array.name = "I"
+        return data_array.assign_attrs(units=AMP, long_name="current")

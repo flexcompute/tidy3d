@@ -15,7 +15,7 @@ from ....components.simulation import Simulation
 from ....components.source import GaussianPulse
 from ....components.types import Ax
 from ....components.viz import add_ax_if_none, equal_aspect
-from ....constants import C_0
+from ....constants import C_0, OHM
 from ....exceptions import ValidationError
 from ....web.api.container import BatchData
 from ..ports.base_lumped import AbstractLumpedPort
@@ -333,7 +333,7 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 # LumpedPorts have a constant reference impedance
                 port_impedances.loc[dict(port=port.name)] = np.full(len(self.freqs), port.impedance)
 
-        port_impedances.name = "impedance (Ohm)"
+        port_impedances = TerminalComponentModeler._set_port_data_array_attributes(port_impedances)
         return port_impedances
 
     @staticmethod
@@ -351,3 +351,9 @@ class TerminalComponentModeler(AbstractComponentModeler):
     def _wave_ports(self) -> list[WavePort]:
         """A list of all wave ports in the ``TerminalComponentModeler``"""
         return [port for port in self.ports if isinstance(port, WavePort)]
+
+    @staticmethod
+    def _set_port_data_array_attributes(data_array: PortDataArray) -> PortDataArray:
+        """Helper to set additional metadata for ``PortDataArray``."""
+        data_array.name = "Z0"
+        return data_array.assign_attrs(units=OHM, long_name="characteristic impedance")

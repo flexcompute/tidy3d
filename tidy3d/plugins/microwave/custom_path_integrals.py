@@ -15,7 +15,13 @@ from ...components.geometry.base import Geometry
 from ...components.types import ArrayFloat2D, Axis, Bound, Coordinate
 from ...constants import MICROMETER, fp_eps
 from ...exceptions import DataError, SetupError
-from .path_integrals import AbstractAxesRH, IntegralResultTypes, MonitorDataTypes
+from .path_integrals import (
+    AbstractAxesRH,
+    CurrentIntegralAxisAligned,
+    IntegralResultTypes,
+    MonitorDataTypes,
+    VoltageIntegralAxisAligned,
+)
 
 FieldParameter = Literal["E", "H"]
 
@@ -252,7 +258,7 @@ class CustomVoltageIntegral2D(CustomPathIntegral2D):
             Result of voltage computation over remaining dimensions (frequency, time, mode indices).
         """
         voltage = -1.0 * self.compute_integral(field="E", em_field=em_field)
-        voltage.name = "voltage (V)"
+        voltage = VoltageIntegralAxisAligned._set_data_array_attributes(voltage)
         return voltage
 
 
@@ -275,5 +281,5 @@ class CustomCurrentIntegral2D(CustomPathIntegral2D):
             Result of current computation over remaining dimensions (frequency, time, mode indices).
         """
         current = self.compute_integral(field="H", em_field=em_field)
-        current.name = "current (A)"
+        current = CurrentIntegralAxisAligned._set_data_array_attributes(current)
         return current
