@@ -197,7 +197,7 @@ def interpn(
 
     values = anp.array(values, copy=False)
     result = interp_fn(indices, norm_distances, values)
-    nans = anp.reshape(nans, (len(nans),) + (1,) * (len(result.shape) - 1))
+    nans = anp.reshape(nans, (-1,) + (1,) * (result.ndim - 1))
     result = anp.where(nans, np.nan, result)
     return anp.reshape(result, shape[:-1] + values.shape[ndim:])
 
