@@ -108,7 +108,7 @@ jobs:
           fi
 
   build:
-    name: test ${{ matrix.python-version }} - ${{ matrix.platform }}
+    name: Python ${{ matrix.python-version }} - ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     strategy:
       matrix:
@@ -120,6 +120,7 @@ jobs:
     env:  # Set environment variables for the whole job
       PIP_ONLY_BINARY: gdstk
       MPLBACKEND: agg
+
     steps:
     - uses: actions/checkout@v4
 
@@ -133,12 +134,19 @@ jobs:
         virtualenvs-create: true
         virtualenvs-in-project: true
 
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
     #----------------------------------------------
     # install your root project, if required
     #----------------------------------------------
     - name: Install library
       run: |
         poetry --version
+        poetry env use python
+        poetry env info
         poetry run pip install --upgrade pip wheel setuptools
         poetry run pip install gdstk --only-binary gdstk
         poetry install -E dev
