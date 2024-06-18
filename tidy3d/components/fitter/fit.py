@@ -12,15 +12,13 @@ import scipy.optimize as opt
 from pydantic.v1 import Field, validator
 from rich.progress import Progress
 
-from tidy3d.web.core.environment import Env
-
-from ...components.base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
-from ...components.medium import AbstractMedium, PoleResidue
-from ...components.types import ArrayFloat1D, Ax
-from ...components.viz import add_ax_if_none
 from ...constants import C_0, HBAR, MICROMETER
 from ...exceptions import SetupError, ValidationError, WebError
 from ...log import get_logging_console, log
+from ..base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
+from ..medium import AbstractMedium, PoleResidue
+from ..types import ArrayFloat1D, Ax
+from ..viz import add_ax_if_none
 
 
 class DispersionFitter(Tidy3dBaseModel):
@@ -614,7 +612,7 @@ class DispersionFitter(Tidy3dBaseModel):
         :class:`DispersionFitter`
             A :class:`DispersionFitter` instance.
         """
-        resp = requests.get(url_file, verify=Env.current.ssl_verify)
+        resp = requests.get(url_file)
 
         try:
             resp.raise_for_status()

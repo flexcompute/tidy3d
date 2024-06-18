@@ -14,12 +14,12 @@ from tidy3d.web.core.environment import Env
 from tidy3d.web.core.http_util import get_headers
 
 from ...components.base import Tidy3dBaseModel, skip_if_fields_missing
+from ...components.fitter.fit import DispersionFitter
 from ...components.medium import PoleResidue
 from ...components.types import Literal
 from ...constants import HERTZ, MICROMETER
 from ...exceptions import SetupError, Tidy3dError, WebError
 from ...log import log
-from .fit import DispersionFitter
 
 BOUND_MAX_FACTOR = 10
 
@@ -330,7 +330,7 @@ def run(
         Number of optimizations to run with random initial guess.
     tolerance_rms : NonNegativeFloat, optional
         RMS error below which the fit is successful and the result is returned.
-    advanced_param : :class:`AdvancedFitterParam`, optional
+    advanced_param : :class:`.AdvancedFitterParam`, optional
         Advanced parameters passed on to the server.
 
     Returns

@@ -113,6 +113,10 @@ from .components.eme.sweep import EMEFreqSweep, EMELengthSweep, EMEModeSweep
 # field projection
 from .components.field_projection import FieldProjector
 
+# material fitter
+from .components.fitter.fit import DispersionFitter
+from .components.fitter.fit_fast import AdvancedFastFitterParam, FastDispersionFitter
+
 # geometry
 from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGroup, Transformed
 from .components.geometry.mesh import TriangleMesh
@@ -464,6 +468,9 @@ __all__ = [
     "TriangularGridDataset",
     "TetrahedralGridDataset",
     "medium_from_nk",
+    "DispersionFitter",
+    "AdvancedFastFitterParam",
+    "FastDispersionFitter",
     "SubpixelSpec",
     "Staircasing",
     "VolumetricAveraging",

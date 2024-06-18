@@ -25,8 +25,8 @@ Spatially varying
 
    tidy3d.CustomMedium
 
-Dispersive Mediums
-------------------
+Dispersive Medium
+-----------------
 
 Spatially uniform
 ^^^^^^^^^^^^^^^^^
@@ -52,6 +52,16 @@ Spatially varying
    tidy3d.CustomDrude
    tidy3d.CustomDebye
 
+Dispersive Medium Fitter
+------------------------
+
+.. autosummary::
+   :toctree: _autosummary/
+   :template: module.rst
+
+   tidy3d.FastDispersionFitter
+   tidy3d.AdvancedFastFitterParam
+   tidy3d.DispersionFitter
 
 Medium Perturbations
 --------------------
@@ -64,8 +74,8 @@ Medium Perturbations
    tidy3d.PerturbationPoleResidue
 
 
-General Mediums (can be both dispersive and non-dispersive)
------------------------------------------------------------
+General Medium (can be both dispersive and non-dispersive)
+----------------------------------------------------------
 
 Spatially uniform
 ^^^^^^^^^^^^^^^^^

@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
 
+### Changed
+- Dispersive medium fitter in `plugins.dispersion` has been moved to Tidy3D module.
+
 ## [2.7.0] - 2024-06-17
 
 ### Added
