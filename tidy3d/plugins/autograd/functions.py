@@ -739,5 +739,6 @@ def interpn(
     indices, norm_distances = itrp._find_indices(grid.T)
 
     result = interp_fn(indices, norm_distances, values)
+    nans = np.reshape(nans, (len(nans),) + (1,) * (len(result.shape) - 1))
     result = np.where(nans, np.nan, result)
     return np.reshape(result, shape[:-1] + values.shape[ndim:])
