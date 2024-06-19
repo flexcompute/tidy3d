@@ -3201,8 +3201,7 @@ class PoleResidue(DispersiveMedium):
         dJ_deps = complex(dJ_deps)
 
         # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = 3e8
-        # frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
         poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
         poles_complex = np.stack(poles_complex, axis=0)
 
