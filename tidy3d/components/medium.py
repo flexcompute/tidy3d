@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from abc import ABC, abstractmethod
 from math import isclose
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -3226,25 +3225,21 @@ class PoleResidue(DispersiveMedium):
             frequency = eps_data.eps_xx.coords["f"].values.flat[0]
             poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
 
-            def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
-                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-                eps = self._eps_model(eps_inf, poles, frequency)
-                return dJ_deps * eps
+            grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
 
-            grad_maker = ag.holomorphic_grad(aux_fn, argnum=(0, 1))
+            deps_deps_inf, deps_dpoles = grad_eps_model(
+                complex(self.eps_inf), poles_complex, frequency
+            )
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                deps_deps_inf, deps_dpoles = grad_maker(
-                    self.eps_inf, poles_complex, frequency, dJ_deps
-                )
+            dJ_deps_inf = dJ_deps * deps_deps_inf
+            dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for (a, c) in deps_dpoles]
 
             if field_name == "eps_inf":
-                derivative_map[field_path] = float(np.real(deps_deps_inf))
+                derivative_map[field_path] = float(np.real(dJ_deps_inf))
 
             if field_name == "poles":
                 pole_index, a_or_c = rest
-                derivative_map[field_path] = complex(deps_dpoles[pole_index][a_or_c])
+                derivative_map[field_path] = complex(dJ_dpoles[pole_index][a_or_c])
 
         return derivative_map
 
@@ -3539,43 +3534,43 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 for a, c in self.poles
             ]
 
-            def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
-                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-                eps = self._eps_model(eps_inf, poles, frequency)
-                return dJ_deps * eps  # possible conj? minus sign?
+            def eps_model_r(
+                eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
+            ) -> float:
+                return np.real(self._eps_model(eps_inf, poles, frequency))
 
-            def aux_fn_re(
-                eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex
-            ) -> complex:
-                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-                return np.real(aux_fn(eps_inf, poles, frequency, dJ_deps))
+            def eps_model_i(
+                eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
+            ) -> float:
+                return np.real(self._eps_model(eps_inf, poles, frequency))
 
-            def aux_fn_im(
-                eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex
-            ) -> complex:
-                """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-                return np.imag(aux_fn(eps_inf, poles, frequency, dJ_deps))
+            grad_eps_model_r = ag.elementwise_grad(eps_model_r, argnum=(0, 1))
+            grad_eps_model_i = ag.elementwise_grad(eps_model_i, argnum=(0, 1))
 
-            grad_maker_re = ag.elementwise_grad(aux_fn_re, argnum=(0, 1))
-            grad_maker_im = ag.elementwise_grad(aux_fn_im, argnum=(0, 1))
+            deps_deps_inf_r, deps_dpoles_r = grad_eps_model_r(
+                self.eps_inf.values, poles_complex, frequency
+            )
+            deps_deps_inf_i, deps_dpoles_i = grad_eps_model_i(
+                self.eps_inf.values, poles_complex, frequency
+            )
 
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
-                deps_deps_inf_re, deps_dpoles_re = grad_maker_re(
-                    self.eps_inf.values, poles_complex, frequency, dJ_deps
-                )
-                deps_deps_inf_im, deps_dpoles_im = grad_maker_im(
-                    self.eps_inf.values, poles_complex, frequency, dJ_deps
-                )
-                deps_deps_inf = deps_deps_inf_re + 1j * deps_deps_inf_im
-                deps_dpoles = np.array(deps_dpoles_re) + 1j * np.array(deps_dpoles_im)
+            deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
+            dJ_deps_inf = dJ_deps * deps_deps_inf / 2.0
+
+            dJ_dpoles = []
+            for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
+                da = da_r + 1j * da_i
+                dc = dc_r + 1j * dc_i
+                dJ_da = dJ_deps * da / 2.0
+                dJ_dc = dJ_deps * dc / 2.0
+                dJ_dpoles.append((dJ_da, dJ_dc))
 
             if field_name == "eps_inf":
-                derivative_map[field_path] = np.real(deps_deps_inf)
+                derivative_map[field_path] = np.real(dJ_deps_inf)
 
             if field_name == "poles":
                 pole_index, a_or_c = rest
-                derivative_map[field_path] = -np.conj(deps_dpoles[pole_index][a_or_c])
+                derivative_map[field_path] = dJ_dpoles[pole_index][a_or_c]
 
         return derivative_map
 
