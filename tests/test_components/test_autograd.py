@@ -851,9 +851,9 @@ def test_pole_residue():
 
         deps_deps, deps_dpoles_im = grad_maker(self.eps_inf, poles_complex, frequency, dJ_deps)
 
-        import pdb
+        # import pdb
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         deps_deps_inf = deps_deps_inf_re + 1j * deps_deps_inf_im
         deps_dpoles = np.array(deps_dpoles_re) + 1j * np.array(deps_dpoles_im)
