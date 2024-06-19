@@ -57,8 +57,8 @@ def _constant_pad(
         The number of values padded to the edges of each axis.
     axis : int
         The axis along which to pad.
-    constant_value : float, optional
-        The constant value to pad with. Default is 0.0.
+    constant_value : float = 0.0
+        The constant value to pad with.
 
     Returns
     -------
@@ -194,12 +194,12 @@ def pad(
         The number of values padded to the edges of each axis. If an integer is provided,
         it is used for both the left and right sides. If a tuple is provided, it specifies
         the padding for the left and right sides respectively.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "constant".
-    axis : Union[int, Iterable[int], None], optional
-        The axis or axes along which to pad. If None, padding is applied to all axes. Default is None.
-    constant_value : float, optional
-        The value to set the padded values for "constant" mode. Default is 0.0.
+    mode : PaddingType = "constant"
+        The padding mode to use.
+    axis : Union[int, Iterable[int], None] = None
+        The axis or axes along which to pad. If None, padding is applied to all axes.
+    constant_value : float = 0.0
+        The value to set the padded values for "constant" mode.
 
     Returns
     -------
@@ -290,12 +290,12 @@ def convolve(
         The input array to be convolved.
     kernel : NDArray
         The kernel to convolve with the input array. All dimensions of the kernel must be odd.
-    padding : _pad_modes, optional
-        The padding mode to use. Default is "constant".
-    axes : Union[Tuple[List[int], List[int]], None], optional
-        The axes along which to perform the convolution. Default is None (all axes).
-    mode : Literal["full", "valid", "same"], optional
-        The convolution mode. Default is "same".
+    padding : PaddingType = "constant"
+        The padding mode to use.
+    axes : Union[Tuple[List[int], List[int]], None] = None
+        The axes along which to perform the convolution.
+    mode : Literal["full", "valid", "same"] = "same"
+        The convolution mode.
 
     Returns
     -------
@@ -340,15 +340,14 @@ def grey_dilation(
     ----------
     array : NDArray
         The input array to perform grey dilation on.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -395,15 +394,14 @@ def grey_erosion(
     ----------
     array : NDArray
         The input array to perform grey dilation on.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -450,15 +448,14 @@ def grey_opening(
     ----------
     array : NDArray
         The input array to perform grey opening on.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -484,15 +481,14 @@ def grey_closing(
     ----------
     array : NDArray
         The input array to perform grey closing on.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -518,15 +514,14 @@ def morphological_gradient(
     ----------
     array : NDArray
         The input array to compute the morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -552,15 +547,14 @@ def morphological_gradient_internal(
     ----------
     array : NDArray
         The input array to compute the internal morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -584,15 +578,14 @@ def morphological_gradient_external(
     ----------
     array : NDArray
         The input array to compute the external morphological gradient of.
-    size : Union[Union[int, Tuple[int, int]], None], optional
+    size : Union[Union[int, Tuple[int, int]], None] = None
         The size of the structuring element. If None, `structure` must be provided.
-        Default is None.
-    structure : Union[NDArray, None], optional
-        The structuring element. If None, `size` must be provided. Default is None.
-    mode : _pad_modes, optional
-        The padding mode to use. Default is "reflect".
-    maxval : float, optional
-        Value to assume for infinite elements in the kernel. Default is 1e4.
+    structure : Union[NDArray, None] = None
+        The structuring element. If None, `size` must be provided.
+    mode : PaddingType = "reflect"
+        The padding mode to use.
+    maxval : float = 1e4
+        Value to assume for infinite elements in the kernel.
 
     Returns
     -------
@@ -616,10 +609,10 @@ def rescale(
         The minimum value of the output range.
     out_max : float
         The maximum value of the output range.
-    in_min : float, optional
-        The minimum value of the input range. Default is 0.0.
-    in_max : float, optional
-        The maximum value of the input range. Default is 1.0.
+    in_min : float = 0.0
+        The minimum value of the input range.
+    in_max : float = 1.0
+        The maximum value of the input range.
 
     Returns
     -------
@@ -650,12 +643,12 @@ def threshold(
     ----------
     array : NDArray
         The input array to be thresholded.
-    vmin : float, optional
-        The value to assign to elements below the threshold. Default is 0.0.
-    vmax : float, optional
-        The value to assign to elements above the threshold. Default is 1.0.
-    level : Union[float, None], optional
-        The threshold level. If None, the threshold is set to the midpoint between `vmin` and `vmax`. Default is None.
+    vmin : float = 0.0
+        The value to assign to elements below the threshold.
+    vmax : float = 1.0
+        The value to assign to elements above the threshold.
+    level : Union[float, None] = None
+        The threshold level. If None, the threshold is set to the midpoint between `vmin` and `vmax`.
 
     Returns
     -------

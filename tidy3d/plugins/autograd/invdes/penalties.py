@@ -1,72 +1,117 @@
 from typing import Callable, Tuple, Union
 
 import autograd.numpy as np
+import pydantic.v1 as pd
 from numpy.typing import NDArray
 
+from tidy3d.components.base import Tidy3dBaseModel
 from tidy3d.components.types import ArrayFloat2D
 
 from ..types import PaddingType
-from .parametrizations import make_filter_and_project
+from .parametrizations import FilterAndProject
 
 
-def make_erosion_dilation_penalty(
-    filter_size: Tuple[int, ...],
-    beta: float = 100.0,
-    eta: float = 0.5,
-    delta_eta: float = 0.01,
-    padding: PaddingType = "reflect",
-) -> Callable:
-    """Computes a penalty for erosion/dilation of a parameter map not being unity.
+class ErosionDilationPenalty(Tidy3dBaseModel):
+    """A class that computes a penalty for erosion/dilation of a parameter map not being unity."""
 
-    Accepts a parameter array normalized between 0 and 1. Uses filtering and projection methods
-    to erode and dilate the features within this array. Measures the change in the array after
-    eroding and dilating (and also dilating and eroding). Returns a penalty proportional to the
-    magnitude of this change. The amount of change under dilation and erosion is minimized if
-    the structure has large feature sizes and large radius of curvature relative to the length scale.
+    radius: Union[float, Tuple[float, ...]] = pd.Field(
+        ..., title="Radius", description="The radius of the kernel."
+    )
+    dl: Union[float, Tuple[float, ...]] = pd.Field(
+        ..., title="Grid Spacing", description="The grid spacing."
+    )
+    size_px: Union[int, Tuple[int, ...]] = pd.Field(
+        None, title="Size in Pixels", description="The size of the kernel in pixels."
+    )
+    beta: pd.NonNegativeFloat = pd.Field(
+        20.0, title="Beta", description="The beta parameter for the tanh projection."
+    )
+    eta: pd.NonNegativeFloat = pd.Field(
+        0.5, title="Eta", description="The eta parameter for the tanh projection."
+    )
+    filter_type: str = pd.Field(
+        "conic", title="Filter Type", description="The type of filter to create."
+    )
+    padding: PaddingType = pd.Field(
+        "reflect", title="Padding", description="The padding mode to use."
+    )
+    delta_eta: float = pd.Field(
+        0.01,
+        title="Delta Eta",
+        description="The binarization threshold for erosion and dilation operations.",
+    )
 
-    Parameters
-    ----------
-    filter_size : Tuple[int, ...]
-        The size of the filter to be used for erosion and dilation.
-    beta : float, optional
-        Strength of the tanh projection. Default is 100.0.
-    eta : float, optional
-        Midpoint of the tanh projection. Default is 0.5.
-    delta_eta : float, optional
-        The binarization threshold for erosion and dilation operations. Default is 0.01.
-    padding : PaddingType, optional
-        The padding type to use for the filter. Default is "reflect".
+    def __call__(self, array: NDArray) -> float:
+        """Compute the erosion/dilation penalty for a given array.
 
-    Returns
-    -------
-    Callable
-        A function that computes the erosion/dilation penalty for a given array.
-    """
-    filtproj = make_filter_and_project(filter_size, beta, eta, padding=padding)
-    eta_dilate = 0.0 + delta_eta
-    eta_eroded = 1.0 - delta_eta
+        Parameters
+        ----------
+        array : np.ndarray
+            The input array to compute the penalty for.
 
-    def _dilate(array: NDArray, beta: float) -> NDArray:
-        return filtproj(array, beta=beta, eta=eta_dilate)
+        Returns
+        -------
+        float
+            The computed erosion/dilation penalty.
+        """
+        filtproj = FilterAndProject(
+            radius=self.radius,
+            dl=self.dl,
+            size_px=self.size_px,
+            beta=self.beta,
+            eta=self.eta,
+            filter_type=self.filter_type,
+            padding=self.padding,
+        )
 
-    def _erode(array: NDArray, beta: float) -> NDArray:
-        return filtproj(array, beta=beta, eta=eta_eroded)
+        eta_dilate = 0.0 + self.delta_eta
+        eta_eroded = 1.0 - self.delta_eta
 
-    def _open(array: NDArray, beta: float) -> NDArray:
-        return _dilate(_erode(array, beta=beta), beta=beta)
+        def _dilate(arr: NDArray):
+            return filtproj(arr, eta=eta_dilate)
 
-    def _close(array: NDArray, beta: float) -> NDArray:
-        return _erode(_dilate(array, beta=beta), beta=beta)
+        def _erode(arr: NDArray):
+            return filtproj(arr, eta=eta_eroded)
 
-    def _erosion_dilation_penalty(array: NDArray, beta: float = beta) -> float:
-        diff = _close(array, beta) - _open(array, beta)
+        def _open(arr: NDArray):
+            return _dilate(_erode(arr))
+
+        def _close(arr: NDArray):
+            return _erode(_dilate(arr))
+
+        diff = _close(array) - _open(array)
 
         if not np.any(diff):
             return 0.0
 
         return np.linalg.norm(diff) / np.sqrt(diff.size)
 
-    return _erosion_dilation_penalty
+
+def make_erosion_dilation_penalty(
+    radius: Union[float, Tuple[float, ...]],
+    dl: Union[float, Tuple[float, ...]],
+    *,
+    size_px: Union[int, Tuple[int, ...]] = None,
+    beta: float = 20.0,
+    eta: float = 0.5,
+    delta_eta: float = 0.01,
+    padding: PaddingType = "reflect",
+) -> Callable:
+    """Computes a penalty for erosion/dilation of a parameter map not being unity.
+
+    See Also
+    --------
+    :func:`~penalties.ErosionDilationPenalty`.
+    """
+    return ErosionDilationPenalty(
+        radius=radius,
+        dl=dl,
+        size_px=size_px,
+        beta=beta,
+        eta=eta,
+        delta_eta=delta_eta,
+        padding=padding,
+    )
 
 
 def curvature(dp: NDArray, ddp: NDArray) -> NDArray:
@@ -74,14 +119,14 @@ def curvature(dp: NDArray, ddp: NDArray) -> NDArray:
 
     Parameters
     ----------
-    dp : NDArray
+    dp : np.ndarray
         The first derivative at the point, with (x, y) entries in the first dimension.
-    ddp : NDArray
+    ddp : np.ndarray
         The second derivative at the point, with (x, y) entries in the first dimension.
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The curvature at the given point.
 
     Notes
@@ -103,16 +148,16 @@ def bezier_with_grads(
     ----------
     t : float
         The parameter at which to evaluate the Bezier curve.
-    p0 : NDArray
+    p0 : np.ndarray
         The first control point of the Bezier curve.
-    pc : NDArray
+    pc : np.ndarray
         The central control point of the Bezier curve.
-    p2 : NDArray
+    p2 : np.ndarray
         The last control point of the Bezier curve.
 
     Returns
     -------
-    tuple[NDArray, NDArray, NDArray]
+    tuple[np.ndarray, np.ndarray, np.ndarray]
         A tuple containing the Bezier curve value, its first derivative, and its second derivative at the given point.
     """
     p1 = 2 * pc - p0 / 2 - p2 / 2
@@ -128,16 +173,16 @@ def bezier_curvature(x: NDArray, y: NDArray, t: Union[NDArray, float] = 0.5) -> 
 
     Parameters
     ----------
-    x : NDArray
+    x : np.ndarray
         The x-coordinates of the control points.
-    y : NDArray
+    y : np.ndarray
         The y-coordinates of the control points.
-    t : Union[NDArray, float], optional
-        The parameter at which to evaluate the curvature, by default 0.5.
+    t : Union[np.ndarray, float] = 0.5
+        The parameter at which to evaluate the curvature.
 
     Returns
     -------
-    NDArray
+    np.ndarray
         The curvature of the Bezier curve at the given parameter t.
     """
     p = np.stack((x, y), axis=1)
@@ -154,12 +199,12 @@ def make_curvature_penalty(
     ----------
     min_radius : float
         The minimum radius of curvature.
-    alpha : float, optional
-        Scaling factor for the penalty, by default 1.0.
-    kappa : float, optional
-        Exponential factor for the penalty, by default 10.0.
-    eps : float, optional
-        A small value to avoid division by zero, by default 1e-6.
+    alpha : float = 1.0
+        Scaling factor for the penalty.
+    kappa : float = 10.0
+        Exponential factor for the penalty.
+    eps : float = 1e-6
+        A small value to avoid division by zero.
 
     Returns
     -------
