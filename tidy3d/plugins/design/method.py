@@ -11,6 +11,7 @@ import scipy.stats.qmc as qmc
 from bayes_opt import BayesianOptimization, UtilityFunction
 from bayes_opt.event import Events
 from bayes_opt.logger import JSONLogger
+from pyswarms.single.global_best import GlobalBestPSO
 
 import tidy3d.plugins.design as tdd
 import tidy3d.web as web
@@ -110,8 +111,8 @@ class Method(Tidy3dBaseModel, ABC):
             lower_params = {param.name: param.span[0] for param in parameters}
             result = run_fn[0](**lower_params)
 
-            # Determine if pre_fn will need to run locally or on tidy3d
-            if isinstance(result, Simulation):  # Single Simulation
+            # Check that pre_fn returns a Simulation object
+            if isinstance(result, Simulation):
                 return True
             else:
                 # Not valid - batching can only be done on tidy3d Simulation generators
@@ -230,6 +231,29 @@ class MethodOptimise(Method, ABC):
         """Reshape parameter spans to dict of boundaries"""
 
         return {design_var.name: design_var.span for design_var in parameters}
+
+    def manage_batch_run(self, run_fn, sol_dict, run_kwargs):
+        sol_out = []
+        if _is_batchable:
+            pre_fn = run_fn[0]
+            post_fn = run_fn[1]
+            sim_dict = {}
+            for sim_idx, arg_dict in enumerate(sol_dict):
+                sim_dict[sim_idx] = pre_fn(**arg_dict)
+
+            sim_result = self._tidy3d_run(sim_dict, run_kwargs)
+            sim_data = [sim_tuple[1] for sim_tuple in sim_result.items()]
+            for next_out in sim_data:
+                sol_out.append(post_fn(next_out))
+
+        else:
+            for arg_dict in sol_dict:
+                sol_out.append(run_fn(**arg_dict))
+
+        return sol_out
+
+    def sol_array_to_dict(self, solution, keys):
+        return [dict(zip(keys, sol)) for sol in solution]
 
 
 class MethodBayOpt(MethodOptimise, ABC):
@@ -355,25 +379,10 @@ class MethodGenAlg(MethodOptimise, ABC):
             run_kwargs = {}
 
             # Break solution down to dict
-            sol_dict = [dict(zip(_param_keys, sol)) for sol in solution]
+            sol_dict = self.sol_array_to_dict(solution, _param_keys)
 
             # Iterate through solutions for batched and non-batched data
-            sol_out = []
-            if _is_batchable:
-                pre_fn = run_fn[0]
-                post_fn = run_fn[1]
-                sim_dict = {}
-                for sim_idx, arg_dict in enumerate(sol_dict):
-                    sim_dict[sim_idx] = pre_fn(**arg_dict)
-
-                sim_result = self._tidy3d_run(sim_dict, run_kwargs)
-                sim_data = [sim_tuple[1] for sim_tuple in sim_result.items()]
-                for next_out in sim_data:
-                    sol_out.append(post_fn(next_out))
-
-            else:
-                for arg_dict in sol_dict:
-                    sol_out.append(run_fn(**arg_dict))
+            sol_out = self.manage_batch_run(run_fn, sol_dict, run_kwargs)
 
             return sol_out
 
@@ -453,6 +462,72 @@ class MethodGenAlg(MethodOptimise, ABC):
         # Format output
         fn_args = [dict(zip(_param_keys, val)) for arr in _store_parameters for val in arr]
         results = [val for arr in _store_fitness for val in arr]
+
+        return fn_args, results
+
+
+class MethodParticleSwarm(MethodOptimise, ABC):
+    """A standard method for performing particle swarm search"""
+
+    def run(
+        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
+    ) -> Tuple[Any]:
+        # Args for the user
+        # n_particles
+        # 3 PSO options
+        # n_iter
+
+        def fitness_function(solution):
+            # Hard-coded kwargs
+            run_kwargs = {}
+
+            # Correct solutions that should be ints
+            sol_dict = self.sol_array_to_dict(solution, _param_keys)
+            for arg_dict in sol_dict:
+                self._force_int(arg_dict, parameters)
+
+            _store_parameters.append(sol_dict)
+
+            sol_out = self.manage_batch_run(run_fn, sol_dict, run_kwargs)
+
+            # Stored before minus to give true answers
+            _store_fitness.append(sol_out)
+
+            # Set as negative as PSO uses a minimising cost function
+            return -np.array(sol_out)
+
+        # Make param names available to the fitness function
+        global _param_keys
+        _param_keys = [param.name for param in parameters]
+
+        global _store_parameters
+        global _store_fitness
+        _store_parameters = []
+        _store_fitness = []
+
+        # Determine if batching is possible
+        global _is_batchable
+        _is_batchable = self._can_batch(parameters, run_fn)
+
+        # Determine bounds and format
+        min_bound = [param.span[0] for param in parameters]
+        max_bound = [param.span[1] for param in parameters]
+        bounds = (min_bound, max_bound)
+
+        options = {"c1": 1.5, "c2": 1.5, "w": 0.9}
+        optimizer = GlobalBestPSO(
+            n_particles=10,
+            dimensions=len(parameters),
+            options=options,
+            bounds=bounds,
+            oh_strategy={"w": "exp_decay"},
+        )
+
+        _ = optimizer.optimize(fitness_function, 100)
+
+        # Collapse stores into fn_args and results lists
+        fn_args = [val for sublist in _store_parameters for val in sublist]
+        results = [val for sublist in _store_fitness for val in sublist]
 
         return fn_args, results
 
@@ -627,5 +702,11 @@ class MethodRandomCustom(AbstractMethodRandom):
 
 
 MethodType = Union[
-    MethodMonteCarlo, MethodGrid, MethodRandom, MethodRandomCustom, MethodBayOpt, MethodGenAlg
+    MethodMonteCarlo,
+    MethodGrid,
+    MethodRandom,
+    MethodRandomCustom,
+    MethodBayOpt,
+    MethodGenAlg,
+    MethodParticleSwarm,
 ]

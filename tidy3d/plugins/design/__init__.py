@@ -6,6 +6,7 @@ from .method import (
     MethodGenAlg,
     MethodGrid,
     MethodMonteCarlo,
+    MethodParticleSwarm,
     MethodRandom,
     MethodRandomCustom,
 )
@@ -24,4 +25,5 @@ __all__ = [
     "MethodRandom",
     "MethodBayOpt",
     "MethodGenAlg",
+    "MethodParticleSwarm",
 ]
