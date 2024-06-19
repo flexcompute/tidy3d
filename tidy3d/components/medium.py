@@ -3201,8 +3201,10 @@ class PoleResidue(DispersiveMedium):
         dJ_deps = complex(dJ_deps)
 
         # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        frequency = 3e8
+        # frequency = eps_data.eps_xx.coords["f"].values.flat[0]
         poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
+        poles_complex = np.stack(poles_complex, axis=0)
 
         # compute gradients of eps_model with respect to eps_inf and poles
         grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
@@ -3495,10 +3497,12 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         # TODO: fix for multi-frequency, also _xx is arbitrary...
         frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+
         poles_complex = [
             (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
             for a, c in self.poles
         ]
+        poles_complex = np.stack(poles_complex, axis=0)
 
         def eps_model_r(
             eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
@@ -3510,7 +3514,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
         ) -> float:
             """Real part of ``eps_model`` evaluated on ``self`` fields."""
-            return np.real(self._eps_model(eps_inf, poles, frequency))
+            return np.imag(self._eps_model(eps_inf, poles, frequency))
 
         # compute the gradients w.r.t. each real and imaginary parts for eps_inf and poles
         grad_eps_model_r = ag.elementwise_grad(eps_model_r, argnum=(0, 1))

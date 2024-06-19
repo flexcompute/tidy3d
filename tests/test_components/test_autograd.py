@@ -765,6 +765,57 @@ def test_autograd_deepcopy():
     assert grad1 == grad2 == grad3
 
 
+def test_pole_residue(monkeypatch):
+    def J(eps):
+        return abs(eps)
+
+    f = 3e8
+
+    eps_inf = 2.0
+    p = td.C_0 * (1 + 1j)
+    poles = [(-p, p), (-2 * p, 2 * p)]
+    pr = td.PoleResidue(eps_inf=2.0, poles=poles)
+    eps0 = pr.eps_model(f)
+
+    dJ_deps = ag.holomorphic_grad(J)(eps0)
+
+    monkeypatch.setattr(
+        td.PoleResidue, "derivative_eps_complex_volume", lambda self, E_der_map, bounds: dJ_deps
+    )
+    # monkeypatch.setattr(td.PoleResidue, 'lambda E_der_map, bounds: dJ_deps)
+
+    import importlib
+
+    importlib.reload(td)
+
+    poles = [(-p, p), (-2 * p, 2 * p)]
+    pr = td.PoleResidue(eps_inf=2.0, poles=poles)
+    field_paths = ["eps_inf"]
+    for i in range(len(poles)):
+        for j in range(2):
+            field_paths.append(("poles", i, j))
+    zz = pr.compute_derivatives(
+        field_paths=field_paths,
+        E_der_map=None,
+        D_der_map=None,
+        eps_data=None,
+        eps_in=None,
+        eps_out=None,
+        bounds=None,
+    )
+
+    print(zz)
+
+    def f(eps_inf, poles):
+        pr = td.PoleResidue(eps_inf=eps_inf, poles=poles)
+        eps = complex(pr.eps_model(3e8))
+        return J(eps)
+
+    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
+    zz2 = gfn(pr.eps_inf, pr.poles)
+    print(zz2)
+
+
 # @pytest.mark.timeout(18.0)
 def _test_many_structures():
     """Test that a metalens-like simulation with many structures can be initialized fast enough."""
