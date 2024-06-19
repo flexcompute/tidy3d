@@ -1,7 +1,6 @@
 """Defines the methods used for parameter sweep."""
 
 from abc import ABC, abstractmethod
-from inspect import getsource
 from typing import Any, Callable, Dict, Literal, Optional, Tuple, Union
 
 import numpy as np
@@ -14,11 +13,9 @@ from bayes_opt.logger import JSONLogger
 from pyswarms.single.global_best import GlobalBestPSO
 
 import tidy3d.plugins.design as tdd
-import tidy3d.web as web
 
 # from ... import web # What's this for?
 from ...components.base import Tidy3dBaseModel
-from ...components.simulation import Simulation
 from ...log import log
 from .parameter import ParameterType
 
@@ -79,52 +76,6 @@ class Method(Tidy3dBaseModel, ABC):
 
                 next_point[param.name] = new_int
 
-    def _tidy3d_run(self, sims, run_kwargs):
-        """Generic logic for running a pre_fn on tidy3d servers"""
-
-        # Add sim type right before running
-        run_kwargs.update(simulation_type="tidy3d_design_testing")
-
-        # If a single simulation is supplied
-        if isinstance(sims, Simulation):
-            return web.run(sims, **run_kwargs)
-
-        # Uses batches if multiple simulations have been supplied
-        else:
-            batch = web.Batch(simulations=sims, **run_kwargs)
-            return batch.run()
-
-    @staticmethod
-    def _can_batch(parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]):
-        """See if pre produces an arrangement of td.Simulation or is unrelated"""
-
-        if isinstance(run_fn, Tuple):
-            # Check if tidy3d is called in func
-            source = getsource(run_fn[0])
-            if "web.Batch(" in source and "web.run(" in source:
-                raise ValueError(
-                    "Can't effectively control batches from a pre-function that calls the tidy3d API. "
-                    "Please convert to a single function or change the function to return a Simulation object."
-                )
-
-            # Run fn_pre with the lower bound of each parameter
-            lower_params = {param.name: param.span[0] for param in parameters}
-            result = run_fn[0](**lower_params)
-
-            # Check that pre_fn returns a Simulation object
-            if isinstance(result, Simulation):
-                return True
-            else:
-                # Not valid - batching can only be done on tidy3d Simulation generators
-                raise ValueError(
-                    "Can't create batches from a pre-function that does not output Simulation objects. "
-                    "Please convert to a single function or change the function to return a Simulation object."
-                )
-
-        else:
-            # For single functions that pass through sequentially
-            return False
-
 
 class MethodSample(Method, ABC):
     """A sweep method where all points are independently computed."""
@@ -143,38 +94,9 @@ class MethodSample(Method, ABC):
         fn_args = self.sample(parameters)
         for arg_dict in fn_args:
             self._force_int(arg_dict, parameters)
-        is_batchable = self._can_batch(parameters, run_fn)
         # self.assert_hashable(fn_args)
         # self.assert_num_points(fn_args)
-        return fn_args, is_batchable
-
-    def _eval_run(self, fn_args: Dict[str, tuple], run_fn, is_batchable):
-        """Handle batchable and non-batchable jobs for a given run_function"""
-
-        processed_result = []
-        if is_batchable:
-            pre_fn = run_fn[0]
-            post_fn = run_fn[1]
-            run_kwargs = {}
-            # Create dict of simulations
-            if len(fn_args) == 1:
-                sims = pre_fn(**fn_args[0])
-            else:
-                sims = {str(i): pre_fn(**arg_dict) for i, arg_dict in enumerate(fn_args)}
-
-            pre_out = self._tidy3d_run(sims, run_kwargs)
-            results = [sim_tuple[1] for sim_tuple in pre_out.items()]
-
-            # Post process the data
-            for res in results:
-                processed_result.append(post_fn(res))
-
-        else:
-            for arg_dict in fn_args:
-                fn_output = run_fn(**arg_dict)
-                processed_result.append(fn_output)
-
-        return processed_result
+        return fn_args
 
     def run(
         self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
@@ -182,14 +104,14 @@ class MethodSample(Method, ABC):
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
-        fn_args, is_batchable = self._assemble_args(parameters, run_fn)
+        fn_args = self._assemble_args(parameters, run_fn)
 
         # Get min and max for each sample
         # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
         # min_max_params = [(min(param), max(param)) for param in args_as_params]
 
         # for each point, construct the function inputs, run it, record output
-        results = self._eval_run(fn_args, run_fn, is_batchable)
+        results = run_fn(fn_args)
 
         return fn_args, results
 
@@ -232,26 +154,6 @@ class MethodOptimise(Method, ABC):
 
         return {design_var.name: design_var.span for design_var in parameters}
 
-    def manage_batch_run(self, run_fn, sol_dict, run_kwargs):
-        sol_out = []
-        if _is_batchable:
-            pre_fn = run_fn[0]
-            post_fn = run_fn[1]
-            sim_dict = {}
-            for sim_idx, arg_dict in enumerate(sol_dict):
-                sim_dict[sim_idx] = pre_fn(**arg_dict)
-
-            sim_result = self._tidy3d_run(sim_dict, run_kwargs)
-            sim_data = [sim_tuple[1] for sim_tuple in sim_result.items()]
-            for next_out in sim_data:
-                sol_out.append(post_fn(next_out))
-
-        else:
-            for arg_dict in sol_dict:
-                sol_out.append(run_fn(**arg_dict))
-
-        return sol_out
-
     def sol_array_to_dict(self, solution, keys):
         return [dict(zip(keys, sol)) for sol in solution]
 
@@ -277,17 +179,14 @@ class MethodBayOpt(MethodOptimise, ABC):
         default="ucb",
     )
 
-    def run(
-        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
-    ) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm for BayOpt"""
         boundary_dict = self.create_boundary_dict(parameters)
-        is_batchable = self._can_batch(self, parameters, pre_fn)
 
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
         opt = BayesianOptimization(
-            f=pre_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
+            f=run_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
         )
 
         # Create log and update
@@ -296,58 +195,22 @@ class MethodBayOpt(MethodOptimise, ABC):
 
         # Run variables
         arg_list = []
-        if is_batchable:
-            # Handle the initial random samples as a batch to save time
-            sim_dict = {}
-            run_kwargs = {}
-            for sim_idx in range(self.initial_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-                arg_list.append(next_point)
-                sim_dict[f"init_{sim_idx}"] = pre_fn(**next_point)
+        for _ in range(self.initial_iter):
+            next_point = opt.suggest(utility)
+            self._force_int(next_point, parameters)
+            arg_list.append(next_point)
 
-            pre_out = self._tidy3d_run(sim_dict, run_kwargs)
+        init_output = run_fn(arg_list)
 
-            # Get the sim data out
-            sim_data = [sim_tuple[1] for sim_tuple in pre_out.items()]
+        for next_point, next_out in zip(arg_list, init_output):
+            opt.register(params=next_point, target=next_out)
 
-            for next_point, sim in zip(arg_list, sim_data):
-                next_out = post_fn(sim)
-                opt.register(params=next_point, target=next_out)
-
-            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
-            for idx in range(self.n_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-
-                # Determine task name
-                task_name = str(idx)
-                run_kwargs = {"task_name": task_name}
-
-                # Data submitted as single Simulations not dict
-                pre_out = self._tidy3d_run(pre_fn(**next_point), run_kwargs)
-
-                next_out = post_fn(pre_out)
-                opt.register(params=next_point, target=next_out)
-        else:
-            # Handle the initial random samples as a batch to save time
-            init_output = []
-            for _ in range(self.initial_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-                arg_list.append(next_point)
-                init_output.append(post_fn(pre_fn(**next_point)))
-
-            for next_point, next_out in zip(arg_list, init_output):
-                opt.register(params=next_point, target=next_out)
-
-            # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
-            for _ in range(self.n_iter):
-                next_point = opt.suggest(utility)
-                self._force_int(next_point, parameters)
-                pre_out = pre_fn(**next_point)
-                next_out = post_fn(pre_out)
-                opt.register(params=next_point, target=next_out)
+        # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
+        for _ in range(self.n_iter):
+            next_point = opt.suggest(utility)
+            self._force_int(next_point, parameters)
+            next_out = run_fn([next_point])
+            opt.register(params=next_point, target=next_out[0])
 
         # Output results from the BO.opt object
         result = []
@@ -375,14 +238,11 @@ class MethodGenAlg(MethodOptimise, ABC):
 
         # Create fitness function combining pre and post fn with the tidy3d call
         def fitness_function(ga_instance, solution, solution_idx):
-            # Hard-coded kwargs
-            run_kwargs = {}
-
             # Break solution down to dict
             sol_dict = self.sol_array_to_dict(solution, _param_keys)
 
             # Iterate through solutions for batched and non-batched data
-            sol_out = self.manage_batch_run(run_fn, sol_dict, run_kwargs)
+            sol_out = run_fn(sol_dict)
 
             return sol_out
 
@@ -403,10 +263,6 @@ class MethodGenAlg(MethodOptimise, ABC):
         global _store_fitness
         _store_parameters = []
         _store_fitness = []
-
-        # Determine if batching is possible
-        global _is_batchable
-        _is_batchable = self._can_batch(parameters, run_fn)
 
         # Set gene_spaces to keep GA within ranges
         gene_spaces = []
@@ -478,9 +334,6 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         # n_iter
 
         def fitness_function(solution):
-            # Hard-coded kwargs
-            run_kwargs = {}
-
             # Correct solutions that should be ints
             sol_dict = self.sol_array_to_dict(solution, _param_keys)
             for arg_dict in sol_dict:
@@ -488,7 +341,7 @@ class MethodParticleSwarm(MethodOptimise, ABC):
 
             _store_parameters.append(sol_dict)
 
-            sol_out = self.manage_batch_run(run_fn, sol_dict, run_kwargs)
+            sol_out = run_fn(sol_dict)
 
             # Stored before minus to give true answers
             _store_fitness.append(sol_out)
@@ -504,10 +357,6 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         global _store_fitness
         _store_parameters = []
         _store_fitness = []
-
-        # Determine if batching is possible
-        global _is_batchable
-        _is_batchable = self._can_batch(parameters, run_fn)
 
         # Determine bounds and format
         min_bound = [param.span[0] for param in parameters]
