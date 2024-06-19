@@ -766,16 +766,18 @@ def test_autograd_deepcopy():
 
 
 def test_pole_residue(monkeypatch):
+    """Test that computed pole residue derivatives match."""
+
     def J(eps):
         return abs(eps)
 
-    f = 3e8
+    freq = 3e8
 
     eps_inf = 2.0
     p = td.C_0 * (1 + 1j)
     poles = [(-p, p), (-2 * p, 2 * p)]
     pr = td.PoleResidue(eps_inf=2.0, poles=poles)
-    eps0 = pr.eps_model(f)
+    eps0 = pr.eps_model(freq)
 
     dJ_deps = ag.holomorphic_grad(J)(eps0)
 
@@ -790,11 +792,12 @@ def test_pole_residue(monkeypatch):
 
     poles = [(-p, p), (-2 * p, 2 * p)]
     pr = td.PoleResidue(eps_inf=2.0, poles=poles)
-    field_paths = ["eps_inf"]
+    field_paths = [("eps_inf",)]
     for i in range(len(poles)):
         for j in range(2):
             field_paths.append(("poles", i, j))
-    zz = pr.compute_derivatives(
+
+    grads_computed = pr.compute_derivatives(
         field_paths=field_paths,
         E_der_map=None,
         D_der_map=None,
@@ -804,16 +807,95 @@ def test_pole_residue(monkeypatch):
         bounds=None,
     )
 
-    print(zz)
-
     def f(eps_inf, poles):
-        pr = td.PoleResidue(eps_inf=eps_inf, poles=poles)
-        eps = complex(pr.eps_model(3e8))
+        eps = td.PoleResidue._eps_model(eps_inf, poles, freq)
         return J(eps)
 
     gfn = ag.holomorphic_grad(f, argnum=(0, 1))
-    zz2 = gfn(pr.eps_inf, pr.poles)
-    print(zz2)
+    grad_eps_inf, grad_poles = gfn(eps_inf, poles)
+
+    assert np.isclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    for i in range(len(poles)):
+        for j in range(2):
+            field_path = ("poles", i, j)
+            assert np.isclose(grads_computed[field_path], grad_poles[i][j])
+
+
+def test_custom_pole_residue(monkeypatch):
+    """Test that computed pole residue derivatives match."""
+
+    nx, ny, nz = shape = (4, 5, 6)
+    values = np.random.random((nx, ny, nz)) * (2 + 2j) * td.C_0
+
+    nx, ny, nz = values.shape
+    x = np.linspace(-0.5, 0.5, nx)
+    y = np.linspace(-0.5, 0.5, ny)
+    z = np.linspace(-0.5, 0.5, nz)
+    coords = dict(x=x, y=y, z=z)
+
+    eps_inf = td.SpatialDataArray(anp.real(values), coords=coords)
+    a1 = td.SpatialDataArray(-values, coords=coords)
+    c1 = td.SpatialDataArray(values, coords=coords)
+    a2 = td.SpatialDataArray(-values, coords=coords)
+    c2 = td.SpatialDataArray(values, coords=coords)
+    poles = [(a1, c1), (a2, c2)]
+    custom_med_pole_res = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+
+    def J(eps):
+        return anp.sum(abs(eps))
+
+    freq = 3e8
+    pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+    eps0 = pr.eps_model(freq)
+
+    dJ_deps = ag.holomorphic_grad(J)(eps0)
+
+    monkeypatch.setattr(
+        td.CustomPoleResidue,
+        "_derivative_field_cmp",
+        lambda self, E_der_map, eps_data, dim: dJ_deps,
+    )
+    # monkeypatch.setattr(td.PoleResidue, 'lambda E_der_map, bounds: dJ_deps)
+
+    import importlib
+
+    importlib.reload(td)
+
+    pr = td.CustomPoleResidue(eps_inf=eps_inf, poles=poles)
+    field_paths = [("eps_inf",)]
+    for i in range(len(poles)):
+        for j in range(2):
+            field_paths.append(("poles", i, j))
+
+    grads_computed = pr.compute_derivatives(
+        field_paths=field_paths,
+        E_der_map=None,
+        D_der_map=None,
+        eps_data=None,
+        eps_in=None,
+        eps_out=None,
+        bounds=None,
+    )
+
+    poles_complex = [
+        (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex)) for a, c in poles
+    ]
+    poles_complex = np.stack(poles_complex, axis=0)
+
+    def f(eps_inf, poles):
+        eps = td.CustomPoleResidue._eps_model(eps_inf, poles, freq)
+        return J(eps)
+
+    gfn = ag.holomorphic_grad(f, argnum=(0, 1))
+    grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
+
+    assert np.allclose(grads_computed[("eps_inf",)], grad_eps_inf)
+
+    for i in range(len(poles)):
+        for j in range(2):
+            field_path = ("poles", i, j)
+            assert np.allclose(grads_computed[field_path], grad_poles[i][j])
 
 
 # @pytest.mark.timeout(18.0)
