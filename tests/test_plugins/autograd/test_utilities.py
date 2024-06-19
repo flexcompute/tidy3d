@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.testing as npt
 import pytest
-from tidy3d.plugins.autograd.utilities import chain, make_kernel
+from tidy3d.plugins.autograd.utilities import chain, get_kernel_size_px, make_kernel
 
 
 @pytest.mark.parametrize("size", [(3, 3), (4, 4), (5, 5)])
@@ -40,6 +40,27 @@ class TestMakeKernelExceptions:
         size = (5, -5)
         with pytest.raises(ValueError, match="must be an iterable of positive integers"):
             make_kernel("circular", size)
+
+
+@pytest.mark.parametrize(
+    "radius, dl, expected",
+    [
+        (1, 0.1, 21),
+        (1, [0.1, 0.2], [21, 11]),
+        ([1, 2], 0.1, [21, 41]),
+        ([1, 1], [0.1, 0.2], [21, 11]),
+        ([1, 2], [0.1, 0.1], [21, 41]),
+    ],
+)
+def test_get_kernel_size_px_with_radius_and_dl(radius, dl, expected):
+    result = get_kernel_size_px(radius, dl)
+    assert result == expected
+
+
+def test_get_kernel_size_px_invalid_arguments():
+    """Test get_kernel_size_px function with invalid arguments."""
+    with pytest.raises(ValueError, match="must be provided"):
+        get_kernel_size_px()
 
 
 class TestChain:

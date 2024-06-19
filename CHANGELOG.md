@@ -6,15 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Convenience method `Structure.from_permittivity_array(geometry, eps_data)`, which creates structure containing `CustomMedium` with `eps_data` array sampled within `geometry.bounds`.
-
-### Fixed
-- Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
-### Added
 - New `tidy3d.plugins.expressions` module for constructing and serializing mathematical expressions and simulation metrics like `ModeAmp` and `ModePower`.
 - Support for serializable expressions in the `invdes` plugin (`InverseDesign(metric=ModePower(...))`).
 - Added `InitializationSpec` as the default way to initialize design region parameters in the `invdes` plugin (`DesignRegion(initialization_spec=RandomInitializationSpec(...))`).
 - Callback support in `invdes.Optimizer` and support for running the optimizer for a fixed number of steps via the `num_steps` argument in `Optimizer.continue_run()`.
+- Convenience method `Structure.from_permittivity_array(geometry, eps_data)`, which creates structure containing `CustomMedium` with `eps_data` array sampled within `geometry.bounds`.
+
+### Changed
+- All filter functions in `plugins/autograd` now accept either an absolute size in pixels or a `radius` and `dl` argument.
+
+### Fixed
+- Ensure `path` argument in `run()` function is respected when running under autograd or the adjoint plugin.
 
 
 ## [2.7.3] - 2024-09-12
