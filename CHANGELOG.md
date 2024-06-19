@@ -5,6 +5,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0rc1]
+
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
