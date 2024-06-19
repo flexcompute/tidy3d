@@ -441,7 +441,6 @@ if TEST_POLYSLAB_SPEED:
 
 # args = [("geo_group", "mode")]
 
-
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
@@ -796,80 +795,6 @@ def test_autograd_deepcopy():
 
     assert val1 == val2 == val3
     assert grad1 == grad2 == grad3
-
-
-def test_pole_residue():
-    """Test pole residue gradient against a regular medium."""
-
-    f = td.C_0
-    eps_0 = 2.0
-
-    def f1(eps):
-        med = td.Medium(permittivity=eps)
-        return med.eps_model(f)
-
-    def f2(x):
-        eps_inf = x
-
-        dJ_deps = ag.holomorphic_grad(f1)(x)
-
-        self = td.PoleResidue(eps_inf=eps_inf, poles=[])
-
-        # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = f
-        poles_complex = [
-            (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
-            for a, c in self.poles
-        ]
-
-        def aux_fn(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
-            """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-            eps = self._eps_model(eps_inf, poles, frequency)
-            print(eps)
-            return dJ_deps * eps  # possible conj? minus sign?
-
-        def aux_fn_re(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
-            """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-            z = np.real(aux_fn(eps_inf, poles, frequency, dJ_deps))
-            print(z)
-            return z
-
-        def aux_fn_im(eps_inf: float, poles: tuple, frequency: float, dJ_deps: complex) -> complex:
-            """Take grad of this -> get dJ_deps * jacobian w.r.t. each arg."""
-            return np.imag(aux_fn(eps_inf, poles, frequency, dJ_deps))
-
-        grad_maker_re = ag.elementwise_grad(aux_fn_re, argnum=(0, 1))
-        grad_maker_im = ag.elementwise_grad(aux_fn_im, argnum=(0, 1))
-        grad_maker = ag.holomorphic_grad(aux_fn, argnum=(0, 1))
-
-        deps_deps_inf_re, deps_dpoles_re = grad_maker_re(
-            self.eps_inf, poles_complex, frequency, dJ_deps
-        )
-        deps_deps_inf_im, deps_dpoles_im = grad_maker_im(
-            self.eps_inf, poles_complex, frequency, dJ_deps
-        )
-
-        deps_deps, deps_dpoles_im = grad_maker(self.eps_inf, poles_complex, frequency, dJ_deps)
-
-        # import pdb
-
-        # pdb.set_trace()
-
-        deps_deps_inf = deps_deps_inf_re + 1j * deps_deps_inf_im
-        deps_dpoles = np.array(deps_dpoles_re) + 1j * np.array(deps_dpoles_im)
-
-        # if field_name == "eps_inf":
-        #     derivative_map[field_path] = np.real(deps_deps_inf)
-
-        # if field_name == "poles":
-        #     pole_index, a_or_c = rest
-        #     derivative_map[field_path] = -np.conj(deps_dpoles[pole_index][a_or_c])
-
-        return deps_deps_inf
-
-    x0 = 4.0
-    print(ag.holomorphic_grad(f1)(x0))
-    print(f2(x0))
 
 
 # @pytest.mark.timeout(18.0)

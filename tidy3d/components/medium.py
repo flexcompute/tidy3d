@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import functools
+import warnings
 from abc import ABC, abstractmethod
 from math import isclose
 from typing import Callable, Dict, List, Optional, Tuple, Union
@@ -3195,44 +3196,32 @@ class PoleResidue(DispersiveMedium):
     ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
+        # compute all derivatives beforehand
+        dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        dJ_deps = complex(dJ_deps)
+
+        # TODO: fix for multi-frequency, also _xx is arbitrary...
+        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
+
+        # compute gradients of eps_model with respect to eps_inf and poles
+        grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
+        with warnings.catch_warnings():
+            # ignore warnings about holmorphic grad being passed a non-complex input (poles)
+            warnings.simplefilter("ignore")
+            deps_deps_inf, deps_dpoles = grad_eps_model(
+                complex(self.eps_inf), poles_complex, complex(frequency)
+            )
+
+        # multiply with partial dJ/deps to give full gradients
+
+        dJ_deps_inf = dJ_deps * deps_deps_inf
+        dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for (a, c) in deps_dpoles]
+
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
         for field_path in field_paths:
             field_name, *rest = field_path
-
-            """
-                J(x) = f(g(x))
-
-                J(pole) = J(eps(pole))
-
-                dJ_dpole(pole) = dJ_deps(eps(pole)) * deps_dpole(pole)
-
-                We know X = dJ_deps(eps(pole)) through adjoint volume integration
-
-                We also have a formula for `eps(pole)` (eps_model)
-
-                A function f(pole) = X * eps(pole)
-                when differentiated, should give
-
-                df_dpole = X * deps_dpole(pole), which is exactly what we want
-
-            """
-
-            dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
-            dJ_deps = complex(dJ_deps)
-
-            # TODO: fix for multi-frequency, also _xx is arbitrary...
-            frequency = eps_data.eps_xx.coords["f"].values.flat[0]
-            poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
-
-            grad_eps_model = ag.holomorphic_grad(self._eps_model, argnum=(0, 1))
-
-            deps_deps_inf, deps_dpoles = grad_eps_model(
-                complex(self.eps_inf), poles_complex, frequency
-            )
-
-            dJ_deps_inf = dJ_deps * deps_deps_inf
-            dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for (a, c) in deps_dpoles]
 
             if field_name == "eps_inf":
                 derivative_map[field_path] = float(np.real(dJ_deps_inf))
@@ -3498,72 +3487,57 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
     ) -> dict[str, Any]:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
-        # get vjps w.r.t. permittivity and conductivity of the bulk
+        dJ_deps = 0.0
+        for dim in "xyz":
+            dJ_deps += self._derivative_field_cmp(
+                E_der_map=E_der_map, eps_data=self.eps_inf, dim=dim
+            )
+
+        # TODO: fix for multi-frequency, also _xx is arbitrary...
+        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        poles_complex = [
+            (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
+            for a, c in self.poles
+        ]
+
+        def eps_model_r(
+            eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
+        ) -> float:
+            """Real part of ``eps_model`` evaluated on ``self`` fields."""
+            return np.real(self._eps_model(eps_inf, poles, frequency))
+
+        def eps_model_i(
+            eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
+        ) -> float:
+            """Real part of ``eps_model`` evaluated on ``self`` fields."""
+            return np.real(self._eps_model(eps_inf, poles, frequency))
+
+        # compute the gradients w.r.t. each real and imaginary parts for eps_inf and poles
+        grad_eps_model_r = ag.elementwise_grad(eps_model_r, argnum=(0, 1))
+        grad_eps_model_i = ag.elementwise_grad(eps_model_i, argnum=(0, 1))
+        deps_deps_inf_r, deps_dpoles_r = grad_eps_model_r(
+            self.eps_inf.values, poles_complex, frequency
+        )
+        deps_deps_inf_i, deps_dpoles_i = grad_eps_model_i(
+            self.eps_inf.values, poles_complex, frequency
+        )
+
+        # multiply with dJ_deps partial derivative to give full gradients
+
+        deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
+        dJ_deps_inf = dJ_deps * deps_deps_inf / 2.0
+
+        dJ_dpoles = []
+        for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
+            da = da_r + 1j * da_i
+            dc = dc_r + 1j * dc_i
+            dJ_da = dJ_deps * da / 2.0
+            dJ_dc = dJ_deps * dc / 2.0
+            dJ_dpoles.append((dJ_da, dJ_dc))
+
         derivative_map = {}
         for field_path in field_paths:
             field_name, *rest = field_path
-
-            """
-                J(x) = f(g(x))
-
-                J(pole) = J(eps(pole))
-
-                dJ_dpole(pole) = dJ_deps(eps(pole)) * deps_dpole(pole)
-
-                We know X = dJ_deps(eps(pole)) through adjoint volume integration
-
-                We also have a formula for `eps(pole)` (eps_model)
-
-                A function f(pole) = X * eps(pole)
-                when differentiated, should give
-
-                df_dpole = X * deps_dpole(pole), which is exactly what we want
-
-            """
-
-            dJ_deps = 0.0
-            for dim in "xyz":
-                dJ_deps += self._derivative_field_cmp(
-                    E_der_map=E_der_map, eps_data=self.eps_inf, dim=dim
-                )
-
-            # TODO: fix for multi-frequency, also _xx is arbitrary...
-            frequency = eps_data.eps_xx.coords["f"].values.flat[0]
-            poles_complex = [
-                (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
-                for a, c in self.poles
-            ]
-
-            def eps_model_r(
-                eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
-            ) -> float:
-                return np.real(self._eps_model(eps_inf, poles, frequency))
-
-            def eps_model_i(
-                eps_inf: complex, poles: list[tuple[complex, complex]], frequency: float
-            ) -> float:
-                return np.real(self._eps_model(eps_inf, poles, frequency))
-
-            grad_eps_model_r = ag.elementwise_grad(eps_model_r, argnum=(0, 1))
-            grad_eps_model_i = ag.elementwise_grad(eps_model_i, argnum=(0, 1))
-
-            deps_deps_inf_r, deps_dpoles_r = grad_eps_model_r(
-                self.eps_inf.values, poles_complex, frequency
-            )
-            deps_deps_inf_i, deps_dpoles_i = grad_eps_model_i(
-                self.eps_inf.values, poles_complex, frequency
-            )
-
-            deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
-            dJ_deps_inf = dJ_deps * deps_deps_inf / 2.0
-
-            dJ_dpoles = []
-            for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
-                da = da_r + 1j * da_i
-                dc = dc_r + 1j * dc_i
-                dJ_da = dJ_deps * da / 2.0
-                dJ_dc = dJ_deps * dc / 2.0
-                dJ_dpoles.append((dJ_da, dJ_dc))
 
             if field_name == "eps_inf":
                 derivative_map[field_path] = np.real(dJ_deps_inf)

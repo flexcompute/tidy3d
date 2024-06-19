@@ -3,7 +3,6 @@
 import copy
 import typing
 
-import autograd as ag
 import numpy as np
 import pydantic.v1 as pd
 import xarray as xr
@@ -81,47 +80,10 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
     return _arr.integrate(coord=dims)
 
 
-def split_fn_z(_fn_of_z):
-    """Split a function of a complex variable into two functions for real and imag outputs of the real and imag parts of input."""
-
-    def fn(x, y):
-        z = x + 1j * y
-        value = _fn_of_z(z)
-        return np.real(value), np.imag(value)
-
-    def u(x, y):
-        return fn(x, y)[0]
-
-    def v(x, y):
-        return fn(x, y)[1]
-
-    return u, v
-
-
-def stitch_vjp(fn, z, g):
-    x, y = np.real(z), np.imag(z)
-    g_x, g_y = np.real(g), np.imag(g)
-    u, v = split_fn_z(fn)
-    vjp_value = (
-        g_x * ag.grad(u, 0)(x, y)
-        - 1j * g_x * ag.grad(u, 1)(x, y)
-        - g_y * ag.grad(v, 0)(x, y)
-        + 1j * g_y * ag.grad(v, 1)(x, y)
-    )
-    import pdb
-
-    pdb.set_trace()
-    if isinstance(z, complex):
-        return vjp_value + 0j
-    else:
-        return np.real(vjp_value)
-
-
 __all__ = [
     "Box",
     "primitive",
     "defvjp",
     "get_static",
     "integrate_within_bounds",
-    "stitch_vjp",
 ]
