@@ -652,9 +652,14 @@ def postprocess_adj(
         # compute the derivatives for this structure
         structure = sim_data_fwd.simulation.structures[structure_index]
 
-        # replace C_0 with some frequency info
-        eps_in = np.mean(structure.medium.eps_model(td.C_0))
-        eps_sim = np.mean(sim_data_orig.simulation.medium.eps_model(td.C_0))
+        # todo: handle multi-frequency, move to a property?
+        frequencies = {src.source_time.freq0 for src in sim_data_adj.simulation.sources}
+        frequencies = list(frequencies)
+        assert len(frequencies) == 1, "Multiple adjoint freqs found"
+        freq_adj = frequencies[0]
+
+        eps_in = np.mean(structure.medium.eps_model(freq_adj))
+        eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(freq_adj))
         eps_out = structure.autograd_background_permittivity or eps_sim
 
         derivative_info = DerivativeInfo(
@@ -664,6 +669,7 @@ def postprocess_adj(
             eps_data=eps_fwd.field_components,
             eps_in=eps_in,
             eps_out=eps_out,
+            frequency=freq_adj,
             bounds=structure.geometry.bounds,  # TODO: pass intersecting bounds with sim?
         )
 
