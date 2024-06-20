@@ -1395,8 +1395,8 @@ class AbstractCustomMedium(AbstractMedium, ABC):
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         E_der_dim = E_der_map[f"E{dim}"]
-        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
-        vjp_array = np.array(E_der_dim_interp.values).astype(float)
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum)
+        vjp_array = np.array(E_der_dim_interp.values).astype(complex)
         vjp_array = vjp_array.reshape(eps_data.shape)
 
         # multiply by volume elements (if possible, being defensive here..)
@@ -2581,8 +2581,8 @@ class CustomMedium(AbstractCustomMedium):
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
         E_der_dim = E_der_map[f"E{dim}"]
-        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
-        vjp_array = np.array(E_der_dim_interp.values).astype(float)
+        E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum)
+        vjp_array = np.array(E_der_dim_interp.values).astype(complex)
         vjp_array = vjp_array.reshape(eps_data.shape)
 
         # multiply by volume elements (if possible, being defensive here..)
@@ -3191,6 +3191,7 @@ class PoleResidue(DispersiveMedium):
         dJ_deps = self.derivative_eps_complex_volume(
             E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
         )
+
         dJ_deps = complex(dJ_deps)
 
         # TODO: fix for multi-frequency
@@ -3478,6 +3479,9 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 E_der_map=derivative_info.E_der_map, eps_data=self.eps_inf, dim=dim
             )
 
+        # import pdb; pdb.set_trace()
+        # dJ_deps = np.conj(dJ_deps)
+
         # TODO: fix for multi-frequency
         frequency = derivative_info.frequency
 
@@ -3512,14 +3516,14 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         # multiply with dJ_deps partial derivative to give full gradients
 
         deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
-        dJ_deps_inf = dJ_deps * deps_deps_inf / 3.0
+        dJ_deps_inf = dJ_deps * deps_deps_inf / 3.0  # mysterious 3
 
         dJ_dpoles = []
         for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
             da = da_r + 1j * da_i
             dc = dc_r + 1j * dc_i
-            dJ_da = dJ_deps * da / 2.0
-            dJ_dc = dJ_deps * dc / 2.0
+            dJ_da = dJ_deps * da / 2.0  # mysterious 2
+            dJ_dc = dJ_deps * dc / 2.0  # mysterious 2
             dJ_dpoles.append((dJ_da, dJ_dc))
 
         derivative_map = {}
