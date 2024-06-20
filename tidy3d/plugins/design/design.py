@@ -141,14 +141,6 @@ class DesignSpace(Tidy3dBaseModel):
     def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable) -> list[Any]:
         """Get function that tries to use batch processing on a set of arguments."""
 
-        # def fn_pre_batched(args_list: list) -> dict[str, Any]:
-        #     """Generate inputs."""
-        #     return {fn_pre(**args) for args in args_list}
-
-        # def fn_post_batch(data_dict_list: dict[str, Any]) -> list[Any]:
-        #     """Evaluate the outputs."""
-        #     return [fn_post(val) for val in data_dict_list.values()]
-
         def evaluate(args_list: list[tuple[Any, ...]]) -> list[Any]:
             """Put together into one pipeline."""
             combined_fn = self._stitch_pre_post(fn_pre=fn_pre, fn_post=fn_post)
@@ -162,29 +154,67 @@ class DesignSpace(Tidy3dBaseModel):
 
         def fn_combined(args_list):
             sim_dict = {idx: fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
-            data = self.fn_mid(sim_dict)
-            post_out = [fn_post(val) for val in data]
-            return post_out
+            data = self.fn_mid(sim_dict, fn_post)
+            # post_out = [fn_post(val[1]) for val in data.items()]
+            return data
 
         return fn_combined
 
     @staticmethod
-    def fn_mid(pre_out: Any) -> Any:
+    def fn_mid(pre_out: Any, fn_post: Callable) -> Any:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
-        # if isinstance(pre_out, Simulation):
-        #     data = web.run(pre_out)
-        # elif isinstance(pre_out, list) and all(isinstance(sim, Simulation) for sim in pre_out):
-        #     data = web.Batch({idx: sim for idx, sim in enumerate(pre_out)}).run()
-        #     data = list(data.values())
-        if isinstance(pre_out, dict) and all(
-            isinstance(sim, Simulation) for sim in pre_out.values()
-        ):
+
+        # Handle most common case where fn_combined builds a dict of sims
+        if all(isinstance(sim, Simulation) for sim in pre_out.values()):
             data = web.Batch(simulations=pre_out).run()
-            data = [sim_tuple[1] for sim_tuple in data.items()]
-        # TODO: eventually handed nested dict of list/tuple of Sims...
+            data = [fn_post(val[1]) for val in data.items()]
+
+        # Can "index" dict here because fn_combined uses idx as the key
+        elif all(isinstance(sim, Dict) for sim in pre_out.values()) and all(
+            isinstance(sim, Simulation) for sim in pre_out[0].values()
+        ):
+            flattened_sims = {}
+            original_structure = []
+            for dict_idx, sub_dict in pre_out.items():
+                sub_structure = []
+                for sub_dict_idx, sim in sub_dict.items():
+                    task_name = f"{dict_idx}_{sub_dict_idx}"
+                    flattened_sims[task_name] = sim
+                    sub_structure.append(task_name)
+
+                original_structure.append(sub_structure)
+
+            batch_out = web.Batch(simulations=flattened_sims).run()
+
+            data = []
+            for sub_structure in original_structure:
+                sub_dict = {batch_out[task_name] for task_name in sub_structure}
+                data.append(fn_post(sub_dict))
+
+        elif all(isinstance(sim, List) for sim in pre_out.values()) and all(
+            isinstance(sim, Simulation) for sim in pre_out[0]
+        ):
+            flattened_sims = {}
+            original_structure = []
+            for dict_idx, sub_list in pre_out.items():
+                sub_structure = []
+                for sub_list_idx, sim in enumerate(sub_list):
+                    task_name = f"{dict_idx}_{sub_list_idx}"
+                    flattened_sims[task_name] = sim
+                    sub_structure.append(task_name)
+
+                original_structure.append(sub_structure)
+
+            batch_out = web.Batch(simulations=flattened_sims).run()
+
+            data = []
+            for sub_structure in original_structure:
+                sub_list = [batch_out[task_name] for task_name in sub_structure]
+                data.append(fn_post(sub_list))
+
         else:
             # user just wants to split into pre and post, without tidy3d I guess
-            data = list(pre_out.values())
+            data = [fn_post(val[1]) for val in pre_out.items()]
             # or we just error
             # raise ValueError(f'Bad outputs from "fn_pre", cant run')
 
