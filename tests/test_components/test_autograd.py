@@ -800,17 +800,14 @@ def test_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
-    eps_xx = td.ScalarFieldDataArray(
-        np.ones((1, 1, 1, 1)), coords=dict(x=[0], y=[0], z=[0], f=np.array([freq]))
-    )
-
     info = DerivativeInfo(
         paths=field_paths,
         E_der_map={},
         D_der_map={},
-        eps_data=dict(eps_xx=eps_xx),
+        eps_data={},
         eps_in=2.0,
         eps_out=1.0,
+        frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
     )
 
@@ -879,17 +876,14 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
-    eps_xx = td.ScalarFieldDataArray(
-        np.ones((1, 1, 1, 1)), coords=dict(x=[0], y=[0], z=[0], f=np.array([freq]))
-    )
-
     info = DerivativeInfo(
         paths=field_paths,
         E_der_map={},
         D_der_map={},
-        eps_data=dict(eps_xx=eps_xx),
+        eps_data={},
         eps_in=2.0,
         eps_out=1.0,
+        frequency=freq,
         bounds=((-1, -1, -1), (1, 1, 1)),
     )
 

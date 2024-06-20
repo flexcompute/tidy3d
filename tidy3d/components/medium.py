@@ -3193,8 +3193,8 @@ class PoleResidue(DispersiveMedium):
         )
         dJ_deps = complex(dJ_deps)
 
-        # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = derivative_info.eps_data["eps_xx"].coords["f"].values.flat[0]
+        # TODO: fix for multi-frequency
+        frequency = derivative_info.frequency
         poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
         poles_complex = np.stack(poles_complex, axis=0)
 
@@ -3478,8 +3478,8 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 E_der_map=derivative_info.E_der_map, eps_data=self.eps_inf, dim=dim
             )
 
-        # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = derivative_info.eps_data["eps_xx"].coords["f"].values.flat[0]
+        # TODO: fix for multi-frequency
+        frequency = derivative_info.frequency
 
         poles_complex = [
             (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
