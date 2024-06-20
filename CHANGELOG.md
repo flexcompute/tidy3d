@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
 - Bug when plotting transformed geometries.
+- Bug when placing path integrals in the `CoaxialLumpedPort`.
 
 ## [2.7.0] - 2024-06-17
 
