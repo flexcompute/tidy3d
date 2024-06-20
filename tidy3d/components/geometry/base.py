@@ -1559,7 +1559,7 @@ class SimplePlaneIntersection(Geometry, ABC):
             kwargs = {coord: origin[axis]}
             section = self.intersections_plane(**kwargs)
             # Apply transformation in the plane by removing row and column
-            to_2D_in_plane = np.delete(np.delete(to_2D, axis, 0), axis, 1)
+            to_2D_in_plane = np.delete(np.delete(to_2D, 2, 0), axis, 1)
 
             def transform(p_array):
                 return np.dot(
