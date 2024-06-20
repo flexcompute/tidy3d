@@ -34,7 +34,7 @@ from ..constants import (
 from ..exceptions import SetupError, ValidationError
 from ..log import log
 from .autograd.derivative_utils import DerivativeInfo, integrate_within_bounds
-from .autograd.types import AutogradFieldMap, TracedFloat, TracedPositiveFloat, TracedPoleAndResidue
+from .autograd.types import AutogradFieldMap, TracedFloat, TracedPoleAndResidue, TracedPositiveFloat
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .data.data_array import DATA_ARRAY_MAP, ScalarFieldDataArray, SpatialDataArray
 from .data.dataset import (
@@ -1142,7 +1142,7 @@ class AbstractMedium(ABC, Tidy3dBaseModel):
 
         vjp_value = 0.0
         for field_name in ("Ex", "Ey", "Ez"):
-            fld = E_der_map.field_components[field_name]
+            fld = E_der_map[field_name]
             vjp_value_fld = integrate_within_bounds(
                 arr=fld,
                 dims=("x", "y", "z"),
@@ -1394,7 +1394,7 @@ class AbstractCustomMedium(AbstractMedium, ABC):
             d_vol = np.array(1.0)
 
         # TODO: probably this could be more robust. eg if the DataArray has weird edge cases
-        E_der_dim = E_der_map.field_components[f"E{dim}"]
+        E_der_dim = E_der_map[f"E{dim}"]
         E_der_dim_interp = E_der_dim.interp(**coords_interp).fillna(0.0).sum(dims_sum).real
         vjp_array = np.array(E_der_dim_interp.values).astype(float)
         vjp_array = vjp_array.reshape(eps_data.shape)
@@ -3184,24 +3184,17 @@ class PoleResidue(DispersiveMedium):
         ep = ep[~np.isnan(ep)]
         return max(ep.imag)
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
         # compute all derivatives beforehand
-        dJ_deps = self.derivative_eps_complex_volume(E_der_map=E_der_map, bounds=bounds)
+        dJ_deps = self.derivative_eps_complex_volume(
+            E_der_map=derivative_info.E_der_map, bounds=derivative_info.bounds
+        )
         dJ_deps = complex(dJ_deps)
 
         # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        frequency = derivative_info.eps_data["eps_xx"].coords["f"].values.flat[0]
         poles_complex = [(complex(a), complex(c)) for a, c in self.poles]
         poles_complex = np.stack(poles_complex, axis=0)
 
@@ -3221,7 +3214,7 @@ class PoleResidue(DispersiveMedium):
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
-        for field_path in field_paths:
+        for field_path in derivative_info.paths:
             field_name, *rest = field_path
 
             if field_name == "eps_inf":
@@ -3476,26 +3469,17 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
 
         return self.updated_copy(eps_inf=eps_inf_reduced, poles=poles_reduced)
 
-    def compute_derivatives(
-        self,
-        field_paths: list[tuple[str, ...]],
-        E_der_map: ElectromagneticFieldDataset,
-        D_der_map: ElectromagneticFieldDataset,
-        eps_data: PermittivityDataset,
-        eps_in: complex,
-        eps_out: complex,
-        bounds: Bound,
-    ) -> dict[str, Any]:
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
         """Compute adjoint derivatives for each of the ``fields`` given the multiplied E and D."""
 
         dJ_deps = 0.0
         for dim in "xyz":
             dJ_deps += self._derivative_field_cmp(
-                E_der_map=E_der_map, eps_data=self.eps_inf, dim=dim
+                E_der_map=derivative_info.E_der_map, eps_data=self.eps_inf, dim=dim
             )
 
         # TODO: fix for multi-frequency, also _xx is arbitrary...
-        frequency = eps_data.eps_xx.coords["f"].values.flat[0]
+        frequency = derivative_info.eps_data["eps_xx"].coords["f"].values.flat[0]
 
         poles_complex = [
             (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex))
@@ -3528,7 +3512,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
         # multiply with dJ_deps partial derivative to give full gradients
 
         deps_deps_inf = deps_deps_inf_r + 1j * deps_deps_inf_i
-        dJ_deps_inf = dJ_deps * deps_deps_inf / 2.0
+        dJ_deps_inf = dJ_deps * deps_deps_inf / 3.0
 
         dJ_dpoles = []
         for (da_r, dc_r), (da_i, dc_i) in zip(deps_dpoles_r, deps_dpoles_i):
@@ -3539,7 +3523,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             dJ_dpoles.append((dJ_da, dJ_dc))
 
         derivative_map = {}
-        for field_path in field_paths:
+        for field_path in derivative_info.paths:
             field_name, *rest = field_path
 
             if field_name == "eps_inf":

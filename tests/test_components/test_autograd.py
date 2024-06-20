@@ -3,6 +3,7 @@
 import copy
 import cProfile
 import typing
+import warnings
 from importlib import reload
 
 import autograd as ag
@@ -11,6 +12,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
+from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.web import run_async
 from tidy3d.web.api.autograd.autograd import run
 
@@ -409,6 +411,7 @@ if TEST_POLYSLAB_SPEED:
 
 args = [("custom_pole_res", "mode"), ("pole_res", "mode")]
 
+
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
     if structure_key == ALL_KEY:
         structure_keys = structure_keys_
@@ -797,22 +800,30 @@ def test_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
-    grads_computed = pr.compute_derivatives(
-        field_paths=field_paths,
-        E_der_map=None,
-        D_der_map=None,
-        eps_data=None,
-        eps_in=None,
-        eps_out=None,
-        bounds=None,
+    eps_xx = td.ScalarFieldDataArray(
+        np.ones((1, 1, 1, 1)), coords=dict(x=[0], y=[0], z=[0], f=np.array([freq]))
     )
+
+    info = DerivativeInfo(
+        paths=field_paths,
+        E_der_map={},
+        D_der_map={},
+        eps_data=dict(eps_xx=eps_xx),
+        eps_in=2.0,
+        eps_out=1.0,
+        bounds=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    grads_computed = pr.compute_derivatives(derivative_info=info)
 
     def f(eps_inf, poles):
         eps = td.PoleResidue._eps_model(eps_inf, poles, freq)
         return J(eps)
 
     gfn = ag.holomorphic_grad(f, argnum=(0, 1))
-    grad_eps_inf, grad_poles = gfn(eps_inf, poles)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        grad_eps_inf, grad_poles = gfn(eps_inf, poles)
 
     assert np.isclose(grads_computed[("eps_inf",)], grad_eps_inf)
 
@@ -868,15 +879,21 @@ def test_custom_pole_residue(monkeypatch):
         for j in range(2):
             field_paths.append(("poles", i, j))
 
-    grads_computed = pr.compute_derivatives(
-        field_paths=field_paths,
-        E_der_map=None,
-        D_der_map=None,
-        eps_data=None,
-        eps_in=None,
-        eps_out=None,
-        bounds=None,
+    eps_xx = td.ScalarFieldDataArray(
+        np.ones((1, 1, 1, 1)), coords=dict(x=[0], y=[0], z=[0], f=np.array([freq]))
     )
+
+    info = DerivativeInfo(
+        paths=field_paths,
+        E_der_map={},
+        D_der_map={},
+        eps_data=dict(eps_xx=eps_xx),
+        eps_in=2.0,
+        eps_out=1.0,
+        bounds=((-1, -1, -1), (1, 1, 1)),
+    )
+
+    grads_computed = pr.compute_derivatives(derivative_info=info)
 
     poles_complex = [
         (np.array(a.values, dtype=complex), np.array(c.values, dtype=complex)) for a, c in poles
@@ -888,7 +905,9 @@ def test_custom_pole_residue(monkeypatch):
         return J(eps)
 
     gfn = ag.holomorphic_grad(f, argnum=(0, 1))
-    grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        grad_eps_inf, grad_poles = gfn(eps_inf.values, poles_complex)
 
     assert np.allclose(grads_computed[("eps_inf",)], grad_eps_inf)
 
