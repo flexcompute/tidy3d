@@ -221,3 +221,29 @@ def test_validate_coaxial_port_diameters():
             num_grid_cells=None,
             impedance=50,
         )
+
+
+@pytest.mark.parametrize("direction", ["+", "-"])
+def test_current_integral_positioning_coaxial_port(direction):
+    """Make sure the positioning of the current integral used by the CoaxialLumpedPort is correct,
+    when the coordinates and port position do not exactly match.
+    """
+    # Test coordinates from a failing case
+    normal_coords = np.array(
+        [
+            -14069.999999999978,
+            -14049.999999999978,
+            -14029.999999999978,
+            -14009.999999999978,
+        ]
+    )
+
+    normal_port_position = -14030
+    path_pos = CoaxialLumpedPort._determine_current_integral_pos(
+        normal_port_position, normal_coords, direction
+    )
+
+    if direction == "+":
+        assert path_pos == normal_coords[3]
+    else:
+        assert path_pos == normal_coords[1]

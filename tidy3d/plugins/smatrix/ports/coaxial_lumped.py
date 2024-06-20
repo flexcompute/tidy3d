@@ -322,15 +322,10 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         # Get the coordinates normal to port and select positions just on either side of the port
         normal_coords = field_coords[coord3].values
-        upper_bound = np.searchsorted(normal_coords, self.center[self.injection_axis])
-        lower_bound = upper_bound - 1
-        # We need to choose which side of the port to place the path integral,
-        # which depends on which way the inner conductor is extending
-        if self.direction == "+":
-            path_pos = normal_coords[upper_bound]
-        else:
-            path_pos = normal_coords[lower_bound]
-
+        normal_port_position = self.center[self.injection_axis]
+        path_pos = CoaxialLumpedPort._determine_current_integral_pos(
+            normal_port_position, normal_coords, self.direction
+        )
         # Setup the path integral and integrate the H field
         path_integral = CustomCurrentIntegral2D(
             axis=self.injection_axis, position=path_pos, vertices=circle_vertices
@@ -343,6 +338,21 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
             current *= -1.0
 
         return current
+
+    @staticmethod
+    def _determine_current_integral_pos(
+        port_center: float, normal_coords: np.array, direction: Direction
+    ) -> float:
+        """Helper to locate where the current integral should be placed in
+        relation to the normal axis of the port.
+        """
+        idx = np.abs(normal_coords - port_center).argmin()
+        # We need to choose which side of the port to place the path integral,
+        # which depends on which way the inner conductor is extending
+        if direction == "+":
+            return normal_coords[idx + 1]
+        else:
+            return normal_coords[idx - 1]
 
     @cached_property
     def _voltage_axis(self) -> Axis:
