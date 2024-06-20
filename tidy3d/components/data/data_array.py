@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import getval, isbox
+from autograd.tracer import Box, isbox
 from xarray.core.types import InterpOptions
 from xarray.core.utils import either_dict_or_kwargs
 
@@ -23,7 +23,6 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
-from ..autograd import interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -73,21 +72,28 @@ class DataArray(xr.DataArray):
         """Initialize ``DataArray``."""
 
         # initialize with untraced data
-        data_untraced = getval(data)
-        super().__init__(data_untraced, *args, **kwargs)
-
-        # if the passed data has tracers, store them in attrs dict
         if isbox(data):
+            super().__init__(data._value, *args, **kwargs)
             self.attrs[AUTOGRAD_KEY] = data
-            # NOTE: this is done because if we pass the traced array directly, it will create a
-            # numpy array of `ArrayBox`, which is extremely slow
+        else:
+            super().__init__(data, *args, **kwargs)
+        # data_untraced = getval(data)
+        # super().__init__(data_untraced, *args, **kwargs)
+
+        # # if the passed data has tracers, store them in attrs dict
+        # if isbox(data):
+        #     # self.attrs[AUTOGRAD_KEY] = np.asarray(data)
+        #     self.attrs[AUTOGRAD_KEY] = getval(data)
+        #     # NOTE: this is done because if we pass the traced array directly, it will create a
+        #     # numpy array of `ArrayBox`, which is extremely slow
 
     @property
     def has_tracers(self) -> bool:
-        """Whether the ``DataArray`` has ``autograd`` derivative information."""
-        traced_data = self.data.dtype == object and isbox(self.data.flat[0])
-        traced_attrs = AUTOGRAD_KEY in self.attrs
-        return traced_data or traced_attrs
+        return AUTOGRAD_KEY in self.attrs
+
+    @property
+    def values(self) -> Union[Box, np.ndarray]:
+        return self.attrs[AUTOGRAD_KEY] if self.has_tracers else super().values
 
     @classmethod
     def __get_validators__(cls):
@@ -133,7 +139,7 @@ class DataArray(xr.DataArray):
         """
         # skip this validator if currently tracing for autograd because
         # self.values will be dtype('object') and not interpolatable
-        if isbox(self.values.flat[0]):
+        if isbox(self.values):
             return
 
         if field_name is None:
@@ -305,14 +311,18 @@ class DataArray(xr.DataArray):
 
             obj = (
                 self if assume_sorted else self.sortby(list(coords.keys()))
-            )  # same handling as in vanilla xarray
+            )  # same handling as in xarray
 
-            points = tuple(dict(obj.coords).values())
-            xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
-            traced_vals = interpn(points, obj.attrs[AUTOGRAD_KEY], xi, method=method)
+            # points = tuple(dict(obj.coords).values())
+            # xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
+            vals = self.values
+            # vals = obj.values
+            # vals = interpn(points, obj.values, xi, method=method)
+            # vals = np.asarray(vals)
 
-            da = DataArray(getval(traced_vals), dict(obj.coords) | coords)
-            da.attrs[AUTOGRAD_KEY] = traced_vals
+            print(isbox(vals))
+            da = DataArray(vals, dict(obj.coords) | coords)
+            da.attrs[AUTOGRAD_KEY] = vals
             return da
 
         return super().interp(

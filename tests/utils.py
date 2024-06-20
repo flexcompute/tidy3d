@@ -393,7 +393,7 @@ custom_sellmeier_u = td.CustomSellmeier(
 # Make a few autograd ArrayBoxes for testing
 start_node = VJPNode.new_root()
 tracer = new_box(1.0, 0, start_node)
-tracer_arr = new_box([[[1.0]]], 0, start_node)
+tracer_arr = new_box(np.array([[[1.0]]]), 0, start_node)
 
 SIM_FULL = td.Simulation(
     size=(8.0, 8.0, 8.0),

@@ -1,11 +1,20 @@
 #!/usr/bin/env -S poetry run python
 # ruff: noqa: F401
+
+from importlib import reload
+
 import autograd.numpy as anp
-import matplotlib.pylab as plt
 from autograd import value_and_grad
 
 import tidy3d as td
-from tidy3d.web import run
+import tidy3d.web.api.webapi as webapi
+from tests.utils import run_emulated
+from tidy3d.web.api.autograd.autograd import run
+
+webapi.run = run_emulated
+from tidy3d.web.api.autograd import autograd  # noqa
+
+reload(autograd)
 
 
 def main():
@@ -61,7 +70,7 @@ def main():
         return sim.updated_copy(structures=[box])
 
     def measure_intensity(data: td.SimulationData) -> float:
-        return anp.sum(anp.array(data.get_intensity(monitor.name).values))
+        return anp.sum(data.get_intensity(monitor.name).values)
 
     @value_and_grad
     def intensity(param: float) -> float:

@@ -141,7 +141,9 @@ def _evaluate_linear(
         weight = anp.ones(1)
         for w in weights:
             weight = weight * w
-        term = anp.array(values[edge_indices]) * weight[_slice]
+        # term = anp.array(values[edge_indices]) * weight[_slice]
+        # term = np.array(values[edge_indices]) * weight[_slice]
+        term = values[edge_indices] * weight[_slice]
         value = value + term
     return value
 
@@ -190,15 +192,30 @@ def interpn(
     else:
         raise ValueError(f"Unsupported interpolation method: {method}")
 
-    itrp = RegularGridInterpolator(points, getval(values), method=method)
+    itrp = RegularGridInterpolator(points, values, method=method)
     grid = anp.meshgrid(*xi, indexing="ij")
     grid, shape, ndim, nans, _ = itrp._prepare_xi(tuple(grid))
     indices, norm_distances = itrp._find_indices(grid.T)
 
-    values = anp.array(values, copy=False)
+    # values = np.asarray(values)
+    # print("unmodified:")
+    # print("values: ", values)
+    # print("type: ", type(values))
+    # print("-----------")
+    # v1 = np.asarray(values)
+    # print("np.asarray:")
+    # print("values: ", v1)
+    # print("type: ", type(v1))
+    # print("-----------")
+    # v2 = anp.array(values)
+    # print("anp.array:")
+    # print("values: ", v2)
+    # print("type: ", type(v2))
+    # exit()
+
     result = interp_fn(indices, norm_distances, values)
-    nans = anp.reshape(nans, (-1,) + (1,) * (result.ndim - 1))
-    result = anp.where(nans, np.nan, result)
+    # nans = anp.reshape(nans, (-1,) + (1,) * (result.ndim - 1))
+    # result = anp.where(nans, np.nan, result)
     return anp.reshape(result, shape[:-1] + values.shape[ndim:])
 
 
