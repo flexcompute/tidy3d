@@ -22,8 +22,8 @@ def test_0d_plot(center_z, len_collections):
             td.PointDipole(
                 center=(0, 0, center_z),
                 source_time=td.GaussianPulse(
-                    freq0=td.C_0 / 1.0,
-                    fwidth=td.C_0 / 5.0,
+                    freq0=td.frequency(1.0),
+                    fwidth=td.frequency(5.0),
                 ),
                 polarization="Ez",
             )
@@ -45,7 +45,7 @@ def test_2d_boundary_plot():
     """
 
     # Dummy objects to pad the simulation
-    freq0 = td.C_0 / 0.75
+    freq0 = td.frequency(0.75)
 
     # create source
     source = td.PointDipole(
