@@ -440,7 +440,6 @@ if TEST_CUSTOM_MEDIUM_SPEED:
 if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
-
 # args = [("geo_group", "mode")]
 
 
@@ -524,25 +523,30 @@ def test_autograd_objective(use_emulated_run, structure_key, monitor_key):
 
         params_num = np.zeros((N_PARAMS, N_PARAMS))
 
+        def task_name_fn(i: int, sign: int) -> str:
+            """Task name for a given index into grad num and sign."""
+            pm_string = "+" if sign > 0 else "-"
+            return f"{i}_{pm_string}"
+
         for i in range(N_PARAMS):
-            for sign, pm_string in zip((-1, 1), "-+"):
-                task_name = f"{i}_{pm_string}"
+            for j, sign in enumerate((-1, 1)):
+                task_name = task_name_fn(i, sign)
                 params_i = np.copy(params0)
                 params_i[i] += sign * delta
-                params_num[i] = params_i.copy()
+                params_num[:, j] = params_i.copy()
                 sim_i = make_sim(params_i)
                 sims_numerical[task_name] = sim_i
 
-        datas = web.run_async(sims_numerical, path_dir="data")
+        datas = web.Batch(simulations=sims_numerical).run(path_dir="data")
 
         grad_num = np.zeros_like(grad)
         objectives_num = np.zeros((len(params0), 2))
         for i in range(N_PARAMS):
-            for sign, pm_string in zip((-1, 1), "-+"):
-                task_name = f"{i}_{pm_string}"
+            for j, sign in enumerate((-1, 1)):
+                task_name = task_name_fn(i, sign)
                 sim_data_i = datas[task_name]
                 obj_i = postprocess(sim_data_i)
-                objectives_num[i, (sign + 1) // 2] = obj_i
+                objectives_num[i, j] = obj_i
                 grad_num[i] += sign * obj_i / 2 / delta
 
         print("adjoint: ", grad)
