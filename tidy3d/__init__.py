@@ -240,6 +240,7 @@ from .components.subpixel_spec import (
     PolarizedAveraging,
     Staircasing,
     SubpixelSpec,
+    SurfaceImpedance,
     VolumetricAveraging,
 )
 
@@ -480,6 +481,7 @@ __all__ = [
     "PolarizedAveraging",
     "HeuristicPECStaircasing",
     "PECConformal",
+    "SurfaceImpedance",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",
