@@ -122,6 +122,7 @@ from .components.geometry.base import Box, ClipOperation, Geometry, GeometryGrou
 from .components.geometry.mesh import TriangleMesh
 from .components.geometry.polyslab import PolySlab
 from .components.geometry.primitives import Cylinder, Sphere
+from .components.good_conductor import LossyMetal, SkinDepthFitterParam
 from .components.grid.grid import Coords, Coords1D, FieldGrid, Grid, YeeGrid
 from .components.grid.grid_spec import AutoGrid, CustomGrid, GridSpec, UniformGrid
 from .components.heat.boundary import ConvectionBC, HeatBoundarySpec, HeatFluxBC, TemperatureBC
@@ -239,6 +240,7 @@ from .components.subpixel_spec import (
     PolarizedAveraging,
     Staircasing,
     SubpixelSpec,
+    SurfaceImpedance,
     VolumetricAveraging,
 )
 
@@ -333,6 +335,8 @@ __all__ = [
     "NonlinearSusceptibility",
     "TwoPhotonAbsorption",
     "KerrNonlinearity",
+    "LossyMetal",
+    "SkinDepthFitterParam",
     "Structure",
     "MeshOverrideStructure",
     "ModeSpec",
@@ -477,6 +481,7 @@ __all__ = [
     "PolarizedAveraging",
     "HeuristicPECStaircasing",
     "PECConformal",
+    "SurfaceImpedance",
     "EMESimulation",
     "EMESimulationData",
     "EMEMonitor",

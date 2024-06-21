@@ -17,8 +17,9 @@ from ...log import log
 from ..base import TYPE_TAG_STR, cached_property, skip_if_fields_missing
 from ..base_sim.data.monitor_data import AbstractMonitorData
 from ..geometry.base import Box
+from ..good_conductor import MediumType
 from ..grid.grid import Coords, Grid
-from ..medium import Medium, MediumType
+from ..medium import Medium
 from ..monitor import (
     DiffractionMonitor,
     FieldMonitor,

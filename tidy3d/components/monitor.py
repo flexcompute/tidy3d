@@ -12,7 +12,7 @@ from ..log import log
 from .apodization import ApodizationSpec
 from .base import Tidy3dBaseModel, cached_property, skip_if_fields_missing
 from .base_sim.monitor import AbstractMonitor
-from .medium import MediumType
+from .good_conductor import MediumType
 from .mode import ModeSpec
 from .types import (
     ArrayFloat1D,

@@ -13,7 +13,8 @@ from ...log import log
 from ...version import __version__
 from ..base import cached_property, skip_if_fields_missing
 from ..geometry.base import Box
-from ..medium import Medium, MediumType3D
+from ..good_conductor import MediumType3D
+from ..medium import Medium
 from ..scene import Scene
 from ..structure import Structure
 from ..types import TYPE_TAG_STR, Ax, Axis, Bound, Symmetry

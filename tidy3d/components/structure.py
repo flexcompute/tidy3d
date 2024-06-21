@@ -15,8 +15,9 @@ from .autograd import get_static
 from .base import Tidy3dBaseModel, skip_if_fields_missing
 from .data.monitor_data import FieldData, PermittivityData
 from .geometry.utils import GeometryType, validate_no_transformed_polyslabs
+from .good_conductor import MediumType
 from .grid.grid import Coords
-from .medium import AbstractCustomMedium, Medium2D, MediumType
+from .medium import AbstractCustomMedium, Medium2D
 from .monitor import FieldMonitor, PermittivityMonitor
 from .types import TYPE_TAG_STR, Ax, Axis, Bound
 from .validators import validate_name_str

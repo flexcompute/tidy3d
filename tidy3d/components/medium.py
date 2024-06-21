@@ -2863,6 +2863,12 @@ class PoleResidue(DispersiveMedium):
             frequency_range=self.frequency_range,
         )
 
+    def _scaled_permittivity(self, scaling: pd.PositiveFloat) -> PoleResidue:
+        """Applying scaling to material parameters so that its permittivity is scaled by ``scaling``."""
+        eps_inf = self.eps_inf * scaling
+        poles = [(a, c * scaling) for (a, c) in self.poles]
+        return PoleResidue(eps_inf=eps_inf, poles=poles)
+
     @staticmethod
     def lo_to_eps_model(
         poles: Tuple[Tuple[float, float, float, float], ...],
@@ -5842,7 +5848,7 @@ class PerturbationPoleResidue(PoleResidue, AbstractPerturbationMedium):
 # types of mediums that can be used in Simulation and Structures
 
 
-MediumType3D = Union[
+MediumType3DTmp = Union[
     Medium,
     AnisotropicMedium,
     PECMedium,
@@ -5947,7 +5953,7 @@ class Medium2D(AbstractMedium):
     def volumetric_equivalent(
         self,
         axis: Axis,
-        adjacent_media: Tuple[MediumType3D, MediumType3D],
+        adjacent_media: Tuple[MediumType3DTmp, MediumType3DTmp],
         adjacent_dls: Tuple[float, float],
     ) -> AnisotropicMedium:
         """Produces a 3D volumetric equivalent medium. The new medium has thickness equal to
@@ -5978,7 +5984,7 @@ class Medium2D(AbstractMedium):
             The 3D material corresponding to this 2D material.
         """
 
-        def get_component(med: MediumType3D, comp: Axis) -> IsotropicUniformMediumType:
+        def get_component(med: MediumType3DTmp, comp: Axis) -> IsotropicUniformMediumType:
             """Extract the ``comp`` component of ``med``."""
             if isinstance(med, AnisotropicMedium):
                 dim = "xyz"[comp]
@@ -6252,7 +6258,7 @@ PEC2D = Medium2D(ss=PEC, tt=PEC)
 
 # types of mediums that can be used in Simulation and Structures
 
-MediumType = Union[MediumType3D, Medium2D, AnisotropicMediumFromMedium2D]
+MediumTypeTmp = Union[MediumType3DTmp, Medium2D, AnisotropicMediumFromMedium2D]
 
 
 # Utility function
