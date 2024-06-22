@@ -294,7 +294,7 @@ def test_mode_solver_validation():
         ms.validate_pre_upload()
 
 
-@pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, "INFO")))
+@pytest.mark.parametrize("group_index_step, log_level", ((1e-7, "WARNING"), (1e-5, None)))
 def test_mode_solver_group_index_warning(group_index_step, log_level, log_capture):
     """Test mode solver setups issuing warnings."""
 
