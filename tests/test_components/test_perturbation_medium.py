@@ -1,9 +1,10 @@
 """Tests mediums."""
 
 import numpy as np
-import pytest
 import pydantic.v1 as pydantic
+import pytest
 import tidy3d as td
+
 from ..utils import AssertLogLevel, cartesian_to_unstructured
 
 

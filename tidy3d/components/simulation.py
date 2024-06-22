@@ -2416,7 +2416,9 @@ class Simulation(AbstractYeeGridSimulation):
 
         source_ranges = [source.source_time.frequency_range() for source in values["sources"]]
         if not source_ranges:
-            log.info("No sources in simulation.")
+            # Commented out to eliminate this message from Mode real time log in GUI
+            # TODO: Bring it back when it doesn't interfere with mode solver
+            # log.info("No sources in simulation.")
             return val
 
         freq_min = min((freq_range[0] for freq_range in source_ranges), default=0.0)
