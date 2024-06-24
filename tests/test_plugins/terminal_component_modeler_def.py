@@ -7,12 +7,12 @@ from tidy3d.plugins.smatrix import (
 )
 
 # Microstrip dimensions
-unit = 1e6
-default_strip_length = 75e-3 * unit
-strip_width = 3e-3 * unit
-gap = 1e-3 * unit
+mm = 1e3
+default_strip_length = 75 * mm
+strip_width = 3 * mm
+gap = 1 * mm
 gnd_width = strip_width * 8
-metal_thickness = 0.2e-3 * unit
+metal_thickness = 0.2 * mm
 
 # Microstrip materials
 pec = td.PECMedium()
@@ -25,11 +25,11 @@ freq_start = 1e8
 freq_stop = 10e9
 
 # Coaxial dimensions
-Rinner = 0.2768 * 1e-3
-Router = 1.0 * 1e-3
+Rinner = 0.2768 * mm
+Router = 1.0 * mm
 
 
-def make_simulation(planar_pec: bool, length: float = None, auto_grid: bool = True):
+def make_simulation(planar_pec: bool, length: float = None, grid_spec: td.GridSpec = None):
     if length:
         strip_length = length
     else:
@@ -49,10 +49,8 @@ def make_simulation(planar_pec: bool, length: float = None, auto_grid: bool = Tr
     run_time = 60 / fwidth
 
     # Spatial grid specification
-    if auto_grid:
+    if not grid_spec:
         grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=td.C_0 / freq_stop)
-    else:
-        grid_spec = td.GridSpec.uniform(wavelength0 / 11)
 
     # Make structures
     strip = td.Structure(
@@ -109,7 +107,7 @@ def make_component_modeler(
     reference_impedance: complex = 50,
     length: float = None,
     port_refinement: bool = True,
-    auto_grid: bool = True,
+    grid_spec: td.GridSpec = None,
     **kwargs,
 ):
     if length:
@@ -117,7 +115,7 @@ def make_component_modeler(
     else:
         strip_length = default_strip_length
 
-    sim = make_simulation(planar_pec, length=length, auto_grid=auto_grid)
+    sim = make_simulation(planar_pec, length=length, grid_spec=grid_spec)
 
     if planar_pec:
         height = 0
@@ -162,11 +160,9 @@ def make_component_modeler(
     return modeler
 
 
-def make_coaxial_simulation(length: float = None, auto_grid: bool = True):
-    if length:
-        coax_length = length
-    else:
-        coax_length = default_strip_length
+def make_coaxial_simulation(length: float = None, grid_spec: td.GridSpec = None):
+    if not length:
+        length = default_strip_length
 
     # wavelength / frequency
     freq0 = (freq_start + freq_stop) / 2
@@ -175,10 +171,8 @@ def make_coaxial_simulation(length: float = None, auto_grid: bool = True):
     run_time = 60 / fwidth
 
     # Spatial grid specification
-    if auto_grid:
+    if not grid_spec:
         grid_spec = td.GridSpec.auto(min_steps_per_wvl=10, wavelength=td.C_0 / freq_stop)
-    else:
-        grid_spec = td.GridSpec.uniform(wavelength0 / 11)
 
     # Make structures
     inner_conductor = td.Cylinder(
@@ -223,7 +217,7 @@ def make_coaxial_simulation(length: float = None, auto_grid: bool = True):
     size_sim = [
         2 * Router,
         2 * Router,
-        coax_length + 0.5 * wavelength0,
+        length + 0.5 * wavelength0,
     ]
 
     sim = td.Simulation(
@@ -245,17 +239,15 @@ def make_coaxial_component_modeler(
     reference_impedance: complex = 50,
     length: float = None,
     port_refinement: bool = True,
-    auto_grid: bool = True,
+    grid_spec: td.GridSpec = None,
     **kwargs,
 ):
-    if length:
-        coax_length = length
-    else:
-        coax_length = default_strip_length
+    if not length:
+        length = default_strip_length
 
-    sim = make_coaxial_simulation(length=coax_length, auto_grid=auto_grid)
+    sim = make_coaxial_simulation(length=length, grid_spec=grid_spec)
 
-    center_src1 = [0, 0, -coax_length / 2]
+    center_src1 = [0, 0, -length / 2]
 
     port_cells = None
     if port_refinement:
@@ -271,7 +263,7 @@ def make_coaxial_component_modeler(
         num_grid_cells=port_cells,
         impedance=reference_impedance,
     )
-    center_src2 = [0, 0, coax_length / 2]
+    center_src2 = [0, 0, length / 2]
     port_2 = port_1.updated_copy(name="coax_port_2", center=center_src2, direction="-")
     ports = [port_1, port_2]
     freqs = np.linspace(freq_start, freq_stop, 100)
