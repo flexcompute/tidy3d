@@ -8,11 +8,12 @@ import pydantic.v1 as pd
 from ....components.base import Tidy3dBaseModel, cached_property
 from ....components.data.data_array import DataArray, FreqDataArray
 from ....components.data.sim_data import SimulationData
+from ....components.geometry.utils_2d import snap_coordinate_to_grid
 from ....components.grid.grid import Grid, YeeGrid
 from ....components.lumped_element import AbstractLumpedResistor
 from ....components.monitor import FieldMonitor
 from ....components.source import GaussianPulse, UniformCurrentSource
-from ....components.types import Complex, FreqArray
+from ....components.types import Complex, Coordinate, FreqArray
 from ....constants import OHM
 
 DEFAULT_PORT_NUM_CELLS = 3
@@ -73,6 +74,17 @@ class AbstractLumpedPort(Tidy3dBaseModel, ABC):
     @cached_property
     def _current_monitor_name(self) -> str:
         return f"{self.name}_current"
+
+    def snapped_center(self, grid: Grid) -> Coordinate:
+        """Get the exact center of this port after snapping along the injection axis.
+        Ports are snapped to the nearest Yee cell boundary to match the exact position
+        of the ``AbstractLumpedResistor".
+        """
+        center = list(self.center)
+        normal_axis = self.injection_axis
+        normal_port_center = center[normal_axis]
+        center[normal_axis] = snap_coordinate_to_grid(grid, normal_port_center, normal_axis)
+        return tuple(center)
 
     @cached_property
     @abstractmethod

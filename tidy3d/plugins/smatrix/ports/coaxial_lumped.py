@@ -178,7 +178,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         dataset_E = FieldDataset(**kwargs)
 
         return CustomCurrentSource(
-            center=self.center,
+            center=center,
             size=(self.outer_diameter, self.outer_diameter, 0),
             source_time=source_time,
             name=self.name,
@@ -218,7 +218,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         # Create a voltage monitor
         return FieldMonitor(
-            center=self._voltage_path_center,
+            center=self._voltage_path_center(center),
             size=self._voltage_path_size,
             freqs=freqs,
             fields=[E1, E2],
@@ -261,11 +261,11 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         We arbitrarily choose the positive first in-plane axis as the location for the path.
         Any of the four possible choices should give the same result.
         """
-
+        exact_port_center = self.snapped_center(sim_data.simulation.grid)
         field_data = sim_data[self._voltage_monitor_name]
 
         voltage_integral = VoltageIntegralAxisAligned(
-            center=self._voltage_path_center,
+            center=self._voltage_path_center(exact_port_center),
             size=self._voltage_path_size,
             extrapolate_to_endpoints=True,
             snap_path_to_grid=True,
@@ -281,7 +281,7 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         The contour is a closed loop around the inner conductor. It is positioned
         at the midpoint between inner and outer radius of the annulus.
         """
-
+        exact_port_center = self.snapped_center(sim_data.simulation.grid)
         # Loops around inner conductive circle conductor
         field_data = sim_data[self._current_monitor_name]
 
@@ -313,8 +313,8 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
         xt, yt = generate_circle_coordinates(
             (self.outer_diameter + self.inner_diameter) / 4, num_path_coords
         )
-        xt += self.center[trans_axes[0]]
-        yt += self.center[trans_axes[1]]
+        xt += exact_port_center[trans_axes[0]]
+        yt += exact_port_center[trans_axes[1]]
 
         circle_vertices = np.column_stack((xt, yt))
         # Close the contour exactly
@@ -322,7 +322,10 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
         # Get the coordinates normal to port and select positions just on either side of the port
         normal_coords = field_coords[coord3].values
-        normal_port_position = self.center[self.injection_axis]
+        normal_port_position = exact_port_center[self.injection_axis]
+        # The exact center position of the port should coincide with a Yee cell boundary, so we
+        # want to select magnetic field positions a half-step on either side,
+        # depending on the direction.
         path_pos = CoaxialLumpedPort._determine_current_integral_pos(
             normal_port_position, normal_coords, self.direction
         )
@@ -341,31 +344,30 @@ class CoaxialLumpedPort(AbstractLumpedPort, AbstractAxesRH):
 
     @staticmethod
     def _determine_current_integral_pos(
-        port_center: float, normal_coords: np.array, direction: Direction
+        snapped_center: float, normal_coords: np.array, direction: Direction
     ) -> float:
         """Helper to locate where the current integral should be placed in
         relation to the normal axis of the port.
         """
-        idx = np.abs(normal_coords - port_center).argmin()
+        upper_bound = np.searchsorted(normal_coords, snapped_center)
+        lower_bound = upper_bound - 1
         # We need to choose which side of the port to place the path integral,
-        # which depends on which way the inner conductor is extending
         if direction == "+":
-            return normal_coords[idx + 1]
+            return normal_coords[upper_bound]
         else:
-            return normal_coords[idx - 1]
+            return normal_coords[lower_bound]
 
     @cached_property
     def _voltage_axis(self) -> Axis:
         return self.remaining_axes[0]
 
-    @cached_property
-    def _voltage_path_center(self) -> Coordinate:
+    def _voltage_path_center(self, port_center: Coordinate) -> Coordinate:
         """We arbitrarily choose the positive first in-plane axis as the location for the path.
         Any of the four possible choices should give the same result.
         """
-        center = list(self.center)
+        center = list(port_center)
         center[self._voltage_axis] += (self.outer_diameter + self.inner_diameter) / 4
-        return center
+        return tuple(center)
 
     @cached_property
     def _voltage_path_size(self) -> Size:
