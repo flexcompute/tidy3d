@@ -21,8 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug where boundary layers would be plotted too small in 2D simulations.
 - Significant speedup for field projection computations.
 - Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
-- Bug when plotting transformed geometries.
-- Bug when placing path integrals in the `CoaxialLumpedPort`.
+- Bug when snapping `CoaxialLumpedPort` to grid cell boundaries.
 
 ## [2.7.0] - 2024-06-17
 

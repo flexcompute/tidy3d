@@ -11,6 +11,7 @@ from tidy3d.plugins.smatrix import (
     LumpedPortDataArray,
     TerminalComponentModeler,
 )
+from tidy3d.plugins.smatrix.ports.base_lumped import AbstractLumpedPort
 
 from ..utils import run_emulated
 from .terminal_component_modeler_def import make_coaxial_component_modeler, make_component_modeler
@@ -26,6 +27,31 @@ def run_component_modeler(monkeypatch, modeler: TerminalComponentModeler):
     monkeypatch.setattr(AbstractComponentModeler, "inv", lambda matrix: np.eye(len(modeler.ports)))
     s_matrix = modeler.run(path_dir=modeler.path_dir)
     return s_matrix
+
+
+def check_lumped_port_components_snapped_correctly(modeler: TerminalComponentModeler):
+    """Given an instance of a ``TerminalComponentModeler``, check that all simulation components
+    have been snapped exactly to the position of the load resistor.
+    """
+    sim_dict = modeler.sim_dict
+    num_ports = len(modeler.ports)
+    # Check to make sure all components are exactly aligned along the normal axis
+    for src_port, src_idx, src_sim in zip(modeler.ports, range(num_ports), sim_dict.values()):
+        assert isinstance(src_port, AbstractLumpedPort)
+        monitor_dict = {monitor.name: monitor for monitor in src_sim.monitors}
+        normal_axis = src_port.injection_axis
+        center_load = src_sim.lumped_elements[src_idx].center[normal_axis]
+        assert len(src_sim.sources) == 1
+        center_source = src_sim.sources[0].center[normal_axis]
+        assert center_load == center_source
+        for port, idx in zip(modeler.ports, range(num_ports)):
+            assert isinstance(port, AbstractLumpedPort)
+            normal_axis = port.injection_axis
+            center_load = src_sim.lumped_elements[idx].center[normal_axis]
+            center_voltage_monitor = monitor_dict[port._voltage_monitor_name].center[normal_axis]
+            center_current_monitor = monitor_dict[port._current_monitor_name].center[normal_axis]
+            assert center_load == center_voltage_monitor
+            assert center_load == center_current_monitor
 
 
 def test_validate_no_sources(tmp_path):
@@ -145,13 +171,17 @@ def test_ab_to_s_component_modeler():
     assert np.isclose(S_matrix, b_matrix).all()
 
 
-def test_port_snapping(monkeypatch, tmp_path):
+def test_port_snapping(tmp_path):
+    """Make sure that the snapping behavior of the load resistor is mirrored
+    by all other components in the modeler simulations with rectangular ports.
+    """
+    y_z_grid = td.UniformGrid(dl=0.1 * 1e3)
+    x_grid = td.UniformGrid(dl=11 * 1e3)
+    grid_spec = td.GridSpec(grid_x=x_grid, grid_y=y_z_grid, grid_z=y_z_grid)
     modeler = make_component_modeler(
-        planar_pec=True, path_dir=str(tmp_path), port_refinement=False, auto_grid=False
+        planar_pec=True, path_dir=str(tmp_path), port_refinement=False, grid_spec=grid_spec
     )
-    # Without port refinement the grid is much too coarse for these port sizes
-    with pytest.raises(SetupError):
-        _ = run_component_modeler(monkeypatch, modeler)
+    check_lumped_port_components_snapped_correctly(modeler=modeler)
 
 
 def test_coarse_grid_at_port(monkeypatch, tmp_path):
@@ -187,9 +217,7 @@ def test_run_coaxial_component_modeler(monkeypatch, tmp_path):
 
 
 def test_coarse_grid_at_coaxial_port(monkeypatch, tmp_path):
-    modeler = make_coaxial_component_modeler(
-        path_dir=str(tmp_path), port_refinement=False, auto_grid=False
-    )
+    modeler = make_coaxial_component_modeler(path_dir=str(tmp_path), port_refinement=False)
     # Without port refinement the grid is much too coarse for these port sizes
     with pytest.raises(SetupError):
         _ = run_component_modeler(monkeypatch, modeler)
@@ -226,7 +254,8 @@ def test_validate_coaxial_port_diameters():
 @pytest.mark.parametrize("direction", ["+", "-"])
 def test_current_integral_positioning_coaxial_port(direction):
     """Make sure the positioning of the current integral used by the CoaxialLumpedPort is correct,
-    when the coordinates and port position do not exactly match.
+    when the coordinates and port position do not exactly match. This requires that the port is
+    snapped correctly to cell boundaries.
     """
     # Test coordinates from a failing case
     normal_coords = np.array(
@@ -237,8 +266,9 @@ def test_current_integral_positioning_coaxial_port(direction):
             -14009.999999999978,
         ]
     )
-
-    normal_port_position = -14030
+    # The port center should be snapped to cell boundaries which is the midpoint of
+    # adjacent transverse magnetic field locations
+    normal_port_position = (normal_coords[2] + normal_coords[3]) / 2
     path_pos = CoaxialLumpedPort._determine_current_integral_pos(
         normal_port_position, normal_coords, direction
     )
@@ -246,4 +276,17 @@ def test_current_integral_positioning_coaxial_port(direction):
     if direction == "+":
         assert path_pos == normal_coords[3]
     else:
-        assert path_pos == normal_coords[1]
+        assert path_pos == normal_coords[2]
+
+
+def test_coaxial_port_snapping(tmp_path):
+    """Make sure that the snapping behavior of the load resistor is mirrored
+    by all other components in the modeler simulations with coaxial ports.
+    """
+    x_y_grid = td.UniformGrid(dl=0.1 * 1e3)
+    z_grid = td.UniformGrid(dl=11 * 1e3)
+    grid_spec = td.GridSpec(grid_x=x_y_grid, grid_y=x_y_grid, grid_z=z_grid)
+    modeler = make_coaxial_component_modeler(
+        path_dir=str(tmp_path), port_refinement=False, grid_spec=grid_spec
+    )
+    check_lumped_port_components_snapped_correctly(modeler=modeler)
