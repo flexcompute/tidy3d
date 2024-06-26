@@ -11,8 +11,8 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
-from tidy3d.web import run_async
-from tidy3d.web.api.autograd.autograd import run
+import xarray as xr
+from tidy3d.web import run, run_async
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -373,7 +373,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("geo_group", "mode")]
+args = [("custom_med", ALL_KEY)]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
@@ -596,6 +596,10 @@ def test_warning_no_adjoint_sources(log_capture, monkeypatch, use_emulated_run):
 def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_emulated_run_async):
     """Test what happens when autograd run pipeline fails."""
 
+    def fail(*args, **kwargs):
+        """Just raise an exception."""
+        raise ValueError("test")
+
     monitor_key = "mode"
     structure_key = "size_element"
     monitor, postprocess = make_monitors()[monitor_key]
@@ -607,18 +611,15 @@ def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_em
     def objective(*args):
         """Objective function."""
         sim = make_sim(*args)
-        data = run(sim, task_name="autograd_test", verbose=False)
+        data = run(sim, task_name=None, verbose=False)
         value = postprocess(data, data[monitor_key])
         return value
-
-    def fail(*args, **kwargs):
-        """Just raise an exception."""
-        raise ValueError("test")
 
     """ if autograd run raises exception, raise a warning and continue with regular ."""
 
     monkeypatch.setattr(td.web.api.autograd.autograd, "_run", fail)
 
+    # why you stop working?
     with AssertLogLevel(
         log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
     ):
@@ -732,11 +733,6 @@ def test_autograd_deepcopy():
     assert grad1 == grad2 == grad3
 
 
-def test_multi_freq_edge_cases():
-    def f(x):
-        pass
-
-
 # @pytest.mark.timeout(18.0)
 def _test_many_structures():
     """Test that a metalens-like simulation with many structures can be initialized fast enough."""
@@ -800,3 +796,202 @@ def _test_many_structures():
 * no copy : 16 sec
 * no to_static(): 13 sec
 """
+
+FREQ1 = FREQ0 * 1.1
+
+mnt_single = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0],
+    name="single",
+)
+
+mnt_multi = td.ModeMonitor(
+    size=(2, 2, 0),
+    center=(0, 0, LZ / 2 - WVL),
+    mode_spec=td.ModeSpec(num_modes=2),
+    freqs=[FREQ0, FREQ1],
+    name="multi",
+)
+
+
+def make_objective(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    def objective(params):
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+        )
+        data = run(sim, task_name="multifreq_test")
+        return postprocess_fn(data)
+
+    return objective
+
+
+def get_amps(sim_data: td.SimulationData, mnt_name: str) -> xr.DataArray:
+    return sim_data[mnt_name].amps
+
+
+def power(amps: xr.DataArray) -> float:
+    """Reduce a selected DataArray into just a float for objective function."""
+    return anp.sum(anp.abs(amps.values) ** 2)
+
+
+def postprocess_0_src(sim_data: td.SimulationData) -> float:
+    """Postprocess function that should return 0 adjoint sources."""
+    return 0.0
+
+
+def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
+    objective = make_objective(postprocess_fn, structure_key=structure_key)
+    ag.grad(objective)(params0 + 1.0)  # +1 is to avoid a warning in size_element
+
+
+MULT_FREQ_TEST_CASES = {}
+
+
+def check_0_src(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 0 adjoint sources."""
+        return 0.0
+
+    compute_grad(postprocess, structure_key=structure_key)
+
+
+# this will raise warning but not the one from our logger (from autograd)
+# compute_grad(postprocess_0_src)
+
+MULT_FREQ_TEST_CASES["no sources"] = check_0_src
+
+
+def check_1_src_single(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with one adjoint source."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["1 source (1 freq)"] = check_1_src_single
+
+
+def check_2_src_single(log_capture, structure_key):
+    def postprocess_2_src_single(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "single").sel(mode_index=0)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with 2 adjoint sources."
+    ):
+        compute_grad(postprocess_2_src_single, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["2 sources (1 freq)"] = check_2_src_single
+
+
+def check_1_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with one adjoint source."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["1 source (2 freqs)"] = check_1_src_multi
+
+
+def check_2_src_multi(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, f=FREQ1)
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture, log_level_expected="INFO", contains_str="One monitor with 2 adjoint sources."
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["2 sources (1 freqs) [1 mon]"] = check_1_src_multi
+
+
+def check_2_src_both(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 2 different adjoint sources."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ0)
+        return power(amps_single) + power(amps_multi)
+
+    with AssertLogLevel(
+        log_capture,
+        log_level_expected="INFO",
+        contains_str="Several adjoint sources from different monitors, with same single frequency.",
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["2 sources (1 freqs) [2 mon]"] = check_2_src_both
+
+
+def check_1_error_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=FREQ1)
+        return power(amps_single) + power(amps_multi)
+
+    with pytest.raises(ValueError):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["2 sources (2 freqs) [1 mon]"] = check_1_error_multisrc
+
+
+def check_2_error_multisrc(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should raise ValueError because diff sources, diff freqs."""
+        amps_single = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+        amps_multi = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps_single) + power(amps_multi)
+
+    with pytest.raises(ValueError):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["2 sources (2 freqs) [2 mon]"] = check_2_error_multisrc
+
+
+def check_1_src_broadband(log_capture, structure_key):
+    def postprocess(sim_data: td.SimulationData) -> float:
+        """Postprocess function that should return 1 broadband adjoint sources with many freqs."""
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    with AssertLogLevel(
+        log_capture,
+        log_level_expected="INFO",
+        contains_str="Constructing broadband adjoint source and performing post-run normalization",
+    ):
+        compute_grad(postprocess, structure_key=structure_key)
+
+
+MULT_FREQ_TEST_CASES["1 source (2 freqs) [Multi-freq]"] = check_1_src_broadband
+
+checks = list(MULT_FREQ_TEST_CASES.items())
+
+
+@pytest.mark.parametrize("label, check_fn", checks)
+@pytest.mark.parametrize("structure_key", structure_keys_)
+def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, label, check_fn):
+    # test multi-frequency adjoint handling
+    check_fn(structure_key=structure_key, log_capture=log_capture)
