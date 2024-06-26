@@ -2461,7 +2461,7 @@ class CustomMedium(AbstractCustomMedium):
     ) -> np.ndarray:
         coords_interp = {key: eps_data.coords[key] for key in "xyz"}
         coords_interp = {key: val for key, val in coords_interp.items() if len(val) > 1}
-        dims_sum = {dim for dim in "xyzf" if dim not in coords_interp}
+        dims_sum = [dim for dim in "xyzf" if dim not in coords_interp]
 
         # compute sizes along each of the interpolation dimensions
         sizes_list = []
