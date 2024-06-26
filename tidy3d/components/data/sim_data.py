@@ -976,6 +976,9 @@ class SimulationData(AbstractYeeGridSimulationData):
             monitors=adjoint_monitors,
         )
 
+        if post_norm_amps is not None:
+            sim_adj_update_dict["normalize_index"] = None
+
         # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
         grid_spec_original = sim_original.grid_spec
         if sim_original.sources and grid_spec_original.wavelength is None:
