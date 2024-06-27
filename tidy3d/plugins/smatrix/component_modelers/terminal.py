@@ -326,9 +326,8 @@ class TerminalComponentModeler(AbstractComponentModeler):
                 sim_data_port = batch_data[self._task_name(port=port)]
                 # WavePorts have a port impedance calculated from its associated modal field distribution
                 # and is frequency dependent.
-                port_impedances.loc[dict(port=port.name)] = port.compute_port_impedance(
-                    sim_data_port
-                ).values
+                impedances = port.compute_port_impedance(sim_data_port).values
+                port_impedances.loc[dict(port=port.name)] = impedances.squeeze()
             else:
                 # LumpedPorts have a constant reference impedance
                 port_impedances.loc[dict(port=port.name)] = np.full(len(self.freqs), port.impedance)

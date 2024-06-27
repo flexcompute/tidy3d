@@ -147,8 +147,9 @@ class WavePort(AbstractTerminalPort, Box):
         else:
             mode_solver_data = sim_mode_data
 
+        # Filter our unwanted modes to reduce impedance computation effort
+        mode_solver_data = mode_solver_data._isel(mode_index=[self.mode_index])
         impedance_array = impedance_calc.compute_impedance(mode_solver_data)
-        impedance_array = impedance_array.sel(mode_index=self.mode_index)
         return impedance_array
 
     @staticmethod
