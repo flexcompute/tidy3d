@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
+- Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.

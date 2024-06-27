@@ -116,3 +116,4 @@ Material Library
 
 .. toctree::
    material_library
+   rf_material_library

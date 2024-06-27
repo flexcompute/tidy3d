@@ -10,6 +10,7 @@ API |:computer:|
     geometry
     mediums
     material_library
+    rf_material_library
     structures
     sources
     monitors
