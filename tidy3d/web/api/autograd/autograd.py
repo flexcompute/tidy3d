@@ -654,7 +654,8 @@ def postprocess_adj(
 
         # replace C_0 with some frequency info
         eps_in = np.mean(structure.medium.eps_model(td.C_0))
-        eps_out = np.mean(sim_data_orig.simulation.medium.eps_model(td.C_0))
+        eps_sim = np.mean(sim_data_orig.simulation.medium.eps_model(td.C_0))
+        eps_out = structure.autograd_background_permittivity or eps_sim
 
         derivative_info = DerivativeInfo(
             paths=structure_paths,

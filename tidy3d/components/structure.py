@@ -9,7 +9,7 @@ from typing import Callable, Optional, Tuple, Union
 import numpy as np
 import pydantic.v1 as pydantic
 
-from ..constants import MICROMETER
+from ..constants import MICROMETER, PERMITTIVITY
 from ..exceptions import SetupError, Tidy3dError, Tidy3dImportError
 from .autograd.derivative_utils import DerivativeInfo
 from .autograd.types import AutogradFieldMap
@@ -49,6 +49,15 @@ class AbstractStructure(Tidy3dBaseModel):
     )
 
     name: str = pydantic.Field(None, title="Name", description="Optional name for the structure.")
+
+    autograd_background_permittivity: float = pydantic.Field(
+        None,
+        ge=1.0,
+        title="Background Permittivity",
+        description="Relative permittivity used for the background of this structure "
+        "when performing shape optimization with autograd.",
+        units=PERMITTIVITY,
+    )
 
     _name_validator = validate_name_str()
 
