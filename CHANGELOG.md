@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Support for differentiation with respect to `GeometryGroup.geometries` elements.
+- Support for differentiation with respect to `ComplexPolySlab.vertices`.
 - Users can now export `SimulationData` to MATLAB `.mat` files with the `to_mat_file` method.
 - Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
 
