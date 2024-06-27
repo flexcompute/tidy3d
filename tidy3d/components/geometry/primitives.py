@@ -11,7 +11,11 @@ import shapely
 
 from ...constants import LARGE_NUMBER, MICROMETER
 from ...exceptions import SetupError, ValidationError
+from ...log import log
 from ...packaging import verify_packages_import
+from ..autograd import AutogradFieldMap
+from ..autograd.derivative_utils import DerivativeInfo
+from ..autograd.types import TracedNonNegativeFloat
 from ..base import cached_property, skip_if_fields_missing
 from ..types import Axis, Bound, Coordinate, MatrixReal4x4, Shapely, Tuple
 from . import base
@@ -21,6 +25,9 @@ _N_SAMPLE_CURVE_SHAPELY = 40
 
 # for shapely circular shapes discretization in visualization
 _N_SHAPELY_QUAD_SEGS = 200
+
+# number of points to discretize cylinder edge for adjoint integral
+NUM_PTS_ADJOINT_CYLINDER = 30
 
 
 class Sphere(base.Centered, base.Circular):
@@ -185,7 +192,7 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
     """
 
     # Provide more explanations on where radius is defined
-    radius: pydantic.NonNegativeFloat = pydantic.Field(
+    radius: TracedNonNegativeFloat = pydantic.Field(
         ...,
         title="Radius",
         description="Radius of geometry at the ``reference_plane``.",
@@ -640,3 +647,111 @@ class Cylinder(base.Centered, base.Circular, base.Planar):
         )
         _, (x_center, y_center) = self.pop_axis(self.center, axis=axis)
         return [x_center + lx_offset, y_center + ly_offset]
+
+    def compute_derivatives(self, derivative_info: DerivativeInfo) -> AutogradFieldMap:
+        """Compute the adjoint derivatives for this object."""
+
+        field_paths = derivative_info.paths
+
+        grad_vjps = {}
+
+        for path in field_paths:
+            field_name, *rest = path
+
+            if field_name == "radius":
+                grad_val = self.compute_derivative_radius(derivative_info=derivative_info)
+
+            elif field_name == "center":
+                (index,) = rest
+                grad_val = self.compute_derivative_center(
+                    derivative_info=derivative_info, axis=index
+                )
+            else:
+                raise NotImplementedError(
+                    f"No derivative defined for field 'Cylinder.{field_name}'"
+                )
+
+            grad_vjps[path] = grad_val
+
+        return grad_vjps
+
+    @property
+    def adjoint_integral_angles(self) -> np.ndarray:
+        """angles used for integration in autograd derivatives."""
+        return 2 * np.pi * np.linspace(0, 1, NUM_PTS_ADJOINT_CYLINDER + 1)[:-1]
+
+    def compute_derivative_center(self, derivative_info: DerivativeInfo, axis: int) -> Coordinate:
+        """Compute the adjoint derivatives for this object."""
+
+        if axis == self.axis:
+            log.warning(
+                "Derivative with respect to 'Cylinder.center' along 'Cylinder.axis' "
+                "is not yet supported. Ignoring gradient."
+            )
+            return 0.0
+
+        # compute weighted sum depending on axis
+        grad_edge = self.compute_derivative_edge_normals(derivative_info=derivative_info)
+
+        angles = self.adjoint_integral_angles
+        weights_t1 = np.cos(angles)
+        weights_t2 = np.sin(angles)
+
+        weights = self.unpop_axis(0.0, (weights_t1, weights_t2), axis=self.axis)
+        return np.sum(weights[axis] * grad_edge)
+
+    def compute_derivative_radius(self, derivative_info: DerivativeInfo) -> float:
+        """Compute the adjoint derivatives for this object."""
+        grad_edge = self.compute_derivative_edge_normals(derivative_info=derivative_info)
+        return np.sum(grad_edge)
+
+    def compute_derivative_edge_normals(
+        self,
+        derivative_info: DerivativeInfo,
+    ) -> float:
+        """Compute the adjoint derivatives for this object."""
+
+        angles = self.adjoint_integral_angles
+
+        center_axis, (center_t1, center_t2) = self.pop_axis(self.center, axis=self.axis)
+
+        # evaluation points (NUM_PTS_ADJOINT_CYLINDER, 3)
+        pts_t1 = center_t1 + self.radius * np.cos(angles)
+        pts_t2 = center_t2 + self.radius * np.sin(angles)
+        pts_tangential = np.stack((pts_t1, pts_t2), axis=-1)
+        pts_axis = center_axis * np.ones_like(angles)
+        pts = self.unpop_axis_vect(ax_coords=pts_axis, plane_coords=pts_tangential)
+
+        # normal vector (NUM_PTS_ADJOINT_CYLINDER, 3)
+        normals_t1 = np.cos(angles)
+        normals_t2 = np.sin(angles)
+        normals_tangential = np.stack((normals_t1, normals_t2), axis=-1)
+        normals_axis = np.zeros_like(angles)
+        normals = self.unpop_axis_vect(ax_coords=normals_axis, plane_coords=normals_tangential)
+        unit_vector_axis = np.zeros(3)
+        unit_vector_axis[self.axis] = 1
+        tangentials = np.cross(normals, unit_vector_axis)
+
+        # differentials (float)
+        d_length = 1.0 if np.isinf(self.length) else self.length
+        d_edge = 2 * np.pi * self.radius / NUM_PTS_ADJOINT_CYLINDER
+        d_area = d_length * d_edge
+
+        # evaluate E and D maps at the cylinder radius
+        pts_interp = dict(zip("xyz", pts.T))
+        keys = [f"E{dim}" for dim in "xyz"]
+        D_der = {k: derivative_info.D_der_map[k].interp(**pts_interp).sum("f") for k in keys}
+        E_der = {k: derivative_info.E_der_map[k].interp(**pts_interp).sum("f") for k in keys}
+
+        # sort into normal and tangential components
+        D_normal = self.project_in_basis(der_dataset=D_der, basis_vector=normals)
+        E_tangential = self.project_in_basis(der_dataset=E_der, basis_vector=tangentials)
+
+        # permittivity changes inside and outside
+        eps_in = derivative_info.eps_in
+        eps_out = derivative_info.eps_out
+        delta_eps_perps = eps_in - eps_out
+        delta_eps_inv_normal = 1.0 / eps_in - 1.0 / eps_out
+
+        grad_unnormalized = -delta_eps_inv_normal * D_normal + delta_eps_perps * E_tangential
+        return np.real(grad_unnormalized.values * d_area)

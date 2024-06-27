@@ -255,6 +255,17 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
+    # cylinder
+    cylinder = td.Structure(
+        geometry=td.Cylinder(
+            center=(x0, y0, 0.0),
+            radius=eps,
+            length=1.0,
+            axis=2,
+        ),
+        medium=td.Medium(permittivity=eps, conductivity=conductivity),
+    )
+
     return dict(
         medium=medium,
         center_list=center_list,
@@ -263,6 +274,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
         geo_group=geo_group,
+        cylinder=cylinder,
     )
 
 
@@ -350,6 +362,7 @@ structure_keys_ = (
     "custom_med_vec",
     "polyslab",
     "geo_group",
+    "cylinder",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -370,7 +383,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("geo_group", "mode")]
+args = [("cylinder", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:

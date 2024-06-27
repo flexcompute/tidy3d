@@ -121,6 +121,10 @@ The following components are traceable as inputs to the `td.Simulation`
 
 - `GeometryGroup.geometries`
 
+- 'Cylinder.center'
+- 'Cylinder.radius'
+- 'Cylinder'
+
 The following components are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`

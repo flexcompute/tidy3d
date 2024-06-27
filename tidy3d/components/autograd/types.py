@@ -5,6 +5,7 @@
 import copy
 import typing
 
+import pydantic.v1 as pd
 from autograd.builtins import dict as dict_ag
 from autograd.extend import Box, defvjp, primitive
 
@@ -27,6 +28,7 @@ Box.__deepcopy__ = lambda v, memo: _deepcopy(v, memo)
 
 # Types for floats, or collections of floats that can also be autograd tracers
 TracedFloat = typing.Union[float, Box]
+TracedNonNegativeFloat = typing.Union[pd.NonNegativeFloat, Box]
 TracedSize1D = typing.Union[Size1D, Box]
 TracedSize = typing.Union[tuple[TracedSize1D, TracedSize1D, TracedSize1D], Box]
 TracedCoordinate = typing.Union[tuple[TracedFloat, TracedFloat, TracedFloat], Box]
