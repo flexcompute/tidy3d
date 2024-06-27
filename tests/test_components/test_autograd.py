@@ -50,7 +50,7 @@ CALL_OBJECTIVE = False
 """ simulation configuration """
 
 WVL = 1.0
-FREQ0 = td.C_0 / WVL
+FREQ0 = td.frequency(WVL)
 
 # sim sizes
 LZ = 7 * WVL

@@ -7,7 +7,7 @@ from tidy3d.exceptions import DataError
 
 MEDIUM = td.Medium(permittivity=3)
 WAVELENGTH = 1
-F0 = td.C_0 / WAVELENGTH / np.sqrt(MEDIUM.permittivity)
+F0 = td.frequency(WAVELENGTH) / np.sqrt(MEDIUM.permittivity)
 R_FAR = 50 * WAVELENGTH
 MAKE_PLOTS = False
 

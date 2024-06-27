@@ -15,7 +15,7 @@ f, AX = plt.subplots()
 def make_eme_sim():
     # general simulation parameters
     lambda0 = 1
-    freq0 = td.C_0 / lambda0
+    freq0 = td.frequency(lambda0)
     freqs = [freq0]
     sim_size = 3 * lambda0, 3 * lambda0, 3 * lambda0
     waveguide_size = (lambda0 / 2, lambda0, td.inf)

@@ -302,8 +302,8 @@ def test_correct_values(dispersive):
     pp_large_sampled = pp_large.apply_data(temperature=t_arr).values[0, 0, 0]
     pp_small_sampled = pp_small.apply_data(temperature=t_arr).values[0, 0, 0]
 
-    freq0 = td.C_0 / 0.7
-    freqs = np.linspace(td.C_0 / 0.5, td.C_0 / 0.8, 11)
+    freq0 = td.frequency(0.7)
+    freqs = np.linspace(td.frequency(0.5), td.frequency(0.8), 11)
 
     si = td.material_library["aSi"]["Horiba"]
     perturbation_class = td.PerturbationPoleResidue

@@ -16,7 +16,7 @@ MNT_NAME = "field"
 WAVELENGTH = 1.0
 BOX_LENGTH = 1.0
 SPACE = 1.0
-FREQ0 = td.C_0 / WAVELENGTH
+FREQ0 = td.frequency(WAVELENGTH)
 N_SIDE = 15
 
 surface_area = 6 * (N_SIDE * BOX_LENGTH**2)
