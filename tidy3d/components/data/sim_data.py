@@ -1001,7 +1001,8 @@ class SimulationData(AbstractYeeGridSimulationData):
                 "Something unexpected happened. There are No adjoint sources, "
                 " yet the adjoint pipeline was triggered. No gradient will be computed "
                 "with respect to simulation data output. If you receive this, please file a bug "
-                "report with as much information as you can provide about your setup. "
+                "report on the tidy3d github repository with as much information as "
+                "you can provide about your setup."
             )
             return [], None
 
@@ -1026,52 +1027,69 @@ class SimulationData(AbstractYeeGridSimulationData):
                 )
                 return adj_srcs, None
 
-            src_times = [src.source_time for src in adj_srcs]
+            adj_sources, post_norm_amps = self._process_adjoint_sources_same_freq(sources_adj_dict)
+            return adj_sources, post_norm_amps
 
-            # compute an unnormalized source that covers the whole spectrum needed
-            num_fwidth = 0.5
-            freq_ranges = np.array(
-                [src_time.frequency_range(num_fwidth=num_fwidth) for src_time in src_times]
-            )
-            fmin = np.min(freq_ranges[:, 0], axis=-1)
-            fmax = np.max(freq_ranges[:, 1], axis=-1)
-            freq0 = (fmin + fmax) / 2.0
-            fwidth = (fmax - fmin) / 2.0 / num_fwidth
-            src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
-            src_un_normalized = adj_srcs[0].updated_copy(source_time=src_time_base)
+        else:
+            # if several monitors making adjoint sources, make sure all same frequency, no normalize
+            adj_sources, post_norm_amps = self._process_adjoint_sources_broadband(sources_adj_dict)
+            return adj_sources, post_norm_amps
 
-            # TODO: make this a broadband mode source, if applicable
-            if isinstance(src_un_normalized, ModeSource):
-                # src_un_normalized = src_un_normalized.updated_copy(...)
-                log.info(
-                    "Making multi-frequency adjoint 'ModeSource' into a broadband "
-                    f"mode source with {src_times} frequencies."
-                )
+    def _process_adjoint_sources_same_freq(
+        self, sources_adj_dict: dict[str, list[Source]]
+    ) -> tuple[list[Source], xr.DataArray]:
+        """Process adjoint sources for the case of several sources at the same freq."""
 
-            def spectrum(f):
-                return src_time_base.spectrum(
-                    times=self.simulation.tmesh, freqs=[f], dt=self.simulation.dt
-                )[0]
+        adj_srcs = list(sources_adj_dict.values())[0]
+        src_times = [src.source_time for src in adj_srcs]
 
-            # compute the post-normalization amplitudes for the adjoint fields
-            coords = dict(f=[src_time.freq0 for src_time in src_times])
-            amps_complex = np.array(
-                # [src_time_base.spectrum(times=self.simulation.tmesh, freqs=[src_time.freq0], dt=self.simulation.dt)[0] * src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
-                [src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
-            )
+        # compute an unnormalized source that covers the whole spectrum needed
+        num_fwidth = 0.5
+        freq_ranges = np.array(
+            [src_time.frequency_range(num_fwidth=num_fwidth) for src_time in src_times]
+        )
+        fmin = np.min(freq_ranges[:, 0], axis=-1)
+        fmax = np.max(freq_ranges[:, 1], axis=-1)
+        freq0 = (fmin + fmax) / 2.0
+        fwidth = (fmax - fmin) / 2.0 / num_fwidth
+        src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
+        src_un_normalized = adj_srcs[0].updated_copy(source_time=src_time_base)
 
-            post_norm_amps = xr.DataArray(amps_complex, coords=coords)
-
+        # TODO: make this a broadband mode source, if applicable
+        if isinstance(src_un_normalized, ModeSource):
+            # src_un_normalized = src_un_normalized.updated_copy(...)
             log.info(
-                "Several adjoint sources, from one monitor. "
-                "Only difference between them is the source time. "
-                "Constructing broadband adjoint source and performing post-run normalization "
-                f"of fields with {len(amps_complex)} frequencies."
+                "Making multi-frequency adjoint 'ModeSource' into a broadband "
+                f"mode source with {src_times} frequencies."
             )
 
-            return [src_un_normalized], post_norm_amps
+        def spectrum(f):
+            return src_time_base.spectrum(
+                times=self.simulation.tmesh, freqs=[f], dt=self.simulation.dt
+            )[0]
 
-        # if several monitors making adjoint sources, make sure all same frequency, no post-normalize
+        # compute the post-normalization amplitudes for the adjoint fields
+        coords = dict(f=[src_time.freq0 for src_time in src_times])
+        amps_complex = np.array(
+            # [src_time_base.spectrum(times=self.simulation.tmesh, freqs=[src_time.freq0], dt=self.simulation.dt)[0] * src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
+            [src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
+        )
+
+        post_norm_amps = xr.DataArray(amps_complex, coords=coords)
+
+        log.info(
+            "Several adjoint sources, from one monitor. "
+            "Only difference between them is the source time. "
+            "Constructing broadband adjoint source and performing post-run normalization "
+            f"of fields with {len(amps_complex)} frequencies."
+        )
+
+        return [src_un_normalized], post_norm_amps
+
+    def _process_adjoint_sources_broadband(
+        self, sources_adj_dict: dict[str, list[Source]]
+    ) -> tuple[list[Source], xr.DataArray]:
+        """Process adjoint sources for the case of one adjoint source at several freqs."""
 
         # perform a couple checks
         sources_unique_freqs = {
