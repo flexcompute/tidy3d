@@ -1036,6 +1036,10 @@ class SimulationData(AbstractYeeGridSimulationData):
         # Get SimData object as dictionary
         sim_dict = self.dict()
 
+        # set long field names true by default, otherwise it wont save fields with > 31 characters
+        if "long_field_names" not in kwargs:
+            kwargs["long_field_names"] = True
+
         # Remove NoneType values from dict
         # Built from theory discussed in https://github.com/scipy/scipy/issues/3488
         modified_sim_dict = replace_values(sim_dict, None, [])

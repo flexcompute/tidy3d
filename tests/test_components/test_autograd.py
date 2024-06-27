@@ -182,6 +182,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     size_element = td.Structure(
         geometry=td.Box(center=(0, 0, 0), size=(1, size_y, 1)),
         medium=med,
+        autograd_background_permittivity=5.0,
     )
 
     # custom medium with variable permittivity data
