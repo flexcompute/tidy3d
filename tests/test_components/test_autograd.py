@@ -153,8 +153,10 @@ def use_emulated_run_async(monkeypatch):
 def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
     """Make a dictionary of the structures given the parameters."""
 
+    np.random.seed(0)
+
     vector = np.random.random(N_PARAMS) - 0.5
-    vector /= np.linalg.norm(vector)
+    vector = vector / np.linalg.norm(vector)
 
     # static components
     box = td.Box(center=(0, 0, 0), size=(1, 1, 1))
@@ -619,7 +621,6 @@ def test_web_failure_handling(log_capture, monkeypatch, use_emulated_run, use_em
 
     monkeypatch.setattr(td.web.api.autograd.autograd, "_run", fail)
 
-    # why you stop working?
     with AssertLogLevel(
         log_capture, "WARNING", contains_str="If you received this warning, please file an issue"
     ):
@@ -845,7 +846,8 @@ def postprocess_0_src(sim_data: td.SimulationData) -> float:
 
 def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.Callable:
     objective = make_objective(postprocess_fn, structure_key=structure_key)
-    ag.grad(objective)(params0 + 1.0)  # +1 is to avoid a warning in size_element
+    params = params0 + 1.0  # +1 is to avoid a warning in size_element with value 0
+    return ag.grad(objective)(params)
 
 
 MULT_FREQ_TEST_CASES = {}
@@ -859,10 +861,7 @@ def check_0_src(log_capture, structure_key):
     compute_grad(postprocess, structure_key=structure_key)
 
 
-# this will raise warning but not the one from our logger (from autograd)
-# compute_grad(postprocess_0_src)
-
-MULT_FREQ_TEST_CASES["no sources"] = check_0_src
+# NOTE: not tested, just raises regular warning
 
 
 def check_1_src_single(log_capture, structure_key):
@@ -995,3 +994,52 @@ checks = list(MULT_FREQ_TEST_CASES.items())
 def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, label, check_fn):
     # test multi-frequency adjoint handling
     check_fn(structure_key=structure_key, log_capture=log_capture)
+
+
+# @pytest.mark.parametrize("structure_key", ('custom_med',))
+@pytest.mark.parametrize("structure_key", structure_keys_)
+# @pytest.mark.parametrize("structure_key", ('polyslab',))
+def _test_multi_frequency_equivalence(use_emulated_run, structure_key):
+    """Test an objective function through tidy3d autograd."""
+
+    def objective_indi(params, structure_key) -> float:
+        power_sum = 0.0
+
+        for f in mnt_multi.freqs:
+            mnt_f = mnt_single.updated_copy(freqs=[f])
+
+            structure_traced = make_structures(params)[structure_key]
+            sim = SIM_BASE.updated_copy(
+                structures=[structure_traced],
+                monitors=list(SIM_BASE.monitors) + [mnt_f],
+            )
+
+            sim_data = run(sim, task_name="multifreq_test")
+            amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
+            amps_i = amps.sel(f=f)
+            power_i = power(amps)
+            power_sum = power_sum + power_i
+
+        return power_sum
+
+    def objective_multi(params, structure_key) -> float:
+        structure_traced = make_structures(params)[structure_key]
+        sim = SIM_BASE.updated_copy(
+            structures=[structure_traced],
+            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+        )
+        sim_data = run(sim, task_name="multifreq_test")
+        amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
+        return power(amps)
+
+    params0_ = params0 + 1.0
+
+    J_indi = objective_indi(params0_, structure_key)
+    J_multi = objective_multi(params0_, structure_key)
+
+    np.testing.assert_allclose(J_indi, J_multi)
+
+    grad_indi = ag.grad(objective_indi)(params0_, structure_key=structure_key)
+    grad_multi = ag.grad(objective_multi)(params0_, structure_key=structure_key)
+
+    np.testing.assert_allclose(grad_indi, grad_multi)

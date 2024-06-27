@@ -2,6 +2,7 @@
 
 import traceback
 import typing
+from collections import defaultdict
 
 import numpy as np
 import xarray as xr
@@ -616,13 +617,10 @@ def postprocess_adj(
     """Postprocess some data from the adjoint simulation into the VJP for the original sim flds."""
 
     # map of index into 'structures' to the list of paths we need vjps for
-    sim_vjp_map = {}
+    sim_vjp_map = defaultdict(list)
     for _, structure_index, *structure_path in sim_fields_original.keys():
         structure_path = tuple(structure_path)
-        if structure_index in sim_vjp_map:
-            sim_vjp_map[structure_index].append(structure_path)
-        else:
-            sim_vjp_map[structure_index] = [structure_path]
+        sim_vjp_map[structure_index].append(structure_path)
 
     # store the derivative values given the forward and adjoint data
     sim_fields_vjp = {}
@@ -634,9 +632,9 @@ def postprocess_adj(
         eps_adj = sim_data_adj.get_adjoint_data(structure_index, data_type="eps")
 
         # post normalize the adjoint fields if a single, broadband source
-        if post_norm_amps is not None:
+        if False and post_norm_amps is not None:
             fwd_flds_normed = {
-                key: val / post_norm_amps for key, val in fld_adj.field_components.items()
+                key: val * post_norm_amps for key, val in fld_adj.field_components.items()
             }
             fld_adj = fld_adj.updated_copy(**fwd_flds_normed)
 
