@@ -1029,12 +1029,10 @@ class SimulationData(AbstractYeeGridSimulationData):
                 return self._process_adjoint_sources_same_freq(sources_adj_dict)
 
             # many sources differ only by source can be handled with broadband adjoint
-            adj_sources, post_norm_amps = self._process_adjoint_sources_broadband(sources_adj_dict)
-            return adj_sources, post_norm_amps
+            return self._process_adjoint_sources_broadband(sources_adj_dict)
 
         # typical case: several monitors with adjoint sources at same freq
-        adj_sources, post_norm_amps = self._process_adjoint_sources_same_freq(sources_adj_dict)
-        return adj_sources, post_norm_amps
+        return self._process_adjoint_sources_same_freq(sources_adj_dict)
 
     def _process_adjoint_sources_same_freq(
         self, sources_adj_dict: dict[str, list[Source]]
@@ -1055,18 +1053,18 @@ class SimulationData(AbstractYeeGridSimulationData):
             "data has one frequency only."
         )
 
-        # perform some validation of the adjoint sources
+        # perform validation of the adjoint sources
 
-        # make sure each monitor only has one frequency
+        # first, make sure each monitor data only has one frequency
         for mnt_name, freqs in sources_unique_freqs.items():
             if len(freqs) > 1:
                 raise ValueError(
                     error_msg_pre(mnt_name)
-                    + f"Monitor has {len(freqs)} frequencies."
+                    + f"Monitor has {len(freqs)} frequencies. "
                     + error_msg_post
                 )
 
-        # more generally, ensure that all monitor data have the same frequency
+        # then, more generally, ensure that all monitor data have the same frequency
         all_freqs = set()
         for mnt_name, freqs in sources_unique_freqs.items():
             freq = tuple(freqs)[0]
