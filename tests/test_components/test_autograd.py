@@ -850,9 +850,6 @@ def compute_grad(postprocess_fn: typing.Callable, structure_key: str) -> typing.
     return ag.grad(objective)(params)
 
 
-MULT_FREQ_TEST_CASES = {}
-
-
 def check_0_src(log_capture, structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 0 adjoint sources."""
@@ -876,9 +873,6 @@ def check_1_src_single(log_capture, structure_key):
         compute_grad(postprocess, structure_key=structure_key)
 
 
-MULT_FREQ_TEST_CASES["1 source (1 freq)"] = check_1_src_single
-
-
 def check_2_src_single(log_capture, structure_key):
     def postprocess_2_src_single(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
@@ -889,9 +883,6 @@ def check_2_src_single(log_capture, structure_key):
         log_capture, log_level_expected="INFO", contains_str="One monitor with 2 adjoint sources."
     ):
         compute_grad(postprocess_2_src_single, structure_key=structure_key)
-
-
-MULT_FREQ_TEST_CASES["2 sources (1 freq)"] = check_2_src_single
 
 
 def check_1_src_multi(log_capture, structure_key):
@@ -906,9 +897,6 @@ def check_1_src_multi(log_capture, structure_key):
         compute_grad(postprocess, structure_key=structure_key)
 
 
-MULT_FREQ_TEST_CASES["1 source (2 freqs)"] = check_1_src_multi
-
-
 def check_2_src_multi(log_capture, structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
@@ -921,9 +909,6 @@ def check_2_src_multi(log_capture, structure_key):
         compute_grad(postprocess, structure_key=structure_key)
 
 
-MULT_FREQ_TEST_CASES["2 sources (1 freqs) [1 mon]"] = check_1_src_multi
-
-
 def check_2_src_both(log_capture, structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should return 2 different adjoint sources."""
@@ -934,12 +919,9 @@ def check_2_src_both(log_capture, structure_key):
     with AssertLogLevel(
         log_capture,
         log_level_expected="INFO",
-        contains_str="Several adjoint sources from different monitors, with same single frequency.",
+        contains_str="Several adjoint sources from different monitors, all with same single frequency.",
     ):
         compute_grad(postprocess, structure_key=structure_key)
-
-
-MULT_FREQ_TEST_CASES["2 sources (1 freqs) [2 mon]"] = check_2_src_both
 
 
 def check_1_error_multisrc(log_capture, structure_key):
@@ -953,9 +935,6 @@ def check_1_error_multisrc(log_capture, structure_key):
         compute_grad(postprocess, structure_key=structure_key)
 
 
-MULT_FREQ_TEST_CASES["2 sources (2 freqs) [1 mon]"] = check_1_error_multisrc
-
-
 def check_2_error_multisrc(log_capture, structure_key):
     def postprocess(sim_data: td.SimulationData) -> float:
         """Postprocess function that should raise ValueError because diff sources, diff freqs."""
@@ -965,9 +944,6 @@ def check_2_error_multisrc(log_capture, structure_key):
 
     with pytest.raises(ValueError):
         compute_grad(postprocess, structure_key=structure_key)
-
-
-MULT_FREQ_TEST_CASES["2 sources (2 freqs) [2 mon]"] = check_2_error_multisrc
 
 
 def check_1_src_broadband(log_capture, structure_key):
@@ -984,7 +960,16 @@ def check_1_src_broadband(log_capture, structure_key):
         compute_grad(postprocess, structure_key=structure_key)
 
 
-MULT_FREQ_TEST_CASES["1 source (2 freqs) [Multi-freq]"] = check_1_src_broadband
+MULT_FREQ_TEST_CASES = dict(
+    src_1_freq_1=check_1_src_single,
+    src_2_freq_1=check_2_src_single,
+    src_1_freq_2=check_1_src_multi,
+    src_2_freq_1_mon_1=check_1_src_multi,
+    src_2_freq_1_mon_2=check_2_src_both,
+    src_2_freq_2_mon_1=check_1_error_multisrc,
+    src_2_freq_2_mon_2=check_2_error_multisrc,
+    src_1_freq_2_broadband=check_1_src_broadband,
+)
 
 checks = list(MULT_FREQ_TEST_CASES.items())
 

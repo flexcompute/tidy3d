@@ -996,6 +996,7 @@ class SimulationData(AbstractYeeGridSimulationData):
         # number of monitors contributing to adjoint sources
         num_adj_src_monitors = len(sources_adj_dict)
 
+        # no adjoint sources, gradient is 0
         if num_adj_src_monitors == 0:
             log.warning(
                 "Something unexpected happened. There are No adjoint sources, "
@@ -1006,18 +1007,18 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
             return [], None
 
-        # single monitor's source with maybe several frequencies.
-        # try to make it a single one with broadband pulse and post-normalize
+        # adjoint sources from just one monitor, try to do broadband
         if num_adj_src_monitors == 1:
+            # grab the sources for that monitor
             adj_srcs = list(sources_adj_dict.values())[0]
 
+            # just one source, just handle it as normal
             if len(adj_srcs) == 1:
                 log.info("One monitor with one adjoint source.")
-                return adj_srcs, None
+                return self._process_adjoint_sources_same_freq(sources_adj_dict)
 
-            # sets Source (without source time) to discrete source times
+            # multiple sources, check if they are same except for source_time
             unique_sources = {src.json(exclude={"source_time"}) for src in adj_srcs}
-
             if len(unique_sources) > 1:
                 log.info(
                     f"One monitor with {len(unique_sources)} adjoint sources. "
@@ -1025,17 +1026,68 @@ class SimulationData(AbstractYeeGridSimulationData):
                     f"the monitor still requires f{len(unique_sources)} different adjoint sources."
                     " No special handling."
                 )
-                return adj_srcs, None
+                return self._process_adjoint_sources_same_freq(sources_adj_dict)
 
-            adj_sources, post_norm_amps = self._process_adjoint_sources_same_freq(sources_adj_dict)
-            return adj_sources, post_norm_amps
-
-        else:
-            # if several monitors making adjoint sources, make sure all same frequency, no normalize
+            # many sources differ only by source can be handled with broadband adjoint
             adj_sources, post_norm_amps = self._process_adjoint_sources_broadband(sources_adj_dict)
             return adj_sources, post_norm_amps
 
+        # typical case: several monitors with adjoint sources at same freq
+        adj_sources, post_norm_amps = self._process_adjoint_sources_same_freq(sources_adj_dict)
+        return adj_sources, post_norm_amps
+
     def _process_adjoint_sources_same_freq(
+        self, sources_adj_dict: dict[str, list[Source]]
+    ) -> tuple[list[Source], xr.DataArray]:
+        """Process adjoint sources for the case of one adjoint source at several freqs."""
+
+        # map of monitor name to set of unique frequencies in the corresponding data
+        sources_unique_freqs = {
+            key: {src.source_time.freq0 for src in val} for key, val in sources_adj_dict.items()
+        }
+
+        def error_msg_pre(mnt_name: str) -> str:
+            """First part of error message for specific monitor."""
+            return f"Can't compute adjoint source for data from monitor '{mnt_name}'. "
+
+        error_msg_post = (
+            "Can only compute adjoint source for several monitor output if each"
+            "data has one frequency only."
+        )
+
+        # perform some validation of the adjoint sources
+
+        # make sure each monitor only has one frequency
+        for mnt_name, freqs in sources_unique_freqs.items():
+            if len(freqs) > 1:
+                raise ValueError(
+                    error_msg_pre(mnt_name)
+                    + f"Monitor has {len(freqs)} frequencies."
+                    + error_msg_post
+                )
+
+        # more generally, ensure that all monitor data have the same frequency
+        all_freqs = set()
+        for mnt_name, freqs in sources_unique_freqs.items():
+            freq = tuple(freqs)[0]
+            all_freqs.add(freq)
+            if len(all_freqs) > 1:
+                raise ValueError(
+                    error_msg_pre(mnt_name)
+                    + error_msg_post
+                    + " Detected different frequencies in different monitors."
+                )
+
+        log.info("Several adjoint sources from different monitors, all with same single frequency.")
+
+        # passed validation, put all sources into a single list and set None for post-normalize amps
+        adj_srcs = []
+        for srcs in sources_adj_dict.values():
+            adj_srcs += srcs
+
+        return adj_srcs, None
+
+    def _process_adjoint_sources_broadband(
         self, sources_adj_dict: dict[str, list[Source]]
     ) -> tuple[list[Source], xr.DataArray]:
         """Process adjoint sources for the case of several sources at the same freq."""
@@ -1053,28 +1105,27 @@ class SimulationData(AbstractYeeGridSimulationData):
         freq0 = (fmin + fmax) / 2.0
         fwidth = (fmax - fmin) / 2.0 / num_fwidth
         src_time_base = GaussianPulse(freq0=freq0, fwidth=fwidth)
-        src_un_normalized = adj_srcs[0].updated_copy(source_time=src_time_base)
+        src_broadband = adj_srcs[0].updated_copy(source_time=src_time_base)
 
         # TODO: make this a broadband mode source, if applicable
-        if isinstance(src_un_normalized, ModeSource):
+        if isinstance(src_broadband, ModeSource):
             # src_un_normalized = src_un_normalized.updated_copy(...)
             log.info(
                 "Making multi-frequency adjoint 'ModeSource' into a broadband "
                 f"mode source with {src_times} frequencies."
             )
 
-        def spectrum(f):
-            return src_time_base.spectrum(
-                times=self.simulation.tmesh, freqs=[f], dt=self.simulation.dt
-            )[0]
+        # compute the post-normalization amplitudes for the adjoint fields as data array
 
-        # compute the post-normalization amplitudes for the adjoint fields
-        coords = dict(f=[src_time.freq0 for src_time in src_times])
-        amps_complex = np.array(
-            # [src_time_base.spectrum(times=self.simulation.tmesh, freqs=[src_time.freq0], dt=self.simulation.dt)[0] * src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
-            [src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
-        )
+        freqs = []
+        amps_complex = []
+        for src_time in src_times:
+            freqs.append(src_time.freq0)
+            amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
+            amps_complex.append(amp_complex)
 
+        coords = dict(f=freqs)
+        amps_complex = np.array(amps_complex)
         post_norm_amps = xr.DataArray(amps_complex, coords=coords)
 
         log.info(
@@ -1084,47 +1135,7 @@ class SimulationData(AbstractYeeGridSimulationData):
             f"of fields with {len(amps_complex)} frequencies."
         )
 
-        return [src_un_normalized], post_norm_amps
-
-    def _process_adjoint_sources_broadband(
-        self, sources_adj_dict: dict[str, list[Source]]
-    ) -> tuple[list[Source], xr.DataArray]:
-        """Process adjoint sources for the case of one adjoint source at several freqs."""
-
-        # perform a couple checks
-        sources_unique_freqs = {
-            key: {src.source_time.freq0 for src in val} for key, val in sources_adj_dict.items()
-        }
-
-        all_freqs = set()
-
-        # all monitors have 1 frequency only
-        for mnt_name, freqs in sources_unique_freqs.items():
-            error_msg_pre = f"Can't compute adjoint source for data from monitor '{mnt_name}'. "
-            error_msg_post = (
-                "Can only compute adjoint source for several monitor output if each"
-                "data has one frequency only."
-            )
-
-            if len(freqs) > 1:
-                raise ValueError(
-                    error_msg_pre + f"Monitor has {len(freqs)} frequencies." + error_msg_post
-                )
-
-            all_freqs.add(tuple(freqs)[0])
-
-            if len(all_freqs) > 1:
-                raise ValueError(
-                    error_msg_pre + error_msg_post + " Detected more than 1 frequency."
-                )
-
-        log.info("Several adjoint sources from different monitors, with same single frequency.")
-
-        adj_srcs = []
-        for srcs in sources_adj_dict.values():
-            adj_srcs += srcs
-
-        return adj_srcs, None
+        return [src_broadband], post_norm_amps
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
