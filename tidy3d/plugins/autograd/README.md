@@ -111,6 +111,7 @@ The following components are traceable as inputs to the `td.Simulation`
 
 - `Box.center`
 - `Box.size`
+
 - `PolySlab.vertices`
 
 - `Medium.permittivity`
@@ -120,6 +121,8 @@ The following components are traceable as inputs to the `td.Simulation`
 - `CustomMedium.eps_dataset`
 
 - `GeometryGroup.geometries`
+
+- `ComplexPolySlab.vertices`
 
 The following components are traceable as outputs of the `td.SimulationData`
 
@@ -148,8 +151,6 @@ Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
 
 - `PoleResidue` and other dispersive models.
 - custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
-
-- `ComplexPolySlab`
 
 Later this year (2024), we plan to support:
 

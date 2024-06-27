@@ -11,6 +11,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
+from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run_async
 from tidy3d.web.api.autograd.autograd import run
 
@@ -258,6 +259,31 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         medium=td.Medium(permittivity=eps, conductivity=conductivity),
     )
 
+    # complex polyslab
+    polyslab_combined = ComplexPolySlab(
+        vertices=(
+            (-eps, 0),
+            (-eps, eps),
+            (0, eps / 10),
+            (eps, eps),
+            (eps, 0),
+        ),
+        slab_bounds=(-0.5, 0.5),
+        axis=1,
+        sidewall_angle=np.pi / 100,
+    )
+
+    polyslab_geometries = []
+    for sub_polyslab in polyslab_combined.sub_polyslabs:
+        polyslab_geometries.append(sub_polyslab)
+
+    assert len(polyslab_geometries) >= 2, "need more polyslabs for a proper test of ComplexPolySlab"
+
+    complex_polyslab_geo_group = td.Structure(
+        geometry=td.GeometryGroup(geometries=polyslab_geometries),
+        medium=td.Medium(permittivity=eps, conductivity=conductivity),
+    )
+
     return dict(
         medium=medium,
         center_list=center_list,
@@ -266,6 +292,7 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
         geo_group=geo_group,
+        complex_polyslab=complex_polyslab_geo_group,
     )
 
 
@@ -353,6 +380,7 @@ structure_keys_ = (
     "custom_med_vec",
     "polyslab",
     "geo_group",
+    "complex_polyslab",
 )
 monitor_keys_ = ("mode", "diff", "field_vol", "field_point")
 
@@ -373,7 +401,7 @@ if TEST_POLYSLAB_SPEED:
     args = [("polyslab", "mode")]
 
 
-# args = [("geo_group", "mode")]
+# args = [("complex_polyslab", "mode")]
 
 
 def get_functions(structure_key: str, monitor_key: str) -> typing.Callable:
