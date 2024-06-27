@@ -6,7 +6,7 @@ import json
 import pathlib
 from abc import ABC
 from collections import defaultdict
-from typing import Callable, Tuple, Union
+from typing import Callable, List, Tuple, Union
 
 import h5py
 import numpy as np
@@ -1093,12 +1093,26 @@ class SimulationData(AbstractYeeGridSimulationData):
         """Process adjoint sources for the case of several sources at the same freq."""
 
         adj_srcs = list(sources_adj_dict.values())[0]
-        src_times = [src.source_time for src in adj_srcs]
+
+        src_broadband = self._make_broadband_source(adj_srcs=adj_srcs)
+        post_norm_amps = self._make_post_norm_amps(adj_srcs=adj_srcs)
+
+        log.info(
+            "Several adjoint sources, from one monitor. "
+            "Only difference between them is the source time. "
+            "Constructing broadband adjoint source and performing post-run normalization "
+            f"of fields with {len(post_norm_amps)} frequencies."
+        )
+
+        return [src_broadband], post_norm_amps
+
+    @staticmethod
+    def _make_broadband_source(adj_srcs: List[Source], num_fwidth: float = 0.5) -> Source:
+        """Make a broadband source for a set of adjoint sources."""
 
         # compute an unnormalized source that covers the whole spectrum needed
-        num_fwidth = 0.5
         freq_ranges = np.array(
-            [src_time.frequency_range(num_fwidth=num_fwidth) for src_time in src_times]
+            [src.source_time.frequency_range(num_fwidth=num_fwidth) for src in adj_srcs]
         )
         fmin = np.min(freq_ranges[:, 0], axis=-1)
         fmax = np.max(freq_ranges[:, 1], axis=-1)
@@ -1112,35 +1126,26 @@ class SimulationData(AbstractYeeGridSimulationData):
             # src_un_normalized = src_un_normalized.updated_copy(...)
             log.info(
                 "Making multi-frequency adjoint 'ModeSource' into a broadband "
-                f"mode source with {src_times} frequencies."
+                f"mode source with {len(adj_srcs)} frequencies."
             )
 
-        # compute the post-normalization amplitudes for the adjoint fields as data array
+        return src_broadband
+
+    @staticmethod
+    def _make_post_norm_amps(adj_srcs: List[Source]) -> xr.DataArray:
+        """Make a ``DataArray`` containing the complex amplitudes to multiply with adjoint field."""
+
         freqs = []
         amps_complex = []
-        for src_time in src_times:
+        for src in adj_srcs:
+            src_time = src.source_time
             freqs.append(src_time.freq0)
             amp_complex = src_time.amplitude * np.exp(1j * src_time.phase)
             amps_complex.append(amp_complex)
 
         coords = dict(f=freqs)
         amps_complex = np.array(amps_complex)
-        post_norm_amps = xr.DataArray(amps_complex, coords=coords)
-
-        log.info(
-            "Several adjoint sources, from one monitor. "
-            "Only difference between them is the source time. "
-            "Constructing broadband adjoint source and performing post-run normalization "
-            f"of fields with {len(amps_complex)} frequencies."
-        )
-
-        return [src_broadband], post_norm_amps
-
-    def _make_broadband_source() -> Source:
-        """Make a broadband source for a set of adjoint sources."""
-
-    def _make_post_norm_amps() -> xr.DataArray:
-        """Make a ``DataArray`` containing the complex amplitudes to multiply with adjoint field."""
+        return xr.DataArray(amps_complex, coords=coords)
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
