@@ -976,8 +976,8 @@ class SimulationData(AbstractYeeGridSimulationData):
             monitors=adjoint_monitors,
         )
 
-        if post_norm_amps is not None:
-            sim_adj_update_dict["normalize_index"] = None
+        # if post_norm_amps is not None:
+        #     sim_adj_update_dict["normalize_index"] = None
 
         # set the ADJ grid spec wavelength to the original wavelength (for same meshing)
         grid_spec_original = sim_original.grid_spec
@@ -1048,11 +1048,18 @@ class SimulationData(AbstractYeeGridSimulationData):
                     f"mode source with {src_times} frequencies."
                 )
 
+            def spectrum(f):
+                return src_time_base.spectrum(
+                    times=self.simulation.tmesh, freqs=[f], dt=self.simulation.dt
+                )[0]
+
             # compute the post-normalization amplitudes for the adjoint fields
             coords = dict(f=[src_time.freq0 for src_time in src_times])
             amps_complex = np.array(
+                # [src_time_base.spectrum(times=self.simulation.tmesh, freqs=[src_time.freq0], dt=self.simulation.dt)[0] * src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
                 [src_time.amplitude * np.exp(1j * src_time.phase) for src_time in src_times]
             )
+
             post_norm_amps = xr.DataArray(amps_complex, coords=coords)
 
             log.info(
