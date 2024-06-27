@@ -1116,7 +1116,6 @@ class SimulationData(AbstractYeeGridSimulationData):
             )
 
         # compute the post-normalization amplitudes for the adjoint fields as data array
-
         freqs = []
         amps_complex = []
         for src_time in src_times:
@@ -1136,6 +1135,12 @@ class SimulationData(AbstractYeeGridSimulationData):
         )
 
         return [src_broadband], post_norm_amps
+
+    def _make_broadband_source() -> Source:
+        """Make a broadband source for a set of adjoint sources."""
+
+    def _make_post_norm_amps() -> xr.DataArray:
+        """Make a ``DataArray`` containing the complex amplitudes to multiply with adjoint field."""
 
     def make_adjoint_sources(self, data_vjp_paths: set[tuple]) -> dict[str, Source]:
         """Generate all of the non-zero sources for the adjoint simulation given the VJP data."""
