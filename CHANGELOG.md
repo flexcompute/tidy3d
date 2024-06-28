@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for differentiation with respect to monitor attributes that require interpolation, such as flux and intensity.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
 - Support for `FieldProjectionAngleMonitor` for 2D simulations with `far_field_approx = True`.
+- Introduce RF material library. Users can now export `rf_material_library` from `tidy3d.plugins.microwave`.
+- `autograd` gradient calculations are done server side by default. Behavior can be changed by passing `local_gradient = True` into `web.run()`.
 
 ### Changed
 - Error if field projection monitors found in 2D simulations, except `FieldProjectionAngleMonitor` with `far_field_approx = True`. Support for other monitors and for exact field projection will be coming in a subsequent Tidy3D version.
@@ -139,7 +141,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `tidy3d.plugins.design.Results` store the `BatchData` for batch runs in the `.batch_data` field.
 - Prompting user to check solver log when loading solver data if warnings were found in the log, or if the simulation diverged or errored.
-- `autograd` gradient calculations are done server side by default. Behavior can be changed by passing `local_gradient = True` into `web.run()`.
 
 ### Changed
 - Slightly reorganized `web.run` logging when `verbose=True` to make it clearer.
