@@ -164,7 +164,12 @@ Picosecond per (nanometer kilometer).
 
 OHM = "ohm"
 """
-SI unit of resistance..
+SI unit of resistance.
+"""
+
+AMP = "A"
+"""
+SI unit of electric current.
 """
 
 THERMAL_CONDUCTIVITY = "W/(um*K)"

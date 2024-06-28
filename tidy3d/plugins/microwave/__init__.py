@@ -6,7 +6,7 @@ from .custom_path_integrals import (
     CustomPathIntegral2D,
     CustomVoltageIntegral2D,
 )
-from .impedance_calculator import ImpedanceCalculator
+from .impedance_calculator import CurrentIntegralTypes, ImpedanceCalculator, VoltageIntegralTypes
 from .path_integrals import (
     AxisAlignedPathIntegral,
     CurrentIntegralAxisAligned,
@@ -21,6 +21,8 @@ __all__ = [
     "CurrentIntegralAxisAligned",
     "CustomVoltageIntegral2D",
     "CustomCurrentIntegral2D",
+    "VoltageIntegralTypes",
+    "CurrentIntegralTypes",
     "ImpedanceCalculator",
     "models",
     "rf_material_library",

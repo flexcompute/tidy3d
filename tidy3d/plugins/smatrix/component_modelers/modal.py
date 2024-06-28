@@ -194,45 +194,6 @@ class ComponentModeler(AbstractComponentModeler):
             name=port.name,
         )
 
-    def _shift_value_signed(self, port: Port) -> float:
-        """How far (signed) to shift the source from the monitor."""
-
-        # get the grid boundaries and sizes along port normal from the simulation
-        normal_axis = port.size.index(0.0)
-        grid = self.simulation.grid
-        grid_boundaries = grid.boundaries.to_list[normal_axis]
-        grid_centers = grid.centers.to_list[normal_axis]
-
-        # get the index of the grid cell where the port lies
-        port_position = port.center[normal_axis]
-        port_pos_gt_grid_bounds = np.argwhere(port_position > grid_boundaries)
-
-        # no port index can be determined
-        if len(port_pos_gt_grid_bounds) == 0:
-            raise SetupError(f"Port position '{port_position}' outside of simulation bounds.")
-        port_index = port_pos_gt_grid_bounds[-1]
-
-        # shift the port to the left
-        if port.direction == "+":
-            shifted_index = port_index - 2
-            if shifted_index < 0:
-                raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
-                    f"on -{'xyz'[normal_axis]} side."
-                )
-
-        # shift the port to the right
-        else:
-            shifted_index = port_index + 2
-            if shifted_index >= len(grid_centers):
-                raise SetupError(
-                    f"Port {port.name} normal is too close to boundary "
-                    f"on +{'xyz'[normal_axis]} side."
-                )
-
-        new_pos = grid_centers[shifted_index]
-        return new_pos - port_position
-
     def shift_port(self, port: Port) -> Port:
         """Generate a new port shifted by the shift amount in normal direction."""
 
