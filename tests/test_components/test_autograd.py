@@ -14,7 +14,6 @@ import pytest
 import tidy3d as td
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 from tidy3d.web import run_async
-
 from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import Job, run_async
 from tidy3d.web.api.autograd.autograd import run
@@ -145,17 +144,18 @@ def use_emulated_run(monkeypatch):
 
         def emulated_job_run(self: Job) -> td.SimulationData:
             """What gets called instead of ``web.run()``."""
+
             sim_data = run_emulated(self.simulation, task_name="test")
 
             if self.simulation_type == "autograd_fwd":
-                sim_data_combined = sim_data
+                sim_original = self.simulation
 
-                # a bit of a hack i guess
-                orig_monitors = [
-                    mnt for mnt in sim_data.simulation.monitors if "adjoint" not in mnt.name
-                ]
-                sim_original = self.simulation.updated_copy(monitors=orig_monitors)
+                # add gradient monitors and make combined simulation
+                sim_fields = setup_run(sim_original)
+                sim_combined = sim_original.with_adjoint_monitors(sim_fields)
+                sim_data_combined = run_emulated(sim_combined, task_name="test")
 
+                # store the data in aux_data (see commented out lines below)
                 aux_data = {}
                 _ = postprocess_fwd(
                     sim_data_combined=sim_data_combined,
@@ -163,25 +163,25 @@ def use_emulated_run(monkeypatch):
                     aux_data=aux_data,
                 )
 
-                sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
-                sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
+                # sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
+                # sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
 
+                # cache it locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
 
             elif self.simulation_type == "autograd_bwd":
-                sim_data_adj = sim_data
+                # run the adjoint sim
+                sim_data_adj = run_emulated(self.simulation, task_name="test")
 
+                # grab the fwd and original data from the cache
                 aux_data_fwd = cache[task_id_fwd]
-
                 sim_data_orig = aux_data_fwd[AUX_KEY_SIM_DATA_ORIGINAL]
                 sim_data_fwd = aux_data_fwd[AUX_KEY_SIM_DATA_FWD]
 
-                orig_monitors = [
-                    mnt for mnt in sim_data.simulation.monitors if "adjoint" not in mnt.name
-                ]
-                sim_original = self.simulation.updated_copy(monitors=orig_monitors)
+                # get the original traced fields
                 sim_fields_original = setup_run(simulation=sim_data_orig.simulation)
 
+                # postprocess (compute adjoint gradients)
                 traced_fields_vjp = postprocess_adj(
                     sim_data_adj=sim_data_adj,
                     sim_data_orig=sim_data_orig,
@@ -189,6 +189,7 @@ def use_emulated_run(monkeypatch):
                     sim_fields_original=sim_fields_original,
                 )
 
+                # cache the results in the VJP key of the cache
                 cache[task_id_bwd][VJP] = traced_fields_vjp
 
             return sim_data
@@ -196,6 +197,8 @@ def use_emulated_run(monkeypatch):
         monkeypatch.setattr(webapi, "run", run_emulated)
         monkeypatch.setattr(Job, "run", emulated_job_run)
         monkeypatch.setattr(Job, "task_id", task_id_fwd)
+
+        reload(webapi)
 
         _run_was_emulated[0] = True
 
