@@ -8,3 +8,5 @@ Thermal Sources
    :template: module.rst
 
    tidy3d.UniformHeatSource
+   tidy3d.HeatSource
+   tidy3d.HeatFromElectricSource

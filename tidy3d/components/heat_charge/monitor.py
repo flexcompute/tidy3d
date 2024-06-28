@@ -11,12 +11,8 @@ from ..types import ArrayFloat1D
 BYTES_REAL = 4
 
 
-class HeatMonitor(AbstractMonitor, ABC):
-    """Abstract base class for heat monitors."""
-
-
-class TemperatureMonitor(HeatMonitor):
-    """Temperature monitor."""
+class HeatChargeMonitor(AbstractMonitor, ABC):
+    """Abstract base class for heat-charge monitors."""
 
     unstructured: bool = pd.Field(
         False,
@@ -42,5 +38,13 @@ class TemperatureMonitor(HeatMonitor):
         return BYTES_REAL * num_steps * num_cells * len(self.fields)
 
 
+class TemperatureMonitor(HeatChargeMonitor):
+    """Temperature monitor."""
+
+
+class VoltageMonitor(HeatChargeMonitor):
+    """Electric potential monitor."""
+
+
 # types of monitors that are accepted by heat simulation
-HeatMonitorType = Union[TemperatureMonitor]
+HeatChargeMonitorType = Union[TemperatureMonitor, VoltageMonitor]
