@@ -5,3 +5,11 @@ repos:
      - id: ruff
        args: [ --fix ]
      - id: ruff-format
+  - repo: local
+    hooks:
+     - id: update-submodules
+       name: Update latest submodules
+       entry: scripts/update_latest_submodules.sh
+       language: script
+       pass_filenames: false
+       always_run: true
