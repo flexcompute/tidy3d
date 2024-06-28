@@ -451,7 +451,7 @@ def _run_async_primitive(
 def setup_fwd(
     sim_fields: AutogradFieldMap,
     sim_original: td.Simulation,
-    local_gradient: bool,
+    local_gradient: bool = LOCAL_GRADIENT,
 ) -> td.Simulation:
     """Set up the combined forward simulation."""
 
