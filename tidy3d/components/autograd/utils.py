@@ -10,6 +10,13 @@ def get_static(x: typing.Any) -> typing.Any:
     return getval(x)
 
 
+def split_list(x: list[typing.Any], index: int) -> (list[typing.Any], list[typing.Any]):
+    """Split a list at a given index."""
+    x = list(x)
+    return x[:index], x[index:]
+
+
 __all__ = [
     "get_static",
+    "split_list",
 ]

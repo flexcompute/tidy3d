@@ -9,6 +9,8 @@ from autograd.extend import defvjp, primitive
 
 import tidy3d as td
 from tidy3d.components.autograd import AutogradFieldMap, get_static
+
+# from tidy3d.components.autograd.utils import split_data_list, split_list
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
 
 from ..asynchronous import DEFAULT_DATA_DIR
@@ -16,7 +18,7 @@ from ..asynchronous import run_async as run_async_webapi
 from ..container import BatchData, Job
 from ..tidy3d_stub import SimulationDataType, SimulationType
 from ..webapi import run as run_webapi
-from .utils import get_derivative_maps, split_data_list, split_list
+from .utils import get_derivative_maps
 
 # keys for data into auxiliary dictionary
 AUX_KEY_SIM_DATA_ORIGINAL = "sim_data"
@@ -394,7 +396,9 @@ def _run_primitive(
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
 
     td.log.info("running primitive '_run_primitive()'")
-    sim_combined = setup_fwd(sim_fields=sim_fields, sim_original=sim_original)
+    sim_combined = setup_fwd(
+        sim_fields=sim_fields, sim_original=sim_original, local_gradient=local_gradient
+    )
 
     if not local_gradient:
         run_kwargs["simulation_type"] = "autograd_fwd"
@@ -444,11 +448,19 @@ def _run_async_primitive(
     return field_map_fwd_dict
 
 
-def setup_fwd(sim_fields: AutogradFieldMap, sim_original: td.Simulation) -> td.Simulation:
+def setup_fwd(
+    sim_fields: AutogradFieldMap,
+    sim_original: td.Simulation,
+    local_gradient: bool,
+) -> td.Simulation:
     """Set up the combined forward simulation."""
 
-    # make and run a sim with combined original & adjoint monitors
-    return sim_original.with_adjoint_monitors(sim_fields)
+    # if local gradient, make and run a sim with combined original & adjoint monitors
+    if local_gradient:
+        return sim_original.with_adjoint_monitors(sim_fields)
+
+    # if remote gradient, add them later
+    return sim_original
 
 
 def postprocess_fwd(
@@ -458,29 +470,12 @@ def postprocess_fwd(
 ) -> AutogradFieldMap:
     """Postprocess the combined simulation data into an Autograd field map."""
 
-    sim_combined = sim_data_combined.simulation
-
     num_mnts_original = len(sim_original.monitors)
-
-    # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
-    data_original, data_fwd = split_data_list(
-        sim_data=sim_data_combined, num_mnts_original=num_mnts_original
+    sim_data_original, sim_data_fwd = sim_data_combined.split_original_fwd(
+        num_mnts_original=num_mnts_original
     )
-    _, monitors_fwd = split_list(sim_combined.monitors, index=num_mnts_original)
 
-    # reconstruct the simulation data for the user, using original sim, and data for original mnts
-    sim_data_original = sim_data_combined.updated_copy(
-        simulation=sim_original, data=data_original, deep=False
-    )
     aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_original
-
-    # construct the 'forward' simulation and its data, which is only used for for gradient calc.
-    sim_fwd = sim_combined.updated_copy(monitors=monitors_fwd)
-    sim_data_fwd = sim_data_combined.updated_copy(
-        simulation=sim_fwd,
-        data=data_fwd,
-        deep=False,
-    )
     aux_data[AUX_KEY_SIM_DATA_FWD] = sim_data_fwd
 
     # strip out the tracer AutogradFieldMap for the .data from the original sim

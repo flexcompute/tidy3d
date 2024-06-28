@@ -16,6 +16,7 @@ from scipy.io import savemat
 
 from ...exceptions import DataError, FileError, Tidy3dKeyError
 from ...log import log
+from ..autograd.utils import split_list
 from ..base import JSON_TAG
 from ..base_sim.data.sim_data import AbstractSimulationData
 from ..file_util import replace_values
@@ -951,6 +952,45 @@ class SimulationData(AbstractYeeGridSimulationData):
         simulation = self.simulation.copy(update=dict(normalize_index=normalize_index))
 
         return self.copy(update=dict(simulation=simulation, data=data_normalized))
+
+    def split_adjoint_data(self: SimulationData, num_mnts_original: int) -> tuple[list, list]:
+        """Split data list into original, adjoint field, and adjoint permittivity."""
+
+        data_all = list(self.data)
+        num_mnts_adjoint = (len(data_all) - num_mnts_original) // 2
+
+        log.info(
+            f" -> {num_mnts_original} monitors, {num_mnts_adjoint} adjoint field monitors, {num_mnts_adjoint} adjoint eps monitors."
+        )
+
+        data_original, data_adjoint = split_list(data_all, index=num_mnts_original)
+
+        return data_original, data_adjoint
+
+    def split_original_fwd(self, num_mnts_original: int) -> Tuple[SimulationData, SimulationData]:
+        """Split this simulation data into original and fwd data from number of original mnts."""
+
+        # split the data and monitors into the original ones & adjoint gradient ones (for 'fwd')
+        data_original, data_fwd = self.split_adjoint_data(num_mnts_original=num_mnts_original)
+        monitors_orig, monitors_fwd = split_list(self.simulation.monitors, index=num_mnts_original)
+
+        # reconstruct the simulation data for the user, using original sim, and data for original mnts
+        sim_original = self.simulation.updated_copy(monitors=monitors_orig)
+        sim_data_original = self.updated_copy(
+            simulation=sim_original,
+            data=data_original,
+            deep=False,
+        )
+
+        # construct the 'forward' simulation and its data, which is only used for for gradient calc.
+        sim_fwd = self.simulation.updated_copy(monitors=monitors_fwd)
+        sim_data_fwd = self.updated_copy(
+            simulation=sim_fwd,
+            data=data_fwd,
+            deep=False,
+        )
+
+        return sim_data_original, sim_data_fwd
 
     def make_adjoint_sim(
         self, data_vjp_paths: set[tuple], adjoint_monitors: list[Monitor]
