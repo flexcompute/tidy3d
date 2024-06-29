@@ -12,8 +12,8 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
-from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.components.autograd.derivative_utils import DerivativeInfo
+from tidy3d.plugins.polyslab import ComplexPolySlab
 from tidy3d.web import run_async
 from tidy3d.web.api.autograd.autograd import run
 
@@ -327,7 +327,6 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         polyslab=polyslab,
         geo_group=geo_group,
         complex_polyslab=complex_polyslab_geo_group,
-        med_dispersive=med_dispersive,
         pole_res=pole_res,
         custom_pole_res=custom_pole_res,
     )
@@ -418,7 +417,6 @@ structure_keys_ = (
     "polyslab",
     "geo_group",
     "complex_polyslab",
-    "med_dispersive",
     "pole_res",
     "custom_pole_res",
 )
