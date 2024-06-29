@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import copy
 from math import isclose
 from typing import List, Tuple
 
@@ -1249,9 +1250,9 @@ class PolySlab(base.Planar):
         def normalize(v):
             return v / np.linalg.norm(v, axis=0)
 
-        vs_orig = vertices.T.copy()
-        vs_next = np.roll(vs_orig.copy(), axis=-1, shift=-1)
-        vs_previous = np.roll(vs_orig.copy(), axis=-1, shift=+1)
+        vs_orig = copy(vertices.T)
+        vs_next = np.roll(copy(vs_orig), axis=-1, shift=-1)
+        vs_previous = np.roll(copy(vs_orig), axis=-1, shift=+1)
 
         asp = normalize(vs_next - vs_orig)
         asm = normalize(vs_orig - vs_previous)
@@ -1289,14 +1290,14 @@ class PolySlab(base.Planar):
         """
 
         # edge length
-        vs_orig = vertices.T.copy()
-        vs_next = np.roll(vs_orig.copy(), axis=-1, shift=-1)
+        vs_orig = copy(vertices.T)
+        vs_next = np.roll(copy(vs_orig), axis=-1, shift=-1)
         edge_length = np.linalg.norm(vs_next - vs_orig, axis=0)
 
         # edge length remaining
         dist = 1
         parallel_shift = PolySlab._shift_vertices(vertices, dist)[1]
-        parallel_shift_p = np.roll(parallel_shift.copy(), shift=-1)
+        parallel_shift_p = np.roll(copy(parallel_shift), shift=-1)
         edge_reduction = -(parallel_shift + parallel_shift_p)
         return edge_length, edge_reduction
 

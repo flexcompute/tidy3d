@@ -239,6 +239,8 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
             vertices=vertices,
             slab_bounds=(-0.5, 0.5),
             axis=1,
+            sidewall_angle=0.01,
+            dilation=0.01,
         ),
         medium=med,
     )

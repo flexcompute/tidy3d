@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bug where boundary layers would be plotted too small in 2D simulations.
 - Bug when plotting transformed geometries.
 - Bug when snapping `CoaxialLumpedPort` to grid cell boundaries.
+- Errors in `PolySlab` when using autograd differentiation with non-zero `sidewall_angle` and `dilation`.
 
 ## [2.7.0] - 2024-06-17
 
