@@ -80,12 +80,12 @@ class DataArray(xr.DataArray):
             super().__init__(data, *args, **kwargs)
 
     @property
-    def has_tracers(self) -> bool:
-        return AUTOGRAD_KEY in self.attrs
-
-    @property
     def values(self) -> Union[Box, np.ndarray]:
         return self.attrs[AUTOGRAD_KEY] if self.has_tracers else super().values
+
+    @property
+    def tracers(self) -> Box:
+        return self.attrs[AUTOGRAD_KEY]
 
     @classmethod
     def __get_validators__(cls):
@@ -308,14 +308,8 @@ class DataArray(xr.DataArray):
             points = tuple(dict(obj.coords).values())
             xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
             vals = interpn(points, obj.values, xi, method=method)
-            vals = np.asarray(vals)
-            ret = self.copy(deep=False, data=self.values._value)
-            ret.attrs[AUTOGRAD_KEY] = self.values
-            return ret
-
-            da = DataArray(vals, dict(obj.coords) | coords)
-            da.attrs[AUTOGRAD_KEY] = vals
-            return da
+            tmp = DataArray(vals, dict(obj.coords) | coords)  # no tracers in vals
+            return tmp.copy(deep=False, data=vals)  # copy over tracers
 
         return super().interp(
             coords=coords,
