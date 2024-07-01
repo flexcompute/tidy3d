@@ -4,7 +4,7 @@ import autograd.numpy as np
 from autograd.scipy.signal import convolve as convolve_ag
 from numpy.typing import NDArray
 
-from tidy3d.components.autograd import interpn
+from tidy3d.components.autograd.derivative_utils import interpn
 
 from .types import PaddingType
 
