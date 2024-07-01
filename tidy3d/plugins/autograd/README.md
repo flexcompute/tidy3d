@@ -124,6 +124,12 @@ The following components are traceable as inputs to the `td.Simulation`
 
 - `ComplexPolySlab.vertices`
 
+- `PoleResidue.eps_inf`
+- `PoleResidue.poles`
+
+- `CustomPoleResidue.eps_inf`
+- `CustomPoleResidue.poles`
+
 The following components are traceable as outputs of the `td.SimulationData`
 
 - `ModeData.amps`
@@ -152,6 +158,7 @@ Next on our roadmap (targeting 2.8 and 2.9, summer 2024) is to support:
 - `PoleResidue` and other dispersive models.
 - custom (spatially-dependent) dispersive models, allowing topology optimization with metals.
 
+- `ComplexPolySlab`
 Later this year (2024), we plan to support:
 
 - `TriangleMesh`.
