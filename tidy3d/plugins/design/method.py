@@ -87,7 +87,6 @@ class MethodSample(Method, ABC):
     def _assemble_args(
         self,
         parameters: Tuple[ParameterType, ...],
-        run_fn: Callable,
     ) -> Tuple[dict, int]:
         """Sample design parameters, check the args are hashable and compute number of points."""
 
@@ -98,19 +97,17 @@ class MethodSample(Method, ABC):
         # self.assert_num_points(fn_args)
         return fn_args
 
-    def run(
-        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
-    ) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
         # get all function inputs
-        fn_args = self._assemble_args(parameters, run_fn)
+        fn_args = self._assemble_args(parameters)
 
         # Get min and max for each sample
         # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
         # min_max_params = [(min(param), max(param)) for param in args_as_params]
 
-        # for each point, construct the function inputs, run it, record output
+        # Run user function on sampled args
         results = run_fn(fn_args)
 
         return fn_args, results
@@ -149,12 +146,12 @@ class MethodOptimise(Method, ABC):
     def create_boundary_dict(
         self,
         parameters: Tuple[ParameterType, ...],
-    ):
+    ) -> dict[str, Tuple]:
         """Reshape parameter spans to dict of boundaries"""
 
         return {design_var.name: design_var.span for design_var in parameters}
 
-    def sol_array_to_dict(self, solution, keys):
+    def sol_array_to_dict(self, solution: np.array, keys: list) -> list[dict]:
         return [dict(zip(keys, sol)) for sol in solution]
 
 
@@ -163,20 +160,32 @@ class MethodBayOpt(MethodOptimise, ABC):
 
     initial_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of initial random search iterations",
+        title="Number of initial random search iterations.",
         description="TBD",
     )
 
     n_iter: pd.PositiveInt = pd.Field(
         ...,
-        title="Number of bayesian optimization iterations",
+        title="Number of bayesian optimization iterations.",
         description="TBD",
     )
 
     acq_func: Optional[Literal["ucb", "ei", "poi"]] = pd.Field(
-        title="Type of acquisition function",
+        title="Type of acquisition function.",
         description="TBD",
         default="ucb",
+    )
+
+    kappa: Optional[pd.PositiveFloat] = pd.Field(
+        title="Kappa parameter for the Gaussian processor.",
+        description="TBD",
+        default=2.5,
+    )
+
+    xi: Optional[pd.PositiveFloat] = pd.Field(
+        title="Xi parameter for the Gaussian processor.",
+        description="TBD",
+        default=0.0,
     )
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
@@ -184,7 +193,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         boundary_dict = self.create_boundary_dict(parameters)
 
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
-        utility = UtilityFunction(kind=self.acq_func, kappa=2.5, xi=0.0)
+        utility = UtilityFunction(kind=self.acq_func, kappa=self.kappa, xi=self.xi)
         opt = BayesianOptimization(
             f=run_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
         )
@@ -226,14 +235,69 @@ class MethodGenAlg(MethodOptimise, ABC):
     """A standard method for performing genetic algorithm search"""
 
     # Args for the user
-    # Solutions per pop
-    # Num generations
-    # Num parents mating
-    # Parent selector, optional
+    solutions_per_pop: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of solutions per population.",
+        description="TBD",
+    )
 
-    def run(
-        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
-    ) -> Tuple[Any]:
+    n_generations: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of generations.",
+        description="TBD",
+    )
+
+    n_parents_mating: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of parents mating.",
+        description="TBD",
+    )
+
+    stop_criteria: Optional[pd.constr(regex=r"\b(?:reach|saturate)_\d+\b")] = pd.Field(
+        title="Early stopping criteria.",
+        description="Define the early stopping criteria. Supported words are 'reach_X' or 'saturate_X' where X is a number. See PyGAD docs for more details",
+        default=None,
+    )
+
+    parent_selection_type: Optional[
+        Literal["sss", "rws", "sus", "rank", "random", "tournament"]
+    ] = pd.Field(
+        title="Parent selection type.",
+        description="TBD",
+        default="sss",
+    )
+
+    crossover_type: Optional[Literal["single_point", "two_points", "uniform", "scattered"]] = (
+        pd.Field(
+            title="Crossover type.",
+            description="TBD",
+            default="single_point",
+        )
+    )
+
+    crossover_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+        title="Crossover probability.",
+        description="TBD",
+        default=0.8,
+    )
+
+    mutation_type: Optional[Literal["random", "swap", "inversion", "scramble", "adaptive"]] = (
+        pd.Field(
+            title="Crossover type.",
+            description="TBD",
+            default="random",
+        )
+    )
+
+    mutation_prob: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+        title="Crossover probability.",
+        description="TBD",
+        default=0.2,
+    )
+
+    # TODO: See if anyone is interested in having the full suite of PyGAD options - there's a lot!
+
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm for the GA"""
 
         # Create fitness function combining pre and post fn with the tidy3d call
@@ -280,37 +344,26 @@ class MethodGenAlg(MethodOptimise, ABC):
                 print("Parameter type not supported by GA method.")
 
         # Determine initial array
-
-        sol_per_pop = 10  # number of solutions in the population
         num_genes = len(parameters)
-        num_generations = 3  # number of generation
-
-        num_parents_mating = 4  # number of mating parents
-        parent_selection_type = "rws"  # parent selection rule
-
-        crossover_type = "scattered"  # crossover rule
-        crossover_probability = 0.7  # cross over probability
-
-        mutation_type = "random"  # mutation rule
-        mutation_probability = 0.2
 
         # define the optimizer
         ga_instance = pygad.GA(
-            num_generations=num_generations,
-            num_parents_mating=num_parents_mating,
+            num_generations=self.n_generations,
+            num_parents_mating=self.n_parents_mating,
             fitness_func=fitness_function,
-            parent_selection_type=parent_selection_type,
-            mutation_type=mutation_type,
-            mutation_probability=mutation_probability,
-            crossover_type=crossover_type,
-            crossover_probability=crossover_probability,
-            sol_per_pop=sol_per_pop,
+            parent_selection_type=self.parent_selection_type,
+            mutation_type=self.mutation_type,
+            mutation_probability=self.mutation_prob,
+            crossover_type=self.crossover_type,
+            crossover_probability=self.crossover_prob,
+            sol_per_pop=self.solutions_per_pop,
             num_genes=num_genes,
-            fitness_batch_size=sol_per_pop,
+            fitness_batch_size=self.solutions_per_pop,
             on_generation=on_generation,
             random_seed=1,
             gene_space=gene_spaces,
             gene_type=gene_types,
+            stop_criteria=self.stop_criteria,
         )
 
         ga_instance.run()
@@ -325,13 +378,50 @@ class MethodGenAlg(MethodOptimise, ABC):
 class MethodParticleSwarm(MethodOptimise, ABC):
     """A standard method for performing particle swarm search"""
 
-    def run(
-        self, parameters: Tuple[ParameterType, ...], run_fn: Union[Callable, Tuple]
-    ) -> Tuple[Any]:
+    n_particles: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of particles in the swarm.",
+        description="TBD",
+    )
+
+    n_iter: pd.PositiveInt = pd.Field(
+        ...,
+        title="Number of generations.",
+        description="TBD",
+    )
+
+    cognitive_coeff: Optional[pd.PositiveFloat] = pd.Field(
+        title="Number of parents mating.",
+        description="TBD",
+        default=1.5,
+    )
+
+    social_coeff: Optional[pd.PositiveFloat] = pd.Field(
+        title="Number of parents mating.",
+        description="TBD",
+        default=1.5,
+    )
+
+    weight: Optional[pd.PositiveFloat] = pd.Field(
+        title="Number of parents mating.",
+        description="TBD",
+        default=0.9,
+    )
+
+    ftol: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+        title="Relative error for convergence.",
+        description="Relative error in objective_func(best_pos) acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
+        default=-np.inf,
+    )
+
+    ftol_iter: Optional[pd.PositiveInt] = pd.Field(
+        title="Number of iterations before acceptable convergence.",
+        description="Number of iterations over which the relative error in objective_func is acceptable for convergence.",
+        default=1,
+    )
+
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         # Args for the user
-        # n_particles
-        # 3 PSO options
-        # n_iter
 
         def fitness_function(solution):
             # Correct solutions that should be ints
@@ -363,16 +453,18 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         max_bound = [param.span[1] for param in parameters]
         bounds = (min_bound, max_bound)
 
-        options = {"c1": 1.5, "c2": 1.5, "w": 0.9}
+        options = {"c1": self.cognitive_coeff, "c2": self.social_coeff, "w": self.weight}
         optimizer = GlobalBestPSO(
-            n_particles=10,
+            n_particles=self.n_particles,
             dimensions=len(parameters),
             options=options,
             bounds=bounds,
-            oh_strategy={"w": "exp_decay"},
+            ftol=self.ftol,
+            ftol_iter=self.ftol_iter,
+            # TODO: including oh_strategy would be nice but complicated to specify with pydantic oh_strategy={"w": "exp_decay"},
         )
 
-        _ = optimizer.optimize(fitness_function, 100)
+        _ = optimizer.optimize(fitness_function, self.n_iter)
 
         # Collapse stores into fn_args and results lists
         fn_args = [val for sublist in _store_parameters for val in sublist]

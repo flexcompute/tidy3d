@@ -173,6 +173,7 @@ class DesignSpace(Tidy3dBaseModel):
         elif all(isinstance(sim, Dict) for sim in pre_out.values()) and all(
             isinstance(sim, Simulation) for sim in pre_out[0].values()
         ):
+            # Flatten dict of dicts whilst storing combined keys for later
             flattened_sims = {}
             original_structure = []
             for dict_idx, sub_dict in pre_out.items():
@@ -184,8 +185,10 @@ class DesignSpace(Tidy3dBaseModel):
 
                 original_structure.append(sub_structure)
 
+            # Run sims with flattened dict
             batch_out = web.Batch(simulations=flattened_sims).run()
 
+            # Unflatten structure whilst running fn_post
             data = []
             for sub_structure in original_structure:
                 sub_dict = {batch_out[task_name] for task_name in sub_structure}
@@ -194,6 +197,7 @@ class DesignSpace(Tidy3dBaseModel):
         elif all(isinstance(sim, List) for sim in pre_out.values()) and all(
             isinstance(sim, Simulation) for sim in pre_out[0]
         ):
+            # Flatten dict of lists whilst storing combined keys for later
             flattened_sims = {}
             original_structure = []
             for dict_idx, sub_list in pre_out.items():
@@ -205,8 +209,10 @@ class DesignSpace(Tidy3dBaseModel):
 
                 original_structure.append(sub_structure)
 
+            # Run sims with flattened dict
             batch_out = web.Batch(simulations=flattened_sims).run()
 
+            # Unflatten structure whilst running fn_post
             data = []
             for sub_structure in original_structure:
                 sub_list = [batch_out[task_name] for task_name in sub_structure]
@@ -215,7 +221,5 @@ class DesignSpace(Tidy3dBaseModel):
         else:
             # user just wants to split into pre and post, without tidy3d I guess
             data = [fn_post(val[1]) for val in pre_out.items()]
-            # or we just error
-            # raise ValueError(f'Bad outputs from "fn_pre", cant run')
 
         return data
