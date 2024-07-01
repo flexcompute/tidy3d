@@ -23,6 +23,7 @@ from ...constants import (
     WATT,
 )
 from ...exceptions import DataError, FileError
+from ..autograd.functions import interpn
 from ..types import Axis, Bound
 
 # maps the dimension names to their attributes
@@ -77,15 +78,6 @@ class DataArray(xr.DataArray):
             self.attrs[AUTOGRAD_KEY] = data
         else:
             super().__init__(data, *args, **kwargs)
-        # data_untraced = getval(data)
-        # super().__init__(data_untraced, *args, **kwargs)
-
-        # # if the passed data has tracers, store them in attrs dict
-        # if isbox(data):
-        #     # self.attrs[AUTOGRAD_KEY] = np.asarray(data)
-        #     self.attrs[AUTOGRAD_KEY] = getval(data)
-        #     # NOTE: this is done because if we pass the traced array directly, it will create a
-        #     # numpy array of `ArrayBox`, which is extremely slow
 
     @property
     def has_tracers(self) -> bool:
@@ -313,14 +305,14 @@ class DataArray(xr.DataArray):
                 self if assume_sorted else self.sortby(list(coords.keys()))
             )  # same handling as in xarray
 
-            # points = tuple(dict(obj.coords).values())
-            # xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
-            vals = self.values
-            # vals = obj.values
-            # vals = interpn(points, obj.values, xi, method=method)
-            # vals = np.asarray(vals)
+            points = tuple(dict(obj.coords).values())
+            xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
+            vals = interpn(points, obj.values, xi, method=method)
+            vals = np.asarray(vals)
+            ret = self.copy(deep=False, data=self.values._value)
+            ret.attrs[AUTOGRAD_KEY] = self.values
+            return ret
 
-            print(isbox(vals))
             da = DataArray(vals, dict(obj.coords) | coords)
             da.attrs[AUTOGRAD_KEY] = vals
             return da
