@@ -3211,7 +3211,7 @@ class PoleResidue(DispersiveMedium):
         # multiply with partial dJ/deps to give full gradients
 
         dJ_deps_inf = dJ_deps * deps_deps_inf
-        dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for (a, c) in deps_dpoles]
+        dJ_dpoles = [(dJ_deps * a, dJ_deps * c) for a, c in deps_dpoles]
 
         # get vjps w.r.t. permittivity and conductivity of the bulk
         derivative_map = {}
@@ -3221,7 +3221,7 @@ class PoleResidue(DispersiveMedium):
             if field_name == "eps_inf":
                 derivative_map[field_path] = float(np.real(dJ_deps_inf))
 
-            if field_name == "poles":
+            elif field_name == "poles":
                 pole_index, a_or_c = rest
                 derivative_map[field_path] = complex(dJ_dpoles[pole_index][a_or_c])
 
@@ -3479,9 +3479,6 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
                 E_der_map=derivative_info.E_der_map, eps_data=self.eps_inf, dim=dim
             )
 
-        # import pdb; pdb.set_trace()
-        # dJ_deps = np.conj(dJ_deps)
-
         # TODO: fix for multi-frequency
         frequency = derivative_info.frequency
 
@@ -3533,7 +3530,7 @@ class CustomPoleResidue(CustomDispersiveMedium, PoleResidue):
             if field_name == "eps_inf":
                 derivative_map[field_path] = np.real(dJ_deps_inf)
 
-            if field_name == "poles":
+            elif field_name == "poles":
                 pole_index, a_or_c = rest
                 derivative_map[field_path] = dJ_dpoles[pole_index][a_or_c]
 

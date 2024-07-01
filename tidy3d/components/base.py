@@ -212,7 +212,7 @@ class Tidy3dBaseModel(pydantic.BaseModel):
 
     def copy(self, deep: bool = True, **kwargs) -> Tidy3dBaseModel:
         """Copy a Tidy3dBaseModel.  With ``deep=True`` as default."""
-        # kwargs.update(deep=deep)
+        kwargs.update(deep=deep)
         new_copy = pydantic.BaseModel.copy(self, **kwargs)
         return self.validate(new_copy.dict())
 
