@@ -939,3 +939,40 @@ def test_mode_solver_relative():
     new_freqs = np.array(freqs) * 1.01
     ms = ms.updated_copy(freqs=new_freqs)
     _ = ms._data_on_yee_grid_relative(basis=basis)
+
+
+def test_mode_solver_plot():
+    """Test mode plane plotting functions"""
+
+    simulation = td.Simulation(
+        size=SIM_SIZE,
+        grid_spec=td.GridSpec(wavelength=1.0),
+        structures=[WAVEGUIDE],
+        run_time=1e-12,
+        symmetry=(0, 0, 1),
+        boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
+        sources=[SRC],
+    )
+    mode_spec = td.ModeSpec(
+        num_modes=3,
+        target_neff=2.0,
+        num_pml=[8, 4],
+    )
+    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    ms = ModeSolver(
+        simulation=simulation,
+        plane=PLANE,
+        mode_spec=mode_spec,
+        freqs=freqs,
+        direction="-",
+        colocate=False,
+    )
+    _, ax = plt.subplots(2, 2, figsize=(12, 8), tight_layout=True)
+    ms.plot(ax=ax[0, 0])
+    ms.plot_eps(freq=200e14, alpha=0.7, ax=ax[0, 1])
+    ms.plot_structures_eps(freq=200e14, alpha=0.8, cbar=True, reverse=False, ax=ax[1, 0])
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 0])
+    ms.plot(ax=ax[1, 1])
+    ms.plot_pml(ax=ax[1, 1])
+    ms.plot_grid(linewidth=0.3, ax=ax[1, 1])
+    plt.close()
