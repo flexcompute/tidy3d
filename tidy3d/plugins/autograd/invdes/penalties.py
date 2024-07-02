@@ -9,7 +9,10 @@ from .parametrizations import make_filter_and_project
 
 
 def make_erosion_dilation_penalty(
-    filter_size: Tuple[int, ...],
+    radius: Union[float, Tuple[float, ...]] = None,
+    dl: Union[float, Tuple[float, ...]] = None,
+    *,
+    size_px: Union[int, Tuple[int, ...]] = None,
     beta: float = 100.0,
     eta: float = 0.5,
     delta_eta: float = 0.01,
@@ -25,8 +28,12 @@ def make_erosion_dilation_penalty(
 
     Parameters
     ----------
-    filter_size : Tuple[int, ...]
-        The size of the filter to be used for erosion and dilation.
+    radius : Union[float, Tuple[float, ...]], optional
+        The radius of the kernel. Can be a scalar or a tuple. Default is None.
+    dl : Union[float, Tuple[float, ...]], optional
+        The grid spacing. Can be a scalar or a tuple. Default is None.
+    size_px : Union[int, Tuple[int, ...]], optional
+        The size of the kernel in pixels for each dimension. Can be a scalar or a tuple. Default is None.
     beta : float, optional
         Strength of the tanh projection. Default is 100.0.
     eta : float, optional
@@ -41,7 +48,9 @@ def make_erosion_dilation_penalty(
     Callable
         A function that computes the erosion/dilation penalty for a given array.
     """
-    filtproj = make_filter_and_project(filter_size, beta, eta, padding=padding)
+    filtproj = make_filter_and_project(
+        radius, dl, size_px=size_px, beta=beta, eta=eta, padding=padding
+    )
     eta_dilate = 0.0 + delta_eta
     eta_eroded = 1.0 - delta_eta
 

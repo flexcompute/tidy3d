@@ -290,7 +290,6 @@ def make_structures(params: anp.ndarray) -> dict[str, td.Structure]:
         custom_med_vec=custom_med_vec,
         polyslab=polyslab,
         geo_group=geo_group,
-        complex_polyslab=complex_polyslab_geo_group,
     )
 
 

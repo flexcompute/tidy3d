@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable, List, Union
 
 import numpy as np
 
@@ -75,6 +75,44 @@ def make_kernel(kernel_type: KernelType, size: Iterable[int], normalize: bool = 
         kernel /= np.sum(kernel)
 
     return kernel
+
+
+def get_kernel_size_px(
+    radius: Union[float, Iterable[float]] = None, dl: Union[float, Iterable[float]] = None
+) -> Union[int, List[int]]:
+    """Calculate the kernel size in pixels based on the provided radius and grid spacing.
+
+    Parameters
+    ----------
+    radius : Union[float, Iterable[float]], optional
+        The radius of the kernel. Can be a scalar or an iterable of floats. Default is None.
+    dl : Union[float, Iterable[float]], optional
+        The grid spacing. Can be a scalar or an iterable of floats. Default is None.
+
+    Returns
+    -------
+    Union[int, List[int]]
+        The size of the kernel in pixels for each dimension. Returns an integer if the radius is scalar, otherwise a list of integers.
+
+    Raises
+    ------
+    ValueError
+        If either 'radius' or 'dl' is not provided.
+    """
+    if radius is None or dl is None:
+        raise ValueError("Either 'size_px' or both 'radius' and 'dl' must be provided.")
+
+    if np.isscalar(radius):
+        radius = [radius] * len(dl) if isinstance(dl, Iterable) else [radius]
+    if np.isscalar(dl):
+        dl = [dl] * len(radius)
+
+    radius_px = [np.ceil(r / g) for r, g in zip(radius, dl)]
+    return (
+        [int(2 * r_px + 1) for r_px in radius_px]
+        if len(radius_px) > 1
+        else int(2 * radius_px[0] + 1)
+    )
 
 
 def chain(*funcs: Union[Callable, Iterable[Callable]]):

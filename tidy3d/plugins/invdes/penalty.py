@@ -7,7 +7,7 @@ import autograd.numpy as anp
 import pydantic.v1 as pd
 
 from tidy3d.constants import MICROMETER
-from tidy3d.plugins.autograd.invdes import get_kernel_size_px, make_erosion_dilation_penalty
+from tidy3d.plugins.autograd.invdes import make_erosion_dilation_penalty
 
 from .base import InvdesBaseModel
 
@@ -85,9 +85,8 @@ class ErosionDilationPenalty(AbstractPenalty):
 
     def evaluate(self, x: anp.ndarray, pixel_size: float) -> float:
         """Evaluate this penalty."""
-        filter_size = get_kernel_size_px(self.length_scale, pixel_size)
         penalty_fn = make_erosion_dilation_penalty(
-            filter_size, self.beta, self.eta0, self.delta_eta
+            self.length_scale, pixel_size, beta=self.beta, eta=self.eta0, delta_eta=self.delta_eta
         )
         penalty_unweighted = penalty_fn(x)
         return self.weight * penalty_unweighted

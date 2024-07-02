@@ -23,12 +23,12 @@ Automatic Differentiation with Autograd
     tidy3d.plugins.autograd.functions.pad
     tidy3d.plugins.autograd.functions.convolve
 
+    tidy3d.plugins.autograd.utilities.chain
+    tidy3d.plugins.autograd.utilities.make_kernel
+    tidy3d.plugins.autograd.utilities.get_kernel_size_px
+
     tidy3d.plugins.autograd.primitives.gaussian_filter
 
-    tidy3d.plugins.autograd.types.PaddingType
-    tidy3d.plugins.autograd.types.KernelType
-
-    tidy3d.plugins.autograd.invdes.get_kernel_size_px
     tidy3d.plugins.autograd.invdes.grey_indicator
     tidy3d.plugins.autograd.invdes.make_circular_filter
     tidy3d.plugins.autograd.invdes.make_conic_filter
@@ -38,3 +38,7 @@ Automatic Differentiation with Autograd
     tidy3d.plugins.autograd.invdes.make_filter_and_project
     tidy3d.plugins.autograd.invdes.ramp_projection
     tidy3d.plugins.autograd.invdes.tanh_projection
+
+    tidy3d.plugins.autograd.types.PaddingType
+    tidy3d.plugins.autograd.types.KernelType
+

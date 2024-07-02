@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+### Changed
+
+- All filter functions in `plugins/autograd` now accept either an absolute size in pixels or a `radius` and `dl` argument.
+
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
 
