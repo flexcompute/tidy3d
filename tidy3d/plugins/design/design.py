@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Dict, List, Tuple, Union
+from typing import Any, Callable, Dict, List, Tuple
 
 import pydantic.v1 as pd
 
+import tidy3d.web as web
+
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...components.data.sim_data import SimulationData
 from ...components.simulation import Simulation
 from ...web.api.container import BatchData
 from .method import MethodType
@@ -65,7 +66,9 @@ class DesignSpace(Tidy3dBaseModel):
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
-        fn_args_coords = tuple(fn_args.values())
+        fn_args_coords = tuple(
+            [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0].keys()]
+        )
 
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
@@ -86,7 +89,7 @@ class DesignSpace(Tidy3dBaseModel):
         except (TypeError, OSError):
             return None
 
-    def run(self, function: Callable, **kwargs) -> Result:
+    def run(self, fn: Callable, fn_post: Callable = None, **kwargs) -> Result:
         """Run the design problem on a user defined function of the design parameters.
 
         Parameters
@@ -102,78 +105,121 @@ class DesignSpace(Tidy3dBaseModel):
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
 
-        # run the function from the method
-        fn_args, fn_values = self.method.run(parameters=self.parameters, fn=function)
+        # Run based on how many functions the user provides
+        if fn_post is None:
+            fn_args, fn_values = self.run_single(fn)
 
-        fn_source = self.get_fn_source(function)
+        else:
+            fn_args, fn_values = self.run_pre_post(fn_pre=fn, fn_post=fn_post)
 
-        # package the result
+        fn_source = self.get_fn_source(fn)
+
+        # Package the result
         return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
 
+    def run_single(self, fn: Callable):
+        """Run a single function of parameter inputs."""
+        evaluate_fn = self._get_evaluate_fn_single(fn=fn)
+        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
+
+    def run_pre_post(self, fn_pre: Callable, fn_post: Callable):
+        """Run a function with tidy3d implicitly called in between."""
+        evaluate_fn = self._get_evaluate_fn_pre_post(fn_pre=fn_pre, fn_post=fn_post)
+        return self.method.run(run_fn=evaluate_fn, parameters=self.parameters)
+
+    """ Helpers """
+
+    def _get_evaluate_fn_single(self, fn: Callable) -> list[Any]:
+        """Get function that sequentially evaluates single `fn` for a list of arguments."""
+
+        def evaluate(args_list: list) -> list[Any]:
+            """Evaluate a list of arguments passed to ``fn``."""
+            return [fn(**args) for args in args_list]
+
+        return evaluate
+
+    def _get_evaluate_fn_pre_post(self, fn_pre: Callable, fn_post: Callable) -> list[Any]:
+        """Get function that tries to use batch processing on a set of arguments."""
+
+        def evaluate(args_list: list[tuple[Any, ...]]) -> list[Any]:
+            """Put together into one pipeline."""
+            combined_fn = self._stitch_pre_post(fn_pre=fn_pre, fn_post=fn_post)
+            out = combined_fn(args_list)
+            return out
+
+        return evaluate
+
+    def _stitch_pre_post(self, fn_pre: Callable, fn_post: Callable) -> Callable:
+        """Combine pre and post into one big function, stitching tidy3d calls between if needed."""
+
+        def fn_combined(args_list):
+            sim_dict = {idx: fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
+            data = self.fn_mid(sim_dict, fn_post)
+            # post_out = [fn_post(val[1]) for val in data.items()]
+            return data
+
+        return fn_combined
+
     @staticmethod
-    def _make_batch_fn_source(fn_source_pre: str, fn_source_post: str) -> str:
-        """How to make the full function source from the pre and post functions."""
+    def fn_mid(pre_out: Any, fn_post: Callable) -> Any:
+        """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
 
-        if (fn_source_pre is None) and (fn_source_post is None):
-            return None
+        # Handle most common case where fn_combined builds a dict of sims
+        if all(isinstance(sim, Simulation) for sim in pre_out.values()):
+            data = web.Batch(simulations=pre_out).run()
+            data = [fn_post(val[1]) for val in data.items()]
 
-        return str(fn_source_pre) + "\n\n" + str(fn_source_post)
+        # Can "index" dict here because fn_combined uses idx as the key
+        elif all(isinstance(sim, Dict) for sim in pre_out.values()) and all(
+            isinstance(sim, Simulation) for sim in pre_out[0].values()
+        ):
+            # Flatten dict of dicts whilst storing combined keys for later
+            flattened_sims = {}
+            original_structure = []
+            for dict_idx, sub_dict in pre_out.items():
+                sub_structure = []
+                for sub_dict_idx, sim in sub_dict.items():
+                    task_name = f"{dict_idx}_{sub_dict_idx}"
+                    flattened_sims[task_name] = sim
+                    sub_structure.append(task_name)
 
-    def run_batch(
-        self,
-        fn_pre: Callable[Any, Union[Simulation, List[Simulation], Dict[str, Simulation]]],
-        fn_post: Callable[
-            Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any
-        ],
-        path_dir: str = None,
-        **batch_kwargs,
-    ) -> Result:
-        """Run a design problem where the function is split into pre and post processing steps.
+                original_structure.append(sub_structure)
 
-        Parameters
-        ----------
-        fn_pre : Callable[Any, Union[Simulation, List[Simulation]]]
-            Function accepting arguments that correspond to the ``.name`` fields
-            of the ``DesignSpace.parameters``. Returns either a :class:`.Simulation`,
-            `list` of :class:`.Simulation`s or a `dict` of :class:`.Simulation`s to be run
-            in a batch.
-        fn_pre : Callable[Union[SimulationData, List[SimulationData], Dict[str, SimulationData]], Any]
-            Function accepting the :class:`.SimulationData` object(s) corresponding to the
-            ``fn_pre`` and returning the result of the parameter sweep function.
-            If ``fn_pre`` returns a single simulation, it will be passed as a single argument to
-            ``fn_post``.
-            If ``fn_pre`` returns a list of simulations, their data will be passed as ``*args``.
-            If ``fn_pre`` returns a dict of simulations, their data will be passed as ``**kwargs``
-            with the keys corresponding to the argument names.
-        path_dir : str = None
-            Optional directory in which to store the batch results.
+            # Run sims with flattened dict
+            batch_out = web.Batch(simulations=flattened_sims).run()
 
-        Returns
-        -------
-        :class:`.Result`
-            Object containing the results of the design space exploration.
-            Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
-        """
+            # Unflatten structure whilst running fn_post
+            data = []
+            for sub_structure in original_structure:
+                sub_dict = {batch_out[task_name] for task_name in sub_structure}
+                data.append(fn_post(sub_dict))
 
-        # run the functions using the `method.run_batch`
-        fn_args, fn_values, task_ids, batch_data = self.method.run_batch(
-            parameters=self.parameters,
-            fn_pre=fn_pre,
-            fn_post=fn_post,
-            path_dir=path_dir,
-            **batch_kwargs,
-        )
+        elif all(isinstance(sim, List) for sim in pre_out.values()) and all(
+            isinstance(sim, Simulation) for sim in pre_out[0]
+        ):
+            # Flatten dict of lists whilst storing combined keys for later
+            flattened_sims = {}
+            original_structure = []
+            for dict_idx, sub_list in pre_out.items():
+                sub_structure = []
+                for sub_list_idx, sim in enumerate(sub_list):
+                    task_name = f"{dict_idx}_{sub_list_idx}"
+                    flattened_sims[task_name] = sim
+                    sub_structure.append(task_name)
 
-        # store the pre and post functions in a single source code
-        fn_source_pre = self.get_fn_source(fn_pre)
-        fn_source_post = self.get_fn_source(fn_post)
-        fn_source = self._make_batch_fn_source(fn_source_pre, fn_source_post)
+                original_structure.append(sub_structure)
 
-        # package the result
-        return self._package_run_results(
-            fn_args=fn_args,
-            fn_values=fn_values,
-            fn_source=fn_source,
-            task_ids=task_ids,
-            batch_data=batch_data,
-        )
+            # Run sims with flattened dict
+            batch_out = web.Batch(simulations=flattened_sims).run()
+
+            # Unflatten structure whilst running fn_post
+            data = []
+            for sub_structure in original_structure:
+                sub_list = [batch_out[task_name] for task_name in sub_structure]
+                data.append(fn_post(sub_list))
+
+        else:
+            # user just wants to split into pre and post, without tidy3d I guess
+            data = [fn_post(val[1]) for val in pre_out.items()]
+
+        return data

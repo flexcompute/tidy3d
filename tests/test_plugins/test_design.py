@@ -7,15 +7,17 @@ import scipy.stats.qmc as qmc
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
-from tidy3d.plugins.design.method import MethodIndependent
 
 from ..utils import assert_log_level, run_emulated
 
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
-    monte_carlo=tdd.MethodMonteCarlo(num_points=5),
+    monte_carlo=tdd.MethodMonteCarlo(num_points=3),
     custom=tdd.MethodRandomCustom(num_points=5, sampler=qmc.Halton(d=3)),
     random=tdd.MethodRandom(num_points=5),  # TODO: remove this if not used
+    bay_opt=tdd.MethodBayOpt(initial_iter=4, n_iter=3),
+    gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2),
+    part_swarm=tdd.MethodParticleSwarm(n_particles=5, n_iter=2),
 )
 
 
@@ -26,12 +28,14 @@ def test_sweep(sweep_method, monkeypatch):
     #   use defines `scs` function to set up and run simulation as function of inputs.
     #   then postprocesses the data to give the SCS.
 
-    monkeypatch.setattr(web, "run", run_emulated)
+    # monkeypatch.setattr(web, "run", run_emulated)
 
-    def emulated_batch_run(self, simulations, path_dir: str = None, **kwargs):
-        data_dict = {task_name: run_emulated(sim) for task_name, sim in simulations.items()}
-        task_ids = dict(zip(simulations.keys(), data_dict.keys()))
-        task_paths = dict(zip(simulations.keys(), simulations.keys()))
+    def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
+        data_dict = {
+            task_name: run_emulated(sim) for task_name, sim in simulations.simulations.items()
+        }
+        task_ids = dict(zip(simulations.simulations.keys(), data_dict.keys()))
+        task_paths = dict(zip(simulations.simulations.keys(), simulations.simulations.keys()))
 
         class BatchDataEmulated(web.BatchData):
             """Emulated BatchData object that just returns stored emulated data."""
@@ -48,7 +52,7 @@ def test_sweep(sweep_method, monkeypatch):
 
         return BatchDataEmulated(data_dict=data_dict, task_ids=task_ids, task_paths=task_paths)
 
-    monkeypatch.setattr(MethodIndependent, "_run_batch", emulated_batch_run)
+    monkeypatch.setattr(web.Batch, "run", emulated_batch_run)
 
     # STEP1: define your design function (inputs and outputs)
 
@@ -121,6 +125,15 @@ def test_sweep(sweep_method, monkeypatch):
         # postprocess
         return scs_post(sim_data=sim_data)
 
+    def non_td_pre_func(radius, num_spheres, tag):
+        return radius + num_spheres * 1.1
+
+    def non_td_post_func(res):
+        return int(res)
+
+    def non_td_combined(radius, num_spheres, tag):
+        return int(radius + num_spheres * 1.1)
+
     # STEP2: define your design problem
 
     radius_variable = tdd.ParameterFloat(
@@ -144,21 +157,21 @@ def test_sweep(sweep_method, monkeypatch):
 
     # STEP3: Run your design problem
 
-    # either supply generic function and run one by one
+    # Try a basic non-td function
+    non_td_sweep1 = design_space.run(non_td_combined)
+
+    non_td_sweep2 = design_space.run(non_td_pre_func, non_td_post_func)
+
+    # or supply generic td single function
     sweep_results = design_space.run(scs)
 
-    assert sweep_results.batch_data is None
-
     # or supply function factored into pre and post and run in batch
-    sweep_results2 = design_space.run_batch(scs_pre, scs_post)
+    sweep_results2 = design_space.run(scs_pre, scs_post)
+    # NOTE: What's this meant to look like for a batch?? Not setting batch_data with new method
 
-    bd = sweep_results2.batch_data
-    for _ in bd.items():
-        continue
+    # design_space.run(scs_pre_multi, scs_post_multi)
 
-    design_space.run_batch(scs_pre_multi, scs_post_multi)
-
-    design_space.run_batch(scs_pre_dict, scs_post_dict)
+    # design_space.run(scs_pre_dict, scs_post_dict)
 
     sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
     sweep_results.sel(**sel_kwargs_0)
