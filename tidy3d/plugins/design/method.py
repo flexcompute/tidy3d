@@ -13,6 +13,7 @@ from bayes_opt.logger import JSONLogger
 from pyswarms.single.global_best import GlobalBestPSO
 
 import tidy3d.plugins.design as tdd
+from tidy3d.constants import inf
 
 # from ... import web # What's this for?
 from ...components.base import Tidy3dBaseModel
@@ -151,8 +152,28 @@ class MethodOptimise(Method, ABC):
 
         return {design_var.name: design_var.span for design_var in parameters}
 
-    def sol_array_to_dict(self, solution: np.array, keys: list) -> list[dict]:
-        return [dict(zip(keys, sol)) for sol in solution]
+    def any_to_int_param(self, parameter):
+        """Convert ParameterAny object to integers and provide a conversion dict to return"""
+
+        return dict(enumerate(parameter.allowed_values))
+        # return {num: par for num, par in enumerate(parameter.allowed_values)}
+
+    def sol_array_to_dict(
+        self, solution: np.array, keys: list, param_converter: dict
+    ) -> list[dict]:
+        """Convert an array of solutions to a list of dicts for function input"""
+        sol_dict_list = [dict(zip(keys, sol)) for sol in solution]
+
+        self._handle_param_convert(param_converter, sol_dict_list)
+
+        return sol_dict_list
+
+    def _handle_param_convert(self, param_converter, sol_dict_list):
+        for param, convert in param_converter.items():
+            for sol in sol_dict_list:
+                if isinstance(sol[param], float):
+                    sol[param] = int(round(sol[param], 0))
+                sol[param] = convert[sol[param]]
 
 
 class MethodBayOpt(MethodOptimise, ABC):
@@ -182,7 +203,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         default=2.5,
     )
 
-    xi: Optional[pd.PositiveFloat] = pd.Field(
+    xi: Optional[pd.NonNegativeFloat] = pd.Field(
         title="Xi parameter for the Gaussian processor.",
         description="TBD",
         default=0.0,
@@ -190,7 +211,24 @@ class MethodBayOpt(MethodOptimise, ABC):
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm for BayOpt"""
-        boundary_dict = self.create_boundary_dict(parameters)
+
+        param_converter = {}
+        boundary_dict = {}
+        for param in parameters:
+            if type(param) == tdd.ParameterAny:
+                param_converter[param.name] = self.any_to_int_param(param)
+                boundary_dict[param.name] = (
+                    0,
+                    len(param.allowed_values) - 1,
+                )  # -1 as ints are starting from 0
+            else:
+                boundary_dict[param.name] = param.span
+
+        # Params must be converted back to ints for BO to learn from them
+        invert_param_converter = {
+            param_name: {val: key for key, val in param_values.items()}
+            for param_name, param_values in param_converter.items()
+        }
 
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=self.kappa, xi=self.xi)
@@ -207,18 +245,22 @@ class MethodBayOpt(MethodOptimise, ABC):
         for _ in range(self.initial_iter):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
+            self._handle_param_convert(param_converter, [next_point])
             arg_list.append(next_point)
 
         init_output = run_fn(arg_list)
 
         for next_point, next_out in zip(arg_list, init_output):
+            self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out)
 
         # Handle subsequent iterations sequentially as BayOpt package does not allow for batched non-random predictions
         for _ in range(self.n_iter):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
+            self._handle_param_convert(param_converter, [next_point])
             next_out = run_fn([next_point])
+            self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
 
         # Output results from the BO.opt object
@@ -303,7 +345,7 @@ class MethodGenAlg(MethodOptimise, ABC):
         # Create fitness function combining pre and post fn with the tidy3d call
         def fitness_function(ga_instance, solution, solution_idx):
             # Break solution down to dict
-            sol_dict = self.sol_array_to_dict(solution, _param_keys)
+            sol_dict = self.sol_array_to_dict(solution, _param_keys, _param_converter)
 
             # Iterate through solutions for batched and non-batched data
             sol_out = run_fn(sol_dict)
@@ -329,6 +371,8 @@ class MethodGenAlg(MethodOptimise, ABC):
         _store_fitness = []
 
         # Set gene_spaces to keep GA within ranges
+        global _param_converter
+        _param_converter = {}
         gene_spaces = []
         gene_types = []
         for param in parameters:
@@ -341,7 +385,11 @@ class MethodGenAlg(MethodOptimise, ABC):
                 )  # +1 included so as to be inclusive of upper range value
                 gene_types.append(int)
             else:
-                print("Parameter type not supported by GA method.")
+                # Designed for str in ParameterAny but may work for anything
+                _param_converter[param.name] = self.any_to_int_param(param)
+
+                gene_spaces.append(range(0, len(param.allowed_values)))
+                gene_types.append(int)
 
         # Determine initial array
         num_genes = len(parameters)
@@ -408,10 +456,10 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         default=0.9,
     )
 
-    ftol: Optional[pd.confloat(ge=0, le=1)] = pd.Field(
+    ftol: Optional[Union[pd.confloat(ge=0, le=1), Literal[-inf]]] = pd.Field(
         title="Relative error for convergence.",
         description="Relative error in objective_func(best_pos) acceptable for convergence. See https://pyswarms.readthedocs.io/en/latest/examples/tutorials/tolerance.html for details. Off by default.",
-        default=-np.inf,
+        default=-inf,
     )
 
     ftol_iter: Optional[pd.PositiveInt] = pd.Field(
@@ -425,7 +473,7 @@ class MethodParticleSwarm(MethodOptimise, ABC):
 
         def fitness_function(solution):
             # Correct solutions that should be ints
-            sol_dict = self.sol_array_to_dict(solution, _param_keys)
+            sol_dict = self.sol_array_to_dict(solution, _param_keys, _param_converter)
             for arg_dict in sol_dict:
                 self._force_int(arg_dict, parameters)
 
@@ -448,9 +496,20 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         _store_parameters = []
         _store_fitness = []
 
-        # Determine bounds and format
-        min_bound = [param.span[0] for param in parameters]
-        max_bound = [param.span[1] for param in parameters]
+        # Build bounds and conversion dict for ParameterAny inputs
+        global _param_converter
+        _param_converter = {}
+        min_bound = []
+        max_bound = []
+        for param in parameters:
+            if type(param) == tdd.ParameterAny:
+                _param_converter[param.name] = self.any_to_int_param(param)
+                min_bound.append(0)
+                max_bound.append(len(param.allowed_values) - 1)  # -1 as ints are starting from 0
+            else:
+                min_bound.append(param.span[0])
+                max_bound.append(param.span[1])
+
         bounds = (min_bound, max_bound)
 
         options = {"c1": self.cognitive_coeff, "c2": self.social_coeff, "w": self.weight}
