@@ -144,6 +144,11 @@ class MethodGrid(MethodSample):
 class MethodOptimise(Method, ABC):
     """A method for handling design searches that optimise the design"""
 
+    # NOTE: We could move this to the Method base class but it's not relevant to MethodGrid
+    rng_seed: pd.PositiveInt = pd.Field(
+        title="Seed for random number generation", description="TBD", default=None
+    )
+
     def create_boundary_dict(
         self,
         parameters: Tuple[ParameterType, ...],
@@ -233,7 +238,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         # Fn can be defined here to be a combined func of pre, run_batch, post for BO to use
         utility = UtilityFunction(kind=self.acq_func, kappa=self.kappa, xi=self.xi)
         opt = BayesianOptimization(
-            f=run_fn, pbounds=boundary_dict, random_state=1, allow_duplicate_points=True
+            f=run_fn, pbounds=boundary_dict, random_state=self.rng_seed, allow_duplicate_points=True
         )
 
         # Create log and update
@@ -408,7 +413,7 @@ class MethodGenAlg(MethodOptimise, ABC):
             num_genes=num_genes,
             fitness_batch_size=self.solutions_per_pop,
             on_generation=on_generation,
-            random_seed=1,
+            random_seed=self.rng_seed,
             gene_space=gene_spaces,
             gene_type=gene_types,
             stop_criteria=self.stop_criteria,
@@ -469,7 +474,8 @@ class MethodParticleSwarm(MethodOptimise, ABC):
     )
 
     def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
-        # Args for the user
+        # Pyswarms doesn't have a seed set outside of numpy std method
+        np.random.seed(self.rng_seed)
 
         def fitness_function(solution):
             # Correct solutions that should be ints
@@ -541,6 +547,10 @@ class AbstractMethodRandom(MethodSample, ABC):
         description="TBD",
     )
 
+    rng_seed: pd.PositiveInt = pd.Field(
+        title="Seed for random number generation", description="TBD", default=None
+    )
+
     @abstractmethod
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
@@ -578,7 +588,7 @@ class MethodMonteCarlo(AbstractMethodRandom):
         """Sampler for this ``Method`` class."""
 
         d = len(parameters)
-        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d)
+        return DEFAULT_MONTE_CARLO_SAMPLER_TYPE(d=d, seed=self.rng_seed)
 
 
 class MethodRandom(AbstractMethodRandom):
@@ -617,6 +627,7 @@ class MethodRandom(AbstractMethodRandom):
         """Sampler for this ``Method`` class."""
 
         d = len(parameters)
+        np.random.seed(self.rng_seed)
 
         class UniformRandomSampler:
             """Has ``.random(n)`` returning ``(n, d)`` array sampled random uniformly in [0, 1]."""

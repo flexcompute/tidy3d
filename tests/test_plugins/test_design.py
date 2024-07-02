@@ -10,14 +10,18 @@ from tidy3d.plugins import design as tdd
 
 from ..utils import assert_log_level, run_emulated
 
+# Create rng object for MethodRandomCustom
+rng = np.random.default_rng(1)
+rng_initial_state = rng.__getstate__()
+
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
-    monte_carlo=tdd.MethodMonteCarlo(num_points=3),
-    custom=tdd.MethodRandomCustom(num_points=5, sampler=qmc.Halton(d=3)),
-    random=tdd.MethodRandom(num_points=5),  # TODO: remove this if not used
-    bay_opt=tdd.MethodBayOpt(initial_iter=4, n_iter=3),
-    gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2),
-    part_swarm=tdd.MethodParticleSwarm(n_particles=5, n_iter=2),
+    monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
+    custom=tdd.MethodRandomCustom(num_points=5, sampler=qmc.Halton(d=3, seed=rng)),
+    random=tdd.MethodRandom(num_points=5, rng_seed=1),  # TODO: remove this if not used
+    bay_opt=tdd.MethodBayOpt(initial_iter=4, n_iter=3, rng_seed=1),
+    gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2, rng_seed=1),
+    part_swarm=tdd.MethodParticleSwarm(n_particles=5, n_iter=2, rng_seed=1),
 )
 
 
@@ -159,8 +163,11 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try a basic non-td function
     non_td_sweep1 = design_space.run(non_td_combined)
-
+    # rng.__setstate__(rng_initial_state) # Resetting the rng state to save reinitialising the random samplers
     non_td_sweep2 = design_space.run(non_td_pre_func, non_td_post_func)
+
+    # Ensure output of combined and pre-post functions is the same
+    assert non_td_sweep1.values == non_td_sweep2.values
 
     # or supply generic td single function
     sweep_results = design_space.run(scs)
