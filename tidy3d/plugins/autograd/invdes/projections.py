@@ -1,7 +1,8 @@
 import autograd.numpy as np
+from numpy.typing import NDArray
 
 
-def ramp_projection(array: np.ndarray, width: float = 0.1, center: float = 0.5):
+def ramp_projection(array: NDArray, width: float = 0.1, center: float = 0.5) -> NDArray:
     """Apply a piecewise linear ramp projection to an array.
 
     This function performs a ramp projection on the input array, modifying its values
@@ -12,7 +13,7 @@ def ramp_projection(array: np.ndarray, width: float = 0.1, center: float = 0.5):
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to be projected.
     width : float, optional
         The width of the ramp. Default is 0.1.
@@ -21,7 +22,7 @@ def ramp_projection(array: np.ndarray, width: float = 0.1, center: float = 0.5):
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The array after applying the ramp projection.
     """
     ll = array <= (center - width / 2)
@@ -37,7 +38,7 @@ def ramp_projection(array: np.ndarray, width: float = 0.1, center: float = 0.5):
     )
 
 
-def tanh_projection(array: np.ndarray, beta: float = 1.0, eta: float = 0.5) -> np.ndarray:
+def tanh_projection(array: NDArray, beta: float = 1.0, eta: float = 0.5) -> NDArray:
     """Apply a tanh-based soft-thresholding projection to an array.
 
     This function performs a tanh projection on the input array, which is a common
@@ -46,7 +47,7 @@ def tanh_projection(array: np.ndarray, beta: float = 1.0, eta: float = 0.5) -> n
 
     Parameters
     ----------
-    array : np.ndarray
+    array : NDArray
         The input array to be projected.
     beta : float, optional
         The steepness of the projection. Higher values result in a sharper transition.
@@ -56,7 +57,7 @@ def tanh_projection(array: np.ndarray, beta: float = 1.0, eta: float = 0.5) -> n
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The array after applying the tanh projection.
     """
     if beta == 0:

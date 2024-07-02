@@ -1,6 +1,7 @@
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 import autograd.numpy as np
+from numpy.typing import NDArray
 
 from tidy3d.components.types import ArrayFloat2D
 
@@ -14,7 +15,7 @@ def make_erosion_dilation_penalty(
     eta: float = 0.5,
     delta_eta: float = 0.01,
     padding: PaddingType = "reflect",
-):
+) -> Callable:
     """Computes a penalty for erosion/dilation of a parameter map not being unity.
 
     Accepts a parameter array normalized between 0 and 1. Uses filtering and projection methods
@@ -45,19 +46,19 @@ def make_erosion_dilation_penalty(
     eta_dilate = 0.0 + delta_eta
     eta_eroded = 1.0 - delta_eta
 
-    def _dilate(array: np.ndarray, beta: float):
+    def _dilate(array: NDArray, beta: float) -> NDArray:
         return filtproj(array, beta=beta, eta=eta_dilate)
 
-    def _erode(array: np.ndarray, beta: float):
+    def _erode(array: NDArray, beta: float) -> NDArray:
         return filtproj(array, beta=beta, eta=eta_eroded)
 
-    def _open(array: np.ndarray, beta: float):
+    def _open(array: NDArray, beta: float) -> NDArray:
         return _dilate(_erode(array, beta=beta), beta=beta)
 
-    def _close(array: np.ndarray, beta: float):
+    def _close(array: NDArray, beta: float) -> NDArray:
         return _erode(_dilate(array, beta=beta), beta=beta)
 
-    def _erosion_dilation_penalty(array: np.ndarray, beta: float = beta):
+    def _erosion_dilation_penalty(array: NDArray, beta: float = beta) -> float:
         diff = _close(array, beta) - _open(array, beta)
 
         if not np.any(diff):
@@ -68,19 +69,19 @@ def make_erosion_dilation_penalty(
     return _erosion_dilation_penalty
 
 
-def curvature(dp: np.ndarray, ddp: np.ndarray) -> np.ndarray:
+def curvature(dp: NDArray, ddp: NDArray) -> NDArray:
     """Calculate the curvature at a point given the first and second derivatives.
 
     Parameters
     ----------
-    dp : np.ndarray
+    dp : NDArray
         The first derivative at the point, with (x, y) entries in the first dimension.
-    ddp : np.ndarray
+    ddp : NDArray
         The second derivative at the point, with (x, y) entries in the first dimension.
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The curvature at the given point.
 
     Notes
@@ -94,24 +95,24 @@ def curvature(dp: np.ndarray, ddp: np.ndarray) -> np.ndarray:
 
 
 def bezier_with_grads(
-    t: float, p0: np.ndarray, pc: np.ndarray, p2: np.ndarray
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    t: float, p0: NDArray, pc: NDArray, p2: NDArray
+) -> tuple[NDArray, NDArray, NDArray]:
     """Compute the Bezier curve and its first and second derivatives at a given point.
 
     Parameters
     ----------
     t : float
         The parameter at which to evaluate the Bezier curve.
-    p0 : np.ndarray
+    p0 : NDArray
         The first control point of the Bezier curve.
-    pc : np.ndarray
+    pc : NDArray
         The central control point of the Bezier curve.
-    p2 : np.ndarray
+    p2 : NDArray
         The last control point of the Bezier curve.
 
     Returns
     -------
-    tuple[np.ndarray, np.ndarray, np.ndarray]
+    tuple[NDArray, NDArray, NDArray]
         A tuple containing the Bezier curve value, its first derivative, and its second derivative at the given point.
     """
     p1 = 2 * pc - p0 / 2 - p2 / 2
@@ -121,22 +122,22 @@ def bezier_with_grads(
     return b, dbdt, dbd2t
 
 
-def bezier_curvature(x: np.ndarray, y: np.ndarray, t: Union[np.ndarray, float] = 0.5) -> np.ndarray:
+def bezier_curvature(x: NDArray, y: NDArray, t: Union[NDArray, float] = 0.5) -> NDArray:
     """
     Calculate the curvature of a Bezier curve at a given parameter t.
 
     Parameters
     ----------
-    x : np.ndarray
+    x : NDArray
         The x-coordinates of the control points.
-    y : np.ndarray
+    y : NDArray
         The y-coordinates of the control points.
-    t : Union[np.ndarray, float], optional
+    t : Union[NDArray, float], optional
         The parameter at which to evaluate the curvature, by default 0.5.
 
     Returns
     -------
-    np.ndarray
+    NDArray
         The curvature of the Bezier curve at the given parameter t.
     """
     p = np.stack((x, y), axis=1)
@@ -146,7 +147,7 @@ def bezier_curvature(x: np.ndarray, y: np.ndarray, t: Union[np.ndarray, float] =
 
 def make_curvature_penalty(
     min_radius: float, alpha: float = 1.0, kappa: float = 10.0, *, eps: float = 1e-6
-):
+) -> Callable:
     """Create a penalty function based on the curvature of a set of points.
 
     Parameters
@@ -178,7 +179,7 @@ def make_curvature_penalty(
     Optics Express (2018).
     """
 
-    def _curvature_penalty(points: ArrayFloat2D):
+    def _curvature_penalty(points: ArrayFloat2D) -> float:
         xs, ys = np.array(points).T
         crv = bezier_curvature(xs, ys)
         curvature_radius = 1 / (np.abs(crv) + eps)

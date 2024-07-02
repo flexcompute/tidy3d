@@ -15,6 +15,11 @@ from .utils import get_static
 FieldData = dict[str, ScalarFieldDataArray]
 PermittivityData = dict[str, ScalarFieldDataArray]
 
+__all__ = [
+    "integrate_within_bounds",
+    "DerivativeInfo",
+]
+
 
 class DerivativeInfo(Tidy3dBaseModel):
     """Stores derivative information passed to the ``.compute_derivatives`` methods."""
@@ -113,9 +118,3 @@ def integrate_within_bounds(arr: xr.DataArray, dims: list[str], bounds: Bound) -
     # uses trapezoidal rule
     # https://docs.xarray.dev/en/stable/generated/xarray.DataArray.integrate.html
     return _arr.integrate(coord=dims)
-
-
-__all__ = [
-    "integrate_within_bounds",
-    "DerivativeInfo",
-]
