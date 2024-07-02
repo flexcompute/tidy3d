@@ -16,6 +16,8 @@ from tidy3d.web.api.webapi import (
     get_info,
     get_run_info,
     load_simulation,
+    monitor,
+    real_cost,
     run,
     upload,
 )
@@ -298,6 +300,17 @@ def test_run(mock_webapi, monkeypatch, tmp_path):
         folder_name=PROJECT_NAME,
         path=str(tmp_path / "web_test_tmp.json"),
     )
+
+
+@responses.activate
+def test_monitor(mock_get_info, mock_monitor):
+    monitor(TASK_ID, verbose=True)
+    monitor(TASK_ID, verbose=False)
+
+
+@responses.activate
+def test_real_cost(mock_get_info):
+    assert real_cost(TASK_ID) == FLEX_UNIT
 
 
 @responses.activate
