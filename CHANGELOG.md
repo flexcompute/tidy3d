@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Bug where boundary layers would be plotted too small in 2D simulations.
+- Significant speedup for field projection computations.
+- Fix numerical precision issue in `FieldProjectionCartesianMonitor`.
 
 ## [2.7.0] - 2024-06-17
 
