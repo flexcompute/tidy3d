@@ -80,11 +80,11 @@ class DataArray(xr.DataArray):
             super().__init__(data, *args, **kwargs)
 
     @property
-    def values(self) -> Union[Box, np.ndarray]:
-        return self.attrs[AUTOGRAD_KEY] if self.has_tracers else super().values
+    def has_tracers(self) -> bool:
+        return AUTOGRAD_KEY in self.attrs
 
     @property
-    def tracers(self) -> Box:
+    def tracers(self) -> Union[Box, np.ndarray]:
         return self.attrs[AUTOGRAD_KEY]
 
     @classmethod
@@ -293,23 +293,19 @@ class DataArray(xr.DataArray):
         **coords_kwargs: Any,
     ):
         if self.has_tracers:
-            if kwargs is None:
-                kwargs = {}
             coords = either_dict_or_kwargs(coords, coords_kwargs, "interp")
 
             missing_keys = set(coords) - set(self.coords)
             if missing_keys:
                 raise KeyError(f"Cannot interpolate: {missing_keys} not in coords.")
 
-            obj = (
-                self if assume_sorted else self.sortby(list(coords.keys()))
-            )  # same handling as in xarray
+            obj = self if assume_sorted else self.sortby(list(coords.keys()))
 
             points = tuple(dict(obj.coords).values())
             xi = tuple(coords.get(k, obj.coords[k]) for k in obj.dims)
-            vals = interpn(points, obj.values, xi, method=method)
-            tmp = DataArray(vals, dict(obj.coords) | coords)  # no tracers in vals
-            return tmp.copy(deep=False, data=vals)  # copy over tracers
+            vals = interpn(points, obj.tracers, xi, method=method)
+            da = DataArray(vals, dict(obj.coords) | coords)  # tracers get stripped
+            return da.copy(deep=False, data=vals)  # copy over tracers
 
         return super().interp(
             coords=coords,
