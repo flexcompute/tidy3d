@@ -1087,6 +1087,21 @@ class FieldProjectionAngleMonitor(AbstractFieldProjectionMonitor):
         return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(self.freqs) * 6
 
 
+class DirectivityMonitor(FieldProjectionAngleMonitor, FluxMonitor):
+    """:class:`Monitor` that records the directivity of antennas in the frequency domain
+    at specified observation angles.
+    """
+
+    def storage_size(self, num_cells: int, tmesh: ArrayFloat1D) -> int:
+        """Size of monitor storage given the number of points after discretization."""
+        # stores 1 complex number per pair of angles, per frequency,
+        # for Er, Etheta, Ephi, Hr, Htheta, and Hphi (6 components)
+        # stores 1 real number per frequency for flux
+        return BYTES_COMPLEX * len(self.theta) * len(self.phi) * len(
+            self.freqs
+        ) * 6 + BYTES_REAL * len(self.freqs)
+
+
 class FieldProjectionCartesianMonitor(AbstractFieldProjectionMonitor):
     """:class:`Monitor` that samples electromagnetic near fields in the frequency domain
     and projects them on a Cartesian observation plane.
@@ -1420,4 +1435,5 @@ MonitorType = Union[
     FieldProjectionCartesianMonitor,
     FieldProjectionKSpaceMonitor,
     DiffractionMonitor,
+    DirectivityMonitor,
 ]

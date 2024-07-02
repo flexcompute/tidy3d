@@ -42,6 +42,9 @@ FS = np.linspace(1e14, 2e14, 5)
 TS = np.linspace(0, 1e-12, 4)
 MODE_INDICES = np.arange(0, 4)
 DIRECTIONS = ["+", "-"]
+PHIS = np.linspace(0, np.pi, 100)
+THETAS = np.linspace(0, 2 * np.pi, 100)
+PD = np.atleast_1d(4000)
 
 FIELD_MONITOR = td.FieldMonitor(size=SIZE_3D, fields=FIELDS, name="field", freqs=FREQS)
 FIELD_TIME_MONITOR = td.FieldTimeMonitor(
@@ -64,6 +67,14 @@ DIFFRACTION_MONITOR = td.DiffractionMonitor(
     freqs=FS,
     name="diffraction",
 )
+DIRECTIVITY_MONITOR = td.DirectivityMonitor(
+    size=(1.5, td.inf, 1.5),
+    freqs=FS,
+    name="directivity",
+    phi=list(PHIS),
+    theta=list(THETAS),
+    proj_distance=PD,
+)
 
 MONITORS = [
     FIELD_MONITOR,
@@ -74,6 +85,7 @@ MONITORS = [
     FLUX_MONITOR,
     FLUX_TIME_MONITOR,
     DIFFRACTION_MONITOR,
+    DIRECTIVITY_MONITOR,
 ]
 
 GRID_SPEC = td.GridSpec(wavelength=2.0)
@@ -176,6 +188,11 @@ def make_flux_data_array():
     return td.FluxDataArray(values, coords=dict(f=FS))
 
 
+def make_directivity_data_array():
+    values = np.random.random((len(PD), len(THETAS), len(PHIS), len(FS)))
+    return td.DirectivityDataArray(values, coords=dict(r=PD, theta=THETAS, phi=PHIS, f=FS))
+
+
 def make_flux_time_data_array():
     values = np.random.random(len(TS))
     return td.FluxTimeDataArray(values, coords=dict(t=TS))
@@ -236,6 +253,11 @@ def test_flux_data_array():
 def test_flux_time_data_array():
     data = make_flux_time_data_array()
     data = data.interp(t=1e-13)
+
+
+def test_directivity_data_array():
+    data = make_directivity_data_array()
+    data = data.sel(f=1e14, phi=0)
 
 
 def test_diffraction_data_array():
