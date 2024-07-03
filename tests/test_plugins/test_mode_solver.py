@@ -1028,6 +1028,29 @@ def test_modes_eme_sim(mock_remote_api, local):
     )
     if local:
         _ = solver.data
+        _ = solver.sim_data
+    else:
+        with pytest.raises(SetupError):
+            _ = msweb.run(solver)
+        _ = msweb.run(solver.to_fdtd_mode_solver())
+
+
+@pytest.mark.parametrize("local", [True, False])
+@responses.activate
+def test_modes_mode_sim(mock_remote_api, local):
+    lambda0 = 1
+    freq0 = td.C_0 / lambda0
+
+    sim = td.ModeSimulation(size=(1, 1, 0), mode_spec=td.ModeSpec(num_modes=10), freqs=[freq0])
+    solver = ModeSolver(simulation=sim, freqs=[freq0], mode_spec=sim.mode_spec, plane=sim.geometry)
+
+    if local:
+        _ = solver.data
+        _ = solver.sim_data
+
+        sim_data = td.run_local(sim=sim)
+        assert sim_data.data == solver.sim_data.data
+        assert not sim_data.remote
     else:
         with pytest.raises(SetupError):
             _ = msweb.run(solver)

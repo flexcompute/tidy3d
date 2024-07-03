@@ -14,7 +14,7 @@ from ...components.geometry.base import Box
 from ...components.geometry.polyslab import PolySlab
 from ...components.grid.grid_spec import GridSpec
 from ...components.medium import Medium, MediumType
-from ...components.mode import ModeSpec
+from ...components.mode_spec import ModeSpec
 from ...components.simulation import Simulation
 from ...components.source import GaussianPulse, ModeSource
 from ...components.structure import Structure

@@ -1040,7 +1040,7 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         span_inds = grid.discretize_inds(box=box, extend=extend)
         return self._subgrid(span_inds=span_inds, grid=grid)
 
-    def _discretize_inds_monitor(self, monitor: Monitor):
+    def _discretize_inds_monitor_box(self, box: Box, colocate: bool):
         """Start and stopping indexes for the cells where data needs to be recorded to fully cover
         a ``monitor``. This is used during the solver run. The final grid on which a monitor data
         lives is computed in ``discretize_monitor``, with the difference being that 0-sized
@@ -1048,8 +1048,8 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
 
         # Expand monitor size slightly to break numerical precision in favor of always having
         # enough data to span the full monitor.
-        expand_size = [size + fp_eps if size > fp_eps else size for size in monitor.size]
-        box_expanded = Box(center=monitor.center, size=expand_size)
+        expand_size = [size + fp_eps if size > fp_eps else size for size in box.size]
+        box_expanded = Box(center=box.center, size=expand_size)
         # Discretize without extension for now
         span_inds = np.array(self.grid.discretize_inds(box_expanded, extend=False))
 
@@ -1063,9 +1063,16 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
         # We always need to expand on the right.
         span_inds[:, 1] += 1
         # Non-colocating monitors also need to expand on the left.
-        if not monitor.colocate:
+        if not colocate:
             span_inds[:, 0] -= 1
         return span_inds
+
+    def _discretize_inds_monitor(self, monitor: Monitor):
+        """Start and stopping indexes for the cells where data needs to be recorded to fully cover
+        a ``monitor``. This is used during the solver run. The final grid on which a monitor data
+        lives is computed in ``discretize_monitor``, with the difference being that 0-sized
+        dimensions of the monitor or the simulation are snapped in post-processing."""
+        return self._discretize_inds_monitor_box(box=monitor.geometry, colocate=monitor.colocate)
 
     def discretize_monitor(self, monitor: Monitor) -> Grid:
         """Grid on which monitor data corresponding to a given monitor will be computed."""
@@ -1092,6 +1099,112 @@ class AbstractYeeGridSimulation(AbstractSimulation, ABC):
             The FDTD subgrid containing simulation points that intersect with ``box``.
         """
         return self._discretize_grid(box=box, grid=self.grid, extend=extend)
+
+    def _solver_symmetry(self, plane: Box) -> Tuple[Symmetry, Symmetry]:
+        """Get symmetry for solver for propagation along plane.normal axis."""
+        mode_symmetry = list(self.symmetry)
+        for dim in range(3):
+            if self.center[dim] != plane.center[dim]:
+                mode_symmetry[dim] = 0
+        _, solver_sym = plane.pop_axis(mode_symmetry, axis=plane.normal_axis)
+        return solver_sym
+
+    def _get_solver_grid(
+        self,
+        plane: Box,
+        keep_additional_layers: bool = False,
+        truncate_symmetry: bool = True,
+    ) -> Grid:
+        """Grid for the mode solver, not snapped to plane or simulation zero dims, and optionally
+        corrected for symmetries.
+
+        Parameters
+        ----------
+        plane: Box
+            Plane of the mode solver to discretize.
+        keep_additional_layers : bool = False
+            Do not discard layers of cells in front and behind the main layer of cells. Together they
+            represent the region where custom medium data is needed for proper subpixel.
+        truncate_symmetry : bool = True
+            Truncate to symmetry quadrant if symmetry present.
+
+        Returns
+        -------
+        :class:.`Grid`
+            The resulting grid.
+        """
+        span_inds = self._discretize_inds_monitor_box(box=plane, colocate=False)
+
+        # Remove extension along monitor normal
+        if not keep_additional_layers:
+            span_inds[plane.normal_axis, 0] += 1
+            span_inds[plane.normal_axis, 1] -= 1
+
+        # Do not extend if simulation has a single pixel along a dimension
+        for dim, num_cells in enumerate(self.grid.num_cells):
+            if num_cells <= 1:
+                span_inds[dim] = [0, 1]
+
+        # Truncate to symmetry quadrant if symmetry present
+        if truncate_symmetry:
+            _, plane_inds = Box.pop_axis([0, 1, 2], plane.normal_axis)
+            for dim, sym in enumerate(self._solver_symmetry(plane=plane)):
+                if sym != 0:
+                    span_inds[plane_inds[dim], 0] += np.diff(span_inds[plane_inds[dim]]) // 2
+        return self._subgrid(span_inds=span_inds)
+
+    def _reduced_simulation_copy(self, plane: Box):
+        """Strip objects not used by the mode solver from simulation object.
+        This might significantly reduce upload time in the presence of custom mediums.
+        """
+
+        # this method is in AbstractYeeGridSimulation instead of in
+        # ModeSimulation because ModeSolver provides reduced_simulation_copy
+        # of arbitrary AbstractYeeGridSimulation.
+        # Same comment applies to _get_solver_grid etc.
+
+        # we preserve extra cells along the normal direction to ensure there is enough data for
+        # subpixel
+        extended_grid = self._get_solver_grid(
+            plane=plane, keep_additional_layers=True, truncate_symmetry=False
+        )
+        grids_1d = extended_grid.boundaries
+        new_sim_box = Box.from_bounds(
+            rmin=(grids_1d.x[0], grids_1d.y[0], grids_1d.z[0]),
+            rmax=(grids_1d.x[-1], grids_1d.y[-1], grids_1d.z[-1]),
+        )
+
+        # remove PML, Absorers, etc, to avoid unnecessary cells
+        bspec = self.boundary_spec
+
+        new_bspec_dict = {}
+        for axis in "xyz":
+            bcomp = bspec[axis]
+            for bside, sign in zip([bcomp.plus, bcomp.minus], "+-"):
+                if isinstance(bside, (PML, StablePML, Absorber)):
+                    new_bspec_dict[axis + sign] = PECBoundary()
+                else:
+                    new_bspec_dict[axis + sign] = bside
+
+        new_bspec = BoundarySpec(
+            x=Boundary(plus=new_bspec_dict["x+"], minus=new_bspec_dict["x-"]),
+            y=Boundary(plus=new_bspec_dict["y+"], minus=new_bspec_dict["y-"]),
+            z=Boundary(plus=new_bspec_dict["z+"], minus=new_bspec_dict["z-"]),
+        )
+
+        # extract sub-simulation removing everything irrelevant
+        new_sim = self.subsection(
+            region=new_sim_box,
+            monitors=[],
+            sources=[],
+            grid_spec="identical",
+            boundary_spec=new_bspec,
+            remove_outside_custom_mediums=True,
+            remove_outside_structures=True,
+            include_pml_cells=True,
+        )
+
+        return new_sim
 
     def epsilon(
         self,

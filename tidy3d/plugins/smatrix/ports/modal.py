@@ -4,7 +4,7 @@ import pydantic.v1 as pd
 
 from ....components.data.data_array import DataArray
 from ....components.geometry.base import Box
-from ....components.mode import ModeSpec
+from ....components.mode_spec import ModeSpec
 from ....components.types import Direction
 
 

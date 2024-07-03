@@ -17,6 +17,7 @@ from rich.progress import Progress
 from ...components.data.monitor_data import ModeSolverData
 from ...components.eme.simulation import EMESimulation
 from ...components.medium import AbstractCustomMedium
+from ...components.mode.simulation import ModeSimulation
 from ...components.simulation import Simulation
 from ...components.types import Literal
 from ...exceptions import SetupError, WebError
@@ -333,6 +334,14 @@ class ModeSolverTask(ResourceLifecycle, Submittable, extra=pydantic.Extra.allow)
                 "and use the EME solver web api."
             )
             # mode_solver.simulation.validate_pre_upload()
+        elif isinstance(mode_solver.simulation, ModeSimulation):
+            # TODO: replace this with native web api support
+            raise SetupError(
+                "'ModeSimulation' is not yet supported in the "
+                "remote mode solver web api. Please instead call 'ModeSolver.to_fdtd_mode_solver' "
+                "before using the web api; this replaces the 'ModeSimulation' with a 'Simulation' "
+                "that can be used in the remote mode solver. "
+            )
         else:
             raise SetupError("Simulation type not supported in the remote mode solver web api.")
 

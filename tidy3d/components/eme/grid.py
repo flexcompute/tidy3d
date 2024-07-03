@@ -13,7 +13,7 @@ from ...exceptions import SetupError, ValidationError
 from ..base import Tidy3dBaseModel, skip_if_fields_missing
 from ..geometry.base import Box
 from ..grid.grid import Coords1D
-from ..mode import ModeSpec
+from ..mode_spec import ModeSpec
 from ..types import ArrayFloat1D, Axis, Coordinate, Size, TrackFreq, annotate_type
 
 # grid limits

@@ -18,7 +18,7 @@ from .data.data_array import TimeDataArray
 from .data.dataset import FieldDataset, ScalarFieldDataArray, TimeDataset
 from .data.validators import validate_no_nans
 from .geometry.base import Box
-from .mode import ModeSpec
+from .mode_spec import ModeSpec
 from .time import AbstractTimeDependence
 from .types import (
     TYPE_TAG_STR,
