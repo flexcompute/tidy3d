@@ -425,7 +425,7 @@ def _run_primitive(
 
         # TODO: put this in postprocess?
         aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
-
+        aux_data[AUX_KEY_SIM_DATA_ORIGINAL] = sim_data_orig
         field_map = sim_data_orig.strip_traced_fields(
             include_untraced_data_arrays=True, starting_path=("data",)
         )
@@ -673,9 +673,10 @@ def setup_adj(
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
 
-    adjoint_monitors = sim_data_orig.simulation.updated_copy(monitors=[]).with_adjoint_monitors(
-        sim_fields_original
-    )
+    num_monitors = len(sim_data_orig.simulation.monitors)
+    adjoint_monitors = sim_data_orig.simulation.with_adjoint_monitors(sim_fields_original).monitors[
+        num_monitors:
+    ]
 
     sim_adj = sim_data_vjp.make_adjoint_sim(
         data_vjp_paths=data_vjp_paths,
