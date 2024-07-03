@@ -770,6 +770,7 @@ class CustomFieldSource(FieldSource, PlanarSource):
     Example
     -------
     >>> from tidy3d import ScalarFieldDataArray
+    >>> import tidy3d as td
     >>> pulse = GaussianPulse(freq0=200e12, fwidth=20e12)
     >>> x = np.linspace(-1, 1, 101)
     >>> y = np.linspace(-1, 1, 101)
@@ -789,7 +790,21 @@ class CustomFieldSource(FieldSource, PlanarSource):
 
     Example
     -------
-
+    >>> Flux_monitor = td.FluxMonitor(
+    ...     center=(0, 0, 0),
+    ...     size=(3, 3, 3),
+    ...     freqs=f,
+    ...     name="Flux",
+    ...     )
+    >>> sim = td.Simulation(
+    ...       center=[0,0,0],
+    ...       size=(4, 4, 4),
+    ...       structures=[],
+    ...       sources=[custom_source],
+    ...       monitors=[],
+    ...       run_time = 1e-6,
+    ...       shutoff=1e-6,
+    ...    )
     >>> sim_empty = sim.updated_copy(monitors = [Flux_monitor],
     ...             structures = [],
     ...             grid_spec= sim.grid_spec.updated_copy(override_structures = sim.structures)
