@@ -984,25 +984,22 @@ def test_multi_freq_edge_cases(log_capture, use_emulated_run, structure_key, lab
 # @pytest.mark.parametrize("structure_key", ('custom_med',))
 @pytest.mark.parametrize("structure_key", structure_keys_)
 # @pytest.mark.parametrize("structure_key", ('polyslab',))
-def _test_multi_frequency_equivalence(use_emulated_run, structure_key):
+def test_multi_frequency_equivalence(use_emulated_run, structure_key):
     """Test an objective function through tidy3d autograd."""
 
     def objective_indi(params, structure_key) -> float:
         power_sum = 0.0
 
         for f in mnt_multi.freqs:
-            mnt_f = mnt_single.updated_copy(freqs=[f])
-
             structure_traced = make_structures(params)[structure_key]
             sim = SIM_BASE.updated_copy(
                 structures=[structure_traced],
-                monitors=list(SIM_BASE.monitors) + [mnt_f],
+                monitors=list(SIM_BASE.monitors) + [mnt_multi],
             )
 
             sim_data = run(sim, task_name="multifreq_test")
-            amps = get_amps(sim_data, "single").sel(mode_index=0, direction="+")
-            amps_i = amps.sel(f=f)
-            power_i = power(amps)
+            amps_i = get_amps(sim_data, "multi").sel(mode_index=0, direction="+", f=f)
+            power_i = power(amps_i)
             power_sum = power_sum + power_i
 
         return power_sum
@@ -1011,7 +1008,7 @@ def _test_multi_frequency_equivalence(use_emulated_run, structure_key):
         structure_traced = make_structures(params)[structure_key]
         sim = SIM_BASE.updated_copy(
             structures=[structure_traced],
-            monitors=list(SIM_BASE.monitors) + [mnt_single, mnt_multi],
+            monitors=list(SIM_BASE.monitors) + [mnt_multi],
         )
         sim_data = run(sim, task_name="multifreq_test")
         amps = get_amps(sim_data, "multi").sel(mode_index=0, direction="+")
@@ -1027,4 +1024,7 @@ def _test_multi_frequency_equivalence(use_emulated_run, structure_key):
     grad_indi = ag.grad(objective_indi)(params0_, structure_key=structure_key)
     grad_multi = ag.grad(objective_multi)(params0_, structure_key=structure_key)
 
-    np.testing.assert_allclose(grad_indi, grad_multi)
+    assert not np.any(np.isclose(grad_indi, 0))
+    assert not np.any(np.isclose(grad_multi, 0))
+
+    np.testing.assert_allclose(grad_indi, grad_multi * len(mnt_multi.freqs))

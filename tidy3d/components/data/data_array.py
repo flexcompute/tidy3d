@@ -10,7 +10,7 @@ import h5py
 import numpy as np
 import pandas
 import xarray as xr
-from autograd.tracer import getval, isbox
+from autograd.tracer import isbox
 
 from ...constants import (
     HERTZ,
@@ -70,7 +70,7 @@ class DataArray(xr.DataArray):
         """Initialize ``DataArray``."""
 
         # initialize with untraced data
-        data_untraced = getval(data)
+        data_untraced = data  # getval(data)
         super().__init__(data_untraced, *args, **kwargs)
 
         # if the passed data has tracers, store them in attrs dict
