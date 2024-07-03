@@ -1986,9 +1986,10 @@ class DirectivityData(MonitorData):
     >>> theta = np.linspace(0, np.pi, 10)
     >>> phi = np.linspace(0, 2*np.pi, 20)
     >>> coords = dict(r=r, theta=theta, phi=phi, f=f)
-    >>> scalar_field = DirectivityDataArray(farfield_values, coords=coords)
+    >>> values = np.random.random((len(r), len(theta), len(phi), len(f)))
+    >>> scalar_field = DirectivityDataArray(values, coords=coords)
     >>> monitor = DirectivityMonitor(center=(1,2,3), size=(2,2,2), freqs=f, name='n2f_monitor', phi=phi, theta=theta)
-    >>> data = DirectivityData(monitor=monitor,Directivity=scalar_field)
+    >>> data = DirectivityData(monitor=monitor,directivity=scalar_field)
     """
 
     monitor: DirectivityMonitor = pd.Field(
