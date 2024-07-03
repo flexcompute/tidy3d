@@ -154,20 +154,29 @@ class DesignSpace(Tidy3dBaseModel):
 
         def fn_combined(args_list):
             sim_dict = {idx: fn_pre(**arg_list) for idx, arg_list in enumerate(args_list)}
-            data = self.fn_mid(sim_dict, fn_post)
-            # post_out = [fn_post(val[1]) for val in data.items()]
-            return data
+            data = self.fn_mid(sim_dict)
+            post_out = [fn_post(val[1]) for val in data.items()]
+            return post_out
 
         return fn_combined
 
     @staticmethod
-    def fn_mid(pre_out: Any, fn_post: Callable) -> Any:
+    def fn_mid(pre_out: Any) -> Any:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
+
+        # Convert list of sim inputs to dict of dict before passing through checks
+        was_list = False
+        if all(isinstance(sim, List) for sim in pre_out.values()) and all(
+            isinstance(sim, Simulation) for sim in pre_out[0]
+        ):
+            pre_out = {
+                idx: dict(enumerate(sim_list)) for idx, sim_list in enumerate(pre_out.values())
+            }
+            was_list = True
 
         # Handle most common case where fn_combined builds a dict of sims
         if all(isinstance(sim, Simulation) for sim in pre_out.values()):
             data = web.Batch(simulations=pre_out).run()
-            data = [fn_post(val[1]) for val in data.items()]
 
         # Can "index" dict here because fn_combined uses idx as the key
         elif all(isinstance(sim, Dict) for sim in pre_out.values()) and all(
@@ -189,37 +198,18 @@ class DesignSpace(Tidy3dBaseModel):
             batch_out = web.Batch(simulations=flattened_sims).run()
 
             # Unflatten structure whilst running fn_post
-            data = []
-            for sub_structure in original_structure:
-                sub_dict = {batch_out[task_name] for task_name in sub_structure}
-                data.append(fn_post(sub_dict))
-
-        elif all(isinstance(sim, List) for sim in pre_out.values()) and all(
-            isinstance(sim, Simulation) for sim in pre_out[0]
-        ):
-            # Flatten dict of lists whilst storing combined keys for later
-            flattened_sims = {}
-            original_structure = []
-            for dict_idx, sub_list in pre_out.items():
-                sub_structure = []
-                for sub_list_idx, sim in enumerate(sub_list):
-                    task_name = f"{dict_idx}_{sub_list_idx}"
-                    flattened_sims[task_name] = sim
-                    sub_structure.append(task_name)
-
-                original_structure.append(sub_structure)
-
-            # Run sims with flattened dict
-            batch_out = web.Batch(simulations=flattened_sims).run()
-
-            # Unflatten structure whilst running fn_post
-            data = []
-            for sub_structure in original_structure:
-                sub_list = [batch_out[task_name] for task_name in sub_structure]
-                data.append(fn_post(sub_list))
+            data = {}
+            for dict_idx, sub_structure in enumerate(original_structure):
+                if was_list:
+                    data[dict_idx] = [batch_out[task_name] for task_name in sub_structure]
+                else:
+                    data[dict_idx] = {
+                        task_name.split("_", 1)[1]: batch_out[task_name]
+                        for task_name in sub_structure
+                    }
 
         else:
             # user just wants to split into pre and post, without tidy3d I guess
-            data = [fn_post(val[1]) for val in pre_out.items()]
+            data = pre_out
 
         return data
