@@ -166,7 +166,7 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Convert list of sim inputs to dict of dict before passing through checks
         was_list = False
-        if all(isinstance(sim, List) for sim in pre_out.values()) and all(
+        if all(isinstance(sim, List) for sim in pre_out.values()) and any(
             isinstance(sim, Simulation) for sim in pre_out[0]
         ):
             pre_out = {
@@ -179,34 +179,41 @@ class DesignSpace(Tidy3dBaseModel):
             data = web.Batch(simulations=pre_out).run()
 
         # Can "index" dict here because fn_combined uses idx as the key
-        elif all(isinstance(sim, Dict) for sim in pre_out.values()) and all(
+        elif all(isinstance(sim, Dict) for sim in pre_out.values()) and any(
             isinstance(sim, Simulation) for sim in pre_out[0].values()
         ):
             # Flatten dict of dicts whilst storing combined keys for later
             flattened_sims = {}
-            original_structure = []
+            original_structure = {}
             for dict_idx, sub_dict in pre_out.items():
-                sub_structure = []
-                for sub_dict_idx, sim in sub_dict.items():
-                    task_name = f"{dict_idx}_{sub_dict_idx}"
-                    flattened_sims[task_name] = sim
-                    sub_structure.append(task_name)
+                sub_structure = {}
+                for sub_dict_idx, sim_like in sub_dict.items():
+                    sub_dict_idx = str(sub_dict_idx)  # Needs to be string for restoration later
+                    if isinstance(sim_like, Simulation):
+                        task_name = f"{dict_idx}_{sub_dict_idx}"
+                        flattened_sims[task_name] = sim_like
+                        sub_structure[sub_dict_idx] = None
+                    else:
+                        sub_structure[sub_dict_idx] = sim_like
 
-                original_structure.append(sub_structure)
+                original_structure[dict_idx] = sub_structure
 
             # Run sims with flattened dict
             batch_out = web.Batch(simulations=flattened_sims).run()
 
             # Unflatten structure whilst running fn_post
-            data = {}
-            for dict_idx, sub_structure in enumerate(original_structure):
-                if was_list:
-                    data[dict_idx] = [batch_out[task_name] for task_name in sub_structure]
-                else:
-                    data[dict_idx] = {
-                        task_name.split("_", 1)[1]: batch_out[task_name]
-                        for task_name in sub_structure
-                    }
+            for task_id in batch_out.task_ids:
+                dict_idx, sub_dict_idx = task_id.split("_", 1)
+                original_structure[int(dict_idx)][sub_dict_idx] = batch_out[task_id]
+
+            # Restore to lists if user supplied lists
+            if was_list:
+                data = {
+                    dict_idx: list(sub_dict.values())
+                    for dict_idx, sub_dict in original_structure.items()
+                }
+            else:
+                data = original_structure
 
         else:
             # user just wants to split into pre and post, without tidy3d I guess
