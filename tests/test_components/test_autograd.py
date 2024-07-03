@@ -11,10 +11,7 @@ import matplotlib.pylab as plt
 import numpy as np
 import pytest
 import tidy3d as td
-from tidy3d.web import run_async
-from tidy3d.plugins.polyslab import ComplexPolySlab
-from tidy3d.web import Job, run_async
-from tidy3d.web.api.autograd.autograd import run
+from tidy3d.web.api.autograd.autograd import run, run_async
 
 from ..utils import SIM_FULL, AssertLogLevel, run_emulated
 
@@ -116,6 +113,8 @@ _run_was_emulated = [False]
 def use_emulated_run(monkeypatch):
     """If this fixture is used, the `tests.utils.run_emulated` function is used for simulation."""
 
+    from tidy3d.web.api.container import Job
+
     if TEST_MODE in ("pipeline", "speed"):
         VJP = "VJP"
         task_id_fwd = "task_fwd"
@@ -198,7 +197,9 @@ def use_emulated_run(monkeypatch):
         monkeypatch.setattr(Job, "run", emulated_job_run)
         monkeypatch.setattr(Job, "task_id", task_id_fwd)
 
-        reload(webapi)
+        import tidy3d
+
+        reload(tidy3d.web.api.autograd.autograd)
 
         _run_was_emulated[0] = True
 
