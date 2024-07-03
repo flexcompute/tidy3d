@@ -119,7 +119,7 @@ def use_emulated_run(monkeypatch):
     if TEST_MODE in ("pipeline", "speed"):
         VJP = "VJP"
         task_id_fwd = "task_fwd"
-        task_id_bwd = "task_fwd"
+        task_id_bwd = "task_bwd"
         cache = {}
 
         monkeypatch.setattr(
@@ -155,6 +155,7 @@ def use_emulated_run(monkeypatch):
 
                 # store the data in aux_data (see commented out lines below)
                 aux_data = {}
+
                 _ = postprocess_fwd(
                     sim_data_combined=sim_data_combined,
                     sim_original=sim_original,
@@ -164,6 +165,7 @@ def use_emulated_run(monkeypatch):
                 # sim_data_orig = aux_data[AUX_KEY_SIM_DATA_ORIGINAL]
                 # sim_data_fwd = aux_data[AUX_KEY_SIM_DATA_FWD]
 
+                # todo: split into return (original data) and store (fwd data)
                 # cache it locally for test
                 cache[task_id_fwd] = copy.copy(aux_data)
 
