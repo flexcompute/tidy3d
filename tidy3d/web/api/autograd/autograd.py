@@ -396,24 +396,40 @@ def _run_primitive(
     """Autograd-traced 'run()' function: runs simulation, strips tracer data, caches fwd data."""
 
     td.log.info("running primitive '_run_primitive()'")
-    sim_combined = setup_fwd(
-        sim_fields=sim_fields, sim_original=sim_original, local_gradient=local_gradient
-    )
 
-    if not local_gradient:
+    if local_gradient:
+        sim_combined = setup_fwd(
+            sim_fields=sim_fields,
+            sim_original=sim_original,
+            local_gradient=local_gradient,
+        )
+        sim_data_combined, _ = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
+
+        # TODO: put this in postprocess?
+        # aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
+
+        field_map = postprocess_fwd(
+            sim_data_combined=sim_data_combined,
+            sim_original=sim_original,
+            aux_data=aux_data,
+        )
+
+    else:
         run_kwargs["simulation_type"] = "autograd_fwd"
 
-    sim_data_combined, task_id_fwd = _run_tidy3d(sim_combined, task_name=task_name, **run_kwargs)
+        sim_data_orig, task_id_fwd = _run_tidy3d(
+            sim_original,
+            task_name=task_name,
+            **run_kwargs,
+        )
 
-    # TODO: put this in postprocess?
-    aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
+        # TODO: put this in postprocess?
+        aux_data[AUX_KEY_FWD_TASK_ID] = task_id_fwd
 
-    # TODO: make sure this function works if the combined sim data has no grad monitors
-    field_map = postprocess_fwd(
-        sim_data_combined=sim_data_combined,
-        sim_original=sim_original,
-        aux_data=aux_data,
-    )
+        field_map = sim_data_orig.strip_traced_fields(
+            include_untraced_data_arrays=True, starting_path=("data",)
+        )
+
     return field_map
 
 
@@ -528,7 +544,6 @@ def _run_bwd(
         sim_adj = setup_adj(
             data_fields_vjp=data_fields_vjp,
             sim_data_orig=sim_data_orig,
-            sim_data_fwd=sim_data_fwd,
             sim_fields_original=sim_fields_original,
         )
 
@@ -550,21 +565,25 @@ def _run_bwd(
         # run adjoint simulation
         task_name_adj = str(task_name) + "_adjoint"
 
-        if not local_gradient:
-            run_kwargs["simulation_type"] = "autograd_bwd"
+        if local_gradient:
+            sim_data_adj, _ = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
+
+            vjp_traced_fields = postprocess_adj(
+                sim_data_adj=sim_data_adj,
+                sim_data_orig=sim_data_orig,
+                sim_data_fwd=sim_data_fwd,
+                sim_fields_original=sim_fields_original,
+            )
+
+        else:
             task_id_fwd = aux_data[AUX_KEY_FWD_TASK_ID]
             run_kwargs["parent_tasks"] = [task_id_fwd]
+            run_kwargs["simulation_type"] = "autograd_bwd"
+
             _, task_id_adj = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
-            return get_vjp_traced_fields(task_id_adj)
+            vjp_traced_fields = get_vjp_traced_fields(task_id_adj)
 
-        sim_data_adj, _ = _run_tidy3d(sim_adj, task_name=task_name_adj, **run_kwargs)
-
-        return postprocess_adj(
-            sim_data_adj=sim_data_adj,
-            sim_data_orig=sim_data_orig,
-            sim_data_fwd=sim_data_fwd,
-            sim_fields_original=sim_fields_original,
-        )
+        return vjp_traced_fields
 
     return vjp
 
@@ -605,7 +624,6 @@ def _run_async_bwd(
             sim_adj = setup_adj(
                 data_fields_vjp=data_fields_vjp,
                 sim_data_orig=sim_data_orig,
-                sim_data_fwd=sim_data_fwd,
                 sim_fields_original=sim_fields_original,
             )
             sims_adj[task_name_adj] = sim_adj
@@ -638,7 +656,6 @@ def _run_async_bwd(
 def setup_adj(
     data_fields_vjp: AutogradFieldMap,
     sim_data_orig: td.SimulationData,
-    sim_data_fwd: td.SimulationData,
     sim_fields_original: AutogradFieldMap,
 ) -> td.Simulation:
     """Construct an adjoint simulation from a set of data_fields for the VJP."""
@@ -655,8 +672,14 @@ def setup_adj(
 
     # make adjoint simulation from that SimulationData
     data_vjp_paths = set(data_fields_vjp.keys())
+
+    adjoint_monitors = sim_data_orig.simulation.updated_copy(monitors=[]).with_adjoint_monitors(
+        sim_fields_original
+    )
+
     sim_adj = sim_data_vjp.make_adjoint_sim(
-        data_vjp_paths=data_vjp_paths, adjoint_monitors=sim_data_fwd.simulation.monitors
+        data_vjp_paths=data_vjp_paths,
+        adjoint_monitors=adjoint_monitors,
     )
 
     td.log.info(f"Adjoint simulation created with {len(sim_adj.sources)} sources.")
