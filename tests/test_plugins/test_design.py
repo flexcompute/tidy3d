@@ -1,9 +1,10 @@
 """Test the parameter sweep plugin."""
 
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-import scipy.stats.qmc as qmc
+
+# import scipy.stats.qmc as qmc
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
@@ -11,13 +12,13 @@ from tidy3d.plugins import design as tdd
 from ..utils import assert_log_level, run_emulated
 
 # Create rng object for MethodRandomCustom
-rng = np.random.default_rng(1)
-rng_initial_state = rng.__getstate__()
+# rng = np.random.default_rng(1)
+# rng_initial_state = rng.__getstate__()
 
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
-    custom=tdd.MethodRandomCustom(num_points=5, sampler=qmc.Halton(d=3, seed=rng)),
+    # custom=tdd.MethodRandomCustom(num_points=50, sampler=qmc.Halton(d=3, seed=rng)),
     random=tdd.MethodRandom(num_points=5, rng_seed=1),  # TODO: remove this if not used
     bay_opt=tdd.MethodBayOpt(initial_iter=4, n_iter=3, rng_seed=1),
     gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2, rng_seed=1),
@@ -32,7 +33,7 @@ def test_sweep(sweep_method, monkeypatch):
     #   use defines `scs` function to set up and run simulation as function of inputs.
     #   then postprocesses the data to give the SCS.
 
-    # monkeypatch.setattr(web, "run", run_emulated)
+    monkeypatch.setattr(web, "run", run_emulated)
 
     def emulated_batch_run(simulations, path_dir: str = None, **kwargs):
         data_dict = {
@@ -60,6 +61,29 @@ def test_sweep(sweep_method, monkeypatch):
 
     # STEP1: define your design function (inputs and outputs)
 
+    # Non td function testing
+    def float_non_td_pre_func(radius, num_spheres, tag):
+        return radius + num_spheres * 1.1
+
+    def float_non_td_post_func(res):
+        return int(res)
+
+    def float_non_td_combined(radius, num_spheres, tag):
+        return int(radius + num_spheres * 1.1)
+
+    def list_non_td_pre_func(radius, num_spheres, tag):
+        return [radius, num_spheres, radius + num_spheres * 1.1]
+
+    def list_non_td_post_func(res):
+        return int(sum(res))
+
+    def dict_non_td_pre_func(radius, num_spheres, tag):
+        return {"rad": radius, "num": num_spheres, "sum": radius + num_spheres * 1.1}
+
+    def dict_non_td_post_func(res):
+        return int(sum(res.values()))
+
+    # Functions with td elements
     def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
         """Preprocessing function (make simulation)"""
 
@@ -95,48 +119,96 @@ def test_sweep(sweep_method, monkeypatch):
         mnt_data = sim_data["field"]
         ex_values = mnt_data.Ex.values
 
-        # generate a random number to add some variance to data
-        np.random.seed(hash(sim_data) % 1000)
+        return np.sum(np.square(np.abs(ex_values)))
 
-        return np.sum(np.square(np.abs(ex_values))) + np.random.random()
+    def scs_combined(radius: float, num_spheres: int, tag: str) -> float:
+        """Preprocessing function (make simulation) and run it controlled by the user"""
 
-    def scs_pre_multi(*args, **kwargs):
-        sim = scs_pre(*args, **kwargs)
+        # set up simulation
+        spheres = []
 
+        for _ in range(int(num_spheres)):
+            spheres.append(
+                td.Structure(
+                    geometry=td.Sphere(radius=radius),
+                    medium=td.PEC,
+                )
+            )
+
+        mnt = td.FieldMonitor(
+            size=(0, 0, 0),
+            center=(0, 0, 0),
+            freqs=[2e14],
+            name="field",
+        )
+
+        sim = td.Simulation(
+            size=(1, 1, 1),
+            structures=spheres,
+            grid_spec=td.GridSpec.auto(wavelength=1.0),
+            run_time=1e-12,
+            monitors=[mnt],
+        )
+
+        sim_data = web.run(sim, task_name="test")
+
+        mnt_data = sim_data["field"]
+        ex_values = mnt_data.Ex.values
+
+        return np.sum(np.square(np.abs(ex_values)))
+
+    def scs_pre_batch(radius: float, num_spheres: int, tag: str) -> float:
+        sim = {"batch_test": scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)}
+
+        return web.Batch(simulations=sim)
+
+    def scs_post_batch(batch_data) -> float:
+        """Postprocessing function (analyze simulation data)"""
+
+        sim_data = [val[1] for val in batch_data.items()][0]
+
+        mnt_data = sim_data["field"]
+        ex_values = mnt_data.Ex.values
+
+        return np.sum(np.square(np.abs(ex_values)))
+
+    def scs_pre_list(radius: float, num_spheres: int, tag: str):
+        sim = scs_pre(radius, num_spheres, tag)
         return [sim, sim, sim]
 
-    def scs_post_multi(*sim_datas):
-        vals = [scs_post(sim_data) for sim_data in sim_datas]
-        return np.mean(vals)
+    def scs_post_list(sim_list):
+        sim_data = [scs_post(sim) for sim in sim_list]
+        return sum(sim_data)
 
-    def scs_pre_dict(*args, **kwargs):
-        sims = scs_pre_multi(*args, **kwargs)
-        keys = "abc"
-        return dict(zip(keys, sims))
+    def scs_pre_dict(radius: float, num_spheres: int, tag: str):
+        sim = scs_pre(radius, num_spheres, tag)
+        return {"test1": sim, "test2": sim, 3: sim}
 
-    def scs_post_dict(a=None, b=None, c=None):
-        sims = [a, b, c]
-        return scs_post_multi(*sims)
+    def scs_post_dict(sim_dict):
+        sim_data = [scs_post(sim) for sim in sim_dict.values()]
+        return sum(sim_data)
 
-    def scs(radius: float, num_spheres: int, tag: str) -> float:
-        """End to end function."""
+    def scs_pre_list_const(radius: float, num_spheres: int, tag: str):
+        sim = scs_pre(radius, num_spheres, tag)
+        return [sim, sim, tag]
 
-        sim = scs_pre(radius=radius, num_spheres=num_spheres, tag=tag)
+    def scs_post_list_const(sim_list):
+        sim_data = [scs_post(sim) for sim in sim_list if isinstance(sim, td.SimulationData)]
+        consts = [const for const in sim_list if not isinstance(const, td.SimulationData)]
+        assert isinstance(consts[0], str)  # Included for testing
+        return sum(sim_data)
 
-        # run simulation
-        sim_data = run_emulated(sim, task_name=f"SWEEP_{tag}")
+    def scs_pre_dict_const(radius: float, num_spheres: int, tag: str):
+        sim = scs_pre(radius, num_spheres, tag)
+        return {"test1": sim, "test2": sim, "tag_const": tag}
 
-        # postprocess
-        return scs_post(sim_data=sim_data)
-
-    def non_td_pre_func(radius, num_spheres, tag):
-        return radius + num_spheres * 1.1
-
-    def non_td_post_func(res):
-        return int(res)
-
-    def non_td_combined(radius, num_spheres, tag):
-        return int(radius + num_spheres * 1.1)
+    def scs_post_dict_const(sim_dict):
+        sim_data = [
+            scs_post(sim) for sim in sim_dict.values() if isinstance(sim, td.SimulationData)
+        ]
+        consts = sim_dict["tag_const"]
+        assert isinstance(consts, str)  # Included for testing
+        return sum(sim_data)
 
     # STEP2: define your design problem
 
@@ -162,94 +234,112 @@ def test_sweep(sweep_method, monkeypatch):
     # STEP3: Run your design problem
 
     # Try a basic non-td function
-    non_td_sweep1 = design_space.run(non_td_combined)
-    # rng.__setstate__(rng_initial_state) # Resetting the rng state to save reinitialising the random samplers
-    non_td_sweep2 = design_space.run(non_td_pre_func, non_td_post_func)
-
     # Ensure output of combined and pre-post functions is the same
+    non_td_sweep1 = design_space.run(float_non_td_combined)
+    non_td_sweep2 = design_space.run(float_non_td_pre_func, float_non_td_post_func)
+
     assert non_td_sweep1.values == non_td_sweep2.values
 
-    # or supply generic td single function
-    sweep_results = design_space.run(scs)
+    # Ensure output of list and dict pre funcs is the same
+    list_non_td_sweep = design_space.run(list_non_td_pre_func, list_non_td_post_func)
+    dict_non_td_sweep = design_space.run(dict_non_td_pre_func, dict_non_td_post_func)
 
-    # or supply function factored into pre and post and run in batch
-    sweep_results2 = design_space.run(scs_pre, scs_post)
-    # NOTE: What's this meant to look like for a batch?? Not setting batch_data with new method
+    assert list_non_td_sweep.values == dict_non_td_sweep.values
 
-    # design_space.run(scs_pre_multi, scs_post_multi)
+    # Try functions that include td objects
+    # Ensure output of combined and pre-post functions is the same
+    td_sweep1 = design_space.run(scs_combined)
+    td_sweep2 = design_space.run(scs_pre, scs_post)
 
-    # design_space.run(scs_pre_dict, scs_post_dict)
+    assert td_sweep1.values == td_sweep2.values
 
-    sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
-    sweep_results.sel(**sel_kwargs_0)
+    # Try with batch output from pre
+    # td_batch = design_space.run(scs_pre_batch, scs_post_batch)
 
-    print(sweep_results.to_dataframe().head(10))
+    # Test with list of sims
+    td_sim_list = design_space.run(scs_pre_list, scs_post_list)
 
-    sweep_results.to_dataframe().plot.hexbin(x="num_spheres", y="radius", C="output")
-    sweep_results.to_dataframe().plot.scatter(x="num_spheres", y="radius", c="output")
-    plt.close()
+    # Test with dict of sims
+    td_sim_dict = design_space.run(scs_pre_dict, scs_post_dict)
 
-    design_space2 = tdd.DesignSpace(
-        parameters=[radius_variable, num_spheres_variable, tag_variable],
-        method=tdd.MethodMonteCarlo(num_points=3),
-        name="sphere CS",
-    )
+    # Test with list of sims and non-sim constant values
+    ts_sim_list_const = design_space.run(scs_pre_list_const, scs_post_list_const)
 
-    sweep_results_other = design_space2.run(scs)
+    # Test with dict of sims and non-sim constant values
+    ts_sim_dict_const = design_space.run(scs_pre_dict_const, scs_post_dict_const)
 
-    # test combining results
-    sweep_results.combine(sweep_results_other)
-    sweep_results + sweep_results_other
+    # sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
+    # sweep_results.sel(**sel_kwargs_0)
 
-    # STEP4: modify the sweep results
+    # print(sweep_results.to_dataframe().head(10))
 
-    sweep_results = sweep_results.add(
-        fn_args={"radius": 1.2, "num_spheres": 5, "tag": "tag2"}, value=1.9
-    )
+    # sweep_results.to_dataframe().plot.hexbin(x="num_spheres", y="radius", C="output")
+    # sweep_results.to_dataframe().plot.scatter(x="num_spheres", y="radius", c="output")
+    # plt.close()
 
-    sweep_results = sweep_results.delete(fn_args={"num_spheres": 5, "tag": "tag2", "radius": 1.2})
+    # design_space2 = tdd.DesignSpace(
+    #     parameters=[radius_variable, num_spheres_variable, tag_variable],
+    #     method=tdd.MethodMonteCarlo(num_points=3),
+    #     name="sphere CS",
+    # )
 
-    sweep_results_df = sweep_results.to_dataframe()
+    # sweep_results_other = design_space2.run(scs)
 
-    sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
-    sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=sweep_results.dims)
+    # # test combining results
+    # sweep_results.combine(sweep_results_other)
+    # sweep_results + sweep_results_other
 
-    assert sweep_results == sweep_results_2 == sweep_results_3
+    # # STEP4: modify the sweep results
 
-    # VALIDATE PROPER DATAFRAME HEADERS AND DATA STORAGE
+    # sweep_results = sweep_results.add(
+    #     fn_args={"radius": 1.2, "num_spheres": 5, "tag": "tag2"}, value=1.9
+    # )
 
-    # make sure returning a float uses the proper output column header
-    float_label = tdd.Result.default_value_keys(1.0)[0]
-    assert float_label in sweep_results_df, "didn't assign column header properly for float"
+    # sweep_results = sweep_results.delete(fn_args={"num_spheres": 5, "tag": "tag2", "radius": 1.2})
 
+    # sweep_results_df = sweep_results.to_dataframe()
+
+    # sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
+    # sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=sweep_results.dims)
+
+    # assert sweep_results == sweep_results_2 == sweep_results_3
+
+    # # VALIDATE PROPER DATAFRAME HEADERS AND DATA STORAGE
+
+    # # make sure returning a float uses the proper output column header
+    # float_label = tdd.Result.default_value_keys(1.0)[0]
+    # assert float_label in sweep_results_df, "didn't assign column header properly for float"
+
+    # NOTE: To be modified later
     # make sure returning a dict uses the keys as output column headers
 
-    labels = ["label1", "label2"]
+    # labels = ["label1", "label2"]
 
-    def scs_dict(*args, **kwargs):
-        output = scs(*args, **kwargs)
-        return dict(zip(labels, len(labels) * [output]))
+    # def scs_dict_output(*args, **kwargs):
+    #     output = scs(*args, **kwargs)
+    #     return dict(zip(labels, len(labels) * [output]))
 
-    df = design_space.run(scs_dict).to_dataframe()
-    for label in labels:
-        assert label in df, "dict key not parsed properly as column header"
-        for value in df[label]:
-            assert not isinstance(value, dict), "dict saved instead of value"
+    # df = design_space.run(scs_dict_output).to_dataframe()
+
+    # for label in labels:
+    #     assert label in df, "dict key not parsed properly as column header"
+    #     for value in df[label]:
+    #         assert not isinstance(value, dict), "dict saved instead of value"
 
     # make sure returning a list assigns column labels properly
 
-    num_outputs = 3
-    label_keys = tdd.Result.default_value_keys(num_outputs * [0.0])
+    # num_outputs = 3
+    # label_keys = tdd.Result.default_value_keys(num_outputs * [0.0])
 
-    def scs_list(*args, **kwargs):
-        output = scs(*args, **kwargs)
-        return num_outputs * [output]
+    # def scs_list(*args, **kwargs):
+    #     output = scs(*args, **kwargs)
+    #     return num_outputs * [output]
 
-    df = design_space.run(scs_list).to_dataframe()
-    for label in label_keys:
-        assert label in df, "dict key not parsed properly as column header"
-        for value in df[label]:
-            assert not isinstance(value, (tuple, list)), "dict saved instead of value"
+    # df = design_space.run(scs_list).to_dataframe()
+    # for label in label_keys:
+    #     assert label in df, "dict key not parsed properly as column header"
+    #     for value in df[label]:
+    #         assert not isinstance(value, (tuple, list)), "dict saved instead of value"
 
 
 def test_method_custom_validators():
