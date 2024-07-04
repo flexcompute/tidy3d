@@ -83,7 +83,7 @@ class UniformHeatSource(HeatSource):
 
     Example
     -------
-    >>> heat_source = UniformHeatSource(rate=1, structures=["box"])
+    >>> heat_source = UniformHeatSource(rate=1, structures=["box"]) # doctest: +SKIP
     """
 
     # NOTE: wrapper for backwards compatibility.

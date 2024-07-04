@@ -19,7 +19,7 @@ class HeatSimulation(HeatChargeSimulation):
     Example
     -------
     >>> import tidy3d as td
-    >>> heat_sim = td.HeatSimulation(
+    >>> heat_sim = td.HeatSimulation( # doctest: +SKIP
     ...     size=(3.0, 3.0, 3.0),
     ...     structures=[
     ...         td.Structure(

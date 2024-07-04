@@ -56,7 +56,7 @@ class InsulatorSpec(AbstractHeatChargeSpec):
 
     Example
     -------
-    >>> solid = InsulatingSpec()
+    >>> solid = InsulatorSpec()
     """
 
 
