@@ -58,7 +58,7 @@ def mock_remote_api(monkeypatch):
             simulation=simulation,
             plane=PLANE,
             mode_spec=mode_spec,
-            freqs=[td.C_0 / 1.0],
+            freqs=[td.wvl_to_freq(1.0)],
         )
         ms.data_raw.to_file(to_file)
 
@@ -175,7 +175,7 @@ def test_compute_modes():
     _ = compute_modes(
         eps_cross=[eps_cross] * 9,
         coords=[coords, coords],
-        freq=td.C_0 / 1.0,
+        freq=td.wvl_to_freq(1.0),
         mode_spec=mode_spec,
         direction="-",
     )
@@ -340,9 +340,9 @@ def test_mode_solver_simple(mock_remote_api, local):
         track_freq="lowest",
     )
     if local:
-        freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+        freqs = [td.wvl_to_freq(0.9), td.wvl_to_freq(1.0), td.wvl_to_freq(1.1)]
     else:
-        freqs = [td.C_0 / 1.0]
+        freqs = [td.wvl_to_freq(1.0)]
     ms = ModeSolver(
         simulation=simulation,
         plane=PLANE,
@@ -362,7 +362,7 @@ def test_mode_solver_simple(mock_remote_api, local):
         _ = msweb.run(ms)
 
     # Testing issue 807 functions
-    freq0 = td.C_0 / 1.55
+    freq0 = td.wvl_to_freq(1.55)
     source_time = td.GaussianPulse(freq0=freq0, fwidth=freq0 / 10)
     nS_add_source = ms.sim_with_source(mode_index=0, direction="+", source_time=source_time)
     nS_add_monitor = ms.sim_with_monitor(freqs=freqs, name="mode monitor")
@@ -384,7 +384,7 @@ def test_mode_solver_custom_medium(mock_remote_api, local, tmp_path):
     x_custom = np.linspace(-0.6, 0.6, 2)
     y_custom = [0]
     z_custom = [0]
-    freq0 = td.C_0 / 1.0
+    freq0 = td.wvl_to_freq(1.0)
     n = np.array([1.5, 5])
     n = n[:, None, None, None]
     n_data = ScalarFieldDataArray(n, coords=dict(x=x_custom, y=y_custom, z=z_custom, f=[freq0]))
@@ -439,7 +439,7 @@ def test_mode_solver_unstructured_custom_medium(nx, cond_factor, interp, tol, tm
     with unstructured custom medium to the results with usual Cartesian custom medium.
     """
 
-    freq0 = td.C_0 / 1.0
+    freq0 = td.wvl_to_freq(1.0)
 
     # Cartesian
     x_custom = np.linspace(-0.6, 0.6, nx)
@@ -508,7 +508,7 @@ def test_mode_solver_straight_vs_angled():
         sources=[SRC],
     )
     mode_spec = td.ModeSpec(num_modes=5, group_index_step=True)
-    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    freqs = [td.wvl_to_freq(0.9), td.wvl_to_freq(1.0), td.wvl_to_freq(1.1)]
     ms = ModeSolver(
         simulation=simulation,
         plane=PLANE,
@@ -593,7 +593,7 @@ def test_mode_solver_angle_bend():
     # put plane entirely in the symmetry quadrant rather than sitting on its center
     plane = td.Box(center=(0, 0.5, 0), size=(1, 0, 1))
     ms = ModeSolver(
-        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
+        simulation=simulation, plane=plane, mode_spec=mode_spec, freqs=[td.wvl_to_freq(1.0)], direction="-"
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
@@ -630,7 +630,7 @@ def test_mode_solver_2D():
         sources=[SRC],
     )
     ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="-"
+        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.wvl_to_freq(1.0)], direction="-"
     )
     compare_colocation(ms)
     verify_pol_fraction(ms)
@@ -653,7 +653,7 @@ def test_mode_solver_2D():
         sources=[SRC],
     )
     ms = ModeSolver(
-        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0], direction="+"
+        simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.wvl_to_freq(1.0)], direction="+"
     )
     compare_colocation(ms)
     # verify_pol_fraction(ms)
@@ -668,7 +668,7 @@ def test_mode_solver_2D():
         boundary_spec=td.BoundarySpec.all_sides(boundary=td.Periodic()),
         sources=[SRC],
     )
-    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.C_0 / 1.0])
+    ms = ModeSolver(simulation=simulation, plane=PLANE, mode_spec=mode_spec, freqs=[td.wvl_to_freq(1.0)])
     compare_colocation(ms)
     verify_pol_fraction(ms)
     check_ms_reduction(ms)
@@ -700,9 +700,9 @@ def test_group_index(mock_remote_api, log_capture, local):
     )
 
     if local:
-        freqs = [td.C_0 / 1.54, td.C_0 / 1.55, td.C_0 / 1.56]
+        freqs = [td.wvl_to_freq(1.54), td.wvl_to_freq(1.55), td.wvl_to_freq(1.56)]
     else:
-        freqs = [td.C_0 / 1.0]
+        freqs = [td.wvl_to_freq(1.0)]
 
     # No group index calculation by default
     ms = ModeSolver(
@@ -796,7 +796,7 @@ def test_mode_solver_nan_pol_fraction():
         track_freq="central",
     )
 
-    freqs = [td.C_0 / 1.55]
+    freqs = [td.wvl_to_freq(1.55)]
 
     ms = ModeSolver(
         simulation=simulation,
@@ -833,7 +833,7 @@ def test_mode_solver_method_defaults():
         track_freq="central",
     )
 
-    freqs = [td.C_0 / 1.55]
+    freqs = [td.wvl_to_freq(1.55)]
 
     ms = ModeSolver(
         simulation=simulation,
@@ -874,7 +874,7 @@ def test_mode_solver_web_run_batch(mock_remote_api):
     wav_max = 1.5
     num_freqs = 1
     num_of_sims = 1
-    freqs = np.linspace(td.C_0 / wav_min, td.C_0 / wav_max, num_freqs)
+    freqs = np.linspace(td.wvl_to_freq(wav_min), td.wvl_to_freq(wav_max), num_freqs)
 
     simulation = td.Simulation(
         size=SIM_SIZE,
@@ -926,7 +926,7 @@ def test_mode_solver_relative():
         precision="double",
         track_freq="lowest",
     )
-    freqs = [td.C_0 / 0.9, td.C_0 / 1.0, td.C_0 / 1.1]
+    freqs = [td.wvl_to_freq(0.9), td.wvl_to_freq(1.0), td.wvl_to_freq(1.1)]
     ms = ModeSolver(
         simulation=simulation,
         plane=PLANE,

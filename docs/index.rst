@@ -118,8 +118,8 @@ Start running simulations with just a few lines of code. Run this sample code to
    import tidy3d.web as web
    # web.configure("YOUR API KEY") # if authentication needed, uncomment this line and paste your API key here
 
-   # set up global parameters of simulation ( speed of light / wavelength in micron )
-   freq0 = td.C_0 / 0.75
+   # set up global parameters of simulation
+   freq0 = td.wvl_to_freq(0.75)
 
    # create structure - a box centered at 0, 0, 0 with a size of 1.5 micron and permittivity of 2
    square = td.Structure(

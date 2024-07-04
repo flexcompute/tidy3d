@@ -58,7 +58,7 @@ Next we define some quantities derived from these parameters.
 ```py
 
 # spectral information
-freq0 = td.C_0 / wavelength
+freq0 = td.wvl_to_freq(wavelength)
 fwidth = freq0 / 10
 run_time = 50 / fwidth
 

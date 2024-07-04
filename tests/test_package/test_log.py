@@ -64,7 +64,7 @@ def test_logging_warning_capture():
     domain_size = 12
 
     wavelength = 1
-    f0 = td.C_0 / wavelength
+    f0 = td.wvl_to_freq(wavelength)
     fwidth = f0 / 10.0
     source_time = td.GaussianPulse(freq0=f0, fwidth=fwidth)
     freqs = np.linspace(f0 - fwidth, f0 + fwidth, 11)

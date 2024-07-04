@@ -588,7 +588,7 @@ def test_mesh_multiple_direct_override_and_global_min():
 
 def test_mesh_gold_slab():
     # Test meshing of a slab with large negative permittivity
-    gold_step = WAVELENGTH / 10 / np.sqrt(np.abs(GOLD.eps_model(td.C_0 / WAVELENGTH).real))
+    gold_step = WAVELENGTH / 10 / np.sqrt(np.abs(GOLD.eps_model(td.wvl_to_freq(WAVELENGTH)).real))
 
     sim = td.Simulation(
         size=(3, 3, 6),

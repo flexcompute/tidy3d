@@ -13,7 +13,7 @@ from shapely.errors import ShapelyDeprecationWarning
 from shapely.geometry import box as shapely_box
 from shapely.strtree import STRtree
 
-from ...constants import C_0, fp_eps
+from ...constants import C_0, wvl_to_freq, fp_eps
 from ...exceptions import SetupError, ValidationError
 from ...log import log
 from ..base import Tidy3dBaseModel
@@ -506,7 +506,7 @@ class GradedMesher(Mesher):
                     # in simulation.py
                     index = 1.0
                 else:
-                    eps_diagonal = structure.medium.eps_diagonal(C_0 / wavelength)
+                    eps_diagonal = structure.medium.eps_diagonal(wvl_to_freq(wavelength))
                     n, k = structure.medium.eps_complex_to_nk(eps_diagonal)
 
                     # take max among all directions because perpendicular eps defines wavelength
