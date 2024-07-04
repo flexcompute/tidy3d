@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Errors in `PolySlab` when using autograd differentiation with non-zero `sidewall_angle` and `dilation`.
 - Error in `EMESimulationData.smatrix_in_basis` when using older versions of xarray.
 - Support for automatic differentiation with respect to `.eps_inf` and `.poles` contained in dispersive mediums `td.PoleResidue` and `td.CustomPoleResidue`.
+- Gradients for `Box` objects when simulation size is < 3D.
 
 ## [2.7.0] - 2024-06-17
 
