@@ -29,9 +29,7 @@ class Method(Tidy3dBaseModel, ABC):
     name: str = pd.Field(None, title="Name", description="Optional name for the sweep method.")
 
     @abstractmethod
-    def run(
-        self, parameters: Tuple[ParameterType, ...], pre_fn: Callable, post_fn: Callable
-    ) -> Tuple[Any]:
+    def run(self, parameters: Tuple[ParameterType, ...], run_fn: Callable) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
     # @staticmethod
@@ -58,16 +56,41 @@ class Method(Tidy3dBaseModel, ABC):
     #             "Please raise an issue on the front end GitHub repository."
     #         )
 
-    def _force_int(self, next_point, parameters):
-        """Convert a float asigned to an int parameter to be an int
+    def _force_int(self, next_point: dict, parameters: list):
+        """Convert a float asigned to an int parameter to be an int. Update dict in place."""
 
-        Update dict in place
-        """
-        # int_keys = [param.name for param in parameters if type(param) == tdd.ParameterInt]
         for param in parameters:
             if type(param) == tdd.ParameterInt:
                 # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
                 next_point[param.name] = int(round(next_point[param.name], 0))
+
+    @staticmethod
+    def _extract_output(output: list) -> Tuple:
+        """Format the user function output for further optimisation and result storage."""
+        if all(isinstance(val, (float, int)) for val in output):
+            # No aux_out
+            return (output, None)
+
+        elif all(isinstance(val[0], (float, int)) for val in output):
+            float_out = []
+            aux_out = []
+            for val in output:
+                float_out.append(val[0])
+                aux_out.append(val[1])
+
+            # Float with aux_out
+            return (float_out, aux_out)
+
+        else:
+            raise ValueError(
+                "Unrecognised output from supplied run function. Output should be a float or a float and iterable object."
+            )
+
+    @staticmethod
+    def _flatten_and_append(list_of_lists: list[list], append_target: list):
+        if list_of_lists is not None:
+            for sub_list in list_of_lists:
+                append_target.append(sub_list)
 
 
 class MethodSample(Method, ABC):
@@ -96,14 +119,10 @@ class MethodSample(Method, ABC):
         # get all function inputs
         fn_args = self._assemble_args(parameters)
 
-        # Get min and max for each sample
-        # args_as_params = [[arg_dict[key] for arg_dict in fn_args] for key in fn_args[0]]
-        # min_max_params = [(min(param), max(param)) for param in args_as_params]
-
         # Run user function on sampled args
-        results = run_fn(fn_args)
+        results, aux_out = self._extract_output(run_fn(fn_args))
 
-        return fn_args, results
+        return fn_args, results, aux_out
 
 
 class MethodGrid(MethodSample):
@@ -231,13 +250,15 @@ class MethodBayOpt(MethodOptimise, ABC):
 
         # Run variables
         arg_list = []
+        total_aux_out = []
         for _ in range(self.initial_iter):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
             arg_list.append(next_point)
 
-        init_output = run_fn(arg_list)
+        init_output, aux_out = self._extract_output(run_fn(arg_list))
+        self._flatten_and_append(aux_out, total_aux_out)
 
         for next_point, next_out in zip(arg_list, init_output):
             self._handle_param_convert(invert_param_converter, [next_point])
@@ -248,7 +269,8 @@ class MethodBayOpt(MethodOptimise, ABC):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
-            next_out = run_fn([next_point])
+            next_out, aux_out = self._extract_output(run_fn([next_point]))
+            self._flatten_and_append(aux_out, total_aux_out)
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
 
@@ -259,7 +281,7 @@ class MethodBayOpt(MethodOptimise, ABC):
             result.append(output["target"])
             fn_args.append(output["params"])
 
-        return fn_args, result
+        return fn_args, result, total_aux_out
 
 
 class MethodGenAlg(MethodOptimise, ABC):
@@ -337,7 +359,9 @@ class MethodGenAlg(MethodOptimise, ABC):
             sol_dict = self.sol_array_to_dict(solution, _param_keys, _param_converter)
 
             # Iterate through solutions for batched and non-batched data
-            sol_out = run_fn(sol_dict)
+            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+
+            self._flatten_and_append(aux_out, _store_aux)
 
             return sol_out
 
@@ -356,8 +380,10 @@ class MethodGenAlg(MethodOptimise, ABC):
         # Store parameters and fitness
         global _store_parameters
         global _store_fitness
+        global _store_aux
         _store_parameters = []
         _store_fitness = []
+        _store_aux = []
 
         # Set gene_spaces to keep GA within ranges
         global _param_converter
@@ -409,7 +435,7 @@ class MethodGenAlg(MethodOptimise, ABC):
         fn_args = [dict(zip(_param_keys, val)) for arr in _store_parameters for val in arr]
         results = [val for arr in _store_fitness for val in arr]
 
-        return fn_args, results
+        return fn_args, results, _store_aux
 
 
 class MethodParticleSwarm(MethodOptimise, ABC):
@@ -469,7 +495,9 @@ class MethodParticleSwarm(MethodOptimise, ABC):
 
             _store_parameters.append(sol_dict)
 
-            sol_out = run_fn(sol_dict)
+            sol_out, aux_out = self._extract_output(run_fn(sol_dict))
+
+            self._flatten_and_append(aux_out, _store_aux)
 
             # Stored before minus to give true answers
             _store_fitness.append(sol_out)
@@ -483,8 +511,10 @@ class MethodParticleSwarm(MethodOptimise, ABC):
 
         global _store_parameters
         global _store_fitness
+        global _store_aux
         _store_parameters = []
         _store_fitness = []
+        _store_aux = []
 
         # Build bounds and conversion dict for ParameterAny inputs
         global _param_converter
@@ -519,7 +549,7 @@ class MethodParticleSwarm(MethodOptimise, ABC):
         fn_args = [val for sublist in _store_parameters for val in sublist]
         results = [val for sublist in _store_fitness for val in sublist]
 
-        return fn_args, results
+        return fn_args, results, _store_aux
 
 
 class AbstractMethodRandom(MethodSample, ABC):

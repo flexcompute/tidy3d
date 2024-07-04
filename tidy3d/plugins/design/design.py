@@ -61,6 +61,7 @@ class DesignSpace(Tidy3dBaseModel):
         fn_values: List[Any],
         fn_source: str,
         task_ids: Tuple[str] = None,
+        aux_values: List[Any] = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
@@ -70,12 +71,15 @@ class DesignSpace(Tidy3dBaseModel):
 
         fn_args_coords_T = list(map(list, zip(*fn_args_coords)))
 
+        # Format fn_values as appropriate
+
         return Result(
             dims=self.dims,
             values=fn_values,
             coords=fn_args_coords_T,
             fn_source=fn_source,
             task_ids=task_ids,
+            aux_values=aux_values,
         )
 
     @staticmethod
@@ -104,15 +108,17 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Run based on how many functions the user provides
         if fn_post is None:
-            fn_args, fn_values = self.run_single(fn)
+            fn_args, fn_values, aux_values = self.run_single(fn)
 
         else:
-            fn_args, fn_values = self.run_pre_post(fn_pre=fn, fn_post=fn_post)
+            fn_args, fn_values, aux_values = self.run_pre_post(fn_pre=fn, fn_post=fn_post)
 
         fn_source = self.get_fn_source(fn)
 
         # Package the result
-        return self._package_run_results(fn_args=fn_args, fn_values=fn_values, fn_source=fn_source)
+        return self._package_run_results(
+            fn_args=fn_args, fn_values=fn_values, fn_source=fn_source, aux_values=aux_values
+        )
 
     def run_single(self, fn: Callable):
         """Run a single function of parameter inputs."""

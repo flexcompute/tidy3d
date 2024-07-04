@@ -68,6 +68,12 @@ class Result(Tidy3dBaseModel):
         "'Design.run_batch()', otherwise is ``None``. ",
     )
 
+    aux_values: Tuple[Any, ...] = pd.Field(
+        None,
+        title="Auxiliary values output from the user function",
+        description="The auxiliary return values from the design problem function. These weren't used to inform the optimiser, if one was used.",
+    )
+
     @pd.validator("coords", always=True)
     def _coords_and_dims_shape(cls, val, values):
         """Make sure coords and dims have same size."""
@@ -158,7 +164,7 @@ class Result(Tidy3dBaseModel):
         coords_tuple = tuple(kwargs[dim] for dim in self.dims)
         return self.get_value(coords_tuple)
 
-    def to_dataframe(self) -> pandas.DataFrame:
+    def to_dataframe(self, include_auxs: bool = False) -> pandas.DataFrame:
         """Data as a `pandas.DataFrame`.
 
         Returns
@@ -174,7 +180,26 @@ class Result(Tidy3dBaseModel):
             data.append(data_i)
 
         val_keys = list(self.value_as_dict(self.values[0])) if self.values else [""]
+
         columns = list(self.dims) + val_keys
+
+        if include_auxs:
+            if self.aux_values is not None:
+                # Can use [0] for aux keys as the function is assumed producing the same structure of output each run
+                if all(isinstance(auxs, dict) for auxs in self.aux_values):
+                    expanded_data = [
+                        data_row + list(auxs.values())
+                        for data_row, auxs in zip(data, self.aux_values)
+                    ]
+                    aux_keys = list(self.aux_values[0].keys())
+                else:
+                    expanded_data = [
+                        data_row + aux_row for data_row, aux_row in zip(data, self.aux_values)
+                    ]
+                    aux_keys = [f"aux_key_{val}" for val in range(len(self.aux_values[0]))]
+
+                columns = columns + aux_keys
+                data = expanded_data
 
         df = pandas.DataFrame(data=data, columns=columns)
 

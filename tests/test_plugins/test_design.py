@@ -84,6 +84,10 @@ def test_sweep(sweep_method, monkeypatch):
     def dict_non_td_post_func(res):
         return int(sum(res.values()))
 
+    def float_non_td_aux_post_func(res):
+        """Uses the same float_non_td_pre_func as pre"""
+        return [int(res), ["any", "other", "data"]]
+
     # Functions with td elements
     def scs_pre(radius: float, num_spheres: int, tag: str) -> td.Simulation:
         """Preprocessing function (make simulation)"""
@@ -211,6 +215,16 @@ def test_sweep(sweep_method, monkeypatch):
         assert isinstance(consts, str)  # Included for testing
         return sum(sim_data)
 
+    def scs_post_aux(sim_data):
+        """Uses scs_pre for pre function"""
+        mnt_data = sim_data["field"]
+        ex_values = mnt_data.Ex.values
+
+        return (
+            np.sum(np.square(np.abs(ex_values))),
+            {"test1": True, "test2": None, "test3": "a great success", "test4": 3.14},
+        )
+
     # STEP2: define your design problem
 
     radius_variable = tdd.ParameterFloat(
@@ -247,6 +261,12 @@ def test_sweep(sweep_method, monkeypatch):
 
     assert list_non_td_sweep.values == dict_non_td_sweep.values
 
+    # Include auxiliary data in list format in the output for non_td run
+    aux_not_td_sweep = design_space.run(float_non_td_pre_func, float_non_td_aux_post_func)
+    aux_not_td_df = aux_not_td_sweep.to_dataframe(include_auxs=True)
+
+    assert aux_not_td_df["aux_key_2"][0] == "data"
+
     # Try functions that include td objects
     # Ensure output of combined and pre-post functions is the same
     td_sweep1 = design_space.run(scs_combined)
@@ -268,6 +288,12 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Test with dict of sims and non-sim constant values
     ts_sim_dict_const = design_space.run(scs_pre_dict_const, scs_post_dict_const)
+
+    # Test for auxiliary values as dict format in output of td function
+    ts_sim_aux = design_space.run(scs_pre, scs_post_aux)
+    ts_sim_aux_df = ts_sim_aux.to_dataframe(include_auxs=True)
+
+    assert ts_sim_aux_df["test4"][0] == 3.14
 
     sel_kwargs_0 = dict(zip(td_sweep1.dims, td_sweep1.coords[0]))
     td_sweep1.sel(**sel_kwargs_0)
