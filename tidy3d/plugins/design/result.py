@@ -9,7 +9,6 @@ import pandas
 import pydantic.v1 as pd
 
 from ...components.base import Tidy3dBaseModel, cached_property
-from ...web.api.container import BatchData
 
 
 class Result(Tidy3dBaseModel):
@@ -66,18 +65,7 @@ class Result(Tidy3dBaseModel):
         title="Task IDs",
         description="Task IDs for the simulation run in each data point. Only available if "
         "the parameter sweep function is split into pre and post processing and run with "
-        "'Design.run_batch()', otherwise is ``None``. "
-        "To access all of the data, see ``batch_data``.",
-    )
-
-    batch_data: BatchData = pd.Field(
-        None,
-        title="Batch Data",
-        description=":class:`BatchData` object storing all of the data for the simulations "
-        " used in this ``Result``. Can be iterated through like a dictionary with "
-        "``for task_name, sim_data in batch_data.items()``. Only available if "
-        "the parameter sweep function is split into pre and post processing and run with "
-        "'Design.run_batch()', otherwise is ``None``.",
+        "'Design.run_batch()', otherwise is ``None``. ",
     )
 
     @pd.validator("coords", always=True)

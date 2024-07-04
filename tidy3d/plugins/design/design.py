@@ -11,7 +11,6 @@ import tidy3d.web as web
 
 from ...components.base import Tidy3dBaseModel, cached_property
 from ...components.simulation import Simulation
-from ...web.api.container import BatchData
 from .method import MethodType
 from .parameter import ParameterType
 from .result import Result
@@ -62,7 +61,6 @@ class DesignSpace(Tidy3dBaseModel):
         fn_values: List[Any],
         fn_source: str,
         task_ids: Tuple[str] = None,
-        batch_data: BatchData = None,
     ) -> Result:
         """How to package results from ``method.run`` and ``method.run_batch``"""
 
@@ -78,7 +76,6 @@ class DesignSpace(Tidy3dBaseModel):
             coords=fn_args_coords_T,
             fn_source=fn_source,
             task_ids=task_ids,
-            batch_data=batch_data,
         )
 
     @staticmethod

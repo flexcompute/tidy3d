@@ -34,29 +34,29 @@ class Method(Tidy3dBaseModel, ABC):
     ) -> Tuple[Any]:
         """Defines the search algorithm (sequential)."""
 
-    @staticmethod
-    def assert_hashable(fn_args: dict) -> None:
-        """Raise error if the function arguments aren't hashable (do before computation)."""
-        fn_args_tuple = tuple(fn_args)
-        try:
-            hash(fn_args_tuple)
-        except TypeError:
-            raise ValueError(
-                "Function arguments must be hashable. "
-                "Parameter sweep tool won't work with sets of lists, dicts or numpy arrays. "
-                "Convert these to 'tuple' for a workaround."
-            )
+    # @staticmethod
+    # def assert_hashable(fn_args: dict) -> None:
+    #     """Raise error if the function arguments aren't hashable (do before computation)."""
+    #     fn_args_tuple = tuple(fn_args)
+    #     try:
+    #         hash(fn_args_tuple)
+    #     except TypeError:
+    #         raise ValueError(
+    #             "Function arguments must be hashable. "
+    #             "Parameter sweep tool won't work with sets of lists, dicts or numpy arrays. "
+    #             "Convert these to 'tuple' for a workaround."
+    #         )
 
-    @staticmethod
-    def assert_num_points(fn_args: Dict[str, tuple]) -> int:
-        """Compute number of points from the function arguments and do error checking."""
-        num_points_each_dim = [len(val) for val in fn_args.values()]
-        if len(set(num_points_each_dim)) != 1:
-            raise ValueError(
-                f"Found different number of points: {num_points_each_dim} along each dimension. "
-                "This suggests a bug in the parameter sweep tool. "
-                "Please raise an issue on the front end GitHub repository."
-            )
+    # @staticmethod
+    # def assert_num_points(fn_args: Dict[str, tuple]) -> int:
+    #     """Compute number of points from the function arguments and do error checking."""
+    #     num_points_each_dim = [len(val) for val in fn_args.values()]
+    #     if len(set(num_points_each_dim)) != 1:
+    #         raise ValueError(
+    #             f"Found different number of points: {num_points_each_dim} along each dimension. "
+    #             "This suggests a bug in the parameter sweep tool. "
+    #             "Please raise an issue on the front end GitHub repository."
+    #         )
 
     def _force_int(self, next_point, parameters):
         """Convert a float asigned to an int parameter to be an int
@@ -67,15 +67,7 @@ class Method(Tidy3dBaseModel, ABC):
         for param in parameters:
             if type(param) == tdd.ParameterInt:
                 # Using int(round()) instead of just int as int always rounds down making upper bound value impossible
-                new_int = int(round(next_point[param.name], 0))
-
-                # Check that the new int is within the bounds - correct if not
-                if new_int < param.span[0]:
-                    new_int = param.span[0]
-                elif new_int > param.span[1]:
-                    new_int = param.span[1]
-
-                next_point[param.name] = new_int
+                next_point[param.name] = int(round(next_point[param.name], 0))
 
 
 class MethodSample(Method, ABC):
@@ -148,14 +140,6 @@ class MethodOptimise(Method, ABC):
     rng_seed: pd.PositiveInt = pd.Field(
         title="Seed for random number generation", description="TBD", default=None
     )
-
-    def create_boundary_dict(
-        self,
-        parameters: Tuple[ParameterType, ...],
-    ) -> dict[str, Tuple]:
-        """Reshape parameter spans to dict of boundaries"""
-
-        return {design_var.name: design_var.span for design_var in parameters}
 
     def any_to_int_param(self, parameter):
         """Convert ParameterAny object to integers and provide a conversion dict to return"""
@@ -660,7 +644,13 @@ class MethodRandomCustom(AbstractMethodRandom):
         " can also be supplied.",
     )
 
-    @pd.validator("sampler")
+    sampler_kwargs: Any = pd.Field(
+        {},
+        title="Keyword arguments for sampler",
+        description="tbd",
+    )
+
+    # @pd.validator("sampler")
     def _check_sampler(cls, val):
         """make sure sampler has required methods."""
         if not hasattr(val, "random"):
@@ -700,8 +690,10 @@ class MethodRandomCustom(AbstractMethodRandom):
     def get_sampler(self, parameters: Tuple[ParameterType, ...]) -> qmc.QMCEngine:
         """Sampler for this ``Method`` class. If ``None``, sets a default."""
 
+        loaded_sampler = self.sampler(**self.sampler_kwargs, seed=self.rng_seed)
+        self._check_sampler(loaded_sampler)
         num_dims_vars = len(parameters)
-        num_dims_sampler = self.sampler.random(1).size
+        num_dims_sampler = loaded_sampler.random(1).size
 
         if num_dims_sampler != num_dims_vars:
             raise ValueError(
@@ -709,7 +701,7 @@ class MethodRandomCustom(AbstractMethodRandom):
                 f"but the design space has {num_dims_vars} dimensions. These must be equivalent. "
             )
 
-        return self.sampler
+        return loaded_sampler
 
 
 MethodType = Union[

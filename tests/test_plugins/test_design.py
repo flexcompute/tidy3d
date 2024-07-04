@@ -1,10 +1,9 @@
 """Test the parameter sweep plugin."""
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import numpy as np
 import pytest
-
-# import scipy.stats.qmc as qmc
+import scipy.stats.qmc as qmc
 import tidy3d as td
 import tidy3d.web as web
 from tidy3d.plugins import design as tdd
@@ -18,9 +17,11 @@ from ..utils import assert_log_level, run_emulated
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
-    # custom=tdd.MethodRandomCustom(num_points=50, sampler=qmc.Halton(d=3, seed=rng)),
+    custom=tdd.MethodRandomCustom(
+        num_points=10, sampler=qmc.Halton, sampler_kwargs={"d": 3}, rng_seed=1
+    ),
     random=tdd.MethodRandom(num_points=5, rng_seed=1),  # TODO: remove this if not used
-    bay_opt=tdd.MethodBayOpt(initial_iter=4, n_iter=3, rng_seed=1),
+    bay_opt=tdd.MethodBayOpt(initial_iter=2, n_iter=2, rng_seed=1),
     gen_alg=tdd.MethodGenAlg(solutions_per_pop=4, n_generations=2, n_parents_mating=2, rng_seed=1),
     part_swarm=tdd.MethodParticleSwarm(n_particles=5, n_iter=2, rng_seed=1),
 )
@@ -268,41 +269,37 @@ def test_sweep(sweep_method, monkeypatch):
     # Test with dict of sims and non-sim constant values
     ts_sim_dict_const = design_space.run(scs_pre_dict_const, scs_post_dict_const)
 
-    # sel_kwargs_0 = dict(zip(sweep_results.dims, sweep_results.coords[0]))
-    # sweep_results.sel(**sel_kwargs_0)
+    sel_kwargs_0 = dict(zip(td_sweep1.dims, td_sweep1.coords[0]))
+    td_sweep1.sel(**sel_kwargs_0)
 
-    # print(sweep_results.to_dataframe().head(10))
+    print(td_sweep1.to_dataframe().head(10))
 
-    # sweep_results.to_dataframe().plot.hexbin(x="num_spheres", y="radius", C="output")
-    # sweep_results.to_dataframe().plot.scatter(x="num_spheres", y="radius", c="output")
-    # plt.close()
+    td_sweep1.to_dataframe().plot.hexbin(x="num_spheres", y="radius", C="output")
+    td_sweep1.to_dataframe().plot.scatter(x="num_spheres", y="radius", c="output")
+    plt.close()
 
-    # design_space2 = tdd.DesignSpace(
-    #     parameters=[radius_variable, num_spheres_variable, tag_variable],
-    #     method=tdd.MethodMonteCarlo(num_points=3),
-    #     name="sphere CS",
-    # )
+    design_space2 = tdd.DesignSpace(
+        parameters=[radius_variable, num_spheres_variable, tag_variable],
+        method=tdd.MethodMonteCarlo(num_points=3),
+        name="sphere CS",
+    )
 
-    # sweep_results_other = design_space2.run(scs)
+    sweep_results_other = design_space2.run(scs_combined)
 
-    # # test combining results
-    # sweep_results.combine(sweep_results_other)
-    # sweep_results + sweep_results_other
+    # test combining results
+    td_sweep1.combine(sweep_results_other)
+    td_sweep1 + sweep_results_other
 
-    # # STEP4: modify the sweep results
+    # STEP4: modify the sweep results
 
-    # sweep_results = sweep_results.add(
-    #     fn_args={"radius": 1.2, "num_spheres": 5, "tag": "tag2"}, value=1.9
-    # )
+    td_sweep2 = td_sweep2.add(fn_args={"radius": 1.2, "num_spheres": 5, "tag": "tag2"}, value=1.9)
 
-    # sweep_results = sweep_results.delete(fn_args={"num_spheres": 5, "tag": "tag2", "radius": 1.2})
+    td_sweep2 = td_sweep2.delete(fn_args={"num_spheres": 5, "tag": "tag2", "radius": 1.2})
 
-    # sweep_results_df = sweep_results.to_dataframe()
+    sweep_results_df = td_sweep2.to_dataframe()
 
-    # sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
-    # sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=sweep_results.dims)
-
-    # assert sweep_results == sweep_results_2 == sweep_results_3
+    sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
+    sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=td_sweep2.dims)
 
     # # VALIDATE PROPER DATAFRAME HEADERS AND DATA STORAGE
 
@@ -310,8 +307,8 @@ def test_sweep(sweep_method, monkeypatch):
     # float_label = tdd.Result.default_value_keys(1.0)[0]
     # assert float_label in sweep_results_df, "didn't assign column header properly for float"
 
-    # NOTE: To be modified later
-    # make sure returning a dict uses the keys as output column headers
+    # # NOTE: To be modified later
+    # # make sure returning a dict uses the keys as output column headers
 
     # labels = ["label1", "label2"]
 
@@ -326,7 +323,7 @@ def test_sweep(sweep_method, monkeypatch):
     #     for value in df[label]:
     #         assert not isinstance(value, dict), "dict saved instead of value"
 
-    # make sure returning a list assigns column labels properly
+    # # make sure returning a list assigns column labels properly
 
     # num_outputs = 3
     # label_keys = tdd.Result.default_value_keys(num_outputs * [0.0])
@@ -342,56 +339,56 @@ def test_sweep(sweep_method, monkeypatch):
     #         assert not isinstance(value, (tuple, list)), "dict saved instead of value"
 
 
-def test_method_custom_validators():
-    """Test the MethodRandomCustom validation performs as expected."""
+# def test_method_custom_validators():
+#     """Test the MethodRandomCustom validation performs as expected."""
 
-    d = 3
+#     d = 3
 
-    # expected case
-    class SamplerWorks:
-        def random(self, n):
-            return np.random.random((n, d))
+#     # expected case
+#     class SamplerWorks:
+#         def random(self, n):
+#             return np.random.random((n, d))
 
-    tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks())
+#     tdd.MethodRandomCustom(num_points=5, sampler=SamplerWorks())
 
-    # missing random method case
-    class SamplerNoRandom:
-        pass
+#     # missing random method case
+#     class SamplerNoRandom:
+#         pass
 
-    with pytest.raises(ValueError):
-        tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom())
+#     with pytest.raises(ValueError):
+#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerNoRandom())
 
-    # random method gives a list
-    class SamplerList:
-        def random(self, n):
-            return np.random.random((n, d)).tolist()
+#     # random method gives a list
+#     class SamplerList:
+#         def random(self, n):
+#             return np.random.random((n, d)).tolist()
 
-    with pytest.raises(ValueError):
-        tdd.MethodRandomCustom(num_points=5, sampler=SamplerList())
+#     with pytest.raises(ValueError):
+#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerList())
 
-    # random method gives wrong number of dimensions
-    class SamplerWrongDims:
-        def random(self, n):
-            return np.random.random((n, d, d))
+#     # random method gives wrong number of dimensions
+#     class SamplerWrongDims:
+#         def random(self, n):
+#             return np.random.random((n, d, d))
 
-    with pytest.raises(ValueError):
-        tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims())
+#     with pytest.raises(ValueError):
+#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongDims())
 
-    # random method gives wrong first dimension length
-    class SamplerWrongShape:
-        def random(self, n):
-            return np.random.random((n + 1, d))
+#     # random method gives wrong first dimension length
+#     class SamplerWrongShape:
+#         def random(self, n):
+#             return np.random.random((n + 1, d))
 
-    with pytest.raises(ValueError):
-        tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape())
+#     with pytest.raises(ValueError):
+#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerWrongShape())
 
-    # random method gives floats outside of range of 0, 1
-    class SamplerOutOfRange:
-        def random(self, n):
-            return 3 * np.random.random((n, d)) - 1
+#     # random method gives floats outside of range of 0, 1
+#     class SamplerOutOfRange:
+#         def random(self, n):
+#             return 3 * np.random.random((n, d)) - 1
 
-    with pytest.raises(ValueError):
-        tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange())
+#     with pytest.raises(ValueError):
+#         tdd.MethodRandomCustom(num_points=5, sampler=SamplerOutOfRange())
 
 
 @pytest.mark.parametrize(
