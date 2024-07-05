@@ -551,9 +551,15 @@ class UniformCurrentSource(CurrentSource, ReverseInterpolatedSource):
 
 
 class PointDipole(CurrentSource, ReverseInterpolatedSource):
-    """Uniform current source with a zero size.
+    """Uniform current source with a zero size. The source corresponds to an infinitesimal antenna
+    with a fixed current density, and is slightly different from a related definition that is used
+    in some contexts, namely an oscillating electric or magnetic dipole. The two are related through
+    a factor of ``omega ** 2`` in the power normalization, where ``omega`` is the angular frequency
+    of the oscillation. This is discussed further in our
+    `source normalization <../../faq/docs/faq/How-are-results-normalized.html>`_ FAQ page.
 
-    .. TODO add image of how it looks like based on sim 1.
+    ..
+        TODO add image of how it looks like based on sim 1.
 
     Example
     -------
@@ -563,8 +569,9 @@ class PointDipole(CurrentSource, ReverseInterpolatedSource):
     See Also
     --------
 
-    **Lectures:**
-        * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
+    **Notebooks**
+        * `Particle swarm optimization of quantum emitter light extraction to free space <../../notebooks/BullseyeCavityPSO.html>`_
+        * `Adjoint optimization of quantum emitter light extraction to an integrated waveguide <../../notebooks/AdjointPlugin12LightExtractor.html>`_
     """
 
     size: Tuple[Literal[0], Literal[0], Literal[0]] = pydantic.Field(
