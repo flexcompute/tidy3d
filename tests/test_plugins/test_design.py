@@ -10,10 +10,6 @@ from tidy3d.plugins import design as tdd
 
 from ..utils import assert_log_level, run_emulated
 
-# Create rng object for MethodRandomCustom
-# rng = np.random.default_rng(1)
-# rng_initial_state = rng.__getstate__()
-
 SWEEP_METHODS = dict(
     grid=tdd.MethodGrid(),
     monte_carlo=tdd.MethodMonteCarlo(num_points=3, rng_seed=1),
@@ -177,6 +173,21 @@ def test_sweep(sweep_method, monkeypatch):
 
         return np.sum(np.square(np.abs(ex_values)))
 
+    def scs_combined_batch(radius: float, num_spheres: int, tag: str) -> float:
+        sim = {
+            "batch_test1": scs_pre(radius=radius, num_spheres=num_spheres, tag=tag),
+            "batch_test2": scs_pre(radius=radius, num_spheres=num_spheres, tag=tag),
+        }
+
+        batch_data = web.Batch(simulations=sim).run()
+
+        sim_data = [val[1] for val in batch_data.items()][0]
+
+        mnt_data = sim_data["field"]
+        ex_values = mnt_data.Ex.values
+
+        return np.sum(np.square(np.abs(ex_values)))
+
     def scs_pre_list(radius: float, num_spheres: int, tag: str):
         sim = scs_pre(radius, num_spheres, tag)
         return [sim, sim, sim]
@@ -244,6 +255,7 @@ def test_sweep(sweep_method, monkeypatch):
         parameters=[radius_variable, num_spheres_variable, tag_variable],
         method=sweep_method,
         name="sphere CS",
+        task_name=f"{sweep_method.type}",
     )
 
     # STEP3: Run your design problem
@@ -276,6 +288,9 @@ def test_sweep(sweep_method, monkeypatch):
 
     # Try with batch output from pre
     # td_batch = design_space.run(scs_pre_batch, scs_post_batch)
+
+    # Test user specified batching works with combined function
+    td_batch_combined = design_space.run(scs_combined_batch)
 
     # Test with list of sims
     td_sim_list = design_space.run(scs_pre_list, scs_post_list)
@@ -327,42 +342,9 @@ def test_sweep(sweep_method, monkeypatch):
     sweep_results_2 = tdd.Result.from_dataframe(sweep_results_df)
     sweep_results_3 = tdd.Result.from_dataframe(sweep_results_df, dims=td_sweep2.dims)
 
-    # # VALIDATE PROPER DATAFRAME HEADERS AND DATA STORAGE
-
-    # # make sure returning a float uses the proper output column header
-    # float_label = tdd.Result.default_value_keys(1.0)[0]
-    # assert float_label in sweep_results_df, "didn't assign column header properly for float"
-
-    # # NOTE: To be modified later
-    # # make sure returning a dict uses the keys as output column headers
-
-    # labels = ["label1", "label2"]
-
-    # def scs_dict_output(*args, **kwargs):
-    #     output = scs(*args, **kwargs)
-    #     return dict(zip(labels, len(labels) * [output]))
-
-    # df = design_space.run(scs_dict_output).to_dataframe()
-
-    # for label in labels:
-    #     assert label in df, "dict key not parsed properly as column header"
-    #     for value in df[label]:
-    #         assert not isinstance(value, dict), "dict saved instead of value"
-
-    # # make sure returning a list assigns column labels properly
-
-    # num_outputs = 3
-    # label_keys = tdd.Result.default_value_keys(num_outputs * [0.0])
-
-    # def scs_list(*args, **kwargs):
-    #     output = scs(*args, **kwargs)
-    #     return num_outputs * [output]
-
-    # df = design_space.run(scs_list).to_dataframe()
-    # for label in label_keys:
-    #     assert label in df, "dict key not parsed properly as column header"
-    #     for value in df[label]:
-    #         assert not isinstance(value, (tuple, list)), "dict saved instead of value"
+    # make sure returning a float uses the proper output column header
+    float_label = tdd.Result.default_value_keys(1.0)[0]
+    assert float_label in sweep_results_df, "didn't assign column header properly for float"
 
 
 # def test_method_custom_validators():

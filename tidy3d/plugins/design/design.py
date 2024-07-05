@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import inspect
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, Generator, List, Tuple
 
 import pydantic.v1 as pd
 
@@ -45,6 +45,16 @@ class DesignSpace(Tidy3dBaseModel):
 
     name: str = pd.Field(None, title="Name", description="Optional name for the design space.")
 
+    task_name: str = pd.Field(
+        None,
+        title="Task Name",
+        description="Task name assigned to tasks along with a simulation counter.",
+    )
+
+    _task_names: list = pd.PrivateAttr(default=[])
+
+    _name_generator: Generator = pd.PrivateAttr(default=None)
+
     @cached_property
     def dims(self) -> Tuple[str]:
         """dimensions defined by the design parameter names."""
@@ -82,6 +92,19 @@ class DesignSpace(Tidy3dBaseModel):
             aux_values=aux_values,
         )
 
+    def _create_name_generator(self):
+        """Initialise the name generator used for simulation task names"""
+        counter = 0
+
+        while True:
+            if self.task_name is not None:
+                task_name = f"{self.task_name}_{counter}"
+            else:
+                task_name = f"{counter}"
+
+            yield (task_name)
+            counter += 1
+
     @staticmethod
     def get_fn_source(function: Callable) -> str:
         """Get the function source as a string, return ``None`` if not available."""
@@ -106,6 +129,8 @@ class DesignSpace(Tidy3dBaseModel):
             Can be converted to ``pandas.DataFrame`` with ``.to_dataframe()``.
         """
 
+        self._name_generator = self._create_name_generator()
+
         # Run based on how many functions the user provides
         if fn_post is None:
             fn_args, fn_values, aux_values = self.run_single(fn)
@@ -117,7 +142,11 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Package the result
         return self._package_run_results(
-            fn_args=fn_args, fn_values=fn_values, fn_source=fn_source, aux_values=aux_values
+            fn_args=fn_args,
+            fn_values=fn_values,
+            fn_source=fn_source,
+            aux_values=aux_values,
+            task_ids=self._task_names,
         )
 
     def run_single(self, fn: Callable):
@@ -163,9 +192,10 @@ class DesignSpace(Tidy3dBaseModel):
 
         return fn_combined
 
-    @staticmethod
-    def fn_mid(pre_out: Any) -> Any:
+    def fn_mid(self, pre_out: Any) -> Any:
         """A function of the output of ``fn_pre`` that gives the input to ``fn_post``."""
+
+        # name_generator = self._create_name_generator()
 
         # Convert list of sim inputs to dict of dict before passing through checks
         was_list = False
@@ -179,7 +209,9 @@ class DesignSpace(Tidy3dBaseModel):
 
         # Handle most common case where fn_combined builds a dict of sims
         if all(isinstance(sim, Simulation) for sim in pre_out.values()):
-            data = web.Batch(simulations=pre_out).run()
+            named_sims = {next(self._name_generator): sim for sim in pre_out.values()}
+            self._task_names.extend(list(named_sims.keys()))
+            data = web.Batch(simulations=named_sims).run()
 
         # Can "index" dict here because fn_combined uses idx as the key
         elif all(isinstance(sim, Dict) for sim in pre_out.values()) and any(
@@ -202,11 +234,15 @@ class DesignSpace(Tidy3dBaseModel):
                 original_structure[dict_idx] = sub_structure
 
             # Run sims with flattened dict
-            batch_out = web.Batch(simulations=flattened_sims).run()
+            named_sims = {next(self._name_generator): sim for sim in flattened_sims.values()}
+            translation_dict = dict(zip(named_sims, flattened_sims))
+            self._task_names.extend(list(named_sims.keys()))
+            batch_out = web.Batch(simulations=named_sims).run()
 
             # Unflatten structure whilst running fn_post
             for task_id in batch_out.task_ids:
-                dict_idx, sub_dict_idx = task_id.split("_", 1)
+                search_key = translation_dict[task_id]
+                dict_idx, sub_dict_idx = search_key.split("_", 1)
                 original_structure[int(dict_idx)][sub_dict_idx] = batch_out[task_id]
 
             # Restore to lists if user supplied lists

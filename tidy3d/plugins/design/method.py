@@ -164,7 +164,6 @@ class MethodOptimise(Method, ABC):
         """Convert ParameterAny object to integers and provide a conversion dict to return"""
 
         return dict(enumerate(parameter.allowed_values))
-        # return {num: par for num, par in enumerate(parameter.allowed_values)}
 
     def sol_array_to_dict(
         self, solution: np.array, keys: list, param_converter: dict

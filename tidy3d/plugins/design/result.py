@@ -60,7 +60,7 @@ class Result(Tidy3dBaseModel):
         description="Source code for the function evaluated in the parameter sweep.",
     )
 
-    task_ids: Tuple[Tuple[str, ...], ...] = pd.Field(
+    task_ids: list[str] = pd.Field(
         None,
         title="Task IDs",
         description="Task IDs for the simulation run in each data point. Only available if "
