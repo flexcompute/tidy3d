@@ -17,7 +17,7 @@ from ..grid.grid_spec import GridSpec
 from ..medium import FullyAnisotropicMedium
 from ..monitor import AbstractModeMonitor, ModeSolverMonitor, Monitor
 from ..scene import Scene
-from ..simulation import AbstractYeeGridSimulation
+from ..simulation import AbstractYeeGridSimulation, Simulation
 from ..source import GaussianPulse, ModeSource
 from ..structure import Structure
 from ..types import Ax, Axis, FreqArray, annotate_type
@@ -42,6 +42,10 @@ MAX_NUM_SWEEP = 100
 
 # constraint can be slow with too many modes
 WARN_CONSTRAINT_NUM_MODES = 50
+
+# dummy run time for conversion to FDTD sim
+# should be very small -- otherwise, generating tmesh will fail or take a long time
+RUN_TIME = 1e-30
 
 
 class EMESimulation(AbstractYeeGridSimulation):
@@ -995,3 +999,37 @@ class EMESimulation(AbstractYeeGridSimulation):
             return np.prod(np.array(num_cells, dtype=np.int64))
 
         return num_transverse_cells_in_monitor(monitor)
+
+    def _to_fdtd_sim(self) -> Simulation:
+        """Convert :class:`.EMESimulation` to :class:`.Simulation`.
+        This should only be used to obtain the same material properties
+        for mode solving or related purposes; the sources and monitors of the
+        resulting simulation are not meaningful."""
+
+        # source to silence warnings
+        plane = self.eme_grid.mode_planes[0]
+        freq0 = self.freqs[0]
+        source_time = GaussianPulse(freq0=freq0, fwidth=0.1 * freq0)
+        source = ModeSource(
+            center=plane.center,
+            size=plane.size,
+            source_time=source_time,
+            direction="+",
+            mode_spec=self.eme_grid.mode_specs[0]._to_mode_spec(),
+        )
+        # copy over all FDTD monitors too
+        monitors = [monitor for monitor in self.monitors if not isinstance(monitor, EMEMonitor)]
+        return Simulation(
+            center=self.center,
+            size=self.size,
+            medium=self.medium,
+            structures=self.structures,
+            symmetry=self.symmetry,
+            grid_spec=self.grid_spec,
+            boundary_spec=self.boundary_spec,
+            version=self.version,
+            subpixel=self.subpixel,
+            run_time=RUN_TIME,
+            sources=[source],
+            monitors=monitors,
+        )

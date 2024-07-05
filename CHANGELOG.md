@@ -5,6 +5,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Mode solver plugin now supports 'EMESimulation'.
+
 ### Fixed
 - Error when loading a previously run `Batch` or `ComponentModeler` containing custom data.
 - Error when plotting mode plane PML and the simulation has symmetry.

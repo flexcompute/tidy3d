@@ -4,8 +4,9 @@ invariance along a given propagation axis.
 
 from __future__ import annotations
 
+from functools import wraps
 from math import isclose
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 import numpy as np
 import pydantic.v1 as pydantic
@@ -22,6 +23,8 @@ from ...components.data.data_array import (
 )
 from ...components.data.monitor_data import ModeSolverData
 from ...components.data.sim_data import SimulationData
+from ...components.eme.data.sim_data import EMESimulationData
+from ...components.eme.simulation import EMESimulation
 from ...components.geometry.base import Box
 from ...components.grid.grid import Grid
 from ...components.medium import FullyAnisotropicMedium
@@ -69,6 +72,25 @@ FIELD_DECAY_CUTOFF = 1e-2
 # Maximum allowed size of the field data produced by the mode solver
 MAX_MODES_DATA_SIZE_GB = 20
 
+MODE_SIMULATION_TYPE = Union[Simulation, EMESimulation]
+MODE_SIMULATION_DATA_TYPE = Union[SimulationData, EMESimulationData]
+
+
+def require_fdtd_simulation(fn):
+    """Decorate a function to check that ``simulation`` is an FDTD ``Simulation``."""
+
+    @wraps(fn)
+    def _fn(self, **kwargs):
+        """New decorated function."""
+        if not isinstance(self.simulation, Simulation):
+            raise SetupError(
+                f"The function '{fn.__name__}' is only supported "
+                "for 'simulation' of type FDTD 'Simulation'."
+            )
+        return fn(self, **kwargs)
+
+    return _fn
+
 
 class ModeSolver(Tidy3dBaseModel):
     """
@@ -89,8 +111,11 @@ class ModeSolver(Tidy3dBaseModel):
         * `Prelude to Integrated Photonics Simulation: Mode Injection <https://www.flexcompute.com/fdtd101/Lecture-4-Prelude-to-Integrated-Photonics-Simulation-Mode-Injection/>`_
     """
 
-    simulation: Simulation = pydantic.Field(
-        ..., title="Simulation", description="Simulation defining all structures and mediums."
+    simulation: MODE_SIMULATION_TYPE = pydantic.Field(
+        ...,
+        title="Simulation",
+        description="Simulation or EMESimulation defining all structures and mediums.",
+        discriminator="type",
     )
 
     plane: Box = pydantic.Field(
@@ -516,7 +541,7 @@ class ModeSolver(Tidy3dBaseModel):
         return mode_solver_data.symmetry_expanded_copy
 
     @cached_property
-    def sim_data(self) -> SimulationData:
+    def sim_data(self) -> MODE_SIMULATION_DATA_TYPE:
         """:class:`.SimulationData` object containing the :class:`.ModeSolverData` for this object.
 
         Returns
@@ -527,7 +552,17 @@ class ModeSolver(Tidy3dBaseModel):
         monitor_data = self.data
         new_monitors = list(self.simulation.monitors) + [monitor_data.monitor]
         new_simulation = self.simulation.copy(update=dict(monitors=new_monitors))
-        return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        if isinstance(new_simulation, Simulation):
+            return SimulationData(simulation=new_simulation, data=(monitor_data,))
+        elif isinstance(new_simulation, EMESimulation):
+            return EMESimulationData(
+                simulation=new_simulation, data=(monitor_data,), smatrix=None, port_modes=None
+            )
+        else:
+            raise SetupError(
+                "The 'simulation' provided does not correspond to any known "
+                "'AbstractSimulationData' type."
+            )
 
     def _get_epsilon(self, freq: float) -> ArrayComplex4D:
         """Compute the epsilon tensor in the plane. Order of components is xx, xy, xz, yx, etc."""
@@ -790,7 +825,7 @@ class ModeSolver(Tidy3dBaseModel):
 
     @staticmethod
     def _grid_correction(
-        simulation: Simulation,
+        simulation: MODE_SIMULATION_TYPE,
         plane: Box,
         mode_spec: ModeSpec,
         n_complex: ModeIndexDataArray,
@@ -993,6 +1028,7 @@ class ModeSolver(Tidy3dBaseModel):
             name=name,
         )
 
+    @require_fdtd_simulation
     def sim_with_source(
         self,
         source_time: SourceTime,
@@ -1027,6 +1063,7 @@ class ModeSolver(Tidy3dBaseModel):
         new_sim = self.simulation.updated_copy(sources=new_sources)
         return new_sim
 
+    @require_fdtd_simulation
     def sim_with_monitor(
         self,
         freqs: List[float] = None,
@@ -1502,3 +1539,16 @@ class ModeSolver(Tidy3dBaseModel):
         )
 
         return self.updated_copy(simulation=new_sim)
+
+    def to_fdtd_mode_solver(self) -> ModeSolver:
+        """Construct a new :class:`.ModeSolver` by converting ``simulation``
+        from a :class:`.EMESimulation` to an FDTD :class:`.Simulation`.
+        Only used as a workaround until :class:`.EMESimulation` is natively supported in the
+        :class:`.ModeSolver` webapi."""
+        if not isinstance(self.simulation, EMESimulation):
+            raise ValidationError(
+                "The method 'to_fdtd_mode_solver' is only needed "
+                "when the 'simulation' is an 'EMESimulation'."
+            )
+        fdtd_sim = self.simulation._to_fdtd_sim()
+        return self.updated_copy(simulation=fdtd_sim)
