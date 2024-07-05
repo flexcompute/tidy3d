@@ -250,6 +250,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         # Run variables
         arg_list = []
         total_aux_out = []
+        result = []
         for _ in range(self.initial_iter):
             next_point = opt.suggest(utility)
             self._force_int(next_point, parameters)
@@ -260,6 +261,7 @@ class MethodBayOpt(MethodOptimise, ABC):
         self._flatten_and_append(aux_out, total_aux_out)
 
         for next_point, next_out in zip(arg_list, init_output):
+            result.append(next_out)
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out)
 
@@ -269,15 +271,14 @@ class MethodBayOpt(MethodOptimise, ABC):
             self._force_int(next_point, parameters)
             self._handle_param_convert(param_converter, [next_point])
             next_out, aux_out = self._extract_output(run_fn([next_point]))
+            result.append(next_out[0])
             self._flatten_and_append(aux_out, total_aux_out)
             self._handle_param_convert(invert_param_converter, [next_point])
             opt.register(params=next_point, target=next_out[0])
 
-        # Output results from the BO.opt object
-        result = []
+        # Output fn_args from the BO.opt object - getting results in situ as opt changes type to float
         fn_args = []
         for output in opt.res:
-            result.append(output["target"])
             fn_args.append(output["params"])
 
         return fn_args, result, total_aux_out
